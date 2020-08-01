@@ -404,6 +404,7 @@ message ExecuteRequest {
   BoundQuery query = 4;
   int64 transaction_id = 5;
   ExecuteOptions options = 6;
+  int64 reserved_id = 7;
 }
 
 // ExecuteResponse is the returned value from Execute
@@ -464,6 +465,7 @@ message BeginRequest {
 // BeginResponse is the returned value from Begin
 message BeginResponse {
   int64 transaction_id = 1;
+  topodata.TabletAlias tablet_alias = 2;
 }
 
 // CommitRequest is the payload to Commit
@@ -475,7 +477,9 @@ message CommitRequest {
 }
 
 // CommitResponse is the returned value from Commit
-message CommitResponse {}
+message CommitResponse {
+  int64 reserved_id = 1;
+}
 
 // RollbackRequest is the payload to Rollback
 message RollbackRequest {
@@ -486,7 +490,9 @@ message RollbackRequest {
 }
 
 // RollbackResponse is the returned value from Rollback
-message RollbackResponse {}
+message RollbackResponse {
+  int64 reserved_id = 1;
+}
 
 // PrepareRequest is the payload to Prepare
 message PrepareRequest {
@@ -590,6 +596,8 @@ message BeginExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   ExecuteOptions options = 5;
+  int64 reserved_id = 6;
+  repeated string pre_queries = 7;
 }
 
 // BeginExecuteResponse is the returned value from BeginExecute
@@ -603,6 +611,7 @@ message BeginExecuteResponse {
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
 }
 
 // BeginExecuteBatchRequest is the payload to BeginExecuteBatch
@@ -626,6 +635,7 @@ message BeginExecuteBatchResponse {
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
 }
 
 // MessageStreamRequest is the request payload for MessageStream.
@@ -660,6 +670,63 @@ message MessageAckResponse {
   QueryResult result = 1;
 }
 
+// ReserveExecuteRequest is the payload to ReserveExecute
+message ReserveExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  int64 transaction_id = 5;
+  ExecuteOptions options = 6;
+  repeated string pre_queries = 7;
+}
+
+// ReserveExecuteResponse is the returned value from ReserveExecute
+message ReserveExecuteResponse {
+  vtrpc.RPCError error = 1;
+  QueryResult result = 2;
+
+  // The following fields might be non-zero even if an error is present.
+  int64 reserved_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
+}
+
+// ReserveBeginExecuteRequest is the payload to ReserveBeginExecute
+message ReserveBeginExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+}
+
+// ReserveBeginExecuteResponse is the returned value from ReserveBeginExecute
+message ReserveBeginExecuteResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the execute failed.
+  vtrpc.RPCError error = 1;
+  QueryResult result = 2;
+  // The following fields might be non-zero even if an error is present.
+  int64 transaction_id = 3;
+  int64 reserved_id = 4;
+  topodata.TabletAlias tablet_alias = 5;
+}
+
+// ReleaseRequest is the payload to Release
+message ReleaseRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  int64 transaction_id = 4;
+  int64 reserved_id = 5;
+}
+
+// ReleaseResponse is the returned value from Release
+message ReleaseResponse {
+}
+
 // StreamHealthRequest is the payload for StreamHealth
 message StreamHealthRequest {
 }
@@ -672,8 +739,8 @@ message RealtimeStats {
   // we do not send queries to servers that are not healthy.
   string health_error = 1;
 
-  // seconds_behind_master is populated for slaves only. It indicates
-  // how far behind on (MySQL) replication a slave currently is.  It is used
+  // seconds_behind_master is populated for replicas only. It indicates
+  // how far behind on (MySQL) replication a replica currently is.  It is used
   // by clients for subset selection (so we don't try to send traffic
   // to tablets that are too far behind).
   // NOTE: This field must not be evaluated if "health_error" is not empty.

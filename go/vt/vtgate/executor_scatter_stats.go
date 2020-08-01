@@ -89,13 +89,17 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	resultItems := make([]*statsResultItem, len(plans))
 	for i, plan := range plans {
 		route := routes[i]
+		var avgTimePerQuery int64
+		if plan.ExecCount != 0 {
+			avgTimePerQuery = plan.ExecTime.Nanoseconds() / int64(plan.ExecCount)
+		}
 		resultItems[i] = &statsResultItem{
 			Query:                  plan.Original,
-			AvgTimePerQuery:        time.Duration(plan.ExecTime.Nanoseconds() / int64(plan.ExecCount)),
-			PercentTimeOfReads:     float64(100 * plan.ExecTime / readOnlyTime),
-			PercentTimeOfScatters:  float64(100 * plan.ExecTime / scatterExecTime),
-			PercentCountOfReads:    float64(100 * plan.ExecCount / readOnlyCount),
-			PercentCountOfScatters: float64(100 * plan.ExecCount / scatterCount),
+			AvgTimePerQuery:        time.Duration(avgTimePerQuery),
+			PercentTimeOfReads:     100 * float64(plan.ExecTime) / float64(readOnlyTime),
+			PercentTimeOfScatters:  100 * float64(plan.ExecTime) / float64(scatterExecTime),
+			PercentCountOfReads:    100 * float64(plan.ExecCount) / float64(readOnlyCount),
+			PercentCountOfScatters: 100 * float64(plan.ExecCount) / float64(scatterCount),
 			From:                   route.Keyspace.Name + "." + route.TableName,
 			Count:                  plan.ExecCount,
 		}

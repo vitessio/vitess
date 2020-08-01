@@ -5,12 +5,16 @@
   "Original": "set @foo = 42",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "UserDefinedVariable",
         "Name": "foo",
-        "PlanValue": 42
+        "Expr": "INT64(42)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
       }
     ]
   }
@@ -23,17 +27,143 @@
   "Original": "set @foo = 42, @bar = @foo",
   "Instructions": {
     "OperatorType": "Set",
-    "Variant": "",
     "Ops": [
       {
         "Type": "UserDefinedVariable",
         "Name": "foo",
-        "PlanValue": 42
+        "Expr": "INT64(42)"
       },
       {
         "Type": "UserDefinedVariable",
         "Name": "bar",
-        "PlanValue": ":__vtudvfoo"
+        "Expr": ":__vtudvfoo"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set multi user defined variable with complex expression
+"set @foo = 42, @bar = @foo + 1"
+{
+  "QueryType": "SET",
+  "Original": "set @foo = 42, @bar = @foo + 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "foo",
+        "Expr": "INT64(42)"
+      },
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "bar",
+        "Expr": ":__vtudvfoo + INT64(1)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set UDV to expression that can't be evaluated at vtgate
+"set @foo = CONCAT('Any','Expression','Is','Valid')"
+{
+  "QueryType": "SET",
+  "Original": "set @foo = CONCAT('Any','Expression','Is','Valid')",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "UserDefinedVariable",
+        "Name": "foo",
+        "Expr": "[0]"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid') from dual",
+        "SingleShardOnly": true
+      }
+    ]
+  }
+}
+
+# only allow whitelisted functions
+"set @foo = BAD_FUNC()"
+"expression not supported for SET: BAD_FUNC()"
+
+# single sysvar cases
+"SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+{
+  "QueryType": "SET",
+  "Original": "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_mode",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# multiple sysvar cases
+"SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0"
+{
+  "QueryType": "SET",
+  "Original": "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_mode",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
+      },
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_safe_updates",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Expr": "0"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
       }
     ]
   }

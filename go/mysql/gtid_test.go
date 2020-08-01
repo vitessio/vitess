@@ -193,14 +193,16 @@ type fakeGTID struct {
 }
 
 func (f fakeGTID) String() string            { return f.value }
+func (f fakeGTID) Last() string              { panic("not implemented") }
 func (f fakeGTID) Flavor() string            { return f.flavor }
 func (fakeGTID) SourceServer() interface{}   { return int(1) }
 func (fakeGTID) SequenceNumber() interface{} { return int(1) }
 func (fakeGTID) SequenceDomain() interface{} { return int(1) }
 func (f fakeGTID) GTIDSet() GTIDSet          { return nil }
 
-func (fakeGTID) ContainsGTID(GTID) bool { return false }
-func (fakeGTID) Contains(GTIDSet) bool  { return false }
+func (fakeGTID) ContainsGTID(GTID) bool  { return false }
+func (fakeGTID) Contains(GTIDSet) bool   { return false }
+func (f fakeGTID) Union(GTIDSet) GTIDSet { return f }
 func (f fakeGTID) Equal(other GTIDSet) bool {
 	otherFake, ok := other.(fakeGTID)
 	if !ok {

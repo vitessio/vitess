@@ -24,32 +24,32 @@ db:
     user: vt_app      # db_app_user
     password:         # db_app_password
     useSsl: true      # db_app_use_ssl
-    preferSocket: true
+    preferTcp: false
   dba:
     user: vt_dba      # db_dba_user
     password:         # db_dba_password
     useSsl: true      # db_dba_use_ssl
-    preferSocket: true
+    preferTcp: false
   filtered:
     user: vt_filtered # db_filtered_user
     password:         # db_filtered_password
     useSsl: true      # db_filtered_use_ssl
-    preferSocket: true
+    preferTcp: false
   repl:
     user: vt_repl     # db_repl_user
     password:         # db_repl_password
     useSsl: true      # db_repl_use_ssl
-    preferSocket: true
+    preferTcp: false
   appdebug:
     user: vt_appdebug # db_appdebug_user
     password:         # db_appdebug_password
     useSsl: true      # db_appdebug_use_ssl
-    preferSocket: true
+    preferTcp: false
   allprivs:
     user: vt_allprivs # db_allprivs_user
     password:         # db_allprivs_password
     useSsl: true      # db_allprivs_use_ssl
-    preferSocket: true
+    preferTcp: false
 
 oltpReadPool:
   size: 16                 # queryserver-config-pool-size
@@ -78,16 +78,27 @@ oltp:
   maxRows: 10000          # queryserver-config-max-result-size
   warnRows: 0             # queryserver-config-warn-result-size
 
+healthcheck:
+  intervalSeconds: 20             # health_check_interval
+  degradedThresholdSeconds: 30    # degraded_threshold
+  unhealthyThresholdSeconds: 7200 # unhealthy_threshold
+
+gracePeriods:
+  transactionShutdownSeconds: 0 # transaction_shutdown_grace_period
+  transitionSeconds: 0          # serving_state_grace_period
+
+replicationTracker:
+  mode: disable                    # enable_replication_reporter
+  heartbeatIntervalMilliseconds: 0 # heartbeat_enable, heartbeat_interval
+
 hotRowProtection:
   mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run
-  # Default value is same as txPool.size.
+  # Recommended value: same as txPool.size.
   maxQueueSize: 20            # hot_row_protection_max_queue_size
   maxGlobalQueueSize: 1000    # hot_row_protection_max_global_queue_size
   maxConcurrency: 5           # hot_row_protection_concurrent_transactions
 
 consolidator: enable|disable|notOnMaster # enable-consolidator, enable-consolidator-replicas
-heartbeatIntervalMilliseconds: 0         # heartbeat_enable, heartbeat_interval
-shutdownGracePeriodSeconds: 0            # transaction_shutdown_grace_period
 passthroughDML: false                    # queryserver-config-passthrough-dmls
 streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
 queryCacheSize: 5000                     # queryserver-config-query-cache-size

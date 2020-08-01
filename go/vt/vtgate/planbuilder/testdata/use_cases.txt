@@ -5,7 +5,6 @@
   "Original": "use ks",
   "Instructions": {
     "OperatorType": "UpdateTarget",
-    "Variant": "",
     "target": "ks"
   }
 }
@@ -17,7 +16,6 @@
   "Original": "use ks@replica",
   "Instructions": {
     "OperatorType": "UpdateTarget",
-    "Variant": "",
     "target": "ks@replica"
   }
 }
@@ -29,7 +27,6 @@
   "Original": "use `ks:-80@replica`",
   "Instructions": {
     "OperatorType": "UpdateTarget",
-    "Variant": "",
     "target": "ks:-80@replica"
   }
 }
@@ -41,7 +38,6 @@
   "Original": "use `ks/80-@replica`",
   "Instructions": {
     "OperatorType": "UpdateTarget",
-    "Variant": "",
     "target": "ks/80-@replica"
   }
 }
@@ -52,7 +48,6 @@
   "QueryType": "USE",
   "Original": "use",
   "Instructions": {
-    "OperatorType": "UpdateTarget",
-    "Variant": ""
+    "OperatorType": "UpdateTarget"
   }
 }

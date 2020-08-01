@@ -160,7 +160,7 @@ func (mysqld *Mysqld) killConnection(connID int64) error {
 	// Get another connection with which to kill.
 	// Use background context because the caller's context is likely expired,
 	// which is the reason we're being asked to kill the connection.
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if poolConn, connErr := getPoolReconnect(ctx, mysqld.dbaPool); connErr == nil {
 		// We got a pool connection.
@@ -171,10 +171,12 @@ func (mysqld *Mysqld) killConnection(connID int64) error {
 		// It might be because the connection pool is exhausted,
 		// because some connections need to be killed!
 		// Try to open a new connection without the pool.
-		killConn, connErr = mysqld.GetDbaConnection()
+		conn, connErr := mysqld.GetDbaConnection(ctx)
 		if connErr != nil {
 			return connErr
 		}
+		defer conn.Close()
+		killConn = conn
 	}
 
 	_, err := killConn.ExecuteFetch(fmt.Sprintf("kill %d", connID), 10000, false)

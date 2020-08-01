@@ -2,41 +2,59 @@
 
 This project was generated with [angular-cli](https://github.com/angular/angular-cli) version 1.0.0-beta.11-webpack.2.
 
-## Installation
-Once downloaded, run `npm install` and `bower install` to retrieve dependencies.
+## Local development
 
-Webpack handles bundling of dependencies from the `node_modules` directory,
-but bower dependencies in the `src/assets` folder simply get copied
-into the `dist` folder at build time.
+**⚠️ Warning! This project relies on very out-of-date node dependencies, many with significant security vulnerabilities. Install at your own risk.** 
 
-To add more Polymer elements, install them with bower and import them in `src/index.html`.
+### Prerequisites
 
-## Development server
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
+You will need (very old!) installations of npm and node to run the front-end dev server. To check your versions:
 
-## Code scaffolding
+```bash
+node -v # v8.0.0 required
+npm -v # 5.0.0 required
+```
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive/pipe/service/class`.
+Using a node version manager like [nvm](https://github.com/nvm-sh/nvm) is strongly recommended, as the versions required by this project are several years out of date.
 
-## Build
+1. Install nvm using the [installation guide](https://github.com/nvm-sh/nvm#installing-and-updating).
+1. Install node (and npm): `nvm install 8.0.0`
+1. In the shell you're using for vtctld UI development: `nvm use 8.0.0`
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory. Use the `-prod` flag for a production build.
+### Starting the dev server
 
-## Running unit tests
+From the root `vitess/` directory:
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+1. Run Vitess locally using Docker and start a vtctld API on `http://localhost:15000/`. For more on this, see the guide on [Local Installation via Docker](https://vitess.io/docs/get-started/local-docker/).
 
-## Running end-to-end tests
+	```bash
+	source dev.env
+	make docker_local && ./docker/local/run.sh
+	```
 
-Run `ng e2e` to execute the end-to-end tests via [Protractor](https://www.protractortest.org/). 
-Before running the tests make sure you are serving the app via `ng serve`.
+2. Start a local Angular server on `http://localhost:4200`. The UI will automatically refresh every time you save a change. Note that you will _probably_ see build errors and security warnings during the `npm install` step; this is, unfortunately, to be expected due to out-of-date dependencies. :)
 
-## Deploying to Github Pages
+	```bash
+	make web_start
+	```
 
-Run `ng github-pages:deploy` to deploy to Github Pages.
+Note: the local docker install will also start a vtctld admin UI on http://localhost:15000/app. This instance will use the statically embedded files, and will not reflect any changes you make unless you run `make web_build`.
 
-## Further help
+### Building for production
 
-To get more help on the `angular-cli` use `ng --help` or go check out the [Angular-CLI README](https://github.com/angular/angular-cli/blob/master/README.md).
+In production, the vtctld UI is hosted with [go.rice](https://github.com/GeertJohan/go.rice). All front-end assets must be built, minified, and embedded in the executable.
+
+If you're ready to open a pull request for your changes, or if you want to do a production build just for fun... :)
+
+```bash
+make web_build
+```
+
+This will regenerate a bunch of files in the `web/vtctld2/dist/` directory, as well as update the embedded files in `rice-box.go`. Make sure you commit these generated files to your branch when opening your pull request.
+
+To verify your changes, run Vitess locally. It is recommended to [use Docker](https://vitess.io/docs/get-started/local-docker/), which will make the vtctld UI accessible at `http://localhost:15000/app`.
 
 
+## Troubleshooting
+
+If you run into issues or have questions, we recommend posting in our [Slack channel](https://vitess.slack.com/). Click the Slack icon in the top right to join.

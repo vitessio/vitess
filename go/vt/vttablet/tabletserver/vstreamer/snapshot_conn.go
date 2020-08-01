@@ -78,6 +78,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 
 	log.Infof("Locking table %s for copying", table)
 	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableIdent), 1, false); err != nil {
+		log.Infof("Error locking table %s to read", tableIdent)
 		return "", err
 	}
 	mpos, err := lockConn.MasterPosition()

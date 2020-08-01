@@ -32,6 +32,7 @@ import (
 	"flag"
 	"net/url"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
 	"sync"
@@ -59,6 +60,7 @@ var (
 	onTermTimeout        = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
 	memProfileRate       = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
 	mutexProfileFraction = flag.Int("mutex-profile-fraction", 0, "profile every n mutex contention events (see runtime.SetMutexProfileFraction)")
+	catchSigpipe         = flag.Bool("catch-sigpipe", false, "catch and ignore SIGPIPE on stdout and stderr if specified")
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -77,6 +79,19 @@ var (
 func Init() {
 	mu.Lock()
 	defer mu.Unlock()
+
+	// Ignore SIGPIPE if specified
+	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr
+	// See https://golang.org/pkg/os/signal/#hdr-SIGPIPE
+	if *catchSigpipe {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGPIPE)
+		go func() {
+			<-sigChan
+			log.Warning("Caught SIGPIPE (ignoring all future SIGPIPEs)")
+			signal.Ignore(syscall.SIGPIPE)
+		}()
+	}
 
 	// Add version tag to every info log
 	log.Infof(AppVersion.String())
@@ -158,6 +173,7 @@ func OnTermSync(f func()) {
 
 // fireOnTermSyncHooks returns true iff all the hooks finish before the timeout.
 func fireOnTermSyncHooks(timeout time.Duration) bool {
+	defer log.Flush()
 	log.Infof("Firing synchronous OnTermSync hooks and waiting up to %v for them", timeout)
 
 	timer := time.NewTimer(timeout)

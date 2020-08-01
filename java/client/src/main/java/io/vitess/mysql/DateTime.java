@@ -92,7 +92,7 @@ public class DateTime {
    * Parse a MySQL TIME format into a {@link Time} with the given {@link Calendar}.
    *
    * <p>The range for TIME values is '-838:59:59.000000' to '838:59:59.000000'
-   * <a href="http://dev.mysql.com/doc/refman/5.6/en/time.html">[1]</a>.
+   * <a href="https://dev.mysql.com/doc/refman/5.6/en/time.html">[1]</a>.
    *
    * <p>Note that this is meant to parse only valid values, assumed to be
    * returned by MySQL. Results are undefined for invalid input.
@@ -178,7 +178,7 @@ public class DateTime {
    * Format a {@link Time} as a MySQL TIME with the given {@link Calendar}.
    *
    * <p>The range for TIME values is '-838:59:59.000000' to '838:59:59.000000'
-   * <a href="http://dev.mysql.com/doc/refman/5.6/en/time.html">[1]</a>.
+   * <a href="https://dev.mysql.com/doc/refman/5.6/en/time.html">[1]</a>.
    * We don't enforce that range, but we do print >24 hours rather than wrapping around to the next
    * day.
    */
@@ -223,7 +223,7 @@ public class DateTime {
    *
    * <p>The format is 'YYYY-MM-DD HH:MM:SS[.fraction]' where the fraction
    * can be up to 6 digits.
-   * <a href="http://dev.mysql.com/doc/refman/5.6/en/datetime.html">[1]</a>.
+   * <a href="https://dev.mysql.com/doc/refman/5.6/en/datetime.html">[1]</a>.
    *
    * <p>Note that this is meant to parse only valid values, assumed to be
    * returned by MySQL. Results are undefined for invalid input.

@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -744,6 +746,9 @@ func TestToFloat64(t *testing.T) {
 		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
 		out: 0,
 	}, {
+		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "1.2"),
+		out: 1.2,
+	}, {
 		v:   sqltypes.NewInt64(1),
 		out: 1,
 	}, {
@@ -757,17 +762,14 @@ func TestToFloat64(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}}
 	for _, tcase := range tcases {
-		got, err := ToFloat64(tcase.v)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("ToFloat64(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
-
-		if got != tcase.out {
-			t.Errorf("ToFloat64(%v): %v, want %v", tcase.v, got, tcase.out)
-		}
+		t.Run(tcase.v.String(), func(t *testing.T) {
+			got, err := ToFloat64(tcase.v)
+			if tcase.err != nil {
+				require.EqualError(t, err, tcase.err.Error())
+			} else {
+				require.Equal(t, tcase.out, got)
+			}
+		})
 	}
 }
 
@@ -878,6 +880,13 @@ func TestToNative(t *testing.T) {
 	}
 }
 
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		evalResult{},
+	},
+	[]string{}, // ignored fields
+)
+
 func TestNewNumeric(t *testing.T) {
 	tcases := []struct {
 		v   sqltypes.Value
@@ -917,17 +926,15 @@ func TestNewNumeric(t *testing.T) {
 		out: evalResult{typ: querypb.Type_FLOAT64, fval: 0},
 	}}
 	for _, tcase := range tcases {
-		got, err := newNumeric(tcase.v)
+		got, err := newEvalResult(tcase.v)
 		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("newNumeric(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
+			t.Errorf("newEvalResult(%s) error: %v, want %v", printValue(tcase.v), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
 		if tcase.err == nil {
 			continue
 		}
 
-		if got != tcase.out {
-			t.Errorf("newNumeric(%s): %v, want %v", printValue(tcase.v), got, tcase.out)
-		}
+		mustMatch(t, tcase.out, got, "newEvalResult")
 	}
 }
 
@@ -974,9 +981,7 @@ func TestNewIntegralNumeric(t *testing.T) {
 			continue
 		}
 
-		if got != tcase.out {
-			t.Errorf("newIntegralNumeric(%s): %v, want %v", printValue(tcase.v), got, tcase.out)
-		}
+		mustMatch(t, tcase.out, got, "newIntegralNumeric")
 	}
 }
 
@@ -1032,16 +1037,16 @@ func TestAddNumeric(t *testing.T) {
 	for _, tcase := range tcases {
 		got := addNumeric(tcase.v1, tcase.v2)
 
-		if got != tcase.out {
-			t.Errorf("addNumeric(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
-		}
+		mustMatch(t, tcase.out, got, "addNumeric")
 	}
 }
 
 func TestPrioritize(t *testing.T) {
-	ival := evalResult{typ: querypb.Type_INT64}
-	uval := evalResult{typ: querypb.Type_UINT64}
-	fval := evalResult{typ: querypb.Type_FLOAT64}
+	ival := evalResult{typ: querypb.Type_INT64, ival: -1}
+	uval := evalResult{typ: querypb.Type_UINT64, uval: 1}
+	fval := evalResult{typ: querypb.Type_FLOAT64, fval: 1.2}
+	textIntval := evalResult{typ: querypb.Type_VARBINARY, bytes: []byte("-1")}
+	textFloatval := evalResult{typ: querypb.Type_VARBINARY, bytes: []byte("1.2")}
 
 	tcases := []struct {
 		v1, v2     evalResult
@@ -1076,12 +1081,23 @@ func TestPrioritize(t *testing.T) {
 		v2:   uval,
 		out1: fval,
 		out2: uval,
+	}, {
+		v1:   textIntval,
+		v2:   ival,
+		out1: ival,
+		out2: ival,
+	}, {
+		v1:   ival,
+		v2:   textFloatval,
+		out1: fval,
+		out2: ival,
 	}}
 	for _, tcase := range tcases {
-		got1, got2 := prioritize(tcase.v1, tcase.v2)
-		if got1 != tcase.out1 || got2 != tcase.out2 {
-			t.Errorf("prioritize(%v, %v): (%v, %v) , want (%v, %v)", tcase.v1.typ, tcase.v2.typ, got1.typ, got2.typ, tcase.out1.typ, tcase.out2.typ)
-		}
+		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
+			got1, got2 := makeNumericAndprioritize(tcase.v1, tcase.v2)
+			mustMatch(t, tcase.out1, got1, "makeNumericAndprioritize")
+			mustMatch(t, tcase.out2, got2, "makeNumericAndprioritize")
+		})
 	}
 }
 

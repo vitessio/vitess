@@ -93,7 +93,7 @@ func TestBuffer(t *testing.T) {
 	// after this. If the TabletExternallyReparented RPC is called regularly by
 	// an external failover tool, the timestamp will be increased (even though
 	// the master did not change.)
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              oldMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -123,7 +123,7 @@ func TestBuffer(t *testing.T) {
 
 	// Mimic the failover end.
 	now = now.Add(1 * time.Second)
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -184,7 +184,7 @@ func TestBuffer(t *testing.T) {
 		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
 	}
 	// Stop buffering.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              oldMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -321,7 +321,7 @@ func TestDryRun(t *testing.T) {
 	}
 
 	// End of failover is tracked as well.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
@@ -373,7 +373,7 @@ func TestLastReparentTooRecent_BufferingSkipped(t *testing.T) {
 	// Simulate that the old master notified us about its reparented timestamp
 	// very recently (time.Now()).
 	// vtgate should see this immediately after the start.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              oldMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -382,7 +382,7 @@ func TestLastReparentTooRecent_BufferingSkipped(t *testing.T) {
 	// Failover to new master. Its end is detected faster than the beginning.
 	// Do not start buffering.
 	now = now.Add(1 * time.Second)
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -417,7 +417,7 @@ func TestLastReparentTooRecent_Buffering(t *testing.T) {
 	// Simulate that the old master notified us about its reparented timestamp
 	// very recently (time.Now()).
 	// vtgate should see this immediately after the start.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              oldMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -426,7 +426,7 @@ func TestLastReparentTooRecent_Buffering(t *testing.T) {
 	// Failover to new master. Do not issue any requests before or after i.e.
 	// there was 0 QPS traffic and no buffering was started.
 	now = now.Add(1 * time.Second)
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -441,7 +441,7 @@ func TestLastReparentTooRecent_Buffering(t *testing.T) {
 		t.Fatal(err)
 	}
 	// And then the failover end.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: now.Unix(),
@@ -480,7 +480,7 @@ func TestPassthroughDuringDrain(t *testing.T) {
 	}
 
 	// Stop buffering and trigger drain.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
@@ -595,7 +595,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	}
 
 	if explicitEnd {
-		b.StatsUpdate(&discovery.TabletStats{
+		b.StatsUpdate(&discovery.LegacyTabletStats{
 			Tablet:                              newMaster,
 			Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 			TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
@@ -614,7 +614,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	// If buffering stopped implicitly, the explicit signal will still happen
 	// shortly after. In that case, the buffer should ignore it.
 	if !explicitEnd {
-		b.StatsUpdate(&discovery.TabletStats{
+		b.StatsUpdate(&discovery.LegacyTabletStats{
 			Tablet:                              newMaster,
 			Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 			TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
@@ -660,7 +660,7 @@ func TestEviction(t *testing.T) {
 	}
 
 	// End of failover. Stop buffering.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
@@ -743,7 +743,7 @@ func TestEvictionNotPossible(t *testing.T) {
 	}
 
 	// End of failover. Stop buffering.
-	b.StatsUpdate(&discovery.TabletStats{
+	b.StatsUpdate(&discovery.LegacyTabletStats{
 		Tablet:                              newMaster,
 		Target:                              &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
 		TabletExternallyReparentedTimestamp: 1, // Use any value > 0.

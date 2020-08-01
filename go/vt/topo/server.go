@@ -218,6 +218,9 @@ func Open() *Server {
 	if *topoGlobalServerAddress == "" && *topoImplementation != "k8s" {
 		log.Exitf("topo_global_server_address must be configured")
 	}
+	if *topoGlobalRoot == "" {
+		log.Exit("topo_global_root must be non-empty")
+	}
 	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
 	if err != nil {
 		log.Exitf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)

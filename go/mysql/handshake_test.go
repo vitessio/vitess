@@ -129,7 +129,7 @@ func TestSSLConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
-	l.TLSConfig = serverConfig
+	l.TLSConfig.Store(serverConfig)
 	go func() {
 		l.Accept()
 	}()

@@ -20,7 +20,6 @@ package tabletenv
 
 import (
 	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -30,36 +29,32 @@ import (
 type Env interface {
 	CheckMySQL()
 	Config() *TabletConfig
-	DBConfigs() *dbconfigs.DBConfigs
 	Exporter() *servenv.Exporter
 	Stats() *Stats
 	LogError()
 }
 
 type testEnv struct {
-	config    *TabletConfig
-	dbconfigs *dbconfigs.DBConfigs
-	exporter  *servenv.Exporter
-	stats     *Stats
+	config   *TabletConfig
+	exporter *servenv.Exporter
+	stats    *Stats
 }
 
-// NewTestEnv creates an Env that can be used for tests.
-// CheckMySQL is a no-op.
-func NewTestEnv(config *TabletConfig, dbconfigs *dbconfigs.DBConfigs, exporterName string) Env {
+// NewEnv creates an Env that can be used for tabletserver subcomponents
+// without an actual TabletServer.
+func NewEnv(config *TabletConfig, exporterName string) Env {
 	exporter := servenv.NewExporter(exporterName, "Tablet")
 	return &testEnv{
-		config:    config,
-		dbconfigs: dbconfigs,
-		exporter:  exporter,
-		stats:     NewStats(exporter),
+		config:   config,
+		exporter: exporter,
+		stats:    NewStats(exporter),
 	}
 }
 
-func (*testEnv) CheckMySQL()                        {}
-func (te *testEnv) Config() *TabletConfig           { return te.config }
-func (te *testEnv) DBConfigs() *dbconfigs.DBConfigs { return te.dbconfigs }
-func (te *testEnv) Exporter() *servenv.Exporter     { return te.exporter }
-func (te *testEnv) Stats() *Stats                   { return te.stats }
+func (*testEnv) CheckMySQL()                    {}
+func (te *testEnv) Config() *TabletConfig       { return te.config }
+func (te *testEnv) Exporter() *servenv.Exporter { return te.exporter }
+func (te *testEnv) Stats() *Stats               { return te.stats }
 
 func (te *testEnv) LogError() {
 	if x := recover(); x != nil {

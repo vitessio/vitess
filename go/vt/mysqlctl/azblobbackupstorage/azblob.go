@@ -127,6 +127,21 @@ func (bh *AZBlobBackupHandle) Name() string {
 	return bh.name
 }
 
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (bh *AZBlobBackupHandle) RecordError(err error) {
+	bh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (bh *AZBlobBackupHandle) HasErrors() bool {
+	return bh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (bh *AZBlobBackupHandle) Error() error {
+	return bh.errors.Error()
+}
+
 // AddFile implements BackupHandle.
 func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error) {
 	if bh.readOnly {
@@ -156,7 +171,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.errors.RecordError(err)
+			bh.RecordError(err)
 		}
 	}()
 
@@ -169,7 +184,7 @@ func (bh *AZBlobBackupHandle) EndBackup(ctx context.Context) error {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
-	return bh.errors.Error()
+	return bh.Error()
 }
 
 // AbortBackup implements BackupHandle.

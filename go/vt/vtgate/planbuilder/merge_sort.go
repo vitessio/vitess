@@ -17,7 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -59,6 +60,11 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
+// PushLock satisfies the builder interface.
+func (ms *mergeSort) PushLock(lock string) error {
+	return ms.input.PushLock(lock)
+}
+
 // PushFilter satisfies the builder interface.
 func (ms *mergeSort) PushFilter(pb *primitiveBuilder, expr sqlparser.Expr, whereType string, origin builder) error {
 	return ms.input.PushFilter(pb, expr, whereType, origin)
@@ -83,7 +89,7 @@ func (ms *mergeSort) PushGroupBy(groupBy sqlparser.GroupBy) error {
 // A merge sort is created due to the push of an ORDER BY clause.
 // So, this function should never get called.
 func (ms *mergeSort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, errors.New("mergeSort.PushOrderBy: unreachable")
+	return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
 }
 
 // Wireup satisfies the builder interface.

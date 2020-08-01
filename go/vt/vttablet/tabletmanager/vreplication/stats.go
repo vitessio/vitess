@@ -61,13 +61,13 @@ func (st *vrStats) register() {
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationSecondsBehindMaster",
 		"vreplication seconds behind master per stream",
-		[]string{"counts"},
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[fmt.Sprintf("%v", ct.id)] = ct.blpStats.SecondsBehindMaster.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.SecondsBehindMaster.Get()
 			}
 			return result
 		})

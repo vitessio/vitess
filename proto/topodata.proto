@@ -79,7 +79,7 @@ enum TabletType {
   // MASTER is the master server for the shard. Only MASTER allows DMLs.
   MASTER = 1;
 
-  // REPLICA is a slave type. It is used to serve live traffic.
+  // REPLICA replicates from master. It is used to serve live traffic.
   // A REPLICA can be promoted to MASTER. A demoted MASTER will go to REPLICA.
   REPLICA = 2;
 

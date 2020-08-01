@@ -17,8 +17,11 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSplitComments(t *testing.T) {
@@ -383,5 +386,57 @@ func TestSkipQueryPlanCacheDirective(t *testing.T) {
 	stmt, _ = Parse("delete /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ from users")
 	if !SkipQueryPlanCacheDirective(stmt) {
 		t.Errorf("d.SkipQueryPlanCacheDirective(stmt) should be true")
+	}
+}
+
+func TestIgnoreMaxPayloadSizeDirective(t *testing.T) {
+	testCases := []struct {
+		query    string
+		expected bool
+	}{
+		{"insert /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ into user(id) values (1), (2)", true},
+		{"insert into user(id) values (1), (2)", false},
+		{"update /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ users set name=1", true},
+		{"update users set name=1", false},
+		{"select /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ * from users", true},
+		{"select * from users", false},
+		{"delete /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ from users", true},
+		{"delete from users", false},
+		{"show /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ create table users", false},
+		{"show create table users", false},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.query, func(t *testing.T) {
+			stmt, _ := Parse(test.query)
+			got := IgnoreMaxPayloadSizeDirective(stmt)
+			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+		})
+	}
+}
+
+func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
+	testCases := []struct {
+		query    string
+		expected bool
+	}{
+		{"insert /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ into user(id) values (1), (2)", true},
+		{"insert into user(id) values (1), (2)", false},
+		{"update /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ users set name=1", true},
+		{"update users set name=1", false},
+		{"select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ * from users", true},
+		{"select * from users", false},
+		{"delete /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ from users", true},
+		{"delete from users", false},
+		{"show /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ create table users", false},
+		{"show create table users", false},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.query, func(t *testing.T) {
+			stmt, _ := Parse(test.query)
+			got := IgnoreMaxMaxMemoryRowsDirective(stmt)
+			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+		})
 	}
 }

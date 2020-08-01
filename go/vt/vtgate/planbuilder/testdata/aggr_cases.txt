@@ -513,7 +513,6 @@
   "Original": "select a from (select count(*) as a from user) t",
   "Instructions": {
     "OperatorType": "Subquery",
-    "Variant": "",
     "Columns": [
       0
     ],
@@ -1096,7 +1095,6 @@
   "Original": "select col, count(*) from user group by col limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Variant": "",
     "Count": 10,
     "Inputs": [
       {

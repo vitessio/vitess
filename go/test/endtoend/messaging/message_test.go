@@ -69,6 +69,8 @@ func TestMessage(t *testing.T) {
 
 	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	exec(t, conn, createMessage)
+	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+
 	defer exec(t, conn, "drop table vitess_message")
 
 	exec(t, streamConn, "set workload = 'olap'")
@@ -95,6 +97,10 @@ func TestMessage(t *testing.T) {
 
 	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
 
+	// account for jitter in timings, maxJitter uses the current hardcoded value for jitter in message_manager.go
+	jitter := int64(0)
+	maxJitter := int64(1.4 * 1e9)
+
 	// Consume first message.
 	start := time.Now().UnixNano()
 	got, err := streamConn.FetchNext()
@@ -108,15 +114,16 @@ func TestMessage(t *testing.T) {
 
 	qr := exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch := getTimeEpoch(qr)
+	jitter += epoch * maxJitter
 	// epoch could be 0 or 1, depending on how fast the row is updated
 	switch epoch {
 	case 0:
-		if !(start-1e9 < next && next < start) {
-			t.Errorf("next: %d. must be within 1s of start: %d", next/1e9, start/1e9)
+		if !(start-1e9 < next && next < (start+jitter)) {
+			t.Errorf("next: %d. must be within 1s of start: %d", next/1e9, (start+jitter)/1e9)
 		}
 	case 1:
-		if !(start < next && next < start+3e9) {
-			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, start/1e9)
+		if !(start < next && next < (start+jitter)+3e9) {
+			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
 		}
 	default:
 		t.Errorf("epoch: %d, must be 0 or 1", epoch)
@@ -127,15 +134,16 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	qr = exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
 	next, epoch = getTimeEpoch(qr)
+	jitter += epoch * maxJitter
 	// epoch could be 1 or 2, depending on how fast the row is updated
 	switch epoch {
 	case 1:
-		if !(start < next && next < start+3e9) {
-			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, start/1e9)
+		if !(start < next && next < (start+jitter)+3e9) {
+			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
 		}
 	case 2:
-		if !(start+2e9 < next && next < start+6e9) {
-			t.Errorf("next: %d. must be about 3s after start: %d", next/1e9, start/1e9)
+		if !(start+2e9 < next && next < (start+jitter)+6e9) {
+			t.Errorf("next: %d. must be about 3s after start: %d", next/1e9, (start+jitter)/1e9)
 		}
 	default:
 		t.Errorf("epoch: %d, must be 1 or 2", epoch)

@@ -322,7 +322,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 
 	// Get the current master replication position, and wait until we catch up
 	// to that point. We do this instead of looking at Seconds_Behind_Master
-	// (replication lag reported by SHOW SLAVE STATUS) because that value can
+	// because that value can
 	// sometimes lie and tell you there's 0 lag when actually replication is
 	// stopped. Also, if replication is making progress but is too slow to ever
 	// catch up to live changes, we'd rather take a backup of something rather
@@ -360,7 +360,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		case <-time.After(time.Second):
 		}
 
-		status, statusErr := mysqld.SlaveStatus()
+		status, statusErr := mysqld.ReplicationStatus()
 		if statusErr != nil {
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
@@ -371,7 +371,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
 			break
 		}
-		if !status.SlaveRunning() {
+		if !status.ReplicationRunning() {
 			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)
@@ -380,12 +380,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Stop replication and see where we are.
-	if err := mysqld.StopSlave(nil); err != nil {
+	if err := mysqld.StopReplication(nil); err != nil {
 		return fmt.Errorf("can't stop replication: %v", err)
 	}
 
 	// Did we make any progress?
-	status, err := mysqld.SlaveStatus()
+	status, err := mysqld.ReplicationStatus()
 	if err != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
@@ -414,14 +414,14 @@ func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 	}
 	if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return vterrors.Wrap(err, "failed to reset slave")
+		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
 	// Check if we have a position to resume from, if not reset to the beginning of time
 	if !pos.IsZero() {
 		// Set the position at which to resume from the master.
-		if err := mysqld.SetSlavePosition(ctx, pos); err != nil {
-			return vterrors.Wrap(err, "failed to set slave position")
+		if err := mysqld.SetReplicationPosition(ctx, pos); err != nil {
+			return vterrors.Wrap(err, "failed to set replica position")
 		}
 	} else {
 		if err := mysqld.ResetReplication(ctx); err != nil {
@@ -448,8 +448,8 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
 	}
 
-	// Stop slave (in case we're restarting), set master, and start slave.
-	if err := mysqld.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), true /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+	// Stop replication (in case we're restarting), set master, and start replication.
+	if err := mysqld.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), true /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
 	return nil

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
 	"sync"
@@ -108,7 +109,7 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	if session.InTransaction {
 		defer atomic.AddInt32(&busyConnections, -1)
 	}
-	_, _, err := vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	err := vh.vtg.CloseSession(ctx, session)
 	if err != nil {
 		log.Errorf("Error happened in transaction rollback: %v", err)
 	}
@@ -134,7 +135,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	if session.InTransaction {
 		defer atomic.AddInt32(&busyConnections, -1)
 	}
-	_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	_ = vh.vtg.CloseSession(ctx, session)
 }
 
 // Regexp to extract parent span id over the sql query
@@ -164,10 +165,6 @@ func startSpanTestable(ctx context.Context, query, label string,
 
 func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {
 	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
-}
-
-func (vh *vtgateHandler) ComInitDB(c *mysql.Conn, schemaName string) {
-	vh.session(c).TargetString = schemaName
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -221,7 +218,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 }
 
 // ComPrepare is the handler for command prepare.
-func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
@@ -255,7 +252,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		}
 	}()
 
-	session, fld, err := vh.vtg.Prepare(ctx, session, query, make(map[string]*querypb.BindVariable))
+	session, fld, err := vh.vtg.Prepare(ctx, session, query, bindVars)
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
 		return nil, err
@@ -334,8 +331,33 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
-
+var sigChan chan os.Signal
 var vtgateHandle *vtgateHandler
+
+// initTLSConfig inits tls config for the given mysql listener
+func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mysqlSslCa string, mysqlServerRequireSecureTransport bool) error {
+	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+	if err != nil {
+		log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
+		return err
+	}
+	mysqlListener.TLSConfig.Store(serverConfig)
+	mysqlListener.RequireSecureTransport = mysqlServerRequireSecureTransport
+	sigChan = make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGHUP)
+	go func() {
+		for range sigChan {
+			serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa)
+			if err != nil {
+				log.Errorf("grpcutils.TLSServerConfig failed: %v", err)
+			} else {
+				log.Info("grpcutils.TLSServerConfig updated")
+				mysqlListener.TLSConfig.Store(serverConfig)
+			}
+		}
+	}()
+	return nil
+}
 
 // initiMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
@@ -381,12 +403,7 @@ func initMySQLProtocol() {
 			mysqlListener.ServerVersion = *mysqlServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			mysqlListener.TLSConfig, err = vttls.ServerConfig(*mysqlSslCert, *mysqlSslKey, *mysqlSslCa)
-			if err != nil {
-				log.Exitf("grpcutils.TLSServerConfig failed: %v", err)
-				return
-			}
-			mysqlListener.RequireSecureTransport = *mysqlServerRequireSecureTransport
+			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlServerRequireSecureTransport)
 		}
 		mysqlListener.AllowClearTextWithoutTLS.Set(*mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
@@ -452,6 +469,9 @@ func shutdownMysqlProtocolAndDrain() {
 	if mysqlUnixListener != nil {
 		mysqlUnixListener.Close()
 		mysqlUnixListener = nil
+	}
+	if sigChan != nil {
+		signal.Stop(sigChan)
 	}
 
 	if atomic.LoadInt32(&busyConnections) > 0 {

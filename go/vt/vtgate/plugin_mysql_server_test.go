@@ -19,8 +19,11 @@ package vtgate
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/trace"
@@ -30,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/tlstest"
 )
 
 type testHandler struct {
@@ -43,14 +47,11 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
-func (th *testHandler) ComInitDB(c *mysql.Conn, schemaName string) {
-}
-
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
 	return nil
 }
 
-func (th *testHandler) ComPrepare(c *mysql.Conn, q string) ([]*querypb.Field, error) {
+func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
@@ -224,5 +225,33 @@ func TestDefaultWorkloadOLAP(t *testing.T) {
 	sess := vh.session(&mysql.Conn{})
 	if sess.Options.Workload != querypb.ExecuteOptions_OLAP {
 		t.Fatalf("Expected default workload OLAP")
+	}
+}
+
+func TestInitTLSConfig(t *testing.T) {
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestInitTLSConfig")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+
+	listener := &mysql.Listener{}
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), true); err != nil {
+		t.Fatalf("init tls config failure due to: +%v", err)
+	}
+
+	serverConfig := listener.TLSConfig.Load()
+	if serverConfig == nil {
+		t.Fatalf("init tls config shouldn't create nil server config")
+	}
+
+	sigChan <- syscall.SIGHUP
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
+
+	if listener.TLSConfig.Load() == serverConfig {
+		t.Fatalf("init tls config should have been recreated after SIGHUP")
 	}
 }

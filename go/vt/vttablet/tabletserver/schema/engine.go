@@ -19,10 +19,12 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -38,6 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -57,23 +61,32 @@ type Engine struct {
 	tables     map[string]*Table
 	lastChange int64
 	reloadTime time.Duration
-	notifiers  map[string]notifier
+	//the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
+	reloadAtPos mysql.Position
+	notifierMu  sync.Mutex
+	notifiers   map[string]notifier
 
-	// The following fields have their own synchronization
-	// and do not require locking mu.
+	// SkipMetaCheck skips the metadata about the database and table information
+	SkipMetaCheck bool
+
+	historian *historian
+
 	conns *connpool.Pool
 	ticks *timer.Timer
+
+	// dbCreationFailed is for preventing log spam.
+	dbCreationFailed bool
 }
 
 // NewEngine creates a new Engine.
 func NewEngine(env tabletenv.Env) *Engine {
-	reloadTime := time.Duration(env.Config().SchemaReloadIntervalSeconds * 1e9)
+	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
 	se := &Engine{
 		env: env,
-		// We need only one connection because the reloader is
-		// the only one that needs this.
+		// We need three connections: one for the reloader, one for
+		// the historian, and one for the tracker.
 		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
-			Size:               1,
+			Size:               3,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 		ticks:      timer.NewTimer(reloadTime),
@@ -93,12 +106,56 @@ func NewEngine(env tabletenv.Env) *Engine {
 
 		schemazHandler(se.GetSchema(), w, r)
 	})
+	se.historian = newHistorian(env.Config().TrackSchemaVersions, se.conns)
 	return se
 }
 
 // InitDBConfig must be called before Open.
 func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
+}
+
+// EnsureConnectionAndDB ensures that we can connect to mysql.
+// If tablet type is master and there is no db, then the database is created.
+// This function can be called before opening the Engine.
+func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+	ctx := tabletenv.LocalContext()
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	if err == nil {
+		conn.Close()
+		se.dbCreationFailed = false
+		return nil
+	}
+	if tabletType != topodatapb.TabletType_MASTER {
+		return err
+	}
+	if merr, isSQLErr := err.(*mysql.SQLError); !isSQLErr || merr.Num != mysql.ERBadDb {
+		return err
+	}
+
+	// We are master and db is not found. Let's create it.
+	// We use allprivs instead of DBA because we want db create to fail if we're read-only.
+	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsConnector())
+	if err != nil {
+		return vterrors.Wrap(err, "allprivs connection failed")
+	}
+	defer conn.Close()
+
+	dbname := se.env.Config().DB.DBName
+	_, err = conn.ExecuteFetch(fmt.Sprintf("create database if not exists `%s`", dbname), 1, false)
+	if err != nil {
+		if !se.dbCreationFailed {
+			// This is the first failure.
+			log.Errorf("db creation failed for %v: %v, will keep retrying", dbname, err)
+			se.dbCreationFailed = true
+		}
+		return err
+	}
+
+	se.dbCreationFailed = false
+	log.Infof("db %v created", dbname)
+	se.dbCreationFailed = false
+	return nil
 }
 
 // Open initializes the Engine. Calling Open on an already
@@ -109,9 +166,21 @@ func (se *Engine) Open() error {
 	if se.isOpen {
 		return nil
 	}
+	log.Info("Schema Engine: opening")
 
 	ctx := tabletenv.LocalContext()
+
+	// The function we're in is supposed to be idempotent, but this conns.Open()
+	// call is not itself idempotent. Therefore, if we return for any reason
+	// without marking ourselves as open, we need to call conns.Close() so the
+	// pools aren't leaked the next time we call Open().
 	se.conns.Open(se.cp, se.cp, se.cp)
+	defer func() {
+		if !se.isOpen {
+			se.conns.Close()
+		}
+	}()
+
 	se.tables = map[string]*Table{
 		"dual": NewTable("dual"),
 	}
@@ -120,12 +189,18 @@ func (se *Engine) Open() error {
 	if err := se.reload(ctx); err != nil {
 		return err
 	}
+	if !se.SkipMetaCheck {
+		if err := se.historian.Open(); err != nil {
+			return err
+		}
+	}
 
 	se.ticks.Start(func() {
 		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
+
 	se.isOpen = true
 	return nil
 }
@@ -145,12 +220,16 @@ func (se *Engine) Close() {
 	if !se.isOpen {
 		return
 	}
+
 	se.ticks.Stop()
+	se.historian.Close()
 	se.conns.Close()
+
 	se.tables = make(map[string]*Table)
 	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
+	log.Info("Schema Engine: closed")
 }
 
 // MakeNonMaster clears the sequence caches to make sure that
@@ -169,15 +248,38 @@ func (se *Engine) MakeNonMaster() {
 	}
 }
 
+// EnableHistorian forces tracking to be on or off.
+// Only used for testing.
+func (se *Engine) EnableHistorian(enabled bool) error {
+	return se.historian.Enable(enabled)
+}
+
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 func (se *Engine) Reload(ctx context.Context) error {
+	return se.ReloadAt(ctx, mysql.Position{})
+}
+
+// ReloadAt reloads the schema info from the db.
+// Any tables that have changed since the last load are updated.
+// It maintains the position at which the schema was reloaded and if the same position is provided
+// (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
+func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
+		log.Warning("Schema reload called for an engine that is not yet open")
 		return nil
 	}
-	return se.reload(ctx)
+	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
+		log.V(2).Infof("ReloadAt: found cached schema at %s", mysql.EncodePosition(pos))
+		return nil
+	}
+	if err := se.reload(ctx); err != nil {
+		return err
+	}
+	se.reloadAtPos = pos
+	return nil
 }
 
 // reload reloads the schema. It can also be used to initialize it.
@@ -199,6 +301,10 @@ func (se *Engine) reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// if this flag is set, then we don't need table meta information
+	if se.SkipMetaCheck {
+		return nil
+	}
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		return err
@@ -215,11 +321,12 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
+		// TODO(sougou); find a better way detect changed tables. This method
+		// seems unreliable. The endtoend test flags all tables as changed.
 		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
 			continue
 		}
-		log.Infof("Reading schema for table: %s", tableName)
-
+		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)
@@ -256,13 +363,13 @@ func (se *Engine) reload(ctx context.Context) error {
 		se.tables[k] = t
 	}
 	se.lastChange = curTime
-
 	se.broadcast(created, altered, dropped)
 	return nil
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
-	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
+	// Keep `SELECT UNIX_TIMESTAMP` is in uppercase because binlog server queries are case sensitive and expect it to be so.
+	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get MySQL time: %v", err)
 	}
@@ -298,16 +405,41 @@ func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn
 	return nil
 }
 
+// RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
+// It triggers the historian to load the newer rows from the database to update its cache
+func (se *Engine) RegisterVersionEvent() error {
+	return se.historian.RegisterVersionEvent()
+}
+
+// GetTableForPos returns a best-effort schema for a specific gtid
+func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
+	mt, err := se.historian.GetTableForPos(tableName, gtid)
+	if err != nil {
+		return nil, err
+	}
+	if mt != nil {
+		return mt, nil
+	}
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	st, ok := se.tables[tableName.String()]
+	if !ok {
+		return nil, fmt.Errorf("table %v not found in vttablet schema", tableName.String())
+	}
+	return newMinimalTable(st), nil
+}
+
 // RegisterNotifier registers the function for schema change notification.
 // It also causes an immediate notification to the caller. The notified
 // function must not change the map or its contents. The only exception
 // is the sequence table where the values can be changed using the lock.
 func (se *Engine) RegisterNotifier(name string, f notifier) {
-	se.mu.Lock()
-	defer se.mu.Unlock()
 	if !se.isOpen {
 		return
 	}
+
+	se.notifierMu.Lock()
+	defer se.notifierMu.Unlock()
 
 	se.notifiers[name] = f
 	var created []string
@@ -319,17 +451,24 @@ func (se *Engine) RegisterNotifier(name string, f notifier) {
 
 // UnregisterNotifier unregisters the notifier function.
 func (se *Engine) UnregisterNotifier(name string) {
-	se.mu.Lock()
-	defer se.mu.Unlock()
 	if !se.isOpen {
 		return
 	}
+
+	se.notifierMu.Lock()
+	defer se.notifierMu.Unlock()
 
 	delete(se.notifiers, name)
 }
 
 // broadcast must be called while holding a lock on se.mu.
 func (se *Engine) broadcast(created, altered, dropped []string) {
+	if !se.isOpen {
+		return
+	}
+
+	se.notifierMu.Lock()
+	defer se.notifierMu.Unlock()
 	s := make(map[string]*Table, len(se.tables))
 	for k, v := range se.tables {
 		s[k] = v
@@ -356,6 +495,11 @@ func (se *Engine) GetSchema() map[string]*Table {
 		tables[k] = v
 	}
 	return tables
+}
+
+// GetConnection returns a connection from the pool
+func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
+	return se.conns.Get(ctx)
 }
 
 func (se *Engine) handleDebugSchema(response http.ResponseWriter, request *http.Request) {

@@ -22,6 +22,8 @@ import (
 	"html/template"
 	"net/http"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -160,8 +162,8 @@ func twopczHandler(txe *TxExecutor, w http.ResponseWriter, r *http.Request) {
 	if format == "json" {
 		w.Header().Set("Content-Type", "application/json")
 		js, err := json.Marshal(struct {
-			Distributed      []*DistributedTx
-			Prepared, Failed []*PreparedTx
+			Distributed      []*tx.DistributedTx
+			Prepared, Failed []*tx.PreparedTx
 		}{
 			Distributed: distributed,
 			Prepared:    prepared,

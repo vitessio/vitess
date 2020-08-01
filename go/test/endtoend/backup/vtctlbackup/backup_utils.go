@@ -38,20 +38,22 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
+// constants for test variants
 const (
-	ExtraBackup = iota
+	XtraBackup = iota
 	Backup
 	Mysqlctld
 )
 
 var (
-	master           *cluster.Vttablet
-	replica1         *cluster.Vttablet
-	replica2         *cluster.Vttablet
-	localCluster     *cluster.LocalProcessCluster
-	newInitDBFile    string
-	useXtrabackup    bool
-	cell             = cluster.DefaultCell
+	master        *cluster.Vttablet
+	replica1      *cluster.Vttablet
+	replica2      *cluster.Vttablet
+	localCluster  *cluster.LocalProcessCluster
+	newInitDBFile string
+	useXtrabackup bool
+	cell          = cluster.DefaultCell
+
 	hostname         = "localhost"
 	keyspaceName     = "ks"
 	dbPassword       = "VtDbaPass"
@@ -114,7 +116,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
 	// Update arguments for xtrabackup
-	if setupType == ExtraBackup {
+	if setupType == XtraBackup {
 		useXtrabackup = true
 
 		xtrabackupArgs := []string{
@@ -127,7 +129,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
 		if streamMode == "xbstream" {
-			xtrabackupArgs = append(xtrabackupArgs, "-xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M"))
+			xtrabackupArgs = append(xtrabackupArgs, "-xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M")) //nolint
 		}
 
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
@@ -139,8 +141,8 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 		if i == 0 {
 			tabletType = "master"
 		}
-		tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
-		tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+		tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
+		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 		tablet.VttabletProcess.DbPassword = dbPassword
 		tablet.VttabletProcess.ExtraArgs = commonTabletArg
 		tablet.VttabletProcess.SupportsBackup = true
@@ -200,10 +202,12 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	return 0, nil
 }
 
+// TearDownCluster shuts down all cluster processes
 func TearDownCluster() {
 	localCluster.Teardown()
 }
 
+// TestBackup runs all the backup tests
 func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 
 	testMethods := []struct {
@@ -658,7 +662,7 @@ func terminateRestore(t *testing.T) {
 				assert.Fail(t, "restore in progress file missing")
 			}
 			tmpProcess.Process.Signal(syscall.SIGTERM)
-			found = true
+			found = true //nolint
 			return
 		}
 	}

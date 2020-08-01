@@ -37,7 +37,8 @@ type GTIDSet interface {
 	// ContainsGTID returns true if the set contains the specified transaction.
 	ContainsGTID(GTID) bool
 
-	// Contains returns true if the set is a superset of another set.
+	// Contains returns true if the set is a superset of another set. All implementations should return false if
+	// other GTIDSet is not the right concrete type for that flavor.
 	Contains(GTIDSet) bool
 
 	// Equal returns true if the set is equal to another set.
@@ -45,6 +46,12 @@ type GTIDSet interface {
 
 	// AddGTID returns a new GTIDSet that is expanded to contain the given GTID.
 	AddGTID(GTID) GTIDSet
+
+	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
+	Union(GTIDSet) GTIDSet
+
+	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
+	Last() string
 }
 
 // gtidSetParsers maps flavor names to parser functions. It is used by

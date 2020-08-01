@@ -30,6 +30,8 @@ func readable(node Expr) string {
 		return fmt.Sprintf("(%s or %s)", readable(node.Left), readable(node.Right))
 	case *AndExpr:
 		return fmt.Sprintf("(%s and %s)", readable(node.Left), readable(node.Right))
+	case *XorExpr:
+		return fmt.Sprintf("(%s xor %s)", readable(node.Left), readable(node.Right))
 	case *BinaryExpr:
 		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator, readable(node.Right))
 	case *IsExpr:
@@ -156,7 +158,7 @@ func TestRandom(t *testing.T) {
 	// The purpose of this test is to find discrepancies between Format and parsing. If for example our precedence rules are not consistent between the two, this test should find it.
 	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
 	seed := time.Now().UnixNano()
-	fmt.Println(fmt.Sprintf("seed is %d", seed))
+	fmt.Println(fmt.Sprintf("seed is %d", seed)) //nolint
 	g := newGenerator(seed, 5)
 	endBy := time.Now().Add(1 * time.Second)
 

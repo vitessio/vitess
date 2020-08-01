@@ -5,7 +5,6 @@
   "Original": "repair table t1,t2 quick",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -24,7 +23,6 @@
   "Original": "optimize table t1",
   "Instructions": {
     "OperatorType": "Send",
-    "Variant": "",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -32,6 +30,24 @@
     "TargetDestination": "AnyShard()",
     "IsDML": false,
     "Query": "optimize table t1",
+    "SingleShardOnly": true
+  }
+}
+
+# DO statement
+"DO 1"
+{
+  "QueryType": "OTHER",
+  "Original": "DO 1",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "DO 1",
     "SingleShardOnly": true
   }
 }

@@ -22,7 +22,8 @@ import (
 	"strings"
 )
 
-const filePosFlavorID = "FilePos"
+// FilePosFlavorID is the string identifier for the filePos flavor.
+const FilePosFlavorID = "FilePos"
 
 // parsefilePosGTID is registered as a GTID parser.
 func parseFilePosGTID(s string) (GTID, error) {
@@ -65,7 +66,7 @@ func (gtid filePosGTID) String() string {
 
 // Flavor implements GTID.Flavor().
 func (gtid filePosGTID) Flavor() string {
-	return filePosFlavorID
+	return FilePosFlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
@@ -109,9 +110,12 @@ func (gtid filePosGTID) ContainsGTID(other GTID) bool {
 // Contains implements GTIDSet.Contains().
 func (gtid filePosGTID) Contains(other GTIDSet) bool {
 	if other == nil {
-		return true
+		return false
 	}
-	filePosOther, _ := other.(filePosGTID)
+	filePosOther, ok := other.(filePosGTID)
+	if !ok {
+		return false
+	}
 	return gtid.ContainsGTID(filePosOther)
 }
 
@@ -133,8 +137,25 @@ func (gtid filePosGTID) AddGTID(other GTID) GTIDSet {
 	return filePosOther
 }
 
+// Union implements GTIDSet.Union().
+func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
+	filePosOther, ok := other.(filePosGTID)
+	if !ok || gtid.Contains(other) {
+		return gtid
+	}
+
+	return filePosOther
+}
+
+// Last returns last filePosition
+// For filePos based GTID we have only one position
+// here we will just return the current filePos
+func (gtid filePosGTID) Last() string {
+	return gtid.String()
+}
+
 func init() {
-	gtidParsers[filePosFlavorID] = parseFilePosGTID
-	gtidSetParsers[filePosFlavorID] = parseFilePosGTIDSet
-	flavors[filePosFlavorID] = newFilePosFlavor
+	gtidParsers[FilePosFlavorID] = parseFilePosGTID
+	gtidSetParsers[FilePosFlavorID] = parseFilePosGTIDSet
+	flavors[FilePosFlavorID] = newFilePosFlavor
 }

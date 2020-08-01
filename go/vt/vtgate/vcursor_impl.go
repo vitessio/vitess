@@ -18,8 +18,14 @@ package vtgate
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/callerid"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -52,8 +58,8 @@ var _ iExecute = (*Executor)(nil)
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, tabletType topodatapb.TabletType, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
+	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
+	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -82,6 +88,7 @@ type vcursorImpl struct {
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
 	rollbackOnPartialExec bool
+	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
 }
@@ -127,19 +134,15 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
-	vschema, err := vm.GetCurrentVschema()
-	if err != nil {
-		return nil, err
-	}
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check for transaction to be only application in master.
-	if safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", tabletType)
+	// With DiscoveryGateway transactions are only allowed on master.
+	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "newVCursorImpl: transactions are supported only for master tablet types, current type: %v", tabletType)
 	}
 
 	return &vcursorImpl{
@@ -167,11 +170,29 @@ func (vc *vcursorImpl) MaxMemoryRows() int {
 	return *maxMemoryRows
 }
 
+// ExceedsMaxMemoryRows returns a boolean indicating whether the maxMemoryRows value has been exceeded.
+// Returns false if the max memory rows override directive is set to true.
+func (vc *vcursorImpl) ExceedsMaxMemoryRows(numRows int) bool {
+	return !vc.ignoreMaxMemoryRows && numRows > *maxMemoryRows
+}
+
+// SetIgnoreMaxMemoryRows sets the ignoreMaxMemoryRows value.
+func (vc *vcursorImpl) SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows bool) {
+	vc.ignoreMaxMemoryRows = ignoreMaxMemoryRows
+}
+
 // SetContextTimeout updates context and sets a timeout.
 func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	ctx, cancel := context.WithTimeout(vc.ctx, timeout)
 	vc.ctx = ctx
 	return cancel
+}
+
+// ErrorGroupCancellableContext updates context that can be cancelled.
+func (vc *vcursorImpl) ErrorGroupCancellableContext() *errgroup.Group {
+	g, ctx := errgroup.WithContext(vc.ctx)
+	vc.ctx = ctx
+	return g
 }
 
 // RecordWarning stores the given warning in the current session
@@ -226,6 +247,43 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return ks.Keyspace, nil
 }
 
+func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
+	keyspace, err := vc.DefaultKeyspace()
+	if err == nil {
+		return keyspace, nil
+	}
+	if err != errNoKeyspace {
+		return nil, err
+	}
+
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+	}
+
+	// Looks for any sharded keyspace if present, otherwise take any keyspace.
+	for _, ks := range vc.vschema.Keyspaces {
+		keyspace = ks.Keyspace
+		if keyspace.Sharded {
+			return keyspace, nil
+		}
+	}
+	return keyspace, nil
+}
+
+func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+	}
+	kss := vc.vschema.Keyspaces
+	keys := make([]string, 0, len(kss))
+	for ks := range kss {
+		keys = append(keys, ks)
+	}
+	sort.Strings(keys)
+
+	return kss[keys[0]].Keyspace, nil
+}
+
 // TargetString returns the current TargetString of the session.
 func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
@@ -252,7 +310,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
 	if errs == nil && rollbackOnError {
 		vc.rollbackOnPartialExec = true
@@ -276,14 +334,14 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, vc.tabletType, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows)
 	return qr, vterrors.Aggregate(errs)
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
-	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
+	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession.Options, callback)
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
@@ -322,7 +380,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 		return err
 	}
 	if _, ok := vc.vschema.Keyspaces[keyspace]; keyspace != "" && !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace provided: %s", keyspace)
+		return mysql.NewSQLError(mysql.ERBadDb, "42000", "Unknown database '%s'", keyspace)
 	}
 
 	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
@@ -339,6 +397,34 @@ func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {
 	}
 	vc.safeSession.SetUserDefinedVariable(key, bindValue)
 	return nil
+}
+
+func (vc *vcursorImpl) SetSysVar(name string, expr string) {
+	vc.safeSession.SetSystemVariable(name, expr)
+}
+
+//NeedsReservedConn implements the SessionActions interface
+func (vc *vcursorImpl) NeedsReservedConn() {
+	vc.safeSession.SetReservedConn(true)
+}
+
+func (vc *vcursorImpl) InReservedConn() bool {
+	return vc.safeSession.InReservedConn()
+}
+
+func (vc *vcursorImpl) ShardSession() []*srvtopo.ResolvedShard {
+	ss := vc.safeSession.GetShardSessions()
+	if len(ss) == 0 {
+		return nil
+	}
+	rss := make([]*srvtopo.ResolvedShard, len(ss))
+	for i, shardSession := range ss {
+		rss[i] = &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: vc.resolver.GetGateway(),
+		}
+	}
+	return rss
 }
 
 // Destination implements the ContextVSchema interface
@@ -395,6 +481,20 @@ func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (str
 
 func (vc *vcursorImpl) planPrefixKey() string {
 	if vc.destination != nil {
+		switch vc.destination.(type) {
+		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
+			resolved, _, err := vc.ResolveDestinations(vc.keyspace, nil, []key.Destination{vc.destination})
+			if err == nil && len(resolved) > 0 {
+				shards := make([]string, len(resolved))
+				for i := 0; i < len(shards); i++ {
+					shards[i] = resolved[i].Target.GetShard()
+				}
+				sort.Strings(shards)
+				return fmt.Sprintf("%s%sKsIDsResolved(%s)", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], strings.Join(shards, ","))
+			}
+		default:
+			// use destination string (out of the switch)
+		}
 		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
 	}
 	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])

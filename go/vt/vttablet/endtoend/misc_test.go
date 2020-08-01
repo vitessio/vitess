@@ -48,12 +48,8 @@ func TestSimpleRead(t *testing.T) {
 		return
 	}
 	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "Queries/TotalCount", vstart, 1); err != nil {
-		t.Error(err)
-	}
-	if err := compareIntDiff(vend, "Queries/Histograms/Select/Count", vstart, 1); err != nil {
-		t.Error(err)
-	}
+	compareIntDiff(t, vend, "Queries/TotalCount", vstart, 1)
+	compareIntDiff(t, vend, "Queries/Histograms/Select/Count", vstart, 1)
 }
 
 func TestBinary(t *testing.T) {
@@ -188,9 +184,7 @@ func TestIntegrityError(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
-	if err := compareIntDiff(framework.DebugVars(), "Errors/ALREADY_EXISTS", vstart, 1); err != nil {
-		t.Error(err)
-	}
+	compareIntDiff(t, framework.DebugVars(), "Errors/ALREADY_EXISTS", vstart, 1)
 }
 
 func TestTrailingComment(t *testing.T) {
@@ -278,8 +272,10 @@ func TestConsolidation(t *testing.T) {
 	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
 	framework.Server.SetPoolSize(1)
 
+	const tag = "Waits/Histograms/Consolidations/Count"
+
 	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
-		vstart := framework.DebugVars()
+		want := framework.FetchInt(framework.DebugVars(), tag) + 1
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
@@ -294,13 +290,10 @@ func TestConsolidation(t *testing.T) {
 		}()
 		wg.Wait()
 
-		vend := framework.DebugVars()
-		if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
-			t.Logf("DebugVars Waits/Histograms/Consolidations/Count not incremented with sleep=%v", sleep)
-			continue
+		if framework.FetchInt(framework.DebugVars(), tag) == want {
+			return
 		}
-		t.Logf("DebugVars properly incremented with sleep=%v", sleep)
-		return
+		t.Logf("Consolidation didn't succeed with sleep for %v, trying a longer sleep", sleep)
 	}
 	t.Error("DebugVars for consolidation not incremented")
 }
@@ -422,7 +415,7 @@ func TestHealth(t *testing.T) {
 
 func TestStreamHealth(t *testing.T) {
 	var health *querypb.StreamHealthResponse
-	framework.Server.BroadcastHealth(0, nil, time.Minute)
+	framework.Server.BroadcastHealth()
 	if err := framework.Server.StreamHealth(context.Background(), func(shr *querypb.StreamHealthResponse) error {
 		health = shr
 		return io.EOF
@@ -431,23 +424,6 @@ func TestStreamHealth(t *testing.T) {
 	}
 	if !proto.Equal(health.Target, &framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
-	}
-}
-
-func TestStreamHealth_Expired(t *testing.T) {
-	var health *querypb.StreamHealthResponse
-	framework.Server.BroadcastHealth(0, nil, time.Millisecond)
-	time.Sleep(5 * time.Millisecond)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
-	defer cancel()
-	if err := framework.Server.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
-		health = shr
-		return io.EOF
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if health != nil {
-		t.Errorf("Health: %v, want %v", health, nil)
 	}
 }
 
@@ -501,19 +477,13 @@ func TestQueryStats(t *testing.T) {
 		t.Errorf("stat: %+v, want %+v", stat, want)
 	}
 	vend := framework.DebugVars()
-	if err := compareIntDiff(vend, "QueryCounts/vitess_a.Select", vstart, 2); err != nil {
-		t.Error(err)
-	}
-	if err := compareIntDiff(vend, "QueryRowCounts/vitess_a.Select", vstart, 2); err != nil {
-		t.Error(err)
-	}
-	if err := compareIntDiff(vend, "QueryErrorCounts/vitess_a.Select", vstart, 1); err != nil {
-		t.Error(err)
-	}
+	compareIntDiff(t, vend, "QueryCounts/vitess_a.Select", vstart, 2)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 2)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Select", vstart, 1)
 
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
-	if _, err := client.BeginExecute(query, bv); err != nil {
+	if _, err := client.BeginExecute(query, bv, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := client.Rollback(); err != nil {
@@ -771,4 +741,20 @@ func TestAppDebugRequest(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
+}
+
+func TestBeginExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) {
+	client := framework.NewClient()
+
+	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
+	preQueries := []string{
+		"savepoint a",
+		"release savepoint b",
+	}
+	_, err := client.BeginExecute(insQuery, nil, preQueries)
+	require.Error(t, err)
+
+	qr, err := client.Execute("select intval from vitess_test where intval = 4", nil)
+	require.NoError(t, err)
+	require.Empty(t, qr.Rows)
 }

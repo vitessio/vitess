@@ -22,17 +22,14 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -43,18 +40,27 @@ var (
 	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
 )
 
-// SlaveStatus returns the replication status
-func (agent *ActionAgent) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
-	status, err := agent.MysqlDaemon.SlaveStatus()
+// ReplicationStatus returns the replication status
+func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+	status, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
 		return nil, err
 	}
-	return mysql.SlaveStatusToProto(status), nil
+	return mysql.ReplicationStatusToProto(status), nil
+}
+
+// MasterStatus returns the replication status fopr a master tablet.
+func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
+	status, err := tm.MysqlDaemon.MasterStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.MasterStatusToProto(status), nil
 }
 
 // MasterPosition returns the master position
-func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
-	pos, err := agent.MysqlDaemon.MasterPosition()
+func (tm *TabletManager) MasterPosition(ctx context.Context) (string, error) {
+	pos, err := tm.MysqlDaemon.MasterPosition()
 	if err != nil {
 		return "", err
 	}
@@ -62,53 +68,73 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
 }
 
 // WaitForPosition returns the master position
-func (agent *ActionAgent) WaitForPosition(ctx context.Context, pos string) error {
+func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
 	mpos, err := mysql.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
-	return agent.MysqlDaemon.WaitMasterPos(ctx, mpos)
+	return tm.MysqlDaemon.WaitMasterPos(ctx, mpos)
 }
 
-// StopSlave will stop the mysql. Works both when Vitess manages
+// StopReplication will stop the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
-func (agent *ActionAgent) StopSlave(ctx context.Context) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) StopReplication(ctx context.Context) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	return agent.stopSlaveLocked(ctx)
+	return tm.stopReplicationLocked(ctx)
 }
 
-func (agent *ActionAgent) stopSlaveLocked(ctx context.Context) error {
+func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
 
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
-	agent.setSlaveStopped(true)
+	tm.replManager.setReplicationStopped(true)
 
 	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
 	// Do this in the background, as it's best-effort.
 	go func() {
-		if agent.orc == nil {
+		if tm.orc == nil {
 			return
 		}
-		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to StopSlave"); err != nil {
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to StopReplication"); err != nil {
 			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
 		}
 	}()
 
-	return agent.MysqlDaemon.StopSlave(agent.hookExtraEnv())
+	return tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
 }
 
-// StopSlaveMinimum will stop the slave after it reaches at least the
+func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
+
+	// Remember that we were told to stop, so we don't try to
+	// restart ourselves (in replication_reporter).
+	tm.replManager.setReplicationStopped(true)
+
+	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if tm.orc == nil {
+			return
+		}
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to StopReplication"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+		}
+	}()
+
+	return tm.MysqlDaemon.StopIOThread(ctx)
+}
+
+// StopReplicationMinimum will stop the replication after it reaches at least the
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
-func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
+	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
@@ -116,53 +142,53 @@ func (agent *ActionAgent) StopSlaveMinimum(ctx context.Context, position string,
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
-	if err := agent.MysqlDaemon.WaitMasterPos(waitCtx, pos); err != nil {
+	if err := tm.MysqlDaemon.WaitMasterPos(waitCtx, pos); err != nil {
 		return "", err
 	}
-	if err := agent.stopSlaveLocked(ctx); err != nil {
+	if err := tm.stopReplicationLocked(ctx); err != nil {
 		return "", err
 	}
-	pos, err = agent.MysqlDaemon.MasterPosition()
+	pos, err = tm.MysqlDaemon.MasterPosition()
 	if err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(pos), nil
 }
 
-// StartSlave will start the mysql. Works both when Vitess manages
+// StartReplication will start the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
-func (agent *ActionAgent) StartSlave(ctx context.Context) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) StartReplication(ctx context.Context) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	agent.setSlaveStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// Tell Orchestrator we're no longer stopped on purpose.
 	// Do this in the background, as it's best-effort.
 	go func() {
-		if agent.orc == nil {
+		if tm.orc == nil {
 			return
 		}
-		if err := agent.orc.EndMaintenance(agent.Tablet()); err != nil {
+		if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
 			log.Warningf("Orchestrator EndMaintenance failed: %v", err)
 		}
 	}()
 
-	if err := agent.fixSemiSync(agent.Tablet().Type); err != nil {
+	if err := tm.fixSemiSync(tm.Tablet().Type); err != nil {
 		return err
 	}
-	return agent.MysqlDaemon.StartSlave(agent.hookExtraEnv())
+	return tm.MysqlDaemon.StartReplication(tm.hookExtraEnv())
 }
 
-// StartSlaveUntilAfter will start the replication and let it catch up
+// StartReplicationUntilAfter will start the replication and let it catch up
 // until and including the transactions in `position`
-func (agent *ActionAgent) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
 	waitCtx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
@@ -172,81 +198,71 @@ func (agent *ActionAgent) StartSlaveUntilAfter(ctx context.Context, position str
 		return err
 	}
 
-	return agent.MysqlDaemon.StartSlaveUntilAfter(waitCtx, pos)
+	return tm.MysqlDaemon.StartReplicationUntilAfter(waitCtx, pos)
 }
 
-// GetSlaves returns the address of all the slaves
-func (agent *ActionAgent) GetSlaves(ctx context.Context) ([]string, error) {
-	return mysqlctl.FindSlaves(agent.MysqlDaemon)
+// GetReplicas returns the address of all the replicas
+func (tm *TabletManager) GetReplicas(ctx context.Context) ([]string, error) {
+	return mysqlctl.FindReplicas(tm.MysqlDaemon)
 }
 
 // ResetReplication completely resets the replication on the host.
 // All binary and relay logs are flushed. All replication positions are reset.
-func (agent *ActionAgent) ResetReplication(ctx context.Context) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) ResetReplication(ctx context.Context) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	agent.setSlaveStopped(true)
-	return agent.MysqlDaemon.ResetReplication(ctx)
+	tm.replManager.setReplicationStopped(true)
+	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
 // InitMaster enables writes and returns the replication position.
-func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
+	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
 	// Initializing as master implies undoing any previous "do not replicate".
-	agent.setSlaveStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
 	cmds := mysqlctl.CreateReparentJournal()
-	if err := agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return "", err
 	}
 
 	// get the current replication position
-	pos, err := agent.MysqlDaemon.MasterPosition()
+	pos, err := tm.MysqlDaemon.MasterPosition()
 	if err != nil {
-		return "", err
-	}
-
-	// If using semi-sync, we need to enable it before going read-write.
-	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
-	// we'll still need some slaves to be able to commit transactions.
-	startTime := time.Now()
-	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+	// we'll still need some replicas to be able to commit transactions.
+	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
 
-	// Change our type to master if not already
-	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime))
-	if err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
-	// We only update agent's masterTermStartTime if we were able to update the topo.
-	// This ensures that in case of a failure, we are never in a situation where the
-	// tablet's timestamp is ahead of the topo's timestamp.
-	agent.setMasterTermStartTime(startTime)
-	// and refresh our state
-	agent.initReplication = true
-	if err := agent.refreshTablet(ctx, "InitMaster"); err != nil {
+
+	// Enforce semi-sync after changing the type to master. Otherwise, the
+	// master will hang while trying to create the database.
+	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
+
 	return mysql.EncodePosition(pos), nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
-func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
+func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, position string) error {
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
@@ -254,62 +270,57 @@ func (agent *ActionAgent) PopulateReparentJournal(ctx context.Context, timeCreat
 	cmds := mysqlctl.CreateReparentJournal()
 	cmds = append(cmds, mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(masterAlias), pos))
 
-	return agent.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
 
-// InitSlave sets replication master and position, and waits for the
+// InitReplica sets replication master and position, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
+
+	// If we were a master type, switch our type to replica.  This
+	// is used on the old master when using InitShardMaster with
+	// -force, and the new master is different from the old master.
+	if tm.Tablet().Type == topodatapb.TabletType_MASTER {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA); err != nil {
+			return err
+		}
+	}
 
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
 	}
-	ti, err := agent.TopoServer.GetTablet(ctx, parent)
+	ti, err := tm.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
 
-	agent.setSlaveStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to master.
 	// If we were a master type, we need to switch back to replica settings.
 	// Otherwise we won't be able to commit anything.
-	tt := agent.Tablet().Type
+	tt := tm.Tablet().Type
 	if tt == topodatapb.TabletType_MASTER {
 		tt = topodatapb.TabletType_REPLICA
 	}
-	if err := agent.fixSemiSync(tt); err != nil {
+	if err := tm.fixSemiSync(tt); err != nil {
 		return err
 	}
 
-	if err := agent.MysqlDaemon.SetSlavePosition(ctx, pos); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* stopReplicationAfter */); err != nil {
 		return err
-	}
-	agent.initReplication = true
-
-	// If we were a master type, switch our type to replica.  This
-	// is used on the old master when using InitShardMaster with
-	// -force, and the new master is different from the old master.
-	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
-		if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil); err != nil {
-			return err
-		}
-
-		if err := agent.refreshTablet(ctx, "InitSlave"); err != nil {
-			return err
-		}
 	}
 
 	// wait until we get the replicated row, or our context times out
-	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
+	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
 // DemoteMaster prepares a MASTER tablet to give up mastership to another tablet.
@@ -327,27 +338,27 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 // or on a tablet that already transitioned to REPLICA.
 //
 // If a step fails in the middle, it will try to undo any changes it made.
-func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
+func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error) {
 	// The public version always reverts on partial failure.
-	return agent.demoteMaster(ctx, true /* revertPartialFailure */)
+	return tm.demoteMaster(ctx, true /* revertPartialFailure */)
 }
 
 // demoteMaster implements DemoteMaster with an additional, private option.
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
-func (agent *ActionAgent) demoteMaster(ctx context.Context, revertPartialFailure bool) (replicationPosition string, finalErr error) {
-	if err := agent.lock(ctx); err != nil {
-		return "", err
+func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure bool) (masterStatus *replicationdatapb.MasterStatus, finalErr error) {
+	if err := tm.lock(ctx); err != nil {
+		return nil, err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	tablet := agent.Tablet()
+	tablet := tm.Tablet()
 	wasMaster := tablet.Type == topodatapb.TabletType_MASTER
-	wasServing := agent.QueryServiceControl.IsServing()
-	wasReadOnly, err := agent.MysqlDaemon.IsReadOnly()
+	wasServing := tm.QueryServiceControl.IsServing()
+	wasReadOnly, err := tm.MysqlDaemon.IsReadOnly()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// If we are a master tablet and not yet read-only, stop accepting new
@@ -359,10 +370,10 @@ func (agent *ActionAgent) demoteMaster(ctx context.Context, revertPartialFailure
 		// Tell Orchestrator we're stopped on purpose for demotion.
 		// This is a best effort task, so run it in a goroutine.
 		go func() {
-			if agent.orc == nil {
+			if tm.orc == nil {
 				return
 			}
-			if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to DemoteMaster"); err != nil {
+			if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to DemoteMaster"); err != nil {
 				log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
 			}
 		}()
@@ -373,12 +384,12 @@ func (agent *ActionAgent) demoteMaster(ctx context.Context, revertPartialFailure
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Infof("DemoteMaster disabling query service")
-		if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
-			return "", vterrors.Wrap(err, "SetServingType(serving=false) failed")
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), false, "demotion in progress"); err != nil {
+			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
-				if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+				if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 					log.Warningf("SetServingType(serving=true) failed during revert: %v", err)
 				}
 			}
@@ -391,195 +402,115 @@ func (agent *ActionAgent) demoteMaster(ctx context.Context, revertPartialFailure
 	// idempotent.
 	if *setSuperReadOnly {
 		// Setting super_read_only also sets read_only
-		if err := agent.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			return "", err
+		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+			return nil, err
 		}
 	} else {
-		if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
-			return "", err
+		if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {
+			return nil, err
 		}
 	}
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
 			// setting read_only OFF will also set super_read_only OFF if it was set
-			if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+			if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
 				log.Warningf("SetReadOnly(false) failed during revert: %v", err)
 			}
 		}
 	}()
 
 	// If using semi-sync, we need to disable master-side.
-	if err := agent.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
-		return "", err
+	if err := tm.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
+		return nil, err
 	}
 	defer func() {
 		if finalErr != nil && revertPartialFailure && wasMaster {
 			// enable master-side semi-sync again
-			if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+			if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
 				log.Warningf("fixSemiSync(MASTER) failed during revert: %v", err)
 			}
 		}
 	}()
 
 	// Return the current replication position.
-	pos, err := agent.MysqlDaemon.MasterPosition()
+	status, err := tm.MysqlDaemon.MasterStatus(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return mysql.EncodePosition(pos), nil
+	masterStatusProto := mysql.MasterStatusToProto(status)
+	return masterStatusProto, nil
 }
 
 // UndoDemoteMaster reverts a previous call to DemoteMaster
 // it sets read-only to false, fixes semi-sync
 // and returns its master position.
-func (agent *ActionAgent) UndoDemoteMaster(ctx context.Context) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
 	// If using semi-sync, we need to enable master-side.
-	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
 		return err
 	}
 
 	// Now, set the server read-only false.
-	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
 		return err
 	}
 
 	// Update serving graph
-	tablet := agent.Tablet()
+	tablet := tm.Tablet()
 	log.Infof("UndoDemoteMaster re-enabling query service")
-	if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+	if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
 
 	return nil
 }
 
-// PromoteSlaveWhenCaughtUp waits for this slave to be caught up on
-// replication up to the provided point, and then makes the slave the
-// shard master.
-// Deprecated
-func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position string) (string, error) {
-	if err := agent.lock(ctx); err != nil {
-		return "", err
-	}
-	defer agent.unlock()
-
-	pos, err := mysql.DecodePosition(position)
-	if err != nil {
-		return "", err
-	}
-
-	if err := agent.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
-		return "", err
-	}
-
-	pos, err = agent.MysqlDaemon.Promote(agent.hookExtraEnv())
-	if err != nil {
-		return "", err
-	}
-
-	// If using semi-sync, we need to enable it before going read-write.
-	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
-	startTime := time.Now()
-	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
-	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime))
-	if err != nil {
-		return "", err
-	}
-
-	// We only update agent's masterTermStartTime if we were able to update the topo.
-	// This ensures that in case of a failure, we are never in a situation where the
-	// tablet's timestamp is ahead of the topo's timestamp.
-	agent.setMasterTermStartTime(startTime)
-
-	if err := agent.refreshTablet(ctx, "PromoteSlaveWhenCaughtUp"); err != nil {
-		return "", err
-	}
-
-	return mysql.EncodePosition(pos), nil
-}
-
-// SlaveWasPromoted promotes a slave to master, no questions asked.
-func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
-	if err := agent.lock(ctx); err != nil {
-		return err
-	}
-	defer agent.unlock()
-	startTime := time.Now()
-
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
-		return err
-	}
-	// We only update agent's masterTermStartTime if we were able to update the topo.
-	// This ensures that in case of a failure, we are never in a situation where the
-	// tablet's timestamp is ahead of the topo's timestamp.
-	agent.setMasterTermStartTime(startTime)
-
-	if err := agent.refreshTablet(ctx, "SlaveWasPromoted"); err != nil {
-		return err
-	}
-
-	return nil
+// ReplicaWasPromoted promotes a replica to master, no questions asked.
+func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
+	return tm.ChangeType(ctx, topodatapb.TabletType_MASTER)
 }
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	if err := agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave); err != nil {
-		return err
-	}
-
-	// Always refresh the tablet, even if we may not have changed it.
-	// It's possible that we changed it earlier but failed to refresh.
-	// Note that we do this outside setMasterLocked() because this should never
-	// be done as part of setMasterRepairReplication().
-	if err := agent.refreshTablet(ctx, "SetMaster"); err != nil {
-		return err
-	}
-
-	return nil
+	return tm.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
 
-func (agent *ActionAgent) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
-	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
+func (tm *TabletManager) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
+	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
 	}
 
-	ctx, unlock, lockErr := agent.TopoServer.LockShard(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard(), fmt.Sprintf("repairReplication to %v as parent)", topoproto.TabletAliasString(parentAlias)))
+	ctx, unlock, lockErr := tm.TopoServer.LockShard(ctx, parent.Tablet.GetKeyspace(), parent.Tablet.GetShard(), fmt.Sprintf("repairReplication to %v as parent)", topoproto.TabletAliasString(parentAlias)))
 	if lockErr != nil {
 		return lockErr
 	}
 
 	defer unlock(&err)
 
-	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave)
+	return tm.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
 
-func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
+func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
 	// End orchestrator maintenance at the end of fixing replication.
 	// This is a best effort operation, so it should happen in a goroutine
 	defer func() {
 		go func() {
-			if agent.orc == nil {
+			if tm.orc == nil {
 				return
 			}
-			if err := agent.orc.EndMaintenance(agent.Tablet()); err != nil {
+			if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
 				log.Warningf("Orchestrator EndMaintenance failed: %v", err)
 			}
 		}()
@@ -591,23 +522,18 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	// steps fail below.
 	// Note it is important to check for MASTER here so that we don't
 	// unintentionally change the type of RDONLY tablets
-	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_REPLICA
-			tablet.MasterTermStartTime = nil
-			return nil
+	tablet := tm.Tablet()
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA); err != nil {
+			return err
 		}
-		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-	})
-	if err != nil {
-		return err
 	}
 
 	// See if we were replicating at all, and should be replicating.
 	wasReplicating := false
 	shouldbeReplicating := false
-	status, err := agent.MysqlDaemon.SlaveStatus()
-	if err == mysql.ErrNotSlave {
+	status, err := tm.MysqlDaemon.ReplicationStatus()
+	if err == mysql.ErrNotReplica {
 		// This is a special error that means we actually succeeded in reading
 		// the status, but the status is empty because replication is not
 		// configured. We assume this means we used to be a master, so we always
@@ -615,48 +541,48 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 		shouldbeReplicating = true
 		// Since we continue in the case of this error, make sure 'status' is
 		// in a known, empty state.
-		status = mysql.SlaveStatus{}
+		status = mysql.ReplicationStatus{}
 	} else if err != nil {
 		// Abort on any other non-nil error.
 		return err
 	}
-	if status.SlaveIORunning || status.SlaveSQLRunning {
+	if status.IOThreadRunning || status.SQLThreadRunning {
 		wasReplicating = true
 		shouldbeReplicating = true
 	}
-	if forceStartSlave {
+	if forceStartReplication {
 		shouldbeReplicating = true
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
 	// If we are currently MASTER, assume we are about to become REPLICA.
-	tabletType := agent.Tablet().Type
+	tabletType := tm.Tablet().Type
 	if tabletType == topodatapb.TabletType_MASTER {
 		tabletType = topodatapb.TabletType_REPLICA
 	}
-	if err := agent.fixSemiSync(tabletType); err != nil {
+	if err := tm.fixSemiSync(tabletType); err != nil {
 		return err
 	}
 	// Update the master address only if needed.
 	// We don't want to interrupt replication for no reason.
-	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
+	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
 	}
-	masterHost := topoproto.MysqlHostname(parent.Tablet)
-	masterPort := int(topoproto.MysqlPort(parent.Tablet))
+	masterHost := parent.Tablet.MysqlHostname
+	masterPort := int(parent.Tablet.MysqlPort)
 	if status.MasterHost != masterHost || status.MasterPort != masterPort {
 		// This handles both changing the address and starting replication.
-		if err := agent.MysqlDaemon.SetMaster(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
-			if err := agent.handleRelayLogError(err); err != nil {
+		if err := tm.MysqlDaemon.SetMaster(ctx, masterHost, masterPort, wasReplicating, shouldbeReplicating); err != nil {
+			if err := tm.handleRelayLogError(err); err != nil {
 				return err
 			}
 		}
 	} else if shouldbeReplicating {
 		// The address is correct. Just start replication if needed.
-		if !status.SlaveRunning() {
-			if err := agent.MysqlDaemon.StartSlave(agent.hookExtraEnv()); err != nil {
-				if err := agent.handleRelayLogError(err); err != nil {
+		if !status.ReplicationRunning() {
+			if err := tm.MysqlDaemon.StartReplication(tm.hookExtraEnv()); err != nil {
+				if err := tm.handleRelayLogError(err); err != nil {
 					return err
 				}
 			}
@@ -673,12 +599,12 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 			if err != nil {
 				return err
 			}
-			if err := agent.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
+			if err := tm.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
 				return err
 			}
 		}
 		if timeCreatedNS != 0 {
-			if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
+			if err := tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
 				return err
 			}
 		}
@@ -687,140 +613,137 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	return nil
 }
 
-// SlaveWasRestarted updates the parent record for a tablet.
-func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
-	if err := agent.lock(ctx); err != nil {
+// ReplicaWasRestarted updates the parent record for a tablet.
+func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
+	if err := tm.lock(ctx); err != nil {
 		return err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
 	// Only change type of former MASTER tablets.
 	// Don't change type of RDONLY
-	typeChanged := false
-	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-		if tablet.Type == topodatapb.TabletType_MASTER {
-			tablet.Type = topodatapb.TabletType_REPLICA
-			tablet.MasterTermStartTime = nil
-			typeChanged = true
-			return nil
-		}
-		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-	}); err != nil {
-		return err
+	tablet := tm.Tablet()
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		return nil
 	}
-
-	if typeChanged {
-		if err := agent.refreshTablet(ctx, "SlaveWasRestarted"); err != nil {
-			return err
-		}
-		agent.runHealthCheckLocked()
-	}
-	return nil
+	return tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA)
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
-func (agent *ActionAgent) StopReplicationAndGetStatus(ctx context.Context) (*replicationdatapb.Status, error) {
-	if err := agent.lock(ctx); err != nil {
-		return nil, err
+func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
+	if err := tm.lock(ctx); err != nil {
+		return StopReplicationAndGetStatusResponse{}, err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	// get the status before we stop replication
-	rs, err := agent.MysqlDaemon.SlaveStatus()
+	// Get the status before we stop replication.
+	// Doing this first allows us to return the status in the case that stopping replication
+	// returns an error, so a user can optionally inspect the status before a stop was called.
+	rs, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "before status failed")
+		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
 	}
-	if !rs.SlaveIORunning && !rs.SlaveSQLRunning {
-		// no replication is running, just return what we got
-		return mysql.SlaveStatusToProto(rs), nil
+	before := mysql.ReplicationStatusToProto(rs)
+
+	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
+		if !rs.IOThreadRunning {
+			return StopReplicationAndGetStatusResponse{
+				HybridStatus: before,
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+					After:  before,
+				},
+			}, nil
+		}
+		if err := tm.stopIOThreadLocked(ctx); err != nil {
+			return StopReplicationAndGetStatusResponse{
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+				},
+			}, vterrors.Wrap(err, "stop io thread failed")
+		}
+	} else {
+		if !rs.IOThreadRunning && !rs.SQLThreadRunning {
+			// no replication is running, just return what we got
+			return StopReplicationAndGetStatusResponse{
+				HybridStatus: before,
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+					After:  before,
+				},
+			}, nil
+		}
+		if err := tm.stopReplicationLocked(ctx); err != nil {
+			return StopReplicationAndGetStatusResponse{
+				Status: &replicationdatapb.StopReplicationStatus{
+					Before: before,
+				},
+			}, vterrors.Wrap(err, "stop replication failed")
+		}
 	}
-	if err := agent.stopSlaveLocked(ctx); err != nil {
-		return nil, vterrors.Wrap(err, "stop slave failed")
-	}
-	// now patch in the current position
-	rs.Position, err = agent.MysqlDaemon.MasterPosition()
+
+	// Get the status after we stop replication so we have up to date position and relay log positions.
+	rsAfter, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
-		return nil, vterrors.Wrap(err, "after position failed")
+		return StopReplicationAndGetStatusResponse{
+			Status: &replicationdatapb.StopReplicationStatus{
+				Before: before,
+			},
+		}, vterrors.Wrap(err, "acquiring replication status failed")
 	}
-	return mysql.SlaveStatusToProto(rs), nil
+	after := mysql.ReplicationStatusToProto(rsAfter)
+
+	rs.Position = rsAfter.Position
+	rs.RelayLogPosition = rsAfter.RelayLogPosition
+	rs.FilePosition = rsAfter.FilePosition
+	rs.FileRelayLogPosition = rsAfter.FileRelayLogPosition
+
+	return StopReplicationAndGetStatusResponse{
+		HybridStatus: mysql.ReplicationStatusToProto(rs),
+		Status: &replicationdatapb.StopReplicationStatus{
+			Before: before,
+			After:  after,
+		},
+	}, nil
+}
+
+// StopReplicationAndGetStatusResponse holds the original hybrid Status struct, as well as a new Status field, which
+// hold the result of show replica status called before stopping replication, and after stopping replication.
+type StopReplicationAndGetStatusResponse struct {
+	// HybridStatus is deprecated. It currently represents a hybrid struct where all data represents the before state,
+	// except for all position related data which comes from the after state. Please use status instead, which holds
+	// discrete replication status calls before and after stopping the replica, or stopping the replica's io_thread.
+	HybridStatus *replicationdatapb.Status
+
+	// Status represents the replication status call right before, and right after telling the replica to stop.
+	Status *replicationdatapb.StopReplicationStatus
 }
 
 // PromoteReplica makes the current tablet the master
-func (agent *ActionAgent) PromoteReplica(ctx context.Context) (string, error) {
-	if err := agent.lock(ctx); err != nil {
+func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
+	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
-	defer agent.unlock()
+	defer tm.unlock()
 
-	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
+	pos, err := tm.MysqlDaemon.Promote(tm.hookExtraEnv())
 	if err != nil {
 		return "", err
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
-	// Set the server read-write
-	startTime := time.Now()
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
 
 	// We call SetReadOnly only after the topo has been updated to avoid
 	// situations where two tablets are master at the DB level but not at the vitess level
-	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
-	// We only update agent's masterTermStartTime if we were able to update the topo.
-	// This ensures that in case of a failure, we are never in a situation where the
-	// tablet's timestamp is ahead of the topo's timestamp.
-	agent.setMasterTermStartTime(startTime)
-
-	if err := agent.refreshTablet(ctx, "PromoteReplica"); err != nil {
-		return "", err
-	}
-
-	return mysql.EncodePosition(pos), nil
-}
-
-// PromoteSlave makes the current tablet the master
-// Deprecated
-func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
-	if err := agent.lock(ctx); err != nil {
-		return "", err
-	}
-	defer agent.unlock()
-
-	pos, err := agent.MysqlDaemon.Promote(agent.hookExtraEnv())
-	if err != nil {
-		return "", err
-	}
-
-	// If using semi-sync, we need to enable it before going read-write.
-	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
-	// Set the server read-write
-	startTime := time.Now()
-	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
-		return "", err
-	}
-
-	// We only update agent's masterTermStartTime if we were able to update the topo.
-	// This ensures that in case of a failure, we are never in a situation where the
-	// tablet's timestamp is ahead of the topo's timestamp.
-	agent.setMasterTermStartTime(startTime)
-
-	if err := agent.refreshTablet(ctx, "PromoteSlave"); err != nil {
+	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
 
@@ -836,24 +759,24 @@ func isMasterEligible(tabletType topodatapb.TabletType) bool {
 	return false
 }
 
-func (agent *ActionAgent) fixSemiSync(tabletType topodatapb.TabletType) error {
+func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType) error {
 	if !*enableSemiSync {
 		// Semi-sync handling is not enabled.
 		return nil
 	}
 
 	// Only enable if we're eligible for becoming master (REPLICA type).
-	// Ineligible slaves (RDONLY) shouldn't ACK because we'll never promote them.
+	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
 	if !isMasterEligible(tabletType) {
-		return agent.MysqlDaemon.SetSemiSyncEnabled(false, false)
+		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 
-	// Always enable slave-side since it doesn't hurt to keep it on for a master.
-	// The master-side needs to be off for a slave, or else it will get stuck.
-	return agent.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_MASTER, true)
+	// Always enable replica-side since it doesn't hurt to keep it on for a master.
+	// The master-side needs to be off for a replica, or else it will get stuck.
+	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_MASTER, true)
 }
 
-func (agent *ActionAgent) fixSemiSyncAndReplication(tabletType topodatapb.TabletType) error {
+func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType) error {
 	if !*enableSemiSync {
 		// Semi-sync handling is not enabled.
 		return nil
@@ -866,27 +789,27 @@ func (agent *ActionAgent) fixSemiSyncAndReplication(tabletType topodatapb.Tablet
 		return nil
 	}
 
-	if err := agent.fixSemiSync(tabletType); err != nil {
+	if err := tm.fixSemiSync(tabletType); err != nil {
 		return vterrors.Wrapf(err, "failed to fixSemiSync(%v)", tabletType)
 	}
 
 	// If replication is running, but the status is wrong,
 	// we should restart replication. First, let's make sure
 	// replication is running.
-	status, err := agent.MysqlDaemon.SlaveStatus()
+	status, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil {
 		// Replication is not configured, nothing to do.
 		return nil
 	}
-	if !status.SlaveIORunning {
+	if !status.IOThreadRunning {
 		// IO thread is not running, nothing to do.
 		return nil
 	}
 
 	shouldAck := isMasterEligible(tabletType)
-	acking, err := agent.MysqlDaemon.SemiSyncSlaveStatus()
+	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
 	if err != nil {
-		return vterrors.Wrap(err, "failed to get SemiSyncSlaveStatus")
+		return vterrors.Wrap(err, "failed to get SemiSyncReplicationStatus")
 	}
 	if shouldAck == acking {
 		return nil
@@ -894,25 +817,112 @@ func (agent *ActionAgent) fixSemiSyncAndReplication(tabletType topodatapb.Tablet
 
 	// We need to restart replication
 	log.Infof("Restarting replication for semi-sync flag change to take effect from %v to %v", acking, shouldAck)
-	if err := agent.MysqlDaemon.StopSlave(agent.hookExtraEnv()); err != nil {
-		return vterrors.Wrap(err, "failed to StopSlave")
+	if err := tm.MysqlDaemon.StopReplication(tm.hookExtraEnv()); err != nil {
+		return vterrors.Wrap(err, "failed to StopReplication")
 	}
-	if err := agent.MysqlDaemon.StartSlave(agent.hookExtraEnv()); err != nil {
-		return vterrors.Wrap(err, "failed to StartSlave")
+	if err := tm.MysqlDaemon.StartReplication(tm.hookExtraEnv()); err != nil {
+		return vterrors.Wrap(err, "failed to StartReplication")
 	}
 	return nil
 }
 
-func (agent *ActionAgent) handleRelayLogError(err error) error {
+func (tm *TabletManager) handleRelayLogError(err error) error {
 	// attempt to fix this error:
 	// Slave failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START SLAVE
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	if strings.Contains(err.Error(), "Slave failed to initialize relay log info structure from the repository") {
-		// Stop, reset and start slave again to resolve this error
-		if err := agent.MysqlDaemon.RestartSlave(agent.hookExtraEnv()); err != nil {
+		// Stop, reset and start replication again to resolve this error
+		if err := tm.MysqlDaemon.RestartReplication(tm.hookExtraEnv()); err != nil {
 			return err
 		}
 		return nil
 	}
 	return err
+}
+
+// repairReplication tries to connect this server to whoever is
+// the current master of the shard, and start replicating.
+func (tm *TabletManager) repairReplication(ctx context.Context) error {
+	tablet := tm.Tablet()
+
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return err
+	}
+	if !si.HasMaster() {
+		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+		// The shard record says we are master, but we disagree; we wouldn't
+		// reach this point unless we were told to check replication.
+		// Hopefully someone is working on fixing that, but in any case,
+		// we should not try to reparent to ourselves.
+		return fmt.Errorf("shard %v/%v record claims tablet %v is master, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
+	}
+
+	// If Orchestrator is configured and if Orchestrator is actively reparenting, we should not repairReplication
+	if tm.orc != nil {
+		re, err := tm.orc.InActiveShardRecovery(tablet)
+		if err != nil {
+			return err
+		}
+		if re {
+			return fmt.Errorf("orchestrator actively reparenting shard %v, skipping repairReplication", si)
+		}
+
+		// Before repairing replication, tell Orchestrator to enter maintenance mode for this tablet and to
+		// lock any other actions on this tablet by Orchestrator.
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to StopReplication"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+			return vterrors.Wrap(err, "orchestrator BeginMaintenance failed, skipping repairReplication")
+		}
+	}
+
+	return tm.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
+}
+
+// SlaveStatus is deprecated
+func (tm *TabletManager) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
+	return tm.ReplicationStatus(ctx)
+}
+
+// StopSlave is deprecated
+func (tm *TabletManager) StopSlave(ctx context.Context) error {
+	return tm.StopReplication(ctx)
+}
+
+// StopSlaveMinimum is deprecated
+func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
+	return tm.StopReplicationMinimum(ctx, position, waitTime)
+}
+
+// StartSlave is deprecated
+func (tm *TabletManager) StartSlave(ctx context.Context) error {
+	return tm.StartReplication(ctx)
+}
+
+// StartSlaveUntilAfter is deprecated
+func (tm *TabletManager) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+	return tm.StartReplicationUntilAfter(ctx, position, waitTime)
+}
+
+// GetSlaves is deprecated
+func (tm *TabletManager) GetSlaves(ctx context.Context) ([]string, error) {
+	return tm.GetReplicas(ctx)
+}
+
+// InitSlave is deprecated
+func (tm *TabletManager) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+	return tm.InitReplica(ctx, parent, position, timeCreatedNS)
+}
+
+// SlaveWasPromoted is deprecated
+func (tm *TabletManager) SlaveWasPromoted(ctx context.Context) error {
+	return tm.ReplicaWasPromoted(ctx)
+}
+
+// SlaveWasRestarted is deprecated
+func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
+	return tm.ReplicaWasRestarted(ctx, parent)
 }

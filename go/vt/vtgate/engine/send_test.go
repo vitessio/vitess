@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/key"
@@ -263,4 +265,35 @@ func TestSendTable_StreamExecute(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSendGetFields(t *testing.T) {
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|c1|c2|c3",
+			"int64|int64|int64|int64",
+		),
+		"1|4|5|6",
+		"2|7|8|9",
+	)}
+
+	send := &Send{
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Query:             "dummy_query",
+		TargetDestination: key.DestinationAllShards{},
+		IsDML:             true,
+		SingleShardOnly:   false,
+	}
+	vc := &loggingVCursor{shards: []string{"-20", "20-"}, results: results}
+	qr, err := send.GetFields(vc, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} true false`,
+	})
+	require.Nil(t, qr.Rows)
+	require.Equal(t, 4, len(qr.Fields))
 }

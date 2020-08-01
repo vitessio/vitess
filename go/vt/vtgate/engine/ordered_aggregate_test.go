@@ -18,8 +18,10 @@ package engine
 
 import (
 	"errors"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
@@ -501,7 +503,6 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 }
 
 func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
-	assert := assert.New(t)
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -526,7 +527,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 	}
 
 	result, err := oa.Execute(nil, nil, false)
-	assert.NoError(err)
+	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -535,7 +536,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 		),
 		"a|1",
 	)
-	assert.Equal(wantResult, result)
+	utils.MustMatch(t, wantResult, result, "")
 }
 
 func TestOrderedAggregateKeysFail(t *testing.T) {
@@ -580,7 +581,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
-			"a|b",
+			"a|0",
 		)},
 	}
 
@@ -614,19 +615,13 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 	}
 
 	res, err := oa.Execute(nil, nil, false)
-	if err != nil {
-		t.Errorf("oa.Execute() failed: %v", err)
-	}
+	require.NoError(t, err)
 
-	if !reflect.DeepEqual(res, result) {
-		t.Fatalf("Found mismatched values: want %v, got %v", result, res)
-	}
+	utils.MustMatch(t, result, res, "Found mismatched values")
 
 	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err != nil {
-		t.Errorf("oa.StreamExecute(): %v", err)
-	}
-
+	err = oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil })
+	require.NoError(t, err)
 }
 
 func TestMerge(t *testing.T) {

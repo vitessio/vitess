@@ -337,9 +337,17 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 
 		if cell == "local" {
 			if *localCell == "" {
-				return nil, fmt.Errorf("local cell requested, but not specified. Please set with -cell flag")
+				cells, err := ts.GetCellInfoNames(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("could not fetch cell info: %v", err)
+				}
+				if len(cells) == 0 {
+					return nil, fmt.Errorf("no local cells have been created yet")
+				}
+				cell = cells[0]
+			} else {
+				cell = *localCell
 			}
-			cell = *localCell
 		}
 
 		// If a keyspace is provided then return the specified srvkeyspace.
@@ -592,14 +600,14 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			return nil
 		}
 		req := struct {
-			Keyspace, SQL       string
-			SlaveTimeoutSeconds int
+			Keyspace, SQL         string
+			ReplicaTimeoutSeconds int
 		}{}
 		if err := unmarshalRequest(r, &req); err != nil {
 			return fmt.Errorf("can't unmarshal request: %v", err)
 		}
-		if req.SlaveTimeoutSeconds <= 0 {
-			req.SlaveTimeoutSeconds = 10
+		if req.ReplicaTimeoutSeconds <= 0 {
+			req.ReplicaTimeoutSeconds = 10
 		}
 
 		logger := logutil.NewCallbackLogger(func(ev *logutilpb.Event) {
@@ -608,7 +616,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		wr := wrangler.New(logger, ts, tmClient)
 
 		executor := schemamanager.NewTabletExecutor(
-			wr, time.Duration(req.SlaveTimeoutSeconds)*time.Second)
+			wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
 
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)

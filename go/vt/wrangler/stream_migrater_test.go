@@ -162,7 +162,6 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	tme.expectCreateReverseVReplication()
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
-	tme.expectDeleteTargetVReplication()
 	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +176,9 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	checkIsMasterServing(t, tme.ts, "ks:-80", true)
 	checkIsMasterServing(t, tme.ts, "ks:80-", true)
 
-	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", false); err != nil {
+	tme.expectDeleteReverseVReplication()
+	tme.expectDeleteTargetVReplication()
+	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false); err != nil {
 		t.Fatal(err)
 	}
 	verifyQueries(t, tme.allDBClients)

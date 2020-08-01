@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -111,9 +112,6 @@ func (th *testHandler) NewConnection(c *Conn) {
 }
 
 func (th *testHandler) ConnectionClosed(c *Conn) {
-}
-
-func (th *testHandler) ComInitDB(c *Conn, schemaName string) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -223,7 +221,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 	return nil
 }
 
-func (th *testHandler) ComPrepare(c *Conn, query string) ([]*querypb.Field, error) {
+func (th *testHandler) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
@@ -959,7 +957,7 @@ func TestTLSServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
-	l.TLSConfig = serverConfig
+	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
 
 	// Setup the right parameters.
@@ -1009,7 +1007,11 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
 
-	checkCountForTLSVer(t, versionTLS12, 1)
+	// Find out which TLS version the connection actually used,
+	// so we can check that the corresponding counter was incremented.
+	tlsVersion := conn.conn.(*tls.Conn).ConnectionState().Version
+
+	checkCountForTLSVer(t, tlsVersionToString(tlsVersion), 1)
 	checkCountForTLSVer(t, versionNoTLS, 0)
 	conn.Close()
 
@@ -1061,7 +1063,7 @@ func TestTLSRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
-	l.TLSConfig = serverConfig
+	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
 	go l.Accept()
 
@@ -1104,7 +1106,7 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 			t.Errorf("Expected connection count for version %s to be %d, got %d", version, expected, count)
 		}
 	} else {
-		t.Errorf("No count found for version %s", version)
+		t.Errorf("No count for version %s found in %v", version, connCounts)
 	}
 }
 

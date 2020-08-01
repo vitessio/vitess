@@ -153,7 +153,7 @@ func TestErrors(t *testing.T) {
 
 		{
 			SQL: "SELECT * FROM table_not_in_schema",
-			Err: "target: ks_unsharded.-.master, used tablet: explainCell-0 (ks_unsharded/-): unknown error: unable to resolve table name table_not_in_schema",
+			Err: "unknown error: unable to resolve table name table_not_in_schema",
 		},
 	}
 

@@ -81,8 +81,9 @@ func TestOpen(t *testing.T) {
 			connStr: fmt.Sprintf(`{"address": "%s", "target": "@replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
-					Protocol: "grpc",
-					Target:   "@replica",
+					Protocol:   "grpc",
+					DriverName: "vitess",
+					Target:     "@replica",
 				},
 				convert: &converter{
 					location: time.UTC,
@@ -94,7 +95,8 @@ func TestOpen(t *testing.T) {
 			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
-					Protocol: "grpc",
+					Protocol:   "grpc",
+					DriverName: "vitess",
 				},
 				convert: &converter{
 					location: time.UTC,
@@ -106,8 +108,9 @@ func TestOpen(t *testing.T) {
 			connStr: fmt.Sprintf(`{"protocol": "grpc", "address": "%s", "target": "ks:0@replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
-					Protocol: "grpc",
-					Target:   "ks:0@replica",
+					Protocol:   "grpc",
+					DriverName: "vitess",
+					Target:     "ks:0@replica",
 				},
 				convert: &converter{
 					location: time.UTC,
@@ -122,6 +125,7 @@ func TestOpen(t *testing.T) {
 			conn: &conn{
 				Configuration: Configuration{
 					Protocol:        "grpc",
+					DriverName:      "vitess",
 					DefaultLocation: "America/Los_Angeles",
 				},
 				convert: &converter{

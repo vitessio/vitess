@@ -46,6 +46,8 @@ type StreamHealthQueryService struct {
 	target          querypb.Target
 }
 
+var _ queryservice.QueryService = (*StreamHealthQueryService)(nil)
+
 // NewStreamHealthQueryService creates a new fake query service for the target.
 func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryService {
 	return &StreamHealthQueryService{
@@ -56,12 +58,12 @@ func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryServic
 }
 
 // Begin implemented as a no op
-func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
-	return 0, nil
+func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+	return 0, nil, nil
 }
 
 // Execute implemented as a no op
-func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 

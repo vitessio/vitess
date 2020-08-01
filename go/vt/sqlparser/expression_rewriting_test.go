@@ -23,8 +23,9 @@ import (
 )
 
 type myTestCase struct {
-	in, expected             string
-	liid, db, foundRows, udv bool
+	in, expected                  string
+	liid, db, foundRows, rowCount bool
+	udv                           int
 }
 
 func TestRewrites(in *testing.T) {
@@ -97,17 +98,27 @@ func TestRewrites(in *testing.T) {
 		{
 			in:       "select @`x y`",
 			expected: "select :__vtudvx_y as `@``x y``` from dual",
-			udv:      true,
+			udv:      1,
 		},
 		{
-			in:       "select id from t where id = @x",
-			expected: "select id from t where id = :__vtudvx",
-			db:       false, udv: true,
+			in:       "select id from t where id = @x and val = @y",
+			expected: "select id from t where id = :__vtudvx and val = :__vtudvy",
+			db:       false, udv: 2,
 		},
 		{
 			in:       "insert into t(id) values(@xyx)",
 			expected: "insert into t(id) values(:__vtudvxyx)",
-			db:       false, udv: true,
+			db:       false, udv: 1,
+		},
+		{
+			in:       "select row_count()",
+			expected: "select :__vtrcount as `row_count()`",
+			rowCount: true,
+		},
+		{
+			in:       "SELECT lower(database())",
+			expected: "SELECT lower(:__vtdbname) as `lower(database())`",
+			db:       true,
 		},
 	}
 
@@ -127,6 +138,8 @@ func TestRewrites(in *testing.T) {
 			require.Equal(t, tc.liid, result.NeedLastInsertID, "should need last insert id")
 			require.Equal(t, tc.db, result.NeedDatabase, "should need database name")
 			require.Equal(t, tc.foundRows, result.NeedFoundRows, "should need found rows")
+			require.Equal(t, tc.rowCount, result.NeedRowCount, "should need row count")
+			require.Equal(t, tc.udv, len(result.NeedUserDefinedVariables), "should need row count")
 		})
 	}
 }

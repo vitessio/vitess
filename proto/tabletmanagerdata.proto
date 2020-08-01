@@ -186,7 +186,7 @@ message IgnoreHealthErrorResponse {
 
 message ReloadSchemaRequest {
   // wait_position allows scheduling a schema reload to occur after a
-  // given DDL has replicated to this slave, by specifying a replication
+  // given DDL has replicated to this server, by specifying a replication
   // position to wait for. Leave empty to trigger the reload immediately.
   string wait_position = 1;
 }
@@ -261,11 +261,18 @@ message ExecuteFetchAsAppResponse {
   query.QueryResult result = 1;
 }
 
-message SlaveStatusRequest {
+message ReplicationStatusRequest {
 }
 
-message SlaveStatusResponse {
+message ReplicationStatusResponse {
   replicationdata.Status status = 1;
+}
+
+message MasterStatusRequest {
+}
+
+message MasterStatusResponse {
+  replicationdata.MasterStatus status = 1;
 }
 
 message MasterPositionRequest {
@@ -282,55 +289,39 @@ message WaitForPositionRequest {
 message WaitForPositionResponse {
 }
 
-message StopSlaveRequest {
+message StopReplicationRequest {
 }
 
-message StopSlaveResponse {
+message StopReplicationResponse {
 }
 
-message StopSlaveMinimumRequest {
+message StopReplicationMinimumRequest {
   string position = 1;
   int64 wait_timeout = 2;
 }
 
-message StopSlaveMinimumResponse {
+message StopReplicationMinimumResponse {
   string position = 1;
 }
 
-message StartSlaveRequest {
+message StartReplicationRequest {
 }
 
-message StartSlaveResponse {
+message StartReplicationResponse {
 }
 
-message StartSlaveUntilAfterRequest {
+message StartReplicationUntilAfterRequest {
   string position = 1;
   int64 wait_timeout = 2;
 }
 
-message StartSlaveUntilAfterResponse {
+message StartReplicationUntilAfterResponse {
 }
 
-message TabletExternallyReparentedRequest {
-  // external_id is an string value that may be provided by an external
-  // agent for tracking purposes. The tablet will emit this string in
-  // events triggered by TabletExternallyReparented, such as VitessReparent.
-  string external_id = 1;
+message GetReplicasRequest {
 }
 
-message TabletExternallyReparentedResponse {
-}
-
-message TabletExternallyElectedRequest {
-}
-
-message TabletExternallyElectedResponse {
-}
-
-message GetSlavesRequest {
-}
-
-message GetSlavesResponse {
+message GetReplicasResponse {
   repeated string addrs = 1;
 }
 
@@ -373,20 +364,24 @@ message PopulateReparentJournalRequest {
 message PopulateReparentJournalResponse {
 }
 
-message InitSlaveRequest {
+message InitReplicaRequest {
   topodata.TabletAlias parent = 1;
   string replication_position = 2;
   int64 time_created_ns = 3;
 }
 
-message InitSlaveResponse {
+message InitReplicaResponse {
 }
 
 message DemoteMasterRequest {
 }
 
 message DemoteMasterResponse {
-  string position = 1;
+  // Position is deprecated, and is a string representation of a demoted masters executed position.
+  string deprecated_position = 1 [deprecated=true];
+
+  // MasterStatus represents the response from calling `SHOW MASTER STATUS` on a master that has been demoted.
+  replicationdata.MasterStatus master_status = 2;
 }
 
 message UndoDemoteMasterRequest {
@@ -395,54 +390,42 @@ message UndoDemoteMasterRequest {
 message UndoDemoteMasterResponse {
 }
 
-// Deprecated
-message PromoteSlaveWhenCaughtUpRequest {
-  string position = 1;
+message ReplicaWasPromotedRequest {
 }
 
-// Deprecated
-message PromoteSlaveWhenCaughtUpResponse {
-  string position = 1;
-}
-
-message SlaveWasPromotedRequest {
-}
-
-message SlaveWasPromotedResponse {
+message ReplicaWasPromotedResponse {
 }
 
 message SetMasterRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
+  bool force_start_replication = 3;
   string wait_position = 4;
-  bool force_start_slave = 3;
 }
 
 message SetMasterResponse {
 }
 
-message SlaveWasRestartedRequest {
+message ReplicaWasRestartedRequest {
   // the parent alias the tablet should have
   topodata.TabletAlias parent = 1;
 }
 
-message SlaveWasRestartedResponse {
+message ReplicaWasRestartedResponse {
 }
 
 message StopReplicationAndGetStatusRequest {
+  replicationdata.StopReplicationMode stop_replication_mode = 1;
 }
 
 message StopReplicationAndGetStatusResponse {
-  replicationdata.Status status = 1;
-}
+  // HybridStatus is deprecated. It currently represents a hybrid struct where all data represents the before state,
+  // except for all position related data which comes from the after state. Please use status instead, which holds
+  // discrete replication status calls before and after stopping the replica, or stopping the replica's io_thread.
+  replicationdata.Status hybrid_status = 1 [deprecated=true];
 
-// Deprecated
-message PromoteSlaveRequest {
-}
-
-// Deprecated
-message PromoteSlaveResponse {
-  string position = 1;
+  // Status represents the replication status call right before, and right after telling the replica to stop.
+  replicationdata.StopReplicationStatus status = 2;
 }
 
 message PromoteReplicaRequest {
@@ -468,4 +451,88 @@ message RestoreFromBackupRequest {
 
 message RestoreFromBackupResponse {
   logutil.Event event = 1;
+}
+
+// Deprecated
+message SlaveStatusRequest {
+}
+
+// Deprecated
+message SlaveStatusResponse {
+  replicationdata.Status status = 1;
+}
+
+// Deprecated
+message StopSlaveRequest {
+}
+
+// Deprecated
+message StopSlaveResponse {
+}
+
+// Deprecated
+message StopSlaveMinimumRequest {
+  string position = 1;
+  int64 wait_timeout = 2;
+}
+
+// Deprecated
+message StopSlaveMinimumResponse {
+  string position = 1;
+}
+
+// Deprecated
+message StartSlaveRequest {
+}
+
+// Deprecated
+message StartSlaveResponse {
+}
+
+// Deprecated
+message StartSlaveUntilAfterRequest {
+  string position = 1;
+  int64 wait_timeout = 2;
+}
+
+// Deprecated
+message StartSlaveUntilAfterResponse {
+}
+
+// Deprecated
+message GetSlavesRequest {
+}
+
+// Deprecated
+message GetSlavesResponse {
+  repeated string addrs = 1;
+}
+
+// Deprecated
+message InitSlaveRequest {
+  topodata.TabletAlias parent = 1;
+  string replication_position = 2;
+  int64 time_created_ns = 3;
+}
+
+// Deprecated
+message InitSlaveResponse {
+}
+
+// Deprecated
+message SlaveWasPromotedRequest {
+}
+
+// Deprecated
+message SlaveWasPromotedResponse {
+}
+
+// Deprecated
+message SlaveWasRestartedRequest {
+  // the parent alias the tablet should have
+  topodata.TabletAlias parent = 1;
+}
+
+// Deprecated
+message SlaveWasRestartedResponse {
 }

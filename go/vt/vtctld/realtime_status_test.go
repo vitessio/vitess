@@ -38,7 +38,7 @@ import (
 )
 
 // TestRealtimeStatsWithQueryService uses fakeTablets and the fakeQueryService to
-// copy the environment needed for the HealthCheck object.
+// copy the environment needed for the LegacyHealthCheck object.
 func TestRealtimeStatsWithQueryService(t *testing.T) {
 	// Set up testing keyspace with 2 tablets within 2 cells.
 	keyspace := "ks"
@@ -113,7 +113,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	}
 }
 
-// checkStats ensures that the HealthCheck object received an update and passed
+// checkStats ensures that the LegacyHealthCheck object received an update and passed
 // that information to the correct tablet.
 func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *querypb.RealtimeStats) error {
 	deadline := time.Now().Add(time.Second * 5)
@@ -122,7 +122,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 		if err != nil {
 			continue
 		}
-		if result.DeepEqual(&discovery.TabletStats{}) {
+		if result.DeepEqual(&discovery.LegacyTabletStats{}) {
 			continue
 		}
 		got := result.Stats
@@ -134,7 +134,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 	return fmt.Errorf("timeout error when getting tabletStatuses")
 }
 
-// newRealtimeStatsForTesting creates a new realtimeStats object without creating a HealthCheck object.
+// newRealtimeStatsForTesting creates a new realtimeStats object without creating a LegacyHealthCheck object.
 func newRealtimeStatsForTesting() *realtimeStats {
 	tabletStatsCache := newTabletStatsCache()
 	return &realtimeStats{

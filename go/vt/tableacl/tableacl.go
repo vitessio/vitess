@@ -28,11 +28,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/tableacl/acl"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
 )
@@ -109,19 +106,17 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	if configFile == "" {
 		return nil
 	}
-	log.Infof("Loading Table ACL from local file: %v", configFile)
 	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
-		log.Infof("unable to read tableACL config file: %v", err)
+		log.Infof("unable to read tableACL config file: %v  Error: %v", configFile, err)
 		return err
 	}
 	config := &tableaclpb.Config{}
 	if err := proto.Unmarshal(data, config); err != nil {
-		log.Infof("unable to parse tableACL config file as a protobuf file: %v", err)
 		// try to parse tableacl as json file
 		if jsonErr := json2.Unmarshal(data, config); jsonErr != nil {
-			log.Infof("unable to parse tableACL config file as a json file: %v", jsonErr)
-			return fmt.Errorf("unable to unmarshal Table ACL data: %v", data)
+			log.Infof("unable to parse tableACL config file as a protobuf or json file.  protobuf err: %v  json err: %v", err, jsonErr)
+			return fmt.Errorf("unable to unmarshal Table ACL data: %s", data)
 		}
 	}
 	return tacl.Set(config)
@@ -320,24 +315,4 @@ func GetCurrentACLFactory() (acl.Factory, error) {
 		return aclFactory, nil
 	}
 	return nil, fmt.Errorf("aclFactory for given default: %s is not found", defaultACL)
-}
-
-func checkHealth(acl *tableACL) error {
-	if !acl.Valid() {
-		return errors.New("the tableacl is not valid")
-	}
-	return nil
-}
-
-func init() {
-	servenv.OnRun(func() {
-		currentConfig := tabletenv.NewCurrentConfig()
-		if !currentConfig.StrictTableACL {
-			return
-		}
-		if currentConfig.EnableTableACLDryRun {
-			return
-		}
-		health.DefaultAggregator.RegisterSimpleCheck("tableacl", func() error { return checkHealth(&currentTableACL) })
-	})
 }

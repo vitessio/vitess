@@ -23,6 +23,9 @@ import (
 	"strconv"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -161,6 +164,8 @@ const (
 	SelectDBA
 	// SelectReference is for fetching from a reference table.
 	SelectReference
+	// SelectNone is used for queries that always return empty values
+	SelectNone
 )
 
 var routeName = map[RouteOpcode]string{
@@ -172,6 +177,7 @@ var routeName = map[RouteOpcode]string{
 	SelectNext:        "SelectNext",
 	SelectDBA:         "SelectDBA",
 	SelectReference:   "SelectReference",
+	SelectNone:        "SelectNone",
 }
 
 var (
@@ -230,6 +236,8 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
 	case SelectIN:
 		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
+	case SelectNone:
+		rss, bvs, err = nil, nil, nil
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", route)
@@ -483,6 +491,18 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace 
 	return rss[0], ksid, nil
 }
 
+func resolveMultiShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey []sqltypes.Value) ([]*srvtopo.ResolvedShard, error) {
+	destinations, err := vindex.Map(vcursor, vindexKey)
+	if err != nil {
+		return nil, err
+	}
+	rss, _, err := vcursor.ResolveDestinations(keyspace.Name, nil, destinations)
+	if err != nil {
+		return nil, err
+	}
+	return rss, nil
+}
+
 func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {
 	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
 	if err != nil {
@@ -534,6 +554,15 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 		shardVars[i] = newbv
 	}
 	return shardVars
+}
+
+func allowOnlyMaster(rss ...*srvtopo.ResolvedShard) error {
+	for _, rs := range rss {
+		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_MASTER {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
+		}
+	}
+	return nil
 }
 
 func (route *Route) description() PrimitiveDescription {

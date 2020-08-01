@@ -17,15 +17,19 @@ limitations under the License.
 package vreplication
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 )
@@ -37,14 +41,10 @@ func TestEngineOpen(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
-	// Test Insert
-
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
-	if vre.IsOpen() {
-		t.Errorf("IsOpen: %v, want false", vre.IsOpen())
-	}
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
+	require.False(t, vre.IsOpen())
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -59,23 +59,79 @@ func TestEngineOpen(t *testing.T) {
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("commit", nil, nil)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 	defer vre.Close()
-	if !vre.IsOpen() {
-		t.Errorf("IsOpen: %v, want true", vre.IsOpen())
-	}
+	assert.True(t, vre.IsOpen())
 
 	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
+	assert.Equal(t, globalStats.controllers, vre.controllers)
 
 	ct := vre.controllers[1]
-	if ct == nil || ct.id != 1 {
-		t.Errorf("ct: %v, id should be 1", ct)
+	assert.True(t, ct != nil && ct.id == 1)
+}
+
+func TestEngineOpenRetry(t *testing.T) {
+	defer func() { globalStats = &vrStats{} }()
+
+	defer func(saved time.Duration) { openRetryInterval.Set(saved) }(openRetryInterval.Get())
+	openRetryInterval.Set(10 * time.Millisecond)
+
+	defer deleteTablet(addTablet(100))
+	resetBinlogClient()
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
+
+	// Fail twice to ensure the retry retries at least once.
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|state|source",
+			"int64|varchar|varchar",
+		),
+	), nil)
+
+	isRetrying := func() bool {
+		vre.mu.Lock()
+		defer vre.mu.Unlock()
+		return vre.cancelRetry != nil
 	}
+
+	vre.Open(context.Background())
+
+	assert.True(t, isRetrying())
+	func() {
+		for i := 0; i < 10; i++ {
+			time.Sleep(10 * time.Millisecond)
+			if !isRetrying() {
+				return
+			}
+		}
+		t.Error("retrying did not become false")
+	}()
+
+	// Open is idempotent.
+	assert.True(t, vre.IsOpen())
+	vre.Open(context.Background())
+
+	vre.Close()
+	assert.False(t, vre.IsOpen())
+
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	vre.Open(context.Background())
+
+	// A second Open should cancel the existing retry and start a new one.
+	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, errors.New("err"))
+	vre.Open(context.Background())
+
+	start := time.Now()
+	// Close should cause the retry to exit.
+	vre.Close()
+	elapsed := time.Since(start)
+	assert.Greater(t, int64(openRetryInterval.Get()), int64(elapsed))
 }
 
 func TestEngineExec(t *testing.T) {
@@ -85,16 +141,14 @@ func TestEngineExec(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
 	// Test Insert
 
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 	defer vre.Close()
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
@@ -247,14 +301,12 @@ func TestEngineBadInsert(t *testing.T) {
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 	defer vre.Close()
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
@@ -277,14 +329,12 @@ func TestEngineSelect(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 	defer vre.Close()
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
@@ -312,14 +362,12 @@ func TestWaitForPos(t *testing.T) {
 	waitRetryTime = 10 * time.Millisecond
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -342,9 +390,9 @@ func TestWaitForPos(t *testing.T) {
 
 func TestWaitForPosError(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
 	err := vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
 	want := `vreplication engine is closed`
@@ -353,9 +401,7 @@ func TestWaitForPosError(t *testing.T) {
 	}
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 
 	err = vre.WaitForPos(context.Background(), 1, "BadFlavor/0-1-1084")
 	want = `parse error: unknown GTIDSet flavor "BadFlavor"`
@@ -384,14 +430,12 @@ func TestWaitForPosError(t *testing.T) {
 
 func TestWaitForPosCancel(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -430,27 +474,31 @@ func TestCreateDBAndTable(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
 
 	// Test Insert
 
-	vre := NewEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName())
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClient.DBName(), nil)
 
 	tableNotFound := mysql.SQLError{Num: 1146, Message: "table not found"}
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, &tableNotFound)
-	if err := vre.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	vre.Open(context.Background())
 	defer vre.Close()
 
 	// Missing db. Statement should get retried after creating everything.
 	dbNotFound := mysql.SQLError{Num: 1049, Message: "db not found"}
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, &dbNotFound)
 
-	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+	expectDDLs := func() {
+		t.Helper()
+		dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN db_name.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("create table if not exists _vt.copy_state.*", &sqltypes.Result{}, nil)
+	}
+	expectDDLs()
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 
 	// Non-recoverable error.
@@ -460,12 +508,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	// Missing table. Statement should get retried after creating everything.
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, &tableNotFound)
-
-	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
-
+	expectDDLs()
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
 
 	// The rest of this test is normal with no db errors or extra queries.

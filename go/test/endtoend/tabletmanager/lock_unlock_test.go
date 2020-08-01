@@ -71,8 +71,8 @@ func TestLockAndUnlock(t *testing.T) {
 	exec(t, masterConn, "delete from t1")
 }
 
-// TestStartSlaveUntilAfter tests by writing three rows, noting the gtid after each, and then replaying them one by one
-func TestStartSlaveUntilAfter(t *testing.T) {
+// TestStartReplicationUntilAfter tests by writing three rows, noting the gtid after each, and then replaying them one by one
+func TestStartReplicationUntilAfter(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
@@ -85,7 +85,7 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 	defer replicaConn.Close()
 
 	//first we stop replication to the replica, so we can move forward step by step.
-	err = tmcStopSlave(ctx, replicaTablet.GrpcPort)
+	err = tmcStopReplication(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
 
 	exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
@@ -105,21 +105,21 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 
 	// starts the mysql replication until
 	timeout := 10 * time.Second
-	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos1, timeout)
+	err = tmcStartReplicationUntilAfter(ctx, replicaTablet.GrpcPort, pos1, timeout)
 	require.Nil(t, err)
 	// first row should be visible
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
-	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos2, timeout)
+	err = tmcStartReplicationUntilAfter(ctx, replicaTablet.GrpcPort, pos2, timeout)
 	require.Nil(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
-	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos3, timeout)
+	err = tmcStartReplicationUntilAfter(ctx, replicaTablet.GrpcPort, pos3, timeout)
 	require.Nil(t, err)
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
 	// Strat replication to the replica
-	err = tmcStartSlave(ctx, replicaTablet.GrpcPort)
+	err = tmcStartReplication(ctx, replicaTablet.GrpcPort)
 	require.Nil(t, err)
 	// Clean the table for further testing
 	exec(t, masterConn, "delete from t1")

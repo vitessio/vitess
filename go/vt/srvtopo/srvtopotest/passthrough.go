@@ -50,7 +50,7 @@ func (srv *PassthroughSrvTopoServer) GetTopoServer() (*topo.Server, error) {
 }
 
 // GetSrvKeyspaceNames implements srvtopo.Server
-func (srv *PassthroughSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (srv *PassthroughSrvTopoServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
 	return srv.SrvKeyspaceNames, srv.SrvKeyspaceNamesError
 }
 

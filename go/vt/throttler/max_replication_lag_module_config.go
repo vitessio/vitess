@@ -45,7 +45,7 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 		EmergencyDecrease: 0.5,
 
 		// Wait for two health broadcast rounds. Otherwise, the "decrease" mode
-		// has less than 2 lag records available to calculate the actual slave rate.
+		// has less than 2 lag records available to calculate the actual replication rate.
 		MinDurationBetweenIncreasesSec: 2 * healthCheckInterval,
 		// MaxDurationBetweenIncreasesSec defaults to 60+2 seconds because this
 		// corresponds to 3 broadcasts.

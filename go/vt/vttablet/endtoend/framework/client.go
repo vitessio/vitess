@@ -18,6 +18,7 @@ package framework
 
 import (
 	"errors"
+	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -37,6 +38,7 @@ type QueryClient struct {
 	target        querypb.Target
 	server        *tabletserver.TabletServer
 	transactionID int64
+	reservedID    int64
 }
 
 // NewClient creates a new client for Server.
@@ -85,7 +87,7 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	if clientFoundRows {
 		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
 	}
-	transactionID, err := client.server.Begin(client.ctx, &client.target, options)
+	transactionID, _, err := client.server.Begin(client.ctx, &client.target, options)
 	if err != nil {
 		return err
 	}
@@ -96,13 +98,23 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 // Commit commits the current transaction.
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Commit(client.ctx, &client.target, client.transactionID)
+	rID, err := client.server.Commit(client.ctx, &client.target, client.transactionID)
+	client.reservedID = rID
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	return client.server.Rollback(client.ctx, &client.target, client.transactionID)
+	rID, err := client.server.Rollback(client.ctx, &client.target, client.transactionID)
+	client.reservedID = rID
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Prepare executes a prepare on the current transaction.
@@ -150,7 +162,7 @@ func (client *QueryClient) ReadTransaction(dtid string) (*querypb.TransactionMet
 // SetServingType is for testing transitions.
 // It currently supports only master->replica and back.
 func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) error {
-	_, err := client.server.SetServingType(tabletType, true, nil)
+	err := client.server.SetServingType(tabletType, time.Time{}, true /* serving */, "" /* reason */)
 	return err
 }
 
@@ -160,21 +172,42 @@ func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.Bi
 }
 
 // BeginExecute performs a BeginExecute.
-func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (client *QueryClient) BeginExecute(query string, bindvars map[string]*querypb.BindVariable, preQueries []string) (*sqltypes.Result, error) {
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, err := client.server.BeginExecute(
+	qr, transactionID, _, err := client.server.BeginExecute(
 		client.ctx,
 		&client.target,
+		preQueries,
 		query,
 		bindvars,
+		client.reservedID,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
+	client.transactionID = transactionID
 	if err != nil {
 		return nil, err
 	}
+	return qr, nil
+}
+
+// BeginExecuteBatch performs a BeginExecuteBatch.
+func (client *QueryClient) BeginExecuteBatch(queries []*querypb.BoundQuery, asTransaction bool) ([]sqltypes.Result, error) {
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	qr, transactionID, _, err := client.server.BeginExecuteBatch(
+		client.ctx,
+		&client.target,
+		queries,
+		asTransaction,
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	)
 	client.transactionID = transactionID
+	if err != nil {
+		return nil, err
+	}
 	return qr, nil
 }
 
@@ -186,6 +219,7 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 		query,
 		bindvars,
 		client.transactionID,
+		client.reservedID,
 		options,
 	)
 }
@@ -260,4 +294,65 @@ func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) 
 		})
 	}
 	return client.server.MessageAck(client.ctx, &client.target, name, bids)
+}
+
+// ReserveExecute performs a ReserveExecute.
+func (client *QueryClient) ReserveExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.reservedID != 0 {
+		return nil, errors.New("already reserved a connection")
+	}
+	qr, reservedID, _, err := client.server.ReserveExecute(client.ctx, &client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	client.reservedID = reservedID
+	if err != nil {
+		return nil, err
+	}
+	return qr, nil
+}
+
+// ReserveBeginExecute performs a ReserveBeginExecute.
+func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.reservedID != 0 {
+		return nil, errors.New("already reserved a connection")
+	}
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, &client.target, preQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	client.transactionID = transactionID
+	client.reservedID = reservedID
+	if err != nil {
+		return nil, err
+	}
+	return qr, nil
+}
+
+// Release performs a Release.
+func (client *QueryClient) Release() error {
+	err := client.server.Release(client.ctx, &client.target, client.transactionID, client.reservedID)
+	if err != nil {
+		return err
+	}
+	client.reservedID = 0
+	client.transactionID = 0
+	return nil
+}
+
+//TransactionID returns transactionID
+func (client *QueryClient) TransactionID() int64 {
+	return client.transactionID
+}
+
+//ReservedID returns reservedID
+func (client *QueryClient) ReservedID() int64 {
+	return client.reservedID
+}
+
+//SetTransactionID does what it says
+func (client *QueryClient) SetTransactionID(id int64) {
+	client.transactionID = id
+}
+
+//SetReservedID does what it says
+func (client *QueryClient) SetReservedID(id int64) {
+	client.reservedID = id
 }

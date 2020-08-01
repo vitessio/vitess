@@ -32,7 +32,8 @@ var (
 	dbPassword = "VtDbaPass"
 
 	// UseXb flag to use extra backup for recovery teseting.
-	UseXb  = false
+	UseXb = false
+	// XbArgs are the arguments for specifying xtrabackup.
 	XbArgs = []string{
 		"-backup_engine_implementation", "xtrabackup",
 		"-xtrabackup_stream_mode=xbstream",
@@ -41,12 +42,14 @@ var (
 	}
 )
 
+// VerifyQueriesUsingVtgate verifies queries using vtgate.
 func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
 	qr, err := session.Execute(context.Background(), query, nil)
 	require.Nil(t, err)
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
 
+// RestoreTablet performs a PITR restore.
 func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, restoreKSName string, shardName string, keyspaceName string, commonTabletArg []string) {
 	tablet.ValidateTabletRestart(t)
 	replicaTabletArgs := commonTabletArg
@@ -69,7 +72,9 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 		"-enable_replication_reporter=false",
 		"-init_tablet_type", "replica",
 		"-init_keyspace", restoreKSName,
-		"-init_shard", shardName)
+		"-init_shard", shardName,
+		"-init_db_name_override", "vt_"+keyspaceName,
+	)
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.ExtraArgs = replicaTabletArgs
 
@@ -81,6 +86,7 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	require.Nil(t, err)
 }
 
+// InsertData inserts data.
 func InsertData(t *testing.T, tablet *cluster.Vttablet, index int, keyspaceName string) {
 	_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (id, msg) values (%d, 'test %d')", index, index), keyspaceName, true)
 	require.Nil(t, err)

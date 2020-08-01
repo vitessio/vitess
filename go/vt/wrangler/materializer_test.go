@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -1418,15 +1419,23 @@ func TestMaterializerOneToOne(t *testing.T) {
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      "t1",
-			SourceExpression: "select * from t1",
-			CreateDdl:        "t1ddl",
-		}, {
-			TargetTable:      "t2",
-			SourceExpression: "select * from t3",
-			CreateDdl:        "t2ddl",
-		}},
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "t1",
+				SourceExpression: "select * from t1",
+				CreateDdl:        "t1ddl",
+			},
+			{
+				TargetTable:      "t2",
+				SourceExpression: "select * from t3",
+				CreateDdl:        "t2ddl",
+			},
+			{
+				TargetTable:      "t4",
+				SourceExpression: "", // empty
+				CreateDdl:        "t4ddl",
+			},
+		},
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1434,8 +1443,16 @@ func TestMaterializerOneToOne(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"select.*t1\\" > rules:<match:\\"t2\\" filter:\\"select.*t3\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'\)`+
-			eol,
+			`\(`+
+			`'workflow', `+
+			(`'keyspace:\\"sourceks\\" shard:\\"0\\" `+
+				`filter:<`+
+				`rules:<match:\\"t1\\" filter:\\"select.*t1\\" > `+
+				`rules:<match:\\"t2\\" filter:\\"select.*t3\\" > `+
+				`rules:<match:\\"t4\\" > `+
+				`> ', `)+
+			`'', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
+			`\)`+eol,
 		&sqltypes.Result{},
 	)
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
@@ -1953,7 +1970,27 @@ func TestMaterializerNoSourceMaster(t *testing.T) {
 	assert.EqualError(t, err, "source shard must have a master for copying schema: 0")
 }
 
-func TestMaterializerTableMismatch(t *testing.T) {
+func TestMaterializerTableMismatchNonCopy(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t2",
+			CreateDdl:        "",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	delete(env.tmc.schema, "targetks.t1")
+
+	err := env.wr.Materialize(context.Background(), ms)
+	assert.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
+}
+
+func TestMaterializerTableMismatchCopy(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
 		SourceKeyspace: "sourceks",
@@ -2145,4 +2182,76 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "could not find vindex column c1")
+}
+
+func TestStripConstraints(t *testing.T) {
+	tcs := []struct {
+		desc string
+		ddl  string
+
+		hasErr bool
+		newDDL string
+	}{
+		{
+			desc: "constraints",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
+				"`foreign_id` int(11) NOT NULL,\n" +
+				"`user_id` int(11) NOT NULL,\n" +
+				"PRIMARY KEY (`id`),\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"KEY `fk_table1_ref_user_id` (`user_id`),\n" +
+				"CONSTRAINT `fk_table1_ref_foreign_id` FOREIGN KEY (`foreign_id`) REFERENCES `foreign` (`id`),\n" +
+				"CONSTRAINT `fk_table1_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `core_user` (`id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+
+			newDDL: "create table table1 (\n" +
+				"\tid int(11) not null auto_increment,\n" +
+				"\tforeign_id int(11) not null,\n" +
+				"\tuser_id int(11) not null,\n" +
+				"\tPRIMARY KEY (id),\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tKEY fk_table1_ref_user_id (user_id)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+
+			hasErr: false,
+		},
+		{
+			desc: "no constraints",
+			ddl: "CREATE TABLE `table1` (\n" +
+				"`id` int(11) NOT NULL AUTO_INCREMENT,\n" +
+				"`foreign_id` int(11) NOT NULL,\n" +
+				"`user_id` int(11) NOT NULL,\n" +
+				"PRIMARY KEY (`id`),\n" +
+				"KEY `fk_table1_ref_foreign_id` (`foreign_id`),\n" +
+				"KEY `fk_table1_ref_user_id` (`user_id`)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1;",
+
+			newDDL: "create table table1 (\n" +
+				"\tid int(11) not null auto_increment,\n" +
+				"\tforeign_id int(11) not null,\n" +
+				"\tuser_id int(11) not null,\n" +
+				"\tPRIMARY KEY (id),\n" +
+				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
+				"\tKEY fk_table1_ref_user_id (user_id)\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+		},
+		{
+			desc: "bad ddl has error",
+			ddl:  "bad ddl",
+
+			hasErr: true,
+		},
+	}
+
+	for _, tc := range tcs {
+		newDDL, err := stripTableConstraints(tc.ddl)
+		if tc.hasErr != (err != nil) {
+			t.Fatalf("hasErr does not match: err: %v, tc: %+v", err, tc)
+		}
+
+		if newDDL != tc.newDDL {
+			utils.MustMatch(t, tc.newDDL, newDDL, fmt.Sprintf("newDDL does not match. tc: %+v", tc))
+		}
+	}
 }

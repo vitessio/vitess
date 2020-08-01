@@ -37,8 +37,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"golang.org/x/net/context"
 
@@ -83,7 +86,7 @@ var logNameMap logNameToLogLevel
 
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
-	client    *s3.S3
+	client    s3iface.S3API
 	bs        *S3BackupStorage
 	dir       string
 	name      string
@@ -100,6 +103,21 @@ func (bh *S3BackupHandle) Directory() string {
 // Name is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) Name() string {
 	return bh.name
+}
+
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) RecordError(err error) {
+	bh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) HasErrors() bool {
+	return bh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (bh *S3BackupHandle) Error() error {
+	return bh.errors.Error()
 }
 
 // AddFile is part of the backupstorage.BackupHandle interface.
@@ -141,7 +159,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		if err != nil {
 			reader.CloseWithError(err)
-			bh.errors.RecordError(err)
+			bh.RecordError(err)
 		}
 	}()
 
@@ -154,7 +172,7 @@ func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
 	bh.waitGroup.Wait()
-	return bh.errors.Error()
+	return bh.Error()
 }
 
 // AbortBackup is part of the backupstorage.BackupHandle interface.
@@ -353,7 +371,11 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 		}
 
 		if *retryCount >= 0 {
-			awsConfig.WithMaxRetries(*retryCount)
+			awsConfig = *request.WithRetryer(&awsConfig, &ClosedConnectionRetryer{
+				awsRetryer: &client.DefaultRetryer{
+					NumMaxRetries: *retryCount,
+				},
+			})
 		}
 
 		bs._client = s3.New(session, &awsConfig)

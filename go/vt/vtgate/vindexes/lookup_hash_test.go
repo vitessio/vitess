@@ -86,8 +86,8 @@ func TestLookupHashMap(t *testing.T) {
 
 	// Test conversion fail.
 	vc.result = sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("a", "varbinary"),
-		"notint",
+		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
+		"1|notint",
 	)
 	got, err = lookuphash.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestLookupHashMapAbsent(t *testing.T) {
 
 func TestLookupHashMapNull(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false)
-	vc := &vcursor{numRows: 1}
+	vc := &vcursor{numRows: 1, keys: []sqltypes.Value{sqltypes.NULL}}
 
 	got, err := lookuphash.Map(vc, []sqltypes.Value{sqltypes.NULL})
 	require.NoError(t, err)
@@ -220,15 +220,22 @@ func TestLookupHashCreate(t *testing.T) {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
+	err = lookuphash.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	want := "lookup.Create: input has null values: row: 0, col: 0"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookuphash.Create(NULL) err: %v, want %s", err, want)
+	}
+
 	vc.queries = nil
+	lookuphash.(*LookupHash).lkp.IgnoreNulls = true
 	err = lookuphash.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 1; got != want {
+	if got, want := len(vc.queries), 0; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
 	err = lookuphash.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
-	want := "lookup.Create.vunhash: invalid keyspace id: 626f677573"
+	want = "lookup.Create.vunhash: invalid keyspace id: 626f677573"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookuphash.Create(bogus) err: %v, want %s", err, want)
 	}

@@ -59,6 +59,27 @@ const (
 	DirectionBackward
 )
 
+// TableRemovalType specifies the way the a table will be removed
+type TableRemovalType int
+
+// The following consts define if DropSource will drop or rename the table
+const (
+	DropTable = TableRemovalType(iota)
+	RenameTable
+)
+
+func (trt TableRemovalType) String() string {
+	types := [...]string{
+		"DROP TABLE",
+		"RENAME TABLE",
+	}
+	if trt < DropTable || trt > RenameTable {
+		return "Unknown"
+	}
+
+	return types[trt]
+}
+
 // accessType specifies the type of access for a shard (allow/disallow writes).
 type accessType int
 
@@ -293,7 +314,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 }
 
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
-func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -328,7 +349,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 	}
 	switch ts.migrationType {
 	case binlogdatapb.MigrationType_TABLES:
-		if err := sw.dropSourceTables(ctx); err != nil {
+		if err := sw.removeSourceTables(ctx, removalType); err != nil {
 			return nil, err
 		}
 		if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
@@ -338,6 +359,9 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 		if err := sw.dropSourceShards(ctx); err != nil {
 			return nil, err
 		}
+	}
+	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+		return nil, err
 	}
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return nil, err
@@ -1119,17 +1143,23 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 
 }
 
-func (ts *trafficSwitcher) dropSourceTables(ctx context.Context) error {
+func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
 	return ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
-			ts.wr.Logger().Infof("Dropping table %s.%s\n", source.master.DbName(), tableName)
 			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
+			if removalType == DropTable {
+				ts.wr.Logger().Infof("Dropping table %s.%s\n", source.master.DbName(), tableName)
+			} else {
+				renameName := fmt.Sprintf("_%.63s", tableName)
+				ts.wr.Logger().Infof("Renaming table %s.%s to %s.%s\n", source.master.DbName(), tableName, source.master.DbName(), renameName)
+				query = fmt.Sprintf("rename table %s.%s TO %s.%s", source.master.DbName(), tableName, source.master.DbName(), renameName)
+			}
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.master.Alias, query, 1, false, true)
 			if err != nil {
-				ts.wr.Logger().Errorf("Error dropping table %s: %v", tableName, err)
+				ts.wr.Logger().Errorf("Error removing table %s: %v", tableName, err)
 				return err
 			}
-			ts.wr.Logger().Infof("Dropped table %s.%s\n", source.master.DbName(), tableName)
+			ts.wr.Logger().Infof("Removed table %s.%s\n", source.master.DbName(), tableName)
 
 		}
 		return nil
@@ -1167,10 +1197,18 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
 	return ts.forAllTargets(func(target *tsTarget) error {
 		ts.wr.Logger().Infof("Deleting target streams for workflow %s db_name %s", ts.workflow, target.master.DbName())
-		fmt.Printf("Delete target streams for workflow %s db_name %s tablet %d\n", ts.workflow, target.master.DbName(), target.master.Alias.Uid)
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(ts.workflow))
-		fmt.Println(query)
 		_, err := ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		return err
+	})
+}
+
+func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Context) error {
+	return ts.forAllSources(func(source *tsSource) error {
+		ts.wr.Logger().Infof("Deleting reverse streams for workflow %s db_name %s", ts.workflow, source.master.DbName())
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s",
+			encodeString(source.master.DbName()), encodeString(reverseName(ts.workflow)))
+		_, err := ts.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
 		return err
 	})
 }

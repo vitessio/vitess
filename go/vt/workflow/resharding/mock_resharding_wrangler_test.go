@@ -13,7 +13,7 @@ import (
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// MockReshardingWrangler is a mock of ReshardingWrangler interface
+// MockReshardingWrangler is a mock of Wrangler interface from resharding_wrangler.go
 type MockReshardingWrangler struct {
 	ctrl     *gomock.Controller
 	recorder *MockReshardingWranglerMockRecorder
@@ -37,15 +37,15 @@ func (m *MockReshardingWrangler) EXPECT() *MockReshardingWranglerMockRecorder {
 }
 
 // CopySchemaShardFromShard mocks base method
-func (m *MockReshardingWrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitSlaveTimeout time.Duration, skipVerify bool) error {
-	ret := m.ctrl.Call(m, "CopySchemaShardFromShard", ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitSlaveTimeout, false)
+func (m *MockReshardingWrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
+	ret := m.ctrl.Call(m, "CopySchemaShardFromShard", ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, false)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CopySchemaShardFromShard indicates an expected call of CopySchemaShardFromShard
-func (mr *MockReshardingWranglerMockRecorder) CopySchemaShardFromShard(ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitSlaveTimeout interface{}, skipVerify bool) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopySchemaShardFromShard", reflect.TypeOf((*MockReshardingWrangler)(nil).CopySchemaShardFromShard), ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitSlaveTimeout, skipVerify)
+func (mr *MockReshardingWranglerMockRecorder) CopySchemaShardFromShard(ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout interface{}, skipVerify bool) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopySchemaShardFromShard", reflect.TypeOf((*MockReshardingWrangler)(nil).CopySchemaShardFromShard), ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
 }
 
 // WaitForFilteredReplication mocks base method

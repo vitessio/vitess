@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -38,7 +40,14 @@ var (
 		val2 int,
 		val3 float,
 		primary key(id)
-	)Engine=InnoDB;`
+	)Engine=InnoDB;
+
+CREATE TABLE test_vdx (
+    val1 varchar(16) NOT NULL,
+    keyspace_id binary(8),
+    UNIQUE KEY (val1)
+) ENGINE=Innodb;
+`
 
 	vSchema = `
 		{	
@@ -46,7 +55,20 @@ var (
 			"vindexes": {
 				"hash_index": {
 					"type": "hash"
-				}
+				},
+				"lookup1": {
+					"type": "consistent_lookup",
+					"params": {
+						"table": "test_vdx",
+						"from": "val1",
+						"to": "keyspace_id",
+						"ignore_nulls": "true"
+					},
+					"owner": "test"
+				},
+				"unicode_vdx":{
+					"type": "unicode_loose_md5"
+                }
 			},	
 			"tables": {
 				"test":{
@@ -54,6 +76,18 @@ var (
 						{
 							"column": "id",
 							"name": "hash_index"
+						},
+						{
+							"column": "val1",
+							"name": "lookup1"
+						}
+					]
+				},
+				"test_vdx":{
+					"column_vindexes": [
+						{
+							"column": "val1",
+							"name": "unicode_vdx"
 						}
 					]
 				}
@@ -98,4 +132,11 @@ func TestMain(m *testing.M) {
 func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
+}
+
+func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err)
+	return qr
 }

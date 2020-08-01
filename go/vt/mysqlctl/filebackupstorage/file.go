@@ -28,6 +28,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
 
@@ -43,6 +44,22 @@ type FileBackupHandle struct {
 	dir      string
 	name     string
 	readOnly bool
+	errors   concurrency.AllErrorRecorder
+}
+
+// RecordError is part of the concurrency.ErrorRecorder interface.
+func (fbh *FileBackupHandle) RecordError(err error) {
+	fbh.errors.RecordError(err)
+}
+
+// HasErrors is part of the concurrency.ErrorRecorder interface.
+func (fbh *FileBackupHandle) HasErrors() bool {
+	return fbh.errors.HasErrors()
+}
+
+// Error is part of the concurrency.ErrorRecorder interface.
+func (fbh *FileBackupHandle) Error() error {
+	return fbh.errors.Error()
 }
 
 // Directory is part of the BackupHandle interface

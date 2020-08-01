@@ -48,7 +48,11 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 		}
 
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
-			return engine.Equal, ksidVindex, ksidCol, single, []sqltypes.PlanValue{pv}, nil
+			opcode := engine.Equal
+			if pv.IsList() {
+				opcode = engine.In
+			}
+			return opcode, ksidVindex, ksidCol, single, []sqltypes.PlanValue{pv}, nil
 		}
 	}
 	if ksidVindex == nil {
@@ -73,6 +77,10 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValu
 		switch comparison.Operator {
 		case sqlparser.EqualStr:
 			if !sqlparser.IsValue(comparison.Right) {
+				continue
+			}
+		case sqlparser.InStr:
+			if !sqlparser.IsSimpleTuple(comparison.Right) {
 				continue
 			}
 		default:

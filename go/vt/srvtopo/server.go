@@ -37,7 +37,7 @@ type Server interface {
 
 	// GetSrvKeyspaceNames returns the list of keyspaces served in
 	// the provided cell.
-	GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error)
+	GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error)
 
 	// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)

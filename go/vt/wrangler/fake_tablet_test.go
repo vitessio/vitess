@@ -17,23 +17,25 @@ limitations under the License.
 package wrangler
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	// import the gRPC client implementation for tablet manager
@@ -68,7 +70,7 @@ type fakeTablet struct {
 	// The following fields are created when we start the event loop for
 	// the tablet, and closed / cleared when we stop it.
 	// The Listener is used by the gRPC server.
-	Agent    *tabletmanager.ActionAgent
+	TM       *tabletmanager.TabletManager
 	Listener net.Listener
 
 	// These optional fields are used if the tablet also needs to
@@ -106,7 +108,8 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
 	mysqlPort := int32(3300 + uid)
-	hostname := fmt.Sprintf("%v.%d", cell, uid)
+	hostname, err := netutil.FullyQualifiedHostname()
+	require.NoError(t, err)
 	tablet := &topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: cell, Uid: uid},
 		Hostname:      hostname,
@@ -119,7 +122,7 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 		Shard:    "0",
 		Type:     tabletType,
 	}
-	topoproto.SetMysqlPort(tablet, mysqlPort)
+	tablet.MysqlPort = mysqlPort
 	for _, option := range options {
 		option(tablet)
 	}
@@ -129,7 +132,7 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 
 	// create a FakeMysqlDaemon with the right information by default
 	fakeMysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
-	fakeMysqlDaemon.MysqlPort = mysqlPort
+	fakeMysqlDaemon.MysqlPort.Set(mysqlPort)
 
 	return &fakeTablet{
 		Tablet:          tablet,
@@ -141,8 +144,8 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
-	if ft.Agent != nil {
-		t.Fatalf("Agent for %v is already running", ft.Tablet.Alias)
+	if ft.TM != nil {
+		t.Fatalf("TM for %v is already running", ft.Tablet.Alias)
 	}
 
 	// Listen on a random port for gRPC.
@@ -167,14 +170,25 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		go ft.HTTPServer.Serve(ft.HTTPListener)
 		vtPort = int32(ft.HTTPListener.Addr().(*net.TCPAddr).Port)
 	}
+	ft.Tablet.PortMap["vt"] = vtPort
+	ft.Tablet.PortMap["grpc"] = gRPCPort
 
-	// Create a test agent on that port, and re-read the record
+	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
-	ft.Agent = tabletmanager.NewTestActionAgent(context.Background(), wr.TopoServer(), ft.Tablet.Alias, vtPort, gRPCPort, ft.FakeMysqlDaemon, nil)
-	ft.Tablet = ft.Agent.Tablet()
+	ft.TM = &tabletmanager.TabletManager{
+		BatchCtx:            context.Background(),
+		TopoServer:          wr.TopoServer(),
+		MysqlDaemon:         ft.FakeMysqlDaemon,
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
+		t.Fatal(err)
+	}
+	ft.Tablet = ft.TM.Tablet()
 
 	// Register the gRPC server, and starts listening.
-	grpctmserver.RegisterForTest(ft.RPCServer, ft.Agent)
+	grpctmserver.RegisterForTest(ft.RPCServer, ft.TM)
 	go ft.RPCServer.Serve(ft.Listener)
 
 	// And wait for it to serve, so we don't start using it before it's
@@ -184,7 +198,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		err := c.Ping(ctx, ft.Agent.Tablet())
+		err := c.Ping(ctx, ft.TM.Tablet())
 		cancel()
 		if err == nil {
 			break
@@ -199,15 +213,15 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 
 // StopActionLoop will stop the Action Loop for the given FakeTablet
 func (ft *fakeTablet) StopActionLoop(t *testing.T) {
-	if ft.Agent == nil {
-		t.Fatalf("Agent for %v is not running", ft.Tablet.Alias)
+	if ft.TM == nil {
+		t.Fatalf("TM for %v is not running", ft.Tablet.Alias)
 	}
 	if ft.StartHTTPServer {
 		ft.HTTPListener.Close()
 	}
 	ft.Listener.Close()
-	ft.Agent.Stop()
-	ft.Agent = nil
+	ft.TM.Stop()
+	ft.TM = nil
 	ft.Listener = nil
 	ft.HTTPListener = nil
 }

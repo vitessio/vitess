@@ -47,7 +47,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.Delete:
 		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
-	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead:
+	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead, *sqlparser.Explain:
 		// no-op
 	case *sqlparser.DDL:
 		for _, t := range node.AffectedTables() {
@@ -56,6 +56,8 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.OtherAdmin:
 		// no op
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
+		// no op
+	case *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback:
 		// no op
 	default:
 		panic(fmt.Errorf("BUG: unexpected statement type: %T", node))
