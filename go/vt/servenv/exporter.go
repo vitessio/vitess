@@ -635,6 +635,11 @@ func (tw *TimingsWrapper) Counts() map[string]int64 {
 	return tw.timings.Counts()
 }
 
+// Reset will clear histograms: used during testing
+func (tw *TimingsWrapper) Reset() {
+	tw.timings.Reset()
+}
+
 //-----------------------------------------------------------------
 
 // MultiTimingsWrapper provides a namespaced version of stats.MultiTimings.
@@ -666,6 +671,11 @@ func (tw *MultiTimingsWrapper) Record(names []string, startTime time.Time) {
 // Counts behaves lie MultiTimings.Counts.
 func (tw *MultiTimingsWrapper) Counts() map[string]int64 {
 	return tw.timings.Counts()
+}
+
+// Reset will clear histograms: used during testing
+func (tw *MultiTimingsWrapper) Reset() {
+	tw.timings.Reset()
 }
 
 //-----------------------------------------------------------------

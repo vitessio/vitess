@@ -38,8 +38,8 @@ type RowStreamer interface {
 }
 
 // NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
-	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
+func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) RowStreamer {
+	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send, vse)
 }
 
 // rowStreamer is used for copying the existing rows of a table
@@ -64,9 +64,10 @@ type rowStreamer struct {
 	plan      *Plan
 	pkColumns []int
 	sendQuery string
+	vse       *Engine
 }
 
-func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -77,6 +78,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		lastpk:  lastpk,
 		send:    send,
 		vschema: vschema,
+		vse:     vse,
 	}
 }
 
@@ -269,6 +271,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 
 		if byteCount >= *PacketSize {
+			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+			rs.vse.rowStreamerNumPackets.Add(int64(1))
+
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
 			err = send(response)
 			if err != nil {
@@ -283,6 +288,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	if len(response.Rows) > 0 {
+		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
 		err = send(response)
 		if err != nil {

@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
@@ -115,4 +116,47 @@ func TestStatusHtml(t *testing.T) {
 	if strings.Contains(buf.String(), wantOut) {
 		t.Errorf("output: %v, want %v", buf, wantOut)
 	}
+}
+
+func TestVReplicationStats(t *testing.T) {
+	blpStats := binlogplayer.NewStats()
+
+	testStats := &vrStats{}
+	testStats.isOpen = true
+	testStats.controllers = map[int]*controller{
+		1: {
+			id: 1,
+			source: binlogdata.BinlogSource{
+				Keyspace: "ks",
+				Shard:    "0",
+			},
+			blpStats: blpStats,
+			done:     make(chan struct{}),
+		},
+	}
+	testStats.controllers[1].sourceTablet.Set("src1")
+
+	sleepTime := 1 * time.Millisecond
+	record := func(phase string) {
+		defer blpStats.PhaseTimings.Record(phase, time.Now())
+		time.Sleep(sleepTime)
+	}
+	want := int64(1.2 * float64(sleepTime)) //allow 10% overhead for recording timing
+
+	record("fastforward")
+	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["fastforward"])
+	record("catchup")
+	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["catchup"])
+	record("copy")
+	require.Greater(t, want, testStats.status().Controllers[0].PhaseTimings["copy"])
+
+	blpStats.QueryCount.Add("replicate", 11)
+	blpStats.QueryCount.Add("fastforward", 23)
+	require.Equal(t, int64(11), testStats.status().Controllers[0].QueryCounts["replicate"])
+	require.Equal(t, int64(23), testStats.status().Controllers[0].QueryCounts["fastforward"])
+
+	blpStats.CopyLoopCount.Add(100)
+	blpStats.CopyRowCount.Add(200)
+	require.Equal(t, int64(100), testStats.status().Controllers[0].CopyLoopCount)
+	require.Equal(t, int64(200), testStats.status().Controllers[0].CopyRowCount)
 }
