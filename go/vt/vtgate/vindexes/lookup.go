@@ -84,7 +84,7 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Des
 		return out, nil
 	}
 
-	results, err := ln.lkp.Lookup(vcursor, ids)
+	results, err := ln.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 		}
 		return out, nil
 	}
-	results, err := lu.lkp.Lookup(vcursor, ids)
+	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
