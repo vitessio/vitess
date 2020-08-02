@@ -2422,12 +2422,6 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 	if *onlineSchemaChange {
 		executor.SetOnlineSchemaChange()
-
-		uuid, err := schemamanager.CreateUUID()
-		if err != nil {
-			return err
-		}
-		executor.SetMigrationUUID(uuid)
 	}
 	return schemamanager.Run(
 		ctx,
