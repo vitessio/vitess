@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -38,7 +39,6 @@ type TabletExecutor struct {
 	isClosed             bool
 	allowBigSchemaChange bool
 	onlineSchemaChange   bool
-	migrationUUID        string
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 }
@@ -50,7 +50,6 @@ func NewTabletExecutor(wr *wrangler.Wrangler, waitReplicasTimeout time.Duration)
 		isClosed:             true,
 		allowBigSchemaChange: false,
 		onlineSchemaChange:   false,
-		migrationUUID:        "",
 		waitReplicasTimeout:  waitReplicasTimeout,
 	}
 }
@@ -70,11 +69,6 @@ func (exec *TabletExecutor) DisallowBigSchemaChange() {
 // SetOnlineSchemaChange sets TabletExecutor such that it initiates online schema change migrations
 func (exec *TabletExecutor) SetOnlineSchemaChange() {
 	exec.onlineSchemaChange = true
-}
-
-// SetMigrationUUID assigns a UUID for this migration
-func (exec *TabletExecutor) SetMigrationUUID(uuid string) {
-	exec.migrationUUID = uuid
 }
 
 // Open opens a connection to the master for every shard.
@@ -264,7 +258,12 @@ func (exec *TabletExecutor) executeOnAllTablets(
 	executeOnlineSchemaChange bool,
 ) {
 	if executeOnlineSchemaChange {
-		err := WriteTopoOnlineSchemaChange(ctx, exec.wr.TopoServer(), exec.keyspace, "", sql, exec.migrationUUID)
+		change, err := schema.NewOnlineSchemaChange(exec.keyspace, "", sql)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return
+		}
+		err = schema.WriteTopoOnlineSchemaChange(ctx, exec.wr.TopoServer(), change)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 		}

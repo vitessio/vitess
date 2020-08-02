@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -66,27 +67,23 @@ func (v *OnlineDDL) GetTableName() string {
 }
 
 //Execute implements the Primitive interface
-func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	// TODO(shlomi) implement an online schema change by writing to topo
 
 	fmt.Printf("==================== inside Execute!\n")
+	change, err := schema.NewOnlineSchemaChange(v.GetKeyspaceName(), v.GetTableName(), v.SQL)
+	if err != nil {
+		return result, err
+	}
+	err = vcursor.OnlineSchemaChange(change)
+	if err != nil {
+		return result, err
+	}
 
-	// executor := schemamanager.NewTabletExecutor(wr, *waitReplicasTimeout)
-	// if *allowLongUnavailability {
-	// 	executor.AllowBigSchemaChange()
-	// }
-	// if *onlineSchemaChange {
-	// 	executor.SetOnlineSchemaChange()
-	// }
-	// return schemamanager.Run(
-	// 	ctx,
-	// 	schemamanager.NewPlainController(change, keyspace),
-	// 	executor,
-	// )
-	// if err != nil {
-	// 	return nil, err
-	// }
-	return &sqltypes.Result{}, nil
+	result = &sqltypes.Result{
+		RowsAffected: 1,
+	}
+	return result, err
 }
 
 //StreamExecute implements the Primitive interface

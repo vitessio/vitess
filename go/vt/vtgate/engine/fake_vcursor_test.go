@@ -36,6 +36,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -171,6 +172,10 @@ func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, 
 	panic("unimplemented")
 }
 
+func (t noopVCursor) OnlineSchemaChange(change *schema.OnlineSchemaChange) error {
+	panic("unimplemented")
+}
+
 var _ VCursor = (*loggingVCursor)(nil)
 var _ SessionActions = (*loggingVCursor)(nil)
 
@@ -280,6 +285,10 @@ func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries
 
 func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
+}
+
+func (f *loggingVCursor) OnlineSchemaChange(change *schema.OnlineSchemaChange) error {
+	return nil
 }
 
 func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
