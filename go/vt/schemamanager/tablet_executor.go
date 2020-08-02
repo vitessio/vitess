@@ -38,6 +38,7 @@ type TabletExecutor struct {
 	isClosed             bool
 	allowBigSchemaChange bool
 	onlineSchemaChange   bool
+	migrationUUID        string
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 }
@@ -49,6 +50,7 @@ func NewTabletExecutor(wr *wrangler.Wrangler, waitReplicasTimeout time.Duration)
 		isClosed:             true,
 		allowBigSchemaChange: false,
 		onlineSchemaChange:   false,
+		migrationUUID:        "",
 		waitReplicasTimeout:  waitReplicasTimeout,
 	}
 }
@@ -68,6 +70,11 @@ func (exec *TabletExecutor) DisallowBigSchemaChange() {
 // SetOnlineSchemaChange sets TabletExecutor such that it initiates online schema change migrations
 func (exec *TabletExecutor) SetOnlineSchemaChange() {
 	exec.onlineSchemaChange = true
+}
+
+// SetMigrationUUID assigns a UUID for this migration
+func (exec *TabletExecutor) SetMigrationUUID(uuid string) {
+	exec.migrationUUID = uuid
 }
 
 // Open opens a connection to the master for every shard.
@@ -256,6 +263,14 @@ func (exec *TabletExecutor) executeOnAllTablets(
 	ctx context.Context, execResult *ExecuteResult, sql string,
 	executeOnlineSchemaChange bool,
 ) {
+	if executeOnlineSchemaChange {
+		err := WriteTopoOnlineSchemaChange(ctx, exec.wr.TopoServer(), exec.keyspace, "", sql, exec.migrationUUID)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+		}
+		return
+	}
+
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)

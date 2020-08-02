@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -65,7 +67,9 @@ func (v *OnlineDDL) GetTableName() string {
 
 //Execute implements the Primitive interface
 func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	// TODO(shlomi) implement an online schema change by applying to vtctld
+	// TODO(shlomi) implement an online schema change by writing to topo
+
+	fmt.Printf("==================== inside Execute!\n")
 
 	// executor := schemamanager.NewTabletExecutor(wr, *waitReplicasTimeout)
 	// if *allowLongUnavailability {
