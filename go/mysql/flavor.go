@@ -31,7 +31,7 @@ import (
 var (
 	// ErrNotReplica means there is no replication status.
 	// Returned by ShowReplicationStatus().
-	ErrNotReplica = errors.New("no slave status")
+	ErrNotReplica = errors.New("no replication status")
 
 	// ErrNoMasterStatus means no status was returned by ShowMasterStatus().
 	ErrNoMasterStatus = errors.New("no master status")
