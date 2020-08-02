@@ -548,7 +548,7 @@ func TestPlanbuilder(t *testing.T) {
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 1+1, '-80')"},
 		outErr:  `unsupported: 1 + 1`,
 	}}
-	for i, tcase := range testcases {
+	for _, tcase := range testcases {
 		plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{tcase.inRule},
 		})
@@ -563,7 +563,7 @@ func TestPlanbuilder(t *testing.T) {
 				plan.Filters[ind].Vindex = nil
 			}
 			if !reflect.DeepEqual(tcase.outPlan, plan) {
-				t.Errorf("index %d, Plan(%v, %v):\n%v, want\n%v", i, tcase.inTable, tcase.inRule, plan, tcase.outPlan)
+				t.Errorf("Plan(%v, %v):\n%v, want\n%v", tcase.inTable, tcase.inRule, plan, tcase.outPlan)
 			}
 		} else if tcase.outPlan != nil {
 			t.Errorf("Plan(%v, %v):\nnil, want\n%v", tcase.inTable, tcase.inRule, tcase.outPlan)
@@ -575,6 +575,5 @@ func TestPlanbuilder(t *testing.T) {
 		if gotErr != tcase.outErr {
 			t.Errorf("Plan(%v, %v) err: %v, want %v", tcase.inTable, tcase.inRule, err, tcase.outErr)
 		}
-		//return
 	}
 }
