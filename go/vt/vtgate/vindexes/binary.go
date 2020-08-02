@@ -46,7 +46,7 @@ func (vind *Binary) String() string {
 
 // Cost returns the cost as 1.
 func (vind *Binary) Cost() int {
-	return 1
+	return 0
 }
 
 // IsUnique returns true since the Vindex is unique.
