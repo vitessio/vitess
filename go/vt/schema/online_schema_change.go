@@ -37,6 +37,7 @@ type OnlineSchemaChange struct {
 	RequestTime int64  `json:"time_created,omitempty"`
 }
 
+// NewOnlineSchemaChange creates a schema change request with self generated UUID and RequestTime
 func NewOnlineSchemaChange(keyspace string, table string, sql string) (*OnlineSchemaChange, error) {
 	uuid, err := CreateUUID()
 	if err != nil {
@@ -50,6 +51,11 @@ func NewOnlineSchemaChange(keyspace string, table string, sql string) (*OnlineSc
 		Online:      true,
 		RequestTime: time.Now().UnixNano(),
 	}, nil
+}
+
+// TopoPath returns the relative path in topo where this schema migration request is stored
+func (change *OnlineSchemaChange) TopoPath() string {
+	return fmt.Sprintf("schema-migration/%s", change.UUID)
 }
 
 // WriteTopoOnlineSchemaChange writes an online schema change request in global topo
@@ -68,8 +74,7 @@ func WriteTopoOnlineSchemaChange(ctx context.Context, ts *topo.Server, change *O
 	if err != nil {
 		return fmt.Errorf("online-schema-change ConnForCell error:%s, keyspace=%s, sql=%s", err.Error(), change.Keyspace, change.SQL)
 	}
-	topoMigrationPath := fmt.Sprintf("schema-migration/%s", change.UUID)
-	_, err = conn.Create(ctx, topoMigrationPath, bytes)
+	_, err = conn.Create(ctx, change.TopoPath(), bytes)
 	if err != nil {
 		return fmt.Errorf("online-schema-change topo create error:%s, keyspace=%s, sql=%s", err.Error(), change.Keyspace, change.SQL)
 	}
