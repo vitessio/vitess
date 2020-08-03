@@ -258,16 +258,16 @@ func (exec *TabletExecutor) executeOnAllTablets(
 	executeOnlineSchemaChange bool,
 ) {
 	if executeOnlineSchemaChange {
-		change, err := schema.NewOnlineSchemaChange(exec.keyspace, "", sql)
+		change, err := schema.NewOnlineDDL(exec.keyspace, "", sql)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return
 		}
-		err = schema.WriteTopoOnlineSchemaChange(ctx, exec.wr.TopoServer(), change)
+		err = schema.WriteTopoOnlineDDL(ctx, exec.wr.TopoServer(), change)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 		}
-		return
+		// return
 	}
 
 	var wg sync.WaitGroup
