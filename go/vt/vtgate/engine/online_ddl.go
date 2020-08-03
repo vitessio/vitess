@@ -71,11 +71,11 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 	// TODO(shlomi) implement an online schema change by writing to topo
 
 	fmt.Printf("==================== inside Execute!\n")
-	change, err := schema.NewOnlineSchemaChange(v.GetKeyspaceName(), v.GetTableName(), v.SQL)
+	change, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL)
 	if err != nil {
 		return result, err
 	}
-	err = vcursor.OnlineSchemaChange(change)
+	err = vcursor.SubmitOnlineDDL(change)
 	if err != nil {
 		return result, err
 	}

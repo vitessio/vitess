@@ -27,8 +27,16 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// OnlineSchemaChange encapsulates the relevant information in an online schema change request
-type OnlineSchemaChange struct {
+var (
+	MigrationBasePath = "schema-migration"
+)
+
+func MigrationKeyspacePath(keyspace string) string {
+	return fmt.Sprintf("%s/%s", MigrationBasePath, keyspace)
+}
+
+// OnlineDDL encapsulates the relevant information in an online schema change request
+type OnlineDDL struct {
 	Keyspace    string `json:"keyspace,omitempty"`
 	Table       string `json:"table,omitempty"`
 	SQL         string `json:"sql,omitempty"`
@@ -37,13 +45,13 @@ type OnlineSchemaChange struct {
 	RequestTime int64  `json:"time_created,omitempty"`
 }
 
-// NewOnlineSchemaChange creates a schema change request with self generated UUID and RequestTime
-func NewOnlineSchemaChange(keyspace string, table string, sql string) (*OnlineSchemaChange, error) {
+// NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
+func NewOnlineDDL(keyspace string, table string, sql string) (*OnlineDDL, error) {
 	uuid, err := CreateUUID()
 	if err != nil {
 		return nil, err
 	}
-	return &OnlineSchemaChange{
+	return &OnlineDDL{
 		Keyspace:    keyspace,
 		Table:       table,
 		SQL:         sql,
@@ -53,30 +61,30 @@ func NewOnlineSchemaChange(keyspace string, table string, sql string) (*OnlineSc
 	}, nil
 }
 
-// TopoPath returns the relative path in topo where this schema migration request is stored
-func (change *OnlineSchemaChange) TopoPath() string {
-	return fmt.Sprintf("schema-migration/%s", change.UUID)
+// MigrationRequestPath returns the relative path in topo where this schema migration request is stored
+func (change *OnlineDDL) MigrationRequestPath() string {
+	return fmt.Sprintf("%s/%s/request", MigrationKeyspacePath(change.Keyspace), change.UUID)
 }
 
-// WriteTopoOnlineSchemaChange writes an online schema change request in global topo
-func WriteTopoOnlineSchemaChange(ctx context.Context, ts *topo.Server, change *OnlineSchemaChange) error {
-	if change == nil {
+// WriteTopoOnlineDDL writes an online schema change request in global topo
+func WriteTopoOnlineDDL(ctx context.Context, ts *topo.Server, onlineDDL *OnlineDDL) error {
+	if onlineDDL == nil {
 		return fmt.Errorf("online-schema-change nil change received")
 	}
-	if change.UUID == "" {
-		return fmt.Errorf("online-schema-change UUID not found; keyspace=%s, sql=%s", change.Keyspace, change.SQL)
+	if onlineDDL.UUID == "" {
+		return fmt.Errorf("online-schema-change UUID not found; keyspace=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.SQL)
 	}
-	bytes, err := json.Marshal(change)
+	bytes, err := json.Marshal(onlineDDL)
 	if err != nil {
-		return fmt.Errorf("online-schema-change marshall error:%s, keyspace=%s, sql=%s", err.Error(), change.Keyspace, change.SQL)
+		return fmt.Errorf("online-schema-change marshall error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 	if err != nil {
-		return fmt.Errorf("online-schema-change ConnForCell error:%s, keyspace=%s, sql=%s", err.Error(), change.Keyspace, change.SQL)
+		return fmt.Errorf("online-schema-change ConnForCell error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
-	_, err = conn.Create(ctx, change.TopoPath(), bytes)
+	_, err = conn.Create(ctx, onlineDDL.MigrationRequestPath(), bytes)
 	if err != nil {
-		return fmt.Errorf("online-schema-change topo create error:%s, keyspace=%s, sql=%s", err.Error(), change.Keyspace, change.SQL)
+		return fmt.Errorf("online-schema-change topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	return nil
 }

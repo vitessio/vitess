@@ -52,7 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/ghost"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -106,8 +106,8 @@ type TabletServer struct {
 	hs          *healthStreamer
 
 	// sm manages state transitions.
-	sm            *stateManager
-	ghostExecutor *ghost.GhostExecutor
+	sm                *stateManager
+	onlineDDLExecutor *onlineddl.Executor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
@@ -157,7 +157,14 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-	tsv.ghostExecutor = ghost.NewExecutor(tsv)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer,
+		func() topodatapb.TabletType {
+			if tsv.sm == nil {
+				return topodatapb.TabletType_UNKNOWN
+			}
+			return tsv.sm.Target().TabletType
+		},
+	)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
@@ -170,7 +177,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		txThrottler: tsv.txThrottler,
 		te:          tsv.te,
 		messager:    tsv.messager,
-		ge:          tsv.ghostExecutor,
+		ddle:        tsv.onlineDDLExecutor,
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -206,6 +213,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
+	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace)
 	return nil
 }
 
@@ -1477,7 +1485,7 @@ func (tsv *TabletServer) ApplyOnlineSchemaChange(ctx context.Context, change *tm
 	// Table name is not provided in the below. That's because the SQL includes table name as part of
 	// ALTER TABLE statement, _and_ we assume gh-ost supports parsing and extracing the table from that statement
 	// see https://github.com/openark/gh-ost/pull/5 or https://github.com/github/gh-ost/pull/865
-	err := tsv.ghostExecutor.Execute(ctx, tsv.sm.target, tsv.alias, dbName, "", change.SQL)
+	err := tsv.onlineDDLExecutor.Execute(ctx, tsv.sm.target, tsv.alias, dbName, "", change.SQL)
 
 	return err
 }

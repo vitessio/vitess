@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ghost
+package onlineddl
 
 import (
 	"context"
@@ -22,13 +22,15 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/withddl"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -36,64 +38,46 @@ import (
 )
 
 var (
-	// ErrGhostExecutorNotWritableTablet error is thrown when executor is asked to run gh-ost on a read-only server
-	ErrGhostExecutorNotWritableTablet = errors.New("Cannot run gh-ost migration on non-writable tablet")
+	// ErrExecutorNotWritableTablet error is thrown when executor is asked to run gh-ost on a read-only server
+	ErrExecutorNotWritableTablet = errors.New("Cannot run gh-ost migration on non-writable tablet")
 )
 
-const (
-	sqlCreateSidecarDB             = "create database if not exists %s"
-	sqlCreateSchemaMigrationsTable = `CREATE TABLE IF NOT EXISTS %s.schema_migrations (
-		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-		migration_uuid varchar(64) NOT NULL,
-		keyspace varchar(256) NOT NULL,
-		shard varchar(256) NOT NULL,
-		mysql_table varchar(128) NOT NULL,
-		migration_statement text NOT NULL,
-		strategy varchar(128) NOT NULL,
-		added_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		ready_timestamp timestamp NULL DEFAULT NULL,
-		assigned_timestamp timestamp NULL DEFAULT NULL,
-		started_timestamp timestamp NULL DEFAULT NULL,
-		liveness_timestamp timestamp NULL DEFAULT NULL,
-		completed_timestamp timestamp NULL DEFAULT NULL,
-		migration_status varchar(128) NOT NULL,
-		PRIMARY KEY (id),
-		KEY uuid_idx (migration_uuid),
-		KEY keyspace_shard_idx (keyspace,shard),
-		KEY status_idx (migration_status, liveness_timestamp)
-	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	sqlValidationQuery = `select 1 from schema_migrations limit 1`
-)
-
-var withDDL = withddl.New([]string{
-	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
-	fmt.Sprintf(sqlCreateSchemaMigrationsTable, "_vt"),
-})
-
-// GhostExecutor wraps and manages the execution of a gh-ost migration.
-type GhostExecutor struct {
+// Executor wraps and manages the execution of a gh-ost migration.
+type Executor struct {
 	hash string
 
-	env  tabletenv.Env
-	pool *connpool.Pool
+	env            tabletenv.Env
+	pool           *connpool.Pool
+	tabletTypeFunc func() topodatapb.TabletType
+	ts             *topo.Server
+
+	keyspace string
 
 	mu     sync.Mutex
+	ticks  *timer.Timer
 	isOpen bool
 }
 
-// NewGhostExecutor creates a new gh-ost executor.
-func NewGhostExecutor(env tabletenv.Env) *GhostExecutor {
-	return &GhostExecutor{
+var (
+	migrationCheckInterval = time.Second * 10
+)
+
+// NewExecutor creates a new gh-ost executor.
+func NewExecutor(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
+	return &Executor{
 		hash: ShortRandomHash(),
 		env:  env,
-		pool: connpool.NewPool(env, "GhostExecutorPool", tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, "ExecutorPool", tabletenv.ConnPoolConfig{
 			Size:               1,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
+		tabletTypeFunc: tabletTypeFunc,
+		ts:             ts,
+		ticks:          timer.NewTimer(migrationCheckInterval),
 	}
 }
 
-func (e *GhostExecutor) initSchema(ctx context.Context) error {
+func (e *Executor) initSchema(ctx context.Context) error {
 	defer e.env.LogError()
 
 	conn, err := e.pool.Get(ctx)
@@ -108,31 +92,44 @@ func (e *GhostExecutor) initSchema(ctx context.Context) error {
 	return nil
 }
 
+// InitDBConfig initializes keysapce
+func (e *Executor) InitDBConfig(keyspace string) {
+	e.keyspace = keyspace
+}
+
 // Open opens database pool and initializes the schema
-func (e *GhostExecutor) Open() error {
+func (e *Executor) Open() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.isOpen {
 		return nil
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
+	e.ticks.Start(e.checkMigrations)
 	e.isOpen = true
 
 	return nil
 }
 
 // Close frees resources
-func (e *GhostExecutor) Close() {
+func (e *Executor) Close() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.isOpen {
+		return
+	}
+
+	e.ticks.Stop()
 	e.pool.Close()
+	e.isOpen = false
 }
 
-func (e *GhostExecutor) panicFlagFileName() string {
+func (e *Executor) ghostPanicFlagFileName() string {
 	return fmt.Sprintf("/tmp/ghost.%s.panic.flag", e.hash)
 }
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
-func (e *GhostExecutor) readMySQLVariables(ctx context.Context) (host string, port int, readOnly bool, err error) {
-	e.initSchema(ctx)
+func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port int, readOnly bool, err error) {
 	conn, err := e.pool.Get(ctx)
 	if err != nil {
 		return host, port, readOnly, err
@@ -163,9 +160,9 @@ func (e *GhostExecutor) readMySQLVariables(ctx context.Context) (host string, po
 // Execute validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binray itself
 // Execution runs first a dry run, then an actual migration
-func (e *GhostExecutor) Execute(ctx context.Context, target querypb.Target, alias topodatapb.TabletAlias, schema, table, alter string) error {
+func (e *Executor) Execute(ctx context.Context, target querypb.Target, alias topodatapb.TabletAlias, schema, table, alter string) error {
 	if target.TabletType != topodatapb.TabletType_MASTER {
-		return ErrGhostExecutorNotWritableTablet
+		return ErrExecutorNotWritableTablet
 	}
 	mysqlHost, mysqlPort, readOnly, err := e.readMySQLVariables(ctx)
 	if err != nil {
@@ -241,7 +238,7 @@ gh-ost "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
 				fmt.Sprintf(`--database=%s`, schema),
 				fmt.Sprintf(`--table=%s`, table),
 				fmt.Sprintf(`--alter=%s`, alter),
-				fmt.Sprintf(`--panic-flag-file=%s`, e.panicFlagFileName()),
+				fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName()),
 				fmt.Sprintf(`--execute=%t`, execute),
 			},
 			os.Environ(),
@@ -275,10 +272,46 @@ gh-ost "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
 }
 
 // Cancel attempts to abort a running migration by touching the panic flag file
-func (e *GhostExecutor) Cancel() error {
-	file, err := os.OpenFile(e.panicFlagFileName(), os.O_RDONLY|os.O_CREATE, 0666)
+func (e *Executor) Cancel() error {
+	file, err := os.OpenFile(e.ghostPanicFlagFileName(), os.O_RDONLY|os.O_CREATE, 0666)
 	if file != nil {
 		defer file.Close()
 	}
 	return err
+}
+
+func (e *Executor) checkMigrations() {
+	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+		return
+	}
+	if e.keyspace == "" {
+		log.Errorf("Executor.checkMigrations(): empty keyspace")
+		return
+	}
+	ctx := context.Background()
+	e.initSchema(ctx)
+
+	conn, err := e.ts.ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		log.Errorf("Executor.checkMigrations ConnForCell error: %s", err.Error())
+		return
+	}
+
+	dirPath := fmt.Sprintf("schema-migration/%s", e.keyspace)
+	fmt.Printf("=============== listing dirPath=%s\n", dirPath)
+	entries, err := conn.ListDir(ctx, dirPath, false)
+	if err != nil {
+		log.Errorf("Executor.checkMigrations listDir error: %s", err.Error())
+		return
+	}
+	fmt.Printf("=============== ListDir=%+v\n", entries)
+	for _, entry := range entries {
+		entryPath := fmt.Sprintf("%s/%s/request", dirPath, entry.Name)
+		bytes, _, err := conn.Get(ctx, entryPath)
+		if err != nil {
+			log.Errorf("Executor.checkMigrations Get %s error: %s", entryPath, err.Error())
+			continue
+		}
+		fmt.Printf("===GET %s: %s\n", entryPath, string(bytes))
+	}
 }
