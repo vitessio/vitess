@@ -1310,28 +1310,6 @@
   }
 }
 
-# routing rules: union finds the correct option to merge, and renames the table
-"select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'"
-{
-  "QueryType": "SELECT",
-  "Original": "select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select a from user_metadata as route1 where 1 != 1 union select b from user_metadata as route1 where 1 != 1",
-    "Query": "select a from user_metadata as route1 where email = 'aaa' union select b from user_metadata as route1 where email = 'aaa'",
-    "Table": "user_metadata",
-    "Values": [
-      "aaa"
-    ],
-    "Vindex": "email_user_map"
-  }
-}
-
 # routing rules: ensure directives are not lost
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
 {

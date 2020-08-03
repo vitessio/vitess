@@ -132,37 +132,32 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// a new set of column references will be generated against the new tables,
 		// and those vindex maps will be returned. They have to replace the old vindex
 		// maps of the inherited route options.
-		vschemaTables := make([]*vindexes.Table, 0, len(subroute.routeOptions))
-		for _, ro := range subroute.routeOptions {
-			vst := &vindexes.Table{
-				Keyspace: ro.eroute.Keyspace,
-			}
-			vschemaTables = append(vschemaTables, vst)
-			for _, rc := range subroute.ResultColumns() {
-				vindex, ok := ro.vindexMap[rc.column]
-				if !ok {
-					continue
-				}
-				// Check if a colvindex of the same name already exists.
-				// Dups are not allowed in subqueries in this situation.
-				for _, colVindex := range vst.ColumnVindexes {
-					if colVindex.Columns[0].Equal(rc.alias) {
-						return fmt.Errorf("duplicate column aliases: %v", rc.alias)
-					}
-				}
-				vst.ColumnVindexes = append(vst.ColumnVindexes, &vindexes.ColumnVindex{
-					Columns: []sqlparser.ColIdent{rc.alias},
-					Vindex:  vindex,
-				})
-			}
+		ro := subroute.routeOptions[0]
+		vschemaTable := &vindexes.Table{
+			Keyspace: ro.eroute.Keyspace,
 		}
-		vindexMaps, err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTables, rb)
+		for _, rc := range subroute.ResultColumns() {
+			vindex, ok := ro.vindexMap[rc.column]
+			if !ok {
+				continue
+			}
+			// Check if a colvindex of the same name already exists.
+			// Dups are not allowed in subqueries in this situation.
+			for _, colVindex := range vschemaTable.ColumnVindexes {
+				if colVindex.Columns[0].Equal(rc.alias) {
+					return fmt.Errorf("duplicate column aliases: %v", rc.alias)
+				}
+			}
+			vschemaTable.ColumnVindexes = append(vschemaTable.ColumnVindexes, &vindexes.ColumnVindex{
+				Columns: []sqlparser.ColIdent{rc.alias},
+				Vindex:  vindex,
+			})
+		}
+		vindexMap, err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTable, rb)
 		if err != nil {
 			return err
 		}
-		for i, ro := range subroute.routeOptions {
-			ro.SubqueryToTable(rb, vindexMaps[i])
-		}
+		ro.SubqueryToTable(rb, vindexMap)
 		rb.routeOptions = subroute.routeOptions
 		subroute.Redirect = rb
 		pb.bldr, pb.st = rb, st
@@ -194,7 +189,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		})
 	}
 
-	vschemaTables, vindex, _, destTableType, destTarget, err := pb.vschema.FindTablesOrVindex(tableName)
+	vschemaTable, vindex, _, destTableType, destTarget, err := pb.vschema.FindTableOrVindex(tableName)
 	if err != nil {
 		return err
 	}
@@ -209,58 +204,56 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 
 	rb, st := newRoute(sel)
 	pb.bldr, pb.st = rb, st
-	vindexMaps, err := st.AddVSchemaTable(alias, vschemaTables, rb)
+	vindexMap, err := st.AddVSchemaTable(alias, vschemaTable, rb)
 	if err != nil {
 		return err
 	}
-	for i, vst := range vschemaTables {
-		sub := &tableSubstitution{
-			oldExpr: tableExpr,
-		}
-		if tableExpr.As.IsEmpty() {
-			if tableName.Name != vst.Name {
-				// Table name does not match. Change and alias it to old name.
-				sub.newExpr = &sqlparser.AliasedTableExpr{
-					Expr: sqlparser.TableName{Name: vst.Name},
-					As:   tableName.Name,
-				}
-			}
-		} else {
-			// Table is already aliased.
-			if tableName.Name != vst.Name {
-				// Table name does not match. Change it and reuse existing alias.
-				sub.newExpr = &sqlparser.AliasedTableExpr{
-					Expr: sqlparser.TableName{Name: vst.Name},
-					As:   tableExpr.As,
-				}
-			}
-		}
-		var eroute *engine.Route
-		switch {
-		case vst.Type == vindexes.TypeSequence:
-			eroute = engine.NewSimpleRoute(engine.SelectNext, vst.Keyspace)
-		case vst.Type == vindexes.TypeReference:
-			eroute = engine.NewSimpleRoute(engine.SelectReference, vst.Keyspace)
-		case !vst.Keyspace.Sharded:
-			eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vst.Keyspace)
-		case vst.Pinned == nil:
-			eroute = engine.NewSimpleRoute(engine.SelectScatter, vst.Keyspace)
-			eroute.TargetDestination = destTarget
-			eroute.TargetTabletType = destTableType
-		default:
-			// Pinned tables have their keyspace ids already assigned.
-			// Use the Binary vindex, which is the identity function
-			// for keyspace id.
-			eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
-			vindex, _ = vindexes.NewBinary("binary", nil)
-			eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
-			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
-		}
-		// set table name into route
-		eroute.TableName = vst.Name.String()
-
-		rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vst, sub, vindexMaps[i], eroute))
+	sub := &tableSubstitution{
+		oldExpr: tableExpr,
 	}
+	if tableExpr.As.IsEmpty() {
+		if tableName.Name != vschemaTable.Name {
+			// Table name does not match. Change and alias it to old name.
+			sub.newExpr = &sqlparser.AliasedTableExpr{
+				Expr: sqlparser.TableName{Name: vschemaTable.Name},
+				As:   tableName.Name,
+			}
+		}
+	} else {
+		// Table is already aliased.
+		if tableName.Name != vschemaTable.Name {
+			// Table name does not match. Change it and reuse existing alias.
+			sub.newExpr = &sqlparser.AliasedTableExpr{
+				Expr: sqlparser.TableName{Name: vschemaTable.Name},
+				As:   tableExpr.As,
+			}
+		}
+	}
+	var eroute *engine.Route
+	switch {
+	case vschemaTable.Type == vindexes.TypeSequence:
+		eroute = engine.NewSimpleRoute(engine.SelectNext, vschemaTable.Keyspace)
+	case vschemaTable.Type == vindexes.TypeReference:
+		eroute = engine.NewSimpleRoute(engine.SelectReference, vschemaTable.Keyspace)
+	case !vschemaTable.Keyspace.Sharded:
+		eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vschemaTable.Keyspace)
+	case vschemaTable.Pinned == nil:
+		eroute = engine.NewSimpleRoute(engine.SelectScatter, vschemaTable.Keyspace)
+		eroute.TargetDestination = destTarget
+		eroute.TargetTabletType = destTableType
+	default:
+		// Pinned tables have their keyspace ids already assigned.
+		// Use the Binary vindex, which is the identity function
+		// for keyspace id.
+		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
+		vindex, _ = vindexes.NewBinary("binary", nil)
+		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
+		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
+	}
+	// set table name into route
+	eroute.TableName = vschemaTable.Name.String()
+
+	rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vschemaTable, sub, vindexMap, eroute))
 	return nil
 }
 
