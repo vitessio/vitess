@@ -160,7 +160,7 @@ func TestIsBetterThan(t *testing.T) {
 		right: engine.SelectScatter,
 		out:   false,
 	}}
-	buildOption := func(opt engine.RouteOpcode, cost int) *routeOption {
+	buildRoute := func(opt engine.RouteOpcode, cost int) *route {
 		var v vindexes.Vindex
 		switch cost {
 		case 1:
@@ -169,7 +169,7 @@ func TestIsBetterThan(t *testing.T) {
 			v, _ = newLookupIndex("", nil)
 		}
 		single, _ := v.(vindexes.SingleColumn)
-		return &routeOption{
+		return &route{
 			eroute: &engine.Route{
 				Opcode: opt,
 				Vindex: single,
@@ -177,8 +177,8 @@ func TestIsBetterThan(t *testing.T) {
 		}
 	}
 	for _, tcase := range testcases {
-		left := buildOption(tcase.left, tcase.leftcost)
-		right := buildOption(tcase.right, tcase.rightcost)
+		left := buildRoute(tcase.left, tcase.leftcost)
+		right := buildRoute(tcase.right, tcase.rightcost)
 		got := left.isBetterThan(right)
 		if got != tcase.out {
 			t.Errorf("isBetterThan(%v, %v, %v, %v): %v, want %v", tcase.left, tcase.leftcost, tcase.right, tcase.rightcost, got, tcase.out)
