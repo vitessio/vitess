@@ -1061,24 +1061,6 @@
   }
 }
 
-# routing rules for join, merged route wins
-"select route2.col from route2 join user_extra on route2.id = user_extra.user_id"
-{
-  "QueryType": "SELECT",
-  "Original": "select route2.col from route2 join user_extra on route2.id = user_extra.user_id",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id where 1 != 1",
-    "Query": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id",
-    "Table": "user"
-  }
-}
-
 # routing rules for join, unsharded route wins if we can't find a merged route
 "select route2.col from route2 join user_extra"
 {
@@ -1245,7 +1227,7 @@
   }
 }
 
-# routing rules for subquery where the first route wins
+# routing rules for subquery
 "select id from (select id, col from route1 where id = 5) as t"
 {
   "QueryType": "SELECT",
@@ -1264,28 +1246,6 @@
       5
     ],
     "Vindex": "user_index"
-  }
-}
-
-# routing rules for subquery where the second route wins
-"select id from (select id, col from route1 where email = 'aaa') as t"
-{
-  "QueryType": "SELECT",
-  "Original": "select id from (select id, col from route1 where email = 'aaa') as t",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from (select id, col from user_metadata as route1 where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id, col from user_metadata as route1 where email = 'aaa') as t",
-    "Table": "user_metadata",
-    "Values": [
-      "aaa"
-    ],
-    "Vindex": "email_user_map"
   }
 }
 

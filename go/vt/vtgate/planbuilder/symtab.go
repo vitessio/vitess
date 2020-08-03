@@ -87,76 +87,65 @@ func newSymtabWithRoute(rb *route) *symtab {
 // AddVSchemaTable takes a list of vschema tables as input and
 // creates a table with multiple route options. It returns a
 // list of vindex maps, one for each input.
-func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vindexes.Table, rb *route) (vindexMaps []map[*column]vindexes.SingleColumn, err error) {
+func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vindexes.Table, rb *route) (vindexMap map[*column]vindexes.SingleColumn, err error) {
 	t := &table{
 		alias:  alias,
 		origin: rb,
 	}
 
-	vindexMaps = make([]map[*column]vindexes.SingleColumn, len(vschemaTables))
-	for i, vst := range vschemaTables {
-		// The following logic allows the first table to be authoritative while the rest
-		// are not. But there's no need to reveal this flexibility to the user.
-		if i != 0 && vst.ColumnListAuthoritative && !t.isAuthoritative {
-			return nil, fmt.Errorf("intermixing of authoritative and non-authoritative tables not allowed: %v", vst.Name)
+	for _, col := range vschemaTable.Columns {
+		if _, err := t.mergeColumn(col.Name, &column{
+			origin: rb,
+			st:     st,
+			typ:    col.Type,
+		}); err != nil {
+			return nil, err
 		}
+	}
+	if vschemaTable.ColumnListAuthoritative {
+		// This will prevent new columns from being added.
+		t.isAuthoritative = true
+	}
 
-		for _, col := range vst.Columns {
-			if _, err := t.mergeColumn(col.Name, &column{
+	for _, cv := range vschemaTable.ColumnVindexes {
+		single, ok := cv.Vindex.(vindexes.SingleColumn)
+		if !ok {
+			continue
+		}
+		for i, cvcol := range cv.Columns {
+			col, err := t.mergeColumn(cvcol, &column{
 				origin: rb,
 				st:     st,
-				typ:    col.Type,
-			}); err != nil {
+			})
+			if err != nil {
 				return nil, err
 			}
-		}
-		if i == 0 && vst.ColumnListAuthoritative {
-			// This will prevent new columns from being added.
-			t.isAuthoritative = true
-		}
-
-		var vindexMap map[*column]vindexes.SingleColumn
-		for _, cv := range vst.ColumnVindexes {
-			single, ok := cv.Vindex.(vindexes.SingleColumn)
-			if !ok {
-				continue
-			}
-			for j, cvcol := range cv.Columns {
-				col, err := t.mergeColumn(cvcol, &column{
-					origin: rb,
-					st:     st,
-				})
-				if err != nil {
-					return nil, err
+			if i == 0 {
+				// For now, only the first column is used for vindex Map functions.
+				if vindexMap == nil {
+					vindexMap = make(map[*column]vindexes.SingleColumn)
 				}
-				if j == 0 {
-					// For now, only the first column is used for vindex Map functions.
-					if vindexMap == nil {
-						vindexMap = make(map[*column]vindexes.SingleColumn)
-					}
-					if vindexMap[col] == nil || vindexMap[col].Cost() > single.Cost() {
-						vindexMap[col] = single
-					}
+				if vindexMap[col] == nil || vindexMap[col].Cost() > single.Cost() {
+					vindexMap[col] = single
 				}
 			}
 		}
-		vindexMaps[i] = vindexMap
+	}
 
-		if ai := vst.AutoIncrement; ai != nil {
-			if _, ok := t.columns[ai.Column.Lowered()]; !ok {
-				if _, err := t.mergeColumn(ai.Column, &column{
-					origin: rb,
-					st:     st,
-				}); err != nil {
-					return nil, err
-				}
+	if ai := vschemaTable.AutoIncrement; ai != nil {
+		if _, ok := t.columns[ai.Column.Lowered()]; !ok {
+			if _, err := t.mergeColumn(ai.Column, &column{
+				origin: rb,
+				st:     st,
+			}); err != nil {
+				return nil, err
 			}
 		}
 	}
 	if err := st.AddTable(t); err != nil {
 		return nil, err
 	}
-	return vindexMaps, nil
+	return vindexMap, nil
 }
 
 // Merge merges the new symtab into the current one.

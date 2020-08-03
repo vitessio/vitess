@@ -839,7 +839,7 @@
   }
 }
 
-# routing rules: order by test pushed to all options. table 1 is chosen.
+# routing rules: order by gets pushed for routes
 "select col from route1 where id = 1 order by col"
 {
   "QueryType": "SELECT",
@@ -858,28 +858,6 @@
       1
     ],
     "Vindex": "user_index"
-  }
-}
-
-# routing rules: order by test pushed to all options. table 2 is chosen.
-"select col from route1 where email = 'aaa' order by col"
-{
-  "QueryType": "SELECT",
-  "Original": "select col from route1 where email = 'aaa' order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select col from user_metadata as route1 where 1 != 1",
-    "Query": "select col from user_metadata as route1 where email = 'aaa' order by col asc",
-    "Table": "user_metadata",
-    "Values": [
-      "aaa"
-    ],
-    "Vindex": "email_user_map"
   }
 }
 

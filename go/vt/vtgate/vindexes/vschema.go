@@ -498,7 +498,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	return table, nil
 }
 
-func (vschema *VSchema) findTables(keyspace, tablename string, tabletType topodatapb.TabletType) ([]*Table, error) {
+func (vschema *VSchema) findRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
@@ -515,22 +515,15 @@ func (vschema *VSchema) findTables(keyspace, tablename string, tabletType topoda
 			if len(rr.Tables) == 0 {
 				return nil, fmt.Errorf("table %s has been disabled", tablename)
 			}
-			return rr.Tables, nil
+			return rr.Tables[0], nil
 		}
 	}
-	t, err := vschema.findTable(keyspace, tablename)
-	if err != nil {
-		return nil, err
-	}
-	if t == nil {
-		return nil, nil
-	}
-	return []*Table{t}, nil
+	return vschema.findTable(keyspace, tablename)
 }
 
-// FindTablesOrVindex finds a table or a Vindex by name using Find and FindVindex.
-func (vschema *VSchema) FindTablesOrVindex(keyspace, name string, tabletType topodatapb.TabletType) ([]*Table, Vindex, error) {
-	tables, err := vschema.findTables(keyspace, name, tabletType)
+// FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
+func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*Table, Vindex, error) {
+	tables, err := vschema.findRoutedTable(keyspace, name, tabletType)
 	if err != nil {
 		return nil, nil, err
 	}
