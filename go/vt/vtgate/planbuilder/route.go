@@ -32,10 +32,6 @@ var _ builder = (*route)(nil)
 // SelectScatter, etc. Portions of the original Select AST
 // are moved into this node, which will be used to build
 // the final SQL for this route.
-// A route can have multiple routeOptions. They are kept
-// up-to-date as the route improves. Those that don't
-// qualify are continuously removed from the options.
-// A single best route is chosen before the Wireup phase.
 type route struct {
 	order int
 
@@ -56,7 +52,7 @@ type route struct {
 	// are added to be used for collation of text columns.
 	weightStrings map[*resultColumn]int
 
-	routeOptions []*routeOption
+	ro *routeOption
 }
 
 func newRoute(stmt sqlparser.SelectStatement) (*route, *symtab) {
@@ -89,7 +85,7 @@ func (rb *route) Reorder(order int) {
 
 // Primitive satisfies the builder interface.
 func (rb *route) Primitive() engine.Primitive {
-	return rb.routeOptions[0].eroute
+	return rb.ro.eroute
 }
 
 // PushLock satisfies the builder interface.
@@ -118,14 +114,12 @@ func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereTy
 	case sqlparser.HavingStr:
 		sel.AddHaving(filter)
 	}
-	rb.UpdatePlans(pb, filter)
+	rb.UpdatePlan(pb, filter)
 	return nil
 }
 
-func (rb *route) UpdatePlans(pb *primitiveBuilder, filter sqlparser.Expr) {
-	for _, ro := range rb.routeOptions {
-		ro.UpdatePlan(pb, filter)
-	}
+func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
+	rb.ro.UpdatePlan(pb, filter)
 }
 
 // PushSelect satisfies the builder interface.
@@ -186,7 +180,7 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 		}
 	}
 
-	if rb.removeMultishardOptions() {
+	if rb.isSingleShard() {
 		for _, order := range orderBy {
 			rb.Select.AddOrder(order)
 		}
@@ -222,9 +216,7 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 			Col:  colNumber,
 			Desc: order.Direction == sqlparser.DescScr,
 		}
-		for _, ro := range rb.routeOptions {
-			ro.eroute.OrderBy = append(ro.eroute.OrderBy, ob)
-		}
+		rb.ro.eroute.OrderBy = append(rb.ro.eroute.OrderBy, ob)
 
 		rb.Select.AddOrder(order)
 	}
@@ -253,19 +245,16 @@ func (rb *route) PushMisc(sel *sqlparser.Select) {
 
 // Wireup satisfies the builder interface.
 func (rb *route) Wireup(bldr builder, jt *jointab) error {
-	rb.finalizeOptions()
-
 	// Precaution: update ERoute.Values only if it's not set already.
-	ro := rb.routeOptions[0]
-	if ro.eroute.Values == nil {
+	if rb.ro.eroute.Values == nil {
 		// Resolve values stored in the builder.
-		switch vals := ro.condition.(type) {
+		switch vals := rb.ro.condition.(type) {
 		case *sqlparser.ComparisonExpr:
 			pv, err := rb.procureValues(bldr, jt, vals.Right)
 			if err != nil {
 				return err
 			}
-			ro.eroute.Values = []sqltypes.PlanValue{pv}
+			rb.ro.eroute.Values = []sqltypes.PlanValue{pv}
 			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
 		case nil:
 			// no-op.
@@ -274,7 +263,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if err != nil {
 				return err
 			}
-			ro.eroute.Values = []sqltypes.PlanValue{pv}
+			rb.ro.eroute.Values = []sqltypes.PlanValue{pv}
 		}
 	}
 
@@ -291,7 +280,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.EqualStr {
-				if ro.exprIsValue(node.Left) && !ro.exprIsValue(node.Right) {
+				if rb.ro.exprIsValue(node.Left) && !rb.ro.exprIsValue(node.Right) {
 					node.Left, node.Right = node.Right, node.Left
 				}
 			}
@@ -300,7 +289,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	}, rb.Select)
 
 	// Substitute table names
-	for _, sub := range ro.substitutions {
+	for _, sub := range rb.ro.substitutions {
 		*sub.oldExpr = *sub.newExpr
 	}
 
@@ -325,8 +314,8 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	}
 	buf := sqlparser.NewTrackedBuffer(varFormatter)
 	varFormatter(buf, rb.Select)
-	ro.eroute.Query = buf.ParsedQuery().Query
-	ro.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
+	rb.ro.eroute.Query = buf.ParsedQuery().Query
+	rb.ro.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
 }
 
@@ -335,16 +324,6 @@ func systemTable(qualifier string) bool {
 		strings.EqualFold(qualifier, "performance_schema") ||
 		strings.EqualFold(qualifier, "sys") ||
 		strings.EqualFold(qualifier, "mysql")
-}
-
-func (rb *route) finalizeOptions() {
-	bestOption := rb.routeOptions[0]
-	for i := 1; i < len(rb.routeOptions); i++ {
-		if cur := rb.routeOptions[i]; cur.isBetterThan(bestOption) {
-			bestOption = cur
-		}
-	}
-	rb.routeOptions = []*routeOption{bestOption}
 }
 
 // procureValues procures and converts the input into
@@ -449,19 +428,8 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 // MergeSubquery returns true if the subquery route could successfully be merged
 // with the outer route.
 func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
-	var mergedRouteOptions []*routeOption
-outer:
-	for _, lro := range rb.routeOptions {
-		for _, rro := range inner.routeOptions {
-			if lro.SubqueryCanMerge(pb, rro) {
-				lro.MergeSubquery(rro)
-				mergedRouteOptions = append(mergedRouteOptions, lro)
-				continue outer
-			}
-		}
-	}
-	if len(mergedRouteOptions) != 0 {
-		rb.routeOptions = mergedRouteOptions
+	if rb.ro.SubqueryCanMerge(pb, inner.ro) {
+		rb.ro.MergeSubquery(inner.ro)
 		inner.Redirect = rb
 		return true
 	}
@@ -471,59 +439,20 @@ outer:
 // MergeUnion returns true if the rhs route could successfully be merged
 // with the rb route.
 func (rb *route) MergeUnion(right *route) bool {
-	var mergedRouteOptions []*routeOption
-outer:
-	for _, lro := range rb.routeOptions {
-		for _, rro := range right.routeOptions {
-			if lro.UnionCanMerge(rro) {
-				lro.MergeUnion(rro)
-				mergedRouteOptions = append(mergedRouteOptions, lro)
-				continue outer
-			}
-		}
-	}
-	if len(mergedRouteOptions) != 0 {
-		rb.routeOptions = mergedRouteOptions
+	if rb.ro.UnionCanMerge(right.ro) {
+		rb.ro.MergeUnion(right.ro)
 		right.Redirect = rb
 		return true
 	}
 	return false
 }
 
-// removeMultishardOptions removes all multi-shard options from the
-// route. It returns false if no such options exist.
-func (rb *route) removeMultishardOptions() bool {
-	return rb.removeOptions(func(ro *routeOption) bool {
-		switch ro.eroute.Opcode {
-		case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
-			return true
-		}
-		return false
-	})
-}
-
-// removeOptionsWithUnmatchedKeyspace removes all options that don't match
-// the specified keyspace. It returns false if no such options exist.
-func (rb *route) removeOptionsWithUnmatchedKeyspace(keyspace string) bool {
-	return rb.removeOptions(func(ro *routeOption) bool {
-		return ro.eroute.Keyspace.Name == keyspace
-	})
-}
-
-// removeOptions removes all options that don't match on
-// the criteria function. It returns false if no such options exist.
-func (rb *route) removeOptions(match func(*routeOption) bool) bool {
-	var newOptions []*routeOption
-	for _, ro := range rb.routeOptions {
-		if match(ro) {
-			newOptions = append(newOptions, ro)
-		}
+func (rb *route) isSingleShard() bool {
+	switch rb.ro.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectNext, engine.SelectEqualUnique, engine.SelectReference:
+		return true
 	}
-	if len(newOptions) == 0 {
-		return false
-	}
-	rb.routeOptions = newOptions
-	return true
+	return false
 }
 
 // queryTimeout returns DirectiveQueryTimeout value if set, otherwise returns 0.
