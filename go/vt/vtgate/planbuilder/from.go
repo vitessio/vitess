@@ -135,8 +135,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			Keyspace: subroute.ro.eroute.Keyspace,
 		}
 		for _, rc := range subroute.ResultColumns() {
-			vindex, ok := subroute.ro.vindexMap[rc.column]
-			if !ok {
+			if rc.column.vindex == nil {
 				continue
 			}
 			// Check if a colvindex of the same name already exists.
@@ -148,14 +147,13 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			}
 			vschemaTable.ColumnVindexes = append(vschemaTable.ColumnVindexes, &vindexes.ColumnVindex{
 				Columns: []sqlparser.ColIdent{rc.alias},
-				Vindex:  vindex,
+				Vindex:  rc.column.vindex,
 			})
 		}
-		vindexMap, err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTable, rb)
-		if err != nil {
+		if err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTable, rb); err != nil {
 			return err
 		}
-		subroute.ro.SubqueryToTable(rb, vindexMap)
+		subroute.ro.rb = rb
 		rb.ro = subroute.ro
 		subroute.Redirect = rb
 		pb.bldr, pb.st = rb, st
@@ -202,8 +200,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 
 	rb, st := newRoute(sel)
 	pb.bldr, pb.st = rb, st
-	vindexMap, err := st.AddVSchemaTable(alias, vschemaTable, rb)
-	if err != nil {
+	if err := st.AddVSchemaTable(alias, vschemaTable, rb); err != nil {
 		return err
 	}
 	sub := &tableSubstitution{
@@ -251,7 +248,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	// set table name into route
 	eroute.TableName = vschemaTable.Name.String()
 
-	rb.ro = newRouteOption(rb, vschemaTable, sub, vindexMap, eroute)
+	rb.ro = newRouteOption(rb, sub, eroute)
 	return nil
 }
 

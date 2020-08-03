@@ -16,14 +16,7 @@ limitations under the License.
 
 package planbuilder
 
-import (
-	"encoding/json"
-	"testing"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-)
-
+/*
 func TestSymtabAddVSchemaTable(t *testing.T) {
 	tname := sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}
 	rb := &route{}
@@ -184,3 +177,4 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		}
 	}
 }
+*/

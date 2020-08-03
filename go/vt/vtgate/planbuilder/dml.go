@@ -141,7 +141,10 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 	}
 
 	eupd.QueryTimeout = queryTimeout(directives)
-	eupd.Table = ro.vschemaTable
+	for _, tval := range pb.st.tables {
+		// There is only one table.
+		eupd.Table = tval.vschemaTable
+	}
 	if eupd.Table == nil {
 		return nil, nil, "", vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: table.vindexTable is mysteriously nil")
 	}
