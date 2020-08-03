@@ -37,11 +37,10 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*r
 	if !ok {
 		return nil, errors.New("unsupported: multi-shard or vindex write statement")
 	}
-	ro := rb.routeOptions[0]
-	for _, sub := range ro.substitutions {
+	for _, sub := range rb.ro.substitutions {
 		*sub.oldExpr = *sub.newExpr
 	}
-	return ro, nil
+	return rb.ro, nil
 }
 
 // processTableExprs analyzes the FROM clause. It produces a builder
@@ -132,12 +131,11 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// a new set of column references will be generated against the new tables,
 		// and those vindex maps will be returned. They have to replace the old vindex
 		// maps of the inherited route options.
-		ro := subroute.routeOptions[0]
 		vschemaTable := &vindexes.Table{
-			Keyspace: ro.eroute.Keyspace,
+			Keyspace: subroute.ro.eroute.Keyspace,
 		}
 		for _, rc := range subroute.ResultColumns() {
-			vindex, ok := ro.vindexMap[rc.column]
+			vindex, ok := subroute.ro.vindexMap[rc.column]
 			if !ok {
 				continue
 			}
@@ -157,8 +155,8 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		if err != nil {
 			return err
 		}
-		ro.SubqueryToTable(rb, vindexMap)
-		rb.routeOptions = subroute.routeOptions
+		subroute.ro.SubqueryToTable(rb, vindexMap)
+		rb.ro = subroute.ro
 		subroute.Redirect = rb
 		pb.bldr, pb.st = rb, st
 		return nil
@@ -180,7 +178,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRoute(sel)
-		rb.routeOptions = []*routeOption{newSimpleRouteOption(rb, engine.NewSimpleRoute(engine.SelectDBA, ks))}
+		rb.ro = newSimpleRouteOption(rb, engine.NewSimpleRoute(engine.SelectDBA, ks))
 		pb.bldr, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
@@ -253,7 +251,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	// set table name into route
 	eroute.TableName = vschemaTable.Name.String()
 
-	rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vschemaTable, sub, vindexMap, eroute))
+	rb.ro = newRouteOption(rb, vschemaTable, sub, vindexMap, eroute)
 	return nil
 }
 
@@ -309,20 +307,10 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 
 	// Try merging the routes.
-	isLeftJoin := ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr
-	var mergedRouteOptions []*routeOption
-outer:
-	for _, lro := range lRoute.routeOptions {
-		for _, rro := range rRoute.routeOptions {
-			if lro.JoinCanMerge(pb, rro, ajoin) {
-				lro.MergeJoin(rro, isLeftJoin)
-				mergedRouteOptions = append(mergedRouteOptions, lro)
-				continue outer
-			}
-		}
-	}
-	if len(mergedRouteOptions) != 0 {
-		return pb.mergeRoutes(rpb, mergedRouteOptions, ajoin)
+	if lRoute.ro.JoinCanMerge(pb, rRoute.ro, ajoin) {
+		isLeftJoin := ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr
+		lRoute.ro.MergeJoin(rRoute.ro, isLeftJoin)
+		return pb.mergeRoutes(rpb, ajoin)
 	}
 
 	return newJoin(pb, rpb, ajoin)
@@ -332,7 +320,7 @@ outer:
 // see if the primitive can be improved. The operation can fail if
 // the expression contains a non-pushable subquery. ajoin can be nil
 // if the join is on a ',' operator.
-func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*routeOption, ajoin *sqlparser.JoinTableExpr) error {
+func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	lRoute := pb.bldr.(*route)
 	rRoute := rpb.bldr.(*route)
 	sel := lRoute.Select.(*sqlparser.Select)
@@ -347,7 +335,6 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*r
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
 	pb.st.singleRoute = lRoute
-	lRoute.routeOptions = routeOptions
 	if ajoin == nil {
 		return nil
 	}
@@ -358,7 +345,7 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*r
 	ajoin.Condition.On = expr
 	pb.addPullouts(pullouts)
 	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
-		lRoute.UpdatePlans(pb, filter)
+		lRoute.UpdatePlan(pb, filter)
 	}
 	return nil
 }
