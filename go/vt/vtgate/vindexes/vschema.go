@@ -397,6 +397,12 @@ func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 outer:
 	for _, rule := range source.RoutingRules.Rules {
 		rr := &RoutingRule{}
+		if len(rule.ToTables) > 1 {
+			vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+				Error: fmt.Errorf("table %v has more than one target: %v", rule.FromTable, rule.ToTables),
+			}
+			continue
+		}
 		for _, toTable := range rule.ToTables {
 			if _, ok := vschema.RoutingRules[rule.FromTable]; ok {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
@@ -417,14 +423,6 @@ outer:
 					Error: err,
 				}
 				continue outer
-			}
-			for _, existing := range rr.Tables {
-				if existing == t {
-					vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-						Error: fmt.Errorf("table %s specified more than once", toTable),
-					}
-					continue outer
-				}
 			}
 			rr.Tables = append(rr.Tables, t)
 		}

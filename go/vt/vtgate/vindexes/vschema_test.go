@@ -679,9 +679,6 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			}, {
 				FromTable: "notfound",
 				ToTables:  []string{"ks1.t2"},
-			}, {
-				FromTable: "doubletable",
-				ToTables:  []string{"ks1.t1", "ks1.t1"},
 			}},
 		},
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -751,7 +748,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{
 			"rt1": {
-				Tables: []*Table{t1, t2},
+				Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
 			},
 			"rt2": {
 				Tables: []*Table{t2},
@@ -767,9 +764,6 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			},
 			"notfound": {
 				Error: errors.New("table t2 not found"),
-			},
-			"doubletable": {
-				Error: errors.New("table ks1.t1 specified more than once"),
 			},
 		},
 		uniqueTables: map[string]*Table{
@@ -801,11 +795,9 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		gotb, _ := json.Marshal(got)
-		wantb, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
-	}
+	gotb, _ := json.MarshalIndent(got, "", "  ")
+	wantb, _ := json.MarshalIndent(want, "", "  ")
+	assert.Equal(t, string(wantb), string(gotb), string(gotb))
 }
 
 func TestChooseVindexForType(t *testing.T) {
@@ -2206,10 +2198,10 @@ func TestFindTableOrVindex(t *testing.T) {
 		RoutingRules: &vschemapb.RoutingRules{
 			Rules: []*vschemapb.RoutingRule{{
 				FromTable: "unqualified",
-				ToTables:  []string{"ksa.ta", "ksb.t1"},
+				ToTables:  []string{"ksa.ta"},
 			}, {
 				FromTable: "unqualified@replica",
-				ToTables:  []string{"ksb.t1", "ksa.ta"},
+				ToTables:  []string{"ksb.t1"},
 			}, {
 				FromTable: "newks.qualified",
 				ToTables:  []string{"ksa.ta"},
@@ -2283,7 +2275,7 @@ func TestFindTableOrVindex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, []*Table{ta}) {
+	if !reflect.DeepEqual(got, ta) {
 		t.Errorf("FindTableOrVindex(\"t1a\"): %+v, want %+v", got, ta)
 	}
 
@@ -2319,7 +2311,7 @@ func TestFindTableOrVindex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{ta, t1}; !reflect.DeepEqual(got, want) {
+	if want := ta; !reflect.DeepEqual(got, want) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
@@ -2327,7 +2319,7 @@ func TestFindTableOrVindex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{t1, ta}; !reflect.DeepEqual(got, want) {
+	if want := t1; !reflect.DeepEqual(got, want) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
@@ -2335,7 +2327,7 @@ func TestFindTableOrVindex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{ta}; !reflect.DeepEqual(got, want) {
+	if want := ta; !reflect.DeepEqual(got, want) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
@@ -2343,7 +2335,7 @@ func TestFindTableOrVindex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{t1}; !reflect.DeepEqual(got, want) {
+	if want := t1; !reflect.DeepEqual(got, want) {
 		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
