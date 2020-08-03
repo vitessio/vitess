@@ -107,7 +107,7 @@ type TabletServer struct {
 
 	// sm manages state transitions.
 	sm            *stateManager
-	ghostExecutor *ghost.Executor
+	ghostExecutor *ghost.GhostExecutor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
