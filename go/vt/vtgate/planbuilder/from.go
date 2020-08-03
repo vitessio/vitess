@@ -28,8 +28,8 @@ import (
 
 // This file has functions to analyze the FROM clause.
 
-// processDMLTable analyzes the FROM clause for DMLs and returns a routeOption.
-func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*routeOption, error) {
+// processDMLTable analyzes the FROM clause for DMLs and returns a route.
+func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*route, error) {
 	if err := pb.processTableExprs(tableExprs); err != nil {
 		return nil, err
 	}
@@ -37,10 +37,10 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*r
 	if !ok {
 		return nil, errors.New("unsupported: multi-shard or vindex write statement")
 	}
-	for _, sub := range rb.ro.substitutions {
+	for _, sub := range rb.substitutions {
 		*sub.oldExpr = *sub.newExpr
 	}
-	return rb.ro, nil
+	return rb, nil
 }
 
 // processTableExprs analyzes the FROM clause. It produces a builder
@@ -123,6 +123,10 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// FROM clause. This allows for other constructs to be
 		// later pushed into it.
 		rb, st := newRoute(&sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}})
+		rb.substitutions = subroute.substitutions
+		rb.condition = subroute.condition
+		rb.eroute = subroute.eroute
+		subroute.Redirect = rb
 
 		// The subquery needs to be represented as a new logical table in the symtab.
 		// The new route will inherit the routeOptions of the underlying subquery.
@@ -132,7 +136,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// and those vindex maps will be returned. They have to replace the old vindex
 		// maps of the inherited route options.
 		vschemaTable := &vindexes.Table{
-			Keyspace: subroute.ro.eroute.Keyspace,
+			Keyspace: subroute.eroute.Keyspace,
 		}
 		for _, rc := range subroute.ResultColumns() {
 			if rc.column.vindex == nil {
@@ -153,9 +157,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		if err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTable, rb); err != nil {
 			return err
 		}
-		subroute.ro.rb = rb
-		rb.ro = subroute.ro
-		subroute.Redirect = rb
+
 		pb.bldr, pb.st = rb, st
 		return nil
 	}
@@ -176,7 +178,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRoute(sel)
-		rb.ro = newSimpleRouteOption(rb, engine.NewSimpleRoute(engine.SelectDBA, ks))
+		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
 		pb.bldr, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
@@ -203,6 +205,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	if err := st.AddVSchemaTable(alias, vschemaTable, rb); err != nil {
 		return err
 	}
+
 	sub := &tableSubstitution{
 		oldExpr: tableExpr,
 	}
@@ -224,6 +227,10 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			}
 		}
 	}
+	if sub != nil && sub.newExpr != nil {
+		rb.substitutions = []*tableSubstitution{sub}
+	}
+
 	var eroute *engine.Route
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
@@ -245,10 +252,9 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
 		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
 	}
-	// set table name into route
 	eroute.TableName = vschemaTable.Name.String()
+	rb.eroute = eroute
 
-	rb.ro = newRouteOption(rb, sub, eroute)
 	return nil
 }
 
@@ -304,31 +310,21 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 
 	// Try merging the routes.
-	if lRoute.ro.JoinCanMerge(pb, rRoute.ro, ajoin) {
-		isLeftJoin := ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr
-		lRoute.ro.MergeJoin(rRoute.ro, isLeftJoin)
-		return pb.mergeRoutes(rpb, ajoin)
+	if !lRoute.JoinCanMerge(pb, rRoute, ajoin) {
+		return newJoin(pb, rpb, ajoin)
 	}
 
-	return newJoin(pb, rpb, ajoin)
-}
+	lRoute.Merge(rRoute)
 
-// mergeRoutes merges the two routes. The ON clause is also analyzed to
-// see if the primitive can be improved. The operation can fail if
-// the expression contains a non-pushable subquery. ajoin can be nil
-// if the join is on a ',' operator.
-func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
-	lRoute := pb.bldr.(*route)
-	rRoute := rpb.bldr.(*route)
+	// Merge the AST.
 	sel := lRoute.Select.(*sqlparser.Select)
-
 	if ajoin == nil {
 		rhsSel := rRoute.Select.(*sqlparser.Select)
 		sel.From = append(sel.From, rhsSel.From...)
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 	}
-	rRoute.Redirect = lRoute
+
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
 	pb.st.singleRoute = lRoute

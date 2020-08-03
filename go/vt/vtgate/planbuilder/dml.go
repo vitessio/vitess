@@ -103,11 +103,11 @@ func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
 func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Statement, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, vindexes.SingleColumn, string, error) {
 	eupd := &engine.DML{}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(stmt)))
-	ro, err := pb.processDMLTable(tableExprs)
+	rb, err := pb.processDMLTable(tableExprs)
 	if err != nil {
 		return nil, nil, "", err
 	}
-	eupd.Keyspace = ro.eroute.Keyspace
+	eupd.Keyspace = rb.eroute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
 		var subqueryArgs []sqlparser.SQLNode
@@ -149,12 +149,12 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 		return nil, nil, "", vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: table.vindexTable is mysteriously nil")
 	}
 
-	if ro.eroute.TargetDestination != nil {
-		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
+	if rb.eroute.TargetDestination != nil {
+		if rb.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: %s statement with a replica target", dmlType)
 		}
 		eupd.Opcode = engine.ByDestination
-		eupd.TargetDestination = ro.eroute.TargetDestination
+		eupd.TargetDestination = rb.eroute.TargetDestination
 		return eupd, nil, "", nil
 	}
 
