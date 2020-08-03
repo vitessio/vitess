@@ -104,7 +104,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 		for _, selectExpr := range sel.SelectExprs {
 			switch selectExpr := selectExpr.(type) {
 			case *sqlparser.AliasedExpr:
-				vindex := rb.ro.FindVindex(pb, selectExpr.Expr)
+				vindex := pb.st.Vindex(selectExpr.Expr, rb)
 				if vindex != nil && vindex.IsUnique() {
 					return nil
 				}
@@ -203,7 +203,7 @@ func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *ro
 		default:
 			continue
 		}
-		vindex := rb.ro.FindVindex(pb, matchedExpr)
+		vindex := pb.st.Vindex(matchedExpr, rb)
 		if vindex != nil && vindex.IsUnique() {
 			return true
 		}
@@ -349,7 +349,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 		// Unreachable
 		return true, innerAliased, nil
 	}
-	vindex := rb.ro.FindVindex(pb, innerAliased.Expr)
+	vindex := pb.st.Vindex(innerAliased.Expr, rb)
 	if vindex != nil && vindex.IsUnique() {
 		return false, nil, nil
 	}

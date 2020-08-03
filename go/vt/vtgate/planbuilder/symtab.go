@@ -84,13 +84,12 @@ func newSymtabWithRoute(rb *route) *symtab {
 	}
 }
 
-// AddVSchemaTable takes a list of vschema tables as input and
-// creates a table with multiple route options. It returns a
-// list of vindex maps, one for each input.
-func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vindexes.Table, rb *route) (vindexMap map[*column]vindexes.SingleColumn, err error) {
+// AddVSchemaTable adds a vschema table to symtab.
+func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vindexes.Table, rb *route) error {
 	t := &table{
-		alias:  alias,
-		origin: rb,
+		alias:        alias,
+		origin:       rb,
+		vschemaTable: vschemaTable,
 	}
 
 	for _, col := range vschemaTable.Columns {
@@ -99,7 +98,7 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vinde
 			st:     st,
 			typ:    col.Type,
 		}); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if vschemaTable.ColumnListAuthoritative {
@@ -118,15 +117,11 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vinde
 				st:     st,
 			})
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if i == 0 {
-				// For now, only the first column is used for vindex Map functions.
-				if vindexMap == nil {
-					vindexMap = make(map[*column]vindexes.SingleColumn)
-				}
-				if vindexMap[col] == nil || vindexMap[col].Cost() > single.Cost() {
-					vindexMap[col] = single
+				if col.vindex == nil || col.vindex.Cost() > single.Cost() {
+					col.vindex = single
 				}
 			}
 		}
@@ -138,14 +133,14 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vinde
 				origin: rb,
 				st:     st,
 			}); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 	if err := st.AddTable(t); err != nil {
-		return nil, err
+		return err
 	}
-	return vindexMap, nil
+	return nil
 }
 
 // Merge merges the new symtab into the current one.
@@ -395,6 +390,26 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 	return int(num - 1), nil
 }
 
+// Vindex returns the vindex if the expression is a plain column reference
+// that is part of the specified route, and has an associated vindex.
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.SingleColumn {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return nil
+	}
+	if col.Metadata == nil {
+		// Find will set the Metadata.
+		if _, _, err := st.Find(col); err != nil {
+			return nil
+		}
+	}
+	c := col.Metadata.(*column)
+	if c.Origin() != scope {
+		return nil
+	}
+	return c.vindex
+}
+
 // BuildColName builds a *sqlparser.ColName for the resultColumn specified
 // by the index. The built ColName will correctly reference the resultColumn
 // it was built from.
@@ -444,6 +459,7 @@ type table struct {
 	columnNames     []sqlparser.ColIdent
 	isAuthoritative bool
 	origin          builder
+	vschemaTable    *vindexes.Table
 }
 
 func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
@@ -492,6 +508,8 @@ func (t *table) Origin() builder {
 // column represents a unique symbol in the query that other
 // parts can refer to.
 // Every column contains the builder it originates from.
+// If a column has associated vindexes, then the one with the
+// lowest cost is set.
 //
 // Two columns are equal if their pointer values match.
 //
@@ -500,6 +518,7 @@ func (t *table) Origin() builder {
 type column struct {
 	origin    builder
 	st        *symtab
+	vindex    vindexes.SingleColumn
 	typ       querypb.Type
 	colNumber int
 }

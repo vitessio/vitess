@@ -27,17 +27,9 @@ import (
 type routeOption struct {
 	rb *route
 
-	// vschemaTable is set only if a single table is referenced
-	// in the from clause. It's used only for DMLs.
-	vschemaTable *vindexes.Table
-
 	// substitutions contain the list of table expressions that
 	// have to be substituted in the route's query.
 	substitutions []*tableSubstitution
-
-	// vindexMap is a map of all vindexMap that can be used
-	// for the routeOption.
-	vindexMap map[*column]vindexes.SingleColumn
 
 	// condition stores the AST condition that will be used
 	// to resolve the ERoute Values field.
@@ -58,16 +50,14 @@ func newSimpleRouteOption(rb *route, eroute *engine.Route) *routeOption {
 	}
 }
 
-func newRouteOption(rb *route, vst *vindexes.Table, sub *tableSubstitution, vindexMap map[*column]vindexes.SingleColumn, eroute *engine.Route) *routeOption {
+func newRouteOption(rb *route, sub *tableSubstitution, eroute *engine.Route) *routeOption {
 	var subs []*tableSubstitution
 	if sub != nil && sub.newExpr != nil {
 		subs = []*tableSubstitution{sub}
 	}
 	return &routeOption{
 		rb:            rb,
-		vschemaTable:  vst,
 		substitutions: subs,
-		vindexMap:     vindexMap,
 		eroute:        eroute,
 	}
 }
@@ -88,13 +78,6 @@ func (ro *routeOption) JoinCanMerge(pb *primitiveBuilder, rro *routeOption, ajoi
 
 func (ro *routeOption) MergeJoin(rro *routeOption, isLeftJoin bool) {
 	ro.merge(rro)
-	ro.vschemaTable = nil
-	for c, v := range rro.vindexMap {
-		if ro.vindexMap == nil {
-			ro.vindexMap = make(map[*column]vindexes.SingleColumn)
-		}
-		ro.vindexMap[c] = v
-	}
 }
 
 // merge merges two routeOptions. If the LHS (ro) is a SelectReference,
@@ -111,7 +94,7 @@ func (ro *routeOption) SubqueryCanMerge(pb *primitiveBuilder, inner *routeOption
 	return ro.canMerge(inner, func() bool {
 		switch vals := inner.condition.(type) {
 		case *sqlparser.ColName:
-			if ro.FindVindex(pb, vals) == inner.eroute.Vindex {
+			if pb.st.Vindex(vals, ro.rb) == inner.eroute.Vindex {
 				return true
 			}
 		}
@@ -129,13 +112,6 @@ func (ro *routeOption) UnionCanMerge(rro *routeOption) bool {
 
 func (ro *routeOption) MergeUnion(rro *routeOption) {
 	ro.merge(rro)
-	ro.vschemaTable = nil
-}
-
-func (ro *routeOption) SubqueryToTable(rb *route, vindexMap map[*column]vindexes.SingleColumn) {
-	ro.rb = rb
-	ro.vschemaTable = nil
-	ro.vindexMap = vindexMap
 }
 
 func (ro *routeOption) canMerge(rro *routeOption, customCheck func() bool) bool {
@@ -178,15 +154,15 @@ func (ro *routeOption) canMergeOnFilter(pb *primitiveBuilder, rro *routeOption, 
 	}
 	left := comparison.Left
 	right := comparison.Right
-	lVindex := ro.FindVindex(pb, left)
+	lVindex := pb.st.Vindex(left, ro.rb)
 	if lVindex == nil {
 		left, right = right, left
-		lVindex = ro.FindVindex(pb, left)
+		lVindex = pb.st.Vindex(left, ro.rb)
 	}
 	if lVindex == nil || !lVindex.IsUnique() {
 		return false
 	}
-	rVindex := rro.FindVindex(pb, right)
+	rVindex := pb.st.Vindex(right, rro.rb)
 	if rVindex == nil {
 		return false
 	}
@@ -276,10 +252,10 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 		return engine.SelectNone, nil, nil
 	}
 
-	vindex = ro.FindVindex(pb, left)
+	vindex = pb.st.Vindex(left, ro.rb)
 	if vindex == nil {
 		left, right = right, left
-		vindex = ro.FindVindex(pb, left)
+		vindex = pb.st.Vindex(left, ro.rb)
 		if vindex == nil {
 			return engine.SelectScatter, nil, nil
 		}
@@ -300,7 +276,7 @@ func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser
 		return engine.SelectScatter, nil, nil
 	}
 
-	vindex = ro.FindVindex(pb, comparison.Expr)
+	vindex = pb.st.Vindex(comparison.Expr, ro.rb)
 	// fallback to scatter gather if there is no vindex
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -313,7 +289,7 @@ func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser
 
 // computeINPlan computes the plan for an IN constraint.
 func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
-	vindex = ro.FindVindex(pb, comparison.Left)
+	vindex = pb.st.Vindex(comparison.Left, ro.rb)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
 	}
@@ -373,24 +349,6 @@ func (ro *routeOption) isBetterThan(other *routeOption) bool {
 		}
 	}
 	return false
-}
-
-func (ro *routeOption) FindVindex(pb *primitiveBuilder, expr sqlparser.Expr) vindexes.SingleColumn {
-	col, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return nil
-	}
-	if col.Metadata == nil {
-		// Find will set the Metadata.
-		if _, _, err := pb.st.Find(col); err != nil {
-			return nil
-		}
-	}
-	c := col.Metadata.(*column)
-	if c.Origin() != ro.rb {
-		return nil
-	}
-	return ro.vindexMap[c]
 }
 
 // exprIsValue returns true if the expression can be treated as a value
