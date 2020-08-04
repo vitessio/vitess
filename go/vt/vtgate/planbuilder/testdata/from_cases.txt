@@ -1061,6 +1061,30 @@
   }
 }
 
+
+# reference table can merge with other opcodes left to right and vindex value is in the plan.
+# This tests that route.Merge also copies the condition to the LHS.
+"select ref.col from ref join (select aa from user where user.id=1) user"
+{
+  "QueryType": "SELECT",
+  "Original": "select ref.col from ref join (select aa from user where user.id=1) user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select ref.col from ref join (select aa from user where 1 != 1) as user where 1 != 1",
+    "Query": "select ref.col from ref join (select aa from user where user.id = 1) as user",
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+
 # routing rules for join, unsharded route wins if we can't find a merged route
 "select route2.col from route2 join user_extra"
 {
