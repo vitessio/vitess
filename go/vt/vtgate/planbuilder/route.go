@@ -479,7 +479,8 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 
 func (rb *route) Merge(rrb *route) {
 	if rb.eroute.Opcode == engine.SelectReference {
-		// Swap the eroutes and then merge.
+		// Swap the conditions & eroutes, and then merge.
+		rb.condition, rrb.condition = rrb.condition, rb.condition
 		rb.eroute, rrb.eroute = rrb.eroute, rb.eroute
 	}
 	rb.substitutions = append(rb.substitutions, rrb.substitutions...)
