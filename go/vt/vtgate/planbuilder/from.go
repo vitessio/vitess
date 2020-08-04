@@ -314,7 +314,13 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		return newJoin(pb, rpb, ajoin)
 	}
 
-	lRoute.Merge(rRoute)
+	if lRoute.eroute.Opcode == engine.SelectReference {
+		// Swap the conditions & eroutes, and then merge.
+		lRoute.condition, rRoute.condition = rRoute.condition, lRoute.condition
+		lRoute.eroute, rRoute.eroute = rRoute.eroute, lRoute.eroute
+	}
+	lRoute.substitutions = append(lRoute.substitutions, rRoute.substitutions...)
+	rRoute.Redirect = lRoute
 
 	// Merge the AST.
 	sel := lRoute.Select.(*sqlparser.Select)
