@@ -166,6 +166,8 @@ const (
 	SelectReference
 	// SelectNone is used for queries that always return empty values
 	SelectNone
+	// NumRouteOpcodes is the number of opcodes
+	NumRouteOpcodes
 )
 
 var routeName = map[RouteOpcode]string{
