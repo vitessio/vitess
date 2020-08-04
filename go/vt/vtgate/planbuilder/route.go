@@ -463,47 +463,10 @@ func (rb *route) isSingleShard() bool {
 	return false
 }
 
+// JoinCanMerge, SubqueryCanMerge and UnionCanMerge have subtly different behaviors.
+// The difference in behavior is around SelectReference.
+// It's not worth trying to reuse the code between them.
 func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr) bool {
-	return rb.canMerge(rrb, func() bool {
-		if ajoin == nil {
-			return false
-		}
-		for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
-			if rb.canMergeOnFilter(pb, rrb, filter) {
-				return true
-			}
-		}
-		return false
-	})
-}
-
-func (rb *route) Merge(rrb *route) {
-	if rb.eroute.Opcode == engine.SelectReference {
-		// Swap the conditions & eroutes, and then merge.
-		rb.condition, rrb.condition = rrb.condition, rb.condition
-		rb.eroute, rrb.eroute = rrb.eroute, rb.eroute
-	}
-	rb.substitutions = append(rb.substitutions, rrb.substitutions...)
-	rrb.Redirect = rb
-}
-
-func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
-	return rb.canMerge(inner, func() bool {
-		switch vals := inner.condition.(type) {
-		case *sqlparser.ColName:
-			if pb.st.Vindex(vals, rb) == inner.eroute.Vindex {
-				return true
-			}
-		}
-		return false
-	})
-}
-
-func (rb *route) UnionCanMerge(rrb *route) bool {
-	return rb.canMerge(rrb, func() bool { return false })
-}
-
-func (rb *route) canMerge(rrb *route, customCheck func() bool) bool {
 	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
 		return false
 	}
@@ -524,10 +487,72 @@ func (rb *route) canMerge(rrb *route, customCheck func() bool) bool {
 	case engine.SelectNext:
 		return false
 	}
-	if customCheck != nil {
-		return customCheck()
+	if ajoin == nil {
+		return false
+	}
+	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+		if rb.canMergeOnFilter(pb, rrb, filter) {
+			return true
+		}
 	}
 	return false
+}
+
+func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
+	if rb.eroute.Keyspace.Name != inner.eroute.Keyspace.Name {
+		return false
+	}
+	switch rb.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
+		return rb.eroute.Opcode == inner.eroute.Opcode || inner.eroute.Opcode == engine.SelectReference
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if inner.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == inner.eroute.Vindex && valEqual(rb.condition, inner.condition) {
+			return true
+		}
+	case engine.SelectNext:
+		return false
+	}
+	// Any sharded plan (including SelectEqualUnique) can merge on a reference table subquery.
+	// This excludes the case of SelectReference with a sharded subquery.
+	if inner.eroute.Opcode == engine.SelectReference {
+		return true
+	}
+	switch vals := inner.condition.(type) {
+	case *sqlparser.ColName:
+		if pb.st.Vindex(vals, rb) == inner.eroute.Vindex {
+			return true
+		}
+	}
+	return false
+}
+
+func (rb *route) UnionCanMerge(rrb *route) bool {
+	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
+		return false
+	}
+	switch rb.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
+		return rb.eroute.Opcode == rrb.eroute.Opcode
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if rrb.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == rrb.eroute.Vindex && valEqual(rb.condition, rrb.condition) {
+			return true
+		}
+	case engine.SelectNext:
+		return false
+	}
+	return false
+}
+
+func (rb *route) Merge(rrb *route) {
+	if rb.eroute.Opcode == engine.SelectReference {
+		// Swap the conditions & eroutes, and then merge.
+		rb.condition, rrb.condition = rrb.condition, rb.condition
+		rb.eroute, rrb.eroute = rrb.eroute, rb.eroute
+	}
+	rb.substitutions = append(rb.substitutions, rrb.substitutions...)
+	rrb.Redirect = rb
 }
 
 // canMergeOnFilter returns true if the join constraint makes the routes
