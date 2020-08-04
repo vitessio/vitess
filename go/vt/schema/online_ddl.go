@@ -28,21 +28,66 @@ import (
 )
 
 var (
-	MigrationBasePath = "schema-migration"
+	migrationBasePath = "schema-migration"
 )
 
-func MigrationKeyspacePath(keyspace string) string {
-	return fmt.Sprintf("%s/%s", MigrationBasePath, keyspace)
+// MigrationBasePath is the root for all schema migration entries
+func MigrationBasePath() string {
+	return migrationBasePath
 }
+
+// MigrationRequestsPath is the base path for all newly received schema migration requests.
+// such requests need to be investigates/reviewed, and to be assigned to all shards
+func MigrationRequestsPath() string {
+	return fmt.Sprintf("%s/requests", MigrationBasePath())
+}
+
+// MigrationReviewedPath is the base path for schema migrations that have been reviewed. Kept for
+// historical reference
+func MigrationReviewedPath() string {
+	return fmt.Sprintf("%s/reviewed", MigrationBasePath())
+}
+
+// MigrationJobsKeyspacePath is the base path for a tablet job, by keyspace
+func MigrationJobsKeyspacePath(keyspace string) string {
+	return fmt.Sprintf("%s/jobs/%s", MigrationBasePath(), keyspace)
+}
+
+// MigrationJobsKeyspaceShardPath is the base path for a tablet job, by keyspace and shard
+func MigrationJobsKeyspaceShardPath(keyspace, shard string) string {
+	return fmt.Sprintf("%s/%s", MigrationJobsKeyspacePath(keyspace), shard)
+}
+
+// OnlineDDLStatus is an indicator to a online DDL status
+type OnlineDDLStatus string
+
+const (
+	OnlineDDLStatusRequested OnlineDDLStatus = "requested"
+	OnlineDDLStatusReviewed  OnlineDDLStatus = "reviewed"
+	OnlineDDLStatusCancelled OnlineDDLStatus = "cancelled"
+	OnlineDDLStatusQueued    OnlineDDLStatus = "queued"
+	OnlineDDLStatusReady     OnlineDDLStatus = "ready"
+	OnlineDDLStatusRunning   OnlineDDLStatus = "running"
+	OnlineDDLStatusComplete  OnlineDDLStatus = "complete"
+	OnlineDDLStatusFailed    OnlineDDLStatus = "failed"
+)
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace    string `json:"keyspace,omitempty"`
-	Table       string `json:"table,omitempty"`
-	SQL         string `json:"sql,omitempty"`
-	UUID        string `json:"uuid,omitempty"`
-	Online      bool   `json:"online,omitempty"`
-	RequestTime int64  `json:"time_created,omitempty"`
+	Keyspace    string          `json:"keyspace,omitempty"`
+	Table       string          `json:"table,omitempty"`
+	SQL         string          `json:"sql,omitempty"`
+	UUID        string          `json:"uuid,omitempty"`
+	Online      bool            `json:"online,omitempty"`
+	RequestTime int64           `json:"time_created,omitempty"`
+	Status      OnlineDDLStatus `json:"status,omitempty"`
+}
+
+// FromJSON creates an OnlineDDL from json
+func FromJSON(bytes []byte) (*OnlineDDL, error) {
+	onlineDDL := &OnlineDDL{}
+	err := json.Unmarshal(bytes, onlineDDL)
+	return onlineDDL, err
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
@@ -58,33 +103,32 @@ func NewOnlineDDL(keyspace string, table string, sql string) (*OnlineDDL, error)
 		UUID:        uuid,
 		Online:      true,
 		RequestTime: time.Now().UnixNano(),
+		Status:      OnlineDDLStatusRequested,
 	}, nil
 }
 
-// MigrationRequestPath returns the relative path in topo where this schema migration request is stored
-func (change *OnlineDDL) MigrationRequestPath() string {
-	return fmt.Sprintf("%s/%s/request", MigrationKeyspacePath(change.Keyspace), change.UUID)
+// JobsKeyspaceShardPath returns job/<keyspace>/<shard>/<uuid>
+func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
+	return fmt.Sprintf("%s/%s", MigrationJobsKeyspaceShardPath(onlineDDL.Keyspace, shard), onlineDDL.UUID)
 }
 
-// WriteTopoOnlineDDL writes an online schema change request in global topo
-func WriteTopoOnlineDDL(ctx context.Context, ts *topo.Server, onlineDDL *OnlineDDL) error {
-	if onlineDDL == nil {
-		return fmt.Errorf("online-schema-change nil change received")
-	}
+// ToJSON exports this onlineDDL to JSON
+func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
+	return json.Marshal(onlineDDL)
+}
+
+// WriteTopo writes this online DDL to given topo connection, based on basePath and and this DDL's UUID
+func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, basePath string) error {
 	if onlineDDL.UUID == "" {
-		return fmt.Errorf("online-schema-change UUID not found; keyspace=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.SQL)
+		return fmt.Errorf("onlineDDL UUID not found; keyspace=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.SQL)
 	}
-	bytes, err := json.Marshal(onlineDDL)
+	bytes, err := onlineDDL.ToJSON()
 	if err != nil {
-		return fmt.Errorf("online-schema-change marshall error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
+		return fmt.Errorf("onlineDDL marshall error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
-	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
+	_, err = conn.Create(ctx, fmt.Sprintf("%s/%s", basePath, onlineDDL.UUID), bytes)
 	if err != nil {
-		return fmt.Errorf("online-schema-change ConnForCell error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
-	}
-	_, err = conn.Create(ctx, onlineDDL.MigrationRequestPath(), bytes)
-	if err != nil {
-		return fmt.Errorf("online-schema-change topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
+		return fmt.Errorf("onlineDDL topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	return nil
 }

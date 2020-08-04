@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -263,7 +264,12 @@ func (exec *TabletExecutor) executeOnAllTablets(
 			execResult.ExecutorErr = err.Error()
 			return
 		}
-		err = schema.WriteTopoOnlineDDL(ctx, exec.wr.TopoServer(), change)
+		conn, err := exec.wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
+		if err != nil {
+			execResult.ExecutorErr = fmt.Sprintf("online-schema-change ConnForCell error:%s", err.Error())
+			return
+		}
+		err = change.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 		}
