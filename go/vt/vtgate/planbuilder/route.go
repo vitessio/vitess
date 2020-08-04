@@ -439,7 +439,8 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 // with the outer route.
 func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 	if rb.SubqueryCanMerge(pb, inner) {
-		rb.Merge(inner)
+		rb.substitutions = append(rb.substitutions, inner.substitutions...)
+		inner.Redirect = rb
 		return true
 	}
 	return false
@@ -449,7 +450,8 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 // with the rb route.
 func (rb *route) MergeUnion(right *route) bool {
 	if rb.UnionCanMerge(right) {
-		rb.Merge(right)
+		rb.substitutions = append(rb.substitutions, right.substitutions...)
+		right.Redirect = rb
 		return true
 	}
 	return false
@@ -543,16 +545,6 @@ func (rb *route) UnionCanMerge(rrb *route) bool {
 		return false
 	}
 	return false
-}
-
-func (rb *route) Merge(rrb *route) {
-	if rb.eroute.Opcode == engine.SelectReference {
-		// Swap the conditions & eroutes, and then merge.
-		rb.condition, rrb.condition = rrb.condition, rb.condition
-		rb.eroute, rrb.eroute = rrb.eroute, rb.eroute
-	}
-	rb.substitutions = append(rb.substitutions, rrb.substitutions...)
-	rrb.Redirect = rb
 }
 
 // canMergeOnFilter returns true if the join constraint makes the routes
