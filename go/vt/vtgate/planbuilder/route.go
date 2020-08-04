@@ -739,32 +739,6 @@ func (rb *route) computeNotInPlan(right sqlparser.Expr) engine.RouteOpcode {
 	return engine.SelectScatter
 }
 
-var planCost = map[engine.RouteOpcode]int{
-	engine.SelectUnsharded:   0,
-	engine.SelectNext:        0,
-	engine.SelectDBA:         0,
-	engine.SelectReference:   0,
-	engine.SelectEqualUnique: 1,
-	engine.SelectIN:          2,
-	engine.SelectEqual:       3,
-	engine.SelectScatter:     4,
-}
-
-func (rb *route) isBetterThan(other *route) bool {
-	ropc := planCost[rb.eroute.Opcode]
-	otherpc := planCost[other.eroute.Opcode]
-	if ropc < otherpc {
-		return true
-	}
-	if ropc == otherpc {
-		switch other.eroute.Opcode {
-		case engine.SelectEqualUnique, engine.SelectIN, engine.SelectEqual:
-			return rb.eroute.Vindex.Cost() < other.eroute.Vindex.Cost()
-		}
-	}
-	return false
-}
-
 // exprIsValue returns true if the expression can be treated as a value
 // for the routeOption. External references are treated as value.
 func (rb *route) exprIsValue(expr sqlparser.Expr) bool {
