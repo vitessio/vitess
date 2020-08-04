@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -52,6 +53,7 @@ type Executor struct {
 	ts             *topo.Server
 
 	keyspace string
+	shard    string
 
 	mu     sync.Mutex
 	ticks  *timer.Timer
@@ -93,8 +95,9 @@ func (e *Executor) initSchema(ctx context.Context) error {
 }
 
 // InitDBConfig initializes keysapce
-func (e *Executor) InitDBConfig(keyspace string) {
+func (e *Executor) InitDBConfig(keyspace, shard string) {
 	e.keyspace = keyspace
+	e.shard = shard
 }
 
 // Open opens database pool and initializes the schema
@@ -297,7 +300,7 @@ func (e *Executor) checkMigrations() {
 		return
 	}
 
-	dirPath := fmt.Sprintf("schema-migration/%s", e.keyspace)
+	dirPath := schema.MigrationJobsKeyspaceShardPath(e.keyspace, e.shard)
 	fmt.Printf("=============== listing dirPath=%s\n", dirPath)
 	entries, err := conn.ListDir(ctx, dirPath, false)
 	if err != nil {

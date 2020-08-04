@@ -469,7 +469,11 @@ func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
 
 // SubmitOnlineDDL implements the VCursor interface
 func (vc *vcursorImpl) SubmitOnlineDDL(change *schema.OnlineDDL) error {
-	return schema.WriteTopoOnlineDDL(vc.ctx, vc.topoServer, change)
+	conn, err := vc.topoServer.ConnForCell(vc.ctx, topo.GlobalCell)
+	if err != nil {
+		return err
+	}
+	return change.WriteTopo(vc.ctx, conn, schema.MigrationRequestsPath())
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
