@@ -2948,21 +2948,26 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("usage: Workflow --dry-run keyspace.workflow start/stop/delete/list/list-all")
 	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
+	keyspace := subFlags.Arg(0)
+	action := subFlags.Arg(1)
+	var workflow string
+	var err error
+	if action != "list-all" {
+		keyspace, workflow, err = splitKeyspaceWorkflow(subFlags.Arg(0))
+		if err != nil {
+			return err
+		}
 	}
 	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
 	if err != nil {
 		wr.Logger().Errorf("Keyspace %s not found", keyspace)
 	}
-	action := subFlags.Arg(1)
 
 	results, err := wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
 	if err != nil {
 		return err
 	}
-	if action == "list" {
+	if action == "list" || action == "list-all" {
 		return nil
 	}
 	if len(results) == 0 {
