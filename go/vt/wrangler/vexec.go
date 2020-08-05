@@ -194,7 +194,7 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	if action == "list" {
 		return nil, wr.listStreams(ctx, workflow, keyspace)
-	} else if action == "list-all" {
+	} else if action == "listall" {
 		_, err := wr.ListAllWorkflows(ctx, keyspace)
 		return nil, err
 	}
