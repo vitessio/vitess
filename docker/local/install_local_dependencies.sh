@@ -19,7 +19,7 @@ rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
 mkdir -p /var/run/etcd && chown -R vitess:vitess /var/run/etcd
 
 # Install gh-ost
-curl -k -L https://github.com/github/gh-ost/releases/download/v1.0.49/gh-ost-binary-linux-20200209110835.tar.gz -o /tmp/gh-ost.tar.gz
+curl -k -L https://github.com/openark/gh-ost/releases/download/v1.1.0/gh-ost-binary-linux-20200805092717.tar.gz -o /tmp/gh-ost.tar.gz
 (cd /tmp/ && tar xzf gh-ost.tar.gz)
 cp /tmp/gh-ost /usr/bin
 
