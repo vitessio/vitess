@@ -478,7 +478,7 @@ var commands = []commandGroup{
 		"Workflow", []command{
 			{"Workflow", commandWorkflow,
 				"<ks.workflow> <action> --dry-run",
-				"Start/Stop/Delete Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
+				"Start/Stop/Delete/List/List-All Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
 	},
@@ -2946,7 +2946,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("usage: Workflow --dry-run keyspace.workflow start/stop/delete")
+		return fmt.Errorf("usage: Workflow --dry-run keyspace.workflow start/stop/delete/list/list-all")
 	}
 	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
