@@ -118,11 +118,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard1Master = localCluster.NewVttabletInstance("master", 0, cell1)
 		shard1Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard1Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
-		shard2Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard2Master = localCluster.NewVttabletInstance("master", 0, cell1)
 		shard2Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard2Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
@@ -256,6 +256,8 @@ func TestAlias(t *testing.T) {
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA"
+	// Use legacy gateway. There's a separate test for tabletgateway in go/test/endtoend/tabletgateway/cellalias/cell_alias_test.go
+	vtgateInstance.GatewayImplementation = "discoverygateway"
 	err = vtgateInstance.Setup()
 	require.NoError(t, err)
 
@@ -309,13 +311,11 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
-	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA,RDONLY"
-	vtgateInstance.GatewayImplementation = "discoverygateway"
+	// only MASTER is in vtgate's "cell", other tablet types are not visible because they are in the other cell
+	vtgateInstance.TabletTypesToWait = "MASTER"
 	err = vtgateInstance.Setup()
 	require.NoError(t, err)
 	defer vtgateInstance.TearDown()
-
-	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
 	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
