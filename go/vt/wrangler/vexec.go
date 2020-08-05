@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/gogo/protobuf/proto"
@@ -352,11 +354,9 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string) ([]st
 	query := "select distinct workflow from _vt.vreplication where state <> 'Stopped'"
 	results, err := wr.runVexec(ctx, "", keyspace, query, false)
 	if err != nil {
-		println("Got here")
-		fmt.Printf("error: %v", err.Error())
 		return nil, err
 	}
-	var workflows []string
+	workflowsSet := sets.NewString()
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			continue
@@ -364,10 +364,12 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string) ([]st
 		qr := sqltypes.Proto3ToResult(result)
 		for _, row := range qr.Rows {
 			for _, value := range row {
-				workflows = append(workflows, value.ToString())
+				// Even though we query for distinct, we must de-dup because we query per master tablet.
+				workflowsSet.Insert(value.ToString())
 			}
 		}
 	}
+	workflows := workflowsSet.List()
 	wr.printWorkflowList(workflows)
 	return workflows, nil
 }

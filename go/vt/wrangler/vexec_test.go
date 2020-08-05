@@ -296,15 +296,13 @@ func TestWorkflowListAll(t *testing.T) {
 	ctx := context.Background()
 	keyspace := "target"
 	workflow := "wrWorkflow"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "select distinct workflow from _vt.vreplication where state != 'Stopped'", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
 	workflows, err := wr.ListAllWorkflows(ctx, keyspace)
 	require.Nil(t, err)
-	want := "Workflow: wrWorkflow"
-	require.Equal(t, want, logger.String())
 	require.Equal(t, []string{workflow}, workflows)
 }
 
