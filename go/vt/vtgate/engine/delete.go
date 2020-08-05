@@ -178,12 +178,10 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 			BindVariables: bindVars,
 		}
 	}
-	if len(del.Table.Owned) > 0 {
-		err = del.deleteVindexEntries(vcursor, bindVars, rss)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// TODO @rafael: Add supports for owned vindexes here.
+	// At the moment this will leave orphaned rows in the owned vindex.
+	// However when using this functionality we are assuming the user
+	// is intending to bypass V3 functionality.
 	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
 }
 
