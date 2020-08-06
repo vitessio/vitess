@@ -149,7 +149,6 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 			fmt.Sprintf("1|%v|pos||0|Running|vt_target|1234|", bls),
 		)
 		env.tmc.setVRResults(master.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'", result)
-		//"
 		env.tmc.setVRResults(
 			master.tablet,
 			"select source, pos from _vt.vreplication where db_name='vt_target' and workflow='wrWorkflow'",
@@ -159,6 +158,12 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 				posRows...,
 			),
 		)
+		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"workflow",
+			"varchar"),
+			"wrWorkflow",
+		)
+		env.tmc.setVRResults(master.tablet, "select distinct workflow from _vt.vreplication where state != 'Stopped' and db_name = 'vt_target'", result)
 
 		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"table|lastpk",
