@@ -83,7 +83,7 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	case In:
 		return del.execDeleteIn(vcursor, bindVars)
 	case Scatter:
-		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
+		return del.execDeleteScatter(vcursor, bindVars, key.DestinationAllShards{})
 	case ByDestination:
 		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
 	default:
@@ -148,6 +148,26 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execDeleteScatter")
+	}
+
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{
+			Sql:           del.Query,
+			BindVariables: bindVars,
+		}
+	}
+	// TODO @rafael: Add supports for owned vindexes here.
+	// At the moment this will leave orphaned rows in the owned vindex.
+	// However when using this functionality we are assuming the user
+	// is intending to bypass V3 functionality.
+	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
+}
+
+func (del *Delete) execDeleteScatter(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteScatter")
