@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -49,7 +48,7 @@ type Controller interface {
 	Stats() *tabletenv.Stats
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(querypb.Target, *dbconfigs.DBConfigs, mysqlctl.MysqlDaemon) error
+	InitDBConfig(target querypb.Target, dbConfigs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.
@@ -84,9 +83,6 @@ type Controller interface {
 
 	// SchemaEngine returns the SchemaEngine object used by this Controller
 	SchemaEngine() *schema.Engine
-
-	// ApplyOnlineSchemaChange runs an online schema change operation
-	ApplyOnlineSchemaChange(ctx context.Context, change *tmutils.SchemaChange, dbName string) error
 
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth()

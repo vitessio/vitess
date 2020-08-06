@@ -24,7 +24,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -273,7 +272,7 @@ func (exec *TabletExecutor) executeOnAllTablets(
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 		}
-		// return
+		return
 	}
 
 	var wg sync.WaitGroup
@@ -284,11 +283,7 @@ func (exec *TabletExecutor) executeOnAllTablets(
 	for _, tablet := range exec.tablets {
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
-			if executeOnlineSchemaChange {
-				exec.executeOnlineSchemaChangeOneTablet(ctx, tablet, sql, errChan, successChan)
-			} else {
-				exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
-			}
+			exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
 		}(tablet)
 	}
 	wg.Wait()
@@ -348,29 +343,6 @@ func (exec *TabletExecutor) executeOneTablet(
 		Shard:    tablet.Shard,
 		Result:   result,
 		Position: pos,
-	}
-}
-
-// executeOnlineSchemaChangeOneTablet will request the tablet to run an online schema change
-func (exec *TabletExecutor) executeOnlineSchemaChangeOneTablet(
-	ctx context.Context,
-	tablet *topodatapb.Tablet,
-	sql string,
-	errChan chan ShardWithError,
-	successChan chan ShardResult,
-) {
-	change := &tmutils.SchemaChange{
-		SQL:    sql,
-		Online: true,
-		Hint:   "", // TODO(shlomi) generate and populate hint
-	}
-	_, err := exec.wr.TabletManagerClient().ApplySchema(ctx, tablet, change)
-	if err != nil {
-		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
-		return
-	}
-	successChan <- ShardResult{
-		Shard: tablet.Shard,
 	}
 }
 
