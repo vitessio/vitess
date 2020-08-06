@@ -188,75 +188,83 @@ func TestWorkflowListStreams(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	err := wr.listStreams(ctx, workflow, keyspace)
+	_, err := wr.ShowWorkflow(ctx, workflow, keyspace)
 	require.Nil(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
 	"SourceKeyspace": "source",
 	"TargetKeyspace": "target",
-	"Statuses": {
-		"-80/zone1-0000000200": [
-			{
-				"Shard": "-80",
-				"Tablet": "zone1-0000000200",
-				"ID": 1,
-				"Bls": {
-					"keyspace": "source",
-					"shard": "0",
-					"filter": {
-						"rules": [
-							{
-								"match": "t1"
-							}
-						]
-					}
-				},
-				"Pos": "pos",
-				"StopPos": "",
-				"State": "Copying",
-				"MaxReplicationLag": 0,
-				"DBName": "vt_target",
-				"TimeUpdated": 1234,
-				"Message": "",
-				"CopyState": [
-					{
-						"Table": "t",
-						"LastPK": "1"
-					}
-				]
-			}
-		],
-		"80-/zone1-0000000210": [
-			{
-				"Shard": "80-",
-				"Tablet": "zone1-0000000210",
-				"ID": 1,
-				"Bls": {
-					"keyspace": "source",
-					"shard": "0",
-					"filter": {
-						"rules": [
-							{
-								"match": "t1"
-							}
-						]
-					}
-				},
-				"Pos": "pos",
-				"StopPos": "",
-				"State": "Copying",
-				"MaxReplicationLag": 0,
-				"DBName": "vt_target",
-				"TimeUpdated": 1234,
-				"Message": "",
-				"CopyState": [
-					{
-						"Table": "t",
-						"LastPK": "1"
-					}
-				]
-			}
-		]
+	"ShardStatuses": {
+		"-80/zone1-0000000200": {
+			"MasterReplicationStatuses": [
+				{
+					"Shard": "-80",
+					"Tablet": "zone1-0000000200",
+					"ID": 1,
+					"Bls": {
+						"keyspace": "source",
+						"shard": "0",
+						"filter": {
+							"rules": [
+								{
+									"match": "t1"
+								}
+							]
+						}
+					},
+					"Pos": "pos",
+					"StopPos": "",
+					"State": "Copying",
+					"MaxReplicationLag": 0,
+					"DBName": "vt_target",
+					"TimeUpdated": 1234,
+					"Message": "",
+					"CopyState": [
+						{
+							"Table": "t",
+							"LastPK": "1"
+						}
+					]
+				}
+			],
+			"TabletControls": null,
+			"MasterIsServing": true
+		},
+		"80-/zone1-0000000210": {
+			"MasterReplicationStatuses": [
+				{
+					"Shard": "80-",
+					"Tablet": "zone1-0000000210",
+					"ID": 1,
+					"Bls": {
+						"keyspace": "source",
+						"shard": "0",
+						"filter": {
+							"rules": [
+								{
+									"match": "t1"
+								}
+							]
+						}
+					},
+					"Pos": "pos",
+					"StopPos": "",
+					"State": "Copying",
+					"MaxReplicationLag": 0,
+					"DBName": "vt_target",
+					"TimeUpdated": 1234,
+					"Message": "",
+					"CopyState": [
+						{
+							"Table": "t",
+							"LastPK": "1"
+						}
+					]
+				}
+			],
+			"TabletControls": null,
+			"MasterIsServing": true
+		}
 	}
 }
 
