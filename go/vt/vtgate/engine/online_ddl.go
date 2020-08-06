@@ -17,8 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -69,14 +67,11 @@ func (v *OnlineDDL) GetTableName() string {
 
 //Execute implements the Primitive interface
 func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	// TODO(shlomi) implement an online schema change by writing to topo
-
-	fmt.Printf("==================== inside Execute!\n")
-	change, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL)
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL)
 	if err != nil {
 		return result, err
 	}
-	err = vcursor.SubmitOnlineDDL(change)
+	err = vcursor.SubmitOnlineDDL(onlineDDL)
 	if err != nil {
 		return result, err
 	}
@@ -90,7 +85,7 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 		},
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary(change.UUID),
+				sqltypes.NewVarBinary(onlineDDL.UUID),
 			},
 		},
 		RowsAffected: 1,
