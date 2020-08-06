@@ -478,7 +478,7 @@ var commands = []commandGroup{
 		"Workflow", []command{
 			{"Workflow", commandWorkflow,
 				"<ks.workflow> <action> --dry-run",
-				"Start/Stop/Delete/List/ListAll Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
+				"Start/Stop/Delete/Show/ListAll Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
 	},
@@ -2967,7 +2967,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		return err
 	}
-	if action == "list" || action == "listall" {
+	if action == "show" || action == "listall" {
 		return nil
 	}
 	if len(results) == 0 {
