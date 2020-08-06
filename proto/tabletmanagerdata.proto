@@ -210,8 +210,6 @@ message ApplySchemaRequest {
   bool allow_replication = 3;
   SchemaDefinition before_schema = 4;
   SchemaDefinition after_schema = 5;
-  bool online = 6;
-  string hint = 7;
 }
 
 message ApplySchemaResponse {
