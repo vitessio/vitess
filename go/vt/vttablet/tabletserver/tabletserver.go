@@ -41,7 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -214,7 +213,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
-	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, "TODO (shlomi)")
 	return nil
 }
 
@@ -1490,16 +1489,6 @@ func (tsv *TabletServer) SetTracking(enabled bool) {
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHistorian(enabled bool) {
 	_ = tsv.se.EnableHistorian(enabled)
-}
-
-// ApplyOnlineSchemaChange runs an online schema migration on this tablet server
-func (tsv *TabletServer) ApplyOnlineSchemaChange(ctx context.Context, change *tmutils.SchemaChange, dbName string) error {
-	// Table name is not provided in the below. That's because the SQL includes table name as part of
-	// ALTER TABLE statement, _and_ we assume gh-ost supports parsing and extracing the table from that statement
-	// see https://github.com/openark/gh-ost/pull/5 or https://github.com/github/gh-ost/pull/865
-	err := tsv.onlineDDLExecutor.Execute(ctx, tsv.sm.target, tsv.alias, dbName, "", change.SQL)
-
-	return err
 }
 
 // SetPoolSize changes the pool size to the specified value.

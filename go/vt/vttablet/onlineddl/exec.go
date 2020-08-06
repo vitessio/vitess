@@ -62,11 +62,11 @@ func createTempDir() (dirName string, err error) {
 	return ioutil.TempDir("", "gh-ost-*")
 }
 
-// createTempFile creates a file in given directory and with given text as content.
-func createTempFile(dirName, fileName, text string) (fullName string, err error) {
+// createTempScript creates an executable file in given directory and with given text as content.
+func createTempScript(dirName, fileName, text string) (fullName string, err error) {
 	fullName = filepath.Join(dirName, fileName)
 	bytes := []byte(text)
-	err = ioutil.WriteFile(fullName, bytes, 0644)
+	err = ioutil.WriteFile(fullName, bytes, 0755)
 	return fullName, err
 }
 

@@ -58,17 +58,13 @@ func runMigrationRequestChecks(ts *topo.Server) {
 
 func reviewMigrationRequest(ctx context.Context, ts *topo.Server, conn topo.Conn, uuid string) error {
 	entryPath := fmt.Sprintf("%s/%s", schema.MigrationRequestsPath(), uuid)
-	bytes, _, err := conn.Get(ctx, entryPath)
+	onlineDDL, err := schema.ReadTopo(ctx, conn, entryPath)
 	if err != nil {
-		return fmt.Errorf("topo Get %s error: %s", entryPath, err.Error())
-	}
-	onlineDDL, err := schema.FromJSON(bytes)
-	if err != nil {
-		return fmt.Errorf("unmarshal %s error: %s", entryPath, err.Error())
+		return err
 	}
 	log.Infof("Found schema migration request: %+v", onlineDDL)
 
-	onlineDDL.Status = schema.OnlineDDLStatusReviewed
+	onlineDDL.Status = schema.OnlineDDLStatusQueued
 
 	shardNames, err := ts.GetShardNames(ctx, onlineDDL.Keyspace)
 	if err != nil {
@@ -80,7 +76,7 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, conn topo.Conn
 		}
 	}
 
-	if err := onlineDDL.WriteTopo(ctx, conn, schema.MigrationReviewedPath()); err != nil {
+	if err := onlineDDL.WriteTopo(ctx, conn, schema.MigrationQueuedPath()); err != nil {
 		return fmt.Errorf("unable to write reviewed migration: %+v, error: %s", onlineDDL, err)
 	}
 	if err := conn.Delete(ctx, entryPath, nil); err != nil {

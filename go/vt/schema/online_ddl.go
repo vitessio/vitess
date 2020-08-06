@@ -42,10 +42,10 @@ func MigrationRequestsPath() string {
 	return fmt.Sprintf("%s/requests", MigrationBasePath())
 }
 
-// MigrationReviewedPath is the base path for schema migrations that have been reviewed. Kept for
-// historical reference
-func MigrationReviewedPath() string {
-	return fmt.Sprintf("%s/reviewed", MigrationBasePath())
+// MigrationQueuedPath is the base path for schema migrations that have been reviewed and
+// queued for execution. Kept for historical reference
+func MigrationQueuedPath() string {
+	return fmt.Sprintf("%s/queued", MigrationBasePath())
 }
 
 // MigrationJobsKeyspacePath is the base path for a tablet job, by keyspace
@@ -63,7 +63,6 @@ type OnlineDDLStatus string
 
 const (
 	OnlineDDLStatusRequested OnlineDDLStatus = "requested"
-	OnlineDDLStatusReviewed  OnlineDDLStatus = "reviewed"
 	OnlineDDLStatusCancelled OnlineDDLStatus = "cancelled"
 	OnlineDDLStatusQueued    OnlineDDLStatus = "queued"
 	OnlineDDLStatusReady     OnlineDDLStatus = "ready"
@@ -90,6 +89,19 @@ func FromJSON(bytes []byte) (*OnlineDDL, error) {
 	return onlineDDL, err
 }
 
+// ReadTopo reads a OnlineDDL object from given topo connection
+func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL, error) {
+	bytes, _, err := conn.Get(ctx, entryPath)
+	if err != nil {
+		return nil, fmt.Errorf("ReadTopo Get %s error: %s", entryPath, err.Error())
+	}
+	onlineDDL, err := FromJSON(bytes)
+	if err != nil {
+		return nil, fmt.Errorf("ReadTopo unmarshal %s error: %s", entryPath, err.Error())
+	}
+	return onlineDDL, nil
+}
+
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
 func NewOnlineDDL(keyspace string, table string, sql string) (*OnlineDDL, error) {
 	uuid, err := CreateUUID()
@@ -109,7 +121,7 @@ func NewOnlineDDL(keyspace string, table string, sql string) (*OnlineDDL, error)
 
 // JobsKeyspaceShardPath returns job/<keyspace>/<shard>/<uuid>
 func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
-	return fmt.Sprintf("%s/%s", MigrationJobsKeyspaceShardPath(onlineDDL.Keyspace, shard), onlineDDL.UUID)
+	return MigrationJobsKeyspaceShardPath(onlineDDL.Keyspace, shard)
 }
 
 // ToJSON exports this onlineDDL to JSON

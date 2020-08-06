@@ -34,17 +34,73 @@ const (
 		strategy varchar(128) NOT NULL,
 		added_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		ready_timestamp timestamp NULL DEFAULT NULL,
-		assigned_timestamp timestamp NULL DEFAULT NULL,
 		started_timestamp timestamp NULL DEFAULT NULL,
 		liveness_timestamp timestamp NULL DEFAULT NULL,
 		completed_timestamp timestamp NULL DEFAULT NULL,
 		migration_status varchar(128) NOT NULL,
 		PRIMARY KEY (id),
-		KEY uuid_idx (migration_uuid),
+		UNIQUE KEY uuid_idx (migration_uuid),
 		KEY keyspace_shard_idx (keyspace,shard),
 		KEY status_idx (migration_status, liveness_timestamp)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	sqlValidationQuery = `select 1 from schema_migrations limit 1`
+	sqlValidationQuery       = `select 1 from schema_migrations limit 1`
+	sqlInsertSchemaMigration = `INSERT IGNORE INTO %s.schema_migrations (
+		migration_uuid,
+		keyspace,
+		shard,
+		mysql_table,
+		migration_statement,
+		strategy,
+		migration_status
+	) VALUES (
+		%a, %a, %a, %a, %a, %a, %a
+	)`
+	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
+		SET
+			migration_status='ready',
+			ready_timestamp=NOW()
+		WHERE
+			migration_status='queued'
+		ORDER BY
+			added_timestamp ASC
+		LIMIT 1
+	`
+	sqlUpdateMigrationState = `INSERT INTO %s.schema_migrations (
+		migration_uuid, migration_status
+	) VALUES (
+		%a, %a
+	) ON DUPLICATE KEY UPDATE
+		migration_status=VALUES(migration_status),
+		ready_timestamp=    IF(VALUES(migration_status)='ready', NOW(), ready_timestamp),
+		started_timestamp=  IF(VALUES(migration_status) IN ('running', 'complete', 'failed') AND started_timestamp IS NULL, NOW(), started_timestamp),
+		liveness_timestamp= IF(VALUES(migration_status) IN ('running', 'complete'), NOW(), liveness_timestamp),
+		completed_timestamp=IF(VALUES(migration_status) IN ('complete', 'failed'), NOW(), completed_timestamp)
+	`
+	sqlSelectCountReadyMigrations = `SELECT
+			count(*) as count_ready
+		FROM %s.schema_migrations
+		WHERE
+			migration_status='ready'
+	`
+	sqlSelectReadyMigration = `SELECT
+			id,
+			migration_uuid,
+			keyspace,
+			shard,
+			mysql_table,
+			migration_statement,
+			strategy,
+			added_timestamp,
+			ready_timestamp,
+			started_timestamp,
+			liveness_timestamp,
+			completed_timestamp,
+			migration_status
+		FROM %s.schema_migrations
+		WHERE
+			migration_status='ready'
+		LIMIT 1
+	`
 )
 
 var withDDL = withddl.New([]string{
