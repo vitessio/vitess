@@ -241,7 +241,6 @@ func (e *Executor) Execute(ctx context.Context, onlineDDL *schema.OnlineDDL) err
 	if err != nil {
 		err := fmt.Errorf("Error creating gh-ost user: %+v", err)
 		log.Errorf(err.Error())
-		fmt.Printf("=================== error: %+v\n", err)
 		return err
 	}
 	tempDir, err := createTempDir()
