@@ -107,6 +107,18 @@ const (
 	`
 )
 
+var (
+	sqlCreateGhostUser = []string{
+		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
+		`ALTER USER %s IDENTIFIED BY '%s'`,
+	}
+	sqlGrantGhostUser = []string{
+		`GRANT SUPER, REPLICATION SLAVE ON *.* TO %s`,
+		`GRANT ALTER, CREATE, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
+	}
+	sqlDropGhostUser = `DROP USER IF EXISTS %s`
+)
+
 var withDDL = withddl.New([]string{
 	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
 	fmt.Sprintf(sqlCreateSchemaMigrationsTable, "_vt"),

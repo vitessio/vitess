@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
@@ -46,6 +47,12 @@ var (
 	ErrExecutorNotWritableTablet = errors.New("Cannot run gh-ost migration on non-writable tablet")
 	// ErrExecutorMigrationAlreadyRunning is generated when an attempt is made to run an operation that conflicts with a running migration
 	ErrExecutorMigrationAlreadyRunning = errors.New("Cannot run gh-ost migration since a migration is already running")
+)
+
+const (
+	maxPasswordLength = 32 // MySQL's *replication* password may not exceed 32 characters
+	ghostUser         = "gh-ost"
+	ghostGrant        = "'gh-ost'@'127.0.0.1'"
 )
 
 // Executor wraps and manages the execution of a gh-ost migration.
@@ -75,6 +82,7 @@ var (
 func NewExecutor(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
 	return &Executor{
 		env: env,
+
 		pool: connpool.NewPool(env, "ExecutorPool", tabletenv.ConnPoolConfig{
 			Size:               1,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
@@ -167,6 +175,44 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port in
 	return host, port, readOnly, nil
 }
 
+// createGhostUser creates a gh-ost user account with all neccessary privileges and with a random password
+func (e *Executor) createGhostUser(ctx context.Context) (password string, err error) {
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
+	if err != nil {
+		return password, err
+	}
+	defer conn.Close()
+
+	password = RandomHash()[0:maxPasswordLength]
+
+	for _, query := range sqlCreateGhostUser {
+		parsed := sqlparser.BuildParsedQuery(query, ghostGrant, password)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return password, err
+		}
+	}
+	for _, query := range sqlGrantGhostUser {
+		parsed := sqlparser.BuildParsedQuery(query, ghostGrant)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return password, err
+		}
+	}
+	return password, err
+}
+
+// dropGhostUser drops the given gh-ost user account at the end of migration
+func (e *Executor) dropGhostUser(ctx context.Context, user string) error {
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	parsed := sqlparser.BuildParsedQuery(sqlDropGhostUser, user)
+	_, err = conn.ExecuteFetch(parsed.Query, 0, false)
+	return err
+}
+
 // Execute validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binray itself
 // Execution runs first a dry run, then an actual migration
@@ -189,6 +235,13 @@ func (e *Executor) Execute(ctx context.Context, onlineDDL *schema.OnlineDDL) err
 	if readOnly {
 		err := fmt.Errorf("Error before running gh-ost: MySQL server is read_only")
 		log.Errorf(err.Error())
+		return err
+	}
+	ghostPassword, err := e.createGhostUser(ctx)
+	if err != nil {
+		err := fmt.Errorf("Error creating gh-ost user: %+v", err)
+		log.Errorf(err.Error())
+		fmt.Printf("=================== error: %+v\n", err)
 		return err
 	}
 	tempDir, err := createTempDir()
@@ -252,15 +305,14 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 	log.Infof("+ OK")
 
 	runGhost := func(execute bool) error {
-		// TODO[(shlomi, the code below assumes user+password are gh-ost:gh-ost)]: externalize credentials before submitting the PR
 		_, err := execCmd(
 			"bash",
 			[]string{
 				wrapperScriptFileName,
 				fmt.Sprintf(`--host=%s`, mysqlHost),
 				fmt.Sprintf(`--port=%d`, mysqlPort),
-				`--user=gh-ost`,
-				`--password=gh-ost`,
+				fmt.Sprintf(`--user=%s`, ghostUser),
+				fmt.Sprintf(`--password=%s`, ghostPassword),
 				`--allow-on-master`,
 				`--max-load=Threads_running=100`,
 				`--critical-load=Threads_running=200`,
@@ -290,6 +342,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 	atomic.StoreInt64(&e.migrationRunning, 1)
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
+		defer e.dropGhostUser(ctx, ghostGrant)
+
 		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
 		if err := runGhost(false); err != nil {
 			log.Errorf("Error executing gh-ost dry run: %+v", err)
@@ -439,7 +493,6 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	}
 	named := r.Named()
 	for _, row := range named.Rows {
-		fmt.Printf("============= is ready: %+v\n", row["migration_uuid"])
 		onlineDDL := &schema.OnlineDDL{
 			Keyspace: row["keyspace"].ToString(),
 			Table:    row["mysql_table"].ToString(),
@@ -522,8 +575,6 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
 func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam string) (err error) {
-	fmt.Printf("==============OnSchemaMigrationStatus %+v, %+v, %+v\n", uuidParam, statusParam, dryrunParam)
-
 	status := schema.OnlineDDLStatus(statusParam)
 	dryRun := (dryrunParam == "true")
 
