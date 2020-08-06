@@ -473,8 +473,55 @@ func (e *Executor) onMigrationCheckTick() {
 	e.runNextMigration(ctx)
 }
 
+func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid string) error {
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStartedTimestamp, "_vt",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_uuid": sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn string, uuid string) error {
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationTimestamp, "_vt", timestampColumn,
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_uuid": sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStatus, "_vt",
+		":migration_status",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_status": sqltypes.StringBindVariable(string(status)),
+		"migration_uuid":   sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
-func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam string) error {
+func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam string) (err error) {
 	fmt.Printf("==============OnSchemaMigrationStatus %+v, %+v, %+v\n", uuidParam, statusParam, dryrunParam)
 
 	status := schema.OnlineDDLStatus(statusParam)
@@ -484,23 +531,31 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 		// We don't consider dry-run reports unless there's a failure
 		return nil
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationState, "_vt",
-		":migration_uuid",
-		":migration_status",
-	)
-	bindVars := map[string]*querypb.BindVariable{
-		"migration_uuid":   sqltypes.StringBindVariable(uuidParam),
-		"migration_status": sqltypes.StringBindVariable(string(status)),
+	switch status {
+	case schema.OnlineDDLStatusReady:
+		{
+			err = e.updateMigrationTimestamp(ctx, "ready_timestamp", uuidParam)
+		}
+	case schema.OnlineDDLStatusRunning:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
+			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuidParam)
+		}
+	case schema.OnlineDDLStatusComplete:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
+			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuidParam)
+		}
+	case schema.OnlineDDLStatusFailed:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
+			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuidParam)
+		}
 	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("=========== query: %+v \n", bound)
-	_, err = e.execQuery(ctx, bound)
-
-	if err != nil {
-		fmt.Printf("=========== query err: %+v \n", err)
+	if err = e.updateMigrationStatus(ctx, uuidParam, status); err != nil {
 		return err
 	}
 

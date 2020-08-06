@@ -65,16 +65,20 @@ const (
 			added_timestamp ASC
 		LIMIT 1
 	`
-	sqlUpdateMigrationState = `INSERT INTO %s.schema_migrations (
-		migration_uuid, migration_status
-	) VALUES (
-		%a, %a
-	) ON DUPLICATE KEY UPDATE
-		migration_status=VALUES(migration_status),
-		ready_timestamp=    IF(VALUES(migration_status)='ready', NOW(), ready_timestamp),
-		started_timestamp=  IF(VALUES(migration_status) IN ('running', 'complete', 'failed') AND started_timestamp IS NULL, NOW(), started_timestamp),
-		liveness_timestamp= IF(VALUES(migration_status) IN ('running', 'complete'), NOW(), liveness_timestamp),
-		completed_timestamp=IF(VALUES(migration_status) IN ('complete', 'failed'), NOW(), completed_timestamp)
+	sqlUpdateMigrationStatus = `UPDATE %s.schema_migrations
+			SET migration_status=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationStartedTimestamp = `UPDATE %s.schema_migrations
+			SET started_timestamp=IFNULL(started_timestamp, NOW())
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationTimestamp = `UPDATE %s.schema_migrations
+			SET %s=NOW()
+		WHERE
+			migration_uuid=%a
 	`
 	sqlSelectCountReadyMigrations = `SELECT
 			count(*) as count_ready
