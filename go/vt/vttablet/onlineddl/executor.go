@@ -243,9 +243,18 @@ func (e *Executor) Execute(ctx context.Context, onlineDDL *schema.OnlineDDL) err
 		log.Errorf(err.Error())
 		return err
 	}
-	tempDir, err := createTempDir()
+	tempDir, err := createTempDir(onlineDDL.UUID)
 	if err != nil {
 		log.Errorf("Error creating temporary directory: %+v", err)
+		return err
+	}
+	credentialsConfigFileContent := fmt.Sprintf(`[client]
+user=%s
+password=${GH_OST_PASSWORD}
+`, ghostUser)
+	credentialsConfigFileName, err := createTempScript(tempDir, "gh-ost-conf.cfg", credentialsConfigFileContent)
+	if err != nil {
+		log.Errorf("Error creating config file: %+v", err)
 		return err
 	}
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
@@ -254,6 +263,7 @@ ghost_log_file=gh-ost.log
 
 mkdir -p "$ghost_log_path"
 
+export GH_OST_PASSWORD
 echo "executing: gh-ost" "$@" > "$ghost_log_path/$ghost_log_file.exec"
 gh-ost "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
 	`, tempDir,
@@ -304,14 +314,14 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 	log.Infof("+ OK")
 
 	runGhost := func(execute bool) error {
+		os.Setenv("GH_OST_PASSWORD", ghostPassword)
 		_, err := execCmd(
 			"bash",
 			[]string{
 				wrapperScriptFileName,
 				fmt.Sprintf(`--host=%s`, mysqlHost),
 				fmt.Sprintf(`--port=%d`, mysqlPort),
-				fmt.Sprintf(`--user=%s`, ghostUser),
-				fmt.Sprintf(`--password=%s`, ghostPassword),
+				fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
 				`--allow-on-master`,
 				`--max-load=Threads_running=100`,
 				`--critical-load=Threads_running=200`,

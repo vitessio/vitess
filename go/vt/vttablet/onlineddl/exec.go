@@ -58,7 +58,10 @@ func execCmd(name string, args, env []string, dir string, input io.Reader, outpu
 }
 
 // createTempDir creates a temporary directory and returns its name
-func createTempDir() (dirName string, err error) {
+func createTempDir(hint string) (dirName string, err error) {
+	if hint != "" {
+		return ioutil.TempDir("", fmt.Sprintf("gh-ost-%s-*", hint))
+	}
 	return ioutil.TempDir("", "gh-ost-*")
 }
 
