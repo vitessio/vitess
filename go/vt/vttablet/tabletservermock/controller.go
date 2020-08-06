@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -202,11 +201,6 @@ func (tqsc *Controller) QueryService() queryservice.QueryService {
 
 // SchemaEngine is part of the tabletserver.Controller interface
 func (tqsc *Controller) SchemaEngine() *schema.Engine {
-	return nil
-}
-
-// ApplyOnlineSchemaChange is part of the tabletserver.Controller interface
-func (tqsc *Controller) ApplyOnlineSchemaChange(ctx context.Context, change *tmutils.SchemaChange, dbName string) error {
 	return nil
 }
 
