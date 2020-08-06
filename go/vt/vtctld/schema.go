@@ -92,9 +92,7 @@ func reviewMigrationRequests(ctx context.Context, ts *topo.Server, conn topo.Con
 		return err
 	}
 
-	fmt.Printf("=============== ListDir=%+v\n", entries)
 	for _, entry := range entries {
-		fmt.Printf("=== entry %+v: \n", entry)
 		if err := reviewMigrationRequest(ctx, ts, conn, entry.Name); err != nil {
 			log.Errorf("vtctld.reviewMigrationRequest %s error: %s", entry.Name, err.Error())
 			continue
