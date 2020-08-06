@@ -17,8 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -83,15 +81,6 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(tm.Tablet())
-
-	if change != nil && change.Online {
-		// TODO(shlomi) remove/improve debug info
-		fmt.Printf("============= request for online schema change: %+v, dbName:  %+v \n", *change, dbName)
-		err := tm.QueryServiceControl.ApplyOnlineSchemaChange(ctx, change, dbName)
-		// ApplyOnlineSchemaChange does not return a detailed SchemaChangeResult because the schema change runs asynchonously
-		return &tabletmanagerdatapb.SchemaChangeResult{}, err
-	}
-	// Not online schema change... proceed with direct ALTER
 
 	// apply the change
 	scr, err := tm.MysqlDaemon.ApplySchemaChange(ctx, dbName, change)
