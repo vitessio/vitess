@@ -17,6 +17,9 @@ limitations under the License.
 package onlineddl
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -65,4 +68,20 @@ func createTempScript(dirName, fileName, text string) (fullName string, err erro
 	bytes := []byte(text)
 	err = ioutil.WriteFile(fullName, bytes, 0755)
 	return fullName, err
+}
+
+// RandomHash returns a 64 hex character random string
+func RandomHash() string {
+	size := 64
+	rb := make([]byte, size)
+	_, _ = rand.Read(rb)
+
+	hasher := sha256.New()
+	hasher.Write(rb)
+	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// ShortRandomHash returns a 8 hex character random string
+func ShortRandomHash() string {
+	return RandomHash()[0:8]
 }
