@@ -218,3 +218,8 @@ func (result *Result) AppendResult(src *Result) {
 	}
 	result.Rows = append(result.Rows, src.Rows...)
 }
+
+// Named returns a NamedResult based on this struct
+func (result *Result) Named() *NamedResult {
+	return ToNamedResult(result)
+}
