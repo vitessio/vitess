@@ -473,6 +473,7 @@ func (vc *vcursorImpl) SubmitOnlineDDL(change *schema.OnlineDDL) error {
 	if err != nil {
 		return err
 	}
+	// Submit an online schema change by writing a migration request in topo
 	return change.WriteTopo(vc.ctx, conn, schema.MigrationRequestsPath())
 }
 
