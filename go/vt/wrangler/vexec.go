@@ -361,6 +361,10 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	if err != nil {
 		return nil, err
 	}
+
+	// We set a topo timeout since we contact topo for the shard record.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	for master, result := range results {
 		var rsrStatus []*ReplicationStatus
 		qr := sqltypes.Proto3ToResult(result)
