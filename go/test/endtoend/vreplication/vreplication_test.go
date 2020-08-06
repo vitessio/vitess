@@ -47,7 +47,7 @@ func init() {
 	defaultReplicas = 1
 }
 
-func TestBasicVreplicationWorkflow(t *testing.T) {
+func TestVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	allCellNames = "zone1"
 	vc = InitCluster(t, []string{defaultCellName})
