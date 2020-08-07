@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"liquidata-inc/vitess/go/stats"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // ClientProtocol indicates how to connect

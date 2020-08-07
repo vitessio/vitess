@@ -26,18 +26,18 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/streamlog"
+	"github.com/liquidata-inc/vitess/go/streamlog"
 
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/tableacl"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema/schematest"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema/schematest"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 func TestStrictMode(t *testing.T) {

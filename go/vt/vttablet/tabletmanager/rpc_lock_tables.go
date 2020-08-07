@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"liquidata-inc/vitess/go/sqlescape"
-	"liquidata-inc/vitess/go/vt/dbconnpool"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/sqlescape"
+	"github.com/liquidata-inc/vitess/go/vt/dbconnpool"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
 	"golang.org/x/net/context"
 )

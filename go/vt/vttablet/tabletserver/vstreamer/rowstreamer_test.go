@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 func TestStreamRowsScan(t *testing.T) {

@@ -22,11 +22,11 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/throttler"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/throttler"
 
-	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
-	throttlerservicepb "liquidata-inc/vitess/go/vt/proto/throttlerservice"
+	throttlerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	throttlerservicepb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerservice"
 )
 
 // Server is the gRPC server implementation of the Throttler service.

@@ -18,8 +18,8 @@ package mysqlctl
 
 import (
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // GetPermissions lists the permissions on the mysqld.

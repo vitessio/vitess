@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/mysql"
 )
 
 // MySQLManager is an interface to a mysqld process manager, capable

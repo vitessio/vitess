@@ -18,15 +18,15 @@ limitations under the License.
 // implementations. If you are testing your implementation, you will
 // want to call TopoServerTestSuite in your test method. For an
 // example, look at the tests in
-// liquidata-inc/vitess/go/vt/topo/memorytopo.
+// github.com/liquidata-inc/vitess/go/vt/topo/memorytopo.
 package test
 
 import (
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // LocalCellName is the cell name used by this test suite.

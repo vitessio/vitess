@@ -21,7 +21,7 @@ import (
 	"net"
 	"os"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

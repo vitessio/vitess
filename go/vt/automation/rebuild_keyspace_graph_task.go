@@ -18,7 +18,7 @@ package automation
 
 import (
 	"golang.org/x/net/context"
-	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
+	automationpb "github.com/liquidata-inc/vitess/go/vt/proto/automation"
 )
 
 // RebuildKeyspaceGraphTask runs vtctl RebuildKeyspaceGraph to migrate a serving

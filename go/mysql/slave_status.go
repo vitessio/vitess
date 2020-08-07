@@ -17,8 +17,8 @@ limitations under the License.
 package mysql
 
 import (
-	replicationdatapb "liquidata-inc/vitess/go/vt/proto/replicationdata"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	replicationdatapb "github.com/liquidata-inc/vitess/go/vt/proto/replicationdata"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 )
 
 // SlaveStatus holds replication information from SHOW SLAVE STATUS.

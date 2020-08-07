@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"testing"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 func TestTypeValues(t *testing.T) {

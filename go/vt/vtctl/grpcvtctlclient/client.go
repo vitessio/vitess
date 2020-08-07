@@ -23,13 +23,13 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"liquidata-inc/vitess/go/vt/grpcclient"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/grpcclient"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
-	vtctldatapb "liquidata-inc/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "liquidata-inc/vitess/go/vt/proto/vtctlservice"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
+	vtctldatapb "github.com/liquidata-inc/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "github.com/liquidata-inc/vitess/go/vt/proto/vtctlservice"
 )
 
 var (

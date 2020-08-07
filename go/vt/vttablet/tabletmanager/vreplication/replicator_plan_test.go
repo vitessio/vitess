@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"liquidata-inc/vitess/go/sqltypes"
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 type TestReplicatorPlan struct {

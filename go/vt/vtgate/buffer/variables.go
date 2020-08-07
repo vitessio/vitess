@@ -17,7 +17,7 @@ limitations under the License.
 package buffer
 
 import (
-	"liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/stats"
 )
 
 // This file contains all status variables which can be used to monitor the

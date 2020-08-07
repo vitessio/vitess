@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 )
 
 type fakeDBClient struct {

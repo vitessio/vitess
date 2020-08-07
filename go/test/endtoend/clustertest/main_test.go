@@ -22,8 +22,8 @@ import (
 	"os"
 	"testing"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/test/endtoend/cluster"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/test/endtoend/cluster"
 )
 
 var (

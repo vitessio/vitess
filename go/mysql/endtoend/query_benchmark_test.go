@@ -24,9 +24,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql"
-	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
-	"liquidata-inc/vitess/go/vt/vttest"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	vttestpb "github.com/liquidata-inc/vitess/go/vt/proto/vttest"
+	"github.com/liquidata-inc/vitess/go/vt/vttest"
 )
 
 // This file contains various long-running tests for mysql.

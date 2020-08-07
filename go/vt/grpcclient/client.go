@@ -26,12 +26,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
-	"liquidata-inc/vitess/go/trace"
+	"github.com/liquidata-inc/vitess/go/trace"
 
-	"liquidata-inc/vitess/go/vt/grpccommon"
-	"liquidata-inc/vitess/go/vt/vttls"
+	"github.com/liquidata-inc/vitess/go/vt/grpccommon"
+	"github.com/liquidata-inc/vitess/go/vt/vttls"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

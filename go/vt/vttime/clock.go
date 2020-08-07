@@ -19,7 +19,7 @@ package vttime
 import (
 	"flag"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

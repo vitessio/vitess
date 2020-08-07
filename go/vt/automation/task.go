@@ -17,7 +17,7 @@ limitations under the License.
 package automation
 
 import (
-	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
+	automationpb "github.com/liquidata-inc/vitess/go/vt/proto/automation"
 )
 
 // Task implementations can be executed by the scheduler.

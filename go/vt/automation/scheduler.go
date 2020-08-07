@@ -27,9 +27,9 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/log"
-	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	automationpb "github.com/liquidata-inc/vitess/go/vt/proto/automation"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 )
 
 type schedulerState int32

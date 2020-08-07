@@ -19,7 +19,7 @@ package simpleacl
 import (
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/tableacl/testlib"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl/testlib"
 )
 
 func TestSimpleAcl(t *testing.T) {

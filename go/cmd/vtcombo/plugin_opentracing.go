@@ -17,9 +17,9 @@ limitations under the License.
 package main
 
 import (
-	"liquidata-inc/vitess/go/trace"
+	"github.com/liquidata-inc/vitess/go/trace"
 
-	"liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
 )
 
 func init() {

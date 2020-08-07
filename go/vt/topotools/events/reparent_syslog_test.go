@@ -20,10 +20,10 @@ import (
 	"log/syslog"
 	"testing"
 
-	base "liquidata-inc/vitess/go/vt/events"
-	"liquidata-inc/vitess/go/vt/topo"
+	base "github.com/liquidata-inc/vitess/go/vt/events"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestReparentSyslog(t *testing.T) {

@@ -21,8 +21,8 @@ import (
 	"sort"
 	"sync"
 
-	"liquidata-inc/vitess/go/stats"
-	"liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
 )
 
 var (

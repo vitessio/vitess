@@ -19,8 +19,8 @@ package mysql
 import (
 	"encoding/binary"
 
-	"liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 )
 
 // mariadbBinlogEvent wraps a raw packet buffer and provides methods to examine

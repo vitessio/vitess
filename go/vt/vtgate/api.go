@@ -23,8 +23,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/discovery"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // This file implements a REST-style API for the vtgate web interface.

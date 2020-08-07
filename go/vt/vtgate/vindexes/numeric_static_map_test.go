@@ -22,8 +22,8 @@ import (
 
 	"strings"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/key"
 )
 
 // createVindex creates the "numeric_static_map" vindex object which is used by

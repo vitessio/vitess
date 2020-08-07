@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // Functions in this file should only be used for testing.

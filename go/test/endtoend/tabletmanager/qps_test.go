@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-	"liquidata-inc/vitess/go/mysql"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 func TestQPS(t *testing.T) {

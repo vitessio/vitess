@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/stats"
 )
 
 func TestOpenTsdbCounter(t *testing.T) {

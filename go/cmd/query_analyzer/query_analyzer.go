@@ -25,9 +25,9 @@ import (
 	"os"
 	"sort"
 
-	"liquidata-inc/vitess/go/exit"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/exit"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 var (

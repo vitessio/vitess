@@ -22,9 +22,9 @@ package vtaclcheck
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/vt/tableacl"
-	"liquidata-inc/vitess/go/vt/tableacl/simpleacl"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl/simpleacl"
 )
 
 // Options to control the explain process

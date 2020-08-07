@@ -22,9 +22,9 @@ import (
 	"sort"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/key"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/key"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // ValidateForReshard returns an error if sourceShards cannot reshard into

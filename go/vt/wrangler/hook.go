@@ -21,9 +21,9 @@ import (
 	"strings"
 
 	"golang.org/x/net/context"
-	hk "liquidata-inc/vitess/go/vt/hook"
+	hk "github.com/liquidata-inc/vitess/go/vt/hook"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // ExecuteHook will run the hook on the tablet

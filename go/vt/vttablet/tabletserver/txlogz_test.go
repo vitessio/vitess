@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/streamlog"
-	"liquidata-inc/vitess/go/sync2"
-	"liquidata-inc/vitess/go/vt/callerid"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/streamlog"
+	"github.com/liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/vt/callerid"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func testNotRedacted(t *testing.T, r *httptest.ResponseRecorder) {

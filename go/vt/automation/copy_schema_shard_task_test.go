@@ -20,8 +20,8 @@ import (
 	"flag"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/vtctl/fakevtctlclient"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/fakevtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 )
 
 func TestCopySchemaShardTask(t *testing.T) {

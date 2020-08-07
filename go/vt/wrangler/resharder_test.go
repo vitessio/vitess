@@ -23,11 +23,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/sqltypes"
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 )
 
 const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values `

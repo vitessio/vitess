@@ -19,7 +19,7 @@ package vreplication
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 // controllerPlan is the plan for vreplication control statements.

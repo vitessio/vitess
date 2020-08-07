@@ -17,7 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 // This file has functions to analyze postprocessing

@@ -27,9 +27,9 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/vt/grpcclient"
-	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
-	automationservicepb "liquidata-inc/vitess/go/vt/proto/automationservice"
+	"github.com/liquidata-inc/vitess/go/vt/grpcclient"
+	automationpb "github.com/liquidata-inc/vitess/go/vt/proto/automation"
+	automationservicepb "github.com/liquidata-inc/vitess/go/vt/proto/automationservice"
 )
 
 var (

@@ -29,7 +29,7 @@ import (
 
 	"flag"
 
-	"liquidata-inc/vitess/go/vt/env"
+	"github.com/liquidata-inc/vitess/go/vt/env"
 )
 
 // This files handles the creation of Mycnf objects for the default 'vt'

@@ -22,8 +22,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/worker/vtworkerclient"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/worker/vtworkerclient"
 )
 
 // ExecuteVtworker executes the vtworker command in "args" via an RPC to

@@ -17,7 +17,7 @@ limitations under the License.
 package servenv
 
 import (
-	"liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
 )
 
 func init() {

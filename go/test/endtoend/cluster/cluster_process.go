@@ -25,7 +25,7 @@ import (
 	"path"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // DefaultCell : If no cell name is passed, then use following

@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // VtctldProcess is a generic handle for a running vtctld .

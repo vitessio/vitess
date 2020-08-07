@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"reflect"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // ApplyVSchemaDDL applies the given DDL statement to the vschema

@@ -32,7 +32,7 @@ import (
 	"os"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/vitessdriver"
+	"github.com/liquidata-inc/vitess/go/vt/vitessdriver"
 )
 
 var (

@@ -19,5 +19,5 @@ package main
 // This plugin imports etcd2topo to register the etcd2 implementation of TopoServer.
 
 import (
-	_ "liquidata-inc/vitess/go/vt/topo/etcd2topo"
+	_ "github.com/liquidata-inc/vitess/go/vt/topo/etcd2topo"
 )

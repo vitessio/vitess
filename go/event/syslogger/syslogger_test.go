@@ -21,7 +21,7 @@ import (
 	"log/syslog"
 	"testing"
 
-	"liquidata-inc/vitess/go/event"
+	"github.com/liquidata-inc/vitess/go/event"
 )
 
 type TestEvent struct {

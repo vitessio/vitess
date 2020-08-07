@@ -23,10 +23,10 @@ import (
 	"fmt"
 	"os"
 
-	"liquidata-inc/vitess/go/exit"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/zkctl"
+	"github.com/liquidata-inc/vitess/go/exit"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/zkctl"
 )
 
 var usage = `

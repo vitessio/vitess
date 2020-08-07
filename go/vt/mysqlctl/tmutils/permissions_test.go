@@ -19,10 +19,10 @@ package tmutils
 import (
 	"testing"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func mapToSQLResults(row map[string]string) ([]*querypb.Field, []sqltypes.Value) {

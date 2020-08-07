@@ -23,7 +23,7 @@ import (
 	"html/template"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/mysql"
 )
 
 // MysqlCallInfo returns an augmented context with a CallInfo structure,

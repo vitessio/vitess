@@ -28,11 +28,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-	"liquidata-inc/vitess/go/json2"
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/test/endtoend/cluster"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/json2"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/test/endtoend/cluster"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql

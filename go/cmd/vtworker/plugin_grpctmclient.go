@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC tabletmanager client
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 )

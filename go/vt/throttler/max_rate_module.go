@@ -17,7 +17,7 @@ limitations under the License.
 package throttler
 
 import (
-	"liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/sync2"
 )
 
 // MaxRateModule allows to set and retrieve a maximum rate limit.

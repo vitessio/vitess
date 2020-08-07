@@ -17,8 +17,8 @@ limitations under the License.
 package vtqueryserver
 
 import (
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver"
 )
 
 var (

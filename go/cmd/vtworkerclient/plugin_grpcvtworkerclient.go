@@ -19,5 +19,5 @@ package main
 // Imports and registers the gRPC vtworker client.
 
 import (
-	_ "liquidata-inc/vitess/go/vt/worker/grpcvtworkerclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/worker/grpcvtworkerclient"
 )

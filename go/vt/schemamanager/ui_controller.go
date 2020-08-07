@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // UIController handles schema events.

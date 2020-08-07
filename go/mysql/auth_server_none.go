@@ -19,7 +19,7 @@ package mysql
 import (
 	"net"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // AuthServerNone takes all comers.

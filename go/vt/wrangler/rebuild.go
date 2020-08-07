@@ -18,7 +18,7 @@ package wrangler
 
 import (
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/topotools"
+	"github.com/liquidata-inc/vitess/go/vt/topotools"
 )
 
 // RebuildKeyspaceGraph rebuilds the serving graph data while locking out other changes.

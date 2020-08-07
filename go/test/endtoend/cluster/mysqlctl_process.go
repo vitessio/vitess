@@ -24,8 +24,8 @@ import (
 	"path"
 	"strings"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // MysqlctlProcess is a generic handle for a running mysqlctl command .

@@ -25,13 +25,13 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/sqltypes"
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	"liquidata-inc/vitess/go/vt/proto/vschema"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 func TestStreamMigrateMainflow(t *testing.T) {

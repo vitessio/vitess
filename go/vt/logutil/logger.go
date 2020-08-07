@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
 )
 
 // Logger defines the interface to use for our logging interface.

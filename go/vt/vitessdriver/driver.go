@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (

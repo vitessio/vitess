@@ -19,7 +19,7 @@ package trace
 import (
 	"io"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // LogErrorsWhenClosing will close the provided Closer, and log any errors it generates

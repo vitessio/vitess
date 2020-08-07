@@ -22,7 +22,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
 )
 
 func TestFindReplicationPosition(t *testing.T) {

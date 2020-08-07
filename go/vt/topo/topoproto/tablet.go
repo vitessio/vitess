@@ -26,9 +26,9 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the topodata.Tablet utility functions.

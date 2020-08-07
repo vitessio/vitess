@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/tlstest"
-	"liquidata-inc/vitess/go/vt/vttls"
+	"github.com/liquidata-inc/vitess/go/vt/tlstest"
+	"github.com/liquidata-inc/vitess/go/vt/vttls"
 )
 
 // This file tests the handshake scenarios between our client and our server.

@@ -23,13 +23,13 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/automation"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/workflow"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/vt/automation"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/workflow"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	workflowpb "liquidata-inc/vitess/go/vt/proto/workflow"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	workflowpb "github.com/liquidata-inc/vitess/go/vt/proto/workflow"
 )
 
 func createTaskID(phase workflow.PhaseType, shardName string) string {

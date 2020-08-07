@@ -36,11 +36,11 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/exit"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/topo/zk2topo"
-	"liquidata-inc/vitess/go/vt/vtctl"
+	"github.com/liquidata-inc/vitess/go/exit"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/topo/zk2topo"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl"
 )
 
 var doc = `

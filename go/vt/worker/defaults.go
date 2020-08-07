@@ -16,7 +16,7 @@ limitations under the License.
 
 package worker
 
-import "liquidata-inc/vitess/go/vt/throttler"
+import "github.com/liquidata-inc/vitess/go/vt/throttler"
 
 const (
 	defaultOnline  = true

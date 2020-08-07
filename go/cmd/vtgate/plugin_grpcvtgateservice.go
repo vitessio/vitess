@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC vtgateservice server
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vtgate/grpcvtgateservice"
+	_ "github.com/liquidata-inc/vitess/go/vt/vtgate/grpcvtgateservice"
 )

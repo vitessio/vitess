@@ -29,7 +29,7 @@ limitations under the License.
 package heartbeat
 
 import (
-	"liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/stats"
 )
 
 var (

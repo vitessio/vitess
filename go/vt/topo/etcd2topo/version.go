@@ -19,7 +19,7 @@ package etcd2topo
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // EtcdVersion is etcd's idea of a version.

@@ -18,5 +18,5 @@ package main
 
 import (
 	// Imports and register the zk2 TopologyServer
-	_ "liquidata-inc/vitess/go/vt/topo/zk2topo"
+	_ "github.com/liquidata-inc/vitess/go/vt/topo/zk2topo"
 )

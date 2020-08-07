@@ -20,7 +20,7 @@ import (
 	"flag"
 	"strings"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // TabletTypeListVar defines a []TabletType flag with the specified name and usage

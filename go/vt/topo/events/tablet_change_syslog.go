@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"log/syslog"
 
-	"liquidata-inc/vitess/go/event/syslogger"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/event/syslogger"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 // Syslog writes the event to syslog.

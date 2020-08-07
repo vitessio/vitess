@@ -30,18 +30,18 @@ import (
 	"strings"
 	"unicode"
 
-	"liquidata-inc/vitess/go/vt/proto/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/proto/logutil"
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
-	_ "liquidata-inc/vitess/go/vt/vtctl/grpcvtctlclient"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/vtctl/grpcvtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vttestpb "github.com/liquidata-inc/vitess/go/vt/proto/vttest"
 )
 
 // Config are the settings used to configure the self-contained Vitess cluster.

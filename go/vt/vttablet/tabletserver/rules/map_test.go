@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
 var (

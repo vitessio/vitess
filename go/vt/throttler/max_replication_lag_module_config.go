@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
 )
 
 // MaxReplicationLagModuleConfig stores all configuration parameters for

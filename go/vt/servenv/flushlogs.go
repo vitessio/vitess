@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
 )
 
 func init() {

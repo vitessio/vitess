@@ -25,20 +25,20 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/netutil"
-	"liquidata-inc/vitess/go/vt/grpcclient"
-	"liquidata-inc/vitess/go/vt/hook"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/netutil"
+	"github.com/liquidata-inc/vitess/go/vt/grpcclient"
+	"github.com/liquidata-inc/vitess/go/vt/hook"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	replicationdatapb "liquidata-inc/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	tabletmanagerservicepb "liquidata-inc/vitess/go/vt/proto/tabletmanagerservice"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	replicationdatapb "github.com/liquidata-inc/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerservicepb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerservice"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

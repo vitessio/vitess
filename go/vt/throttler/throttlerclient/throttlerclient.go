@@ -26,7 +26,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
 )
 
 // protocol specifics which RPC client implementation should be used.

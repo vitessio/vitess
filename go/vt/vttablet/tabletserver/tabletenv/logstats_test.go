@@ -27,11 +27,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/streamlog"
-	"liquidata-inc/vitess/go/vt/callinfo"
-	"liquidata-inc/vitess/go/vt/callinfo/fakecallinfo"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/streamlog"
+	"github.com/liquidata-inc/vitess/go/vt/callinfo"
+	"github.com/liquidata-inc/vitess/go/vt/callinfo/fakecallinfo"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 func TestLogStats(t *testing.T) {

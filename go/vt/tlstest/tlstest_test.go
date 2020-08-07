@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"liquidata-inc/vitess/go/vt/vttls"
+	"github.com/liquidata-inc/vitess/go/vt/vttls"
 )
 
 // TestClientServer generates:

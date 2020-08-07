@@ -23,7 +23,7 @@ import (
 	"strconv"
 	"time"
 
-	"liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/stats"
 )
 
 var (

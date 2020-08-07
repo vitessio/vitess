@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/sync2"
 )
 
 // Timings is meant to tracks timing data

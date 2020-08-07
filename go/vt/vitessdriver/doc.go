@@ -29,7 +29,7 @@ Using this SQL driver is as simple as:
 
   import (
     "time"
-    "liquidata-inc/vitess/go/vt/vitessdriver"
+    "github.com/liquidata-inc/vitess/go/vt/vitessdriver"
   )
 
   func main() {

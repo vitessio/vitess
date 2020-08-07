@@ -19,8 +19,8 @@ limitations under the License.
 package eventtoken
 
 import (
-	"liquidata-inc/vitess/go/mysql"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // Fresher compares two event tokens.  It returns a negative number if

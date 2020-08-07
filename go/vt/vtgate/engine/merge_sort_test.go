@@ -21,10 +21,10 @@ import (
 	"reflect"
 	"testing"
 
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	"liquidata-inc/vitess/go/vt/srvtopo"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/vt/srvtopo"
 )
 
 // TestMergeSortNormal tests the normal flow of a merge

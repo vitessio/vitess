@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"liquidata-inc/vitess/go/cache"
+	"github.com/liquidata-inc/vitess/go/cache"
 )
 
 // Numbered allows you to manage resources by tracking them with numbers.

@@ -19,5 +19,5 @@ package main
 // Imports and register the 'etcd2' topo.Server.
 
 import (
-	_ "liquidata-inc/vitess/go/vt/topo/etcd2topo"
+	_ "github.com/liquidata-inc/vitess/go/vt/topo/etcd2topo"
 )
