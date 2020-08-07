@@ -336,6 +336,65 @@ func TestAccessors(t *testing.T) {
 	if v.IsBinary() {
 		t.Error("v.IsBinary: true, want false")
 	}
+	{
+		i, err := v.ToInt64()
+		if err != nil {
+			t.Errorf("v.ToInt64: got error: %+v, want no error", err)
+		}
+		if i != 1 {
+			t.Errorf("v.ToInt64=%+v, want 1", i)
+		}
+	}
+	{
+		i, err := v.ToUint64()
+		if err != nil {
+			t.Errorf("v.ToUint64: got error: %+v, want no error", err)
+		}
+		if i != 1 {
+			t.Errorf("v.ToUint64=%+v, want 1", i)
+		}
+	}
+	{
+		b, err := v.ToBool()
+		if err != nil {
+			t.Errorf("v.ToBool: got error: %+v, want no error", err)
+		}
+		if !b {
+			t.Errorf("v.ToBool=%+v, want true", b)
+		}
+	}
+}
+
+func TestAccessorsNegative(t *testing.T) {
+	v := TestValue(Int64, "-1")
+	if v.ToString() != "-1" {
+		t.Errorf("v.String=%s, want -1", v.ToString())
+	}
+	if v.IsNull() {
+		t.Error("v.IsNull: true, want false")
+	}
+	if !v.IsIntegral() {
+		t.Error("v.IsIntegral: false, want true")
+	}
+	{
+		i, err := v.ToInt64()
+		if err != nil {
+			t.Errorf("v.ToInt64: got error: %+v, want no error", err)
+		}
+		if i != -1 {
+			t.Errorf("v.ToInt64=%+v, want -1", i)
+		}
+	}
+	{
+		if _, err := v.ToUint64(); err == nil {
+			t.Error("v.ToUint64: got no error, want error")
+		}
+	}
+	{
+		if _, err := v.ToBool(); err == nil {
+			t.Error("v.ToUint64: got no error, want error")
+		}
+	}
 }
 
 func TestToBytesAndString(t *testing.T) {
