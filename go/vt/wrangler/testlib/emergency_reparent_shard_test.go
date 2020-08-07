@@ -23,14 +23,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestEmergencyReparentShard(t *testing.T) {

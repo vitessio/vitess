@@ -16,5 +16,5 @@ limitations under the License.
 package main
 
 import (
-	_ "liquidata-inc/vitess/go/vt/mysqlctl/filebackupstorage"
+	_ "github.com/liquidata-inc/vitess/go/vt/mysqlctl/filebackupstorage"
 )

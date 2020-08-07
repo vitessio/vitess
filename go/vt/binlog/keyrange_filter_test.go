@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"testing"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var testKeyRange = &topodatapb.KeyRange{

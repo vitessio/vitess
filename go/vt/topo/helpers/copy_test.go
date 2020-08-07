@@ -21,12 +21,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server) {

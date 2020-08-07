@@ -21,9 +21,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/discovery"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/vtctl"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl"
 )
 
 // realtimeStats holds the objects needed to obtain realtime health stats of tablets.

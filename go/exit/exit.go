@@ -50,8 +50,8 @@ package exit
 import (
 	"os"
 
-	"liquidata-inc/vitess/go/tb"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/tb"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 type exitCode int

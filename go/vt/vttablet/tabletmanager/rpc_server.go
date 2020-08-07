@@ -19,13 +19,13 @@ package tabletmanager
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/tb"
-	"liquidata-inc/vitess/go/vt/callinfo"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/tb"
+	"github.com/liquidata-inc/vitess/go/vt/callinfo"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 // This file contains the RPC method helpers for the tablet manager.

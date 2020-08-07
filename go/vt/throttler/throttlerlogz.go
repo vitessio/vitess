@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/logz"
+	"github.com/liquidata-inc/vitess/go/vt/logz"
 )
 
 const logHeaderHTML = `

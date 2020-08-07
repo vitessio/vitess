@@ -42,14 +42,14 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/stats"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/dbconnpool"
-	vtenv "liquidata-inc/vitess/go/vt/env"
-	"liquidata-inc/vitess/go/vt/hook"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/mysqlctl/mysqlctlclient"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/dbconnpool"
+	vtenv "github.com/liquidata-inc/vitess/go/vt/env"
+	"github.com/liquidata-inc/vitess/go/vt/hook"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/mysqlctlclient"
 )
 
 var (

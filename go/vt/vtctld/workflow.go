@@ -21,18 +21,18 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/trace"
+	"github.com/liquidata-inc/vitess/go/trace"
 
-	"liquidata-inc/vitess/go/flagutil"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/schemamanager/schemaswap"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/vtctl"
-	"liquidata-inc/vitess/go/vt/workflow"
-	"liquidata-inc/vitess/go/vt/workflow/resharding"
-	"liquidata-inc/vitess/go/vt/workflow/reshardingworkflowgen"
-	"liquidata-inc/vitess/go/vt/workflow/topovalidator"
+	"github.com/liquidata-inc/vitess/go/flagutil"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/schemamanager/schemaswap"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl"
+	"github.com/liquidata-inc/vitess/go/vt/workflow"
+	"github.com/liquidata-inc/vitess/go/vt/workflow/resharding"
+	"github.com/liquidata-inc/vitess/go/vt/workflow/reshardingworkflowgen"
+	"github.com/liquidata-inc/vitess/go/vt/workflow/topovalidator"
 )
 
 var (

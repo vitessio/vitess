@@ -20,9 +20,9 @@ import (
 	"fmt"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // ErrorQueryService is an object that returns an error for all methods.

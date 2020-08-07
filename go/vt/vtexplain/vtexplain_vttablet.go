@@ -25,21 +25,21 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/sync2"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/mysqlctl"
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

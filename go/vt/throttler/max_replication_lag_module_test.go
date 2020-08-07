@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // The tests below tests the heuristic of the MaxReplicationLagModule.

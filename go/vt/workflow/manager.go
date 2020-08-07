@@ -26,10 +26,10 @@ import (
 	gouuid "github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 
-	workflowpb "liquidata-inc/vitess/go/vt/proto/workflow"
+	workflowpb "github.com/liquidata-inc/vitess/go/vt/proto/workflow"
 )
 
 var (

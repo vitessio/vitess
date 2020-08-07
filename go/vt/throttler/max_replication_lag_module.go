@@ -24,13 +24,13 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"liquidata-inc/vitess/go/sync2"
-	"liquidata-inc/vitess/go/vt/discovery"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
 
-	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	throttlerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 type state string

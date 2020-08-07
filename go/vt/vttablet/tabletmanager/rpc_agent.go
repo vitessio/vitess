@@ -21,14 +21,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/hook"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/liquidata-inc/vitess/go/vt/hook"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	replicationdatapb "liquidata-inc/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	replicationdatapb "github.com/liquidata-inc/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // RPCAgent defines the interface implemented by the Agent for RPCs.

@@ -24,16 +24,16 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"liquidata-inc/vitess/go/history"
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"github.com/liquidata-inc/vitess/go/history"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // Init tablet fixes replication data when safe

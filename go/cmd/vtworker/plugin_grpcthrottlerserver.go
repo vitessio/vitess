@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC throttler server.
 
 import (
-	_ "liquidata-inc/vitess/go/vt/throttler/grpcthrottlerserver"
+	_ "github.com/liquidata-inc/vitess/go/vt/throttler/grpcthrottlerserver"
 )

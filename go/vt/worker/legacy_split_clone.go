@@ -27,26 +27,26 @@ import (
 	"sync"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/event"
-	"liquidata-inc/vitess/go/sqlescape"
-	"liquidata-inc/vitess/go/sync2"
-	"liquidata-inc/vitess/go/vt/binlog/binlogplayer"
-	"liquidata-inc/vitess/go/vt/discovery"
-	"liquidata-inc/vitess/go/vt/throttler"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/topotools"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
-	"liquidata-inc/vitess/go/vt/worker/events"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/event"
+	"github.com/liquidata-inc/vitess/go/sqlescape"
+	"github.com/liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/vt/binlog/binlogplayer"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/throttler"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/topotools"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/worker/events"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // LegacySplitCloneWorker will clone the data within a keyspace from a

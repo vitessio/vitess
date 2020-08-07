@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 func TestWrapNil(t *testing.T) {

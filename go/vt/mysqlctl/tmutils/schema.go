@@ -24,9 +24,9 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"liquidata-inc/vitess/go/vt/concurrency"
+	"github.com/liquidata-inc/vitess/go/vt/concurrency"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // This file contains helper methods to deal with Schema information.

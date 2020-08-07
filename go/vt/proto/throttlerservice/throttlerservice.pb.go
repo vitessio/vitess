@@ -12,7 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	throttlerdata "liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	throttlerdata "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

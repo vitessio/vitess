@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"testing"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 func TestTableColumnString(t *testing.T) {

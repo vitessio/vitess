@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"time"
 
-	"liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/sync2"
 
 	"golang.org/x/time/rate"
 )

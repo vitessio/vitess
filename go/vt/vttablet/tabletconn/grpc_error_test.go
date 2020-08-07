@@ -19,8 +19,8 @@ package tabletconn
 import (
 	"testing"
 
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 )
 
 func TestTabletErrorFromRPCError(t *testing.T) {

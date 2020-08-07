@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 func TestValEqual(t *testing.T) {

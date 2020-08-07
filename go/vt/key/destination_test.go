@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // initShardArray returns the ShardReference array for the provided

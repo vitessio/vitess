@@ -22,10 +22,10 @@ import (
 	"strconv"
 	"strings"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 var errNoTable = errors.New("no table info")

@@ -24,7 +24,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	context "golang.org/x/net/context"
 
-	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
+	automationpb "github.com/liquidata-inc/vitess/go/vt/proto/automation"
 )
 
 // newTestScheduler constructs a scheduler with test tasks.

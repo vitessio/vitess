@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"log/syslog"
 
-	"liquidata-inc/vitess/go/event/syslogger"
+	"github.com/liquidata-inc/vitess/go/event/syslogger"
 )
 
 // Syslog writes a SplitClone event to syslog.

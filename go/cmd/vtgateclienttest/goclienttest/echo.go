@@ -21,13 +21,13 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/callerid"
-	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/callerid"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 var (

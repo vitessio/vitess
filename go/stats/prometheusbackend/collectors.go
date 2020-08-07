@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/stats"
 )
 
 type metricFuncCollector struct {

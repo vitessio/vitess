@@ -17,10 +17,10 @@ limitations under the License.
 package events
 
 import (
-	base "liquidata-inc/vitess/go/vt/events"
-	"liquidata-inc/vitess/go/vt/topo"
+	base "github.com/liquidata-inc/vitess/go/vt/events"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // MigrateServedFrom is an event that describes a single step in the process of

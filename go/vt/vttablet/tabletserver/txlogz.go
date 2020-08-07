@@ -23,15 +23,15 @@ import (
 	"net/http"
 	"time"
 
-	"liquidata-inc/vitess/go/acl"
-	"liquidata-inc/vitess/go/streamlog"
-	"liquidata-inc/vitess/go/vt/callerid"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logz"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/acl"
+	"github.com/liquidata-inc/vitess/go/streamlog"
+	"github.com/liquidata-inc/vitess/go/vt/callerid"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logz"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 var (

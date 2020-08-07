@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	"liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 )
 
 // binlogEvent wraps a raw packet buffer and provides methods to examine it

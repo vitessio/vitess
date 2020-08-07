@@ -20,10 +20,10 @@ import (
 	"html/template"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 )
 
 // BlockWorker will block infinitely until its context is canceled.

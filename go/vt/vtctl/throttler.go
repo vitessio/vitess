@@ -27,12 +27,12 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/throttler"
-	"liquidata-inc/vitess/go/vt/throttler/throttlerclient"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/throttler"
+	"github.com/liquidata-inc/vitess/go/vt/throttler/throttlerclient"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 
-	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
 )
 
 const (

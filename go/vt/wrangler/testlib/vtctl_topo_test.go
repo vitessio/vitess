@@ -26,9 +26,9 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want string) {

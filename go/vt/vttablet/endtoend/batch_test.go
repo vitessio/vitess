@@ -20,9 +20,9 @@ import (
 	"reflect"
 	"testing"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	"liquidata-inc/vitess/go/vt/vttablet/endtoend/framework"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 func TestBatchRead(t *testing.T) {

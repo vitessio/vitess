@@ -31,8 +31,8 @@ import (
 
 	"bytes"
 
-	"liquidata-inc/vitess/go/stats"
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 const (

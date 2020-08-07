@@ -17,12 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"liquidata-inc/vitess/go/vt/discovery"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/srvtopo"
-	_ "liquidata-inc/vitess/go/vt/status"
-	"liquidata-inc/vitess/go/vt/vtgate"
-	"liquidata-inc/vitess/go/vt/vtgate/gateway"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/srvtopo"
+	_ "github.com/liquidata-inc/vitess/go/vt/status"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/gateway"
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.

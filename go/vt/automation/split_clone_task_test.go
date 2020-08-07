@@ -20,8 +20,8 @@ import (
 	"flag"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/worker/fakevtworkerclient"
-	"liquidata-inc/vitess/go/vt/worker/vtworkerclient"
+	"github.com/liquidata-inc/vitess/go/vt/worker/fakevtworkerclient"
+	"github.com/liquidata-inc/vitess/go/vt/worker/vtworkerclient"
 )
 
 func TestSplitCloneTask(t *testing.T) {

@@ -23,11 +23,11 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // Watch is part of the topo.Conn interface.

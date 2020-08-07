@@ -22,9 +22,9 @@ import (
 	"net/url"
 	"time"
 
-	"liquidata-inc/vitess/go/event"
-	"liquidata-inc/vitess/go/proc"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/event"
+	"github.com/liquidata-inc/vitess/go/proc"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

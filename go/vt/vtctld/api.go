@@ -28,20 +28,20 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/acl"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/schemamanager"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/vtctl"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
-	"liquidata-inc/vitess/go/vt/workflow"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/acl"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/schemamanager"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/vt/workflow"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 
-	"liquidata-inc/vitess/go/vt/mysqlctl"
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

@@ -21,16 +21,16 @@ import (
 	"fmt"
 	"time"
 
-	"liquidata-inc/vitess/go/jsonutil"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/key"
-	"liquidata-inc/vitess/go/vt/sqlannotation"
-	"liquidata-inc/vitess/go/vt/srvtopo"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/jsonutil"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/sqlannotation"
+	"github.com/liquidata-inc/vitess/go/vt/srvtopo"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Delete)(nil)

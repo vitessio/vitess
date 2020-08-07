@@ -25,9 +25,9 @@ import (
 	"flag"
 	"fmt"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sync2"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

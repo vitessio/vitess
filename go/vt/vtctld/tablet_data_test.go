@@ -24,16 +24,16 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/logutil"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/vttablet/grpcqueryservice"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice/fakes"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
-	"liquidata-inc/vitess/go/vt/wrangler"
-	"liquidata-inc/vitess/go/vt/wrangler/testlib"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice/fakes"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler/testlib"
 )
 
 // streamHealthTabletServer is a local QueryService implementation to support the tests

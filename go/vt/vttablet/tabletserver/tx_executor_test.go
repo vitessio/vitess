@@ -27,14 +27,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/vtgate/fakerpcvtgateconn"
-	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/fakerpcvtgateconn"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestTxExecutorEmptyPrepare(t *testing.T) {

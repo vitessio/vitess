@@ -25,7 +25,7 @@ import (
 	"net/url"
 	"strings"
 
-	"liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
 )
 
 var (

@@ -19,13 +19,13 @@ package splitquery
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // FullScanAlgorithm implements the SplitAlgorithmInterface and represents the full-scan algorithm

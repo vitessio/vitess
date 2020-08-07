@@ -23,14 +23,14 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/flagutil"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/flagutil"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
-	"liquidata-inc/vitess/go/vt/discovery"
-	"liquidata-inc/vitess/go/vt/srvtopo"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/srvtopo"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the Gateway interface definition, and the

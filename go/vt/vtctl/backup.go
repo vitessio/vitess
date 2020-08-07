@@ -23,11 +23,11 @@ import (
 	"io"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/mysqlctl/backupstorage"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/backupstorage"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 )
 
 func init() {

@@ -22,9 +22,9 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // Watch is part of the topo.Conn interface.

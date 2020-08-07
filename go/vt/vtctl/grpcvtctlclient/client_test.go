@@ -26,11 +26,11 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/vtctl/grpcvtctlserver"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclienttest"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/grpcvtctlserver"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclienttest"
 
-	vtctlservicepb "liquidata-inc/vitess/go/vt/proto/vtctlservice"
+	vtctlservicepb "github.com/liquidata-inc/vitess/go/vt/proto/vtctlservice"
 )
 
 // the test here creates a fake server implementation, a fake client

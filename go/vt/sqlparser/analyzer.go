@@ -24,10 +24,10 @@ import (
 	"strings"
 	"unicode"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // StatementType encodes the type of a SQL statement

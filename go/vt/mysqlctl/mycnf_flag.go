@@ -19,7 +19,7 @@ package mysqlctl
 import (
 	"flag"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // This file handles using command line flags to create a Mycnf object.

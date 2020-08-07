@@ -19,5 +19,5 @@ package main
 // Imports and register the file custom rule source
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vttablet/customrule/filecustomrule"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/customrule/filecustomrule"
 )

@@ -30,15 +30,15 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-	"liquidata-inc/vitess/go/vt/concurrency"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vitessdriver"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/liquidata-inc/vitess/go/vt/concurrency"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vitessdriver"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
 
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 var (

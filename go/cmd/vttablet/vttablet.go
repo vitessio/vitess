@@ -21,17 +21,17 @@ import (
 	"flag"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/mysqlctl"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/tableacl"
-	"liquidata-inc/vitess/go/vt/tableacl/simpleacl"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl/simpleacl"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (

@@ -21,10 +21,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // DBClient is a high level interface to the database.

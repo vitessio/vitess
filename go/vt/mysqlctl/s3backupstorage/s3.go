@@ -34,7 +34,7 @@ import (
 	"strings"
 	"sync"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -42,8 +42,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/concurrency"
-	"liquidata-inc/vitess/go/vt/mysqlctl/backupstorage"
+	"github.com/liquidata-inc/vitess/go/vt/concurrency"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/backupstorage"
 )
 
 var (

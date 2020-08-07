@@ -17,5 +17,5 @@ limitations under the License.
 package main
 
 import (
-	_ "liquidata-inc/vitess/go/vt/mysqlctl/s3backupstorage"
+	_ "github.com/liquidata-inc/vitess/go/vt/mysqlctl/s3backupstorage"
 )

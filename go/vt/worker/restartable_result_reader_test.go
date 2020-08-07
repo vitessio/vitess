@@ -25,17 +25,17 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/grpcclient"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletconn"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/grpcclient"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletconn"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestGreaterThanTupleWhereClause(t *testing.T) {

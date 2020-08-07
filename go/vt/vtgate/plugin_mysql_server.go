@@ -26,22 +26,22 @@ import (
 	"syscall"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/trace"
+	"github.com/liquidata-inc/vitess/go/trace"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/callerid"
-	"liquidata-inc/vitess/go/vt/callinfo"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/vttls"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/callerid"
+	"github.com/liquidata-inc/vitess/go/vt/callinfo"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/vttls"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vtgatepb "github.com/liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 var (

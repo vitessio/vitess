@@ -18,8 +18,8 @@ package helpers
 
 import (
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // TeeFactory is an implementation of topo.Factory that uses a primary

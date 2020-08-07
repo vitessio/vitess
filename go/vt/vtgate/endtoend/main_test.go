@@ -23,12 +23,12 @@ import (
 	"path"
 	"testing"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/vttest"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/vttest"
 
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vttestpb "github.com/liquidata-inc/vitess/go/vt/proto/vttest"
 )
 
 var (

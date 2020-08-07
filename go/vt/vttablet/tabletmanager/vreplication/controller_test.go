@@ -24,13 +24,13 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/binlog/binlogplayer"
-	"liquidata-inc/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/binlog/binlogplayer"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

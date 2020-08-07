@@ -25,11 +25,11 @@ import (
 	"text/template"
 	"time"
 
-	"liquidata-inc/vitess/go/acl"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logz"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/acl"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logz"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (

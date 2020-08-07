@@ -22,13 +22,13 @@ import (
 	"strings"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	"liquidata-inc/vitess/go/sqlescape"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/sqlescape"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/stats"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // RowAggregator aggregates SQL reconciliation statements into one statement.

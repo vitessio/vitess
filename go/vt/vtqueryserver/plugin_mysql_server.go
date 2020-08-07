@@ -25,15 +25,15 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/callerid"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/mysqlproxy"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/vttls"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/callerid"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlproxy"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/vttls"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 var (

@@ -26,8 +26,8 @@ import (
 	"strings"
 	"syscall"
 
-	vtenv "liquidata-inc/vitess/go/vt/env"
-	"liquidata-inc/vitess/go/vt/log"
+	vtenv "github.com/liquidata-inc/vitess/go/vt/env"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // Hook is the input structure for this library.

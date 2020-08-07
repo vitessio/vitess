@@ -22,19 +22,19 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/json2"
-	"liquidata-inc/vitess/go/vt/grpcclient"
-	"liquidata-inc/vitess/go/vt/key"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
-	"liquidata-inc/vitess/go/vt/vttablet/sandboxconn"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletconn"
+	"github.com/liquidata-inc/vitess/go/json2"
+	"github.com/liquidata-inc/vitess/go/vt/grpcclient"
+	"github.com/liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/sandboxconn"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletconn"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.

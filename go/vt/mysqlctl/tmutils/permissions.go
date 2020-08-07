@@ -24,11 +24,11 @@ import (
 	"sort"
 	"strings"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/concurrency"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/concurrency"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // This file contains helper methods to deal with Permissions.

@@ -19,8 +19,8 @@ package json2
 import (
 	"testing"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 func TestMarshalPB(t *testing.T) {

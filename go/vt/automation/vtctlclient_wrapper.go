@@ -21,11 +21,11 @@ import (
 	"fmt"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
 )
 
 // ExecuteVtctl runs vtctl using vtctlclient. The stream of Event

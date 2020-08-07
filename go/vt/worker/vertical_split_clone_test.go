@@ -22,17 +22,17 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/vttablet/grpcqueryservice"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice/fakes"
-	"liquidata-inc/vitess/go/vt/wrangler/testlib"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice/fakes"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler/testlib"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 const (

@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // Note that definitions of local_metadata and shard_metadata should be the same

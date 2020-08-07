@@ -18,10 +18,10 @@ package tabletmanager
 
 import (
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.

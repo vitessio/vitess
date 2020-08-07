@@ -22,10 +22,10 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 // This file contains the utility methods to manage SrvVSchema objects.

@@ -1,4 +1,4 @@
-module liquidata-inc/vitess
+module github.com/liquidata-inc/vitess
 
 go 1.12
 

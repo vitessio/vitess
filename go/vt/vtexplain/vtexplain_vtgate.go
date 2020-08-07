@@ -23,22 +23,22 @@ import (
 	"fmt"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	"liquidata-inc/vitess/go/json2"
-	"liquidata-inc/vitess/go/vt/discovery"
-	"liquidata-inc/vitess/go/vt/key"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/srvtopo"
-	"liquidata-inc/vitess/go/vt/vtgate"
-	"liquidata-inc/vitess/go/vt/vtgate/engine"
-	"liquidata-inc/vitess/go/vt/vtgate/gateway"
+	"github.com/liquidata-inc/vitess/go/json2"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/srvtopo"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/engine"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/gateway"
 
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vtgatepb "github.com/liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 var (

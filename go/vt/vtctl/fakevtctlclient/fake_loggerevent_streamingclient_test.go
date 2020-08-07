@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
 )
 
 func TestStreamOutputAndError(t *testing.T) {

@@ -17,7 +17,7 @@ limitations under the License.
 package events
 
 import (
-	base "liquidata-inc/vitess/go/vt/events"
+	base "github.com/liquidata-inc/vitess/go/vt/events"
 )
 
 // SplitClone is an event that describes a single step in a horizontal

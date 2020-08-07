@@ -19,8 +19,8 @@ package automation
 import (
 	"strings"
 
-	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	automationpb "github.com/liquidata-inc/vitess/go/vt/proto/automation"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 // VerticalSplitTask is a cluster operation to split out specific tables of one

@@ -20,12 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/log"
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 type resultStreamer struct {

@@ -23,8 +23,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"liquidata-inc/vitess/go/stats"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 // PromBackend implements PullBackend using Prometheus as the backing metrics storage.

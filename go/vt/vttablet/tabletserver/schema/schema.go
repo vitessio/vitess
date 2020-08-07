@@ -24,11 +24,11 @@ import (
 	"sync"
 	"time"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/sync2"
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // Table types

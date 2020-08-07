@@ -21,15 +21,15 @@ import (
 
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/netutil"
-	"liquidata-inc/vitess/go/vt/binlog/binlogplayer"
-	"liquidata-inc/vitess/go/vt/grpcclient"
+	"github.com/liquidata-inc/vitess/go/netutil"
+	"github.com/liquidata-inc/vitess/go/vt/binlog/binlogplayer"
+	"github.com/liquidata-inc/vitess/go/vt/grpcclient"
 
 	"flag"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	binlogservicepb "liquidata-inc/vitess/go/vt/proto/binlogservice"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	binlogservicepb "github.com/liquidata-inc/vitess/go/vt/proto/binlogservice"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

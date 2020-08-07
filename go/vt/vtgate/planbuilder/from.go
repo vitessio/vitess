@@ -20,10 +20,10 @@ import (
 	"errors"
 	"fmt"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vtgate/engine"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/engine"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file has functions to analyze the FROM clause.

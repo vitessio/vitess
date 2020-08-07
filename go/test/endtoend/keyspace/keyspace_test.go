@@ -27,8 +27,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"liquidata-inc/vitess/go/test/endtoend/cluster"
-	"liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/test/endtoend/cluster"
+	"github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

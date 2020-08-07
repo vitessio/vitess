@@ -24,14 +24,14 @@ import (
 
 	"time"
 
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/rules"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/rules"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // BroadcastData is used by the mock Controller to send data

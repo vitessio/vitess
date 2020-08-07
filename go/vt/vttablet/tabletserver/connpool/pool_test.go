@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/vt/callerid"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/vt/callerid"
 
 	"golang.org/x/net/context"
 )

@@ -17,18 +17,18 @@ limitations under the License.
 package worker
 
 import (
-	"liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
-	"liquidata-inc/vitess/go/vt/key"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // This file defines the interface and implementations of sharding key resolvers.

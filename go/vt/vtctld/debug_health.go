@@ -23,8 +23,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/acl"
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/acl"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // RegisterDebugHealthHandler register a debug health http endpoint for a vtcld server

@@ -19,7 +19,7 @@ package throttler
 import (
 	"time"
 
-	"liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
 )
 
 // replicationLagRecord stores the tablet health data for a given point in time.

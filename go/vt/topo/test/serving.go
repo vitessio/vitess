@@ -21,10 +21,10 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 // checkSrvKeyspace tests the SrvKeyspace methods (other than watch).

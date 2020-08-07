@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/sqlescape"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/sqlescape"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (

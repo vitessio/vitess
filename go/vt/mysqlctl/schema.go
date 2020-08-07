@@ -23,14 +23,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/sqlescape"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/liquidata-inc/vitess/go/sqlescape"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)

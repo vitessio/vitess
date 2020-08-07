@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"regexp"
 
-	"liquidata-inc/vitess/go/sqlescape"
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqlescape"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 //

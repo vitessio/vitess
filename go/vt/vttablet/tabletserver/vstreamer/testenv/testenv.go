@@ -23,20 +23,20 @@ import (
 	"os"
 	"path"
 
-	"liquidata-inc/vitess/go/json2"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/mysqlctl"
-	"liquidata-inc/vitess/go/vt/srvtopo"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/connpool"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"liquidata-inc/vitess/go/vt/vttest"
+	"github.com/liquidata-inc/vitess/go/json2"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl"
+	"github.com/liquidata-inc/vitess/go/vt/srvtopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/connpool"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/vt/vttest"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vttestpb "github.com/liquidata-inc/vitess/go/vt/proto/vttest"
 )
 
 // Env contains all the env vars for a test against a mysql instance.

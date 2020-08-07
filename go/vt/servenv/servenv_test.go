@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/event"
+	"github.com/liquidata-inc/vitess/go/event"
 )
 
 func TestFireOnTermSyncHooksFinished(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"flag"
 	"net/http"
 
-	"liquidata-inc/vitess/go/streamlog"
+	"github.com/liquidata-inc/vitess/go/streamlog"
 )
 
 var (

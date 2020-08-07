@@ -19,7 +19,7 @@ package zk2topo
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // ZKVersion is zookeeper's idea of a version.

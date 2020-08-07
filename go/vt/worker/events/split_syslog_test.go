@@ -20,7 +20,7 @@ import (
 	"log/syslog"
 	"testing"
 
-	base "liquidata-inc/vitess/go/vt/events"
+	base "github.com/liquidata-inc/vitess/go/vt/events"
 )
 
 func TestSplitCloneSyslog(t *testing.T) {

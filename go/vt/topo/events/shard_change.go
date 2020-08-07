@@ -17,7 +17,7 @@ limitations under the License.
 package events
 
 import (
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // ShardChange is an event that describes changes to a shard.

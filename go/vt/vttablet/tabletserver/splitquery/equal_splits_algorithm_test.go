@@ -23,10 +23,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/splitquery/splitquery_testing"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/splitquery/splitquery_testing"
 )
 
 // Table-driven test for equal-splits algorithm.

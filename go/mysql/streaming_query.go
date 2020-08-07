@@ -17,9 +17,9 @@ limitations under the License.
 package mysql
 
 import (
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // This file contains the methods needed to execute streaming queries.

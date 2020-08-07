@@ -21,7 +21,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 )
 
 // PingWorker will log a message with level CONSOLE.

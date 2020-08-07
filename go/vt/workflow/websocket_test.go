@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
 )
 
 func TestWebSocket(t *testing.T) {

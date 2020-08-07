@@ -21,7 +21,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
-	"liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/stats"
 )
 
 var (

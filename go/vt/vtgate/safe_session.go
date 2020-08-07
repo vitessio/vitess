@@ -20,12 +20,12 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/liquidata-inc/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // SafeSession is a mutex-protected version of the Session.

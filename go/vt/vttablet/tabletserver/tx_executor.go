@@ -21,14 +21,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/trace"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/trace"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/messager"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/messager"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // TxExecutor is used for executing a transactional request.

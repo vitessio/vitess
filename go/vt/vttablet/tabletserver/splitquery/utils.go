@@ -21,9 +21,9 @@ package splitquery
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // populateNewBindVariable inserts 'bindVariableName' with 'bindVariableValue' to the

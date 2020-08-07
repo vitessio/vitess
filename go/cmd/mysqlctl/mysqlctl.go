@@ -25,14 +25,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/exit"
-	"liquidata-inc/vitess/go/flagutil"
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/netutil"
-	"liquidata-inc/vitess/go/vt/dbconfigs"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/mysqlctl"
+	"github.com/liquidata-inc/vitess/go/exit"
+	"github.com/liquidata-inc/vitess/go/flagutil"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/netutil"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl"
 )
 
 var (

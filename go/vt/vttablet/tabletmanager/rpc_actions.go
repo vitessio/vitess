@@ -21,18 +21,18 @@ import (
 	"regexp"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/hook"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/mysqlctl"
-	"liquidata-inc/vitess/go/vt/topotools"
+	"github.com/liquidata-inc/vitess/go/vt/hook"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl"
+	"github.com/liquidata-inc/vitess/go/vt/topotools"
 
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the implementations of RPCAgent methods.

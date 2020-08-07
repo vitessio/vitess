@@ -27,14 +27,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
-	"liquidata-inc/vitess/go/json2"
-	"liquidata-inc/vitess/go/vt/health"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/tableacl/acl"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/json2"
+	"github.com/liquidata-inc/vitess/go/vt/health"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl/acl"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	tableaclpb "liquidata-inc/vitess/go/vt/proto/tableacl"
+	tableaclpb "github.com/liquidata-inc/vitess/go/vt/proto/tableacl"
 )
 
 // ACLResult embeds an acl.ACL and also tell which table group it belongs to.

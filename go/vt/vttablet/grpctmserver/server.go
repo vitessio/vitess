@@ -22,17 +22,17 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/vt/callinfo"
-	"liquidata-inc/vitess/go/vt/hook"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
+	"github.com/liquidata-inc/vitess/go/vt/callinfo"
+	"github.com/liquidata-inc/vitess/go/vt/hook"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
-	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
-	tabletmanagerservicepb "liquidata-inc/vitess/go/vt/proto/tabletmanagerservice"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
+	tabletmanagerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerservicepb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerservice"
 )
 
 // server is the gRPC implementation of the RPC server

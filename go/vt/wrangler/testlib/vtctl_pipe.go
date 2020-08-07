@@ -29,15 +29,15 @@ import (
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/vtctl/grpcvtctlserver"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/grpcvtctlserver"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
-	_ "liquidata-inc/vitess/go/vt/vtctl/grpcvtctlclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/vtctl/grpcvtctlclient"
 )
 
 var servenvInitialized sync.Once

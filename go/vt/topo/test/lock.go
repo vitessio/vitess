@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // timeUntilLockIsTaken is the time to wait until a lock is taken.

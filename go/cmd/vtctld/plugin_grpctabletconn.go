@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC tabletconn client
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vttablet/grpctabletconn"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/grpctabletconn"
 )

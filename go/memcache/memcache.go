@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"liquidata-inc/vitess/go/cacheservice"
+	"github.com/liquidata-inc/vitess/go/cacheservice"
 )
 
 // Connection is the connection to a memcache.

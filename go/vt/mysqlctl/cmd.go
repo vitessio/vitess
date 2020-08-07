@@ -23,7 +23,7 @@ package mysqlctl
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"github.com/liquidata-inc/vitess/go/vt/dbconfigs"
 )
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL

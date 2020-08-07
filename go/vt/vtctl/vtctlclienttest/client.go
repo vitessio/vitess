@@ -32,17 +32,17 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
 
 	// import the gRPC client implementation for tablet manager
-	_ "liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func init() {

@@ -19,5 +19,5 @@ package main
 // Imports and register the syslog-based query logger
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vttablet/sysloglogger"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/sysloglogger"
 )

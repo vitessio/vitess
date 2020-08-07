@@ -19,9 +19,9 @@ package testsuite
 import (
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/callerid"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"github.com/liquidata-inc/vitess/go/vt/callerid"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 func TestFakeCallerID(t *testing.T) {

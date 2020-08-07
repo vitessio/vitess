@@ -22,8 +22,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 var dmlErrorCases = []string{

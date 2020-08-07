@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	tableaclpb "liquidata-inc/vitess/go/vt/proto/tableacl"
-	"liquidata-inc/vitess/go/vt/tableacl"
-	"liquidata-inc/vitess/go/vt/tableacl/acl"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	tableaclpb "github.com/liquidata-inc/vitess/go/vt/proto/tableacl"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl/acl"
 )
 
 // TestSuite tests a concrete acl.Factory implementation.

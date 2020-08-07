@@ -20,7 +20,7 @@ import (
 	"log/syslog"
 	"testing"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestKeyspaceChangeSyslog(t *testing.T) {

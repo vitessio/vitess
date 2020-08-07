@@ -21,11 +21,11 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
-	"liquidata-inc/vitess/go/vt/vttablet/agentrpctest"
-	"liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/agentrpctest"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 
-	tabletmanagerservicepb "liquidata-inc/vitess/go/vt/proto/tabletmanagerservice"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	tabletmanagerservicepb "github.com/liquidata-inc/vitess/go/vt/proto/tabletmanagerservice"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // TestGRPCTMServer creates a fake server implementation, a fake client

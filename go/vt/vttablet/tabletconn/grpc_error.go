@@ -21,9 +21,9 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // ErrorFromGRPC converts a GRPC error to vtError for

@@ -29,10 +29,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/pools"
-	"liquidata-inc/vitess/go/stats"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/pools"
+	"github.com/liquidata-inc/vitess/go/stats"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

@@ -19,8 +19,8 @@ package main
 // This plugin imports ldapauthserver to register the LDAP implementation of AuthServer.
 
 import (
-	"liquidata-inc/vitess/go/mysql/ldapauthserver"
-	"liquidata-inc/vitess/go/vt/vtgate"
+	"github.com/liquidata-inc/vitess/go/mysql/ldapauthserver"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate"
 )
 
 func init() {

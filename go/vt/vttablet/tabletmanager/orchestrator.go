@@ -27,12 +27,12 @@ import (
 	"strconv"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	"liquidata-inc/vitess/go/timer"
-	"liquidata-inc/vitess/go/vt/log"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/timer"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 var (

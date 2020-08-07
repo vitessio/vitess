@@ -27,7 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 func TestLocalControllerNoSchemaChanges(t *testing.T) {

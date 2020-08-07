@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC vtgateconn client
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "github.com/liquidata-inc/vitess/go/vt/vtgate/grpcvtgateconn"
 )

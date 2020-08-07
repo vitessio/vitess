@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-	"liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/mysql"
 )
 
 // TestLockAndUnlock tests the lock ability by locking a replica and asserting it does not see changes

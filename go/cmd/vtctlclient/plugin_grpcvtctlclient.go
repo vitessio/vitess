@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC vtctl client.
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vtctl/grpcvtctlclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/vtctl/grpcvtctlclient"
 )

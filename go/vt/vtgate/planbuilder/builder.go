@@ -20,12 +20,12 @@ import (
 	"errors"
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/key"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vtgate/engine"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/engine"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 //-------------------------------------------------------------------------

@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"liquidata-inc/vitess/go/sync2"
+	"github.com/liquidata-inc/vitess/go/sync2"
 )
 
 var lastID, count sync2.AtomicInt64

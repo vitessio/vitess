@@ -25,22 +25,22 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"liquidata-inc/vitess/go/mysql/fakesqldb"
-	"liquidata-inc/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
-	"liquidata-inc/vitess/go/vt/vttablet/grpctmserver"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletconn"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/mysql/fakesqldb"
+	"github.com/liquidata-inc/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/grpctmserver"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletconn"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
 
 	// import the gRPC client implementation for tablet manager
-	_ "liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 
 	// import the gRPC client implementation for query service
-	_ "liquidata-inc/vitess/go/vt/vttablet/grpctabletconn"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/grpctabletconn"
 )
 
 // This file was copied from testlib. All tests from testlib should be moved

@@ -34,18 +34,18 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
-	"liquidata-inc/vitess/go/vt/worker"
-	"liquidata-inc/vitess/go/vt/worker/vtworkerclient"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/vt/worker"
+	"github.com/liquidata-inc/vitess/go/vt/worker/vtworkerclient"
 
 	// Import the gRPC client implementation for tablet manager because the real
 	// vtworker implementation requires it.
-	_ "liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 func init() {

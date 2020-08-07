@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 // TestFormatDescriptionEvent tests both MySQL 5.6 and MariaDB 10.0

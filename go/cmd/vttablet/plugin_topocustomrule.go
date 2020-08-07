@@ -19,5 +19,5 @@ package main
 // Imports and register the topo custom rule source
 
 import (
-	_ "liquidata-inc/vitess/go/vt/vttablet/customrule/topocustomrule"
+	_ "github.com/liquidata-inc/vitess/go/vt/vttablet/customrule/topocustomrule"
 )

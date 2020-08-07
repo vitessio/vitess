@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
 )
 
 // FakeLoggerEventStreamingClient is the base for the fakes for the vtctlclient and vtworkerclient.

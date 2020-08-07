@@ -27,12 +27,12 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"liquidata-inc/vitess/go/vt/health"
-	"liquidata-inc/vitess/go/vt/tableacl/acl"
-	"liquidata-inc/vitess/go/vt/tableacl/simpleacl"
+	"github.com/liquidata-inc/vitess/go/vt/health"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl/acl"
+	"github.com/liquidata-inc/vitess/go/vt/tableacl/simpleacl"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	tableaclpb "liquidata-inc/vitess/go/vt/proto/tableacl"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	tableaclpb "github.com/liquidata-inc/vitess/go/vt/proto/tableacl"
 )
 
 type fakeACLFactory struct{}

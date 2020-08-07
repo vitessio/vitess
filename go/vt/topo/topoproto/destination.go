@@ -20,11 +20,11 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"liquidata-inc/vitess/go/vt/key"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // ParseDestination parses the string representation of a Destination

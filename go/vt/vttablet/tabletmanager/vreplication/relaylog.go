@@ -23,7 +23,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 type relayLog struct {

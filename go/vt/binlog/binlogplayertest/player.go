@@ -25,12 +25,12 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/vt/binlog/binlogplayer"
-	"liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/binlog/binlogplayer"
+	"github.com/liquidata-inc/vitess/go/vt/key"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // keyRangeRequest is used to make a request for StreamKeyRange.

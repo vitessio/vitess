@@ -17,7 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 type MapFunc func(index int) error

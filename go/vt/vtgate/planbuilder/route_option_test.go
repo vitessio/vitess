@@ -19,8 +19,8 @@ package planbuilder
 import (
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/vtgate/engine"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/engine"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestIsBetterThan(t *testing.T) {

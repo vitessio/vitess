@@ -27,11 +27,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/test/endtoend/cluster"
-	tabletpb "liquidata-inc/vitess/go/vt/proto/topodata"
-	tmc "liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/test/endtoend/cluster"
+	tabletpb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	tmc "github.com/liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (

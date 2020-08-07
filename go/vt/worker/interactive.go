@@ -23,9 +23,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/acl"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/acl"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
 )
 
 const indexHTML = `

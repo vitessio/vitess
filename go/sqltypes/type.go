@@ -19,7 +19,7 @@ package sqltypes
 import (
 	"fmt"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // This file provides wrappers and support

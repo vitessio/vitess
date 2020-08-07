@@ -19,7 +19,7 @@ package memorytopo
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // NodeVersion is the local topo.Version implementation

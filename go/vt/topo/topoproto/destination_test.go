@@ -21,9 +21,9 @@ import (
 	"reflect"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/vt/key"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestParseDestination(t *testing.T) {

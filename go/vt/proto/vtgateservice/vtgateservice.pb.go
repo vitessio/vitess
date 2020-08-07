@@ -12,8 +12,8 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	query "liquidata-inc/vitess/go/vt/proto/query"
-	vtgate "liquidata-inc/vitess/go/vt/proto/vtgate"
+	query "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vtgate "github.com/liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

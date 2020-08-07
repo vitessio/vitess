@@ -19,7 +19,7 @@ package consultopo
 import (
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 // ConsulVersion is consul's idea of a version.

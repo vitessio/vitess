@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"github.com/liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 var (

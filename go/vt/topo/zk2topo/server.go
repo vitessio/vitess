@@ -19,7 +19,7 @@ package zk2topo
 import (
 	"strings"
 
-	"liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
 )
 
 const (

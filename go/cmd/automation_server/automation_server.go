@@ -23,9 +23,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/vt/automation"
-	automationservicepb "liquidata-inc/vitess/go/vt/proto/automationservice"
-	"liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/automation"
+	automationservicepb "github.com/liquidata-inc/vitess/go/vt/proto/automationservice"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
 )
 
 func init() {

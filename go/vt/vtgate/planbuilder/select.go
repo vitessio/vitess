@@ -20,8 +20,8 @@ import (
 	"errors"
 	"fmt"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vtgate/engine"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/engine"
 )
 
 // buildSelectPlan is the new function to build a Select plan.

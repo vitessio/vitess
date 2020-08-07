@@ -31,7 +31,7 @@ import (
 	jsonpatch "github.com/evanphx/json-patch"
 	yamlpatch "github.com/krishicks/yaml-patch"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

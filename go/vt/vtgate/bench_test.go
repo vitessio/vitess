@@ -23,8 +23,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 // Benchmark run on 6/27/17, with optimized byte-level operations

@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-	"liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/mysql"
 )
 
 // TabletCommands tests the basic tablet commands

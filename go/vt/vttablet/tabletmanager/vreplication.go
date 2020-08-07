@@ -19,9 +19,9 @@ package tabletmanager
 import (
 	"golang.org/x/net/context"
 
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // VReplicationExec executes a vreplication command.

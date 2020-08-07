@@ -17,8 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/vtctl/grpcvtctlserver"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/grpcvtctlserver"
 )
 
 func init() {

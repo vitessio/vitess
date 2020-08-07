@@ -22,11 +22,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
-	"liquidata-inc/vitess/go/vt/vtctl/fakevtctlclient"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
-	"liquidata-inc/vitess/go/vt/worker/fakevtworkerclient"
-	"liquidata-inc/vitess/go/vt/worker/vtworkerclient"
+	automationpb "github.com/liquidata-inc/vitess/go/vt/proto/automation"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/fakevtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/worker/fakevtworkerclient"
+	"github.com/liquidata-inc/vitess/go/vt/worker/vtworkerclient"
 )
 
 // TestVerticalSplitTask tests the vertical split cluster operation

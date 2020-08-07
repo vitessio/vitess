@@ -21,8 +21,8 @@ import (
 	"errors"
 	"sync"
 
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
 // Map is the maintainer of Rules from multiple sources

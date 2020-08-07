@@ -22,8 +22,8 @@ import (
 	"path"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/rules"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletservermock"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/rules"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletservermock"
 )
 
 var customRule1 = `[

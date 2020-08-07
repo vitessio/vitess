@@ -20,11 +20,11 @@ import (
 	"errors"
 	"testing"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 func TestUpdateUnsharded(t *testing.T) {

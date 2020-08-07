@@ -26,9 +26,9 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"liquidata-inc/vitess/go/vt/log"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 )
 
 // Span represents a unit of work within a trace. After creating a Span with

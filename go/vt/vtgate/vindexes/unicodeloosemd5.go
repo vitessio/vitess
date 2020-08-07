@@ -22,8 +22,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/key"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/key"
 
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"

@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 )
 
 func TestPreview(t *testing.T) {

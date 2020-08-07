@@ -26,7 +26,7 @@ import (
 	"time"
 
 	// we use gRPC everywhere, so import the vtgate client.
-	_ "liquidata-inc/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "github.com/liquidata-inc/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 // Environment is the interface that customizes the global settings for

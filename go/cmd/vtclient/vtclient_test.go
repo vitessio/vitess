@@ -23,10 +23,10 @@ import (
 	"strings"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/vttest"
+	"github.com/liquidata-inc/vitess/go/vt/vttest"
 
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
-	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	vttestpb "github.com/liquidata-inc/vitess/go/vt/proto/vttest"
 )
 
 func TestVtclient(t *testing.T) {

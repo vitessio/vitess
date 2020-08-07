@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
 )
 
 func TestLongPolling(t *testing.T) {

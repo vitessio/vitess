@@ -22,9 +22,9 @@ import (
 	"strings"
 	"testing"
 
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
-	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // fakePrimitive fakes a primitive. For every call, it sends the

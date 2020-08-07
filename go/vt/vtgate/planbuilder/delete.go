@@ -19,13 +19,13 @@ package planbuilder
 import (
 	"errors"
 
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vterrors"
-	"liquidata-inc/vitess/go/vt/vtgate/engine"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/engine"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
-	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.

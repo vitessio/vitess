@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var pidFile = flag.String("pid_file", "", "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")

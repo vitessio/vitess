@@ -22,12 +22,12 @@ import (
 	"os"
 	"testing"
 
-	"liquidata-inc/vitess/go/vt/vttest"
+	"github.com/liquidata-inc/vitess/go/vt/vttest"
 
 	"github.com/golang/protobuf/jsonpb"
-	"liquidata-inc/vitess/go/vt/proto/logutil"
-	"liquidata-inc/vitess/go/vt/proto/vschema"
-	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/liquidata-inc/vitess/go/vt/proto/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/proto/vschema"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 )
 
 type columnVindex struct {

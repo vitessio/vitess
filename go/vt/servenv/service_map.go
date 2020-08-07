@@ -19,8 +19,8 @@ package servenv
 import (
 	"flag"
 
-	"liquidata-inc/vitess/go/flagutil"
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/flagutil"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 )
 
 var (

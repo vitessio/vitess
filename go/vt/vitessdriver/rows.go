@@ -20,7 +20,7 @@ import (
 	"database/sql/driver"
 	"io"
 
-	"liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 )
 
 // rows creates a database/sql/driver compliant Row iterator

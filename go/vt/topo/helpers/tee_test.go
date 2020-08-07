@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestTee(t *testing.T) {

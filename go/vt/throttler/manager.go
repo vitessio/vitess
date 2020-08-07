@@ -21,9 +21,9 @@ import (
 	"sort"
 	"sync"
 
-	"liquidata-inc/vitess/go/vt/log"
+	"github.com/liquidata-inc/vitess/go/vt/log"
 
-	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
 )
 
 // GlobalManager is the per-process manager which manages all active throttlers.

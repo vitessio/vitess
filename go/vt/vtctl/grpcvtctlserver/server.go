@@ -25,16 +25,16 @@ import (
 
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/vt/logutil"
-	"liquidata-inc/vitess/go/vt/servenv"
-	"liquidata-inc/vitess/go/vt/topo"
-	"liquidata-inc/vitess/go/vt/vtctl"
-	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
-	"liquidata-inc/vitess/go/vt/wrangler"
+	"github.com/liquidata-inc/vitess/go/vt/logutil"
+	"github.com/liquidata-inc/vitess/go/vt/servenv"
+	"github.com/liquidata-inc/vitess/go/vt/topo"
+	"github.com/liquidata-inc/vitess/go/vt/vtctl"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"github.com/liquidata-inc/vitess/go/vt/wrangler"
 
-	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
-	vtctldatapb "liquidata-inc/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "liquidata-inc/vitess/go/vt/proto/vtctlservice"
+	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
+	vtctldatapb "github.com/liquidata-inc/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "github.com/liquidata-inc/vitess/go/vt/proto/vtctlservice"
 )
 
 // VtctlServer is our RPC server

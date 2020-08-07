@@ -20,7 +20,7 @@ import (
 	"sort"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/discovery"
+	"github.com/liquidata-inc/vitess/go/vt/discovery"
 )
 
 // replicationLagCache caches for each replica a bounded list of historic

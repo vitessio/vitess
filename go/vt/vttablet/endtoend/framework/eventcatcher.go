@@ -20,9 +20,9 @@ import (
 	"errors"
 	"time"
 
-	"liquidata-inc/vitess/go/streamlog"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/liquidata-inc/vitess/go/streamlog"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // TxCatcher allows you to capture and fetch transactions that are being

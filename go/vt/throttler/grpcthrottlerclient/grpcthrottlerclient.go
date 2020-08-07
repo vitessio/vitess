@@ -23,12 +23,12 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"liquidata-inc/vitess/go/vt/grpcclient"
-	"liquidata-inc/vitess/go/vt/throttler/throttlerclient"
-	"liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/liquidata-inc/vitess/go/vt/grpcclient"
+	"github.com/liquidata-inc/vitess/go/vt/throttler/throttlerclient"
+	"github.com/liquidata-inc/vitess/go/vt/vterrors"
 
-	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
-	throttlerservicepb "liquidata-inc/vitess/go/vt/proto/throttlerservice"
+	throttlerdatapb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerdata"
+	throttlerservicepb "github.com/liquidata-inc/vitess/go/vt/proto/throttlerservice"
 )
 
 var (

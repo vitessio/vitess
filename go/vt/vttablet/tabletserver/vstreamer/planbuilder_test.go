@@ -21,15 +21,15 @@ import (
 	"reflect"
 	"testing"
 
-	"liquidata-inc/vitess/go/json2"
-	"liquidata-inc/vitess/go/mysql"
-	"liquidata-inc/vitess/go/sqltypes"
-	"liquidata-inc/vitess/go/vt/sqlparser"
-	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
+	"github.com/liquidata-inc/vitess/go/json2"
+	"github.com/liquidata-inc/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 
-	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
-	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	vschemapb "github.com/liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 var testKSChema *vindexes.KeyspaceSchema

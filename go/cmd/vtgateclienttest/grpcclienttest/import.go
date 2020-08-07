@@ -18,5 +18,5 @@ package grpcclienttest
 
 import (
 	// import the grpc client, it will register itself
-	_ "liquidata-inc/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "github.com/liquidata-inc/vitess/go/vt/vtgate/grpcvtgateconn"
 )

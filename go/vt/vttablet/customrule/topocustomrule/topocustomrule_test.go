@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"liquidata-inc/vitess/go/vt/topo/memorytopo"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/rules"
-	"liquidata-inc/vitess/go/vt/vttablet/tabletservermock"
+	"github.com/liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletserver/rules"
+	"github.com/liquidata-inc/vitess/go/vt/vttablet/tabletservermock"
 )
 
 var customRule1 = `
