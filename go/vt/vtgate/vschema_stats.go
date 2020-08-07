@@ -21,7 +21,7 @@ package vtgate
 import (
 	"sort"
 
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
 )
 
 // VSchemaStats contains a rollup of the VSchema stats.

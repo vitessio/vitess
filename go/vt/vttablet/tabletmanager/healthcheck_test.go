@@ -27,20 +27,20 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/health"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+	"liquidata-inc/vitess/go/vt/health"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/topotools"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletservermock"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 
 	// needed so that grpc client is registered
-	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	_ "liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 )
 
 func TestHealthRecordDeduplication(t *testing.T) {

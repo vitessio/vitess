@@ -20,7 +20,7 @@ import (
 	"flag"
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 func init() {

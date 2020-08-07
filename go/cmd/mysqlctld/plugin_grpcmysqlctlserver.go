@@ -19,8 +19,8 @@ package main
 // Import and register the gRPC mysqlctl server
 
 import (
-	"vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlserver"
-	"vitess.io/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/mysqlctl/grpcmysqlctlserver"
+	"liquidata-inc/vitess/go/vt/servenv"
 )
 
 func init() {

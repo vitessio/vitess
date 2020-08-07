@@ -28,8 +28,8 @@ import (
 	"time"
 	"unicode"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/vt/servenv"
 )
 
 var (

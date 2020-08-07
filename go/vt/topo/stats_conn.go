@@ -21,7 +21,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/stats"
+	"liquidata-inc/vitess/go/stats"
 )
 
 var _ Conn = (*StatsConn)(nil)

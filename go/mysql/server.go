@@ -23,15 +23,15 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/tb"
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/netutil"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/sync2"
+	"liquidata-inc/vitess/go/tb"
+	"liquidata-inc/vitess/go/vt/log"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 )
 
 const (

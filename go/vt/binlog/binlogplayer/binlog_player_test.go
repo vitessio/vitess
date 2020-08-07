@@ -22,12 +22,12 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/throttler"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/throttler"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

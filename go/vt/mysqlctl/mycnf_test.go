@@ -23,9 +23,9 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/env"
-	"vitess.io/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/env"
+	"liquidata-inc/vitess/go/vt/servenv"
 )
 
 var MycnfPath = "/tmp/my.cnf"

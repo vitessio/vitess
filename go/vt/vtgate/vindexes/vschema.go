@@ -24,12 +24,12 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/json2"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 // TabletTypeSuffix maps the tablet type to its suffix string.

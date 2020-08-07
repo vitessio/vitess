@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/tableacl"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/tableacl"
 )
 
 func TestBuildPermissions(t *testing.T) {

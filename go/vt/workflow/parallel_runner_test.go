@@ -26,10 +26,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
 
-	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
+	workflowpb "liquidata-inc/vitess/go/vt/proto/workflow"
 )
 
 func TestParallelRunner(t *testing.T) {

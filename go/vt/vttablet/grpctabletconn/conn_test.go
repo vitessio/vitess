@@ -25,11 +25,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vttablet/grpcqueryservice"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletconntest"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // This test makes sure the go rpc service works

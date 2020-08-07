@@ -30,7 +30,7 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 const pidURL = "/debug/pid"

@@ -41,7 +41,7 @@ import (
 	"net/http"
 	"sync"
 
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // This is a list of predefined roles. Applications are free

@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
 )
 
 const connectionKeyspace = "conn_ks"

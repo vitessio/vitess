@@ -26,12 +26,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/callinfo"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/streamlog"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/callinfo"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 const (

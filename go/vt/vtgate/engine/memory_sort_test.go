@@ -21,9 +21,9 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/sqltypes"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 func TestMemorySortExecute(t *testing.T) {

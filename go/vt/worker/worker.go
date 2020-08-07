@@ -27,7 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/stats"
+	"liquidata-inc/vitess/go/stats"
 )
 
 // Worker is the base interface for all long running workers.

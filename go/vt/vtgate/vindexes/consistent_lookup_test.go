@@ -25,11 +25,11 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/key"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 func TestConsistentLookupInit(t *testing.T) {

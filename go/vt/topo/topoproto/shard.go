@@ -22,8 +22,8 @@ import (
 	"html/template"
 	"strings"
 
-	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/vt/key"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // KeyspaceShardString returns a "keyspace/shard" string taking

@@ -26,11 +26,11 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/trace"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // This file contains utility methods and definitions to lock

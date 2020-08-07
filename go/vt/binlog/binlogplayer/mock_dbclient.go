@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 )
 
 // MockDBClient mocks a DBClient.

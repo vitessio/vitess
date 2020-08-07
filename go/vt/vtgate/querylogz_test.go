@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/streamlog"
+	"liquidata-inc/vitess/go/vt/callerid"
 )
 
 func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {

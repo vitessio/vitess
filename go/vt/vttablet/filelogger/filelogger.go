@@ -20,10 +20,10 @@ package filelogger
 import (
 	"flag"
 
-	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/streamlog"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // logQueriesToFile is the vttablet startup flag that must be set for this plugin to be active.

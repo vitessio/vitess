@@ -23,17 +23,17 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"liquidata-inc/vitess/go/netutil"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/grpcclient"
+	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletconn"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	queryservicepb "liquidata-inc/vitess/go/vt/proto/queryservice"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 const protocolName = "grpc"

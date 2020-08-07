@@ -22,10 +22,10 @@ import (
 	"reflect"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/sqltypes"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // Testable restricts the types that can be added to

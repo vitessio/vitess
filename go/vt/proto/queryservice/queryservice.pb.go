@@ -12,8 +12,8 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	binlogdata "vitess.io/vitess/go/vt/proto/binlogdata"
-	query "vitess.io/vitess/go/vt/proto/query"
+	binlogdata "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	query "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

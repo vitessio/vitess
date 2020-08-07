@@ -23,12 +23,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/testfiles"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/test"
-	"vitess.io/vitess/go/vt/zkctl"
+	"liquidata-inc/vitess/go/testfiles"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/test"
+	"liquidata-inc/vitess/go/vt/zkctl"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestZk2Topo(t *testing.T) {

@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/proto/binlogdata"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/vt/binlog/binlogplayer"
+	"liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 var wantOut = `

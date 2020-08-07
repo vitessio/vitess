@@ -22,10 +22,10 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/key"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 // ExcludeStr is the filter value for excluding tables that match a rule.

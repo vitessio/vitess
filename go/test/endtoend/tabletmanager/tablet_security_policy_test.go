@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"liquidata-inc/vitess/go/test/endtoend/cluster"
 )
 
 func TestFallbackSecurityPolicy(t *testing.T) {

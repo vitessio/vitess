@@ -21,7 +21,7 @@ import (
 	"os"
 	"runtime/pprof"
 
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 var (

@@ -19,7 +19,7 @@ package planbuilder
 import (
 	"strconv"
 
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 // jointab manages procurement and naming of join

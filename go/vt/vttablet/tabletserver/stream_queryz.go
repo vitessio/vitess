@@ -23,9 +23,9 @@ import (
 	"strconv"
 	"text/template"
 
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logz"
+	"liquidata-inc/vitess/go/acl"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logz"
 )
 
 var (

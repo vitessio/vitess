@@ -29,12 +29,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/netutil"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/hook"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // WaitForSlaveStart waits until the deadline for replication to start.

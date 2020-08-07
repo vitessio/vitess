@@ -21,7 +21,7 @@ import (
 	"log/syslog"
 	"strings"
 
-	"vitess.io/vitess/go/event/syslogger"
+	"liquidata-inc/vitess/go/event/syslogger"
 )
 
 // Syslog writes a MigrateServedFrom event to syslog.

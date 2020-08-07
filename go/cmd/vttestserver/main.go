@@ -27,9 +27,9 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/vt/log"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
-	"vitess.io/vitess/go/vt/vttest"
+	"liquidata-inc/vitess/go/vt/log"
+	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
+	"liquidata-inc/vitess/go/vt/vttest"
 )
 
 type topoFlags struct {

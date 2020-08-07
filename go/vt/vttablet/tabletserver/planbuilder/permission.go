@@ -19,8 +19,8 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/tableacl"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/tableacl"
 )
 
 // Permission associates the required access permission

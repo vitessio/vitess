@@ -24,9 +24,9 @@ import (
 	"net"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 )
 
 // AuthServer is the interface that servers must implement to validate

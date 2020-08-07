@@ -25,8 +25,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
 )
 
 // TestCreateShard tests a few cases for topo.CreateShard

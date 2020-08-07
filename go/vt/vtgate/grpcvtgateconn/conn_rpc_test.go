@@ -27,10 +27,10 @@ import (
 	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconntest"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vtgate/grpcvtgateservice"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconntest"
 )
 
 // TestGRPCVTGateConn makes sure the grpc service works

@@ -21,7 +21,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // VtctlProcess is a generic handle for a running vtctl command .

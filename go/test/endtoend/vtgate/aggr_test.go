@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
+	"liquidata-inc/vitess/go/mysql"
 )
 
 func TestAggregateTypes(t *testing.T) {

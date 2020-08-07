@@ -19,13 +19,13 @@ package main
 import (
 	"html/template"
 
-	"vitess.io/vitess/go/vt/health"
-	"vitess.io/vitess/go/vt/servenv"
-	_ "vitess.io/vitess/go/vt/status"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"liquidata-inc/vitess/go/vt/health"
+	"liquidata-inc/vitess/go/vt/servenv"
+	_ "liquidata-inc/vitess/go/vt/status"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
 )
 
 var (

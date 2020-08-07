@@ -23,16 +23,16 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vtbench"
+	"liquidata-inc/vitess/go/exit"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vtbench"
 
 	// Import and register the gRPC vtgateconn client
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "liquidata-inc/vitess/go/vt/vtgate/grpcvtgateconn"
 	// Import and register the gRPC tabletconn client
-	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
+	_ "liquidata-inc/vitess/go/vt/vttablet/grpctabletconn"
 )
 
 /*

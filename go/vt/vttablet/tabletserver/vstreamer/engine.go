@@ -24,18 +24,18 @@ import (
 	"net/http"
 	"sync"
 
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"liquidata-inc/vitess/go/acl"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/srvtopo"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 var (

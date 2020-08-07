@@ -17,7 +17,7 @@ limitations under the License.
 package logutil
 
 import (
-	"vitess.io/vitess/go/event"
+	"liquidata-inc/vitess/go/event"
 )
 
 var (

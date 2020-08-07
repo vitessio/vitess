@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 // lookupInternal implements the functions for the Lookup vindexes.

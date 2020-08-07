@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // ParseKeyspaceType parses a string into a KeyspaceType

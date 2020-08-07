@@ -20,8 +20,8 @@ import (
 	"flag"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtctl/fakevtctlclient"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	"liquidata-inc/vitess/go/vt/vtctl/fakevtctlclient"
+	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 )
 
 func TestRebuildKeyspaceGraphTask(t *testing.T) {

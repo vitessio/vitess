@@ -19,9 +19,9 @@ package srvtopotest
 import (
 	"golang.org/x/net/context"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/topo"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	"liquidata-inc/vitess/go/vt/topo"
 )
 
 // PassthroughSrvTopoServer is a bare implementation of srvtopo.Server for use in tests

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	"liquidata-inc/vitess/go/mysql"
 )
 
 func TestRegisterFlagsWithSomeFlags(t *testing.T) {

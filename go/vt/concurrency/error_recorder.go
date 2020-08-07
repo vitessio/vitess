@@ -21,7 +21,7 @@ import (
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // ErrorRecorder offers a way to record errors during complex

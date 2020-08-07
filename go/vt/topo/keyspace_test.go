@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // This file tests the keyspace related object functionnalities.

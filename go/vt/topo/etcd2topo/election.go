@@ -22,8 +22,8 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/topo"
 )
 
 // NewMasterParticipation is part of the topo.Server interface

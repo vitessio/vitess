@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	"liquidata-inc/vitess/go/exit"
+	"liquidata-inc/vitess/go/trace"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/vtctl/vtctlclient"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
 )
 
 // The default values used by these flags cannot be taken from wrangler and

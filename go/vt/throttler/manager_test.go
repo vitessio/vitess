@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
 )
 
 // We base our test data on these defaults.

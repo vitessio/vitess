@@ -8,7 +8,7 @@ import (
 	math "math"
 
 	proto "github.com/golang/protobuf/proto"
-	logutil "vitess.io/vitess/go/vt/proto/logutil"
+	logutil "liquidata-inc/vitess/go/vt/proto/logutil"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

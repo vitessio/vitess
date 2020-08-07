@@ -16,7 +16,7 @@ limitations under the License.
 
 package sqlparser
 
-import querypb "vitess.io/vitess/go/vt/proto/query"
+import querypb "liquidata-inc/vitess/go/vt/proto/query"
 
 // RedactSQLQuery returns a sql string with the params stripped out for display
 func RedactSQLQuery(sql string) (string, error) {

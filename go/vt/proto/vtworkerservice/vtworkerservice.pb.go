@@ -12,7 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	vtworkerdata "vitess.io/vitess/go/vt/proto/vtworkerdata"
+	vtworkerdata "liquidata-inc/vitess/go/vt/proto/vtworkerdata"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

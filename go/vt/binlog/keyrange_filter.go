@@ -17,18 +17,18 @@ limitations under the License.
 package binlog
 
 import (
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlannotation"
+	"liquidata-inc/vitess/go/vt/key"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/sqlannotation"
 
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // KeyRangeFilterFunc returns a function that calls callback only if statements

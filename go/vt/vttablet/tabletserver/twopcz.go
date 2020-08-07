@@ -22,8 +22,8 @@ import (
 	"html/template"
 	"net/http"
 
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/acl"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 var (

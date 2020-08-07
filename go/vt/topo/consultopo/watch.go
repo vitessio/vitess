@@ -24,7 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/hashicorp/consul/api"
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo"
 )
 
 var (

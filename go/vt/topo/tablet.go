@@ -23,19 +23,19 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/event"
+	"liquidata-inc/vitess/go/netutil"
+	"liquidata-inc/vitess/go/trace"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/events"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/vt/topo/events"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned

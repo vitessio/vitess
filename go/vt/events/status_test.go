@@ -19,7 +19,7 @@ package events
 import (
 	"testing"
 
-	"vitess.io/vitess/go/event"
+	"liquidata-inc/vitess/go/event"
 )
 
 type testEvent struct {

@@ -25,8 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/test/endtoend/cluster"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/test/endtoend/cluster"
 )
 
 func TestTopoCustomRule(t *testing.T) {

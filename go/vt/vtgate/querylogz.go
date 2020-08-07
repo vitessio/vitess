@@ -25,10 +25,10 @@ import (
 	"text/template"
 	"time"
 
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logz"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/acl"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logz"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 var (

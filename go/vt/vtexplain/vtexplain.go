@@ -27,13 +27,13 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/jsonutil"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"liquidata-inc/vitess/go/jsonutil"
+	"liquidata-inc/vitess/go/sync2"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/vtgate/engine"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 var (

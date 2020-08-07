@@ -26,10 +26,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/streamlog"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {

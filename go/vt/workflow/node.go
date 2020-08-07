@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
-	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
+	"liquidata-inc/vitess/go/vt/log"
+	workflowpb "liquidata-inc/vitess/go/vt/proto/workflow"
 )
 
 // This file contains the necessary object definitions and interfaces

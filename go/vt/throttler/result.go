@@ -23,7 +23,7 @@ import (
 	"text/template"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 type rateChange string

@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/grpclog"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // grpc doesn't return underlying errors. So, we have

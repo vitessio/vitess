@@ -26,8 +26,8 @@ import (
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/vt/log"
 
 	"golang.org/x/net/context"
 )

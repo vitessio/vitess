@@ -22,11 +22,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/key"
+	"liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 // ExplainTopo satisfies the srvtopo.Server interface.
