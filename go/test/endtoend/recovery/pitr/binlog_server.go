@@ -38,7 +38,7 @@ type mysqlMaster struct {
 
 // newBinlogServer returns an instance of binlog server
 func newBinlogServer(hostname string, port int) (*binLogServer, error) {
-	dataDir := path.Join(os.Getenv("VTDATAROOT"), binlogDataDir)
+	dataDir := path.Join(os.Getenv("VTDATAROOT"), binlogDataDir+"_"+fmt.Sprintf("%d", port))
 	fmt.Println(dataDir)
 	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 		err := os.Mkdir(dataDir, 0700)
