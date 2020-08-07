@@ -22,10 +22,10 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/vterrors"
 )
 
 // TabletPicker gives a simplified API for picking tablets.

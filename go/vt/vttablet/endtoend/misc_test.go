@@ -29,15 +29,15 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/log"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/vttablet/endtoend/framework"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestSimpleRead(t *testing.T) {

@@ -20,8 +20,8 @@ package main
 // with the Prometheus client library
 
 import (
-	"vitess.io/vitess/go/stats/prometheusbackend"
-	"vitess.io/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/stats/prometheusbackend"
+	"liquidata-inc/vitess/go/vt/servenv"
 )
 
 func init() {

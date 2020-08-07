@@ -27,10 +27,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/streamlog"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/streamlog"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 func resetVariables() {

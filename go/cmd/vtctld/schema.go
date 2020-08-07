@@ -22,13 +22,13 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/schemamanager"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/wrangler"
+	"liquidata-inc/vitess/go/timer"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/schemamanager"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
+	"liquidata-inc/vitess/go/vt/wrangler"
 )
 
 var (

@@ -27,7 +27,7 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
 )

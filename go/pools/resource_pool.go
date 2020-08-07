@@ -26,9 +26,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/trace"
+	"liquidata-inc/vitess/go/sync2"
+	"liquidata-inc/vitess/go/timer"
+	"liquidata-inc/vitess/go/trace"
 )
 
 var (

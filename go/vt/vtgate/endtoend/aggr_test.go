@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
+	"liquidata-inc/vitess/go/mysql"
 )
 
 func TestAggregateTypes(t *testing.T) {

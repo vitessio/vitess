@@ -26,16 +26,16 @@ import (
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vtgate/gateway"
-	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
+	"liquidata-inc/vitess/go/vt/discovery"
+	"liquidata-inc/vitess/go/vt/srvtopo"
+	"liquidata-inc/vitess/go/vt/vtgate/gateway"
+	"liquidata-inc/vitess/go/vt/vttablet/grpcqueryservice"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletconntest"
 
 	// We will use gRPC to connect, register the dialer
-	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
+	_ "liquidata-inc/vitess/go/vt/vttablet/grpctabletconn"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // TestGRPCDiscovery tests the discovery gateway with a gRPC

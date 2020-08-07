@@ -18,7 +18,7 @@ package automation
 
 import (
 	"golang.org/x/net/context"
-	automationpb "vitess.io/vitess/go/vt/proto/automation"
+	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
 )
 
 // CopySchemaShardTask runs vtctl CopySchemaShard to copy the schema from one shard to another.

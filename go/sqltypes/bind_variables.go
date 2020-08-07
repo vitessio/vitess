@@ -24,7 +24,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // NullBindVariable is a bindvar with NULL value.

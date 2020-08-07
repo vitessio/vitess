@@ -20,7 +20,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"vitess.io/vitess/go/cache"
+	"liquidata-inc/vitess/go/cache"
 )
 
 // Consolidator consolidates duplicate queries from executing simulaneously

@@ -25,10 +25,10 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func hki(hexValue string) []byte {

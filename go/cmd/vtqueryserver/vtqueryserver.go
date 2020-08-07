@@ -20,11 +20,11 @@ import (
 	"flag"
 	"os"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtqueryserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vtqueryserver"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (

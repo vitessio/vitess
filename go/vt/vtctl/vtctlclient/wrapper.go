@@ -24,7 +24,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
 )
 
 var (

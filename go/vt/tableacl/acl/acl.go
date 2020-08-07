@@ -17,7 +17,7 @@ limitations under the License.
 package acl
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 // ACL is an interface for Access Control List.

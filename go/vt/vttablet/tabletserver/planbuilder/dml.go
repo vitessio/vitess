@@ -17,13 +17,13 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan *Plan, err error) {

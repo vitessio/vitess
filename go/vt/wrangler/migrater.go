@@ -28,17 +28,17 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/binlog/binlogplayer"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/key"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
 )
 
 const (

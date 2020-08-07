@@ -19,9 +19,9 @@ limitations under the License.
 package wrangler
 
 import (
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
 )
 
 var (

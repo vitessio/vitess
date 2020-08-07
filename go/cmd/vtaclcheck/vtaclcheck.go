@@ -20,11 +20,11 @@ import (
 	"flag"
 	"fmt"
 
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtaclcheck"
+	"liquidata-inc/vitess/go/exit"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vtaclcheck"
 )
 
 var (

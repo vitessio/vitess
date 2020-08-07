@@ -20,12 +20,12 @@ import (
 	"path"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
 )
 
 // SaveVSchema first validates the VSchema, then saves it.

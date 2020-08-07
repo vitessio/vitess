@@ -29,13 +29,13 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/workflow"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/workflow"
 
-	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
+	workflowpb "liquidata-inc/vitess/go/vt/proto/workflow"
 )
 
 const (

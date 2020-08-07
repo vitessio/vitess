@@ -23,7 +23,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // This file provides the utility methods to save / retrieve CellsAliases

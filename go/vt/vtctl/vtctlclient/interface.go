@@ -24,8 +24,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
 )
 
 // vtctlClientProtocol specifics which RPC client implementation should be used.

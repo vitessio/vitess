@@ -20,10 +20,10 @@ import (
 	"errors"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 func TestDeleteUnsharded(t *testing.T) {

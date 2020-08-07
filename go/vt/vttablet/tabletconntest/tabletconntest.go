@@ -28,16 +28,16 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/grpcclient"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletconn"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // testErrorHelper will check one instance of each error type,

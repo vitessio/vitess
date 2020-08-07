@@ -19,13 +19,13 @@ package mysqlctl
 import (
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/dbconnpool"
+	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // MysqlDaemon is the interface we use for abstracting Mysqld.

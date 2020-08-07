@@ -26,12 +26,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqlescape"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/mysqlctl/backupstorage"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 )
 
 // This file handles the backup and restore related code

@@ -22,12 +22,12 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/mysql"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/proto/query"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"liquidata-inc/vitess/go/mysql"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	"liquidata-inc/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
 )
 
 func TestVStream(t *testing.T) {

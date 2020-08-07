@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"vitess.io/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/servenv"
 )
 
 // This file registers a /healthz URL that reports the health of the agent.

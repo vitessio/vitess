@@ -25,19 +25,19 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/acl"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/timer"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/connpool"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 const maxTableCount = 10000

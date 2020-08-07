@@ -17,16 +17,16 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
 
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // GetSchema returns the schema.

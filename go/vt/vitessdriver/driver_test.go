@@ -30,9 +30,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
+	"liquidata-inc/vitess/go/sqltypes"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/vt/vtgate/grpcvtgateservice"
 )
 
 var (

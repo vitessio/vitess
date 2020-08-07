@@ -17,7 +17,7 @@ limitations under the License.
 package automation
 
 import (
-	automationpb "vitess.io/vitess/go/vt/proto/automation"
+	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
 )
 
 // Helper functions for "TaskContainer" protobuf message.

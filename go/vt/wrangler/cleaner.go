@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 const (

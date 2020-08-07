@@ -24,8 +24,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
 )
 
 // TestKill opens a connection, issues a command that

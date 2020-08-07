@@ -30,13 +30,13 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/worker"
+	"liquidata-inc/vitess/go/exit"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/worker"
 )
 
 var (

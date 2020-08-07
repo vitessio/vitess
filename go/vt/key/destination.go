@@ -22,10 +22,10 @@ import (
 	"math/rand"
 	"strings"
 
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // AnyShardPicker makes a choice on what shard to use when any shard will do. Used for testing.

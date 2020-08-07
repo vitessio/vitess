@@ -23,13 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/mysql/fakesqldb"
+	"liquidata-inc/vitess/go/sqltypes"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"golang.org/x/net/context"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 func TestTxEngineClose(t *testing.T) {

@@ -22,13 +22,13 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/cmd/vtgateclienttest/services"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+	"liquidata-inc/vitess/go/cmd/vtgateclienttest/services"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 // testCallerID adds a caller ID to a context, and makes sure the server

@@ -20,12 +20,12 @@ import (
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/log"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 const unknown string = "unknown"

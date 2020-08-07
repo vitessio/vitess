@@ -33,10 +33,10 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/discovery"
+	"liquidata-inc/vitess/go/vt/log"
 
-	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
+	throttlerdatapb "liquidata-inc/vitess/go/vt/proto/throttlerdata"
 )
 
 const (

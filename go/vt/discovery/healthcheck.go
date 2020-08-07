@@ -51,18 +51,18 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"liquidata-inc/vitess/go/netutil"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/sync2"
+	"liquidata-inc/vitess/go/vt/grpcclient"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/topotools"
+	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletconn"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

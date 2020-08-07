@@ -22,13 +22,13 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
 
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // GetPermissions returns the permissions set on a remote tablet

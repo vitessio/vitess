@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 var errGeneric = "generic error"

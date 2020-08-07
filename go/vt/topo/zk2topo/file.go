@@ -24,7 +24,7 @@ import (
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo"
 )
 
 // Create is part of the topo.Conn interface.

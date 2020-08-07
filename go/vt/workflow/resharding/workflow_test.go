@@ -23,17 +23,17 @@ import (
 	"github.com/golang/mock/gomock"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/worker/fakevtworkerclient"
-	"vitess.io/vitess/go/vt/worker/vtworkerclient"
-	"vitess.io/vitess/go/vt/workflow"
-	"vitess.io/vitess/go/vt/wrangler"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"liquidata-inc/vitess/go/vt/worker/fakevtworkerclient"
+	"liquidata-inc/vitess/go/vt/worker/vtworkerclient"
+	"liquidata-inc/vitess/go/vt/workflow"
+	"liquidata-inc/vitess/go/vt/wrangler"
 
 	// import the gRPC client implementation for tablet manager
-	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	_ "liquidata-inc/vitess/go/vt/vttablet/grpctmclient"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

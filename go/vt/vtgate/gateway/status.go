@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/stats"
+	"liquidata-inc/vitess/go/stats"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 const (

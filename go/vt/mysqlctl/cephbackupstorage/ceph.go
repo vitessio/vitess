@@ -33,9 +33,9 @@ import (
 	minio "github.com/minio/minio-go"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/mysqlctl/backupstorage"
 )
 
 var (

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/tb"
+	"liquidata-inc/vitess/go/tb"
 )
 
 // HandlePanic should be called using 'defer' in the RPC code that executes the command.

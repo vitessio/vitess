@@ -18,8 +18,8 @@ package automation
 
 import (
 	"golang.org/x/net/context"
-	automationpb "vitess.io/vitess/go/vt/proto/automation"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	automationpb "liquidata-inc/vitess/go/vt/proto/automation"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
 )
 
 // SplitDiffTask runs SplitDiff on a remote vtworker to compare the old shard against its new split shards.

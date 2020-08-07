@@ -22,19 +22,19 @@ import (
 	"net/http"
 	"time"
 
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/vtgate/fakerpcvtgateconn"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/vtgate/fakerpcvtgateconn"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

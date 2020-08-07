@@ -21,17 +21,17 @@ import (
 	"flag"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/tableacl"
-	"vitess.io/vitess/go/vt/tableacl/simpleacl"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/mysqlctl"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/tableacl"
+	"liquidata-inc/vitess/go/vt/tableacl/simpleacl"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (

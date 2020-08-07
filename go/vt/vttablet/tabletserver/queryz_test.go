@@ -26,10 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 func TestQueryzHandler(t *testing.T) {

@@ -20,12 +20,12 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 func TestCodexBuildValuesList(t *testing.T) {

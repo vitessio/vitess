@@ -17,10 +17,10 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topotools"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topotools"
 )
 
 // maybeRebuildKeyspace handles the initial rebuild of SrvKeyspace if needed.

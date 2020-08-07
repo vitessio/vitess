@@ -22,11 +22,11 @@ import (
 	"os"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/helpers"
+	"liquidata-inc/vitess/go/exit"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/helpers"
 )
 
 var (

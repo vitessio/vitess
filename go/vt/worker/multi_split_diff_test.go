@@ -24,19 +24,19 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
-	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
-	"vitess.io/vitess/go/vt/wrangler"
-	"vitess.io/vitess/go/vt/wrangler/testlib"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"liquidata-inc/vitess/go/vt/vttablet/grpcqueryservice"
+	"liquidata-inc/vitess/go/vt/vttablet/queryservice/fakes"
+	"liquidata-inc/vitess/go/vt/wrangler"
+	"liquidata-inc/vitess/go/vt/wrangler/testlib"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 // msdDestinationTabletServer is a local QueryService implementation to

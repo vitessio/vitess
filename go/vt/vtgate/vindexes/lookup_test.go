@@ -23,12 +23,12 @@ import (
 
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 
-	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"liquidata-inc/vitess/go/vt/key"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vtgatepb "liquidata-inc/vitess/go/vt/proto/vtgate"
 )
 
 // LookupNonUnique tests are more comprehensive than others.

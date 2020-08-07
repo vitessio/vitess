@@ -26,12 +26,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"liquidata-inc/vitess/go/json2"
+	"liquidata-inc/vitess/go/vt/key"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // waitForInitialSrvKeyspace waits for the initial SrvKeyspace to

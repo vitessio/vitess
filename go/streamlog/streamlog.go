@@ -29,9 +29,9 @@ import (
 	"sync"
 	"syscall"
 
-	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/acl"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 var (

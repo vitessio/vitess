@@ -20,10 +20,10 @@ limitations under the License.
 package main
 
 import (
-	"vitess.io/vitess/go/cmd/vtgateclienttest/services"
-	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtgate"
+	"liquidata-inc/vitess/go/cmd/vtgateclienttest/services"
+	"liquidata-inc/vitess/go/exit"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vtgate"
 )
 
 func init() {

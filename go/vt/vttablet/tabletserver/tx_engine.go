@@ -23,20 +23,20 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/dtids"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
+	"liquidata-inc/vitess/go/timer"
+	"liquidata-inc/vitess/go/trace"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/dtids"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/connpool"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 type txEngineState int

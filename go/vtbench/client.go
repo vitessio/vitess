@@ -22,17 +22,17 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/grpcclient"
+	"liquidata-inc/vitess/go/vt/key"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/vtgate/vtgateconn"
+	"liquidata-inc/vitess/go/vt/vttablet/queryservice"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletconn"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 type clientConn interface {

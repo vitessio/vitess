@@ -22,7 +22,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo"
 )
 
 func waitForMasterID(t *testing.T, mp topo.MasterParticipation, expected string) {

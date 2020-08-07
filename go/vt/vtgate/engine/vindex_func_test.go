@@ -20,11 +20,11 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/key"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // uvindex is Unique.

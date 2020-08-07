@@ -23,17 +23,17 @@ import (
 	"flag"
 	"time"
 
-	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/timer"
+	"liquidata-inc/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlproxy"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/mysqlproxy"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 var (

@@ -26,11 +26,11 @@ import (
 	"time"
 
 	ldap "gopkg.in/ldap.v2"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vttls"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/netutil"
+	"liquidata-inc/vitess/go/vt/log"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/vt/vttls"
 )
 
 var (

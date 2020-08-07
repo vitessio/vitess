@@ -23,21 +23,21 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/mysql/fakesqldb"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"regexp"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/messager"
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {

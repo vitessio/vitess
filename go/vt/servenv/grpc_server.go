@@ -25,16 +25,16 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"vitess.io/vitess/go/trace"
+	"liquidata-inc/vitess/go/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/grpccommon"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttls"
+	"liquidata-inc/vitess/go/vt/grpccommon"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/vttls"
 )
 
 // This file handles gRPC server, on its own port.

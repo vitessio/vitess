@@ -23,7 +23,7 @@ import (
 	"fmt"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 var protocol = flag.String("mysqlctl_client_protocol", "grpc", "the protocol to use to talk to the mysqlctl server")

@@ -21,7 +21,7 @@ import (
 	"regexp"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 )
 
 func verifyQueries(t *testing.T, dcs []*fakeDBClient) {

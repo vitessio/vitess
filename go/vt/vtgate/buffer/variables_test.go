@@ -24,7 +24,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/stats"
+	"liquidata-inc/vitess/go/stats"
 )
 
 func TestVariables(t *testing.T) {

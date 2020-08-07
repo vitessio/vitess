@@ -26,12 +26,12 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
-	vtenv "vitess.io/vitess/go/vt/env"
-	"vitess.io/vitess/go/vt/tlstest"
-	"vitess.io/vitess/go/vt/vttest"
+	"liquidata-inc/vitess/go/mysql"
+	vtenv "liquidata-inc/vitess/go/vt/env"
+	"liquidata-inc/vitess/go/vt/tlstest"
+	"liquidata-inc/vitess/go/vt/vttest"
 
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
 )
 
 var (

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/stats"
+	"liquidata-inc/vitess/go/stats"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

@@ -17,5 +17,5 @@ limitations under the License.
 package main
 
 import (
-	_ "vitess.io/vitess/go/vt/topo/zk2topo"
+	_ "liquidata-inc/vitess/go/vt/topo/zk2topo"
 )

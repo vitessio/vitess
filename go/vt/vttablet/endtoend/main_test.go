@@ -24,14 +24,14 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/tableacl"
-	"vitess.io/vitess/go/vt/tableacl/simpleacl"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttest"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/vt/tableacl"
+	"liquidata-inc/vitess/go/vt/tableacl/simpleacl"
+	"liquidata-inc/vitess/go/vt/vttablet/endtoend/framework"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/vt/vttest"
 
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+	vttestpb "liquidata-inc/vitess/go/vt/proto/vttest"
 )
 
 var (

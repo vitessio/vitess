@@ -19,8 +19,8 @@ package discovery
 import (
 	"testing"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestRemoveUnhealthyTablets(t *testing.T) {

@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // LocalController listens to the specified schema change dir and applies schema changes.

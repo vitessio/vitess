@@ -23,11 +23,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 // VSchemaManager is used to watch for updates to the vschema and to implement

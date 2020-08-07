@@ -21,11 +21,11 @@ import (
 	"html/template"
 	"net/http"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/wrangler"
+	"liquidata-inc/vitess/go/vt/wrangler"
 )
 
 const blockHTML = `

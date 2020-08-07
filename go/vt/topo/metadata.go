@@ -20,10 +20,10 @@ import (
 	"context"
 	"path"
 
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 
-	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/vt/topo/events"
+	"liquidata-inc/vitess/go/event"
+	"liquidata-inc/vitess/go/vt/topo/events"
 )
 
 // UpsertMetadata sets the key/value in the metadata if it doesn't exist, otherwise it updates the content

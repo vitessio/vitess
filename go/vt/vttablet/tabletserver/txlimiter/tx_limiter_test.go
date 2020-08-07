@@ -19,10 +19,10 @@ package txlimiter
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/callerid"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 func resetVariables() {

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // ThrottledLogger will allow logging of messages but won't spam the

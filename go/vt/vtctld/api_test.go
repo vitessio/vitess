@@ -27,11 +27,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/wrangler"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
+	"liquidata-inc/vitess/go/vt/wrangler"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vschemapb "liquidata-inc/vitess/go/vt/proto/vschema"
 )
 
 func compactJSON(in []byte) string {

@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 )
 
 func TestMessagerCacheOrder(t *testing.T) {

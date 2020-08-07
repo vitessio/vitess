@@ -29,10 +29,10 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/tableacl"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/tableacl"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 // MarshalJSON returns a JSON of the given Plan.

@@ -19,7 +19,7 @@ package proc
 import (
 	"net"
 
-	"vitess.io/vitess/go/stats"
+	"liquidata-inc/vitess/go/stats"
 )
 
 type CountingListener struct {

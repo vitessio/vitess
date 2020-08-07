@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 func TestJournalOneToOne(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"container/heap"
 	"sync"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 )
 
 //_______________________________________________

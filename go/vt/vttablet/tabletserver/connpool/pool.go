@@ -22,17 +22,17 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/pools"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/pools"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/trace"
+	"liquidata-inc/vitess/go/vt/callerid"
+	"liquidata-inc/vitess/go/vt/dbconnpool"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 // ErrConnPoolClosed is returned when the connection pool is closed.

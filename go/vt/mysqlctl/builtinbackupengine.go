@@ -28,17 +28,17 @@ import (
 	"time"
 
 	"github.com/klauspost/pgzip"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sync2"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/hook"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/mysqlctl/backupstorage"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/tmclient"
 )
 
 const (

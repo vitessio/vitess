@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 func TestStreamResults(t *testing.T) {

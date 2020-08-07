@@ -26,20 +26,20 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/topotools/events"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/event"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqlescape"
+	"liquidata-inc/vitess/go/vt/concurrency"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/topotools"
+	"liquidata-inc/vitess/go/vt/topotools/events"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	replicationdatapb "liquidata-inc/vitess/go/vt/proto/replicationdata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	vtrpcpb "liquidata-inc/vitess/go/vt/proto/vtrpc"
 )
 
 const (

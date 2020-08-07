@@ -19,8 +19,8 @@ package tabletmanager
 import (
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/topo"
 )
 
 type shardWatcher struct {

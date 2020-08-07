@@ -41,13 +41,13 @@ import (
 	// register the HTTP handlers for profiling
 	_ "net/http/pprof"
 
-	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/event"
+	"liquidata-inc/vitess/go/netutil"
+	"liquidata-inc/vitess/go/stats"
+	"liquidata-inc/vitess/go/vt/log"
 
 	// register the proper init and shutdown hooks for logging
-	_ "vitess.io/vitess/go/vt/logutil"
+	_ "liquidata-inc/vitess/go/vt/logutil"
 )
 
 var (

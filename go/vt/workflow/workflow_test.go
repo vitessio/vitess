@@ -26,11 +26,11 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/topo"
 
-	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
+	workflowpb "liquidata-inc/vitess/go/vt/proto/workflow"
 )
 
 const (

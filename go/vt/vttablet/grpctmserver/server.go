@@ -22,17 +22,17 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/callinfo"
-	"vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"liquidata-inc/vitess/go/vt/callinfo"
+	"liquidata-inc/vitess/go/vt/hook"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/mysqlctl/tmutils"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletmanager"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
+	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
+	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerservicepb "liquidata-inc/vitess/go/vt/proto/tabletmanagerservice"
 )
 
 // server is the gRPC implementation of the RPC server

@@ -21,8 +21,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/key"
 )
 
 var (

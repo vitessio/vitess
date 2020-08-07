@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"vitess.io/vitess/go/bytes2"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/bytes2"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/vterrors"
 )
 
 const (

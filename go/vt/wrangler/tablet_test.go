@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/logutil"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"liquidata-inc/vitess/go/vt/logutil"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/vt/topo/memorytopo"
 )
 
 // TestInitTabletShardConversion makes sure InitTablet converts the

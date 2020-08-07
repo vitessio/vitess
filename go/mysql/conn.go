@@ -28,14 +28,14 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/bucketpool"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/bucketpool"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sync2"
+	"liquidata-inc/vitess/go/vt/log"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/vterrors"
 )
 
 const (

@@ -23,8 +23,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/vt/log"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
 )
 
 const (

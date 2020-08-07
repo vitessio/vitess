@@ -26,11 +26,11 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/worker/grpcvtworkerserver"
-	"vitess.io/vitess/go/vt/worker/vtworkerclienttest"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/worker/grpcvtworkerserver"
+	"liquidata-inc/vitess/go/vt/worker/vtworkerclienttest"
 
-	vtworkerservicepb "vitess.io/vitess/go/vt/proto/vtworkerservice"
+	vtworkerservicepb "liquidata-inc/vitess/go/vt/proto/vtworkerservice"
 )
 
 // Test gRPC interface using a vtworker and vtworkerclient.

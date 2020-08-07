@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/vtgate/engine"
+	"liquidata-inc/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildInsertPlan builds the route for an INSERT statement.

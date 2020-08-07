@@ -25,14 +25,14 @@ import (
 
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/worker"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/servenv"
+	"liquidata-inc/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/worker"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	vtworkerdatapb "vitess.io/vitess/go/vt/proto/vtworkerdata"
-	vtworkerservicepb "vitess.io/vitess/go/vt/proto/vtworkerservice"
+	logutilpb "liquidata-inc/vitess/go/vt/proto/logutil"
+	vtworkerdatapb "liquidata-inc/vitess/go/vt/proto/vtworkerdata"
+	vtworkerservicepb "liquidata-inc/vitess/go/vt/proto/vtworkerservice"
 )
 
 // VtworkerServer is our RPC server

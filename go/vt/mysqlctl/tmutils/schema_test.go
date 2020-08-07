@@ -24,7 +24,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var basicTable1 = &tabletmanagerdatapb.TableDefinition{

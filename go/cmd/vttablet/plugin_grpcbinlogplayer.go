@@ -19,5 +19,5 @@ package main
 // Imports and register the gRPC binlog player
 
 import (
-	_ "vitess.io/vitess/go/vt/binlog/grpcbinlogplayer"
+	_ "liquidata-inc/vitess/go/vt/binlog/grpcbinlogplayer"
 )

@@ -22,11 +22,11 @@ import (
 	"sync"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/fileutil"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/fileutil"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // ResolveKeyspaceWildcard will resolve keyspace wildcards.

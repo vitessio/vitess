@@ -1,4 +1,4 @@
-module vitess.io/vitess
+module liquidata-inc/vitess
 
 go 1.12
 

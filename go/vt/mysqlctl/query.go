@@ -23,10 +23,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/dbconnpool"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if

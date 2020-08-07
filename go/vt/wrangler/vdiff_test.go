@@ -23,10 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/sqltypes"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"liquidata-inc/vitess/go/sqltypes"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "liquidata-inc/vitess/go/vt/proto/tabletmanagerdata"
+	"liquidata-inc/vitess/go/vt/vtgate/engine"
 )
 
 func TestVDiffPlanSuccess(t *testing.T) {

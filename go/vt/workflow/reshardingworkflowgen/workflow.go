@@ -29,14 +29,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/workflow"
-	"vitess.io/vitess/go/vt/workflow/resharding"
+	"liquidata-inc/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/vt/logutil"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topotools"
+	"liquidata-inc/vitess/go/vt/workflow"
+	"liquidata-inc/vitess/go/vt/workflow/resharding"
 
-	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
+	workflowpb "liquidata-inc/vitess/go/vt/proto/workflow"
 )
 
 const (

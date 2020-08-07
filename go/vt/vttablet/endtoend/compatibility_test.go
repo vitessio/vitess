@@ -21,9 +21,9 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"liquidata-inc/vitess/go/sqltypes"
+	querypb "liquidata-inc/vitess/go/vt/proto/query"
+	"liquidata-inc/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 var point12 = "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@"

@@ -28,11 +28,11 @@ import (
 
 	"github.com/hashicorp/consul/api"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/testfiles"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/test"
+	"liquidata-inc/vitess/go/testfiles"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/test"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // startConsul starts a consul subprocess, and waits for it to be ready.

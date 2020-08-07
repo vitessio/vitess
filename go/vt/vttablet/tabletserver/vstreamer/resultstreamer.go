@@ -20,12 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"liquidata-inc/vitess/go/mysql"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/dbconfigs"
+	"liquidata-inc/vitess/go/vt/log"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
+	"liquidata-inc/vitess/go/vt/sqlparser"
 )
 
 type resultStreamer struct {

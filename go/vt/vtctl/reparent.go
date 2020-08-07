@@ -22,12 +22,12 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/wrangler"
+	"liquidata-inc/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo/topoproto"
+	"liquidata-inc/vitess/go/vt/wrangler"
 
-	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/vt/mysqlctl"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func init() {

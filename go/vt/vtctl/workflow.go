@@ -22,8 +22,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/workflow"
-	"vitess.io/vitess/go/vt/wrangler"
+	"liquidata-inc/vitess/go/vt/workflow"
+	"liquidata-inc/vitess/go/vt/wrangler"
 )
 
 // This file contains the workflows command group for vtctl.

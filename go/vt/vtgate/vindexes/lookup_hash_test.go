@@ -21,9 +21,9 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"liquidata-inc/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/vt/key"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 func TestLookupHashNew(t *testing.T) {

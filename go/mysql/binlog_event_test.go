@@ -19,7 +19,7 @@ package mysql
 import (
 	"testing"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "liquidata-inc/vitess/go/vt/proto/binlogdata"
 )
 
 func TestQueryString(t *testing.T) {

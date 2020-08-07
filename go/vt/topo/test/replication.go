@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/topo"
+	"liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // checkShardReplication tests ShardReplication objects

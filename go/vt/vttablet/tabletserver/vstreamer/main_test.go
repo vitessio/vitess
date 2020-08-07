@@ -22,7 +22,7 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+	"liquidata-inc/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
 
 var (

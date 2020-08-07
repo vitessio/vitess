@@ -53,8 +53,8 @@ import (
 	"log/syslog"
 	"os"
 
-	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/vt/log"
+	"liquidata-inc/vitess/go/event"
+	"liquidata-inc/vitess/go/vt/log"
 )
 
 // Syslogger is the interface that events should implement if they want to be

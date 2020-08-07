@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
+	"liquidata-inc/vitess/go/vt/proto/vtrpc"
+	"liquidata-inc/vitess/go/vt/vterrors"
 )
 
 const mysql56FlavorID = "MySQL56"

@@ -19,10 +19,10 @@ limitations under the License.
 package events
 
 import (
-	base "vitess.io/vitess/go/vt/events"
-	"vitess.io/vitess/go/vt/topo"
+	base "liquidata-inc/vitess/go/vt/events"
+	"liquidata-inc/vitess/go/vt/topo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	topodatapb "liquidata-inc/vitess/go/vt/proto/topodata"
 )
 
 // Reparent is an event that describes a single step in the reparent process.

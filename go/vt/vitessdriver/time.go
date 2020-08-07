@@ -20,7 +20,7 @@ import (
 	"errors"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
+	"liquidata-inc/vitess/go/sqltypes"
 )
 
 // ErrInvalidTime is returned when we fail to parse a datetime
