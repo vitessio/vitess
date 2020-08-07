@@ -274,14 +274,14 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 						return err
 					}
 
-					if eventPos.AtLeast(lastPos) {
-						gtidsChan <- []string{"", beforePos}
-						break
-					}
-
 					if event.Timestamp >= restoreTime {
 						afterPos = event.Gtid
 						gtidsChan <- []string{event.Gtid, beforePos}
+						break
+					}
+
+					if eventPos.AtLeast(lastPos) {
+						gtidsChan <- []string{"", beforePos}
 						break
 					}
 					beforePos = event.Gtid
