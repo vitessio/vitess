@@ -53,6 +53,9 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)
 	}
+	if keyspace == "" || shard == "" || len(cells) == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace, Shard and cells must be provided")
+	}
 	return &TabletPicker{
 		ts:          ts,
 		cells:       cells,
