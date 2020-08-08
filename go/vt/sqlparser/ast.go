@@ -1830,6 +1830,9 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		if opt.DbName != "" {
 			buf.Myprintf(" from %s", opt.DbName)
 		}
+		if opt.AsOf != nil {
+			buf.Myprintf(" as of %v", opt.AsOf)
+		}
 		buf.Myprintf("%v", opt.Filter)
 		return
 	}
@@ -1888,6 +1891,7 @@ type ShowTablesOpt struct {
 	Full   string
 	DbName string
 	Filter *ShowFilter
+	AsOf   Expr
 }
 
 // ShowFilter is show tables filter

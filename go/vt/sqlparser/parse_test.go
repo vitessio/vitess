@@ -1308,15 +1308,27 @@ var (
 	}, {
 		input: "show tables",
 	}, {
+		input: "show tables as of 123",
+	}, {
 		input: "show tables like '%keyspace%'",
+	}, {
+		input: "show tables as of 123 like '%keyspace%'",
 	}, {
 		input: "show tables where 1 = 0",
 	}, {
+		input: "show tables as of 'abc' where 1 = 0",
+	}, {
 		input: "show tables from a",
+	}, {
+		input: "show tables from a as of 'abc'",
 	}, {
 		input: "show tables from a where 1 = 0",
 	}, {
+		input: "show tables from a as of 123 where 1 = 0",
+	}, {
 		input: "show tables from a like '%keyspace%'",
+	}, {
+		input: "show tables from a as of 'abc' like '%keyspace%'",
 	}, {
 		input: "show full tables",
 	}, {
