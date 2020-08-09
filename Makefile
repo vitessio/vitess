@@ -156,13 +156,14 @@ ifndef NOBANNER
 endif
 
 # TODO(sougou): find a better way around this temp hack.
-VTTOP=$(VTROOT)/../../..
 $(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		cd $(VTTOP)/src && \
-		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Ivitess.io/vitess/proto vitess.io/vitess/proto/$${name}.proto && \
+		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
+		mkdir -p $(VTROOT)/go/vt/proto/$${name} && \
+		mv vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go $(VTROOT)/go/vt/proto/$${name}/ && \
 		goimports -w $(VTROOT)/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
+	rm -rf vitess.io
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.
