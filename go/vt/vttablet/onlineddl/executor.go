@@ -81,7 +81,7 @@ var (
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
 func GhostBinaryFileName() string {
-	return path.Join(os.TempDir(), "gh-ost")
+	return path.Join(os.TempDir(), "vt-gh-ost")
 }
 
 // NewExecutor creates a new gh-ost executor.
