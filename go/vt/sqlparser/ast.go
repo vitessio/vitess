@@ -193,6 +193,7 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
+		Online        bool
 
 		// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
 		VindexSpec *VindexSpec

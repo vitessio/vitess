@@ -62,6 +62,9 @@ const (
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 
+	// Online DDL hint
+	OnlineStr = "online"
+
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
 
@@ -172,9 +175,4 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
-
-	// Vitess magic hints
-	// TODO(shlomi) this is a temporary hack; we should be able to parse hints in a formal way,
-	//              but at this time I'm not keen to tamper with the parser
-	VitessOnlineDDLHint = "vt:online-schema-change"
 )

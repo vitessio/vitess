@@ -263,9 +263,7 @@ func IsVschemaDDL(ddl *DDL) bool {
 func IsOnlineSchemaDDL(ddl *DDL, sql string) bool {
 	switch ddl.Action {
 	case AlterStr:
-		// TODO(shlomi): rmeove hard coded 'true', or consider how to hint to vtgate that ALTER TABLE is "online"
-		return true
-		// return strings.Contains(sql, VitessOnlineDDLHint)
+		return ddl.Online
 	}
 	return false
 }

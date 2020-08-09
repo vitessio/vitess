@@ -282,6 +282,7 @@ var keywords = map[string]int{
 	"off":                 OFF,
 	"offset":              OFFSET,
 	"on":                  ON,
+	"online":              ONLINE,
 	"only":                ONLY,
 	"optimize":            OPTIMIZE,
 	"optimizer_costs":     UNUSED,
