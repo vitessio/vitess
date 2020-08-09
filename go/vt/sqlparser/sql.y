@@ -170,6 +170,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
+%token <bytes> ONLINE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -281,6 +282,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
+%type <byt> online_hint_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
@@ -1372,35 +1374,35 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
+  ALTER online_hint_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterStr, Online: ($2 != 0), Table: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
+| ALTER online_hint_opt TABLE table_name ADD alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterStr, Online: ($2 != 0), Table: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
+| ALTER online_hint_opt TABLE table_name DROP alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterStr, Online: ($2 != 0), Table: $4}
   }
-| ALTER ignore_opt TABLE table_name RENAME to_opt table_name
+| ALTER online_hint_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
   }
-| ALTER ignore_opt TABLE table_name RENAME index_opt skip_to_end
+| ALTER online_hint_opt TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterStr, Online: ($2 != 0), Table: $4}
   }
 | ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
   }
-| ALTER ignore_opt TABLE table_name partition_operation
+| ALTER online_hint_opt TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterStr, Online: ($2 != 0), Table: $4, PartitionSpec: $5}
   }
 | ALTER DATABASE id_or_var ddl_skip_to_end
   {
@@ -3406,6 +3408,11 @@ non_add_drop_or_rename_operation:
   { $$ = struct{}{} }
 | id_or_var
   { $$ = struct{}{} }
+
+online_hint_opt:
+  { $$ = 0 }
+| ONLINE
+  { $$ = 1 }
 
 to_opt:
   { $$ = struct{}{} }
