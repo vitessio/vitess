@@ -258,20 +258,21 @@ func (exec *TabletExecutor) executeOnAllTablets(
 	executeOnlineSchemaChange bool,
 ) {
 	if executeOnlineSchemaChange {
-		change, err := schema.NewOnlineDDL(exec.keyspace, "", sql)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sql)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return
 		}
 		conn, err := exec.wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
 		if err != nil {
-			execResult.ExecutorErr = fmt.Sprintf("online-schema-change ConnForCell error:%s", err.Error())
+			execResult.ExecutorErr = fmt.Sprintf("online DDL ConnForCell error:%s", err.Error())
 			return
 		}
-		err = change.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
+		err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 		}
+		fmt.Println(onlineDDL.UUID)
 		return
 	}
 
