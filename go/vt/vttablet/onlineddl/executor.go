@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -77,6 +78,11 @@ type Executor struct {
 var (
 	migrationCheckInterval = time.Second * 10
 )
+
+// GhostBinaryFileName returns the full path+name of the gh-ost binary
+func GhostBinaryFileName() string {
+	return path.Join(os.TempDir(), "gh-ost")
+}
 
 // NewExecutor creates a new gh-ost executor.
 func NewExecutor(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
@@ -264,9 +270,8 @@ ghost_log_file=gh-ost.log
 mkdir -p "$ghost_log_path"
 
 export GH_OST_PASSWORD
-echo "executing: gh-ost" "$@" > "$ghost_log_path/$ghost_log_file.exec"
-gh-ost "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
-	`, tempDir,
+%s "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
+	`, tempDir, GhostBinaryFileName(),
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "gh-ost-wrapper.sh", wrapperScriptContent)
 	if err != nil {

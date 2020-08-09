@@ -32,11 +32,14 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
+
+	rice "github.com/GeertJohan/go.rice"
 )
 
 var (
@@ -76,6 +79,10 @@ func main() {
 
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
+
+	if err := extractGhostBinary(); err != nil {
+		log.Exitf("failed to extract gh-ost binary: %v", err)
+	}
 
 	// Initialize and start tm.
 	gRPCPort := int32(0)
@@ -155,6 +162,24 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 		cfg.InitWithSocket("")
 	}
 	return config, mycnf
+}
+
+// extractGhostBinary extracts the gh-ost binary from this executable. gh-ost is appended
+// to vttablet executable by `make build` and via ricebox
+func extractGhostBinary() error {
+	riceBox, err := rice.FindBox("../../../resources/bin")
+	if err != nil {
+		return err
+	}
+	ghostBinary, err := riceBox.Bytes("gh-ost")
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(onlineddl.GhostBinaryFileName(), ghostBinary, 0755)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) *tabletserver.TabletServer {
