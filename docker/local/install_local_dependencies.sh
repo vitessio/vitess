@@ -19,9 +19,8 @@ rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
 mkdir -p /var/run/etcd && chown -R vitess:vitess /var/run/etcd
 
 # Install gh-ost
-curl -k -L https://github.com/openark/gh-ost/releases/download/v1.1.0/gh-ost-binary-linux-20200805092717.tar.gz -o /tmp/gh-ost.tar.gz
-(cd /tmp/ && tar xzf gh-ost.tar.gz)
-cp /tmp/gh-ost /usr/bin
+cp resources/bin/gh-ost /usr/bin
+chmod +x /usr/bin/gh-ost
 
 # Clean up files we won't need in the final image.
 rm -rf /var/lib/apt/lists/*
