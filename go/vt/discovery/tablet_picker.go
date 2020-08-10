@@ -17,7 +17,10 @@ limitations under the License.
 package discovery
 
 import (
+	"fmt"
 	"math/rand"
+	"runtime/debug"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -53,8 +56,20 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to parse list of tablet types: %v", tabletTypesStr)
 	}
-	if keyspace == "" || shard == "" || len(cells) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace, Shard and cells must be provided")
+	var missingFields []string
+	if keyspace == "" {
+		missingFields = append(missingFields, "Keyspace")
+	}
+	if shard == "" {
+		missingFields = append(missingFields, "Shard")
+	}
+	if len(cells) == 0 {
+		missingFields = append(missingFields, "Cells")
+	}
+	if len(missingFields) > 0 {
+		log.Errorf("missing picker fields %s", debug.Stack())
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			fmt.Sprintf("Missing required field(s) for tablet picker: %s", strings.Join(missingFields, ", ")))
 	}
 	return &TabletPicker{
 		ts:          ts,
@@ -80,6 +95,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		candidates := tp.getMatchingTablets(ctx)
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
+			log.Infof("No tablet found for streaming, sleeping for %d", tabletPickerRetryDelay)
 			time.Sleep(tabletPickerRetryDelay)
 			continue
 		}

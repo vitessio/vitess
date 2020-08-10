@@ -559,7 +559,6 @@ func TestShardMigrateMainflow(t *testing.T) {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
-
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test SwitchWrites cancelation on failure.
 
@@ -607,9 +606,9 @@ func TestShardMigrateMainflow(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
 		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
-		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult2(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult2(2), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult2(2), nil)
 
 		deleteReverseReplicaion()
 	}
@@ -622,7 +621,6 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 
 	verifyQueries(t, tme.allDBClients)
-
 	checkServedTypes(t, tme.ts, "ks:-40", 1)
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
@@ -656,9 +654,9 @@ func TestShardMigrateMainflow(t *testing.T) {
 		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
 		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
-		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult2(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult2(2), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult2(2), nil)
 	}
 	waitForCatchup()
 
@@ -685,12 +683,12 @@ func TestShardMigrateMainflow(t *testing.T) {
 	startReverseVReplication := func() {
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
 		tme.dbSourceClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
-		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 3", runningResult2(3), nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 4", runningResult2(4), nil)
 		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
 		tme.dbSourceClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
-		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 3", runningResult2(3), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 4", runningResult2(4), nil)
 	}
 	startReverseVReplication()
 
@@ -1751,18 +1749,26 @@ func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, w
 	}
 }
 
-func stoppedResult(id int) *sqltypes.Result {
+func getResult(id int, state string, keyspace string, shard string) *sqltypes.Result {
 	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|state",
-		"int64|varchar"),
-		fmt.Sprintf("%d|Stopped", id),
+		"id|state|cell|tablet_types|source",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("%d|%s|cell1|MASTER|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
 	)
 }
 
+func stoppedResult2(id int) *sqltypes.Result {
+	return getResult(id, "Stopped", "ks", "-40")
+}
+
+func runningResult2(id int) *sqltypes.Result {
+	return getResult(id, "Running", "ks", "-40")
+}
+
+func stoppedResult(id int) *sqltypes.Result {
+	return getResult(id, "Stopped", "", "")
+}
+
 func runningResult(id int) *sqltypes.Result {
-	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|state",
-		"int64|varchar"),
-		fmt.Sprintf("%d|Running", id),
-	)
+	return getResult(id, "Running", "", "")
 }
