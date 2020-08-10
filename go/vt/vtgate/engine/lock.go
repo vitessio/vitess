@@ -27,8 +27,7 @@ import (
 
 var _ Primitive = (*Lock)(nil)
 
-//Lock will mark the session as needing a
-//reserved connection and then execute the inner Primitive
+//Lock primitive will execute sql containing lock functions
 type Lock struct {
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
@@ -95,7 +94,7 @@ func (l *Lock) description() PrimitiveDescription {
 		"Query": l.Query,
 	}
 	return PrimitiveDescription{
-		OperatorType:      "Send",
+		OperatorType:      "Lock",
 		Keyspace:          l.Keyspace,
 		TargetDestination: l.TargetDestination,
 		Other:             other,

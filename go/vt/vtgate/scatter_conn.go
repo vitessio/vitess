@@ -602,9 +602,9 @@ func (stc *ScatterConn) ExecuteLock(
 		if reservedID == 0 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
 		}
-		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0, reservedID, opts)
+		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
 	case reserve:
-		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0, opts)
+		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
 		if err != nil && reservedID != 0 {
 			_ = stc.txConn.ReleaseLock(ctx, session)
 		}
