@@ -4,7 +4,7 @@
   "QueryType": "SELECT",
   "Original": "select get_lock('xyz', 10) from dual",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "Lock",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -20,7 +20,7 @@
   "QueryType": "SELECT",
   "Original": "select is_free_lock('xyz') from dual",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "Lock",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
