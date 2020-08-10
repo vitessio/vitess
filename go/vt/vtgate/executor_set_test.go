@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"testing"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -237,8 +238,8 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
 	}}
-	for _, tcase := range testcases {
-		t.Run(tcase.in, func(t *testing.T) {
+	for i, tcase := range testcases {
+		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorEnv.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
 			if tcase.err == "" {

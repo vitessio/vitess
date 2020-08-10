@@ -202,44 +202,8 @@ var checkAndIgnore = []setting{
 	{name: "version_tokens_session"},
 }
 
-var allowSetIfValueAlreadySet = []string{}
-
-var vitessAware = []string{
-	engine.AUTOCOMMIT,
-}
-
-var vitessShouldBeAwareOf = []string{
-	"block_encryption_mode",
-	"character_set_client",
-	"character_set_connection",
-	"character_set_database",
-	"character_set_filesystem",
-	"character_set_server",
-	"collation_connection",
-	"collation_database",
-	"collation_server",
-	"completion_type",
-	"div_precision_increment",
-	"innodb_lock_wait_timeout",
-	"interactive_timeout",
-	"lc_time_names",
-	"lock_wait_timeout",
-	"max_allowed_packet",
-	"max_error_count",
-	"max_execution_time",
-	"max_join_size",
-	"max_length_for_sort_data",
-	"max_sort_length",
-	"max_user_connections",
-	"session_track_gtids",
-	"session_track_schema",
-	"session_track_state_change",
-	"session_track_system_variables",
-	"session_track_transaction_info",
-	"time_zone",
-	"transaction_isolation",
-	"version_tokens_session",
-	"sql_auto_is_null",
+var vitessAware = []setting{
+	{name: engine.AUTOCOMMIT, boolean: true},
 }
 
 func init() {
@@ -354,18 +318,14 @@ func (ec *expressionConverter) source(vschema ContextVSchema) (engine.Primitive,
 	return primitive, nil
 }
 
-func buildNotSupported(bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
+func buildNotSupported(bool) planFunc {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", expr.Name)
 	}
 }
 
-func buildSetOpIgnore(expr *sqlparser.SetExpr, _ ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("%v", expr.Expr)
-
-func buildSetOpIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
-	return func(expr *sqlparser.SetExpr, _ ContextVSchema) (engine.SetOp, error) {
+func buildSetOpIgnore(boolean bool) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return &engine.SysVarIgnore{
 			Name: expr.Name.Lowered(),
 			Expr: extractValue(expr, boolean),
@@ -373,7 +333,7 @@ func buildSetOpIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (en
 	}
 }
 
-func buildSetOpCheckAndIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
+func buildSetOpCheckAndIgnore(boolean bool) planFunc {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		keyspace, dest, err := resolveDestination(schema)
 		if err != nil {
@@ -406,7 +366,7 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 	return valid
 }
 
-func buildSetOpVarSet(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
+func buildSetOpVarSet(boolean bool) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
@@ -422,27 +382,29 @@ func buildSetOpVarSet(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (en
 	}
 }
 
-func buildSetOpVitessAware(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
-	ks, err := vschema.AnyKeyspace()
-	if err != nil {
-		return nil, err
-	}
-
-	switch expr.Name.Lowered() {
-	case engine.AUTOCOMMIT:
-		convert, err := ec.convert(expr)
+func buildSetOpVitessAware(boolean bool) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
+		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
-		return &engine.SysVarSetAware{
-			Name:              expr.Name.Lowered(),
-			Keyspace:          ks,
-			TargetDestination: vschema.Destination(),
-			Expr:              convert,
-			OrigExpr:          sqlparser.String(expr.Expr),
-		}, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown setting %s", expr.Name.String())
+
+		switch expr.Name.Lowered() {
+		case engine.AUTOCOMMIT:
+			convert, err := ec.convert(expr)
+			if err != nil {
+				return nil, err
+			}
+			return &engine.SysVarSetAware{
+				Name:              expr.Name.Lowered(),
+				Keyspace:          ks,
+				TargetDestination: vschema.Destination(),
+				Expr:              convert,
+				OrigExpr:          extractValue(expr, boolean),
+			}, nil
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown setting %s", expr.Name.String())
+		}
 	}
 }
 

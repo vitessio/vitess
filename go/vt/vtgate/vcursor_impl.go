@@ -60,6 +60,7 @@ type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
+	Commit(ctx context.Context, safeSession *SafeSession) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -467,8 +468,14 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
 }
 
-func (vc *vcursorImpl) SetAutocommit(b bool) {
-	vc.safeSession.Autocommit = b
+func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
+	if autocommit && vc.safeSession.InTransaction() {
+		if err := vc.executor.Commit(vc.ctx, vc.safeSession); err != nil {
+			return err
+		}
+	}
+	vc.safeSession.Autocommit = autocommit
+	return nil
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
