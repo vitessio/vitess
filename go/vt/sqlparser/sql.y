@@ -248,7 +248,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolVal> boolean_value
 %type <str> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val
+%type <expr> value value_expression num_val as_of_opt
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
 %type <str> is_suffix
 %type <colTuple> col_tuple
@@ -1855,13 +1855,13 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
     $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
   }
-| SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
+| SHOW full_opt tables_or_processlist from_database_opt as_of_opt like_or_where_opt
   {
     // this is ugly, but I couldn't find a better way for now
     if $3 == "processlist" {
       $$ = &Show{Type: $3}
     } else {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
+    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$6, AsOf:$5}
       $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
     }
   }
@@ -2324,6 +2324,15 @@ aliased_table_options:
 //  {
 //    $$ = &AsOf{Time: string($5)}
 //  }
+
+as_of_opt:
+  {
+    $$ = nil
+  }
+| AS OF value_expression
+  {
+    $$ = $3
+  }
 
 column_list:
   sql_id
