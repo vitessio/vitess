@@ -23,7 +23,7 @@ RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PR
     mv /protoc/bin/protoc /usr/local/bin/ && \
     rm -rf protoc-${PROTOC_VERSION}-linux-x86_64.zip
 
-ADD proto/ proto
+ADD proto proto
 
 # Build proto/$x.proto files into /go/vt/proto/$x/$x.pb.go
-CMD [ "proto/build.sh" ]
+CMD [ "./proto/build.sh" ]
