@@ -189,9 +189,9 @@ func TestLocksWithTxFailure(t *testing.T) {
 	_, err = conn1.ExecuteFetch("commit", 1, true)
 	require.Error(t, err)
 
-	// in the second connection, lock acquisition succeeds.
-	assertMatches(t, conn2, `select get_lock('lock', 2)`, `[[INT64(1)]]`)
-	assertMatches(t, conn2, `select release_lock('lock')`, `[[INT64(1)]]`)
+	// in the second connection, lock acquisition should fail as first connection still hold the lock though the transaction has failed.
+	assertMatches(t, conn2, `select get_lock('lock', 2)`, `[[INT64(0)]]`)
+	assertMatches(t, conn2, `select release_lock('lock')`, `[[INT64(0)]]`)
 }
 
 func TestLocksWithTxOngoingAndReleaseLock(t *testing.T) {
