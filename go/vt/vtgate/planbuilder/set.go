@@ -239,7 +239,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 			// would have been explictly set to sqlparser.SessionStr before reaching this
 			// phase of planning
 		case "":
-			evalExpr, err := ec.convert(expr)
+			evalExpr, err := ec.convert(expr, false)
 			if err != nil {
 				return nil, err
 			}
@@ -275,8 +275,33 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
-func (ec *expressionConverter) convert(setExpr *sqlparser.SetExpr) (evalengine.Expr, error) {
+func (ec *expressionConverter) convert(setExpr *sqlparser.SetExpr, boolean bool) (evalengine.Expr, error) {
 	astExpr := setExpr.Expr
+	if boolean {
+		switch node := astExpr.(type) {
+		case *sqlparser.SQLVal:
+			if node.Type == sqlparser.StrVal && boolean {
+				switch strings.ToLower(string(node.Val)) {
+				case "on":
+					return evalengine.NewLiteralInt([]byte("1"))
+				case "off":
+					return evalengine.NewLiteralInt([]byte("0"))
+				}
+			}
+		case *sqlparser.ColName:
+			// this is a little of a hack. it's used when the setting is not a normal expression, but rather
+			// an enumeration, such as utf8, utf8mb4, etc
+			if node.Name.AtCount() == sqlparser.NoAt {
+				switch node.Name.Lowered() {
+				case "on":
+					return evalengine.NewLiteralInt([]byte("1"))
+				case "off":
+					return evalengine.NewLiteralInt([]byte("0"))
+				}
+				return evalengine.NewLiteralString([]byte(sqlparser.String(node)))
+			}
+		}
+	}
 	evalExpr, err := sqlparser.Convert(astExpr)
 	if err != nil {
 		if err != sqlparser.ExprNotSupported {
@@ -383,27 +408,19 @@ func buildSetOpVarSet(boolean bool) planFunc {
 }
 
 func buildSetOpVitessAware(boolean bool) planFunc {
-	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
-		ks, err := vschema.AnyKeyspace()
-		if err != nil {
-			return nil, err
-		}
-
-		switch expr.Name.Lowered() {
+	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
+		switch astExpr.Name.Lowered() {
 		case engine.AUTOCOMMIT:
-			convert, err := ec.convert(expr)
+			runtimeExpr, err := ec.convert(astExpr, boolean)
 			if err != nil {
 				return nil, err
 			}
 			return &engine.SysVarSetAware{
-				Name:              expr.Name.Lowered(),
-				Keyspace:          ks,
-				TargetDestination: vschema.Destination(),
-				Expr:              convert,
-				OrigExpr:          extractValue(expr, boolean),
+				Name: astExpr.Name.Lowered(),
+				Expr: runtimeExpr,
 			}, nil
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown setting %s", expr.Name.String())
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown setting %s", astExpr.Name.String())
 		}
 	}
 }
