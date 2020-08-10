@@ -84,7 +84,7 @@ type (
 
 		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 
-		SubmitOnlineDDL(change *schema.OnlineDDL) error
+		SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error
 
 		Session() SessionActions
 

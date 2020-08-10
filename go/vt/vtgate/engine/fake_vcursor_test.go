@@ -172,7 +172,7 @@ func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, 
 	panic("unimplemented")
 }
 
-func (t noopVCursor) SubmitOnlineDDL(change *schema.OnlineDDL) error {
+func (t noopVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
 	panic("unimplemented")
 }
 
@@ -287,7 +287,7 @@ func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
 }
 
-func (f *loggingVCursor) SubmitOnlineDDL(change *schema.OnlineDDL) error {
+func (f *loggingVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
 	return nil
 }
 
