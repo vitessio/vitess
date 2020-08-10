@@ -128,6 +128,9 @@ message Session {
 
   // in_reserved_conn is set to true if the session should be using reserved connections.
   bool in_reserved_conn = 17;
+
+  // lock_session keep tracks of shard on which the lock query is sent.
+  ShardSession lock_session = 18;
 }
 
 // ExecuteRequest is the payload to Execute.
