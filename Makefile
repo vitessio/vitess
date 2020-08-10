@@ -154,7 +154,7 @@ ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
 	docker build -t proto-builder -f docker/proto/Dockerfile .
-	docker run --rm -v $(pwd)/go/vt/proto/:/go/vt/proto/ proto-builder
+	docker run --rm --mount type=bind,src=$(shell pwd)/go/vt/proto/,dst=/go/vt/proto/ proto-builder
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.
