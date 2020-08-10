@@ -84,6 +84,8 @@ type (
 		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 
 		Session() SessionActions
+
+		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
