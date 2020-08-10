@@ -52,8 +52,11 @@ var (
 
 const (
 	maxPasswordLength = 32 // MySQL's *replication* password may not exceed 32 characters
-	ghostUser         = "gh-ost"
-	ghostGrant        = "'gh-ost'@'127.0.0.1'"
+)
+
+var (
+	ghostUser  = "gh-ost-vitess-internal"
+	ghostGrant = fmt.Sprintf("'%s'@'%s'", ghostUser, "%")
 )
 
 // Executor wraps and manages the execution of a gh-ost migration.
