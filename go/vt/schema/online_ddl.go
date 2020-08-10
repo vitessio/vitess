@@ -119,6 +119,11 @@ func NewOnlineDDL(keyspace string, table string, sql string) (*OnlineDDL, error)
 	}, nil
 }
 
+// RequestTimeSeconds converts request time to seconds (losing nano precision)
+func (onlineDDL *OnlineDDL) RequestTimeSeconds() int64 {
+	return onlineDDL.RequestTime / int64(time.Second)
+}
+
 // JobsKeyspaceShardPath returns job/<keyspace>/<shard>/<uuid>
 func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
 	return MigrationJobsKeyspaceShardPath(onlineDDL.Keyspace, shard)

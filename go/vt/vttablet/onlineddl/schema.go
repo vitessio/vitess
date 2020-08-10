@@ -33,6 +33,7 @@ const (
 		migration_statement text NOT NULL,
 		strategy varchar(128) NOT NULL,
 		added_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		requested_timestamp timestamp NOT NULL,
 		ready_timestamp timestamp NULL DEFAULT NULL,
 		started_timestamp timestamp NULL DEFAULT NULL,
 		liveness_timestamp timestamp NULL DEFAULT NULL,
@@ -51,9 +52,10 @@ const (
 		mysql_table,
 		migration_statement,
 		strategy,
+		requested_timestamp,
 		migration_status
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
 	)`
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
@@ -62,7 +64,7 @@ const (
 		WHERE
 			migration_status='queued'
 		ORDER BY
-			added_timestamp ASC
+			requested_timestamp ASC
 		LIMIT 1
 	`
 	sqlUpdateMigrationStatus = `UPDATE %s.schema_migrations

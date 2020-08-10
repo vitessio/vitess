@@ -399,6 +399,7 @@ func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.Onli
 		":mysql_table",
 		":migration_statement",
 		":strategy",
+		":requested_timestamp",
 		":migration_status",
 	)
 	bindVars := map[string]*querypb.BindVariable{
@@ -408,6 +409,7 @@ func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.Onli
 		"mysql_table":         sqltypes.StringBindVariable(onlineDDL.Table),
 		"migration_statement": sqltypes.StringBindVariable(onlineDDL.SQL),
 		"strategy":            sqltypes.StringBindVariable(""),
+		"requested_timestamp": sqltypes.Int64BindVariable(onlineDDL.RequestTimeSeconds()),
 		"migration_status":    sqltypes.StringBindVariable(string(onlineDDL.Status)),
 	}
 
