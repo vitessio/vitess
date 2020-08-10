@@ -81,11 +81,8 @@ type (
 	// SysVarSetAware implements the SetOp interface and will write the changes variable into the session
 	// The special part is that these settings change the sessions behaviour in different ways
 	SysVarSetAware struct {
-		Name              string
-		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination `json:",omitempty"`
-		Expr              evalengine.Expr `json:"-"`
-		OrigExpr          string
+		Name string
+		Expr evalengine.Expr
 	}
 )
 
@@ -346,6 +343,19 @@ var _ SetOp = (*SysVarSetAware)(nil)
 const (
 	AUTOCOMMIT = "autocommit"
 )
+
+//MarshalJSON provides the type to SetOp for plan json
+func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		Name string
+		Expr string
+	}{
+		Type: "SysVarAware",
+		Name: svss.Name,
+		Expr: svss.Expr.String(),
+	})
+}
 
 //Execute implements the SetOp interface method
 func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {

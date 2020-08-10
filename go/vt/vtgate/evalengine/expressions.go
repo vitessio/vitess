@@ -248,7 +248,7 @@ func (l *Literal) String() string {
 
 //String implements the Expr interface
 func (c *Column) String() string {
-	return fmt.Sprintf("[%d]", c.Offset)
+	return fmt.Sprintf("column %d from the input", c.Offset)
 }
 
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
