@@ -403,4 +403,26 @@
     ]
   }
 }
+
+# set autocommit with backticks
+"set @@session.`autocommit` = 0"
+{
+  "QueryType": "SET",
+  "Original": "set @@session.`autocommit` = 0",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(0)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
                 
