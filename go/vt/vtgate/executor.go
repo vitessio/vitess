@@ -457,25 +457,6 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 
 func handleSessionSetting(ctx context.Context, name string, session *SafeSession, value interface{}, conn *TxConn, sql string) error {
 	switch name {
-	case "autocommit":
-		val, err := validateSetOnOff(value, name)
-		if err != nil {
-			return err
-		}
-
-		switch val {
-		case 0:
-			session.Autocommit = false
-		case 1:
-			if session.InTransaction() {
-				if err := conn.Commit(ctx, session); err != nil {
-					return err
-				}
-			}
-			session.Autocommit = true
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for autocommit: %d", val)
-		}
 	case "client_found_rows":
 		val, ok := value.(int64)
 		if !ok {
