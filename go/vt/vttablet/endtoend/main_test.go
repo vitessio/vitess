@@ -216,6 +216,13 @@ var tableACLConfig = `{
       "admins": ["dev"]
     },
     {
+      "name": "vitess_test_ddl",
+      "table_names_or_prefixes": ["vitess_test_ddl"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
       "name": "vitess_seq",
       "table_names_or_prefixes": ["vitess_seq"],
       "readers": ["dev"],
