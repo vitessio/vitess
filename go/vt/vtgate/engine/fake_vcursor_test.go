@@ -81,6 +81,10 @@ func (t noopVCursor) Session() SessionActions {
 	return t
 }
 
+func (t noopVCursor) SetAutocommit(autocommit bool) error {
+	panic("implement me")
+}
+
 func (t noopVCursor) SetTarget(target string) error {
 	panic("implement me")
 }
@@ -139,8 +143,6 @@ func (t noopVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query strin
 func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	panic("unimplemented")
 }
-
-func (t noopVCursor) SetAutocommit(bool) {}
 
 var _ VCursor = (*loggingVCursor)(nil)
 
@@ -350,7 +352,9 @@ func (f *loggingVCursor) Rewind() {
 	f.warnings = nil
 }
 
-func (f *loggingVCursor) SetAutocommit(b bool) {}
+func (f *loggingVCursor) SetAutocommit(b bool) error {
+	panic("implement me")
+}
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 	if f.results == nil || f.curResult >= len(f.results) {

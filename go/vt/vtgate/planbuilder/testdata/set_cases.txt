@@ -168,3 +168,52 @@
     ]
   }
 }
+
+# autocommit case
+"SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`"
+{
+  "QueryType": "SET",
+  "Original": "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OrigExpr": "1"
+      },
+      {
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OrigExpr": "'on'"
+      },
+      {
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OrigExpr": "'on'"
+      },
+      {
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OrigExpr": ":__vtudvmyudv"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}

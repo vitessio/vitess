@@ -342,6 +342,7 @@ func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.Expre
 
 var _ SetOp = (*SysVarSetAware)(nil)
 
+// System variables that needs special handling
 const (
 	AUTOCOMMIT = "autocommit"
 )
@@ -354,20 +355,11 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		if err != nil {
 			return err
 		}
-
-		autocommittable, err := value.ToBooleanStrict()
+		autocommit, err := value.ToBooleanStrict()
 		if err != nil {
 			return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
 		}
-
-		if autocommittable && vcursor.Session().InReservedConn() {
-			//TODO do it
-			//if err := conn.Commit(ctx, session); err != nil {
-			//	return err
-			//}
-		}
-		vcursor.Session().SetAutocommit(autocommittable)
-
+		vcursor.Session().SetAutocommit(autocommit)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
 	}
