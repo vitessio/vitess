@@ -18,9 +18,5 @@ rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
 
 mkdir -p /var/run/etcd && chown -R vitess:vitess /var/run/etcd
 
-# Install gh-ost
-cp resources/bin/gh-ost /usr/bin
-chmod +x /usr/bin/gh-ost
-
 # Clean up files we won't need in the final image.
 rm -rf /var/lib/apt/lists/*
