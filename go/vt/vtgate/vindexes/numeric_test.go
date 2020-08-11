@@ -51,6 +51,7 @@ func TestNumericMap(t *testing.T) {
 		sqltypes.NewInt64(6),
 		sqltypes.NewInt64(7),
 		sqltypes.NewInt64(8),
+		sqltypes.NewInt32(8),
 	})
 	require.NoError(t, err)
 	want := []key.Destination{
@@ -62,6 +63,7 @@ func TestNumericMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x05")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x06")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x07")),
+		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
 	}
 	if !reflect.DeepEqual(got, want) {

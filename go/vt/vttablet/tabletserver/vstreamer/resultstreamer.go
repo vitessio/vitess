@@ -38,9 +38,10 @@ type resultStreamer struct {
 	query     string
 	tableName sqlparser.TableIdent
 	send      func(*binlogdatapb.VStreamResultsResponse) error
+	vse       *Engine
 }
 
-func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string, send func(*binlogdatapb.VStreamResultsResponse) error) *resultStreamer {
+func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string, send func(*binlogdatapb.VStreamResultsResponse) error, vse *Engine) *resultStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &resultStreamer{
 		ctx:    ctx,
@@ -48,6 +49,7 @@ func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string
 		cp:     cp,
 		query:  query,
 		send:   send,
+		vse:    vse,
 	}
 }
 
@@ -108,6 +110,8 @@ func (rs *resultStreamer) Stream() error {
 		}
 
 		if byteCount >= *PacketSize {
+			rs.vse.resultStreamerNumRows.Add(int64(len(response.Rows)))
+			rs.vse.resultStreamerNumPackets.Add(int64(1))
 			err = rs.send(response)
 			if err != nil {
 				return err
@@ -120,6 +124,7 @@ func (rs *resultStreamer) Stream() error {
 	}
 
 	if len(response.Rows) > 0 {
+		rs.vse.resultStreamerNumRows.Add(int64(len(response.Rows)))
 		err = rs.send(response)
 		if err != nil {
 			return err

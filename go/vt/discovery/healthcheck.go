@@ -313,11 +313,16 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
-	log.Infof("Calling AddTablet for tablet: %v", tablet)
 	// check whether we should really add this tablet
 	if !hc.isIncluded(tablet) {
 		return
 	}
+	// check whether grpc port is present on tablet, if not return
+	if tablet.PortMap["grpc"] == 0 {
+		return
+	}
+
+	log.Infof("Adding tablet to healthcheck: %v", tablet)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	if hc.healthByAlias == nil {
@@ -371,11 +376,12 @@ func (hc *HealthCheckImpl) RemoveTablet(tablet *topodata.Tablet) {
 
 // ReplaceTablet removes the old tablet and adds the new tablet.
 func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodata.Tablet) {
-	hc.deleteTablet(old)
+	hc.RemoveTablet(old)
 	hc.AddTablet(new)
 }
 
 func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
+	log.Infof("Removing tablet from healthcheck: %v", tablet)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 

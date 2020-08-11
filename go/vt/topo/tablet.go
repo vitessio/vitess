@@ -204,7 +204,7 @@ func (ti *TabletInfo) IsInServingGraph() bool {
 	return IsInServingGraph(ti.Type)
 }
 
-// IsReplicaType returns if this tablet's type is a slave
+// IsReplicaType returns if this tablet's type is a replica
 func (ti *TabletInfo) IsReplicaType() bool {
 	return IsReplicaType(ti.Type)
 }

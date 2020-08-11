@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -71,6 +73,9 @@ type Engine struct {
 
 	conns *connpool.Pool
 	ticks *timer.Timer
+
+	// dbCreationFailed is for preventing log spam.
+	dbCreationFailed bool
 }
 
 // NewEngine creates a new Engine.
@@ -108,6 +113,49 @@ func NewEngine(env tabletenv.Env) *Engine {
 // InitDBConfig must be called before Open.
 func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
+}
+
+// EnsureConnectionAndDB ensures that we can connect to mysql.
+// If tablet type is master and there is no db, then the database is created.
+// This function can be called before opening the Engine.
+func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+	ctx := tabletenv.LocalContext()
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	if err == nil {
+		conn.Close()
+		se.dbCreationFailed = false
+		return nil
+	}
+	if tabletType != topodatapb.TabletType_MASTER {
+		return err
+	}
+	if merr, isSQLErr := err.(*mysql.SQLError); !isSQLErr || merr.Num != mysql.ERBadDb {
+		return err
+	}
+
+	// We are master and db is not found. Let's create it.
+	// We use allprivs instead of DBA because we want db create to fail if we're read-only.
+	conn, err = dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsConnector())
+	if err != nil {
+		return vterrors.Wrap(err, "allprivs connection failed")
+	}
+	defer conn.Close()
+
+	dbname := se.env.Config().DB.DBName
+	_, err = conn.ExecuteFetch(fmt.Sprintf("create database if not exists `%s`", dbname), 1, false)
+	if err != nil {
+		if !se.dbCreationFailed {
+			// This is the first failure.
+			log.Errorf("db creation failed for %v: %v, will keep retrying", dbname, err)
+			se.dbCreationFailed = true
+		}
+		return err
+	}
+
+	se.dbCreationFailed = false
+	log.Infof("db %v created", dbname)
+	se.dbCreationFailed = false
+	return nil
 }
 
 // Open initializes the Engine. Calling Open on an already

@@ -27,6 +27,8 @@ import (
 	"vitess.io/vitess/go/history"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -46,6 +48,8 @@ type healthStreamer struct {
 	unhealthyThreshold time.Duration
 
 	mu      sync.Mutex
+	ctx     context.Context
+	cancel  context.CancelFunc
 	clients map[chan *querypb.StreamHealthResponse]struct{}
 	state   *querypb.StreamHealthResponse
 
@@ -72,17 +76,45 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 }
 
 func (hs *healthStreamer) InitDBConfig(target querypb.Target) {
-	hs.state.Target = &target
+	// Weird test failures happen if we don't instantiate
+	// a separate variable.
+	inner := target
+	hs.state.Target = &inner
+}
+
+func (hs *healthStreamer) Open() {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+
+	if hs.cancel != nil {
+		return
+	}
+	hs.ctx, hs.cancel = context.WithCancel(context.TODO())
+}
+
+func (hs *healthStreamer) Close() {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+
+	if hs.cancel != nil {
+		hs.cancel()
+		hs.cancel = nil
+	}
 }
 
 func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	ch := hs.register()
+	ch, hsCtx := hs.register()
+	if hsCtx == nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tabletserver is shutdown")
+	}
 	defer hs.unregister(ch)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-hsCtx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tabletserver is shutdown")
 		case shr := <-ch:
 			if err := callback(shr); err != nil {
 				if err == io.EOF {
@@ -94,16 +126,20 @@ func (hs *healthStreamer) Stream(ctx context.Context, callback func(*querypb.Str
 	}
 }
 
-func (hs *healthStreamer) register() chan *querypb.StreamHealthResponse {
+func (hs *healthStreamer) register() (chan *querypb.StreamHealthResponse, context.Context) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
+
+	if hs.cancel == nil {
+		return nil, nil
+	}
 
 	ch := make(chan *querypb.StreamHealthResponse, 1)
 	hs.clients[ch] = struct{}{}
 
 	// Send the current state immediately.
 	ch <- proto.Clone(hs.state).(*querypb.StreamHealthResponse)
-	return ch
+	return ch, hs.ctx
 }
 
 func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
