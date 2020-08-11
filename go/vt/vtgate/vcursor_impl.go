@@ -474,6 +474,7 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
 }
 
+//SetAutocommit implementes the SessionActions interface
 func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
 	if autocommit && vc.safeSession.InTransaction() {
 		if err := vc.executor.Commit(vc.ctx, vc.safeSession); err != nil {
@@ -482,6 +483,22 @@ func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
 	}
 	vc.safeSession.Autocommit = autocommit
 	return nil
+}
+
+//SetClientFoundRows implementes the SessionActions interface
+func (vc *vcursorImpl) SetClientFoundRows(clientFoundRows bool) {
+	if vc.safeSession.Options == nil {
+		vc.safeSession.Options = &querypb.ExecuteOptions{}
+	}
+	vc.safeSession.Options.ClientFoundRows = clientFoundRows
+}
+
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) {
+	if vc.safeSession.Options == nil {
+		vc.safeSession.Options = &querypb.ExecuteOptions{}
+	}
+	vc.safeSession.Options.SkipQueryPlanCache = skipQueryPlanCache
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

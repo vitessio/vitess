@@ -116,10 +116,10 @@ func TestExecutorSet(t *testing.T) {
 		err: "cannot use scope and @@",
 	}, {
 		in:  "set client_found_rows = 'aa'",
-		err: "unexpected value type for client_found_rows: string",
+		err: "System setting 'client_found_rows' can't be set to this value: 'aa' is not a boolean",
 	}, {
 		in:  "set client_found_rows = 2",
-		err: "unexpected value for client_found_rows: 2",
+		err: "System setting 'client_found_rows' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
@@ -203,10 +203,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set tx_read_only = 2",
-		err: "unexpected value for tx_read_only: 2",
+		err: "System setting 'tx_read_only' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_read_only = 2",
-		err: "unexpected value for transaction_read_only: 2",
+		err: "System setting 'transaction_read_only' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set session transaction isolation level repeatable read",
 		out: &vtgatepb.Session{Autocommit: true},

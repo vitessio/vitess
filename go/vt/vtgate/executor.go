@@ -272,7 +272,7 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, safeSession.Options, logStats, false /* canAutocommit */, ignoreMaxMemoryRows)
 }
 
-func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	err := e.txConn.Begin(ctx, safeSession)
@@ -394,7 +394,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			if err != nil {
 				return nil, err
 			}
-			err = handleSessionSetting(ctx, name, safeSession, value, e.txConn, sql)
+			err = handleSessionSetting(name, safeSession, value, sql)
 		case sqlparser.VitessMetadataStr:
 			value, err = getValueFor(expr)
 			if err != nil {
@@ -456,40 +456,8 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 
 }
 
-func handleSessionSetting(ctx context.Context, name string, session *SafeSession, value interface{}, conn *TxConn, sql string) error {
+func handleSessionSetting(name string, session *SafeSession, value interface{}, sql string) error {
 	switch name {
-	case "client_found_rows":
-		val, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for client_found_rows: %T", value)
-		}
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		switch val {
-		case 0:
-			session.Options.ClientFoundRows = false
-		case 1:
-			session.Options.ClientFoundRows = true
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for client_found_rows: %d", val)
-		}
-	case "skip_query_plan_cache":
-		val, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for skip_query_plan_cache: %T", value)
-		}
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		switch val {
-		case 0:
-			session.Options.SkipQueryPlanCache = false
-		case 1:
-			session.Options.SkipQueryPlanCache = true
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for skip_query_plan_cache: %d", val)
-		}
 	case "transaction_mode":
 		val, ok := value.(string)
 		if !ok {
@@ -500,17 +468,6 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
 		}
 		session.TransactionMode = vtgatepb.TransactionMode(out)
-	case "tx_read_only", "transaction_read_only": // TODO move this to set tx
-		val, err := validateSetOnOff(value, name)
-		if err != nil {
-			return err
-		}
-		switch val {
-		case 0, 1:
-			// TODO (4127): This is a dangerous NOP.
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %v: %d", name, val)
-		}
 	case "workload":
 		val, ok := value.(string)
 		if !ok {
@@ -615,26 +572,6 @@ func (e *Executor) handleShowVitessMetadata(ctx context.Context, opt *sqlparser.
 		Rows:         rows,
 		RowsAffected: uint64(len(rows)),
 	}, nil
-}
-
-func validateSetOnOff(v interface{}, typ string) (int64, error) {
-	var val int64
-	switch v := v.(type) {
-	case int64:
-		val = v
-	case string:
-		lcaseV := strings.ToLower(v)
-		if lcaseV == "on" {
-			val = 1
-		} else if lcaseV == "off" {
-			val = 0
-		} else {
-			return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %s: %s", typ, v)
-		}
-	default:
-		return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %T", typ, v)
-	}
-	return val, nil
 }
 
 func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
