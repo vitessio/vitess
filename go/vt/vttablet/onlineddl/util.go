@@ -83,9 +83,9 @@ func execCmd(name string, args, env []string, dir string, input io.Reader, outpu
 // createTempDir creates a temporary directory and returns its name
 func createTempDir(hint string) (dirName string, err error) {
 	if hint != "" {
-		return ioutil.TempDir("", fmt.Sprintf("gh-ost-%s-*", hint))
+		return ioutil.TempDir("", fmt.Sprintf("online-ddl-%s-*", hint))
 	}
-	return ioutil.TempDir("", "gh-ost-*")
+	return ioutil.TempDir("", "online-ddl-*")
 }
 
 // createTempScript creates an executable file in given directory and with given text as content.
