@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -71,15 +72,21 @@ const (
 	OnlineDDLStatusFailed    OnlineDDLStatus = "failed"
 )
 
+const (
+	DDLStrategyNormal sqlparser.DDLStrategy = ""
+	DDLStrategyGhost  sqlparser.DDLStrategy = "gh-ost"
+	DDLStrategyPTOSC  sqlparser.DDLStrategy = "pt-osc"
+)
+
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace    string          `json:"keyspace,omitempty"`
-	Table       string          `json:"table,omitempty"`
-	SQL         string          `json:"sql,omitempty"`
-	UUID        string          `json:"uuid,omitempty"`
-	Online      bool            `json:"online,omitempty"`
-	RequestTime int64           `json:"time_created,omitempty"`
-	Status      OnlineDDLStatus `json:"status,omitempty"`
+	Keyspace    string                `json:"keyspace,omitempty"`
+	Table       string                `json:"table,omitempty"`
+	SQL         string                `json:"sql,omitempty"`
+	UUID        string                `json:"uuid,omitempty"`
+	Strategy    sqlparser.DDLStrategy `json:"strategy,omitempty"`
+	RequestTime int64                 `json:"time_created,omitempty"`
+	Status      OnlineDDLStatus       `json:"status,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -103,7 +110,7 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string) (*OnlineDDL, error) {
+func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.DDLStrategy) (*OnlineDDL, error) {
 	uuid, err := CreateUUID()
 	if err != nil {
 		return nil, err
@@ -113,7 +120,7 @@ func NewOnlineDDL(keyspace string, table string, sql string) (*OnlineDDL, error)
 		Table:       table,
 		SQL:         sql,
 		UUID:        uuid,
-		Online:      true,
+		Strategy:    strategy,
 		RequestTime: time.Now().UnixNano(),
 		Status:      OnlineDDLStatusRequested,
 	}, nil

@@ -175,6 +175,8 @@ type (
 		Charset  string
 	}
 
+	DDLStrategy string
+
 	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 	DDL struct {
 		Action string
@@ -193,7 +195,7 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
-		Online        bool
+		Strategy      DDLStrategy
 
 		// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
 		VindexSpec *VindexSpec
