@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -125,17 +124,17 @@ func BenchmarkXXHash(b *testing.B) {
 
 		name := fmt.Sprintf("xxHash,direct,bytes,n=%s", benchSize.name)
 		b.Run(name, func(b *testing.B) {
-			benchmarkHashBytes(b, input)
+			benchmarkXXHashBytes(b, input)
 		})
 
 	}
 }
 
-var sink uint64
+var sinkXXHash []byte
 
-func benchmarkHashBytes(b *testing.B, input []byte) {
+func benchmarkXXHashBytes(b *testing.B, input []byte) {
 	b.SetBytes(int64(len(input)))
 	for i := 0; i < b.N; i++ {
-		sink = xxhash.Sum64(input)
+		sinkXXHash = vXXHash(input)
 	}
 }

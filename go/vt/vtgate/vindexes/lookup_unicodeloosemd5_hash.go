@@ -382,7 +382,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) MarshalJSON() ([]byte, error) {
 }
 
 func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {
-	hash, err := unicodeHash(value)
+	hash, err := unicodeHash(vMD5Hash, value)
 	if err != nil {
 		return sqltypes.NULL, err
 	}

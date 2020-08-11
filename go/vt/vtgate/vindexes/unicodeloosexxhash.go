@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,50 +25,50 @@ import (
 )
 
 var (
-	_ SingleColumn = (*UnicodeLooseMD5)(nil)
+	_ SingleColumn = (*UnicodeLooseXXHash)(nil)
 )
 
-// UnicodeLooseMD5 is a vindex that normalizes and hashes unicode strings
+// UnicodeLooseXXHash is a vindex that normalizes and hashes unicode strings
 // to a keyspace id. It conservatively converts the string to its base
 // characters before hashing. This is also known as UCA level 1.
 // Ref: http://www.unicode.org/reports/tr10/#Multi_Level_Comparison.
 // This is compatible with MySQL's utf8_unicode_ci collation.
-type UnicodeLooseMD5 struct {
+type UnicodeLooseXXHash struct {
 	name string
 }
 
-// NewUnicodeLooseMD5 creates a new UnicodeLooseMD5.
-func NewUnicodeLooseMD5(name string, _ map[string]string) (Vindex, error) {
-	return &UnicodeLooseMD5{name: name}, nil
+// NewUnicodeLooseXXHash creates a new UnicodeLooseXXHash struct.
+func NewUnicodeLooseXXHash(name string, _ map[string]string) (Vindex, error) {
+	return &UnicodeLooseXXHash{name: name}, nil
 }
 
 // String returns the name of the vindex.
-func (vind *UnicodeLooseMD5) String() string {
+func (vind *UnicodeLooseXXHash) String() string {
 	return vind.name
 }
 
 // Cost returns the cost as 1.
-func (vind *UnicodeLooseMD5) Cost() int {
+func (vind *UnicodeLooseXXHash) Cost() int {
 	return 1
 }
 
 // IsUnique returns true since the Vindex is unique.
-func (vind *UnicodeLooseMD5) IsUnique() bool {
+func (vind *UnicodeLooseXXHash) IsUnique() bool {
 	return true
 }
 
 // NeedsVCursor satisfies the Vindex interface.
-func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
+func (vind *UnicodeLooseXXHash) NeedsVCursor() bool {
 	return false
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *UnicodeLooseXXHash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		data, err := unicodeHash(vMD5Hash, ids[i])
+		data, err := unicodeHash(vXXHash, ids[i])
 		if err != nil {
-			return nil, fmt.Errorf("UnicodeLooseMD5.Verify: %v", err)
+			return nil, fmt.Errorf("UnicodeLooseXXHash.Verify: %v", err)
 		}
 		out[i] = bytes.Equal(data, ksids[i])
 	}
@@ -76,12 +76,12 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *UnicodeLooseXXHash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
-		data, err := unicodeHash(vMD5Hash, id)
+		data, err := unicodeHash(vXXHash, id)
 		if err != nil {
-			return nil, fmt.Errorf("UnicodeLooseMD5.Map: %v", err)
+			return nil, fmt.Errorf("UnicodeLooseXXHash.Map: %v", err)
 		}
 		out = append(out, key.DestinationKeyspaceID(data))
 	}
@@ -89,5 +89,5 @@ func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.De
 }
 
 func init() {
-	Register("unicode_loose_md5", NewUnicodeLooseMD5)
+	Register("unicode_loose_xxhash", NewUnicodeLooseXXHash)
 }
