@@ -55,6 +55,7 @@ type SplitDiffWorker struct {
 	minHealthyRdonlyTablets int
 	destinationTabletType   topodatapb.TabletType
 	parallelDiffsCount      int
+	skipVerify              bool
 	cleaner                 *wrangler.Cleaner
 
 	// populated during WorkerStateInit, read-only after that
@@ -71,7 +72,7 @@ type SplitDiffWorker struct {
 }
 
 // NewSplitDiffWorker returns a new SplitDiffWorker object.
-func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyTablets, parallelDiffsCount int, tabletType topodatapb.TabletType) Worker {
+func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sourceUID uint32, excludeTables []string, minHealthyRdonlyTablets, parallelDiffsCount int, tabletType topodatapb.TabletType, skipVerify bool) Worker {
 	return &SplitDiffWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
@@ -83,6 +84,7 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, sou
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		destinationTabletType:   tabletType,
 		parallelDiffsCount:      parallelDiffsCount,
+		skipVerify:              skipVerify,
 		cleaner:                 &wrangler.Cleaner{},
 	}
 }
@@ -429,13 +431,26 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 		return rec.Error()
 	}
 
-	sdw.wr.Logger().Infof("Diffing the schema...")
-	rec = &concurrency.AllErrorRecorder{}
-	tmutils.DiffSchema("destination", sdw.destinationSchemaDefinition, "source", sdw.sourceSchemaDefinition, rec)
-	if rec.HasErrors() {
-		sdw.wr.Logger().Warningf("Different schemas: %v", rec.Error().Error())
-	} else {
-		sdw.wr.Logger().Infof("Schema match, good.")
+	// In splitClone state:
+	// if source destination shard table has column like:
+	// `object_id` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT
+	// Then after copy and exec it on destination the table column will turn to like this:
+	// `object_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT
+	// In that case,(mysql's behavior) when source has too many tables contains columns as `object_id`.
+	// there will be too much differ schema fail error out put on vtworkerclient side says:
+	// remainder of the error is truncated because gRPC has a size limit on errors
+	// This will obscure the real problem.
+	// so add this flag assumed people already know the schema does not match and make the process going on
+	if !sdw.skipVerify {
+		sdw.wr.Logger().Infof("Diffing the schema...")
+		rec = &concurrency.AllErrorRecorder{}
+		tmutils.DiffSchema("destination", sdw.destinationSchemaDefinition, "source", sdw.sourceSchemaDefinition, rec)
+		if !rec.HasErrors() {
+			sdw.wr.Logger().Infof("Schema match, good.")
+		} else {
+			sdw.wr.Logger().Warningf("Different schemas: %v", rec.Error().Error())
+			return rec.Error()
+		}
 	}
 
 	// read the vschema if needed

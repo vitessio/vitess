@@ -107,8 +107,9 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 	if !thc.loggedServingState || (serving != thc.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
 		// the th lock while logging is happening
-		go log.Infof("HealthCheckUpdate(Serving State): tablet: %v serving => %v for %v/%v (%v) reason: %s",
+		log.Infof("HealthCheckUpdate(Serving State): tablet: %v serving %v => %v for %v/%v (%v) reason: %s",
 			topotools.TabletIdent(thc.Tablet),
+			thc.Serving,
 			serving,
 			thc.Tablet.GetKeyspace(),
 			thc.Tablet.GetShard(),

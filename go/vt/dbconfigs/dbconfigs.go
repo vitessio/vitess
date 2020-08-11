@@ -223,6 +223,11 @@ func (dbcfgs *DBConfigs) AppDebugWithDB() Connector {
 	return dbcfgs.makeParams(&dbcfgs.appdebugParams, true)
 }
 
+// AllPrivsConnector returns connection parameters for appdebug with no dbname set.
+func (dbcfgs *DBConfigs) AllPrivsConnector() Connector {
+	return dbcfgs.makeParams(&dbcfgs.allprivsParams, false)
+}
+
 // AllPrivsWithDB returns connection parameters for appdebug with dbname set.
 func (dbcfgs *DBConfigs) AllPrivsWithDB() Connector {
 	return dbcfgs.makeParams(&dbcfgs.allprivsParams, true)

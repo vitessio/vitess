@@ -943,6 +943,7 @@ func TestPlayerUpdates(t *testing.T) {
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
+	validateQueryCountStat(t, "replicate", 7)
 }
 
 func TestPlayerRowMove(t *testing.T) {
@@ -988,6 +989,7 @@ func TestPlayerRowMove(t *testing.T) {
 		{"1", "1", "1"},
 		{"2", "5", "2"},
 	})
+	validateQueryCountStat(t, "replicate", 3)
 
 	execStatements(t, []string{
 		"update src set val1=1, val2=4 where id=3",
@@ -1003,6 +1005,7 @@ func TestPlayerRowMove(t *testing.T) {
 		{"1", "5", "2"},
 		{"2", "2", "1"},
 	})
+	validateQueryCountStat(t, "replicate", 5)
 }
 
 func TestPlayerTypes(t *testing.T) {

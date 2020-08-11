@@ -60,6 +60,13 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
 	return t
 }
 
+// Reset will clear histograms: used during testing
+func (t *Timings) Reset() {
+	t.mu.RLock()
+	t.histograms = make(map[string]*Histogram)
+	t.mu.RUnlock()
+}
+
 // Add will add a new value to the named histogram.
 func (t *Timings) Add(name string, elapsed time.Duration) {
 	if t.labelCombined {
