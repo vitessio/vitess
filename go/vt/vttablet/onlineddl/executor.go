@@ -467,7 +467,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	// Validate gh-ost binary:
+	// Validate pt-online-schema-change binary:
 	log.Infof("Will now validate pt-online-schema-change binary")
 	_, err = execCmd(
 		"bash",
@@ -486,7 +486,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	}
 	log.Infof("+ OK")
 
-	runGhost := func(execute bool) error {
+	runPTOSC := func(execute bool) error {
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		_, err := execCmd(
 			"bash",
@@ -527,15 +527,15 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		defer e.dropOnlineDDLUser(ctx, onlineDDLGrant)
 
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
-		if err := runGhost(false); err != nil {
-			log.Errorf("Error executing gh-ost dry run: %+v", err)
+		if err := runPTOSC(false); err != nil {
+			log.Errorf("Error executing pt-online-schema-change dry run: %+v", err)
 			return err
 		}
 		log.Infof("+ OK")
 
 		log.Infof("Will now run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
 		startedMigrations.Add(1)
-		if err := runGhost(true); err != nil {
+		if err := runPTOSC(true); err != nil {
 			failedMigrations.Add(1)
 			log.Errorf("Error running pt-online-schema-change: %+v", err)
 			return err
