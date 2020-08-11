@@ -189,8 +189,8 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port in
 	return host, port, readOnly, nil
 }
 
-// createGhostUser creates a gh-ost user account with all neccessary privileges and with a random password
-func (e *Executor) createGhostUser(ctx context.Context) (password string, err error) {
+// createOnlineDDLUser creates a gh-ost user account with all neccessary privileges and with a random password
+func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
 		return password, err
@@ -199,13 +199,13 @@ func (e *Executor) createGhostUser(ctx context.Context) (password string, err er
 
 	password = RandomHash()[0:maxPasswordLength]
 
-	for _, query := range sqlCreateGhostUser {
+	for _, query := range sqlCreateOnlineDDLUser {
 		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant, password)
 		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 			return password, err
 		}
 	}
-	for _, query := range sqlGrantGhostUser {
+	for _, query := range sqlGrantOnlineDDLUser {
 		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
 		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 			return password, err
@@ -214,15 +214,15 @@ func (e *Executor) createGhostUser(ctx context.Context) (password string, err er
 	return password, err
 }
 
-// dropGhostUser drops the given gh-ost user account at the end of migration
-func (e *Executor) dropGhostUser(ctx context.Context, user string) error {
+// dropOnlineDDLUser drops the given ddl user account at the end of migration
+func (e *Executor) dropOnlineDDLUser(ctx context.Context, user string) error {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	parsed := sqlparser.BuildParsedQuery(sqlDropGhostUser, user)
+	parsed := sqlparser.BuildParsedQuery(sqlDropOnlineDDLUser, user)
 	_, err = conn.ExecuteFetch(parsed.Query, 0, false)
 	return err
 }
@@ -251,7 +251,7 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 		log.Errorf(err.Error())
 		return err
 	}
-	ghostPassword, err := e.createGhostUser(ctx)
+	onlineDDLPassword, err := e.createOnlineDDLUser(ctx)
 	if err != nil {
 		err := fmt.Errorf("Error creating gh-ost user: %+v", err)
 		log.Errorf(err.Error())
@@ -288,8 +288,8 @@ export ONLINE_DDL_PASSWORD
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS_HINT"'&status=%s&dryrun='"$GH_OST_DRY_RUN"
-		`, *servenv.Port, string(status))
+curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"
+		`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
@@ -327,7 +327,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 	log.Infof("+ OK")
 
 	runGhost := func(execute bool) error {
-		os.Setenv("ONLINE_DDL_PASSWORD", ghostPassword)
+		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		_, err := execCmd(
 			"bash",
 			[]string{
@@ -364,7 +364,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 	atomic.StoreInt64(&e.migrationRunning, 1)
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
-		defer e.dropGhostUser(ctx, onlineDDLGrant)
+		defer e.dropOnlineDDLUser(ctx, onlineDDLGrant)
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
 		if err := runGhost(false); err != nil {
@@ -378,6 +378,166 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 		if err := runGhost(true); err != nil {
 			failedMigrations.Add(1)
 			log.Errorf("Error running gh-ost: %+v", err)
+			return err
+		}
+		successfulMigrations.Add(1)
+		log.Infof("+ OK")
+		return nil
+	}()
+	return nil
+}
+
+// ExecuteWithPTOSC validates and runs a pt-online-schema-change process.
+// Validation included testing the backend MySQL server and the pt-online-schema-change binary itself
+// Execution runs first a dry run, then an actual migration
+func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+		return ErrExecutorMigrationAlreadyRunning
+	}
+
+	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+		return ErrExecutorNotWritableTablet
+	}
+	mysqlHost, mysqlPort, readOnly, err := e.readMySQLVariables(ctx)
+	if err != nil {
+		log.Errorf("Error before running pt-online-schema-change: %+v", err)
+		return err
+	}
+	if readOnly {
+		err := fmt.Errorf("Error before running pt-online-schema-change: MySQL server is read_only")
+		log.Errorf(err.Error())
+		return err
+	}
+	onlineDDLPassword, err := e.createOnlineDDLUser(ctx)
+	if err != nil {
+		err := fmt.Errorf("Error creating pt-online-schema-change user: %+v", err)
+		log.Errorf(err.Error())
+		return err
+	}
+	tempDir, err := createTempDir(onlineDDL.UUID)
+	if err != nil {
+		log.Errorf("Error creating temporary directory: %+v", err)
+		return err
+	}
+	credentialsConfigFileContent := fmt.Sprintf(`[client]
+user=%s
+password=${ONLINE_DDL_PASSWORD}
+`, onlineDDLUser)
+	credentialsConfigFileName, err := createTempScript(tempDir, "pt-online-schema-change-conf.cfg", credentialsConfigFileContent)
+	if err != nil {
+		log.Errorf("Error creating config file: %+v", err)
+		return err
+	}
+	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
+pt_log_path="%s"
+pt_log_file=pt-online-schema-change.log
+
+mkdir -p "$pt_log_path"
+
+export ONLINE_DDL_PASSWORD
+%s "$@" > "$pt_log_path/$pt_log_file" 2>&1
+	`, tempDir, PTOSCFileName(),
+	)
+	wrapperScriptFileName, err := createTempScript(tempDir, "pt-online-schema-change-wrapper.sh", wrapperScriptContent)
+	if err != nil {
+		log.Errorf("Error creating wrapper script: %+v", err)
+		return err
+	}
+	onHookContent := func(status schema.OnlineDDLStatus) string {
+		return fmt.Sprintf(`#!/bin/bash
+curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"
+		`, *servenv.Port, onlineDDL.UUID, string(status))
+	}
+	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
+		log.Errorf("Error creating script: %+v", err)
+		return err
+	}
+	if _, err := createTempScript(tempDir, "gh-ost-on-status", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
+		log.Errorf("Error creating script: %+v", err)
+		return err
+	}
+	if _, err := createTempScript(tempDir, "gh-ost-on-success", onHookContent(schema.OnlineDDLStatusComplete)); err != nil {
+		log.Errorf("Error creating script: %+v", err)
+		return err
+	}
+	if _, err := createTempScript(tempDir, "gh-ost-on-failure", onHookContent(schema.OnlineDDLStatusFailed)); err != nil {
+		log.Errorf("Error creating script: %+v", err)
+		return err
+	}
+	// Validate gh-ost binary:
+	log.Infof("Will now validate pt-online-schema-change binary")
+	_, err = execCmd(
+		"bash",
+		[]string{
+			wrapperScriptFileName,
+			"--version",
+		},
+		os.Environ(),
+		"/tmp",
+		nil,
+		nil,
+	)
+	if err != nil {
+		log.Errorf("Error testing pt-online-schema-change binary: %+v", err)
+		return err
+	}
+	log.Infof("+ OK")
+
+	runGhost := func(execute bool) error {
+		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
+		_, err := execCmd(
+			"bash",
+			[]string{
+				wrapperScriptFileName,
+				fmt.Sprintf(`--host=%s`, mysqlHost),
+				fmt.Sprintf(`--port=%d`, mysqlPort),
+				fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
+				`--allow-on-master`,
+				`--max-load=Threads_running=100`,
+				`--critical-load=Threads_running=200`,
+				`--critical-load-hibernate-seconds=60`,
+				`--approve-renamed-columns`,
+				`--debug`,
+				`--exact-rowcount`,
+				`--timestamp-old-table`,
+				`--initially-drop-ghost-table`,
+				`--default-retries=120`,
+				fmt.Sprintf("--hooks-path=%s", tempDir),
+				fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
+				fmt.Sprintf(`--database=%s`, e.dbName),
+				fmt.Sprintf(`--table=%s`, onlineDDL.Table),
+				fmt.Sprintf(`--alter=%s`, onlineDDL.SQL),
+				fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL)),
+				fmt.Sprintf(`--execute=%t`, execute),
+			},
+			os.Environ(),
+			"/tmp",
+			nil,
+			nil,
+		)
+		return err
+	}
+
+	atomic.StoreInt64(&e.migrationRunning, 1)
+	go func() error {
+		defer atomic.StoreInt64(&e.migrationRunning, 0)
+		defer e.dropOnlineDDLUser(ctx, onlineDDLGrant)
+
+		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
+		if err := runGhost(false); err != nil {
+			log.Errorf("Error executing gh-ost dry run: %+v", err)
+			return err
+		}
+		log.Infof("+ OK")
+
+		log.Infof("Will now run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
+		startedMigrations.Add(1)
+		if err := runGhost(true); err != nil {
+			failedMigrations.Add(1)
+			log.Errorf("Error running pt-online-schema-change: %+v", err)
 			return err
 		}
 		successfulMigrations.Add(1)
