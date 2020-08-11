@@ -110,7 +110,7 @@ func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection
 		tableNames = append(tableNames, fmt.Sprintf("%s READ", sqlescape.EscapeID(name)))
 	}
 	lockStatement := fmt.Sprintf("LOCK TABLES %v", strings.Join(tableNames, ", "))
-	_, err := conn.ExecuteFetch(fmt.Sprintf("USE %s", tm.DBConfigs.DBName), 0, false)
+	_, err := conn.ExecuteFetch("USE "+sqlescape.EscapeID(tm.DBConfigs.DBName), 0, false)
 	if err != nil {
 		return err
 	}
