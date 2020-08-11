@@ -466,31 +466,30 @@ echo "running this" %s "$@" > /tmp/t.txt
 
 	sub init {
 		 my ($self, %args) = @_;
-		 print "PLUGIN init\n";
 	}
 
 	sub before_create_new_table {
 		 my ($self, %args) = @_;
-		 get("http://localhost:VTTABLET_PORT/schema-migration/report-status?uuid=MIGRATION_UUID&status=OnlineDDLStatusRunning&dryrun=DRYRUN");
+		 get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusRunning}}&dryrun={{DRYRUN}}");
 	}
 
 	sub before_exit {
 		 my ($self, %args) = @_;
 		 my $exit_status = $args{exit_status};
 		 if ($exit_status == 0) {
-				get("http://localhost:VTTABLET_PORT/schema-migration/report-status?uuid=MIGRATION_UUID&status=OnlineDDLStatusComplete&dryrun=DRYRUN");
+				get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusComplete}}&dryrun={{DRYRUN}}");
 		 } else {
-				get("http://localhost:VTTABLET_PORT/schema-migration/report-status?uuid=MIGRATION_UUID&status=OnlineDDLStatusFailed&dryrun=DRYRUN");
+				get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusFailed}}&dryrun={{DRYRUN}}");
 			 }
 		}
 
 	1;
 	`
-	pluginCode = strings.ReplaceAll(pluginCode, "VTTABLET_PORT", fmt.Sprintf("%d", *servenv.Port))
-	pluginCode = strings.ReplaceAll(pluginCode, "MIGRATION_UUID", onlineDDL.UUID)
-	pluginCode = strings.ReplaceAll(pluginCode, "OnlineDDLStatusRunning", string(schema.OnlineDDLStatusRunning))
-	pluginCode = strings.ReplaceAll(pluginCode, "OnlineDDLStatusComplete", string(schema.OnlineDDLStatusComplete))
-	pluginCode = strings.ReplaceAll(pluginCode, "OnlineDDLStatusFailed", string(schema.OnlineDDLStatusFailed))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", *servenv.Port))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{MIGRATION_UUID}}", onlineDDL.UUID)
+	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(schema.OnlineDDLStatusRunning))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(schema.OnlineDDLStatusComplete))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusFailed}}", string(schema.OnlineDDLStatusFailed))
 
 	// Validate pt-online-schema-change binary:
 	log.Infof("Will now validate pt-online-schema-change binary")
@@ -523,7 +522,7 @@ echo "running this" %s "$@" > /tmp/t.txt
 		if execute {
 			executeFlag = "--execute"
 		}
-		finalPluginCode := strings.ReplaceAll(pluginCode, "DRYRUN", fmt.Sprintf("%t", !execute))
+		finalPluginCode := strings.ReplaceAll(pluginCode, "{{DRYRUN}}", fmt.Sprintf("%t", !execute))
 		pluginFile, err := createTempScript(tempDir, "pt-online-schema-change-plugin", finalPluginCode)
 		if err != nil {
 			log.Errorf("Error creating script: %+v", err)
