@@ -41,6 +41,14 @@ var (
 	tabletPickerRetryDelay = 30 * time.Second
 )
 
+func GetTabletPickerRetryDelay() time.Duration {
+	return tabletPickerRetryDelay
+}
+
+func SetTabletPickerRetryDelay(delay time.Duration) {
+	tabletPickerRetryDelay = delay
+}
+
 // TabletPicker gives a simplified API for picking tablets.
 type TabletPicker struct {
 	ts          *topo.Server
@@ -67,7 +75,7 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 		missingFields = append(missingFields, "Cells")
 	}
 	if len(missingFields) > 0 {
-		log.Errorf("missing picker fields %s", debug.Stack())
+		log.Errorf("missing picker fields %s", debug.Stack()) //FIXME: remove after all tests run
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			fmt.Sprintf("Missing required field(s) for tablet picker: %s", strings.Join(missingFields, ", ")))
 	}
@@ -156,6 +164,8 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 			// match cell, keyspace and shard
 			sri, err := tp.ts.GetShardReplication(shortCtx, cell, tp.keyspace, tp.shard)
 			if err != nil {
+				log.Errorf("missing shard in topo %s", debug.Stack()) //FIXME: remove after all tests run
+
 				log.Warningf("error %v from GetShardReplication for %v %v %v", err, cell, tp.keyspace, tp.shard)
 				continue
 			}

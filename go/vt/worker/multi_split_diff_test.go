@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -277,7 +279,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(sourceRdonly.RPCServer, &msdSourceTabletServer{
-			t:                        t,
+			t: t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			v3:                       v3,
@@ -288,7 +290,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &msdDestinationTabletServer{
-			t:                        t,
+			t: t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			shardIndex:               0,
@@ -299,7 +301,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &msdDestinationTabletServer{
-			t:                        t,
+			t: t,
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			shardIndex:               1,
@@ -333,5 +335,11 @@ func TestMultiSplitDiffv2(t *testing.T) {
 }
 
 func TestMultiSplitDiffv3(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	testMultiSplitDiff(t, true)
 }
