@@ -162,7 +162,7 @@ func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []inter
 		if nw.inUse || !nw.enforceTimeout {
 			continue
 		}
-		if nw.timeCreated.Add(age).Sub(now) <= 0 {
+		if nw.timeUsed.Add(age).Sub(now) <= 0 {
 			nw.inUse = true
 			nw.purpose = purpose
 			vals = append(vals, nw.val)
