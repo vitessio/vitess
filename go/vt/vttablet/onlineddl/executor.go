@@ -87,6 +87,11 @@ func GhostBinaryFileName() string {
 	return path.Join(os.TempDir(), "vt-gh-ost")
 }
 
+// PTOSCFileName returns the full path+name of the pt-online-schema-change binary
+func PTOSCFileName() string {
+	return path.Join(os.TempDir(), "vt-pt-online-schema-change")
+}
+
 // NewExecutor creates a new gh-ost executor.
 func NewExecutor(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
 	return &Executor{
@@ -222,7 +227,7 @@ func (e *Executor) dropGhostUser(ctx context.Context, user string) error {
 	return err
 }
 
-// Execute validates and runs a gh-ost process.
+// ExecuteWithGhost validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binray itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {

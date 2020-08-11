@@ -80,7 +80,7 @@ func main() {
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
-	if err := extractGhostBinary(); err != nil {
+	if err := extractOnlineDDL(); err != nil {
 		log.Exitf("failed to extract gh-ost binary: %v", err)
 	}
 
@@ -164,9 +164,9 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 	return config, mycnf
 }
 
-// extractGhostBinary extracts the gh-ost binary from this executable. gh-ost is appended
+// extractOnlineDDL extracts the gh-ost binary from this executable. gh-ost is appended
 // to vttablet executable by `make build` and via ricebox
-func extractGhostBinary() error {
+func extractOnlineDDL() error {
 	riceBox, err := rice.FindBox("../../../resources/bin")
 	if err != nil {
 		return err
@@ -175,10 +175,18 @@ func extractGhostBinary() error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(onlineddl.GhostBinaryFileName(), ghostBinary, 0755)
+	if err := ioutil.WriteFile(onlineddl.GhostBinaryFileName(), ghostBinary, 0755); err != nil {
+		return err
+	}
+
+	ptoscBinary, err := riceBox.Bytes("pt-online-schema-change")
 	if err != nil {
 		return err
 	}
+	if err := ioutil.WriteFile(onlineddl.PTOSCFileName(), ptoscBinary, 0755); err != nil {
+		return err
+	}
+
 	return nil
 }
 
