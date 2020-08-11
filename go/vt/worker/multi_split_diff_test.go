@@ -280,6 +280,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(sourceRdonly.RPCServer, &msdSourceTabletServer{
 			t: t,
+
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			v3:                       v3,
@@ -291,6 +292,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &msdDestinationTabletServer{
 			t: t,
+
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			shardIndex:               0,
@@ -302,6 +304,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &msdDestinationTabletServer{
 			t: t,
+
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			shardIndex:               1,
