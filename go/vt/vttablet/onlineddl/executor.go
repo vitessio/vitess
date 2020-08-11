@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -368,6 +369,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
 		if err := runGhost(false); err != nil {
+			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
+			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 			log.Errorf("Error executing gh-ost dry run: %+v", err)
 			return err
 		}
@@ -376,6 +379,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		log.Infof("Will now run gh-ost on: %s:%d", mysqlHost, mysqlPort)
 		startedMigrations.Add(1)
 		if err := runGhost(true); err != nil {
+			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
+			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 			failedMigrations.Add(1)
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
@@ -447,27 +452,46 @@ echo "running this" %s "$@" > /tmp/t.txt
 		log.Errorf("Error creating wrapper script: %+v", err)
 		return err
 	}
-	onHookContent := func(status schema.OnlineDDLStatus) string {
-		return fmt.Sprintf(`#!/bin/bash
-curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"
-		`, *servenv.Port, onlineDDL.UUID, string(status))
+	pluginCode := `
+	package pt_online_schema_change_plugin;
+
+	use strict;
+	use LWP::Simple;
+
+	sub new {
+		 my ($class, %args) = @_;
+		 my $self = { %args };
+		 return bless $self, $class;
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
-		log.Errorf("Error creating script: %+v", err)
-		return err
+
+	sub init {
+		 my ($self, %args) = @_;
+		 print "PLUGIN init\n";
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-status", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
-		log.Errorf("Error creating script: %+v", err)
-		return err
+
+	sub before_create_new_table {
+		 my ($self, %args) = @_;
+		 get("http://localhost:VTTABLET_PORT/schema-migration/report-status?uuid=MIGRATION_UUID&status=OnlineDDLStatusRunning&dryrun=DRYRUN");
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-success", onHookContent(schema.OnlineDDLStatusComplete)); err != nil {
-		log.Errorf("Error creating script: %+v", err)
-		return err
-	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-failure", onHookContent(schema.OnlineDDLStatusFailed)); err != nil {
-		log.Errorf("Error creating script: %+v", err)
-		return err
-	}
+
+	sub before_exit {
+		 my ($self, %args) = @_;
+		 my $exit_status = $args{exit_status};
+		 if ($exit_status == 0) {
+				get("http://localhost:VTTABLET_PORT/schema-migration/report-status?uuid=MIGRATION_UUID&status=OnlineDDLStatusComplete&dryrun=DRYRUN");
+		 } else {
+				get("http://localhost:VTTABLET_PORT/schema-migration/report-status?uuid=MIGRATION_UUID&status=OnlineDDLStatusFailed&dryrun=DRYRUN");
+			 }
+		}
+
+	1;
+	`
+	pluginCode = strings.ReplaceAll(pluginCode, "VTTABLET_PORT", fmt.Sprintf("%d", *servenv.Port))
+	pluginCode = strings.ReplaceAll(pluginCode, "MIGRATION_UUID", onlineDDL.UUID)
+	pluginCode = strings.ReplaceAll(pluginCode, "OnlineDDLStatusRunning", string(schema.OnlineDDLStatusRunning))
+	pluginCode = strings.ReplaceAll(pluginCode, "OnlineDDLStatusComplete", string(schema.OnlineDDLStatusComplete))
+	pluginCode = strings.ReplaceAll(pluginCode, "OnlineDDLStatusFailed", string(schema.OnlineDDLStatusFailed))
+
 	// Validate pt-online-schema-change binary:
 	log.Infof("Will now validate pt-online-schema-change binary")
 	_, err = execCmd(
@@ -499,10 +523,18 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		if execute {
 			executeFlag = "--execute"
 		}
-		_, err := execCmd(
+		finalPluginCode := strings.ReplaceAll(pluginCode, "DRYRUN", fmt.Sprintf("%t", !execute))
+		pluginFile, err := createTempScript(tempDir, "pt-online-schema-change-plugin", finalPluginCode)
+		if err != nil {
+			log.Errorf("Error creating script: %+v", err)
+			return err
+		}
+		_, err = execCmd(
 			"bash",
 			[]string{
 				wrapperScriptFileName,
+				`--plugin`,
+				pluginFile,
 				`--alter`,
 				alterOptions,
 				executeFlag,
@@ -523,6 +555,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
 		if err := runPTOSC(false); err != nil {
+			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
+			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 			log.Errorf("Error executing pt-online-schema-change dry run: %+v", err)
 			return err
 		}
@@ -531,6 +565,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		log.Infof("Will now run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
 		startedMigrations.Add(1)
 		if err := runPTOSC(true); err != nil {
+			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
+			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 			failedMigrations.Add(1)
 			log.Errorf("Error running pt-online-schema-change: %+v", err)
 			return err
@@ -682,11 +718,22 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		}
 		switch onlineDDL.Strategy {
 		case schema.DDLStrategyGhost:
-			go e.ExecuteWithGhost(ctx, onlineDDL)
+			go func() {
+				if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
+					_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+				}
+			}()
 		case schema.DDLStrategyPTOSC:
-			go e.ExecuteWithPTOSC(ctx, onlineDDL)
+			go func() {
+				if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+					_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+				}
+			}()
 		default:
-			return fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy)
+			{
+				_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+				return fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy)
+			}
 		}
 		// the query should only ever return a single row at the most
 		// but let's make it also explicit here that we only run a single migration
