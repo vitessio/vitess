@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -33,6 +34,8 @@ import (
 var (
 	alterTableExplicitSchemaTableRegexps = []*regexp.Regexp{
 		// ALTER TABLE `scm`.`tbl` something
+		// ALTER WITH_GHOST TABLE `scm`.`tbl` something
+		// ALTER WITH_PT TABLE `scm`.`tbl` something
 		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
 		// ALTER TABLE `scm`.tbl something
 		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]([\S]+)\s+(.*$)`),
@@ -113,7 +116,7 @@ func ShortRandomHash() string {
 // - explicit schema and table, if available
 // - alter roptions (anything that follows ALTER ... TABLE)
 func parseAlterTableOptions(alterStatement string) (explicitSchema, explicitTable, alterOptions string) {
-	alterOptions = alterStatement
+	alterOptions = strings.TrimSpace(alterStatement)
 	for _, alterTableRegexp := range alterTableExplicitSchemaTableRegexps {
 		if submatch := alterTableRegexp.FindStringSubmatch(alterOptions); len(submatch) > 0 {
 			explicitSchema = submatch[2]

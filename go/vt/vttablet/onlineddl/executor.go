@@ -486,6 +486,12 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	}
 	log.Infof("+ OK")
 
+	// Temporary hack (2020-08-11)
+	// Because sqlparser does not do full blown ALTER TABLE parsing,
+	// and because pt-online-schema-change requires only the table options part of the ALTER TABLE statement,
+	// we resort to regexp-based parsing of the query.
+	_, _, alterOptions := parseAlterTableOptions(onlineDDL.SQL)
+
 	runPTOSC := func(execute bool) error {
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		_, err := execCmd(
@@ -509,7 +515,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 				fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
 				fmt.Sprintf(`--database=%s`, e.dbName),
 				fmt.Sprintf(`--table=%s`, onlineDDL.Table),
-				fmt.Sprintf(`--alter=%s`, onlineDDL.SQL),
+				fmt.Sprintf(`--alter=%s`, alterOptions),
 				fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL)),
 				fmt.Sprintf(`--execute=%t`, execute),
 			},
