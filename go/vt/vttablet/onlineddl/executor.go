@@ -55,8 +55,8 @@ const (
 )
 
 var (
-	ghostUser  = "gh-ost-vitess-internal"
-	ghostGrant = fmt.Sprintf("'%s'@'%s'", ghostUser, "%")
+	onlineDDLUser  = "vt-online-ddl-internal"
+	onlineDDLGrant = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 )
 
 // Executor wraps and manages the execution of a gh-ost migration.
@@ -195,13 +195,13 @@ func (e *Executor) createGhostUser(ctx context.Context) (password string, err er
 	password = RandomHash()[0:maxPasswordLength]
 
 	for _, query := range sqlCreateGhostUser {
-		parsed := sqlparser.BuildParsedQuery(query, ghostGrant, password)
+		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant, password)
 		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 			return password, err
 		}
 	}
 	for _, query := range sqlGrantGhostUser {
-		parsed := sqlparser.BuildParsedQuery(query, ghostGrant)
+		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
 		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 			return password, err
 		}
@@ -225,7 +225,7 @@ func (e *Executor) dropGhostUser(ctx context.Context, user string) error {
 // Execute validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binray itself
 // Execution runs first a dry run, then an actual migration
-func (e *Executor) Execute(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -259,8 +259,8 @@ func (e *Executor) Execute(ctx context.Context, onlineDDL *schema.OnlineDDL) err
 	}
 	credentialsConfigFileContent := fmt.Sprintf(`[client]
 user=%s
-password=${GH_OST_PASSWORD}
-`, ghostUser)
+password=${ONLINE_DDL_PASSWORD}
+`, onlineDDLUser)
 	credentialsConfigFileName, err := createTempScript(tempDir, "gh-ost-conf.cfg", credentialsConfigFileContent)
 	if err != nil {
 		log.Errorf("Error creating config file: %+v", err)
@@ -272,7 +272,7 @@ ghost_log_file=gh-ost.log
 
 mkdir -p "$ghost_log_path"
 
-export GH_OST_PASSWORD
+export ONLINE_DDL_PASSWORD
 %s "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
 	`, tempDir, GhostBinaryFileName(),
 	)
@@ -322,7 +322,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 	log.Infof("+ OK")
 
 	runGhost := func(execute bool) error {
-		os.Setenv("GH_OST_PASSWORD", ghostPassword)
+		os.Setenv("ONLINE_DDL_PASSWORD", ghostPassword)
 		_, err := execCmd(
 			"bash",
 			[]string{
@@ -359,7 +359,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid='"$GH_OST_HOOKS
 	atomic.StoreInt64(&e.migrationRunning, 1)
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
-		defer e.dropGhostUser(ctx, ghostGrant)
+		defer e.dropGhostUser(ctx, onlineDDLGrant)
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
 		if err := runGhost(false); err != nil {
@@ -408,7 +408,7 @@ func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.Onli
 		"shard":               sqltypes.StringBindVariable(e.shard),
 		"mysql_table":         sqltypes.StringBindVariable(onlineDDL.Table),
 		"migration_statement": sqltypes.StringBindVariable(onlineDDL.SQL),
-		"strategy":            sqltypes.StringBindVariable(""),
+		"strategy":            sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
 		"requested_timestamp": sqltypes.Int64BindVariable(onlineDDL.RequestTimeSeconds()),
 		"migration_status":    sqltypes.StringBindVariable(string(onlineDDL.Status)),
 	}
@@ -511,19 +511,26 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		return err
 	}
 	named := r.Named()
-	for _, row := range named.Rows {
+	for i, row := range named.Rows {
 		onlineDDL := &schema.OnlineDDL{
 			Keyspace: row["keyspace"].ToString(),
 			Table:    row["mysql_table"].ToString(),
 			SQL:      row["migration_statement"].ToString(),
 			UUID:     row["migration_uuid"].ToString(),
-			Online:   true,
+			Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
-		go e.Execute(ctx, onlineDDL)
+		switch onlineDDL.Strategy {
+		case schema.DDLStrategyGhost:
+			go e.ExecuteWithGhost(ctx, onlineDDL)
+		default:
+			return fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy)
+		}
 		// the query should only ever return a single row at the most
 		// but let's make it also explicit here that we only run a single migration
-		return nil
+		if i == 0 {
+			break
+		}
 	}
 
 	return nil

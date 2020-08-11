@@ -36,6 +36,7 @@ func buildOnlineDDLPlan(query string, stmt *sqlparser.DDL, vschema ContextVSchem
 		Keyspace: keyspace,
 		DDL:      stmt,
 		SQL:      query,
+		Strategy: stmt.Strategy,
 	}, nil
 }
 

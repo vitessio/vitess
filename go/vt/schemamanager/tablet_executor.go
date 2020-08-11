@@ -237,15 +237,15 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			execResult.ExecutorErr = err.Error()
 			return &execResult
 		}
-		executeOnlineSchemaChange := false
+		strategy := schema.DDLStrategyNormal
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
 			if ddl.Action == sqlparser.AlterStr && exec.onlineSchemaChange {
-				executeOnlineSchemaChange = true
+				strategy = ddl.Strategy
 			}
 		}
-		exec.wr.Logger().Infof("Received DDL request. online schema change = %t", executeOnlineSchemaChange)
-		exec.executeOnAllTablets(ctx, &execResult, sql, executeOnlineSchemaChange)
+		exec.wr.Logger().Infof("Received DDL request. strategy = %+v", strategy)
+		exec.executeOnAllTablets(ctx, &execResult, sql, strategy)
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -255,10 +255,10 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 func (exec *TabletExecutor) executeOnAllTablets(
 	ctx context.Context, execResult *ExecuteResult, sql string,
-	executeOnlineSchemaChange bool,
+	strategy sqlparser.DDLStrategy,
 ) {
-	if executeOnlineSchemaChange {
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sql)
+	if strategy != schema.DDLStrategyNormal {
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sql, strategy)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return

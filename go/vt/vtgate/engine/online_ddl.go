@@ -34,6 +34,7 @@ type OnlineDDL struct {
 	Keyspace *vindexes.Keyspace
 	DDL      *sqlparser.DDL
 	SQL      string
+	Strategy sqlparser.DDLStrategy
 
 	noTxNeeded
 
@@ -67,7 +68,7 @@ func (v *OnlineDDL) GetTableName() string {
 
 //Execute implements the Primitive interface
 func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL)
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL, v.Strategy)
 	if err != nil {
 		return result, err
 	}
