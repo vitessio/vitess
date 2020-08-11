@@ -182,6 +182,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(sourceRdonly.RPCServer, &legacyTestQueryService{
 			t: tc.t,
+
 			StreamHealthQueryService: qs,
 		})
 	}

@@ -180,6 +180,7 @@ func TestVerticalSplitDiff(t *testing.T) {
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(rdonly.RPCServer, &verticalDiffTabletServer{
 			t: t,
+
 			StreamHealthQueryService: qs,
 		})
 	}

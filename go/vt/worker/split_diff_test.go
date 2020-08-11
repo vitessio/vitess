@@ -274,6 +274,7 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(sourceRdonly.RPCServer, &sourceTabletServer{
 			t: t,
+
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			v3:                       v3,
@@ -285,6 +286,7 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &destinationTabletServer{
 			t: t,
+
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 		})
