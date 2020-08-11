@@ -109,6 +109,8 @@ type (
 		ShardSession() []*srvtopo.ResolvedShard
 
 		SetAutocommit(bool) error
+		SetClientFoundRows(bool)
+		SetSkipQueryPlanCache(bool)
 	}
 
 	// Plan represents the execution strategy for a given query.

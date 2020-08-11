@@ -203,7 +203,11 @@ var checkAndIgnore = []setting{
 }
 
 var vitessAware = []setting{
-	{name: engine.AUTOCOMMIT, boolean: true},
+	{name: engine.Autocommit, boolean: true},
+	{name: engine.ClientFoundRows, boolean: true},
+	{name: engine.SkipQueryPlanCache, boolean: true},
+	{name: engine.TransactionReadOnly, boolean: true},
+	{name: engine.TxReadOnly, boolean: true},
 }
 
 func init() {
@@ -409,19 +413,14 @@ func buildSetOpVarSet(boolean bool) planFunc {
 
 func buildSetOpVitessAware(boolean bool) planFunc {
 	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
-		switch astExpr.Name.Lowered() {
-		case engine.AUTOCOMMIT:
-			runtimeExpr, err := ec.convert(astExpr, boolean)
-			if err != nil {
-				return nil, err
-			}
-			return &engine.SysVarSetAware{
-				Name: astExpr.Name.Lowered(),
-				Expr: runtimeExpr,
-			}, nil
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown setting %s", astExpr.Name.String())
+		runtimeExpr, err := ec.convert(astExpr, boolean)
+		if err != nil {
+			return nil, err
 		}
+		return &engine.SysVarSetAware{
+			Name: astExpr.Name.Lowered(),
+			Expr: runtimeExpr,
+		}, nil
 	}
 }
 

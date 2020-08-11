@@ -425,4 +425,31 @@
     ]
   }
 }
+
+# more vitess aware settings
+"set client_found_rows = off, skip_query_plan_cache = ON"
+{
+  "QueryType": "SET",
+  "Original": "set client_found_rows = off, skip_query_plan_cache = ON",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "client_found_rows",
+        "Expr": "INT64(0)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "skip_query_plan_cache",
+        "Expr": "INT64(1)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
                 

@@ -341,7 +341,11 @@ var _ SetOp = (*SysVarSetAware)(nil)
 
 // System variables that needs special handling
 const (
-	AUTOCOMMIT = "autocommit"
+	Autocommit          = "autocommit"
+	ClientFoundRows     = "client_found_rows"
+	SkipQueryPlanCache  = "skip_query_plan_cache"
+	TxReadOnly          = "tx_read_only"
+	TransactionReadOnly = "transaction_read_only"
 )
 
 //MarshalJSON provides the type to SetOp for plan json
@@ -360,16 +364,27 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 //Execute implements the SetOp interface method
 func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	switch svss.Name {
-	case AUTOCOMMIT:
+	// These are all the boolean values we need to handle
+	case Autocommit, ClientFoundRows, SkipQueryPlanCache, TxReadOnly, TransactionReadOnly:
 		value, err := svss.Expr.Evaluate(env)
 		if err != nil {
 			return err
 		}
-		autocommit, err := value.ToBooleanStrict()
+		boolValue, err := value.ToBooleanStrict()
 		if err != nil {
 			return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
 		}
-		vcursor.Session().SetAutocommit(autocommit)
+		switch svss.Name {
+		case Autocommit:
+			vcursor.Session().SetAutocommit(boolValue)
+		case ClientFoundRows:
+			vcursor.Session().SetClientFoundRows(boolValue)
+		case SkipQueryPlanCache:
+			vcursor.Session().SetSkipQueryPlanCache(boolValue)
+		case TxReadOnly, TransactionReadOnly:
+			// TODO (4127): This is a dangerous NOP.
+		}
+
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
 	}

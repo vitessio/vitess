@@ -85,11 +85,19 @@ func (t noopVCursor) Session() SessionActions {
 	return t
 }
 
-func (t noopVCursor) SetAutocommit(autocommit bool) error {
+func (t noopVCursor) SetAutocommit(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetTarget(target string) error {
+func (t noopVCursor) SetClientFoundRows(bool) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetSkipQueryPlanCache(bool) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetTarget(string) error {
 	panic("implement me")
 }
 
@@ -355,7 +363,15 @@ func (f *loggingVCursor) Rewind() {
 	f.warnings = nil
 }
 
-func (f *loggingVCursor) SetAutocommit(b bool) error {
+func (f *loggingVCursor) SetAutocommit(bool) error {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetClientFoundRows(bool) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetSkipQueryPlanCache(bool) {
 	panic("implement me")
 }
 
