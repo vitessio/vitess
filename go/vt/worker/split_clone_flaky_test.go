@@ -337,15 +337,16 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 		fields = v3Fields
 	}
 	return &testQueryService{
-		t:      t,
-		target: target,
+		t:              t,
+		target:         target,
+		shardIndex:     shardIndex,
+		shardCount:     shardCount,
+		alias:          alias,
+		omitKeyspaceID: omitKeyspaceID,
+		fields:         fields,
+		forceError:     make(map[int64]int),
+
 		StreamHealthQueryService: shqs,
-		shardIndex:               shardIndex,
-		shardCount:               shardCount,
-		alias:                    alias,
-		omitKeyspaceID:           omitKeyspaceID,
-		fields:                   fields,
-		forceError:               make(map[int64]int),
 	}
 }
 
