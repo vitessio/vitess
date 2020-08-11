@@ -23,6 +23,7 @@ import (
 	"html/template"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,6 +41,7 @@ import (
 )
 
 var connMap map[string]*fakeConn
+var muConnMap sync.Mutex
 
 func init() {
 	tabletconn.RegisterDialer("fake_discovery", discoveryDialer)
@@ -88,18 +90,20 @@ func TestLegacyHealthCheck(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Up:                                  true,
-		Serving:                             true,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		TabletExternallyReparentedTimestamp: 10,
 	}
 	input <- shr
@@ -119,12 +123,13 @@ func TestLegacyHealthCheck(t *testing.T) {
 		Cell:   "cell",
 		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		TabletsStats: LegacyTabletStatsList{{
-			Key:                                 "a,vt:1",
-			Tablet:                              tablet,
-			Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-			Up:                                  true,
-			Serving:                             true,
-			Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+			Key:     "a,vt:1",
+			Tablet:  tablet,
+			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+			Up:      true,
+			Serving: true,
+			Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 			TabletExternallyReparentedTimestamp: 10,
 		}},
 	}}
@@ -135,20 +140,23 @@ func TestLegacyHealthCheck(t *testing.T) {
 
 	// TabletType changed, should get both old and new event
 	shr = &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 	}
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Up:                                  false,
-		Serving:                             true,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:      false,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		TabletExternallyReparentedTimestamp: 10,
 	}
 	res = <-l.output
@@ -156,12 +164,13 @@ func TestLegacyHealthCheck(t *testing.T) {
 		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Up:                                  true,
-		Serving:                             true,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+
 		TabletExternallyReparentedTimestamp: 0,
 	}
 	res = <-l.output
@@ -176,18 +185,21 @@ func TestLegacyHealthCheck(t *testing.T) {
 
 	// Serving & RealtimeStats changed
 	shr = &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             false,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: false,
+
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Up:                                  true,
-		Serving:                             false,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: false,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+
 		TabletExternallyReparentedTimestamp: 0,
 	}
 	input <- shr
@@ -200,20 +212,24 @@ func TestLegacyHealthCheck(t *testing.T) {
 
 	// HealthError
 	shr = &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+
+		RealtimeStats: &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Up:                                  true,
-		Serving:                             false,
-		Stats:                               &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: false,
+		Stats:   &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+
 		TabletExternallyReparentedTimestamp: 0,
-		LastError:                           fmt.Errorf("vttablet error: some error"),
+
+		LastError: fmt.Errorf("vttablet error: some error"),
 	}
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3}}`)
@@ -227,14 +243,16 @@ func TestLegacyHealthCheck(t *testing.T) {
 	hc.deleteConn(tablet)
 	t.Logf(`hc.RemoveTablet({Host: "a", PortMap: {"vt": 1}})`)
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Up:                                  false,
-		Serving:                             false,
-		Stats:                               &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      false,
+		Serving: false,
+		Stats:   &querypb.RealtimeStats{HealthError: "some error", SecondsBehindMaster: 1, CpuUsage: 0.3},
+
 		TabletExternallyReparentedTimestamp: 0,
-		LastError:                           context.Canceled,
+
+		LastError: context.Canceled,
 	}
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
@@ -274,18 +292,21 @@ func TestLegacyHealthCheckStreamError(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Up:                                  true,
-		Serving:                             true,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		TabletExternallyReparentedTimestamp: 0,
 	}
 	input <- shr
@@ -298,14 +319,16 @@ func TestLegacyHealthCheckStreamError(t *testing.T) {
 	// Stream error
 	fc.errCh <- fmt.Errorf("some stream error")
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Up:                                  true,
-		Serving:                             false,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Up:      true,
+		Serving: false,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		TabletExternallyReparentedTimestamp: 0,
-		LastError:                           fmt.Errorf("some stream error"),
+
+		LastError: fmt.Errorf("some stream error"),
 	}
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
@@ -345,11 +368,13 @@ func TestLegacyHealthCheckVerifiesTabletAlias(t *testing.T) {
 	}
 
 	input <- &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		TabletAlias:                         &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
-		Serving:                             true,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		TabletAlias: &topodatapb.TabletAlias{Uid: 20, Cell: "cellb"},
+		Serving:     true,
+
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
 	select {
@@ -363,11 +388,13 @@ func TestLegacyHealthCheckVerifiesTabletAlias(t *testing.T) {
 	}
 
 	input <- &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		TabletAlias:                         &topodatapb.TabletAlias{Uid: 1, Cell: "cell"},
-		Serving:                             true,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		TabletAlias: &topodatapb.TabletAlias{Uid: 1, Cell: "cell"},
+		Serving:     true,
+
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 
 	select {
@@ -412,18 +439,21 @@ func TestLegacyHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 
 	// Verify that the listener works in general.
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Up:                                  true,
-		Serving:                             true,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		TabletExternallyReparentedTimestamp: 10,
 	}
 	input <- shr
@@ -507,18 +537,21 @@ func TestLegacyHealthCheckTimeout(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Up:                                  true,
-		Serving:                             true,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		TabletExternallyReparentedTimestamp: 10,
 	}
 	input <- shr
@@ -586,12 +619,13 @@ func TestLegacyTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
 	ts := []*LegacyTabletStats{
 		{
-			Key:                                 "a",
-			Tablet:                              tablet,
-			Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-			Up:                                  true,
-			Serving:                             false,
-			Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+			Key:     "a",
+			Tablet:  tablet,
+			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Up:      true,
+			Serving: false,
+			Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+
 			TabletExternallyReparentedTimestamp: 0,
 		},
 	}
@@ -618,12 +652,13 @@ func TestLegacyDebugURLFormatting(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")
 	ts := []*LegacyTabletStats{
 		{
-			Key:                                 "a",
-			Tablet:                              tablet,
-			Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-			Up:                                  true,
-			Serving:                             false,
-			Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+			Key:     "a",
+			Tablet:  tablet,
+			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Up:      true,
+			Serving: false,
+			Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.3},
+
 			TabletExternallyReparentedTimestamp: 0,
 		},
 	}
@@ -661,6 +696,8 @@ func (l *listener) StatsUpdate(ts *LegacyTabletStats) {
 
 func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	key := TabletToMapKey(tablet)
+	muConnMap.Lock()
+	defer muConnMap.Unlock()
 	if qs, ok := connMap[key]; ok {
 		return qs, nil
 	}

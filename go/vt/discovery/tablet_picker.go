@@ -19,8 +19,8 @@ package discovery
 import (
 	"fmt"
 	"math/rand"
-	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -38,14 +38,21 @@ import (
 )
 
 var (
-	tabletPickerRetryDelay = 30 * time.Second
+	tabletPickerRetryDelay   = 30 * time.Second
+	muTabletPickerRetryDelay sync.Mutex
 )
 
+// GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
 func GetTabletPickerRetryDelay() time.Duration {
+	muTabletPickerRetryDelay.Lock()
+	defer muTabletPickerRetryDelay.Unlock()
 	return tabletPickerRetryDelay
 }
 
+// SetTabletPickerRetryDelay synchronizes reads for tabletPickerRetryDelay. Used in tests only at the moment
 func SetTabletPickerRetryDelay(delay time.Duration) {
+	muTabletPickerRetryDelay.Lock()
+	defer muTabletPickerRetryDelay.Unlock()
 	tabletPickerRetryDelay = delay
 }
 
@@ -75,7 +82,7 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 		missingFields = append(missingFields, "Cells")
 	}
 	if len(missingFields) > 0 {
-		log.Errorf("missing picker fields %s", debug.Stack()) //FIXME: remove after all tests run
+		//log.Errorf("missing picker fields %s", debug.Stack()) //FIXME: remove after all tests run
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			fmt.Sprintf("Missing required field(s) for tablet picker: %s", strings.Join(missingFields, ", ")))
 	}
@@ -103,8 +110,8 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		candidates := tp.getMatchingTablets(ctx)
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
-			log.Infof("No tablet found for streaming, sleeping for %d", tabletPickerRetryDelay)
-			time.Sleep(tabletPickerRetryDelay)
+			log.Infof("No tablet found for streaming, sleeping for %d seconds", int(GetTabletPickerRetryDelay()/1e9))
+			time.Sleep(GetTabletPickerRetryDelay())
 			continue
 		}
 		// try at most len(candidate) times to find a healthy tablet
@@ -164,9 +171,9 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 			// match cell, keyspace and shard
 			sri, err := tp.ts.GetShardReplication(shortCtx, cell, tp.keyspace, tp.shard)
 			if err != nil {
-				log.Errorf("missing shard in topo %s", debug.Stack()) //FIXME: remove after all tests run
+				//log.Errorf("missing shard in topo %s", debug.Stack()) //FIXME: remove after all tests run
 
-				log.Warningf("error %v from GetShardReplication for %v %v %v", err, cell, tp.keyspace, tp.shard)
+				//log.Warningf("error %v from GetShardReplication for %v %v %v", err, cell, tp.keyspace, tp.shard)
 				continue
 			}
 

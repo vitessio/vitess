@@ -280,10 +280,11 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
 
-	tabletPickerRetryDelay = 11 * time.Millisecond
+	delay := GetTabletPickerRetryDelay()
 	defer func() {
-		tabletPickerRetryDelay = 30 * time.Second
+		SetTabletPickerRetryDelay(delay)
 	}()
+	SetTabletPickerRetryDelay(11 * time.Millisecond)
 
 	result := make(chan *topodatapb.Tablet)
 	// start picker first, then add tablet
@@ -309,10 +310,12 @@ func TestPickError(t *testing.T) {
 
 	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
 	require.NoError(t, err)
-	tabletPickerRetryDelay = 11 * time.Millisecond
+	delay := GetTabletPickerRetryDelay()
 	defer func() {
-		tabletPickerRetryDelay = 30 * time.Second
+		SetTabletPickerRetryDelay(delay)
 	}()
+	SetTabletPickerRetryDelay(11 * time.Millisecond)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	// no tablets
