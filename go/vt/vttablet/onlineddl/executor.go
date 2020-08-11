@@ -514,7 +514,8 @@ echo "running this" %s "$@" > /tmp/t.txt
 	// Because sqlparser does not do full blown ALTER TABLE parsing,
 	// and because pt-online-schema-change requires only the table options part of the ALTER TABLE statement,
 	// we resort to regexp-based parsing of the query.
-	_, _, alterOptions := parseAlterTableOptions(onlineDDL.SQL)
+	// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
+	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
 
 	runPTOSC := func(execute bool) error {
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)

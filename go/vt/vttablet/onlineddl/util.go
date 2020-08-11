@@ -25,31 +25,8 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"vitess.io/vitess/go/vt/log"
-)
-
-var (
-	alterTableExplicitSchemaTableRegexps = []*regexp.Regexp{
-		// ALTER TABLE `scm`.`tbl` something
-		// ALTER WITH_GHOST TABLE `scm`.`tbl` something
-		// ALTER WITH_PT TABLE `scm`.`tbl` something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
-		// ALTER TABLE `scm`.tbl something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]([\S]+)\s+(.*$)`),
-		// ALTER TABLE scm.`tbl` something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+([\S]+)[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
-		// ALTER TABLE scm.tbl something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+([\S]+)[.]([\S]+)\s+(.*$)`),
-	}
-	alterTableExplicitTableRegexps = []*regexp.Regexp{
-		// ALTER TABLE `tbl` something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
-		// ALTER TABLE tbl something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+([\S]+)\s+(.*$)`),
-	}
 )
 
 // execCmd searches the PATH for a command and runs it, logging the output.
@@ -110,27 +87,4 @@ func RandomHash() string {
 // ShortRandomHash returns a 8 hex character random string
 func ShortRandomHash() string {
 	return RandomHash()[0:8]
-}
-
-// parseAlterTableOptions parses a ALTER ... TABLE... statement into:
-// - explicit schema and table, if available
-// - alter roptions (anything that follows ALTER ... TABLE)
-func parseAlterTableOptions(alterStatement string) (explicitSchema, explicitTable, alterOptions string) {
-	alterOptions = strings.TrimSpace(alterStatement)
-	for _, alterTableRegexp := range alterTableExplicitSchemaTableRegexps {
-		if submatch := alterTableRegexp.FindStringSubmatch(alterOptions); len(submatch) > 0 {
-			explicitSchema = submatch[2]
-			explicitTable = submatch[3]
-			alterOptions = submatch[4]
-			return explicitSchema, explicitTable, alterOptions
-		}
-	}
-	for _, alterTableRegexp := range alterTableExplicitTableRegexps {
-		if submatch := alterTableRegexp.FindStringSubmatch(alterOptions); len(submatch) > 0 {
-			explicitTable = submatch[2]
-			alterOptions = submatch[3]
-			return explicitSchema, explicitTable, alterOptions
-		}
-	}
-	return explicitSchema, explicitTable, alterOptions
 }
