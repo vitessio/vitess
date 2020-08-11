@@ -25,17 +25,18 @@ func TestParseAlterTableOptions(t *testing.T) {
 		schema, table, options string
 	}
 	tests := map[string]expect{
-		"add column i int, drop column d":                                      {schema: "", table: "", options: "add column i int, drop column d"},
-		"alter table t add column i int, drop column d":                        {schema: "", table: "t", options: "add column i int, drop column d"},
-		"alter    table   t      add column i int, drop column d":              {schema: "", table: "t", options: "add column i int, drop column d"},
-		"alter table `t` add column i int, drop column d":                      {schema: "", table: "t", options: "add column i int, drop column d"},
-		"alter table `scm`.`t` add column i int, drop column d":                {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter table `scm`.t add column i int, drop column d":                  {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter table scm.`t` add column i int, drop column d":                  {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter table scm.t add column i int, drop column d":                    {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter with_ghost table scm.t add column i int, drop column d":         {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter   with_ghost   table   scm.`t` add column i int, drop column d": {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter with_pt table scm.t add column i int, drop column d":            {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"add column i int, drop column d":                                        {schema: "", table: "", options: "add column i int, drop column d"},
+		"  add column i int, drop column d  ":                                    {schema: "", table: "", options: "add column i int, drop column d"},
+		"alter table t add column i int, drop column d":                          {schema: "", table: "t", options: "add column i int, drop column d"},
+		"alter    table   t      add column i int, drop column d":                {schema: "", table: "t", options: "add column i int, drop column d"},
+		"alter table `t` add column i int, drop column d":                        {schema: "", table: "t", options: "add column i int, drop column d"},
+		"alter table `scm`.`t` add column i int, drop column d":                  {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter table `scm`.t add column i int, drop column d":                    {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter table scm.`t` add column i int, drop column d":                    {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter table scm.t add column i int, drop column d":                      {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter with_ghost table scm.t add column i int, drop column d":           {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"  alter   with_ghost   table   scm.`t` add column i int, drop column d": {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter with_pt table scm.t add column i int, drop column d":              {schema: "scm", table: "t", options: "add column i int, drop column d"},
 	}
 	for query, expect := range tests {
 		schema, table, options := parseAlterTableOptions(query)
