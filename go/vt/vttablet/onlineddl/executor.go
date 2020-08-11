@@ -424,8 +424,8 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 	}
 	credentialsConfigFileContent := fmt.Sprintf(`[client]
 user=%s
-password=${ONLINE_DDL_PASSWORD}
-`, onlineDDLUser)
+password=%s
+`, onlineDDLUser, onlineDDLPassword)
 	credentialsConfigFileName, err := createTempScript(tempDir, "pt-online-schema-change-conf.cfg", credentialsConfigFileContent)
 	if err != nil {
 		log.Errorf("Error creating config file: %+v", err)
@@ -438,8 +438,9 @@ pt_log_file=pt-online-schema-change.log
 mkdir -p "$pt_log_path"
 
 export ONLINE_DDL_PASSWORD
+echo "running this" %s "$@" > /tmp/t.txt
 %s "$@" > "$pt_log_path/$pt_log_file" 2>&1
-	`, tempDir, PTOSCFileName(),
+	`, tempDir, PTOSCFileName(), PTOSCFileName(),
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "pt-online-schema-change-wrapper.sh", wrapperScriptContent)
 	if err != nil {
@@ -494,30 +495,18 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 
 	runPTOSC := func(execute bool) error {
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
+		executeFlag := "--dry-run"
+		if execute {
+			executeFlag = "--execute"
+		}
 		_, err := execCmd(
 			"bash",
 			[]string{
 				wrapperScriptFileName,
-				fmt.Sprintf(`--host=%s`, mysqlHost),
-				fmt.Sprintf(`--port=%d`, mysqlPort),
-				fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
-				`--allow-on-master`,
-				`--max-load=Threads_running=100`,
-				`--critical-load=Threads_running=200`,
-				`--critical-load-hibernate-seconds=60`,
-				`--approve-renamed-columns`,
-				`--debug`,
-				`--exact-rowcount`,
-				`--timestamp-old-table`,
-				`--initially-drop-ghost-table`,
-				`--default-retries=120`,
-				fmt.Sprintf("--hooks-path=%s", tempDir),
-				fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
-				fmt.Sprintf(`--database=%s`, e.dbName),
-				fmt.Sprintf(`--table=%s`, onlineDDL.Table),
-				fmt.Sprintf(`--alter=%s`, alterOptions),
-				fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL)),
-				fmt.Sprintf(`--execute=%t`, execute),
+				`--alter`,
+				alterOptions,
+				executeFlag,
+				fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,F=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, credentialsConfigFileName),
 			},
 			os.Environ(),
 			"/tmp",
@@ -694,6 +683,8 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		switch onlineDDL.Strategy {
 		case schema.DDLStrategyGhost:
 			go e.ExecuteWithGhost(ctx, onlineDDL)
+		case schema.DDLStrategyPTOSC:
+			go e.ExecuteWithPTOSC(ctx, onlineDDL)
 		default:
 			return fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy)
 		}
