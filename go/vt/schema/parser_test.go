@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package onlineddl
+package schema
 
 import (
 	"testing"
@@ -39,7 +39,7 @@ func TestParseAlterTableOptions(t *testing.T) {
 		"alter with_pt table scm.t add column i int, drop column d":              {schema: "scm", table: "t", options: "add column i int, drop column d"},
 	}
 	for query, expect := range tests {
-		schema, table, options := parseAlterTableOptions(query)
+		schema, table, options := ParseAlterTableOptions(query)
 		if schema != expect.schema {
 			t.Errorf("schema: %+v, want:%+v", schema, expect.schema)
 		}
@@ -48,6 +48,24 @@ func TestParseAlterTableOptions(t *testing.T) {
 		}
 		if options != expect.options {
 			t.Errorf("options: %+v, want:%+v", options, expect.options)
+		}
+	}
+}
+
+func TestRemoveOnlineDDLHints(t *testing.T) {
+	tests := map[string]string{
+		"ALTER TABLE my_table DROP COLUMN i":                              "ALTER TABLE `my_table` DROP COLUMN i",
+		"   ALTER     TABLE    my_table     DROP COLUMN i":                "ALTER TABLE `my_table` DROP COLUMN i",
+		"ALTER WITH_GHOST TABLE my_table DROP COLUMN i":                   "ALTER TABLE `my_table` DROP COLUMN i",
+		"ALTER WITH_PT TABLE `my_table` DROP COLUMN i":                    "ALTER TABLE `my_table` DROP COLUMN i",
+		"ALTER WITH_PT TABLE scm.`my_table` DROP COLUMN i":                "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+		"ALTER WITH_PT TABLE `scm`.`my_table` DROP COLUMN i":              "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+		"ALTER    WITH_GHOST   TABLE   `scm`.`my_table`    DROP COLUMN i": "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+	}
+	for query, expect := range tests {
+		normalizedQuery := RemoveOnlineDDLHints(query)
+		if normalizedQuery != expect {
+			t.Errorf("got: %+v, want:%+v", normalizedQuery, expect)
 		}
 	}
 }
