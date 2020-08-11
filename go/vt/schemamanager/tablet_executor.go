@@ -238,14 +238,16 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			return &execResult
 		}
 		strategy := schema.DDLStrategyNormal
+		tableName := ""
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
 			if ddl.Action == sqlparser.AlterStr && exec.onlineSchemaChange {
 				strategy = ddl.Strategy
 			}
+			tableName = ddl.Table.Name.String()
 		}
 		exec.wr.Logger().Infof("Received DDL request. strategy = %+v", strategy)
-		exec.executeOnAllTablets(ctx, &execResult, sql, strategy)
+		exec.executeOnAllTablets(ctx, &execResult, sql, tableName, strategy)
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -255,10 +257,10 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 func (exec *TabletExecutor) executeOnAllTablets(
 	ctx context.Context, execResult *ExecuteResult, sql string,
-	strategy sqlparser.DDLStrategy,
+	tableName string, strategy sqlparser.DDLStrategy,
 ) {
 	if strategy != schema.DDLStrategyNormal {
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sql, strategy)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return
