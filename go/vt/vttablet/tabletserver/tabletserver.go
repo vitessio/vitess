@@ -375,6 +375,11 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
 }
 
+// OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
+func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
+	return tsv.onlineDDLExecutor
+}
+
 // SchemaEngine returns the SchemaEngine part of TabletServer.
 func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 	return tsv.se

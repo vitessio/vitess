@@ -132,7 +132,7 @@ func TestVExec(t *testing.T) {
 		errorString: errorString,
 	})
 
-	errorString = "invalid table name"
+	errorString = "table not supported by vexec"
 	testCases = append(testCases, &TestCase{
 		name:        "delete invalid-other-table",
 		query:       "delete from _vt.copy_state",
@@ -360,7 +360,7 @@ func TestVExecValidations(t *testing.T) {
 		{
 			name:        "incorrect table",
 			query:       "select * from _vt.vreplication2",
-			errorString: "invalid table name: _vt.vreplication2",
+			errorString: "table not supported by vexec: _vt.vreplication2",
 		},
 		{
 			name:        "unsupported query",

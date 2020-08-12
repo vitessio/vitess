@@ -30,7 +30,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/olekukonko/tablewriter"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -41,7 +40,8 @@ import (
 )
 
 const (
-	vreplicationTableName = "_vt.vreplication"
+	vreplicationTableName     = "_vt.vreplication"
+	schemaMigrationsTableName = "_vt.schema_migrations"
 )
 
 type vexec struct {
@@ -66,7 +66,7 @@ func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangle
 	}
 }
 
-// VExec executes queries on _vt.vreplication on all masters in the target keyspace of the workflow
+// VExec executes queries on a table on all masters in the target keyspace of the workflow
 func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
@@ -86,40 +86,17 @@ func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query stri
 	}
 	fullQuery := vx.plan.parsedQuery.Query
 	if dryRun {
-		return nil, vx.outputDryRunInfo(wr)
+		return nil, vx.outputDryRunInfo()
 	}
 	return vx.exec(fullQuery)
 }
 
-func (vx *vexec) outputDryRunInfo(wr *Wrangler) error {
-	rsr, err := vx.wr.getStreams(vx.ctx, vx.workflow, vx.keyspace)
-	if err != nil {
-		return err
-	}
-
-	wr.Logger().Printf("Query: %s\nwill be run on the following streams in keyspace %s for workflow %s:\n\n",
-		vx.plan.parsedQuery.Query, vx.keyspace, vx.workflow)
-	tableString := &strings.Builder{}
-	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID", "MaxReplicationLag"})
-	for _, master := range vx.masters {
-		key := fmt.Sprintf("%s/%s", master.Shard, master.AliasString())
-		for _, stream := range rsr.ShardStatuses[key].MasterReplicationStatuses {
-			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos, fmt.Sprintf("%d", stream.MaxReplicationLag)})
-		}
-	}
-	table.SetAutoMergeCellsByColumnIndex([]int{0})
-	table.SetRowLine(true)
-	table.Render()
-	wr.Logger().Printf(tableString.String())
-	wr.Logger().Printf("\n\n")
-
-	return nil
+func (vx *vexec) outputDryRunInfo() error {
+	return vx.plan.planner.dryRun()
 }
 
 func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
-	workflow := vx.workflow
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
 	var mu sync.Mutex
@@ -130,14 +107,12 @@ func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, 
 		go func(ctx context.Context, master *topo.TabletInfo) {
 			defer wg.Done()
 			log.Infof("Running %s on %s\n", query, master.AliasString())
-			qr, err := vx.wr.VReplicationExec(ctx, master.Alias, query)
+			qr, err := vx.plan.planner.exec(ctx, master.Alias, query)
 			log.Infof("Result is %s: %v", master.AliasString(), qr)
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
-				if qr.RowsAffected == 0 {
-					log.Infof("no matching streams found for workflow %s, tablet %s, query %s", workflow, master.Alias, query)
-				} else {
+				if qr.RowsAffected > 0 {
 					mu.Lock()
 					results[master] = qr
 					mu.Unlock()
@@ -240,7 +215,7 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 	}
 	fullQuery := vx.plan.parsedQuery.Query
 	if dryRun {
-		return nil, vx.outputDryRunInfo(wr)
+		return nil, vx.outputDryRunInfo()
 	}
 	results, err := vx.exec(fullQuery)
 	return results, err
