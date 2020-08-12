@@ -29,6 +29,7 @@ const (
 		migration_uuid varchar(64) NOT NULL,
 		keyspace varchar(256) NOT NULL,
 		shard varchar(256) NOT NULL,
+		mysql_schema varchar(128) NOT NULL,
 		mysql_table varchar(128) NOT NULL,
 		migration_statement text NOT NULL,
 		strategy varchar(128) NOT NULL,
@@ -49,13 +50,14 @@ const (
 		migration_uuid,
 		keyspace,
 		shard,
+		mysql_schema,
 		mysql_table,
 		migration_statement,
 		strategy,
 		requested_timestamp,
 		migration_status
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
+		%a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
 	)`
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
@@ -93,6 +95,7 @@ const (
 			migration_uuid,
 			keyspace,
 			shard,
+			mysql_schema,
 			mysql_table,
 			migration_statement,
 			strategy,
