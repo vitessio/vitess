@@ -376,9 +376,13 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 	if err != nil {
 		return nil, err
 	}
-	err = qre.BeginAgain(qre.ctx, conn)
-	if err != nil {
-		return nil, err
+	// Only perform this operation when the connection has transaction open.
+	// TODO: This actually does not retain the old transaction. We should see how to provide correct behaviour to client.
+	if conn.txProps != nil {
+		err = qre.BeginAgain(qre.ctx, conn)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }
