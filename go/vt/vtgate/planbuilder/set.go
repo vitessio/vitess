@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -34,8 +36,9 @@ type (
 	planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error)
 
 	setting struct {
-		name    string
-		boolean bool
+		name         string
+		boolean      bool
+		defaultValue evalengine.Expr
 
 		// this allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
 		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
@@ -97,22 +100,22 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
-func buildNotSupported(bool, bool) planFunc {
+func buildNotSupported(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", expr.Name)
 	}
 }
 
-func buildSetOpIgnore(boolean, _ bool) planFunc {
+func buildSetOpIgnore(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return &engine.SysVarIgnore{
 			Name: expr.Name.Lowered(),
-			Expr: extractValue(expr, boolean),
+			Expr: extractValue(expr, s.boolean),
 		}, nil
 	}
 }
 
-func buildSetOpCheckAndIgnore(boolean, _ bool) planFunc {
+func buildSetOpCheckAndIgnore(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		keyspace, dest, err := resolveDestination(schema)
 		if err != nil {
@@ -123,7 +126,7 @@ func buildSetOpCheckAndIgnore(boolean, _ bool) planFunc {
 			Name:              expr.Name.Lowered(),
 			Keyspace:          keyspace,
 			TargetDestination: dest,
-			Expr:              extractValue(expr, boolean),
+			Expr:              extractValue(expr, s.boolean),
 		}, nil
 	}
 }
@@ -148,7 +151,7 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 	return valid
 }
 
-func buildSetOpVarSet(boolean, _ bool) planFunc {
+func buildSetOpVarSet(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
@@ -159,17 +162,29 @@ func buildSetOpVarSet(boolean, _ bool) planFunc {
 			Name:              expr.Name.Lowered(),
 			Keyspace:          ks,
 			TargetDestination: vschema.Destination(),
-			Expr:              extractValue(expr, boolean),
+			Expr:              extractValue(expr, s.boolean),
 		}, nil
 	}
 }
 
-func buildSetOpVitessAware(boolean, identifierAsString bool) planFunc {
+func buildSetOpVitessAware(s setting) planFunc {
 	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
-		runtimeExpr, err := ec.convert(astExpr.Expr, boolean, identifierAsString)
-		if err != nil {
-			return nil, err
+		var err error
+		var runtimeExpr evalengine.Expr
+
+		_, isDefault := astExpr.Expr.(*sqlparser.Default)
+		if isDefault {
+			if s.defaultValue == nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "don't know default value for %s", astExpr.Name)
+			}
+			runtimeExpr = s.defaultValue
+		} else {
+			runtimeExpr, err = ec.convert(astExpr.Expr, s.boolean, s.identifierAsString)
+			if err != nil {
+				return nil, err
+			}
 		}
+
 		return &engine.SysVarSetAware{
 			Name: astExpr.Name.Lowered(),
 			Expr: runtimeExpr,

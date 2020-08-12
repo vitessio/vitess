@@ -18,7 +18,6 @@ package engine
 
 import (
 	"fmt"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -75,12 +74,6 @@ func TestSetTable(t *testing.T) {
 		expectedError    string
 	}
 
-	intExpr := func(i int) evalengine.Expr {
-		s := strconv.FormatInt(int64(i), 10)
-		e, _ := evalengine.NewLiteralInt([]byte(s))
-		return e
-	}
-
 	tests := []testCase{
 		{
 			testName:         "nil set ops",
@@ -91,7 +84,7 @@ func TestSetTable(t *testing.T) {
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
-					Expr: intExpr(42),
+					Expr: evalengine.NewLiteralInt(42),
 				},
 			},
 			expectedQueryLog: []string{
@@ -173,7 +166,7 @@ func TestSetTable(t *testing.T) {
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
-					Expr: intExpr(1),
+					Expr: evalengine.NewLiteralInt(1),
 				},
 				&SysVarIgnore{
 					Name: "y",
