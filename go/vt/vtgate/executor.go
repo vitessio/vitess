@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/trace"
 
@@ -458,16 +456,6 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 
 func handleSessionSetting(name string, session *SafeSession, value interface{}, sql string) error {
 	switch name {
-	case "transaction_mode":
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for transaction_mode: %T", value)
-		}
-		out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(val)]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
-		}
-		session.TransactionMode = vtgatepb.TransactionMode(out)
 	case "workload":
 		val, ok := value.(string)
 		if !ok {

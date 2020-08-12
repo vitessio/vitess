@@ -48,9 +48,9 @@ func TestExecutorSet(t *testing.T) {
 	}{{
 		in:  "set @@autocommit = true",
 		out: &vtgatepb.Session{Autocommit: true},
-		//}, { TODO Re-enable when all SET handling is done through planning
-		//	in:  "set autocommit = 1, client_found_rows = 1",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
+	}, {
+		in:  "set autocommit = 1, client_found_rows = 1",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
 	}, {
 		in:  "set @@session.autocommit = true",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -140,7 +140,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid transaction_mode: aa",
 	}, {
 		in:  "set transaction_mode = 1",
-		err: "unexpected value type for transaction_mode: int64",
+		err: "unexpected value type for transaction_mode: INT64",
 	}, {
 		in:  "set workload = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
@@ -159,9 +159,9 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set workload = 1",
 		err: "unexpected value type for workload: int64",
-		//}, { TODO systay re-enable when all set is handled through planning
-		//	in:  "set transaction_mode = 'twopc', autocommit=1",
-		//	out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+	}, {
+		in:  "set transaction_mode = 'twopc', autocommit=1",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
 		in:  "set sql_select_limit = 5",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},

@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -347,6 +350,7 @@ const (
 	TxReadOnly          = "tx_read_only"
 	TransactionReadOnly = "transaction_read_only"
 	SQLSelectLimit      = "sql_select_limit"
+	TransactionMode     = "transaction_mode"
 )
 
 //MarshalJSON provides the type to SetOp for plan json
@@ -402,6 +406,23 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
 
+		}
+	case TransactionMode:
+		value, err := svss.Expr.Evaluate(env)
+		if err != nil {
+			return err
+		}
+		v := value.Value()
+		switch {
+		case v.IsText() || v.IsBinary():
+			str := v.ToString()
+			out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", str)
+			}
+			vcursor.Session().SetTransactionMode(out)
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for transaction_mode: %s", value.Value().Type().String())
 		}
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")

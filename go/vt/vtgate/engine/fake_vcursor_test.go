@@ -101,6 +101,10 @@ func (t noopVCursor) SetSQLSelectLimit(int64) {
 	panic("implement me")
 }
 
+func (t noopVCursor) SetTransactionMode(int32) {
+	panic("implement me")
+}
+
 func (t noopVCursor) SetTarget(string) error {
 	panic("implement me")
 }
@@ -380,6 +384,10 @@ func (f *loggingVCursor) SetSkipQueryPlanCache(bool) {
 }
 
 func (f *loggingVCursor) SetSQLSelectLimit(int64) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetTransactionMode(int32) {
 	panic("implement me")
 }
 

@@ -112,6 +112,7 @@ type (
 		SetClientFoundRows(bool)
 		SetSkipQueryPlanCache(bool)
 		SetSQLSelectLimit(int64)
+		SetTransactionMode(int32)
 	}
 
 	// Plan represents the execution strategy for a given query.

@@ -41,6 +41,10 @@ type (
 	setting struct {
 		name    string
 		boolean bool
+
+		// this allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
+		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
+		identifierAsString bool
 	}
 )
 
@@ -209,6 +213,7 @@ var vitessAware = []setting{
 	{name: engine.TransactionReadOnly, boolean: true},
 	{name: engine.TxReadOnly, boolean: true},
 	{name: engine.SQLSelectLimit},
+	{name: engine.TransactionMode, identifierAsString: true},
 }
 
 func init() {
@@ -219,12 +224,12 @@ func init() {
 	forSettings(vitessAware, buildSetOpVitessAware)
 }
 
-func forSettings(settings []setting, f func(bool) planFunc) {
+func forSettings(settings []setting, f func(boolean, identifierAsString bool) planFunc) {
 	for _, setting := range settings {
 		if _, alreadyExists := sysVarPlanningFunc[setting.name]; alreadyExists {
 			panic("bug in set plan init - " + setting.name + " aleady configured")
 		}
-		sysVarPlanningFunc[setting.name] = f(setting.boolean)
+		sysVarPlanningFunc[setting.name] = f(setting.boolean, setting.identifierAsString)
 	}
 }
 
@@ -244,7 +249,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 			// would have been explictly set to sqlparser.SessionStr before reaching this
 			// phase of planning
 		case "":
-			evalExpr, err := ec.convert(expr.Expr, false)
+			evalExpr, err := ec.convert(expr.Expr /*boolean*/, false /*identifierAsString*/, false)
 			if err != nil {
 				return nil, err
 			}
@@ -280,7 +285,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
-func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean bool) (evalengine.Expr, error) {
+func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifierAsString bool) (evalengine.Expr, error) {
 	if boolean {
 		switch node := astExpr.(type) {
 		case *sqlparser.SQLVal:
@@ -304,6 +309,12 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean bool) (ev
 				}
 				return evalengine.NewLiteralString([]byte(sqlparser.String(node)))
 			}
+		}
+	}
+	if identifierAsString {
+		colName, isColName := astExpr.(*sqlparser.ColName)
+		if isColName {
+			return evalengine.NewLiteralString([]byte(colName.Name.Lowered()))
 		}
 	}
 	evalExpr, err := sqlparser.Convert(astExpr)
@@ -347,13 +358,13 @@ func (ec *expressionConverter) source(vschema ContextVSchema) (engine.Primitive,
 	return primitive, nil
 }
 
-func buildNotSupported(bool) planFunc {
+func buildNotSupported(bool, bool) planFunc {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", expr.Name)
 	}
 }
 
-func buildSetOpIgnore(boolean bool) planFunc {
+func buildSetOpIgnore(boolean, identifierAsString bool) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return &engine.SysVarIgnore{
 			Name: expr.Name.Lowered(),
@@ -362,7 +373,7 @@ func buildSetOpIgnore(boolean bool) planFunc {
 	}
 }
 
-func buildSetOpCheckAndIgnore(boolean bool) planFunc {
+func buildSetOpCheckAndIgnore(boolean, identifierAsString bool) planFunc {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		keyspace, dest, err := resolveDestination(schema)
 		if err != nil {
@@ -389,13 +400,16 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 			_, ok := validFuncs[n.Name.Lowered()]
 			valid = ok
 			return ok
+		case *sqlparser.ColName:
+			valid = false
+			return false
 		}
 		return true
 	})
 	return valid
 }
 
-func buildSetOpVarSet(boolean bool) planFunc {
+func buildSetOpVarSet(boolean, identifierAsString bool) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
@@ -411,9 +425,9 @@ func buildSetOpVarSet(boolean bool) planFunc {
 	}
 }
 
-func buildSetOpVitessAware(boolean bool) planFunc {
+func buildSetOpVitessAware(boolean, identifierAsString bool) planFunc {
 	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
-		runtimeExpr, err := ec.convert(astExpr.Expr, boolean)
+		runtimeExpr, err := ec.convert(astExpr.Expr, boolean, identifierAsString)
 		if err != nil {
 			return nil, err
 		}
