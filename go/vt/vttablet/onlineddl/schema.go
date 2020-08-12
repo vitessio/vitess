@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	SchemaMigrationsTableName      = "schema_migrations"
 	sqlCreateSidecarDB             = "create database if not exists %s"
 	sqlCreateSchemaMigrationsTable = `CREATE TABLE IF NOT EXISTS %s.schema_migrations (
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,

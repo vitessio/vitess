@@ -851,3 +851,7 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 
 	return nil
 }
+
+func (e *Executor) VExec(ctx context.Context, query string, stmt sqlparser.Statement) (*querypb.QueryResult, error) {
+	return nil, nil
+}
