@@ -155,6 +155,8 @@ ifndef NOBANNER
 endif
 	docker build -t proto-builder -f docker/proto/Dockerfile .
 	docker run --rm --mount type=bind,src=$(shell pwd)/go/vt/proto/,dst=/go/vt/proto/ proto-builder
+	# Because we're bind mounting, they'll get created by root:root in the proto-builder.
+	sudo chown -R $(shell id -u):$(shell id -g) ./go/vt/proto/
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.
