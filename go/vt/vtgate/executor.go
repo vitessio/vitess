@@ -477,10 +477,7 @@ func handleSessionSetting(name string, session *SafeSession, value interface{}, 
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", val)
 		}
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		session.Options.Workload = querypb.ExecuteOptions_Workload(out)
+		session.GetOrCreateOptions().Workload = querypb.ExecuteOptions_Workload(out)
 	case "sql_select_limit":
 		var val int64
 
@@ -494,11 +491,7 @@ func handleSessionSetting(name string, session *SafeSession, value interface{}, 
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value)
 		}
-
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		session.Options.SqlSelectLimit = val
+		session.GetOrCreateOptions().SqlSelectLimit = val
 	case "charset", "names":
 		val, ok := value.(string)
 		if !ok {

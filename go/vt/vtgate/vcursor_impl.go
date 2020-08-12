@@ -487,18 +487,12 @@ func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
 
 //SetClientFoundRows implementes the SessionActions interface
 func (vc *vcursorImpl) SetClientFoundRows(clientFoundRows bool) {
-	if vc.safeSession.Options == nil {
-		vc.safeSession.Options = &querypb.ExecuteOptions{}
-	}
-	vc.safeSession.Options.ClientFoundRows = clientFoundRows
+	vc.safeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
 }
 
 //SetSkipQueryPlanCache implementes the SessionActions interface
 func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) {
-	if vc.safeSession.Options == nil {
-		vc.safeSession.Options = &querypb.ExecuteOptions{}
-	}
-	vc.safeSession.Options.SkipQueryPlanCache = skipQueryPlanCache
+	vc.safeSession.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
