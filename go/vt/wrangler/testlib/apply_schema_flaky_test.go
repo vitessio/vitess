@@ -95,7 +95,7 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 		ft.FakeMysqlDaemon.PreflightSchemaChangeResult = preflightSchemaChanges
 	}
 
-	changeToDb := "USE vt_ks"
+	changeToDb := "USE `vt_ks`"
 	addColumn := "ALTER TABLE table1 ADD COLUMN new_id bigint(20)"
 	db.AddQuery(changeToDb, &sqltypes.Result{})
 	db.AddQuery(addColumn, &sqltypes.Result{})
