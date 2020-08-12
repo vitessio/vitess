@@ -146,19 +146,20 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 		return nil, nil, "", vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: table.vindexTable is mysteriously nil")
 	}
 
+	routingType, ksidVindex, ksidCol, vindex, values, err := getDMLRouting(where, eupd.Table)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
 	if ro.eroute.TargetDestination != nil {
 		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: %s statement with a replica target", dmlType)
 		}
 		eupd.Opcode = engine.ByDestination
 		eupd.TargetDestination = ro.eroute.TargetDestination
-		return eupd, nil, "", nil
+		return eupd, ksidVindex, ksidCol, nil
 	}
 
-	routingType, ksidVindex, ksidCol, vindex, values, err := getDMLRouting(where, eupd.Table)
-	if err != nil {
-		return nil, nil, "", err
-	}
 	eupd.Opcode = routingType
 	if routingType == engine.Scatter {
 		if limit != nil {
