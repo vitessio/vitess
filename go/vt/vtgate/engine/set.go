@@ -346,6 +346,7 @@ const (
 	SkipQueryPlanCache  = "skip_query_plan_cache"
 	TxReadOnly          = "tx_read_only"
 	TransactionReadOnly = "transaction_read_only"
+	SQLSelectLimit      = "sql_select_limit"
 )
 
 //MarshalJSON provides the type to SetOp for plan json
@@ -384,7 +385,24 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		case TxReadOnly, TransactionReadOnly:
 			// TODO (4127): This is a dangerous NOP.
 		}
+	case SQLSelectLimit:
+		value, err := svss.Expr.Evaluate(env)
+		if err != nil {
+			return err
+		}
 
+		v := value.Value()
+		switch {
+		case v.IsIntegral():
+			intValue, err := v.ToInt64()
+			if err != nil {
+				return err
+			}
+			vcursor.Session().SetSQLSelectLimit(intValue)
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
+
+		}
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
 	}

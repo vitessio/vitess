@@ -35,7 +35,7 @@ type (
 	planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error)
 
 	expressionConverter struct {
-		tabletExpressions []*sqlparser.SetExpr
+		tabletExpressions []sqlparser.Expr
 	}
 
 	setting struct {
@@ -208,6 +208,7 @@ var vitessAware = []setting{
 	{name: engine.SkipQueryPlanCache, boolean: true},
 	{name: engine.TransactionReadOnly, boolean: true},
 	{name: engine.TxReadOnly, boolean: true},
+	{name: engine.SQLSelectLimit},
 }
 
 func init() {
@@ -243,7 +244,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 			// would have been explictly set to sqlparser.SessionStr before reaching this
 			// phase of planning
 		case "":
-			evalExpr, err := ec.convert(expr, false)
+			evalExpr, err := ec.convert(expr.Expr, false)
 			if err != nil {
 				return nil, err
 			}
@@ -279,8 +280,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
-func (ec *expressionConverter) convert(setExpr *sqlparser.SetExpr, boolean bool) (evalengine.Expr, error) {
-	astExpr := setExpr.Expr
+func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean bool) (evalengine.Expr, error) {
 	if boolean {
 		switch node := astExpr.(type) {
 		case *sqlparser.SQLVal:
@@ -317,7 +317,7 @@ func (ec *expressionConverter) convert(setExpr *sqlparser.SetExpr, boolean bool)
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expression not supported for SET: %s", sqlparser.String(astExpr))
 		}
 		evalExpr = &evalengine.Column{Offset: len(ec.tabletExpressions)}
-		ec.tabletExpressions = append(ec.tabletExpressions, setExpr)
+		ec.tabletExpressions = append(ec.tabletExpressions, astExpr)
 	}
 	return evalExpr, nil
 }
@@ -333,7 +333,7 @@ func (ec *expressionConverter) source(vschema ContextVSchema) (engine.Primitive,
 
 	var expr []string
 	for _, e := range ec.tabletExpressions {
-		expr = append(expr, sqlparser.String(e.Expr))
+		expr = append(expr, sqlparser.String(e))
 	}
 	query := fmt.Sprintf("select %s from dual", strings.Join(expr, ","))
 
@@ -413,7 +413,7 @@ func buildSetOpVarSet(boolean bool) planFunc {
 
 func buildSetOpVitessAware(boolean bool) planFunc {
 	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
-		runtimeExpr, err := ec.convert(astExpr, boolean)
+		runtimeExpr, err := ec.convert(astExpr.Expr, boolean)
 		if err != nil {
 			return nil, err
 		}

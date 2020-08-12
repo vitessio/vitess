@@ -111,6 +111,7 @@ type (
 		SetAutocommit(bool) error
 		SetClientFoundRows(bool)
 		SetSkipQueryPlanCache(bool)
+		SetSQLSelectLimit(int64)
 	}
 
 	// Plan represents the execution strategy for a given query.

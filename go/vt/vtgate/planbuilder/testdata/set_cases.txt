@@ -427,10 +427,10 @@
 }
 
 # more vitess aware settings
-"set client_found_rows = off, skip_query_plan_cache = ON"
+"set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20"
 {
   "QueryType": "SET",
-  "Original": "set client_found_rows = off, skip_query_plan_cache = ON",
+  "Original": "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20",
   "Instructions": {
     "OperatorType": "Set",
     "Ops": [
@@ -443,6 +443,11 @@
         "Type": "SysVarAware",
         "Name": "skip_query_plan_cache",
         "Expr": "INT64(1)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "sql_select_limit",
+        "Expr": "INT64(20)"
       }
     ],
     "Inputs": [
