@@ -452,9 +452,8 @@ pt_log_file=pt-online-schema-change.log
 mkdir -p "$pt_log_path"
 
 export ONLINE_DDL_PASSWORD
-echo "running this" %s "$@" > /tmp/t.txt
 %s "$@" > "$pt_log_path/$pt_log_file" 2>&1
-	`, tempDir, PTOSCFileName(), PTOSCFileName(),
+	`, tempDir, PTOSCFileName(),
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "pt-online-schema-change-wrapper.sh", wrapperScriptContent)
 	if err != nil {
