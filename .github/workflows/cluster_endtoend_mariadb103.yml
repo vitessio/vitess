@@ -1,4 +1,4 @@
-name: cluster_endtoend
+name: cluster_endtoend_with_maria
 on: [push, pull_request]
 jobs:
 
