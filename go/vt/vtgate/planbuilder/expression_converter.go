@@ -38,11 +38,9 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 		if node.Type == sqlparser.StrVal {
 			switch strings.ToLower(string(node.Val)) {
 			case "on":
-				literalInt, _ := evalengine.NewLiteralInt([]byte("1"))
-				return literalInt
+				return ON
 			case "off":
-				literalInt, _ := evalengine.NewLiteralInt([]byte("0"))
-				return literalInt
+				return OFF
 			}
 		}
 	case *sqlparser.ColName:
@@ -50,21 +48,19 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 		if node.Name.AtCount() == sqlparser.NoAt {
 			switch node.Name.Lowered() {
 			case "on":
-				literalInt, _ := evalengine.NewLiteralInt([]byte("1"))
-				return literalInt
+				return ON
 			case "off":
-				literalInt, _ := evalengine.NewLiteralInt([]byte("0"))
-				return literalInt
+				return OFF
 			}
 		}
 	}
 	return nil
 }
+
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		literalString, _ := evalengine.NewLiteralString([]byte(colName.Name.Lowered()))
-		return literalString
+		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()))
 	}
 	return nil
 }

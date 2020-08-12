@@ -30,19 +30,19 @@ func Convert(e Expr) (evalengine.Expr, error) {
 	case *SQLVal:
 		switch node.Type {
 		case IntVal:
-			return evalengine.NewLiteralInt(node.Val)
+			return evalengine.NewLiteralIntFromBytes(node.Val)
 		case FloatVal:
 			return evalengine.NewLiteralFloat(node.Val)
 		case ValArg:
 			return &evalengine.BindVariable{Key: string(node.Val[1:])}, nil
 		case StrVal:
-			return evalengine.NewLiteralString(node.Val)
+			return evalengine.NewLiteralString(node.Val), nil
 		}
 	case BoolVal:
 		if node {
-			return evalengine.NewLiteralInt([]byte("1"))
+			return evalengine.NewLiteralIntFromBytes([]byte("1"))
 		}
-		return evalengine.NewLiteralInt([]byte("0"))
+		return evalengine.NewLiteralIntFromBytes([]byte("0"))
 	case *BinaryExpr:
 		var op evalengine.BinaryExpr
 		switch node.Operator {
