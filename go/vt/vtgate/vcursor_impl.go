@@ -495,6 +495,11 @@ func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) {
 	vc.safeSession.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
 }
 
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) {
+	vc.safeSession.GetOrCreateOptions().SqlSelectLimit = limit
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
