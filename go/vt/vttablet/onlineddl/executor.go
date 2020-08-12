@@ -392,6 +392,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
 		}
+		// Migration successful!
+		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
@@ -467,9 +469,7 @@ echo "running this" %s "$@" > /tmp/t.txt
 
 	sub new {
 	  my($class, % args) = @_;
-	  my $self = {
-	    % args
-	  };
+	  my $self = { %args };
 	  return bless $self, $class;
 	}
 
@@ -483,10 +483,8 @@ echo "running this" %s "$@" > /tmp/t.txt
 	}
 
 	sub before_exit {
-	  my($self, % args) = @_;
-	  my $exit_status = $args {
-	    exit_status
-	  };
+		my($self, % args) = @_;
+		my $exit_status = $args{exit_status};
 	  if ($exit_status == 0) {
 	    get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusComplete}}&dryrun={{DRYRUN}}");
 	  } else {
@@ -582,6 +580,8 @@ echo "running this" %s "$@" > /tmp/t.txt
 			log.Errorf("Error running pt-online-schema-change: %+v", err)
 			return err
 		}
+		// Migration successful!
+		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
