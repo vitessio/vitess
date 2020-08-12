@@ -396,3 +396,11 @@ func (session *SafeSession) ResetAll() {
 	session.PostSessions = nil
 	session.LockSession = nil
 }
+
+//GetOrCreateOptions will return the current options struct, or create one and return it if no-one exists
+func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
+	if session.Session.Options == nil {
+		session.Session.Options = &querypb.ExecuteOptions{}
+	}
+	return session.Session.Options
+}
