@@ -466,29 +466,33 @@ echo "running this" %s "$@" > /tmp/t.txt
 	use LWP::Simple;
 
 	sub new {
-		 my ($class, %args) = @_;
-		 my $self = { %args };
-		 return bless $self, $class;
+	  my($class, % args) = @_;
+	  my $self = {
+	    % args
+	  };
+	  return bless $self, $class;
 	}
 
 	sub init {
-		 my ($self, %args) = @_;
+	  my($self, % args) = @_;
 	}
 
 	sub before_create_new_table {
-		 my ($self, %args) = @_;
-		 get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusRunning}}&dryrun={{DRYRUN}}");
+	  my($self, % args) = @_;
+	  get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusRunning}}&dryrun={{DRYRUN}}");
 	}
 
 	sub before_exit {
-		 my ($self, %args) = @_;
-		 my $exit_status = $args{exit_status};
-		 if ($exit_status == 0) {
-				get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusComplete}}&dryrun={{DRYRUN}}");
-		 } else {
-				get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusFailed}}&dryrun={{DRYRUN}}");
-			 }
-		}
+	  my($self, % args) = @_;
+	  my $exit_status = $args {
+	    exit_status
+	  };
+	  if ($exit_status == 0) {
+	    get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusComplete}}&dryrun={{DRYRUN}}");
+	  } else {
+	    get("http://localhost:{{VTTABLET_PORT}}/schema-migration/report-status?uuid={{MIGRATION_UUID}}&status={{OnlineDDLStatusFailed}}&dryrun={{DRYRUN}}");
+	  }
+	}
 
 	1;
 	`
