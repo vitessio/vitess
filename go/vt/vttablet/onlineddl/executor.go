@@ -328,6 +328,13 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	log.Infof("+ OK")
 
 	runGhost := func(execute bool) error {
+		// Temporary hack (2020-08-11)
+		// Because sqlparser does not do full blown ALTER TABLE parsing,
+		// and because we don't want gh-ost to know about WITH_GHOST and WITH_PT syntax,
+		// we resort to regexp-based parsing of the query.
+		// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
+		_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		_, err := execCmd(
 			"bash",
@@ -350,7 +357,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 				fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
 				fmt.Sprintf(`--database=%s`, e.dbName),
 				fmt.Sprintf(`--table=%s`, onlineDDL.Table),
-				fmt.Sprintf(`--alter=%s`, onlineDDL.SQL),
+				fmt.Sprintf(`--alter=%s`, alterOptions),
 				fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL)),
 				fmt.Sprintf(`--execute=%t`, execute),
 			},
