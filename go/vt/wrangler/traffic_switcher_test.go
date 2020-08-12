@@ -1457,9 +1457,9 @@ func TestMigrateFrozen(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message",
-		"int64|varchar|varchar"),
-		fmt.Sprintf("1|%v|FROZEN", bls1),
+		"id|source|message|cell|tablet_types",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("1|%v|FROZEN||", bls1),
 	), nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
@@ -1470,9 +1470,9 @@ func TestMigrateFrozen(t *testing.T) {
 	}
 
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message",
-		"int64|varchar|varchar"),
-		fmt.Sprintf("1|%v|FROZEN", bls1),
+		"id|source|message|cell|tablet_type",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("1|%v|FROZEN||", bls1),
 	), nil)
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
 
@@ -1517,9 +1517,9 @@ func TestMigrateDistinctSources(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message",
-		"int64|varchar|varchar"),
-		fmt.Sprintf("1|%v|", bls),
+		"id|source|message|cell|tablet_types",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("1|%v|||", bls),
 	), nil)
 
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
@@ -1545,9 +1545,9 @@ func TestMigrateMismatchedTables(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message",
-		"int64|varchar|varchar"),
-		fmt.Sprintf("1|%v|", bls)),
+		"id|source|message|cell|tablet_types",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("1|%v|||", bls)),
 		nil,
 	)
 
@@ -1598,10 +1598,10 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message",
-		"int64|varchar|varchar"),
-		fmt.Sprintf("1|%v|", bls1),
-		fmt.Sprintf("2|%v|", bls2),
+		"id|source|message|cell|tablet_types",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("1|%v|||", bls1),
+		fmt.Sprintf("2|%v|||", bls2),
 	), nil)
 	bls3 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks1",
@@ -1614,9 +1614,9 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message",
-		"int64|varchar|varchar"),
-		fmt.Sprintf("1|%v|", bls3),
+		"id|source|message|cell|tablet_types",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("1|%v|||", bls3),
 	), nil)
 
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
@@ -1640,6 +1640,51 @@ func TestReverseName(t *testing.T) {
 		if got, want := reverseName(test.in), test.out; got != want {
 			t.Errorf("reverseName(%s): %s, want %s", test.in, got, test.out)
 		}
+	}
+}
+
+func TestReverseVReplicationUpdateQuery(t *testing.T) {
+	ts := &trafficSwitcher{
+		reverseWorkflow: "wf",
+	}
+	dbname := "db"
+	type tCase struct {
+		optCells       string
+		optTabletTypes string
+		targetCell     string
+		sourceCell     string
+		want           string
+	}
+	updateQuery := "update _vt.vreplication set cell = '%s', tablet_types = '%s' where workflow = 'wf' and db_name = 'db'"
+	tCases := []tCase{
+		{
+			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1", optTabletTypes: "",
+			want: fmt.Sprintf(updateQuery, "cell1", ""),
+		},
+		{
+			targetCell: "cell1", sourceCell: "cell2", optCells: "cell1", optTabletTypes: "",
+			want: fmt.Sprintf(updateQuery, "cell2", ""),
+		},
+		{
+			targetCell: "cell1", sourceCell: "cell2", optCells: "cell2", optTabletTypes: "",
+			want: fmt.Sprintf(updateQuery, "cell2", ""),
+		},
+		{
+			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1,cell2", optTabletTypes: "replica,master",
+			want: fmt.Sprintf(updateQuery, "cell1,cell2", "replica,master"),
+		},
+		{
+			targetCell: "cell1", sourceCell: "cell1", optCells: "", optTabletTypes: "replica,master",
+			want: fmt.Sprintf(updateQuery, "", "replica,master"),
+		},
+	}
+	for _, tc := range tCases {
+		t.Run("", func(t *testing.T) {
+			ts.optCells = tc.optCells
+			ts.optTabletTypes = tc.optTabletTypes
+			got := ts.getReverseVReplicationUpdateQuery(tc.targetCell, tc.sourceCell, dbname)
+			require.Equal(t, tc.want, got)
+		})
 	}
 }
 
