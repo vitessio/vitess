@@ -38,7 +38,6 @@ type TabletExecutor struct {
 	tablets              []*topodatapb.Tablet
 	isClosed             bool
 	allowBigSchemaChange bool
-	onlineSchemaChange   bool
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 }
@@ -49,7 +48,6 @@ func NewTabletExecutor(wr *wrangler.Wrangler, waitReplicasTimeout time.Duration)
 		wr:                   wr,
 		isClosed:             true,
 		allowBigSchemaChange: false,
-		onlineSchemaChange:   false,
 		waitReplicasTimeout:  waitReplicasTimeout,
 	}
 }
@@ -64,11 +62,6 @@ func (exec *TabletExecutor) AllowBigSchemaChange() {
 // TabletExecutor will reject these.
 func (exec *TabletExecutor) DisallowBigSchemaChange() {
 	exec.allowBigSchemaChange = false
-}
-
-// SetOnlineSchemaChange sets TabletExecutor such that it initiates online schema change migrations
-func (exec *TabletExecutor) SetOnlineSchemaChange() {
-	exec.onlineSchemaChange = true
 }
 
 // Open opens a connection to the master for every shard.
@@ -170,7 +163,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr, sqlparser.RenameStr:
 			continue
 		case sqlparser.AlterStr:
-			if exec.onlineSchemaChange {
+			if ddl.Strategy != schema.DDLStrategyNormal {
 				// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
 				continue
 			}
@@ -223,8 +216,19 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 	}()
 
+	// We added the WITH_GHOST and WITH_PT hints to ALTER TABLE syntax, but these hints are
+	// obviously not accepted by MySQL.
+	// To run preflightSchemaChanges we must clean up such hints from the ALTER TABLE statement.
+	// Because our sqlparser does not do a complete parse of ALTER RABLE statements at this time,
+	// we resort to temporary regexp based parsing.
+	// TODO(shlomi): replace the below with sqlparser based reconstruction of the query,
+	//               when sqlparser has a complete coverage of ALTER TABLE syntax
+	sqlsWithoutAlterTableHints := []string{}
+	for _, sql := range sqls {
+		sqlsWithoutAlterTableHints = append(sqlsWithoutAlterTableHints, schema.RemoveOnlineDDLHints(sql))
+	}
 	// Make sure the schema changes introduce a table definition change.
-	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
+	if err := exec.preflightSchemaChanges(ctx, sqlsWithoutAlterTableHints); err != nil {
 		execResult.ExecutorErr = err.Error()
 		return &execResult
 	}
@@ -241,7 +245,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		tableName := ""
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
-			if ddl.Action == sqlparser.AlterStr && exec.onlineSchemaChange {
+			if ddl.Action == sqlparser.AlterStr {
 				strategy = ddl.Strategy
 			}
 			tableName = ddl.Table.Name.String()
