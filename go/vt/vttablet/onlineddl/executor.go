@@ -436,22 +436,14 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 		log.Errorf("Error creating temporary directory: %+v", err)
 		return err
 	}
-	credentialsConfigFileContent := fmt.Sprintf(`[client]
-user=%s
-password=%s
-`, onlineDDLUser, onlineDDLPassword)
-	credentialsConfigFileName, err := createTempScript(tempDir, "pt-online-schema-change-conf.cfg", credentialsConfigFileContent)
-	if err != nil {
-		log.Errorf("Error creating config file: %+v", err)
-		return err
-	}
+
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
 pt_log_path="%s"
 pt_log_file=pt-online-schema-change.log
 
 mkdir -p "$pt_log_path"
 
-export ONLINE_DDL_PASSWORD
+export MYSQL_PWD
 %s "$@" > "$pt_log_path/$pt_log_file" 2>&1
 	`, tempDir, PTOSCFileName(),
 	)
@@ -526,7 +518,7 @@ export ONLINE_DDL_PASSWORD
 	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
 
 	runPTOSC := func(execute bool) error {
-		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
+		os.Setenv("MYSQL_PWD", onlineDDLPassword)
 		executeFlag := "--dry-run"
 		if execute {
 			executeFlag = "--execute"
@@ -546,7 +538,7 @@ export ONLINE_DDL_PASSWORD
 				`--alter`,
 				alterOptions,
 				executeFlag,
-				fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,F=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, credentialsConfigFileName),
+				fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
 			},
 			os.Environ(),
 			"/tmp",
@@ -602,6 +594,7 @@ func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.Onli
 		":migration_uuid",
 		":keyspace",
 		":shard",
+		":mysql_schema",
 		":mysql_table",
 		":migration_statement",
 		":strategy",
@@ -612,6 +605,7 @@ func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.Onli
 		"migration_uuid":      sqltypes.StringBindVariable(onlineDDL.UUID),
 		"keyspace":            sqltypes.StringBindVariable(onlineDDL.Keyspace),
 		"shard":               sqltypes.StringBindVariable(e.shard),
+		"mysql_schema":        sqltypes.StringBindVariable(e.dbName),
 		"mysql_table":         sqltypes.StringBindVariable(onlineDDL.Table),
 		"migration_statement": sqltypes.StringBindVariable(onlineDDL.SQL),
 		"strategy":            sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
