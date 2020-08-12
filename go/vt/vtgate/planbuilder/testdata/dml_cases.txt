@@ -2150,3 +2150,48 @@
     "Table": "user"
   }
 }
+
+# delete with shard targeting
+"delete from `user[-]`.user"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from `user[-]`.user",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "ByDestination",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "Query": "delete from user",
+    "Table": "user"
+  }
+}
+
+# update with shard targeting
+"update `user[-]`.user set name = 'myname'"
+{
+  "QueryType": "UPDATE",
+  "Original": "update `user[-]`.user set name = 'myname'",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "ByDestination",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "ChangedVindexValues": [
+      "name_user_map"
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "Query": "update user set name = 'myname'",
+    "Table": "user"
+  }
+}
