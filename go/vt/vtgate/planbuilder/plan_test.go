@@ -147,7 +147,8 @@ func init() {
 
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v:             loadSchema(t, "schema_test.json"),
+		sysVarEnabled: true,
 	}
 
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
@@ -176,6 +177,18 @@ func TestPlan(t *testing.T) {
 	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
+}
+
+func TestSysVarSetDisabled(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "schema_test.json"),
+		sysVarEnabled: false,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
+	testFile(t, "set_sysvar_disabled_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -258,10 +271,15 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 var _ ContextVSchema = (*vschemaWrapper)(nil)
 
 type vschemaWrapper struct {
-	v          *vindexes.VSchema
-	keyspace   *vindexes.Keyspace
-	tabletType topodatapb.TabletType
-	dest       key.Destination
+	v             *vindexes.VSchema
+	keyspace      *vindexes.Keyspace
+	tabletType    topodatapb.TabletType
+	dest          key.Destination
+	sysVarEnabled bool
+}
+
+func (vw *vschemaWrapper) SysVarSetEnabled() bool {
+	return vw.sysVarEnabled
 }
 
 func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
