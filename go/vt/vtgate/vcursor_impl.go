@@ -467,6 +467,10 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
 }
 
+func (vc *vcursorImpl) SysVarSetEnabled() bool {
+	return *sysVarSetEnabled
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
