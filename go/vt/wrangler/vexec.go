@@ -254,9 +254,19 @@ type ReplicationStatusResult struct {
 	SourceKeyspace string
 	// TargetKeyspace is the keyspace name that we are vreplicating into.
 	TargetKeyspace string
+	// SourceLocation represents the keyspace and shards that we are vreplicating from.
+	SourceLocation ReplicationLocation
+	// TargetLocation represents the keyspace and shards that we are vreplicating into.
+	TargetLocation ReplicationLocation
 
 	// Statuses is a map of <shard>/<master tablet alias> : ShardReplicationStatus (for the given shard).
 	ShardStatuses map[string]*ShardReplicationStatus
+}
+
+// ReplicationLocation represents a location that data is either replicating from, or replicating into.
+type ReplicationLocation struct {
+	Keyspace string
+	Shards   []string
 }
 
 // ShardReplicationStatus holds relevant vreplication related info for the given shard.
@@ -367,6 +377,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	defer cancel()
 	for master, result := range results {
 		var rsrStatus []*ReplicationStatus
+		var sourceShards []string
 		qr := sqltypes.Proto3ToResult(result)
 		for _, row := range qr.Rows {
 			status, sourceKeyspace, err := wr.getReplicationStatusFromRow(ctx, row, master)
@@ -375,8 +386,13 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				return nil, err
 			}
 			rsr.SourceKeyspace = sourceKeyspace
+			sourceShards = append(sourceShards, status.Bls.Shard)
 
 			rsrStatus = append(rsrStatus, status)
+		}
+		rsr.SourceLocation = ReplicationLocation{
+			Keyspace: rsr.SourceKeyspace,
+			Shards:   sourceShards,
 		}
 		si, err := wr.ts.GetShard(ctx, keyspace, master.Shard)
 		if err != nil {
