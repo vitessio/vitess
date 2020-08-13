@@ -220,7 +220,7 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 		sqlparser.StmtDelete, sqlparser.StmtDDL, sqlparser.StmtUse, sqlparser.StmtExplain, sqlparser.StmtOther:
 		return 0, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: not reachable as handled with plan execute")
 	case sqlparser.StmtSet:
-		qr, err := e.handleSet(ctx, safeSession, sql, logStats)
+		qr, err := e.handleSet(ctx, sql, logStats)
 		return sqlparser.StmtSet, qr, err
 	case sqlparser.StmtShow:
 		qr, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
@@ -350,7 +350,7 @@ func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) e
 	return e.txConn.ReleaseAll(ctx, safeSession)
 }
 
-func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -388,11 +388,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		case sqlparser.GlobalStr:
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
 		case sqlparser.SessionStr:
-			value, err = getValueFor(expr)
-			if err != nil {
-				return nil, err
-			}
-			err = handleSessionSetting(name, safeSession, value, sql)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "usnsupported construct: %s", sql)
 		case sqlparser.VitessMetadataStr:
 			value, err = getValueFor(expr)
 			if err != nil {
@@ -451,36 +447,6 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", sqlparser.String(expr))
 	}
-
-}
-
-func handleSessionSetting(name string, session *SafeSession, value interface{}, sql string) error {
-	switch name {
-	case "workload":
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for workload: %T", value)
-		}
-		out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(val)]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", val)
-		}
-		session.GetOrCreateOptions().Workload = querypb.ExecuteOptions_Workload(out)
-	case "charset", "names":
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset/names: %T", value)
-		}
-		switch val {
-		case "", "utf8", "utf8mb4", "latin1", "default":
-			break
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", val)
-		}
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
-	}
-	return nil
 }
 
 func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value string) (*sqltypes.Result, error) {

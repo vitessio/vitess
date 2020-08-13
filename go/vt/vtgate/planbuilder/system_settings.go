@@ -39,8 +39,9 @@ func forSettings(settings []setting, f func(s setting) planFunc) {
 }
 
 var (
-	ON          = evalengine.NewLiteralInt(1)
-	OFF         = evalengine.NewLiteralInt(0)
+	ON  = evalengine.NewLiteralInt(1)
+	OFF = evalengine.NewLiteralInt(0)
+
 	vitessAware = []setting{
 		{name: engine.Autocommit, boolean: true, defaultValue: ON},
 		{name: engine.ClientFoundRows, boolean: true, defaultValue: OFF},
@@ -49,7 +50,11 @@ var (
 		{name: engine.TxReadOnly, boolean: true, defaultValue: OFF},
 		{name: engine.SQLSelectLimit, defaultValue: OFF},
 		{name: engine.TransactionMode, identifierAsString: true, defaultValue: evalengine.NewLiteralString([]byte("MULTI"))},
+		{name: engine.Workload, identifierAsString: true, defaultValue: evalengine.NewLiteralString([]byte("UNSPECIFIED"))},
+		{name: engine.Charset, identifierAsString: true, defaultValue: evalengine.NewLiteralString([]byte("utf8"))},
+		{name: engine.Names, identifierAsString: true, defaultValue: evalengine.NewLiteralString([]byte("utf8"))},
 	}
+
 	notSupported = []setting{
 		{name: "audit_log_read_buffer_size"},
 		{name: "auto_increment_increment"},
@@ -91,6 +96,7 @@ var (
 		{name: "thread_pool_prio_kickup_timer"},
 		{name: "transaction_write_set_extraction"},
 	}
+
 	ignoreThese = []setting{
 		{name: "big_tables", boolean: true},
 		{name: "bulk_insert_buffer_size"},
@@ -118,6 +124,7 @@ var (
 		{name: "transaction_alloc_block_size"},
 		{name: "wait_timeout"},
 	}
+
 	useReservedConn = []setting{
 		{name: "default_week_format"},
 		{name: "end_markers_in_json", boolean: true},

@@ -501,8 +501,13 @@ func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) {
 }
 
 //SetSkipQueryPlanCache implementes the SessionActions interface
-func (vc *vcursorImpl) SetTransactionMode(mode int32) {
-	vc.safeSession.TransactionMode = vtgatepb.TransactionMode(mode)
+func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
+	vc.safeSession.TransactionMode = mode
+}
+
+//SetWorkload implementes the SessionActions interface
+func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
+	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

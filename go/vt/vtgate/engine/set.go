@@ -351,6 +351,9 @@ const (
 	TransactionReadOnly = "transaction_read_only"
 	SQLSelectLimit      = "sql_select_limit"
 	TransactionMode     = "transaction_mode"
+	Workload            = "workload"
+	Charset             = "charset"
+	Names               = "names"
 )
 
 //MarshalJSON provides the type to SetOp for plan json
@@ -389,6 +392,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		case TxReadOnly, TransactionReadOnly:
 			// TODO (4127): This is a dangerous NOP.
 		}
+
 	case SQLSelectLimit:
 		value, err := svss.Expr.Evaluate(env)
 		if err != nil {
@@ -396,34 +400,50 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		}
 
 		v := value.Value()
-		switch {
-		case v.IsIntegral():
-			intValue, err := v.ToInt64()
-			if err != nil {
-				return err
-			}
-			vcursor.Session().SetSQLSelectLimit(intValue)
-		default:
+		if !v.IsIntegral() {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
-
 		}
-	case TransactionMode:
+		intValue, err := v.ToInt64()
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetSQLSelectLimit(intValue)
+
+		// String settings
+	case TransactionMode, Workload, Charset, Names:
 		value, err := svss.Expr.Evaluate(env)
 		if err != nil {
 			return err
 		}
 		v := value.Value()
-		switch {
-		case v.IsText() || v.IsBinary():
-			str := v.ToString()
+		if !v.IsText() && !v.IsBinary() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %s", svss.Name, value.Value().Type().String())
+		}
+
+		str := v.ToString()
+		switch svss.Name {
+		case TransactionMode:
 			out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
 			if !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", str)
 			}
-			vcursor.Session().SetTransactionMode(out)
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for transaction_mode: %s", value.Value().Type().String())
+			vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
+		case Workload:
+			out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(str)]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
+			}
+			vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
+		case Charset, Names:
+			switch strings.ToLower(str) {
+			case "", "utf8", "utf8mb4", "latin1", "default":
+				// do nothing
+				break
+			default:
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
+			}
 		}
+
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
 	}
