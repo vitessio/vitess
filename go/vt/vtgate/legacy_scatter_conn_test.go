@@ -359,6 +359,11 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 
 func executeOnShards(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) {
 	t.Helper()
+	require.Empty(t, executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations))
+}
+
+func executeOnShardsReturnsErr(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *SafeSession, destinations []key.Destination) error {
+	t.Helper()
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
 
@@ -372,7 +377,7 @@ func executeOnShards(t *testing.T, res *srvtopo.Resolver, keyspace string, sc *S
 	}
 
 	_, errs := sc.ExecuteMultiShard(ctx, rss, queries, session, false, false)
-	require.Empty(t, errs)
+	return vterrors.Aggregate(errs)
 }
 
 func TestMultiExecs(t *testing.T) {
