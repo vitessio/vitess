@@ -200,7 +200,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			case nothing:
 				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
 				if err != nil {
-					resetShardSession(info, err, session)
+					checkAndResetShardSession(info, err, session)
 					return nil, err
 				}
 			case begin:
@@ -239,7 +239,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-func resetShardSession(info *shardActionInfo, err error, session *SafeSession) {
+func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) {
 	if info.reservedID != 0 && info.transactionID == 0 {
 		sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 		if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost {
