@@ -101,7 +101,11 @@ func (t noopVCursor) SetSQLSelectLimit(int64) {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetTransactionMode(int32) {
+func (t noopVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
 }
 
@@ -387,7 +391,11 @@ func (f *loggingVCursor) SetSQLSelectLimit(int64) {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetTransactionMode(int32) {
+func (f *loggingVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
 }
 
