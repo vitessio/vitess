@@ -53,6 +53,7 @@ type VtgateProcess struct {
 	MySQLAuthServerImpl   string
 	Directory             string
 	VerifyURL             string
+	SysVarSetEnabled      bool
 	//Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
@@ -63,8 +64,7 @@ type VtgateProcess struct {
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
 
-	vtgate.proc = exec.Command(
-		vtgate.Binary,
+	args := []string{
 		"-topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
@@ -80,6 +80,13 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+	}
+	if vtgate.SysVarSetEnabled {
+		args = append(args, "-enable_system_settings")
+	}
+	vtgate.proc = exec.Command(
+		vtgate.Binary,
+		args...,
 	)
 	if *isCoverage {
 		vtgate.proc.Args = append(vtgate.proc.Args, "-test.coverprofile="+getCoveragePath("vtgate.out"))
