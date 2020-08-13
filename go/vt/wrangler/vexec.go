@@ -363,7 +363,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 
 	// We set a topo timeout since we contact topo for the shard record.
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 	for master, result := range results {
 		var rsrStatus []*ReplicationStatus
