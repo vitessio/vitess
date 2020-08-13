@@ -104,6 +104,8 @@ type SandboxConn struct {
 
 	sExecMu sync.Mutex
 	execMu  sync.Mutex
+
+	ShardErr error
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -124,6 +126,9 @@ func (sbc *SandboxConn) getError() error {
 		}
 		sbc.MustFailCodes[code] = count - 1
 		return vterrors.New(code, fmt.Sprintf("%v error", code))
+	}
+	if sbc.ShardErr != nil {
+		return sbc.ShardErr
 	}
 	return nil
 }
