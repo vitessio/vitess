@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,83 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
+
+func TestPlayerCopyTablesWithInvalidDates(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, dt date, primary key(id))",
+		fmt.Sprintf("create table %s.dst1(id int, dt date, primary key(id))", vrepldb),
+		"insert into src1 values(1, '2020-01-12'), (2, '0000-00-00');",
+	})
+
+	// default mysql flavor allows invalid dates: so disallow explicitly for this test
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=CONCAT(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE')"); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
+	defer func() {
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+		}
+	}()
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		// Create the list of tables to copy and transition to Copying state.
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"/update _vt.vreplication set pos=",
+		"begin",
+		"insert into dst1(id,dt) values (1,'2020-01-12'), (2,'0000-00-00')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		"commit",
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		// All tables copied. Final catch up followed by Running state.
+		"/update _vt.vreplication set state='Running'",
+	})
+
+	expectData(t, "dst1", [][]string{
+		{"1", "2020-01-12"},
+		{"2", "0000-00-00"},
+	})
+
+	query = fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
+	})
+}
 
 func TestPlayerCopyCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
@@ -341,7 +419,6 @@ func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	})
 }
 
-// TestPlayerCopyTablesWithFK validates that vreplication disables foreign keys during the copy phase
 func TestPlayerCopyTablesWithFK(t *testing.T) {
 	testForeignKeyQueries = true
 	defer func() {
@@ -390,6 +467,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"select @@foreign_key_checks;",
+		"select @@foreign_key_checks, @@sql_mode;",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",

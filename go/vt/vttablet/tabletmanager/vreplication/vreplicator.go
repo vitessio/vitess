@@ -48,6 +48,11 @@ var (
 	replicaLagTolerance = 10 * time.Second
 )
 
+type connectionSettings struct {
+	fkCheck int64
+	sqlMode string
+}
+
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
@@ -62,7 +67,7 @@ type vreplicator struct {
 	mysqld    mysqlctl.MysqlDaemon
 	pkInfoMap map[string][]*PrimaryKeyInfo
 
-	originalFKCheckSetting int64
+	originalSettings connectionSettings
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -135,11 +140,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		return err
 	}
 	vr.pkInfoMap = pkInfo
-	if err := vr.getSettingFKCheck(); err != nil {
+	if err := vr.getConnectionSettings(); err != nil {
 		return err
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
-	defer vr.resetFKCheckAfterCopy()
+	defer vr.resetConnectionSettings()
 	for {
 		select {
 		case <-ctx.Done():
@@ -161,8 +166,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 
 		switch {
 		case numTablesToCopy != 0:
-			if err := vr.clearFKCheck(); err != nil {
-				log.Warningf("Unable to clear FK check %v", err)
+			if err := vr.setTemporaryConnectionSettings(); err != nil {
+				log.Warningf("Unable to set temporary connection settings %v", err)
 				return err
 			}
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
@@ -175,7 +180,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 		default:
-			if err := vr.resetFKCheckAfterCopy(); err != nil {
+			if err := vr.resetConnectionSettings(); err != nil {
 				log.Warningf("Unable to reset FK check %v", err)
 				return err
 			}
@@ -321,27 +326,41 @@ func encodeString(in string) string {
 	return buf.String()
 }
 
-func (vr *vreplicator) getSettingFKCheck() error {
-	qr, err := vr.dbClient.Execute("select @@foreign_key_checks;")
+func (vr *vreplicator) setTemporaryConnectionSettings() error {
+	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
 	if err != nil {
 		return err
 	}
-	if qr.RowsAffected != 1 || len(qr.Fields) != 1 {
-		return fmt.Errorf("unable to select @@foreign_key_checks")
+	sqlMode := strings.ToUpper(vr.originalSettings.sqlMode)
+	sqlMode = strings.Replace(sqlMode, "TRADITIONAL", "", -1)
+	sqlMode = strings.Replace(sqlMode, "NO_ZERO_DATE", "", -1)
+	sqlMode = strings.Replace(sqlMode, "NO_ZERO_IN_DATE", "", -1)
+	sqlMode += ",ALLOW_INVALID_DATES"
+	_, err = vr.dbClient.Execute(fmt.Sprintf("set sql_mode = '%s';", sqlMode))
+	return err
+}
+
+func (vr *vreplicator) getConnectionSettings() error {
+	qr, err := vr.dbClient.Execute("select @@foreign_key_checks, @@sql_mode;")
+	if err != nil {
+		return err
 	}
-	vr.originalFKCheckSetting, err = evalengine.ToInt64(qr.Rows[0][0])
+	if qr.RowsAffected != 1 || len(qr.Fields) != 2 {
+		return fmt.Errorf("unable to get connection settings")
+	}
+	vr.originalSettings.fkCheck, err = evalengine.ToInt64(qr.Rows[0][0])
+	vr.originalSettings.sqlMode = qr.Rows[0][1].ToString()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (vr *vreplicator) resetFKCheckAfterCopy() error {
-	_, err := vr.dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalFKCheckSetting))
-	return err
-}
-
-func (vr *vreplicator) clearFKCheck() error {
-	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
+func (vr *vreplicator) resetConnectionSettings() error {
+	_, err := vr.dbClient.Execute(fmt.Sprintf("set foreign_key_checks=%d;", vr.originalSettings.fkCheck))
+	if err != nil {
+		return err
+	}
+	_, err = vr.dbClient.Execute(fmt.Sprintf("set sql_mode='%s';", vr.originalSettings.sqlMode))
 	return err
 }
