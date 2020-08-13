@@ -363,7 +363,9 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 
 func buildSetOpVarSet(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
-		ks, err := vschema.AnyKeyspace()
+		if !vschema.SysVarSetEnabled() {
+		return buildSetOpCheckAndIgnore(expr, vschema)
+	}ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
