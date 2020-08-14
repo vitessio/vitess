@@ -250,10 +250,6 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 type ReplicationStatusResult struct {
 	// Workflow represents the name of the workflow relevant to the related replication statuses.
 	Workflow string
-	// SourceKeyspace is the keyspace name that we are vreplicating from.
-	SourceKeyspace string
-	// TargetKeyspace is the keyspace name that we are vreplicating into.
-	TargetKeyspace string
 	// SourceLocation represents the keyspace and shards that we are vreplicating from.
 	SourceLocation ReplicationLocation
 	// TargetLocation represents the keyspace and shards that we are vreplicating into.
@@ -364,7 +360,6 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	var rsr ReplicationStatusResult
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
-	rsr.TargetKeyspace = keyspace
 	var results map[*topo.TabletInfo]*querypb.QueryResult
 	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication"
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
@@ -375,35 +370,43 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	// We set a topo timeout since we contact topo for the shard record.
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
+	var sourceKeyspace string
+	sourceShards := sets.NewString()
+	targetShards := sets.NewString()
 	for master, result := range results {
 		var rsrStatus []*ReplicationStatus
-		var sourceShards []string
 		qr := sqltypes.Proto3ToResult(result)
 		for _, row := range qr.Rows {
-			status, sourceKeyspace, err := wr.getReplicationStatusFromRow(ctx, row, master)
+			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, master)
 			fmt.Printf("getReplicationStatusFromRow status for master %s is %v\n", master.AliasString(), status)
 			if err != nil {
 				return nil, err
 			}
-			rsr.SourceKeyspace = sourceKeyspace
-			sourceShards = append(sourceShards, status.Bls.Shard)
+			sourceKeyspace = sk
+			sourceShards.Insert(status.Bls.Shard)
 
 			rsrStatus = append(rsrStatus, status)
-		}
-		rsr.SourceLocation = ReplicationLocation{
-			Keyspace: rsr.SourceKeyspace,
-			Shards:   sourceShards,
 		}
 		si, err := wr.ts.GetShard(ctx, keyspace, master.Shard)
 		if err != nil {
 			return nil, err
 		}
+		targetShards.Insert(si.ShardName())
 		rsr.ShardStatuses[fmt.Sprintf("%s/%s", master.Shard, master.AliasString())] = &ShardReplicationStatus{
 			MasterReplicationStatuses: rsrStatus,
 			TabletControls:            si.TabletControls,
 			MasterIsServing:           si.IsMasterServing,
 		}
 	}
+	rsr.SourceLocation = ReplicationLocation{
+		Keyspace: sourceKeyspace,
+		Shards:   sourceShards.List(),
+	}
+	rsr.TargetLocation = ReplicationLocation{
+		Keyspace: keyspace,
+		Shards:   targetShards.List(),
+	}
+
 	return &rsr, nil
 }
 
