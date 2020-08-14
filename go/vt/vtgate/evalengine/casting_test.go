@@ -25,7 +25,7 @@ import (
 )
 
 func TestEvalResultToBooleanStrict(t *testing.T) {
-	trueValues := []*evalResult{{
+	trueValues := []*EvalResult{{
 		typ:  sqltypes.Int64,
 		ival: 1,
 	}, {
@@ -36,7 +36,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 		ival: 1,
 	}}
 
-	falseValues := []*evalResult{{
+	falseValues := []*EvalResult{{
 		typ:  sqltypes.Int64,
 		ival: 0,
 	}, {
@@ -47,7 +47,7 @@ func TestEvalResultToBooleanStrict(t *testing.T) {
 		uval: 0,
 	}}
 
-	invalid := []*evalResult{{
+	invalid := []*EvalResult{{
 		typ:   sqltypes.VarChar,
 		bytes: []byte("foobar"),
 	}, {
