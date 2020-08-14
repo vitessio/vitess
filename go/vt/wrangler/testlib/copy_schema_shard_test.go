@@ -98,7 +98,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourceMaster.FakeMysqlDaemon.Schema = schema
 	sourceRdonly.FakeMysqlDaemon.Schema = schema
 
-	changeToDb := "USE vt_ks"
+	changeToDb := "USE `vt_ks`"
 	createDb := "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"
 	createTable := "CREATE TABLE `vt_ks`.`table1` (\n" +
 		"  `id` bigint(20) NOT NULL AUTO_INCREMENT,\n" +
