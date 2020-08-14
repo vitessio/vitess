@@ -131,13 +131,15 @@ func (nu *Numbered) Get(id int64, purpose string) (val interface{}, err error) {
 }
 
 // Put unlocks a resource for someone else to use.
-func (nu *Numbered) Put(id int64) {
+func (nu *Numbered) Put(id int64, updateTime bool) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	if nw, ok := nu.resources[id]; ok {
 		nw.inUse = false
 		nw.purpose = ""
-		nw.timeUsed = time.Now()
+		if updateTime {
+			nw.timeUsed = time.Now()
+		}
 	}
 }
 
