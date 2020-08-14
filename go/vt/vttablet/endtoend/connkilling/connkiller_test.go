@@ -51,12 +51,25 @@ func TestTxKillerCountsTimeFromTxStartedNotStatefulConnCreated(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Release()
 
+	// reserve connection at 0th second
 	_, err := client.ReserveExecute("select 42", nil, nil)
 	require.NoError(t, err)
 
-	assertIsNotKilledOver5Second(t, client)
+	// elapsed 2 seconds
+	time.Sleep(2 * time.Second)
 
+	// update the timer on tx start - new tx timer starts
 	_, err = client.BeginExecute("select 44", nil, nil)
+	require.NoError(t, err)
+
+	// elapsed 1 second from tx and 3 second from reserved conn.
+	time.Sleep(1 * time.Second)
+	_, err = client.Execute("select 43", nil)
+	require.NoError(t, err)
+
+	// elapsed 2 second from tx and 4 second from reserved conn. It does not fail.
+	time.Sleep(1 * time.Second)
+	_, err = client.Execute("select 43", nil)
 	require.NoError(t, err)
 
 	assertIsKilledWithin5Seconds(t, client)
@@ -92,5 +105,6 @@ func assertIsKilledWithin5Seconds(t *testing.T, client *framework.QueryClient) {
 	}
 
 	// then it should still be killed. transactions are tracked per tx-creation time and not last-used time
-	require.Errorf(t, err, "sumthingsumthing")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "exceeded timeout: 3s")
 }
