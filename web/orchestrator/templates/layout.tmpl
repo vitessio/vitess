@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="description" content="">
+	<meta name="author" content="">
+	<link rel="shortcut icon" href="../../assets/ico/favicon.ico">
+	<title>Orchestrator - {{.title}}</title>
+	<script type="text/javascript" src="{{.prefix}}/js/jquery.min.js"></script>
+	<script type="text/javascript" src="{{.prefix}}/js/jquery.cookie-1.4.1.min.js"></script>
+	<script type="text/javascript" src="{{.prefix}}/js/corex.js"></script>
+	<script type="text/javascript" src="{{.prefix}}/js/corex-jquery.js"></script>
+	<script src="{{.prefix}}/js/md5.js"></script>
+	<script src="{{.prefix}}/js/common.js"></script>
+	<script src="{{.prefix}}/js/orchestrator.js"></script>
+	<script src="{{.prefix}}/js/custom.js"></script>
+	<link href="{{.prefix}}/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+	<link href="{{.prefix}}/css/orchestrator.css" rel="stylesheet">
+	<link href="{{.prefix}}/css/custom.css" rel="stylesheet">
+
+	<style type="text/css">
+		.ajaxLoader {
+			visibility: hidden;
+		}
+
+		#nav_agents {
+			display: none;
+		}
+	</style>
+
+	<!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+	<!--[if lt IE 9]>
+	      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+	      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+	    <![endif]-->
+</head>
+
+<body>
+
+	<div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+		<div class="navbar-header">
+			<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+				<span class="sr-only">Toggle navigation</span> <span class="icon-bar"></span> <span class="icon-bar"></span> <span class="icon-bar"></span>
+			</button>
+			<a class="navbar-brand orchestrator-brand" href="https://github.com/openark/orchestrator">orchestrator</a>
+
+		</div>
+		<div class="collapse navbar-collapse">
+			<ul class="nav navbar-nav">
+				<li>
+					<a href="#" id="mainAjaxLoader" class="ajaxLoader"><img src="{{.prefix}}/images/ajax-loader.gif" /></a>
+				</li>
+				<li class="dropdown" data-nav-page="home">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                            Home
+                            <b class="caret"></b>
+                        </a>
+					<ul class="dropdown-menu">
+						<li><a href="{{.prefix}}/web/about">About</a></li>
+						<li><a href="https://github.com/openark/orchestrator/wiki/Orchestrator-Manual" target="_blank">Manual</a></li>
+						<li><a href="https://github.com/openark/orchestrator/wiki/FAQ" target="_blank">FAQ</a></li>
+						<li><a href="{{.prefix}}/web/keep-calm">Keep calm</a></li>
+						<li role="presentation" class="divider"></li>
+						<li><a href="{{.prefix}}/web/status">Status</a></li>
+					</ul>
+				</li>
+
+				<li class="dropdown" data-nav-page="cluster">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                            Clusters
+                            <b class="caret"></b>
+		                </a>
+					<ul class="dropdown-menu" id="dropdown-clusters">
+						<li><a href="{{.prefix}}/web/clusters/">Dashboard</a></li>
+						<li><a href="{{.prefix}}/web/clusters-analysis/">Failure analysis</a></li>
+						<li><a href="{{.prefix}}/web/discover">Discover</a></li>
+						<li role="presentation" class="divider"></li>
+					</ul>
+				</li>
+
+				<li class="dropdown" data-nav-page="audit">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                            Audit
+                            <b class="caret"></b>
+                        </a>
+					<ul class="dropdown-menu">
+						<li><a href="{{.prefix}}/web/audit">General</a></li>
+						<li><a href="{{.prefix}}/web/audit-failure-detection">Failure detection</a></li>
+						<li><a href="{{.prefix}}/web/audit-recovery">Recovery</a></li>
+						<li role="presentation" class="divider"></li>
+						<li><a href="{{.prefix}}/web/agents">Agents</a></li>
+						<li><a href="{{.prefix}}/web/seeds">Seeds</a></li>
+					</ul>
+				</li>
+
+				<li data-nav-page="search">
+					<form class="navbar-form navbar-left" role="search" name="searchForm" action="{{.prefix}}/web/search">
+						<div class="form-group">
+							<input type="text" name="s" id="searchInput" class="form-control input-sm" placeholder="Search">
+						</div>
+						<button type="submit" class="btn btn-default btn-sm"><span class="glyphicon glyphicon-search"></span></button>
+					</form>
+				</li>
+				<li class="dropdown" data-nav-page="context" style="visibility: hidden;">
+					<a href="#" class="dropdown-toggle" data-toggle="dropdown">
+						<span class="glyphicon glyphicon-cog"></span>
+					</a>
+					<ul class="dropdown-menu" id="dropdown-context">
+					</ul>
+				<li data-nav-page="global-recoveries">
+          <a id="global-recoveries-icon" name="global-recoveries" href="#">
+            <span class="glyphicon hidden"></span>
+          </a>
+				</li>
+				<li data-nav-page="read-only" style="display: none;">
+					<a name="read-only" title="read only mode"><span class="glyphicon glyphicon-eye-open"></span></a>
+				</li>
+				<li data-nav-page="user-id" style="display: none;">
+					<a name="user-id"></a>
+				</li>
+				<li data-nav-page="refreshCountdown">
+					<a href="#" id="refreshCountdown" class="small"></a>
+				</li>
+			</ul>
+		</div>
+	</div>
+
+	<div id="alerts_container"></div>
+	<div class="container-fluid" id="main_container">
+		<div class="pull-right" id="instance_problems">
+			<div class="dropdown pull-right">
+				<button type="button" id="instance_problems_button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" title="Problems">
+					<span class="glyphicon glyphicon-exclamation-sign"></span> <span class="caret"></span>
+				</button>
+				<ul class="dropdown-menu" role="menu" aria-labelledby="dLabel">
+				</ul>
+			</div>
+		</div>
+
+		{{yield}}
+
+		<div class="modal fade" id="node_modal" tabindex="-1">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+						<h4 class="modal-title"></h4>
+					</div>
+					<div class="modal-body">
+
+						<div class="panel panel-default begin-downtime">
+						  <div class="panel-body">
+								<form class="form-inline">
+									<div class="form-group">
+										<input type="text" class="form-control input-sm" id="beginDowntimeOwner" placeholder="owner name" />
+										<input type="text" class="form-control input-sm" id="beginDowntimeReason" placeholder="reason" />
+										<select class="form-control input-sm" id="beginDowntimeDuration">
+											<option value="10m">10m</option>
+											<option value="30m">30m</option>
+											<option value="1h">1h</option>
+											<option value="4h">4h</option>
+											<option value="24h">24h</option>
+											<option value="2d">2d</option>
+											<option value="7d">7d</option>
+										</select>
+									</div>
+									<button type="button" class="form-control btn btn-info pull-right" data-btn="begin-downtime">
+										<span class="glyphicon glyphicon-volume-off"></span> Begin downtime
+									</button>
+								</form>
+							</div>
+						</div>
+						<div class="panel panel-warning end-downtime">
+							<div class="panel-heading"></div>
+						  <div class="panel-body">
+							</div>
+							<div class="panel-footer">
+								<button type="button" class="btn btn-default" data-btn="end-downtime">
+									<span class="glyphicon glyphicon-volume-up"></span> End downtime
+								</button>
+							</div>
+						</div>
+
+						<table id="modalDataAttributesTable" class="table">
+							<div class="hidden-zone"></div>
+						</table>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-success" data-btn="recover" title="Recover from failure"><span class="glyphicon glyphicon-heart"></span> Recover</button>
+						<button type="button" class="btn alert-success" data-btn="refresh-instance" title="Refresh instance status now"><span class="glyphicon glyphicon-refresh"></span> Refresh</button>
+						<button type="button" class="btn btn-danger" data-btn="stop-replica"><span class="glyphicon glyphicon-stop"></span> Stop replication</button>
+						<button type="button" class="btn btn-success" data-btn="start-replica"><span class="glyphicon glyphicon-play"></span> Start replication</button>
+						<button type="button" class="btn btn-warning" data-btn="restart-replica"><span class="glyphicon glyphicon-repeat"></span> Restart replication</button>
+						<button type="button" class="btn btn-danger" data-btn="detach-replica" title="Corrupt replica coordinates such that it fails to replicate. Reversible via reattach-replica"><span class="glyphicon glyphicon-remove-sign"></span> Detach replica</button>
+						<button type="button" class="btn btn-success" data-btn="reattach-replica" title="Restore replica coordinates corrupted by detach-replica"><span class="glyphicon glyphicon-ok-sign"></span> Reattach replica</button>
+
+						<button type="button" class="btn btn-danger" data-btn="skip-query" title="Skip a single query and resume replication">Skip query</button>
+						<button type="button" class="btn btn-warning" data-btn="set-read-only"><span class="glyphicon glyphicon-eye-open"></span> Set read-only</button>
+						<button type="button" class="btn btn-warning" data-btn="set-writeable"><span class="glyphicon glyphicon-pencil"></span> Set writeable</button>
+						<button type="button" class="btn btn-warning" data-btn="reattach-replica-master-host" title="Reattach woth detached master">
+							</span> Reattach</button>
+						<button type="button" class="btn btn-danger" data-btn="reset-replica" title="Make this replica forget its master and stop replicating">Reset replica</button>
+						<button type="button" class="btn btn-info" data-btn="take-siblings" title="Take siblings of this replica">Take siblings</button>
+						<button type="button" class="btn btn-success" data-btn="enable-gtid"><span class="glyphicon glyphicon-globe"></span> Enable</button>
+						<button type="button" class="btn btn-danger" data-btn="disable-gtid"><span class="glyphicon glyphicon-remove"></span> Disable</button>
+						<div class="btn-group" data-btn-group="gtid-errant-fix">
+							<button type="button" class="btn btn-danger" data-btn="gtid-errant-fix" data-grouped="true">Fix</button>
+							<button type="button" class="btn btn-danger dropdown-toggle" data-toggle="dropdown">
+								<span class="caret"></span> <span class="sr-only">Toggle Dropdown</span>
+							</button>
+							<ul class="dropdown-menu" role="menu">
+								<li><a href="#" data-btn="gtid-errant-reset-master">Reset master</a></li>
+								<li><a href="#" data-btn="gtid-errant-inject-empty">Inject empty transactions</a></li>
+							</ul>
+						</div>
+						<button type="button" class="btn btn-info" data-btn="regroup-replicas" title="Pick candidate replica and have it take its siblings">Regroup replicas</button>
+						<button type="button" class="btn alert-danger" data-btn="forget-instance" title="Make orchestrator forget this instance. Orchestrator may auto-find it again."><span class="glyphicon glyphicon-remove"></span> Forget</button>
+						<button type="button" class="btn btn-warning" data-btn="end-maintenance" title="End maintenance period now">End maintenance</button>
+						<button type="button" class="btn btn-primary" data-dismiss="modal">Done</button>
+						<div class="btn-group" data-btn-group="move-equivalent">
+							<button type="button" class="btn btn-success dropdown-toggle" data-toggle="dropdown">
+								Safe revert to <span class="caret"></span> <span class="sr-only">Toggle Dropdown</span>
+							</button>
+							<ul class="dropdown-menu" role="menu">
+							</ul>
+						</div>
+					</div>
+				</div>
+				<!-- /.modal-content -->
+			</div>
+			<!-- /.modal-dialog -->
+		</div>
+		<!-- /.modal -->
+
+	</div>
+
+	<script src="{{.prefix}}/bootstrap/js/bootstrap.min.js"></script>
+	<script type="text/javascript" src="{{.prefix}}/js/bootbox.min.js"></script>
+	<script>
+		function autoshowProblems() {
+			return "{{.autoshow_problems}}";
+		}
+
+		function agentsHttpActive() {
+			return "{{.agentsHttpActive}}";
+		}
+
+		function contextMenuVisible() {
+			return "{{.contextMenuVisible}}";
+		}
+
+		function isAuthorizedForAction() {
+			return "{{.authorizedForAction}}" == "true";
+		}
+
+		function getUserId() {
+			return "{{.userId}}";
+		}
+
+		function webMessage() {
+			return "{{.webMessage}}";
+		}
+	</script>
+	<script src="{{.prefix}}/js/instance-problems.js"></script>
+</body>
+
+</html>

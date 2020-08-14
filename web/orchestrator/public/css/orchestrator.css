@@ -1,0 +1,1012 @@
+.hiddenMessage {
+    display: none;
+}
+
+.hiddenMessage p {
+    font-size: inherit;
+}
+
+body {
+    background-color: #f7f7f7;
+    background-repeat: repeat;
+    padding-top: 50px;
+}
+
+.orchestrator-brand {
+    height: 32px;
+    margin-top: 9px;
+    padding: 0px 15px;
+}
+
+.orchestrator-brand img {
+  padding: 0px;
+  padding-right: 8px;
+}
+
+.table {
+    font-size: 13px;
+}
+
+#dropdown-clusters.dropdown-menu {
+    height: auto;
+    max-height: 600px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.navbar {
+  margin-bottom: 0px;
+}
+
+.navbar-nav > li > .dropdown {
+    padding-bottom: 15px;
+    padding-top: 15px;
+}
+
+.navbar-nav #searchInput {
+  height: 30px;
+}
+
+.navbar-nav > li > a {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+#dashboard-sort, #move-instance-method {
+    padding-bottom: 0px;
+}
+
+#move-instance-method button {
+    text-transform: capitalize;
+}
+
+#alerts_container .alert {
+    margin-bottom: 4px;
+    padding: 8px;
+    padding-right: 30px;
+    border-radius: 0px;
+}
+
+.node circle {
+    fill: #fff;
+    stroke: steelblue;
+    stroke-width: 1.5px;
+    cursor: pointer;
+}
+
+.link {
+    fill: none;
+    stroke: #ccc;
+    stroke-width: 1.5px;
+}
+
+.node .svgInstanceWrapper {
+    font: 10px sans-serif;
+    width: 276px;
+}
+
+/*.instance {
+    transition: border-color 0.15s ease-in-out 0s, box-shadow 0.15s ease-in-out 0s;
+}*/
+
+.instance.selected {
+    border-width: 3px;
+    border-color: #808080;
+}
+
+.instance h3 .small {
+    font-size: 80%;
+    font-weight: inherit;
+    line-height: inherit;
+    color: inherit;
+}
+
+.instance h3 {
+    overflow: auto;
+    margin: 0;
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #ebebeb;
+    border-radius: 5px 5px 0 0;
+    padding: 2px 8px;
+    font-size: inherit;
+    line-height: 18px;
+}
+
+.instance h3 .pull-left {
+    max-width: 190px;
+    width: auto;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.instance h3 .pull-right {
+    width: auto;
+}
+
+.instance h3 .pull-right > .glyphicon {
+    color: #606060;
+}
+
+.instance h3 .pull-right > .glyphicon.text-muted {
+    color: #999999;
+}
+
+.instance h3 .pull-right > .glyphicon.text-danger {
+    color: #a94442;
+}
+
+
+.instance h3 .glyphicon {
+    position: inherit;
+    cursor: default;
+}
+
+.instance h3 .instance-glyphs {
+    cursor: pointer;
+}
+
+.instance h3 .glyphicon {
+    cursor: pointer;
+}
+
+.instance h3.label-info {
+    background-color: #5bc0de;
+    color: #ffffff;
+}
+
+.instance h3.label-info .glyphicon {
+    color: #ffffff;
+}
+
+.instance h3.label-warning {
+    background-color: #f0ad4e;
+    color: #ffffff;
+}
+
+.instance h3.label-warning .glyphicon {
+    color: #ffffff;
+}
+
+.glyphicon.text-warning {
+    color: #f0ad4e;
+}
+
+.instance h3.label-danger {
+    background-color: #d9534f;
+    color: #ffffff;
+}
+
+.instance h3.label-danger .glyphicon {
+    color: #ffffff;
+}
+
+.instance h3.label-stale {
+    background-color: #808080;
+    color: #ffffff;
+}
+
+.instance h3.label-stale .glyphicon {
+    color: #ffffff;
+}
+
+.instance h3.label-errant {
+    background-color: #b0b0b0;
+    color: #ffffff;
+}
+
+.instance h3.label-errant .glyphicon {
+    color: #ffffff;
+}
+
+.instance h3.label-fatal {
+    background-color: #000000;
+    color: #ffffff;
+}
+
+.instance h3.label-fatal .glyphicon {
+    color: #ffffff;
+}
+
+.instance h3.label-primary {
+    background-color: #428BCA;
+    color: #ffffff;
+}
+
+.instance h3.label-primary .glyphicon {
+    color: #ffffff;
+}
+
+.instance .badge {
+    color: #ffffff;
+    font-size: 10px;
+}
+
+.instance .badge.label-info {
+    background-color: #5bc0de;
+}
+
+.instance .badge.label-warning {
+    background-color: #f0ad4e;
+}
+
+.instance .badge.label-danger {
+    background-color: #d9534f;
+}
+
+.instance .badge.label-stale {
+    background-color: #808080;
+}
+
+.instance .badge.label-fatal {
+    background-color: #000000;
+}
+
+.instance .badge.label-errant {
+    background-color: #b0b0b0;
+}
+
+.instance .badge.label-primary {
+    background-color: #428BCA;
+}
+
+.instance.dc-color {
+    border-width: 2px;
+}
+
+.instance.draggable-hovers {
+    background-color: #f7f7f7;
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.66);
+}
+
+.instance.draggable-hovers h3 {
+    background-color: #e0e0e0;
+    color: inherit;
+}
+
+.cluster-graph .instance.original-dragged {
+    background-color: #808080;
+}
+
+.cluster-graph .instance-trailer.original-dragged {
+    background-color: #808080;
+}
+
+.cluster-graph > .instance.original-dragged h3 {
+    background-color: #808080;
+}
+
+.cluster-graph > * {
+    position: absolute;
+}
+.cluster-graph > svg{
+    position:relative;
+}
+
+.cluster-graph > .instance.draggable-msg {
+}
+
+#clusters .instance h3,
+#clusters_analysis .instance h3,
+.instance.instance-search h3 {
+    padding: 8px 14px;
+}
+
+
+#clusters .instance h3 .pull-right > .glyphicon {
+	margin-right: 2px;
+	font-size: 12px;
+	color: #31708f;
+}
+
+#clusters .instance h3 .pull-left > .glyphicon {
+	margin-right: 2px;
+}
+
+#instance_problems {
+    z-index: 10;
+    position: fixed;
+    right: 0px;
+    padding-right: 15px;
+}
+
+#instance_problems button.btn-stale {
+    background-color: #808080;
+    color: #ffffff;
+}
+
+#instance_problems button.btn-fatal {
+    background-color: #000000;
+    color: #ffffff;
+}
+
+#instance_problems ul.dropdown-menu {
+    height: auto;
+    max-height: 600px;
+    overflow: auto;
+}
+
+.instance.instance-problem {
+    font: 10px sans-serif;
+    display: block;
+    position: inherit;
+    width: 276px;
+    min-height: 50px;
+    margin: 10px;
+    cursor: pointer;
+}
+
+.instance.instance-problem h3 {
+    font-size: 10px;
+    padding: 2px 8px;
+}
+
+.instance.instance-problem .instance-content p,
+.instance.instance-search .instance-content p {
+    margin: 4px 0px;
+}
+
+.instance.instance-problem .instance-content {
+    padding: 4px 8px;
+}
+.instance.instance-search .instance-content {
+    padding: 4px 14px;
+}
+
+.instance-content .tooltip-inner {
+	text-align: left;
+	min-width: 420px;
+	white-space: nowrap;
+}
+
+#pools .popover {
+    vertical-align: top;
+}
+
+#pools .popover div.pool-instances-listing {
+    font: 12px sans-serif;
+}
+
+#pools .popover div.pool-instances-listing div {
+    margin-top: 8px;
+}
+
+#node_modal .modal-dialog {
+  width: 800px;
+}
+
+#node_modal .modal-body {
+    padding-bottom: 0px;
+}
+
+#node_modal .modal-title code {
+    background-color: inherit;
+    font-weight: bold;
+}
+
+#node_modal .modal-title .downtime-message {
+    padding-top: 8px;
+    font-weight: bold;
+}
+
+#node_modal .modal-content {
+    font-size: 12px;
+}
+
+#node_modal .hidden-zone {
+	display: none;
+}
+
+.modal-content .btn {
+    font-size: 11px;
+    line-height: 16px;
+    padding: 5px 9px;
+}
+
+#node_modal .begin-downtime .panel-body {
+  background-color: #d9edf7;
+}
+
+#modalDataAttributesTable tbody tr td:first-child {
+  white-space: nowrap;
+  background-color: #f7f7f7;
+}
+
+#modalDataAttributesTable tbody tr td {
+    padding: 3px;
+}
+
+#modalDataAttributesTable td code {
+    white-space: normal;
+    background-color: inherit;
+    padding: 0px;
+}
+
+#modalDataAttributesTable div.attributes-buttons > button {
+    margin-left: 4px;
+}
+#modalDataAttributesTable div.attributes-buttons > .btn-group {
+    margin-left: 4px;
+}
+
+.popover-footer div.dropdown code {
+    color: inherit;
+    background-color: inherit;
+}
+
+
+.bootbox .modal-body {
+    padding: 12px;
+}
+
+.bootbox .modal-footer {
+    padding: 12px;
+}
+
+#audit table tr td:first-child {
+    white-space: nowrap;
+}
+
+#audit table .more-recovery-info {
+    cursor: pointer;
+}
+
+#audit table .more-detection-info {
+    cursor: pointer;
+}
+
+#audit table .more-info ul {
+    list-style: none;
+}
+
+#audit table .more-info code {
+    padding-left: 0;
+    font-weight: bold;
+    white-space: normal;
+    color: inherit;
+    background-color: inherit;
+}
+
+#audit span.acknowledge-indicator {
+	padding-right: 8px;
+}
+
+#audit span.acknowledge-indicator.unacknowledged {
+	cursor: pointer;
+}
+
+#audit_recovery_steps thead tr th {
+  border-bottom: 0px;
+}
+
+#audit_recovery_steps tbody tr td:first-child {
+  background-color: #f7f7f7;
+}
+
+#audit_recovery_details thead tr th {
+  border-bottom: 0px;
+}
+
+#audit_recovery_details tbody tr td:first-child {
+  background-color: #f7f7f7;
+}
+#audit_recovery_details tbody tr td:nth-child(2) {
+  white-space: nowrap;
+}
+#audit_recovery_details tbody tr td:nth-child(3) {
+  width: 100%;
+  border: 1px dotted #cccccc;
+}
+#audit_recovery_details tbody tr ul {
+  padding-left: 16px;
+}
+#audit_recovery_details tbody tr code {
+  background-color: inherit;
+}
+#audit_recovery_details tbody tr:first-child td:nth-child(3) {
+  background-color: #f7f7f7;
+}
+
+.table-unbordered > tbody > tr > td {
+    border: 0px;
+}
+
+#long_queries tbody td div {
+    overflow: auto;
+}
+
+#long_queries tbody td div.query {
+    max-width: 1080px;
+    max-height: 240px;
+}
+
+#long_queries div.process-query {
+    overflow: auto;
+    max-height: 240px;
+}
+
+#long_queries div.row > div {
+    overflow: auto;
+}
+
+#long_queries table tbody tr td:first-child {
+    width: 200px;
+}
+
+#long_queries table {
+    margin-bottom: 0px;
+}
+
+#long_queries pre {
+    border-top: 0px;
+    border-radius: 0px;
+    border-color: #dddddd;
+}
+
+.popover-footer {
+    padding: 8px 14px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: normal;
+    line-height: 18px;
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #ebebeb;
+    border-radius: 0 0 5px 5px;
+}
+
+#cluster_sidebar {
+    float: left;
+    position: fixed;
+    left: 0px;
+    padding: 8px 15px 8px 15px;
+    z-index:100;
+    border-right: dotted 1px #bbbbbb;
+    background-color: #f7f7f7;
+    height: 100%;
+}
+
+#cluster_sidebar li {
+    font-size: 1.2em;
+}
+
+#cluster_sidebar li > div > span {
+    cursor: pointer;
+}
+
+#cluster_sidebar li[data-bullet] span.glyphicon {
+    font-size: 20px;
+    margin-bottom: 15px;
+}
+
+#cluster_sidebar li a .glyphicon {
+    cursor: pointer;
+}
+
+#cluster_sidebar .nav li > a {
+    padding: 0;
+}
+
+#cluster_sidebar .nav li a:hover {
+    background-color: inherit;
+}
+
+#cluster_sidebar li .popover {
+    max-width: 640px;
+    width: 640px;
+    font: 12px sans-serif;
+}
+
+#cluster_sidebar li .popover hr {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+#cluster_sidebar li div.glyphicon {
+    font-size: 24px;
+    padding-right: 8px;
+}
+
+#cluster_sidebar li .popover pre {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+#cluster_sidebar .text-indicate {
+    color: #e68545;
+}
+
+#cluster_info {
+  position: fixed;
+  height: 100%;
+  overflow: auto;
+  z-index: 50;
+
+  padding-left: 64px;
+  margin-left: -64px;
+  padding-right: 24px;
+
+  border-right: dotted 1px #bbbbbb;
+  background-color: #f7f7f7;
+  font: 12px sans-serif;
+
+  display: none;
+}
+
+#cluster_info > div {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+#cluster_info [data-tag=glyphs] span.glyphicon {
+  font-size: 20px;
+}
+
+#cluster_info hr {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+
+#cluster_info div[data-tag=analysis] {
+  background-color: white;
+  border: 1px dotted #bbbbbb;
+  padding: 8px;
+}
+
+#cluster_info div[data-tag=analysis] div {
+  padding: 4px;
+}
+
+#cluster_info div[data-tag=analysis] div .pull-left.glyphicon {
+  font-size: 32px;
+}
+
+#cluster_name_info {
+  position: fixed;
+  z-index: 50;
+  padding-left: 64px;
+  background-color: #f7f7f7;
+}
+
+#cluster_wrapper {
+  padding-left: 64px;
+  padding-top: 36px;
+}
+
+#cluster_name {
+  font-size: 24px;
+}
+
+#cluster_subtitle {
+  font-size: 12px;
+}
+
+.arrow_box {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid #9c9c9c;
+}
+
+.arrow_box:after, .arrow_box:before {
+    right: 100%;
+    top: 50%;
+    border: solid transparent;
+    content: " ";
+    height: 0;
+    width: 0;
+    position: absolute;
+    pointer-events: none;
+}
+
+.arrow_box:after {
+    border-color: rgba(255, 255, 255, 0);
+    border-right-color: #ffffff;
+    border-width: 10px;
+    margin-top: -10px;
+}
+
+.arrow_box:before {
+    border-color: rgba(156, 156, 156, 0);
+    border-right-color: #9c9c9c;
+    border-width: 11px;
+    margin-top: -11px;
+}
+
+
+/* Cluster - container, instance, instance trailer */
+
+.cluster-graph {
+    overflow-x: visible;
+    overflow-y: visible;
+    position: relative;
+    /*height: 600px;*/
+}
+
+.instance {
+    display: block;
+    cursor: move;
+    padding: 1px;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ccc;
+    border: 1px solid rgba(0,0,0,.2);
+    border-radius: 6px;
+}
+
+
+.instance.instance-diagram,
+.instance.instance-problem,
+.instance.instance-search {
+    -webkit-box-shadow: 0 5px 10px rgba(0,0,0,.2);
+    box-shadow: 0 5px 10px rgba(0,0,0,.2);
+}
+
+.instance.instance-diagram:hover {
+    -webkit-box-shadow: 0 5px 10px rgba(0,0,0,.6);
+    box-shadow: 0 5px 10px rgba(0,0,0,.6);
+}
+
+.instance.instance-diagram,
+.instance.instance-problem {
+    font: 10px sans-serif;
+    width: 276px;
+    min-height: 50px;
+}
+
+.instance.instance-diagram {
+    position: absolute;
+}
+
+.instance.instance-search {
+    margin: 10px 0;
+}
+
+
+.instance.instance-search p {
+    line-height: 26px;
+}
+
+
+.instance h4 {
+    font-size: 10px;
+    padding: 2px 8px;
+}
+
+
+.instance .instance-content {
+    padding: 4px 8px;
+}
+
+.instance .instance-content p {
+    margin-bottom: 0px;
+}
+
+.instance .instance-content p.high {
+    margin-top: 4px;
+    margin-bottom: 8px;
+}
+
+.instance .instance-master-section {
+  position: absolute;
+  bottom: 0px;
+  left: 0px;
+  z-index: 20;
+  height: 0%;
+  width: 48%;
+}
+
+.instance.accept_drop_check .instance-master-section {
+  height: 100%;
+}
+
+.instance .instance-normal-section {
+  position: absolute;
+  bottom: 0px;
+  right: 0px;
+  z-index: 20;
+  height: 0%;
+  width: 51%;
+}
+
+.instance.accept_drop_check .instance-normal-section {
+  height: 100%;
+}
+
+.instance h4.popover-footer {
+  z-index: 25;
+}
+
+/*.cluster-graph > .instance[data-duplicate-node] {
+    position: absolute;
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.66);
+}*/
+
+.instance.accept_drop h3 {
+    background-color: #5CB85C;
+    color: #ffffff;
+}
+
+.instance.accept_drop h3 .glyphicon {
+    color: #ffffff;
+}
+
+.instance.accept_drop_warning h3 {
+    background-color: #ff6600;
+    color: #ffffff;
+}
+
+.instance.accept_drop_warning h3 .glyphicon {
+    color: #ffffff;
+}
+
+.instance > .instance-trailer {
+    font: 10px sans-serif;
+    position: absolute;
+    display: block;
+    width: 13px;
+    cursor: move;
+    left: 100%;
+    height: 100%;
+    top: -1px;
+    text-align: left;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ccc;
+    border: 1px solid rgba(0,0,0,.2);
+    border-radius: 6px;
+    -webkit-box-shadow: 0 5px 10px rgba(0,0,0,.2);
+    box-shadow: 0 5px 10px rgba(0,0,0,.2);
+    overflow: hidden;
+    box-sizing: content-box;
+    padding: 0;
+}
+
+.instance > .instance-trailer.colorized {
+    top: -2px;
+}
+
+.instance > .instance-trailer > div:first-child {
+    float: left;
+    padding-left: 1px;
+	position: relative;
+	top: 50%;
+	transform: translateY(-50%);
+	margin-left: -1px;
+}
+
+
+.instance > .instance-trailer .instance-trailer-title {
+    padding-top: 3px;
+    line-height: 18px;
+}
+
+.instance > .instance-trailer .instance-trailer-title,
+.instance > .instance-trailer .instance-trailer-content {
+    display: none;
+    padding-left: 16px;
+}
+
+.instance > .instance-trailer:hover,
+.instance > .instance-trailer.ui-draggable-dragging {
+    width: 200px;
+}
+
+.instance > .instance-trailer:hover .instance-trailer-title,
+.instance > .instance-trailer.ui-draggable-dragging .instance-trailer-title,
+.instance > .instance-trailer:hover .instance-trailer-content,
+.instance > .instance-trailer.ui-draggable-dragging .instance-trailer-content {
+    display: block;
+}
+
+.instance > .instance-trailer:hover {
+    z-index: 50;
+}
+
+.instance:hover {
+    z-index: 50;
+}
+
+#cluster_legend {
+  margin-top: 20px;
+}
+
+#cluster_legend span {
+  padding: 3px 5px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+#cluster_legend span.dc {
+  margin-right: 10px;
+  border: 2px solid;
+  border-radius: 5px;
+}
+
+#clusters_analysis .popover {
+    width: 430px;
+    max-width: 430px;
+    vertical-align: top;
+}
+
+#clusters_analysis .popover-content span.glyphicon {
+	font-family: "Glyphicons Halflings";
+}
+
+#main_container {
+  margin-top: 15px;
+}
+
+#main_container.container, #main_container .container {
+    width: inherit;
+}
+
+.container.clusters .popover.instance {
+    display: inline-block;
+    position: inherit;
+    width: 276px;
+}
+
+.container.clusters .popover.instance {
+    margin: 8px;
+}
+
+.container.clusters .popover.instance p {
+    margin: 8px 0px;
+}
+
+
+.container.clusters .popover.instance code {
+    white-space: normal;
+    color: inherit;
+    background-color: inherit;
+}
+
+
+.container.clusters .popover.instance .popover-content span {
+    font: 12px sans-serif;
+}
+
+.container.clusters .popover.instance .popover-content div.downtimed {
+    background-color: #e7e7e7;
+}
+
+.container.clusters .popover.instance .popover-content div.blocked {
+    background-color: #ebccd1;
+}
+
+.container.clusters .popover.instance .popover-content span.badge {
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+
+.status-table {
+    font: 12px sans-serif;
+}
+
+.status-table code {
+    font-size: 100%;
+    background-color: inherit;
+}
+.status-table .long-text {
+  overflow: auto;
+}
+
+.instance.instance-search {
+    display: block;
+    position: inherit;
+    max-width: inherit;
+}
+
+.instance.instance-search h3 {
+    cursor: pointer;
+}
+
+.instance.instance-search {
+    margin: 8px;
+}
+
+.instance.instance-search p {
+    margin: 8px 0px;
+}
