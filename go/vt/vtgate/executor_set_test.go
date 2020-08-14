@@ -46,144 +46,144 @@ func TestExecutorSet(t *testing.T) {
 		out *vtgatepb.Session
 		err string
 	}{{
-		//	in:  "set @@autocommit = true",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = 1, client_found_rows = 1",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
-		//}, {
-		//	in:  "set @@session.autocommit = true",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set @@session.`autocommit` = true",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = true",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = on",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = ON",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = 'on'",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = `on`",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = \"on\"",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = false",
-		//	out: &vtgatepb.Session{},
-		//}, {
-		//	in:  "set autocommit = off",
-		//	out: &vtgatepb.Session{},
-		//}, {
-		//	in:  "set autocommit = OFF",
-		//	out: &vtgatepb.Session{},
-		//}, {
-		//	in:  "set AUTOCOMMIT = 0",
-		//	out: &vtgatepb.Session{},
-		//}, {
-		//	in:  "set AUTOCOMMIT = 'aa'",
-		//	err: "System setting 'autocommit' can't be set to this value: 'aa' is not a boolean",
-		//}, {
-		//	in:  "set autocommit = 2",
-		//	err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
-		//}, {
-		//	in:  "set client_found_rows = 1",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
-		//}, {
-		//	in:  "set client_found_rows = true",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
-		//}, {
-		//	in:  "set client_found_rows = 0",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
-		//}, {
-		//	in:  "set client_found_rows = false",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
-		//}, {
-		//	in:  "set @@global.client_found_rows = 1",
-		//	err: "unsupported in set: global",
-		//}, {
-		//	in:  "set global client_found_rows = 1",
-		//	err: "unsupported in set: global",
-		//}, {
-		//	in:  "set global @@session.client_found_rows = 1",
-		//	err: "cannot use scope and @@",
-		//}, {
-		//	in:  "set client_found_rows = 'aa'",
-		//	err: "System setting 'client_found_rows' can't be set to this value: 'aa' is not a boolean",
-		//}, {
-		//	in:  "set client_found_rows = 2",
-		//	err: "System setting 'client_found_rows' can't be set to this value: 2 is not a boolean",
-		//}, {
-		//	in:  "set transaction_mode = 'unspecified'",
-		//	out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
-		//}, {
-		//	in:  "set transaction_mode = 'single'",
-		//	out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_SINGLE},
-		//}, {
-		//	in:  "set transaction_mode = 'multi'",
-		//	out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI},
-		//}, {
-		//	in:  "set transaction_mode = 'twopc'",
-		//	out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
-		//}, {
-		//	in:  "set transaction_mode = twopc",
-		//	out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
-		//}, {
-		//	in:  "set transaction_mode = 'aa'",
-		//	err: "invalid transaction_mode: aa",
-		//}, {
-		//	in:  "set transaction_mode = 1",
-		//	err: "unexpected value type for transaction_mode: INT64",
-		//}, {
-		//	in:  "set workload = 'unspecified'",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
-		//}, {
-		//	in:  "set workload = 'oltp'",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}},
-		//}, {
-		//	in:  "set workload = 'olap'",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}},
-		//}, {
-		//	in:  "set workload = 'dba'",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_DBA}},
-		//}, {
-		//	in:  "set workload = 'aa'",
-		//	err: "invalid workload: aa",
-		//}, {
-		//	in:  "set workload = 1",
-		//	err: "unexpected value type for workload: INT64",
-		//}, {
-		//	in:  "set transaction_mode = 'twopc', autocommit=1",
-		//	out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
-		//}, {
-		//	in:  "set sql_select_limit = 5",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
-		//}, {
-		//	in:  "set sql_select_limit = DEFAULT",
-		//	out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
-		//}, {
-		//	in:  "set sql_select_limit = 'asdfasfd'",
-		//	err: "unexpected value type for sql_select_limit: string",
-		//}, {
-		//	in:  "set autocommit = 1+1",
-		//	err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
-		//}, {
-		//	in:  "set autocommit = 1+0",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set autocommit = default",
-		//	out: &vtgatepb.Session{Autocommit: true},
-		//}, {
-		//	in:  "set foo = 1",
-		//	err: "unsupported construct: set foo = 1",
-		//}, {
+		in:  "set @@autocommit = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = 1, client_found_rows = 1",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
+	}, {
+		in:  "set @@session.autocommit = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set @@session.`autocommit` = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = true",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = on",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = ON",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = 'on'",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = `on`",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = \"on\"",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = false",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set autocommit = off",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set autocommit = OFF",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set AUTOCOMMIT = 0",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set AUTOCOMMIT = 'aa'",
+		err: "System setting 'autocommit' can't be set to this value: 'aa' is not a boolean",
+	}, {
+		in:  "set autocommit = 2",
+		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+	}, {
+		in:  "set client_found_rows = 1",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
+	}, {
+		in:  "set client_found_rows = true",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
+	}, {
+		in:  "set client_found_rows = 0",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
+	}, {
+		in:  "set client_found_rows = false",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
+	}, {
+		in:  "set @@global.client_found_rows = 1",
+		err: "unsupported global scope in set: global client_found_rows = 1",
+	}, {
+		in:  "set global client_found_rows = 1",
+		err: "unsupported global scope in set: global client_found_rows = 1",
+	}, {
+		in:  "set global @@session.client_found_rows = 1",
+		err: "cannot use scope and @@",
+	}, {
+		in:  "set client_found_rows = 'aa'",
+		err: "System setting 'client_found_rows' can't be set to this value: 'aa' is not a boolean",
+	}, {
+		in:  "set client_found_rows = 2",
+		err: "System setting 'client_found_rows' can't be set to this value: 2 is not a boolean",
+	}, {
+		in:  "set transaction_mode = 'unspecified'",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
+	}, {
+		in:  "set transaction_mode = 'single'",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_SINGLE},
+	}, {
+		in:  "set transaction_mode = 'multi'",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI},
+	}, {
+		in:  "set transaction_mode = 'twopc'",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+	}, {
+		in:  "set transaction_mode = twopc",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+	}, {
+		in:  "set transaction_mode = 'aa'",
+		err: "invalid transaction_mode: aa",
+	}, {
+		in:  "set transaction_mode = 1",
+		err: "unexpected value type for transaction_mode: INT64",
+	}, {
+		in:  "set workload = 'unspecified'",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
+	}, {
+		in:  "set workload = 'oltp'",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}},
+	}, {
+		in:  "set workload = 'olap'",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}},
+	}, {
+		in:  "set workload = 'dba'",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_DBA}},
+	}, {
+		in:  "set workload = 'aa'",
+		err: "invalid workload: aa",
+	}, {
+		in:  "set workload = 1",
+		err: "unexpected value type for workload: INT64",
+	}, {
+		in:  "set transaction_mode = 'twopc', autocommit=1",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+	}, {
+		in:  "set sql_select_limit = 5",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 5}},
+	}, {
+		in:  "set sql_select_limit = DEFAULT",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
+	}, {
+		in:  "set sql_select_limit = 'asdfasfd'",
+		err: "unexpected value type for sql_select_limit: string",
+	}, {
+		in:  "set autocommit = 1+1",
+		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+	}, {
+		in:  "set autocommit = 1+0",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = default",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set foo = 1",
+		err: "unsupported construct in set: session foo = 1",
+	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
