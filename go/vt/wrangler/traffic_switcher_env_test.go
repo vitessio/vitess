@@ -66,6 +66,17 @@ type testShardMigraterEnv struct {
 	testMigraterEnv
 }
 
+// tablet picker requires these to be set, otherwise it errors out. also the values need to match an existing
+// tablet, otherwise it sleeps until it retries, causing tests to timeout and hence break
+// we set these for each new migater env to be the first source shard
+// the tests don't depend on which tablet is picked, so this works for now
+type testTabletPickerChoice struct {
+	keyspace string
+	shard    string
+}
+
+var tpChoice *testTabletPickerChoice
+
 func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 	return newTestTableMigraterCustom(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"}, "select * %s")
 }
@@ -90,6 +101,11 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			t.Fatal(err)
 		}
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
+	}
+	tpChoiceTablet := tme.sourceMasters[0].Tablet
+	tpChoice = &testTabletPickerChoice{
+		keyspace: tpChoiceTablet.Keyspace,
+		shard:    tpChoiceTablet.Shard,
 	}
 	for _, shard := range targetShards {
 		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, tme.tmeDB, TabletKeyspaceShard(t, "ks2", shard)))
@@ -209,6 +225,12 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		}
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
+	tpChoiceTablet := tme.sourceMasters[0].Tablet
+	tpChoice = &testTabletPickerChoice{
+		keyspace: tpChoiceTablet.Keyspace,
+		shard:    tpChoiceTablet.Shard,
+	}
+
 	for _, shard := range targetShards {
 		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks", shard)))
 		tabletID += 10
