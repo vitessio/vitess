@@ -1,0 +1,56 @@
+<style type="text/css">
+
+</style>
+
+<div class="container" id="seed">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      Seed <strong><span data-seed="id"></span></strong>
+    </div>
+    <div class="panel-body">
+      <div class="seed_details panel panel-default">
+        <div class="panel-heading">
+          Seed details
+        </div>
+        <table class="table table-condensed table-bordered table-striped ">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Id</th>
+              <th>Target host</th>
+              <th>Source host</th>
+              <th>Seed start time</th>
+              <th>Seed end time</th>
+            </tr>
+          </thead>
+          <tbody data-agent="seed_details"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="seed_states panel panel-default">
+        <div class="panel-heading">
+          Seed states
+        </div>
+        <table class="table table-condensed table-bordered table-striped ">
+          <thead>
+            <tr>
+              <th>State start time</th>
+              <th>State action</th>
+              <th>Error message</th>
+            </tr>
+          </thead>
+          <tbody data-agent="seed_states"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function currentSeedId() {
+    return "{{.seedId}}";
+  }
+</script>
+<script src="{{.prefix}}/js/seed.js"></script>
+<script src="{{.prefix}}/js/seed-shared.js"></script>

@@ -1,0 +1,161 @@
+<style type="text/css">
+
+</style>
+
+<div class="container" id="agent">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      Agent: <strong><span data-agent="hostname"></span></strong>
+    </div>
+    <div class="panel-body">
+      <div class="col-xs-6">
+        <div class="panel panel-default">
+          <div class="panel-heading">
+            Info
+          </div>
+          <table class="table">
+            <tr>
+              <td>Hostname</td>
+              <td data-agent="hostname_search"></td>
+            </tr>
+            <tr>
+              <td>Port</td>
+              <td data-agent="port"></td>
+            </tr>
+            <tr>
+              <td>Last submitted</td>
+              <td data-agent="last_submitted"></td>
+            </tr>
+            <tr>
+              <td>MySQL running</td>
+              <td data-agent="mysql_running"></td>
+            </tr>
+            <tr>
+              <td>MySQL port</td>
+              <td data-agent="mysql_port"></td>
+            </tr>
+            <tr>
+              <td>MySQL disk usage</td>
+              <td data-agent="mysql_disk_usage"></td>
+            </tr>
+            <tr>
+              <td>Error log tail (click to expand)</td>
+              <td>
+                <a data-agent="mysql_error_log_tail"></a>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <div class="col-xs-6">
+        <div class="panel panel-default">
+          <div class="panel-heading">
+            Snapshots
+          </div>
+          <table class="table">
+            <tr>
+              <td>Available locally</td>
+              <td>
+                <table class="table table-condensed table-unbordered" data-agent="available_local_snapshots"></table>
+              </td>
+            </tr>
+            <tr>
+              <td>Available remote</td>
+              <td>
+                <table class="table table-condensed table-unbordered" data-agent="available_remote_snapshots"></table>
+              </td>
+            </tr>
+            <tr>
+              <td>Snapshots taken on this host
+                <div>
+                  <button class="btn btn-xs btn-info" data-command="create-snapshot">Create snapshot</button>
+                </div>
+              </td>
+            </tr>
+        </div>
+        </td>
+        <td>
+          <table class="table table-condensed table-unbordered" data-agent="lv_snapshots"></table>
+        </td>
+        </tr>
+        <tr>
+          <td>Mounted snapshot</td>
+          <td>
+            <table class="table table-condensed table-unbordered">
+              <tr data-agent="mount_point"></tr>
+            </table>
+          </td>
+        </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-body">
+    <div class="active_seeds panel panel-default">
+      <div class="panel-heading">
+        Active seeds
+      </div>
+      <table class="table table-condensed table-bordered table-striped ">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Id</th>
+            <th>Target host</th>
+            <th>Source host</th>
+            <th>Seed start time</th>
+            <th>Seed end time</th>
+          </tr>
+        </thead>
+        <tbody data-agent="active_seeds"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="seed_states panel panel-default">
+      <div class="panel-heading">
+        Active seed states
+      </div>
+      <table class="table table-condensed table-bordered table-striped ">
+        <thead>
+          <tr>
+            <th>State start time</th>
+            <th>State action</th>
+            <th>Error message</th>
+          </tr>
+        </thead>
+        <tbody data-agent="seed_states"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="recent_seeds panel panel-default">
+      <div class="panel-heading">
+        Recent seeds
+      </div>
+      <table class="table table-condensed table-bordered table-striped">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Id</th>
+            <th>Target host</th>
+            <th>Source host</th>
+            <th>Seed start time</th>
+            <th>Seed end time</th>
+          </tr>
+        </thead>
+        <tbody data-agent="recent_seeds"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+  function currentAgentHost() {
+    return "{{.agentHost}}";
+  }
+</script>
+<script src="{{.prefix}}/js/agent.js"></script>
+<script src="{{.prefix}}/js/seed-shared.js"></script>
+<script src="{{.prefix}}/js/discover.js"></script>

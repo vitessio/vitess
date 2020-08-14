@@ -1,0 +1,30 @@
+<style type="text/css">
+  #pools .popover.instance {
+    display: inline-block;
+    position: inherit;
+    width: 276px;
+  }
+
+  #pools .popover.instance {
+    margin: 8px;
+  }
+
+  #pools .popover.instance p {
+    margin: 8px 0px;
+  }
+</style>
+
+<div class="container" id="pools">
+</div>
+
+
+<script>
+  function currentClusterName() {
+    return "{{.clusterName}}";
+  }
+
+  function removeTextFromHostnameDisplay() {
+    return "{{.removeTextFromHostnameDisplay}}";
+  }
+</script>
+<script src="{{.prefix}}/js/cluster-pools.js"></script>
