@@ -89,7 +89,7 @@ type OrchestratorExecutionMode string
 
 const (
 	OrchestratorExecutionCliMode  OrchestratorExecutionMode = "CLIMode"
-	OrchestratorExecutionHttpMode                           = "HttpMode"
+	OrchestratorExecutionHttpMode OrchestratorExecutionMode = "HttpMode"
 )
 
 var continuousRegistrationOnce sync.Once
@@ -135,7 +135,7 @@ func HealthTest() (health *HealthStatus, err error) {
 			return health, log.Errore(err)
 		}
 	}
-	health.AvailableNodes, err = ReadAvailableNodes(true)
+	health.AvailableNodes, _ = ReadAvailableNodes(true)
 
 	return health, nil
 }

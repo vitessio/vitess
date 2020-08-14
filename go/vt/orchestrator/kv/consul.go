@@ -33,10 +33,9 @@ import (
 
 // A Consul store based on config's `ConsulAddress`, `ConsulScheme`, and `ConsulKVPrefix`
 type consulStore struct {
-	client                        *consulapi.Client
-	kvCache                       *cache.Cache
-	pairsDistributionSuccessMutex sync.Mutex
-	distributionReentry           int64
+	client              *consulapi.Client
+	kvCache             *cache.Cache
+	distributionReentry int64
 }
 
 // NewConsulStore creates a new consul store. It is possible that the client for this store is nil,
@@ -83,7 +82,10 @@ func (this *consulStore) GetKeyValue(key string) (value string, found bool, err 
 	if err != nil {
 		return value, found, err
 	}
-	return string(pair.Value), (pair != nil), nil
+	if pair == nil {
+		return "", false, err
+	}
+	return string(pair.Value), true, nil
 }
 
 func (this *consulStore) DistributePairs(kvPairs [](*KVPair)) (err error) {

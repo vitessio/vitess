@@ -269,7 +269,7 @@ func ClearActiveRecoveries() error {
 // RegisterBlockedRecoveries writes down currently blocked recoveries, and indicates what recovery they are blocked on.
 // Recoveries are blocked thru the in_active_period flag, which comes to avoid flapping.
 func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blockingRecoveries []TopologyRecovery) error {
-	for _, recovery := range blockingRecoveries {
+	for _, recovery := range blockingRecoveries { //nolint:govet
 		_, err := db.ExecOrchestrator(`
 			insert
 				into blocked_topology_recovery (
@@ -424,7 +424,7 @@ func AcknowledgeClusterRecoveries(clusterName string, owner string, comment stri
 		countAcknowledgedEntries = countAcknowledgedEntries + count
 	}
 	{
-		clusterInfo, err := inst.ReadClusterInfo(clusterName)
+		clusterInfo, _ := inst.ReadClusterInfo(clusterName)
 		whereClause := `cluster_alias = ? and cluster_alias != ''`
 		args := sqlutils.Args(clusterInfo.ClusterAlias)
 		clearAcknowledgedFailureDetections(whereClause, args)
@@ -578,7 +578,7 @@ func readRecoveries(whereCondition string, limit string, args []interface{}) ([]
 
 		topologyRecovery.LastDetectionId = m.GetInt64("last_detection_id")
 
-		res = append(res, topologyRecovery)
+		res = append(res, topologyRecovery) //nolint:govet
 		return nil
 	})
 
@@ -737,7 +737,7 @@ func readFailureDetections(whereCondition string, limit string, args []interface
 
 		failureDetection.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
 
-		res = append(res, failureDetection)
+		res = append(res, failureDetection) //nolint:govet
 		return nil
 	})
 

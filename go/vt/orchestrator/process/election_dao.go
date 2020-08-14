@@ -151,5 +151,5 @@ func ElectedNode() (node NodeHealth, isElected bool, err error) {
 	})
 
 	isElected = (node.Hostname == ThisHostname && node.Token == util.ProcessToken.Hash)
-	return node, isElected, log.Errore(err)
+	return node, isElected, log.Errore(err) //nolint copylocks: return copies lock value
 }

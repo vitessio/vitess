@@ -103,9 +103,6 @@ func NewFileSnapshotStoreWithLogger(base string, retain int) (*FileSnapshotStore
 // on a base directory. The `retain` parameter controls how many
 // snapshots are retained. Must be at least 1.
 func NewFileSnapshotStore(base string, retain int, logOutput io.Writer) (*FileSnapshotStore, error) {
-	if logOutput == nil {
-		logOutput = os.Stderr
-	}
 	return NewFileSnapshotStoreWithLogger(base, retain)
 }
 
@@ -300,7 +297,7 @@ func (f *FileSnapshotStore) Open(id string) (*raft.SnapshotMeta, io.ReadCloser, 
 
 	// Verify the hash
 	computed := stateHash.Sum(nil)
-	if bytes.Compare(meta.CRC, computed) != 0 {
+	if !bytes.Equal(meta.CRC, computed) {
 		_ = log.Errorf("snapshot: CRC checksum failed (stored: %v computed: %v)",
 			meta.CRC, computed)
 		fh.Close()

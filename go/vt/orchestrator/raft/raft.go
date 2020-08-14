@@ -378,6 +378,7 @@ func HealthyMembers() (advertised []string) {
 
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
+//nolint SA1015: using time.Tick leaks the underlying ticker
 func Monitor() {
 	t := time.Tick(5 * time.Second)
 	heartbeat := time.Tick(1 * time.Minute)

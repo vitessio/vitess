@@ -59,7 +59,7 @@ func NewTLSConfig(caFile string, verifyCert bool) (*tls.Config, error) {
 		return &c, err
 	}
 	c.ClientCAs = caPool
-	c.BuildNameToCertificate()
+	c.BuildNameToCertificate() //nolint SA1019: c.BuildNameToCertificate is deprecated
 	return &c, nil
 }
 
