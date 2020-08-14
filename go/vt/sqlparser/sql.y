@@ -1946,7 +1946,11 @@ explain_statement:
   }
 | explain_synonyms explain_format_opt explainable_statement
   {
-    $$ = &Explain{Type: $2, Statement: $3}
+    if $2 == VitessStr {
+      $$ = &Explain{Type: $2, Statement: $3}
+    } else {
+      $$ = &OtherRead{}
+    }
   }
 
 other_statement:
