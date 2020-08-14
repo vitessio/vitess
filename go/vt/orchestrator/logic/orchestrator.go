@@ -226,7 +226,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	}
 
 	latency.Start("backend")
-	instance, found, err := inst.ReadInstance(&instanceKey)
+	instance, found, _ := inst.ReadInstance(&instanceKey)
 	latency.Stop("backend")
 	if found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
@@ -236,7 +236,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	discoveriesCounter.Inc(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err = inst.ReadTopologyInstanceBufferable(&instanceKey, config.Config.BufferInstanceWrites, latency)
+	instance, err := inst.ReadTopologyInstanceBufferable(&instanceKey, config.Config.BufferInstanceWrites, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")
@@ -476,6 +476,7 @@ func injectSeeds(seedOnce *sync.Once) {
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
+//nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
 	continuousDiscoveryStartTime := time.Now()
