@@ -203,7 +203,7 @@ func TestDMLScatter(t *testing.T) {
 	3 4
 	4 5
 	*/
-	exec(t, conn, "update t3 set id5 = 42 where id5 = 1")
+	exec(t, conn, "update `ks[-]`.t3 set id5 = 42 where id5 = 1")
 	qr = exec(t, conn, "select id5, id6, id7 from t3 order by id5")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) INT64(2) INT64(3)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)] [INT64(42) INT64(2) INT64(3)]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
@@ -246,7 +246,7 @@ func TestDMLScatter(t *testing.T) {
 	require.Empty(t, qr.Rows)
 
 	// delete all the rows.
-	exec(t, conn, "delete from t3")
+	exec(t, conn, "delete from `ks[-]`.t3")
 	qr = exec(t, conn, "select * from t3")
 	require.Empty(t, qr.Rows)
 	qr = exec(t, conn, "select * from t3_id7_idx")
