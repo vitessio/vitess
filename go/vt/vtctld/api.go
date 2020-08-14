@@ -63,10 +63,10 @@ const (
 
 // TabletStats represents realtime stats from a discovery.LegacyTabletStats struct.
 type TabletStats struct {
-	LastError     string                 `json:"last_error,omitempty"`
-	RealtimeStats *querypb.RealtimeStats `json:"realtime,omitempty"`
-	Serving       bool                   `json:"serving,omitempty"`
-	Up            bool                   `json:"up,omitempty"`
+	LastError string                 `json:"last_error,omitempty"`
+	Realtime  *querypb.RealtimeStats `json:"realtime,omitempty"`
+	Serving   bool                   `json:"serving"`
+	Up        bool                   `json:"up"`
 }
 
 // TabletWithStatsAndURL wraps topo.Tablet, adding a URL property and optional realtime stats.
@@ -112,9 +112,9 @@ func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 	if realtimeStats != nil {
 		if stats, err := realtimeStats.tabletStats(tablet.Alias); err == nil {
 			tablet.Stats = &TabletStats{
-				RealtimeStats: stats.Stats,
-				Serving:       stats.Serving,
-				Up:            stats.Up,
+				Realtime: stats.Stats,
+				Serving:  stats.Serving,
+				Up:       stats.Up,
 			}
 			if stats.LastError != nil {
 				tablet.Stats.LastError = stats.LastError.Error()
