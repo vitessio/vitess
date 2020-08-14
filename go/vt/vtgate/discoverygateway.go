@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
@@ -39,7 +38,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 const (
@@ -405,20 +403,6 @@ func (dg *DiscoveryGateway) getStatsAggregator(target *querypb.Target) *TabletSt
 	aggr = NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, key)
 	dg.statusAggregators[key] = aggr
 	return aggr
-}
-
-// NewShardError returns a new error with the shard info amended.
-func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) error {
-	if in == nil {
-		return nil
-	}
-	if tablet != nil {
-		return vterrors.Wrapf(in, "target: %s.%s.%s, used tablet: %s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), topotools.TabletIdent(tablet))
-	}
-	if target != nil {
-		return vterrors.Wrapf(in, "target: %s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType))
-	}
-	return in
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
