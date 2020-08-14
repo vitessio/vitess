@@ -666,8 +666,8 @@ func TestBuildPlayerPlan(t *testing.T) {
 		err: "group by expression is not allowed to reference an aggregate expression: a",
 	}}
 
-	tableKeys := map[string][]string{
-		"t1": {"c1"},
+	tableKeys := map[string][]*TableKey{
+		"t1": {&TableKey{Name: "c1"}},
 	}
 
 	copyState := map[string]*sqltypes.Result{
@@ -708,9 +708,9 @@ func TestBuildPlayerPlan(t *testing.T) {
 }
 
 func TestBuildPlayerPlanNoDup(t *testing.T) {
-	tableKeys := map[string][]string{
-		"t1": {"c1"},
-		"t2": {"c2"},
+	tableKeys := map[string][]*TableKey{
+		"t1": {&TableKey{Name: "c1"}},
+		"t2": {&TableKey{Name: "c2"}},
 	}
 	input := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -729,9 +729,9 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {
-	tableKeys := map[string][]string{
-		"t1": {"c1"},
-		"t2": {"c2"},
+	tableKeys := map[string][]*TableKey{
+		"t1": {&TableKey{Name: "c1"}},
+		"t2": {&TableKey{Name: "c2"}},
 	}
 	input := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
