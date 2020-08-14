@@ -120,7 +120,7 @@ func TestPlayerCopyVarcharPK(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(idc,val) values ('a',1)",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"a\\" > ' where vrepl_id=.*`,
-		`insert into dst(idc,val) select 'c', 3 from dual where ( _utf8 'c' COLLATE utf8_general_ci ) <= ( _utf8 'a' COLLATE utf8_general_ci )`,
+		`/insert into dst\(idc,val\) select 'c', 3 from dual where \( .* 'c' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 		"insert into dst(idc,val) values ('b',2)",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"b\\" > ' where vrepl_id=.*`,
 		"insert into dst(idc,val) values ('c',3)",
