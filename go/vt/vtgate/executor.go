@@ -323,6 +323,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
+	var value interface{}
 	for _, expr := range set.Exprs {
 		// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
 		// it will remove backticks and double quotes that might surround the part after the first period
@@ -332,13 +333,13 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		case sqlparser.GlobalStr:
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
 		case sqlparser.SessionStr:
-			value, err := getValueFor(expr)
+			value, err = getValueFor(expr)
 			if err != nil {
 				return nil, err
 			}
-			return &sqltypes.Result{}, handleSessionSetting(ctx, name, safeSession, value, e.txConn, sql)
+			err = handleSessionSetting(ctx, name, safeSession, value, e.txConn, sql)
 		case sqlparser.VitessMetadataStr:
-			value, err := getValueFor(expr)
+			value, err = getValueFor(expr)
 			if err != nil {
 				return nil, err
 			}
@@ -346,10 +347,13 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset: %v", value)
 			}
-			return e.handleSetVitessMetadata(ctx, name, val)
+			_, err = e.handleSetVitessMetadata(ctx, name, val)
 		case "": // we should only get here with UDVs
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should have been handled by planning")
 
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 
