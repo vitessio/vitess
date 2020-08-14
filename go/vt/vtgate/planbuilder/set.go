@@ -143,7 +143,7 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 			valid = ok
 			return ok
 		case *sqlparser.ColName:
-			valid = false
+			valid = n.Name.AtCount() == 2
 			return false
 		}
 		return true
