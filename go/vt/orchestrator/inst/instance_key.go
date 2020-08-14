@@ -32,11 +32,11 @@ type InstanceKey struct {
 }
 
 var (
-	ipv4Regexp         = regexp.MustCompile("^([0-9]+)[.]([0-9]+)[.]([0-9]+)[.]([0-9]+)$")
-	ipv4HostPortRegexp = regexp.MustCompile("^([^:]+):([0-9]+)$")
-	ipv4HostRegexp     = regexp.MustCompile("^([^:]+)$")
-	ipv6HostPortRegexp = regexp.MustCompile("^\\[([:0-9a-fA-F]+)\\]:([0-9]+)$") // e.g. [2001:db8:1f70::999:de8:7648:6e8]:3308
-	ipv6HostRegexp     = regexp.MustCompile("^([:0-9a-fA-F]+)$")                // e.g. 2001:db8:1f70::999:de8:7648:6e8
+	ipv4Regexp         = regexp.MustCompile(`^([0-9]+)[.]([0-9]+)[.]([0-9]+)[.]([0-9]+)$`)
+	ipv4HostPortRegexp = regexp.MustCompile(`^([^:]+):([0-9]+)$`)
+	ipv4HostRegexp     = regexp.MustCompile(`^([^:]+)$`)
+	ipv6HostPortRegexp = regexp.MustCompile(`^\[([:0-9a-fA-F]+)\]:([0-9]+)$`) // e.g. [2001:db8:1f70::999:de8:7648:6e8]:3308
+	ipv6HostRegexp     = regexp.MustCompile(`^([:0-9a-fA-F]+)$`)              // e.g. 2001:db8:1f70::999:de8:7648:6e8
 )
 
 const detachHint = "//"

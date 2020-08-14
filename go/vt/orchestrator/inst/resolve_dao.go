@@ -57,7 +57,7 @@ func WriteResolvedHostname(hostname string, resolvedHostname string) error {
 		}
 		if hostname != resolvedHostname {
 			// history is only interesting when there's actually something to resolve...
-			_, err = db.ExecOrchestrator(`
+			_, _ = db.ExecOrchestrator(`
 			insert into
 					hostname_resolve_history (hostname, resolved_hostname, resolved_timestamp)
 				values
@@ -182,33 +182,6 @@ func readUnresolvedHostname(hostname string) (string, error) {
 	return unresolvedHostname, err
 }
 
-// readMissingHostnamesToResolve gets those (unresolved, e.g. VIP) hostnames that *should* be present in
-// the hostname_resolve table, but aren't.
-func readMissingKeysToResolve() (result InstanceKeyMap, err error) {
-	query := `
-   		select
-   				hostname_unresolve.unresolved_hostname,
-   				database_instance.port
-   			from
-   				database_instance
-   				join hostname_unresolve on (database_instance.hostname = hostname_unresolve.hostname)
-   				left join hostname_resolve on (database_instance.hostname = hostname_resolve.resolved_hostname)
-   			where
-   				hostname_resolve.hostname is null
-	   		`
-
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		instanceKey := InstanceKey{Hostname: m.GetString("unresolved_hostname"), Port: m.GetInt("port")}
-		result.AddKey(instanceKey)
-		return nil
-	})
-
-	if err != nil {
-		log.Errore(err)
-	}
-	return result, err
-}
-
 // WriteHostnameUnresolve upserts an entry in hostname_unresolve
 func WriteHostnameUnresolve(instanceKey *InstanceKey, unresolvedHostname string) error {
 	writeFunc := func() error {
@@ -226,7 +199,7 @@ func WriteHostnameUnresolve(instanceKey *InstanceKey, unresolvedHostname string)
 		if err != nil {
 			return log.Errore(err)
 		}
-		_, err = db.ExecOrchestrator(`
+		_, _ = db.ExecOrchestrator(`
         	replace into hostname_unresolve_history (
         		hostname,
         		unresolved_hostname,

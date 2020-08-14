@@ -36,8 +36,8 @@ type StopReplicationMethod string
 
 const (
 	NoStopReplication     StopReplicationMethod = "NoStopReplication"
-	StopReplicationNormal                       = "StopReplicationNormal"
-	StopReplicationNice                         = "StopReplicationNice"
+	StopReplicationNormal StopReplicationMethod = "StopReplicationNormal"
+	StopReplicationNice   StopReplicationMethod = "StopReplicationNice"
 )
 
 var ReplicationNotRunningError = fmt.Errorf("Replication not running")
@@ -249,7 +249,7 @@ func MoveEquivalent(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 		err = fmt.Errorf("MoveEquivalent(): ExecBinlogCoordinates changed after stopping replication on %+v; aborting", instance.Key)
 		goto Cleanup
 	}
-	instance, err = ChangeMasterTo(instanceKey, otherKey, binlogCoordinates, false, GTIDHintNeutral)
+	_, err = ChangeMasterTo(instanceKey, otherKey, binlogCoordinates, false, GTIDHintNeutral)
 
 Cleanup:
 	instance, _ = StartReplication(instanceKey)
@@ -286,7 +286,7 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, fmt.Errorf("master is not a replica itself: %+v", master.Key)
 	}
 
-	if canReplicate, err := instance.CanReplicateFrom(master); canReplicate == false {
+	if canReplicate, err := instance.CanReplicateFrom(master); !canReplicate {
 		return instance, err
 	}
 	if master.IsBinlogServer() {
@@ -322,14 +322,14 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if !instance.UsingMariaDBGTID {
-		instance, err = StartReplicationUntilMasterCoordinates(instanceKey, &master.SelfBinlogCoordinates)
+		_, err = StartReplicationUntilMasterCoordinates(instanceKey, &master.SelfBinlogCoordinates)
 		if err != nil {
 			goto Cleanup
 		}
 	}
 
 	// We can skip hostname unresolve; we just copy+paste whatever our master thinks of its master.
-	instance, err = ChangeMasterTo(instanceKey, &master.MasterKey, &master.ExecBinlogCoordinates, true, GTIDHintDeny)
+	_, err = ChangeMasterTo(instanceKey, &master.MasterKey, &master.ExecBinlogCoordinates, true, GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -416,7 +416,7 @@ func MoveUpReplicas(instanceKey *InstanceKey, pattern string) ([](*Instance), *I
 
 			var replicaErr error
 			ExecuteOnTopology(func() {
-				if canReplicate, err := replica.CanReplicateFrom(instance); canReplicate == false || err != nil {
+				if canReplicate, err := replica.CanReplicateFrom(instance); !canReplicate || err != nil {
 					replicaErr = err
 					return
 				}
@@ -542,7 +542,7 @@ func MoveBelow(instanceKey, siblingKey *InstanceKey) (*Instance, error) {
 		goto Cleanup
 	}
 	if instance.ExecBinlogCoordinates.SmallerThan(&sibling.ExecBinlogCoordinates) {
-		instance, err = StartReplicationUntilMasterCoordinates(instanceKey, &sibling.ExecBinlogCoordinates)
+		_, err = StartReplicationUntilMasterCoordinates(instanceKey, &sibling.ExecBinlogCoordinates)
 		if err != nil {
 			goto Cleanup
 		}
@@ -554,14 +554,14 @@ func MoveBelow(instanceKey, siblingKey *InstanceKey) (*Instance, error) {
 	}
 	// At this point both siblings have executed exact same statements and are identical
 
-	instance, err = ChangeMasterTo(instanceKey, &sibling.Key, &sibling.SelfBinlogCoordinates, false, GTIDHintDeny)
+	_, err = ChangeMasterTo(instanceKey, &sibling.Key, &sibling.SelfBinlogCoordinates, false, GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
 
 Cleanup:
 	instance, _ = StartReplication(instanceKey)
-	sibling, _ = StartReplication(siblingKey)
+	_, _ = StartReplication(siblingKey)
 
 	if err != nil {
 		return instance, log.Errore(err)
@@ -635,12 +635,12 @@ func moveInstanceBelowViaGTID(instance, otherInstance *Instance) (*Instance, err
 		defer EndMaintenance(maintenanceToken)
 	}
 
-	instance, err = StopReplication(instanceKey)
+	_, err = StopReplication(instanceKey)
 	if err != nil {
 		goto Cleanup
 	}
 
-	instance, err = ChangeMasterTo(instanceKey, &otherInstance.Key, &otherInstance.SelfBinlogCoordinates, false, GTIDHintForce)
+	_, err = ChangeMasterTo(instanceKey, &otherInstance.Key, &otherInstance.SelfBinlogCoordinates, false, GTIDHintForce)
 	if err != nil {
 		goto Cleanup
 	}
@@ -831,7 +831,7 @@ func Repoint(instanceKey *InstanceKey, masterKey *InstanceKey, gtidHint Operatio
 	if instance.ExecBinlogCoordinates.IsEmpty() {
 		instance.ExecBinlogCoordinates.LogFile = "orchestrator-unknown-log-file"
 	}
-	instance, err = ChangeMasterTo(instanceKey, masterKey, &instance.ExecBinlogCoordinates, !masterIsAccessible, gtidHint)
+	_, err = ChangeMasterTo(instanceKey, masterKey, &instance.ExecBinlogCoordinates, !masterIsAccessible, gtidHint)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1062,13 +1062,13 @@ func ResetReplicationOperation(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if instance.IsReplica() {
-		instance, err = StopReplication(instanceKey)
+		_, err = StopReplication(instanceKey)
 		if err != nil {
 			goto Cleanup
 		}
 	}
 
-	instance, err = ResetReplication(instanceKey)
+	_, err = ResetReplication(instanceKey)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1114,7 +1114,7 @@ func DetachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
 		goto Cleanup
 	}
 
-	instance, err = ChangeMasterTo(instanceKey, detachedMasterKey, &instance.ExecBinlogCoordinates, true, GTIDHintNeutral)
+	_, err = ChangeMasterTo(instanceKey, detachedMasterKey, &instance.ExecBinlogCoordinates, true, GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1159,7 +1159,7 @@ func ReattachReplicaMasterHost(instanceKey *InstanceKey) (*Instance, error) {
 		goto Cleanup
 	}
 
-	instance, err = ChangeMasterTo(instanceKey, reattachedMasterKey, &instance.ExecBinlogCoordinates, true, GTIDHintNeutral)
+	_, err = ChangeMasterTo(instanceKey, reattachedMasterKey, &instance.ExecBinlogCoordinates, true, GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1476,7 +1476,7 @@ func CorrelateBinlogCoordinates(instance *Instance, binlogCoordinates *BinlogCoo
 		return nil, 0, err
 	}
 	entriesMonotonic := (config.Config.PseudoGTIDMonotonicHint != "") && strings.Contains(instancePseudoGtidText, config.Config.PseudoGTIDMonotonicHint)
-	minBinlogCoordinates, _, err := GetHeuristiclyRecentCoordinatesForInstance(&otherInstance.Key)
+	minBinlogCoordinates, _, _ := GetHeuristiclyRecentCoordinatesForInstance(&otherInstance.Key)
 	otherInstancePseudoGtidCoordinates, err := SearchEntryInInstanceBinlogs(otherInstance, instancePseudoGtidText, entriesMonotonic, minBinlogCoordinates)
 	if err != nil {
 		return nil, 0, err
@@ -1605,7 +1605,7 @@ func MatchBelow(instanceKey, otherKey *InstanceKey, requireInstanceMaintenance b
 		goto Cleanup
 	}
 
-	nextBinlogCoordinatesToMatch, countMatchedEvents, err = CorrelateBinlogCoordinates(instance, nil, otherInstance)
+	nextBinlogCoordinatesToMatch, countMatchedEvents, _ = CorrelateBinlogCoordinates(instance, nil, otherInstance)
 
 	if countMatchedEvents == 0 {
 		err = fmt.Errorf("Unexpected: 0 events processed while iterating logs. Something went wrong; aborting. nextBinlogCoordinatesToMatch: %+v", nextBinlogCoordinatesToMatch)
@@ -1614,7 +1614,7 @@ func MatchBelow(instanceKey, otherKey *InstanceKey, requireInstanceMaintenance b
 	log.Debugf("%+v will match below %+v at %+v; validated events: %d", *instanceKey, *otherKey, *nextBinlogCoordinatesToMatch, countMatchedEvents)
 
 	// Drum roll...
-	instance, err = ChangeMasterTo(instanceKey, otherKey, nextBinlogCoordinatesToMatch, false, GTIDHintDeny)
+	_, err = ChangeMasterTo(instanceKey, otherKey, nextBinlogCoordinatesToMatch, false, GTIDHintDeny)
 	if err != nil {
 		goto Cleanup
 	}
@@ -1730,8 +1730,8 @@ func TakeMasterHook(successor *Instance, demoted *Instance) {
 	env = append(env, fmt.Sprintf("ORC_SUCCESSOR_HOST=%s", successorKey))
 	env = append(env, fmt.Sprintf("ORC_FAILED_HOST=%s", demotedKey))
 
-	successorStr := fmt.Sprintf("%s", successorKey)
-	demotedStr := fmt.Sprintf("%s", demotedKey)
+	successorStr := fmt.Sprintf("%v", successorKey)
+	demotedStr := fmt.Sprintf("%v", demotedKey)
 
 	processCount := len(config.Config.PostTakeMasterProcesses)
 	for i, command := range config.Config.PostTakeMasterProcesses {
@@ -1773,7 +1773,7 @@ func TakeMaster(instanceKey *InstanceKey, allowTakingCoMaster bool) (*Instance, 
 	}
 	log.Debugf("TakeMaster: will attempt making %+v take its master %+v, now resolved as %+v", *instanceKey, instance.MasterKey, masterInstance.Key)
 
-	if canReplicate, err := masterInstance.CanReplicateFrom(instance); canReplicate == false {
+	if canReplicate, err := masterInstance.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
 	}
 	// We begin
@@ -2828,11 +2828,6 @@ func relocateReplicasInternal(replicas [](*Instance), instance, other *Instance)
 		}
 		pseudoGTIDReplicas, _, err, errs = MultiMatchBelow(pseudoGTIDReplicas, &other.Key, nil)
 		return pseudoGTIDReplicas, err, errs
-	}
-
-	// Normal binlog file:pos
-	if InstanceIsMasterOf(other, instance) {
-		// MoveUpReplicas -- but not supporting "replicas" argument at this time.
 	}
 
 	// Too complex

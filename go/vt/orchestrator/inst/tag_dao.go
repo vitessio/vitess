@@ -54,7 +54,7 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 	if instanceKey == nil && !tag.HasValue {
 		return nil, log.Errorf("Untag: either indicate an instance or a tag value. Will not delete on-valued tag across instances")
 	}
-	clause := ``
+	var clause string
 	args := sqlutils.Args()
 	if tag.HasValue {
 		clause = `tag_name=? and tag_value=?`
@@ -79,7 +79,7 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 		order by hostname, port
 		`, clause,
 	)
-	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	_ = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		key, _ := NewResolveInstanceKey(m.GetString("hostname"), m.GetInt("port"))
 		tagged.AddKey(*key)
 		return nil

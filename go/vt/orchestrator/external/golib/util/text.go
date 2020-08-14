@@ -17,7 +17,6 @@
 package util
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -52,21 +51,15 @@ func SimpleTimeToSeconds(simpleTime string) (int, error) {
 		i, _ := strconv.Atoi(simpleTime[0 : len(simpleTime)-1])
 		return i * 60 * 60 * 24 * 7, nil
 	}
-	return 0, errors.New(fmt.Sprintf("Cannot parse simple time: %s", simpleTime))
+	return 0, fmt.Errorf("Cannot parse simple time: %s", simpleTime)
 }
 
 func Tabulate(lines []string, separator string, outputSeparator string, directionFlags ...int) (result []string) {
 	tokens := make([][]string, 0)
-	widths := make([][]int, 0)
 	countColumns := 0
 	for _, line := range lines {
 		lineTokens := strings.Split(line, separator)
-		lineWidths := make([]int, len(lineTokens))
-		for i := range lineTokens {
-			lineWidths[i] = len(lineTokens[i])
-		}
 		tokens = append(tokens, lineTokens)
-		widths = append(widths, lineWidths)
 		if len(lineTokens) > countColumns {
 			countColumns = len(lineTokens)
 		}

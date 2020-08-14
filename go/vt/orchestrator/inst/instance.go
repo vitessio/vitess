@@ -264,10 +264,7 @@ func (this *Instance) IsReplicationGroupSecondary() bool {
 
 // IsBinlogServer checks whether this is any type of a binlog server (currently only maxscale)
 func (this *Instance) IsBinlogServer() bool {
-	if this.isMaxScale() {
-		return true
-	}
-	return false
+	return this.isMaxScale()
 }
 
 // IsOracleMySQL checks whether this is an Oracle MySQL distribution
@@ -636,6 +633,6 @@ func (this *Instance) HumanReadableDescription() string {
 // TabulatedDescription returns a simple tabulated string of various properties
 func (this *Instance) TabulatedDescription(separator string) string {
 	tokens := this.descriptionTokens()
-	description := fmt.Sprintf("%s", strings.Join(tokens, separator))
+	description := strings.Join(tokens, separator)
 	return description
 }

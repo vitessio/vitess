@@ -174,7 +174,7 @@ func (zook *ZooKeeper) childrenRecursiveInternal(connection *zk.Conn, path strin
 	if err != nil {
 		return children, err
 	}
-	sort.Sort(sort.StringSlice(children))
+	sort.Strings(children)
 	recursiveChildren := []string{}
 	for _, child := range children {
 		incrementalChild := gopath.Join(incrementalPath, child)
@@ -221,12 +221,11 @@ func (zook *ZooKeeper) createInternal(connection *zk.Conn, path string, data []b
 			if parentPath == path {
 				return returnValue, err
 			}
-			returnValue, err = zook.createInternal(connection, parentPath, []byte("zookeepercli auto-generated"), acl, force)
+			_, _ = zook.createInternal(connection, parentPath, []byte("zookeepercli auto-generated"), acl, force)
 		} else {
 			return returnValue, err
 		}
 	}
-	return "", nil
 }
 
 // createInternalWithACL: create a new path with acl
@@ -241,12 +240,11 @@ func (zook *ZooKeeper) createInternalWithACL(connection *zk.Conn, path string, d
 		returnValue, err := connection.Create(path, data, zook.flags, perms)
 		log.Debugf("create status for %s: %s, %+v", path, returnValue, err)
 		if err != nil && force && attempts < 2 {
-			returnValue, err = zook.createInternalWithACL(connection, gopath.Dir(path), []byte("zookeepercli auto-generated"), force, perms)
+			_, _ = zook.createInternalWithACL(connection, gopath.Dir(path), []byte("zookeepercli auto-generated"), force, perms)
 		} else {
 			return returnValue, err
 		}
 	}
-	return "", nil
 }
 
 // Create will create a new path, or exit with error should the path exist.
@@ -350,19 +348,14 @@ func (zook *ZooKeeper) parsePermsString(permstr string) (perms int32, err error)
 			switch rune {
 			case "r":
 				perms |= zk.PermRead
-				break
 			case "w":
 				perms |= zk.PermWrite
-				break
 			case "c":
 				perms |= zk.PermCreate
-				break
 			case "d":
 				perms |= zk.PermDelete
-				break
 			case "a":
 				perms |= zk.PermAdmin
-				break
 			default:
 				err = errors.New("invalid ACL string specified")
 			}

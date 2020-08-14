@@ -41,8 +41,8 @@ type OperationGTIDHint string
 
 const (
 	GTIDHintDeny    OperationGTIDHint = "NoGTID"
-	GTIDHintNeutral                   = "GTIDHintNeutral"
-	GTIDHintForce                     = "GTIDHintForce"
+	GTIDHintNeutral OperationGTIDHint = "GTIDHintNeutral"
+	GTIDHintForce   OperationGTIDHint = "GTIDHintForce"
 )
 
 const (
@@ -524,7 +524,6 @@ func WaitForExecBinlogCoordinatesToReach(instanceKey *InstanceKey, coordinates *
 			return instance, false, nil
 		}
 	}
-	return instance, exactMatch, err
 }
 
 // StartReplicationUntilMasterCoordinates issuesa START SLAVE UNTIL... statement on given instance

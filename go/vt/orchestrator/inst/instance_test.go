@@ -32,7 +32,6 @@ func init() {
 
 var instance1 = Instance{Key: key1}
 var instance2 = Instance{Key: key2}
-var instance3 = Instance{Key: key3}
 
 func TestIsSmallerMajorVersion(t *testing.T) {
 	i55 := Instance{Version: "5.5"}

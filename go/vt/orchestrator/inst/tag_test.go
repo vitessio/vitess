@@ -6,6 +6,7 @@ import (
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 )
 
+//nolint:staticcheck
 func TestParseTag(t *testing.T) {
 	{
 		tag, err := ParseTag("")

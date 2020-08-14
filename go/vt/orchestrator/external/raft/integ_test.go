@@ -146,7 +146,7 @@ CHECK:
 		}
 		for idx, log := range first.fsm.logs {
 			other := env.fsm.logs[idx]
-			if bytes.Compare(log, other) != 0 {
+			if !bytes.Equal(log, other) {
 				err = fmt.Errorf("log %d mismatch %v %v", idx, log, other)
 				goto ERR
 			}
@@ -252,7 +252,7 @@ func TestRaft_Integ(t *testing.T) {
 	time.Sleep(3 * conf.HeartbeatTimeout)
 
 	// Wait for a leader
-	leader, err = WaitForAny(Leader, envs)
+	_, err = WaitForAny(Leader, envs)
 	NoErr(err, t)
 
 	allEnvs := append([]*RaftEnv{env1}, envs...)

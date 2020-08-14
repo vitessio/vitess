@@ -32,7 +32,7 @@ func writePoolInstances(pool string, instanceKeys [](*InstanceKey)) error {
 		if err != nil {
 			return log.Errore(err)
 		}
-		tx, err := dbh.Begin()
+		tx, _ := dbh.Begin()
 		if _, err := tx.Exec(`delete from database_instance_pool where pool = ?`, pool); err != nil {
 			tx.Rollback()
 			return log.Errore(err)

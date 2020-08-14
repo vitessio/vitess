@@ -723,7 +723,7 @@ func (this *HttpAPI) LocateErrantGTID(params martini.Params, r render.Render, re
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("located errant GTID"), Details: errantBinlogs})
+	Respond(r, &APIResponse{Code: OK, Message: "located errant GTID", Details: errantBinlogs})
 }
 
 // ErrantGTIDResetMaster removes errant transactions on a server by way of RESET MASTER
@@ -1625,7 +1625,7 @@ func (this *HttpAPI) KillQuery(params martini.Params, r render.Render, req *http
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, _ := this.getInstanceKey(params["host"], params["port"])
 	processId, err := strconv.ParseInt(params["process"], 10, 0)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -2308,7 +2308,7 @@ func (this *HttpAPI) DiscoveryMetricsRaw(params martini.Params, r render.Render,
 // DiscoveryMetricsAggregated will return a single set of aggregated metrics for raw values collected since the
 // specified time.
 func (this *HttpAPI) DiscoveryMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	seconds, err := strconv.Atoi(params["seconds"])
+	seconds, _ := strconv.Atoi(params["seconds"])
 
 	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
 	aggregated, err := discovery.AggregatedSince(discoveryMetrics, refTime)
@@ -2691,7 +2691,7 @@ func (this *HttpAPI) AgentSeedDetails(params martini.Params, r render.Render, re
 		return
 	}
 
-	seedId, err := strconv.ParseInt(params["seedId"], 10, 0)
+	seedId, _ := strconv.ParseInt(params["seedId"], 10, 0)
 	output, err := agent.AgentSeedDetails(seedId)
 
 	if err != nil {
@@ -2713,7 +2713,7 @@ func (this *HttpAPI) AgentSeedStates(params martini.Params, r render.Render, req
 		return
 	}
 
-	seedId, err := strconv.ParseInt(params["seedId"], 10, 0)
+	seedId, _ := strconv.ParseInt(params["seedId"], 10, 0)
 	output, err := agent.ReadSeedStates(seedId)
 
 	if err != nil {
@@ -2756,8 +2756,8 @@ func (this *HttpAPI) AbortSeed(params martini.Params, r render.Render, req *http
 		return
 	}
 
-	seedId, err := strconv.ParseInt(params["seedId"], 10, 0)
-	err = agent.AbortSeed(seedId)
+	seedId, _ := strconv.ParseInt(params["seedId"], 10, 0)
+	err := agent.AbortSeed(seedId)
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -2780,7 +2780,7 @@ func (this *HttpAPI) Health(params martini.Params, r render.Render, req *http.Re
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Application node is healthy"), Details: health})
+	Respond(r, &APIResponse{Code: OK, Message: "Application node is healthy", Details: health})
 
 }
 
@@ -2814,7 +2814,7 @@ func (this *HttpAPI) StatusCheck(params martini.Params, r render.Render, req *ht
 		r.JSON(500, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Application node is unhealthy %+v", err), Details: health})
 		return
 	}
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Application node is healthy"), Details: health})
+	Respond(r, &APIResponse{Code: OK, Message: "Application node is healthy", Details: health})
 }
 
 // GrabElection forcibly grabs leadership. Use with care!!
@@ -2829,7 +2829,7 @@ func (this *HttpAPI) GrabElection(params martini.Params, r render.Render, req *h
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Node elected as leader")})
+	Respond(r, &APIResponse{Code: OK, Message: "Node elected as leader"})
 }
 
 // Reelect causes re-elections for an active node
@@ -2844,7 +2844,7 @@ func (this *HttpAPI) Reelect(params martini.Params, r render.Render, req *http.R
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Set re-elections")})
+	Respond(r, &APIResponse{Code: OK, Message: "Set re-elections"})
 }
 
 // RaftAddPeer adds a new node to the raft cluster
@@ -2898,7 +2898,7 @@ func (this *HttpAPI) RaftYield(params martini.Params, r render.Render, req *http
 		return
 	}
 	orcraft.PublishYield(params["node"])
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Asynchronously yielded")})
+	Respond(r, &APIResponse{Code: OK, Message: "Asynchronously yielded"})
 }
 
 // RaftYieldHint yields to a host whose name contains given hint (e.g. DC)
@@ -3039,7 +3039,7 @@ func (this *HttpAPI) ReloadConfiguration(params martini.Params, r render.Render,
 	config.Reload(extraConfigFile)
 	inst.AuditOperation("reload-configuration", nil, "Triggered via API")
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Config reloaded"), Details: extraConfigFile})
+	Respond(r, &APIResponse{Code: OK, Message: "Config reloaded", Details: extraConfigFile})
 }
 
 // ReplicationAnalysis retuens list of issues
@@ -3060,7 +3060,7 @@ func (this *HttpAPI) replicationAnalysis(clusterName string, instanceKey *inst.I
 		analysis = filtered
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Analysis"), Details: analysis})
+	Respond(r, &APIResponse{Code: OK, Message: "Analysis", Details: analysis})
 }
 
 // ReplicationAnalysis retuens list of issues
@@ -3070,8 +3070,7 @@ func (this *HttpAPI) ReplicationAnalysis(params martini.Params, r render.Render,
 
 // ReplicationAnalysis retuens list of issues
 func (this *HttpAPI) ReplicationAnalysisForCluster(params martini.Params, r render.Render, req *http.Request) {
-	clusterName := params["clusterName"]
-
+	var clusterName string
 	var err error
 	if clusterName, err = inst.DeduceClusterName(params["clusterName"]); err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get analysis: %+v", err)})
@@ -3271,7 +3270,7 @@ func (this *HttpAPI) AutomatedRecoveryFilters(params martini.Params, r render.Re
 	automatedRecoveryMap["RecoverIntermediateMasterClusterFilters"] = config.Config.RecoverIntermediateMasterClusterFilters
 	automatedRecoveryMap["RecoveryIgnoreHostnameFilters"] = config.Config.RecoveryIgnoreHostnameFilters
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Automated recovery configuration details"), Details: automatedRecoveryMap})
+	Respond(r, &APIResponse{Code: OK, Message: "Automated recovery configuration details", Details: automatedRecoveryMap})
 }
 
 // AuditFailureDetection provides list of topology_failure_detection entries
@@ -3414,7 +3413,7 @@ func (this *HttpAPI) AcknowledgeClusterRecoveries(params martini.Params, r rende
 
 	comment := strings.TrimSpace(req.URL.Query().Get("comment"))
 	if comment == "" {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No acknowledge comment given")})
+		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
 	userId := getUserId(req, user)
@@ -3433,7 +3432,7 @@ func (this *HttpAPI) AcknowledgeClusterRecoveries(params martini.Params, r rende
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Acknowledged cluster recoveries"), Details: clusterName})
+	Respond(r, &APIResponse{Code: OK, Message: "Acknowledged cluster recoveries", Details: clusterName})
 }
 
 // ClusterInfo provides details of a given cluster
@@ -3451,7 +3450,7 @@ func (this *HttpAPI) AcknowledgeInstanceRecoveries(params martini.Params, r rend
 
 	comment := strings.TrimSpace(req.URL.Query().Get("comment"))
 	if comment == "" {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No acknowledge comment given")})
+		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
 	userId := getUserId(req, user)
@@ -3470,7 +3469,7 @@ func (this *HttpAPI) AcknowledgeInstanceRecoveries(params martini.Params, r rend
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Acknowledged instance recoveries"), Details: instanceKey})
+	Respond(r, &APIResponse{Code: OK, Message: "Acknowledged instance recoveries", Details: instanceKey})
 }
 
 // ClusterInfo provides details of a given cluster
@@ -3497,7 +3496,7 @@ func (this *HttpAPI) AcknowledgeRecovery(params martini.Params, r render.Render,
 	}
 	comment := strings.TrimSpace(req.URL.Query().Get("comment"))
 	if comment == "" {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No acknowledge comment given")})
+		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
 	userId := getUserId(req, user)
@@ -3522,7 +3521,7 @@ func (this *HttpAPI) AcknowledgeRecovery(params martini.Params, r render.Render,
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Acknowledged recovery"), Details: idParam})
+	Respond(r, &APIResponse{Code: OK, Message: "Acknowledged recovery", Details: idParam})
 }
 
 // ClusterInfo provides details of a given cluster
@@ -3534,7 +3533,7 @@ func (this *HttpAPI) AcknowledgeAllRecoveries(params martini.Params, r render.Re
 
 	comment := strings.TrimSpace(req.URL.Query().Get("comment"))
 	if comment == "" {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No acknowledge comment given")})
+		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
 	userId := getUserId(req, user)
@@ -3554,7 +3553,7 @@ func (this *HttpAPI) AcknowledgeAllRecoveries(params martini.Params, r render.Re
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Acknowledged all recoveries"), Details: comment})
+	Respond(r, &APIResponse{Code: OK, Message: "Acknowledged all recoveries", Details: comment})
 }
 
 // BlockedRecoveries reads list of currently blocked recoveries, optionally filtered by cluster name

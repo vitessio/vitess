@@ -48,5 +48,5 @@ func (downtime *Downtime) Ended() bool {
 }
 
 func (downtime *Downtime) EndsIn() time.Duration {
-	return downtime.EndsAt.Sub(time.Now())
+	return time.Until(downtime.EndsAt)
 }

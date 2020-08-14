@@ -80,7 +80,7 @@ func (tag *Tag) String() string {
 
 func (tag *Tag) Display() string {
 	if tag.TagValue == "" {
-		return fmt.Sprintf("%s", tag.TagName)
+		return tag.TagName
 	} else {
 		return fmt.Sprintf("%s=%s", tag.TagName, tag.TagValue)
 	}

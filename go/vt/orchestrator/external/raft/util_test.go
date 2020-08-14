@@ -13,7 +13,7 @@ func TestRandomTimeout(t *testing.T) {
 
 	select {
 	case <-timeout:
-		diff := time.Now().Sub(start)
+		diff := time.Since(start)
 		if diff < time.Millisecond {
 			t.Fatalf("fired early")
 		}
@@ -72,7 +72,7 @@ func TestGenerateUUID(t *testing.T) {
 			t.Fatalf("Should get a new ID!")
 		}
 
-		matched, err := regexp.MatchString(
+		matched, err := regexp.MatchString( //nolint SA6000: calling regexp.MatchString in a loop has poor performance
 			`[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}`, id)
 		if !matched || err != nil {
 			t.Fatalf("expected match %s %v %s", id, matched, err)

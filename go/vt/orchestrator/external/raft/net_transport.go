@@ -249,7 +249,7 @@ func (n *NetworkTransport) returnConn(conn *netConn) {
 	defer n.connPoolLock.Unlock()
 
 	key := conn.target
-	conns, _ := n.connPool[key]
+	conns := n.connPool[key]
 
 	if !n.IsShutdown() && len(conns) < n.maxPool {
 		n.connPool[key] = append(conns, conn)
