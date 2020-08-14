@@ -110,15 +110,15 @@ func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats
 	}
 
 	if realtimeStats != nil {
-		stats, err := realtimeStats.tabletStats(tablet.Alias)
-		if err != nil {
-			return nil, err
-		}
-		tablet.Stats = &TabletStats{
-			LastError:     stats.LastError.Error(),
-			RealtimeStats: stats.Stats,
-			Serving:       stats.Serving,
-			Up:            stats.Up,
+		if stats, err := realtimeStats.tabletStats(tablet.Alias); err == nil {
+			tablet.Stats = &TabletStats{
+				RealtimeStats: stats.Stats,
+				Serving:       stats.Serving,
+				Up:            stats.Up,
+			}
+			if stats.LastError != nil {
+				tablet.Stats.LastError = stats.LastError.Error()
+			}
 		}
 	}
 
@@ -274,7 +274,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		cells := r.FormValue("cells")
 		filterCells := []string{} // empty == all cells
 		if cell != "" {
-			filterCells[0] = cell // single cell
+			filterCells = []string{cell} // single cell
 		} else if cells != "" {
 			filterCells = strings.Split(cells, ",") // list of cells
 		}

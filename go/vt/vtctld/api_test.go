@@ -126,6 +126,49 @@ func TestAPI(t *testing.T) {
 	realtimeStats.StatsUpdate(ts5)
 	realtimeStats.StatsUpdate(ts6)
 
+	// all-tablets response for keyspace/ks1/tablets/ endpoints
+	keyspaceKs1AllTablets := `[
+		{
+			"alias": {
+				"cell": "cell1",
+				"uid": 100
+			},
+			"port_map": {
+				"vt": 100
+			},
+			"keyspace": "ks1",
+			"shard": "-80",
+			"key_range": {
+				"end": "gA=="
+			},
+			"type": 2,
+			"stats": {
+				"realtime_stats": {
+					"seconds_behind_master": 100
+				},
+				"serving": true,
+				"up": true
+			},
+			"url": "http://:100"
+		},
+		{
+			"alias": {
+				"cell": "cell2",
+				"uid": 200
+			},
+			"port_map": {
+				"vt": 200
+			},
+			"keyspace": "ks1",
+			"shard": "-80",
+			"key_range": {
+				"end": "gA=="
+			},
+			"type": 2,
+			"url": "http://:200"
+		}
+	]`
+
 	// Test cases.
 	table := []struct {
 		method, path, body, want string
@@ -140,60 +183,56 @@ func TestAPI(t *testing.T) {
 		{"GET", "cells", "", `["cell1","cell2"]`},
 
 		// Keyspace
-		{"GET", "keyspace/ks1/tablets/", "", `[
+		{"GET", "keyspace/doesnt-exist/tablets/", "", ``},
+		{"GET", "keyspace/ks1/tablets/", "", keyspaceKs1AllTablets},
+		{"GET", "keyspace/ks1/tablets/-80", "", keyspaceKs1AllTablets},
+		{"GET", "keyspace/ks1/tablets/80-", "", `[]`},
+		{"GET", "keyspace/ks1/tablets/?cells=cell1,cell2", "", keyspaceKs1AllTablets},
+		{"GET", "keyspace/ks1/tablets/?cells=cell1", "", `[
 			{
 				"alias": {
-			  		"cell": "cell1",
-			  		"uid": 170947604
+					"cell": "cell1",
+					"uid": 100
 				},
-				"hostname": "db-mysql-792a7de.cell1-iad.test.com",
 				"port_map": {
-			  		"grpc": 15991,
-			  		"mysql": 3306,
-			  		"vt": 15101
+					"vt": 100
 				},
-				"keyspace": "test_ks",
+				"keyspace": "ks1",
 				"shard": "-80",
 				"key_range": {
-			  		"start": "wA=="
+					"end": "gA=="
 				},
 				"type": 2,
-				"db_name_override": "test",
-				"mysql_hostname": "db-mysql-792a7de.cell1-iad.test.com",
-				"mysql_port": 3306
-			},
-			{
-				"alias": {
-			  		"cell": "cell2",
-			  		"uid": 170947605
+				"stats": {
+					"realtime_stats": {
+						"seconds_behind_master": 100
+					},
+					"serving": true,
+					"up": true
 				},
-				"hostname": "mysql2.test.com",
-				"port_map": {
-			  		"grpc": 15991,
-			  		"mysql": 3306,
-			  		"vt": 15101
-				},
-				"keyspace": "test_ks",
-				"shard": "-80",
-				"key_range": {
-			  		"start": "wA=="
-				},
-				"type": 2,
-				"db_name_override": "test",
-				"mysql_hostname": "mysql2.test.com",
-				"mysql_port": 3306
+				"url": "http://:100"
 			}
 		]`},
-		//{"GET", "keyspace/ks1/tablets/?cell=cell1", "", `[
-		//]`},
-		//{"GET", "keyspace/ks1/tablets/?cells=cell1,cell2", "", `[
-		//]`},
-		//{"GET", "keyspace/ks1/tablets/-80", "", `[
-		//]`},
-		//{"GET", "keyspace/ks1/tablets/-80?cell=cell1", "", `[
-		//]`},
-		//{"GET", "keyspace/ks1/tablets/-80?cells=cell1,cell2", "", `[
-		//]`},
+		{"GET", "keyspace/ks1/tablets/?cells=cell3", "", `[]`},
+		{"GET", "keyspace/ks1/tablets/?cell=cell2", "", `[
+			{
+				"alias": {
+					"cell": "cell2",
+					"uid": 200
+				},
+				"port_map": {
+					"vt": 200
+				},
+				"keyspace": "ks1",
+				"shard": "-80",
+				"key_range": {
+					"end": "gA=="
+				},
+				"type": 2,
+				"url": "http://:200"
+			}
+		]`},
+		{"GET", "keyspace/ks1/tablets/?cell=cell3", "", `[]`},
 
 		// Keyspaces
 		{"GET", "keyspaces", "", `["ks1", "ks3"]`},
