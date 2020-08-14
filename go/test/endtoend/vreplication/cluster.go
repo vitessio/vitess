@@ -124,8 +124,8 @@ func InitCluster(t *testing.T, cellNames []string) *VitessCluster {
 		globalConfig.topoPort, globalConfig.hostname, globalConfig.tmpDir)
 	vc.Vtctld = vtctld
 	assert.NotNil(t, vc.Vtctld)
-	// use first cell as `-cell` and all cells as `-cells_to_watch`
-	vc.Vtctld.Setup(cellNames[0], "-cells_to_watch", strings.Join(cellNames, ","))
+	// use first cell as `-cell`
+	vc.Vtctld.Setup(cellNames[0])
 
 	vc.Vtctl = cluster.VtctlProcessInstance(globalConfig.topoPort, globalConfig.hostname)
 	assert.NotNil(t, vc.Vtctl)

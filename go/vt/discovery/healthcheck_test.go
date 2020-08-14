@@ -48,6 +48,9 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+var connMap map[string]*fakeConn
+var connMapMu sync.Mutex
+
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
 
@@ -55,6 +58,7 @@ func init() {
 	if err := flag.Set("tablet_protocol", "fake_gateway"); err != nil {
 		log.Errorf("failed to set flag \"tablet_protocol\" to \"fake_gateway\":%v", err)
 	}
+	connMap = make(map[string]*fakeConn)
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -85,9 +89,10 @@ func TestHealthCheck(t *testing.T) {
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
+		TabletAlias: tablet.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:     true,
+
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 	}
@@ -323,10 +328,11 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want = &TabletHealth{
-		Tablet:              tablet,
-		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:             true,
-		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		MasterTermStartTime: 0,
 	}
 	input <- shr
@@ -549,11 +555,13 @@ func TestGetHealthyTablets(t *testing.T) {
 
 	// second tablet turns into a master
 	shr2 = &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet2.Alias,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:                             true,
+		TabletAlias: tablet2.Alias,
+		Target:      &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:     true,
+
 		TabletExternallyReparentedTimestamp: 10,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 0, CpuUsage: 0.2},
 	}
 	input2 <- shr2
 	// wait for result
@@ -766,6 +774,9 @@ func TestDebugURLFormatting(t *testing.T) {
 }
 
 func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
+	connMapMu.Lock()
+	defer connMapMu.Unlock()
+
 	key := TabletToMapKey(tablet)
 	if qs, ok := connMap[key]; ok {
 		return qs, nil
@@ -794,6 +805,8 @@ type fakeConn struct {
 }
 
 func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthResponse) *fakeConn {
+	connMapMu.Lock()
+	defer connMapMu.Unlock()
 	key := TabletToMapKey(tablet)
 	conn := &fakeConn{
 		QueryService: fakes.ErrorQueryService,
@@ -866,6 +879,8 @@ func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.Strea
 		tablet:       tablet,
 		fixedResult:  fixedResult,
 	}
+	connMapMu.Lock()
+	defer connMapMu.Unlock()
 	connMap[key] = conn
 	return conn
 }
