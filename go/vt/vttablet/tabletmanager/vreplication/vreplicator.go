@@ -58,7 +58,7 @@ type vreplicator struct {
 	stats *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
-	tableKeys map[string][]string
+	tableKeys map[string][]*TableKey
 
 	originalFKCheckSetting int64
 }
@@ -185,18 +185,67 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 }
 
-func (vr *vreplicator) buildTableKeys(ctx context.Context) (map[string][]string, error) {
+// TableKey is used to store charset and collation for primary keys where applicable
+type TableKey struct {
+	Name      string
+	CharSet   string
+	Collation string
+}
+
+// should try using the mysql type helper flagisText(), it may not work since we find type VARBINARY for _bin collations
+func shouldCollate(dataType string) bool {
+	dataType = strings.ToLower(dataType)
+	if dataType == "varchar" || dataType == "text" || dataType == "char" {
+		return true
+	}
+	return false
+}
+
+func (vr *vreplicator) buildTableKeys(ctx context.Context) (map[string][]*TableKey, error) {
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
 		return nil, err
 	}
-	tableKeys := make(map[string][]string)
+	queryTemplate := "select character_set_name, collation_name,column_name,data_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	tableKeys := make(map[string][]*TableKey)
 	for _, td := range schema.TableDefinitions {
-		if len(td.PrimaryKeyColumns) != 0 {
-			tableKeys[td.Name] = td.PrimaryKeyColumns
-		} else {
-			tableKeys[td.Name] = td.Columns
+		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
+		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
+		if err != nil {
+			return nil, err
 		}
+		if len(qr.Rows) > 0 && len(qr.Fields) != 4 {
+			return nil, fmt.Errorf("incorrect result returned for collation query")
+		}
+
+		var pks []string
+		if len(td.PrimaryKeyColumns) != 0 {
+			pks = td.PrimaryKeyColumns
+		} else {
+			pks = td.Columns
+		}
+		var keys []*TableKey
+		for _, pk := range pks {
+			charSet := ""
+			collation := ""
+			for _, row := range qr.Rows {
+				columnName := row[2].ToString()
+				dataType := row[3].ToString()
+				if strings.EqualFold(columnName, pk) {
+					if shouldCollate(dataType) {
+						charSet = row[0].ToString()
+						collation = row[1].ToString()
+					}
+					break
+				}
+			}
+			keys = append(keys, &TableKey{
+				Name:      pk,
+				CharSet:   charSet,
+				Collation: collation,
+			})
+		}
+		tableKeys[td.Name] = keys
 	}
 	return tableKeys, nil
 }

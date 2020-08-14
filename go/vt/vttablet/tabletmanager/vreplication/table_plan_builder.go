@@ -48,6 +48,7 @@ type tablePlanBuilder struct {
 	onInsert   insertType
 	pkCols     []*colExpr
 	lastpk     *sqltypes.Result
+	tableKey   []*TableKey
 }
 
 // colExpr describes the processing to be performed to
@@ -114,7 +115,7 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]*TableKey, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
@@ -173,7 +174,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
+func buildTablePlan(tableName, filter string, tableKeys map[string][]*TableKey, lastpk *sqltypes.Result) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -222,6 +223,7 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 		},
 		selColumns: make(map[string]bool),
 		lastpk:     lastpk,
+		tableKey:   tableKeys[tableName],
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -247,12 +249,12 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 	}
 
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
-	tablePlan := tpb.generate(tableKeys)
+	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
 	return tablePlan, nil
 }
 
-func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan {
+func (tpb *tablePlanBuilder) generate() *TablePlan {
 	refmap := make(map[string]bool)
 	for _, cexpr := range tpb.pkCols {
 		for k := range cexpr.references {
@@ -450,13 +452,13 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 }
 
 // analyzePK builds tpb.pkCols.
-func (tpb *tablePlanBuilder) analyzePK(tableKeys map[string][]string) error {
+func (tpb *tablePlanBuilder) analyzePK(tableKeys map[string][]*TableKey) error {
 	pkcols, ok := tableKeys[tpb.name.String()]
 	if !ok {
 		return fmt.Errorf("table %s not found in schema", tpb.name)
 	}
 	for _, pkcol := range pkcols {
-		cexpr := tpb.findCol(sqlparser.NewColIdent(pkcol))
+		cexpr := tpb.findCol(sqlparser.NewColIdent(pkcol.Name))
 		if cexpr == nil {
 			return fmt.Errorf("primary key column %s not found in select list", pkcol)
 		}
@@ -669,17 +671,40 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 	}
 }
 
+func (tpb *tablePlanBuilder) getCharsetAndCollation(pkname string) (charSet string, collation string) {
+	for _, tableKey := range tpb.tableKey {
+		if strings.EqualFold(tableKey.Name, pkname) {
+			if tableKey.CharSet != "" {
+				charSet = fmt.Sprintf(" _%s ", tableKey.CharSet)
+			}
+			if tableKey.Collation != "" {
+				collation = fmt.Sprintf(" COLLATE %s ", tableKey.Collation)
+			}
+		}
+	}
+	return charSet, collation
+}
+
 func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
+	type charSetCollation struct {
+		charSet   string
+		collation string
+	}
+	var charSetCollations []*charSetCollation
 	separator := "("
 	for _, pkname := range tpb.lastpk.Fields {
-		buf.Myprintf("%s%v", separator, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)})
+		charSet, collation := tpb.getCharsetAndCollation(pkname.Name)
+		charSetCollations = append(charSetCollations, &charSetCollation{charSet: charSet, collation: collation})
+		buf.Myprintf("%s%s%v%s", separator, charSet, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)}, collation)
 		separator = ","
 	}
 	separator = ") <= ("
-	for _, val := range tpb.lastpk.Rows[0] {
+	for i, val := range tpb.lastpk.Rows[0] {
 		buf.WriteString(separator)
+		buf.WriteString(charSetCollations[i].charSet)
 		separator = ","
 		val.EncodeSQL(buf)
+		buf.WriteString(charSetCollations[i].collation)
 	}
 	buf.WriteString(")")
 }
