@@ -80,7 +80,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 	}
 	evalExpr, err := sqlparser.Convert(astExpr)
 	if err != nil {
-		if err != sqlparser.ExprNotSupported {
+		if err != sqlparser.ErrExprNotSupported {
 			return nil, err
 		}
 		// We have an expression that we can't handle at the vtgate level

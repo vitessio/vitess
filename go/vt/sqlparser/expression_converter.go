@@ -34,7 +34,7 @@ func Convert(e Expr) (evalengine.Expr, error) {
 		case FloatVal:
 			return evalengine.NewLiteralFloat(node.Val)
 		case ValArg:
-			return &evalengine.BindVariable{Key: string(node.Val[1:])}, nil
+			return evalengine.NewBindVar(string(node.Val[1:])), nil
 		case StrVal:
 			return evalengine.NewLiteralString(node.Val), nil
 		}

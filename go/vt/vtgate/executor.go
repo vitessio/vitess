@@ -385,10 +385,6 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		_, out := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
 		name := string(out)
 		switch expr.Scope {
-		case sqlparser.GlobalStr:
-			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
-		case sqlparser.SessionStr:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "usnsupported construct: %s", sql)
 		case sqlparser.VitessMetadataStr:
 			value, err = getValueFor(expr)
 			if err != nil {
@@ -399,8 +395,8 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset: %v", value)
 			}
 			_, err = e.handleSetVitessMetadata(ctx, name, val)
-		case "": // we should only get here with UDVs
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should have been handled by planning")
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should have been handled by planning: %s", sql)
 
 		}
 		if err != nil {
