@@ -559,7 +559,6 @@ func TestShardMigrateMainflow(t *testing.T) {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
-
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test SwitchWrites cancelation on failure.
 
@@ -622,7 +621,6 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 
 	verifyQueries(t, tme.allDBClients)
-
 	checkServedTypes(t, tme.ts, "ks:-40", 1)
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
@@ -1751,18 +1749,18 @@ func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, w
 	}
 }
 
-func stoppedResult(id int) *sqltypes.Result {
+func getResult(id int, state string, keyspace string, shard string) *sqltypes.Result {
 	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|state",
-		"int64|varchar"),
-		fmt.Sprintf("%d|Stopped", id),
+		"id|state|cell|tablet_types|source",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("%d|%s|cell1|MASTER|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
 	)
 }
 
+func stoppedResult(id int) *sqltypes.Result {
+	return getResult(id, "Stopped", tpChoice.keyspace, tpChoice.shard)
+}
+
 func runningResult(id int) *sqltypes.Result {
-	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|state",
-		"int64|varchar"),
-		fmt.Sprintf("%d|Running", id),
-	)
+	return getResult(id, "Running", tpChoice.keyspace, tpChoice.shard)
 }
