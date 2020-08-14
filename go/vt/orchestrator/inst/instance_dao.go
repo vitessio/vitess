@@ -34,9 +34,12 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
@@ -308,12 +311,13 @@ func expectReplicationThreadsState(instanceKey *InstanceKey, expectedState Repli
 func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", fmt.Errorf("%+v", r))
+			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", tb.Errorf("%+v", r))
 		}
 	}()
 
 	var waitGroup sync.WaitGroup
 	var serverUuidWaitGroup sync.WaitGroup
+	var tablet *topodatapb.Tablet
 	readingStartTime := time.Now()
 	instance := NewInstance()
 	instanceFound := false
@@ -342,8 +346,16 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 	latency.Start("instance")
 	db, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
-	latency.Stop("instance")
 	if err != nil {
+		goto Cleanup
+	}
+
+	tablet, err = ReadTablet(*instanceKey)
+	if err != nil {
+		goto Cleanup
+	}
+	if tablet == nil {
+		log.Errorf("tablet alias is nil")
 		goto Cleanup
 	}
 
@@ -363,7 +375,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 	}
 
-	latency.Start("instance")
 	if isMaxScale {
 		if strings.Contains(instance.Version, "1.1.0") {
 			isMaxScale110 = true
@@ -520,6 +531,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		goto Cleanup
 	}
 	go ResolveHostnameIPs(instance.Key.Hostname)
+
+	// TODO(sougou) delete DataCenterPattern
 	if config.Config.DataCenterPattern != "" {
 		if pattern, err := regexp.Compile(config.Config.DataCenterPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
@@ -737,6 +750,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}()
 	}
 
+	// TODO(sougou): delete DetectDataCenterQuery
 	if config.Config.DetectDataCenterQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -745,7 +759,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			logReadTopologyInstanceError(instanceKey, "DetectDataCenterQuery", err)
 		}()
 	}
+	instance.DataCenter = tablet.Alias.Cell
 
+	// TODO(sougou): use cell alias to identify regions.
 	if config.Config.DetectRegionQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -764,6 +780,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}()
 	}
 
+	// TODO(sougou): delete DetectInstanceAliasQuery
 	if config.Config.DetectInstanceAliasQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -772,7 +789,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			logReadTopologyInstanceError(instanceKey, "DetectInstanceAliasQuery", err)
 		}()
 	}
+	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 
+	// TODO(sougou): come up with a strategy for semi-sync
 	if config.Config.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -845,9 +864,18 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			}
 		}()
 	}
+	if tablet.Type == topodatapb.TabletType_MASTER || tablet.Type == topodatapb.TabletType_REPLICA {
+		instance.PromotionRule = NeutralPromoteRule
+	} else {
+		instance.PromotionRule = MustNotPromoteRule
+	}
 
+	// TODO(sougou): delete cluster_alias_override metadata
 	ReadClusterAliasOverride(instance)
 	if !isMaxScale {
+		instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
+
+		// TODO(sougou): delete DetectClusterAliasQuery
 		if instance.SuggestedClusterAlias == "" {
 			// Only need to do on masters
 			if config.Config.DetectClusterAliasQuery != "" {
