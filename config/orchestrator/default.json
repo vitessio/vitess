@@ -1,0 +1,10 @@
+{
+  "Debug": true,
+  "MySQLTopologyUser": "orc_client_user",
+  "MySQLTopologyPassword": "orc_client_user_password",
+  "BackendDB": "sqlite",
+  "SQLite3DataFile": "/home/sougou/dev/src/vitess.io/vitess/vtdataroot/orchestrator.sqlite3",
+  "RecoverMasterClusterFilters": ["*"],
+  "RecoveryPeriodBlockSeconds": 1,
+  "DelayMasterPromotionIfSQLThreadNotUpToDate": true
+}
