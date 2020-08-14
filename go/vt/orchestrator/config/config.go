@@ -62,26 +62,6 @@ const (
 	SelectTrueQuery                              = "select 1"
 )
 
-var deprecatedConfigurationVariables = []string{
-	"DatabaselessMode__experimental",
-	"BufferBinlogEvents",
-	"BinlogFileHistoryDays",
-	"MaintenanceOwner",
-	"ReadLongRunningQueries",
-	"DiscoveryPollSeconds",
-	"ActiveNodeExpireSeconds",
-	"AuditPageSize",
-	"SlaveStartPostWaitMilliseconds",
-	"MySQLTopologyMaxPoolConnections",
-	"MaintenancePurgeDays",
-	"MaintenanceExpireMinutes",
-	"HttpTimeoutSeconds",
-	"AgentAutoDiscover",
-	"PseudoGTIDCoordinatesHistoryHeuristicMinutes",
-	"PseudoGTIDPreferIndependentMultiMatch",
-	"MaxOutdatedKeysToShow",
-}
-
 // Configuration makes for orchestrator configuration input, which can be provided by user via JSON formatted file.
 // Some of the parameteres have reasonable default values, and some (like database credentials) are
 // strictly expected from user.
@@ -546,9 +526,6 @@ func (this *Configuration) postReadAdjustments() error {
 
 	if this.IsSQLite() && this.SQLite3DataFile == "" {
 		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite3")
-	}
-	if this.IsSQLite() {
-		//		this.HostnameResolveMethod = "none"
 	}
 	if this.RaftEnabled && this.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be defined since raft is enabled (RaftEnabled)")

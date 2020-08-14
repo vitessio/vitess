@@ -359,7 +359,7 @@ func GetAgent(hostname string) (Agent, error) {
 			mySQLRunningUri := fmt.Sprintf("%s/mysql-status?token=%s", uri, token)
 			body, err := readResponse(httpGet(mySQLRunningUri))
 			if err == nil {
-				err = json.Unmarshal(body, &agent.MySQLRunning)
+				_ = json.Unmarshal(body, &agent.MySQLRunning)
 			}
 			// Actually an error is OK here since "status" returns with non-zero exit code when MySQL not running
 		}
@@ -702,8 +702,8 @@ func executeSeed(seedId int64, targetHostname string, sourceHostname string) err
 	if err != nil {
 		return updateSeedStateEntry(seedStateId, err)
 	}
-	sourceAgent, err = GetAgent(sourceHostname)
-	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("MySQL data volume on source host %s is %d bytes", sourceHostname, sourceAgent.MountPoint.MySQLDiskUsage), "")
+	sourceAgent, _ = GetAgent(sourceHostname)
+	_, _ = submitSeedStateEntry(seedId, fmt.Sprintf("MySQL data volume on source host %s is %d bytes", sourceHostname, sourceAgent.MountPoint.MySQLDiskUsage), "")
 
 	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("Erasing MySQL data on %s", targetHostname), "")
 	_, err = deleteMySQLDatadir(targetHostname)
@@ -723,10 +723,10 @@ func executeSeed(seedId int64, targetHostname string, sourceHostname string) err
 	}
 
 	// ...
-	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("%s will now receive data in background", targetHostname), "")
+	_, _ = submitSeedStateEntry(seedId, fmt.Sprintf("%s will now receive data in background", targetHostname), "")
 	ReceiveMySQLSeedData(targetHostname, seedId)
 
-	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("Waiting %d seconds for %s to start listening for incoming data", config.Config.SeedWaitSecondsBeforeSend, targetHostname), "")
+	_, _ = submitSeedStateEntry(seedId, fmt.Sprintf("Waiting %d seconds for %s to start listening for incoming data", config.Config.SeedWaitSecondsBeforeSend, targetHostname), "")
 	time.Sleep(time.Duration(config.Config.SeedWaitSecondsBeforeSend) * time.Second)
 
 	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("%s will now send data to %s in background", sourceHostname, targetHostname), "")
@@ -795,10 +795,10 @@ func executeSeed(seedId int64, targetHostname string, sourceHostname string) err
 		return updateSeedStateEntry(seedStateId, err)
 	}
 
-	seedStateId, _ = submitSeedStateEntry(seedId, fmt.Sprintf("Submitting MySQL instance for discovery: %s", targetHostname), "")
+	_, _ = submitSeedStateEntry(seedId, fmt.Sprintf("Submitting MySQL instance for discovery: %s", targetHostname), "")
 	SeededAgents <- &targetAgent
 
-	seedStateId, _ = submitSeedStateEntry(seedId, "Done", "")
+	_, _ = submitSeedStateEntry(seedId, "Done", "")
 
 	return nil
 }

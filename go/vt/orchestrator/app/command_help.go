@@ -902,6 +902,5 @@ func init() {
 }
 
 func HelpCommand(command string) {
-	fmt.Println(
-		fmt.Sprintf("%s:\n%s", command, CommandHelp[command]))
+	fmt.Printf("%s:\n%s\n", command, CommandHelp[command])
 }

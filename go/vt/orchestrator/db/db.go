@@ -125,10 +125,6 @@ func IsSQLite() bool {
 	return config.Config.IsSQLite()
 }
 
-func isInMemorySQLite() bool {
-	return config.Config.IsSQLite() && strings.Contains(config.Config.SQLite3DataFile, ":memory:")
-}
-
 // OpenTopology returns the DB instance for the orchestrator backed database
 func OpenOrchestrator() (db *sql.DB, err error) {
 	var fromCache bool
@@ -248,7 +244,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 	// My bad.
 	originalSqlMode := ""
 	if config.Config.IsMySQL() {
-		err = tx.QueryRow(`select @@session.sql_mode`).Scan(&originalSqlMode)
+		_ = tx.QueryRow(`select @@session.sql_mode`).Scan(&originalSqlMode)
 		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', '')`); err != nil {
 			log.Fatale(err)
 		}
@@ -256,11 +252,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 			log.Fatale(err)
 		}
 	}
-	for i, query := range queries {
-		if i == 0 {
-			//log.Debugf("sql_mode is: %+v", originalSqlMode)
-		}
-
+	for _, query := range queries {
 		query, err := translateStatement(query)
 		if err != nil {
 			return log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)

@@ -280,8 +280,8 @@ func (c *Collection) Append(m Metric) error {
 	if c == nil {
 		return errors.New("Collection.Append: c == nil")
 	}
-	c.Lock()
-	defer c.Unlock()
+	c.Lock()         //nolint SA5011: possible nil pointer dereference
+	defer c.Unlock() //nolint SA5011: possible nil pointer dereference
 	// we don't want to add nil metrics
 	if c == nil {
 		return errors.New("Collection.Append: c == nil")
