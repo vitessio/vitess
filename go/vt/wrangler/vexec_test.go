@@ -192,8 +192,19 @@ func TestWorkflowListStreams(t *testing.T) {
 	require.Nil(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
-	"SourceKeyspace": "source",
-	"TargetKeyspace": "target",
+	"SourceLocation": {
+		"Keyspace": "source",
+		"Shards": [
+			"0"
+		]
+	},
+	"TargetLocation": {
+		"Keyspace": "target",
+		"Shards": [
+			"-80",
+			"80-"
+		]
+	},
 	"ShardStatuses": {
 		"-80/zone1-0000000200": {
 			"MasterReplicationStatuses": [
