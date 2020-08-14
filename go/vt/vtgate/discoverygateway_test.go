@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/vt/log"
@@ -31,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -391,32 +389,4 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg *DiscoveryGateway, tar
 	err = f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_INVALID_ARGUMENT)
 	verifyContainsError(t, err, fmt.Sprintf(format, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
-}
-
-func verifyContainsError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
-	}
-	if code := vterrors.Code(err); code != wantCode {
-		t.Fatalf("wanted error code: %s, got: %v", wantCode, code)
-	}
-}
-
-func verifyShardErrorEither(t *testing.T, err error, a, b string) {
-	if err == nil || !strings.Contains(err.Error(), a) || !strings.Contains(err.Error(), b) {
-		t.Fatalf("wanted error to contain: %v or %v\n, got error: %v", a, b, err)
-	}
-}
-
-func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vtrpcpb.Code) {
-	if err != nil {
-		for _, wantErr := range wantErrors {
-			if err == nil || !strings.Contains(err.Error(), wantErr) {
-				t.Fatalf("wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
-			}
-		}
-	}
-	if code := vterrors.Code(err); code != wantCode {
-		t.Fatalf("wanted error code: %s, got: %v", wantCode, code)
-	}
 }
