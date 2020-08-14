@@ -122,7 +122,9 @@ func (sc *StatefulConnection) Unlock() {
 	if sc.dbConn.IsClosed() {
 		sc.Releasef("unlocked closed connection")
 	} else {
-		sc.pool.markAsNotInUse(sc.ConnID)
+		// when in a transaction, we count from the time created, so each use of the connection does not update the time
+		updateTime := !sc.IsInTransaction()
+		sc.pool.markAsNotInUse(sc.ConnID, updateTime)
 	}
 }
 
