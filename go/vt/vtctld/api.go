@@ -64,7 +64,7 @@ const (
 // TabletStats represents realtime stats from a discovery.LegacyTabletStats struct.
 type TabletStats struct {
 	LastError     string                 `json:"last_error,omitempty"`
-	RealtimeStats *querypb.RealtimeStats `json:"realtime_stats,omitempty"`
+	RealtimeStats *querypb.RealtimeStats `json:"realtime,omitempty"`
 	Serving       bool                   `json:"serving,omitempty"`
 	Up            bool                   `json:"up,omitempty"`
 }

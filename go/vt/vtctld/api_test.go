@@ -143,7 +143,7 @@ func TestAPI(t *testing.T) {
 			},
 			"type": 2,
 			"stats": {
-				"realtime_stats": {
+				"realtime": {
 					"seconds_behind_master": 100
 				},
 				"serving": true,
@@ -204,7 +204,7 @@ func TestAPI(t *testing.T) {
 				},
 				"type": 2,
 				"stats": {
-					"realtime_stats": {
+					"realtime": {
 						"seconds_behind_master": 100
 					},
 					"serving": true,
