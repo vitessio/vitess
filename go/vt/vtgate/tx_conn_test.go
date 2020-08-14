@@ -112,7 +112,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
@@ -154,7 +154,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			},
 			TransactionId: 1,
 			ReservedId:    1,
-			TabletAlias:   sbc0.Tablet().Alias,
+			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -178,7 +178,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			ReservedId:  2,
-			TabletAlias: sbc0.Tablet().Alias,
+			TabletAlias: sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -574,7 +574,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -661,7 +661,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			},
 			TransactionId: 1,
 			ReservedId:    1,
-			TabletAlias:   sbc0.Tablet().Alias,
+			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -699,7 +699,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 				TabletType: topodatapb.TabletType_MASTER,
 			},
 			ReservedId:  2,
-			TabletAlias: sbc0.Tablet().Alias,
+			TabletAlias: sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -857,7 +857,7 @@ func TestTxConnRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollback(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TxConnReservedRollback")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -892,19 +892,19 @@ func TestTxConnReservedRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TxConnReservedRollback")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
 	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	require.Error(t,
+	assert.Error(t,
 		sc.txConn.Rollback(ctx, session))
 	wantSession := vtgatepb.Session{
 		InReservedConn: true,
 		Warnings: []*querypb.QueryWarning{{
-			Message: "rollback encountered an error and connection to all shard for this session is released: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TxConnReservedRollback.1.master, used tablet: aa-0 (1)",
+			Message: "rollback encountered an error and connection to all shard for this session is released: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n",
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
