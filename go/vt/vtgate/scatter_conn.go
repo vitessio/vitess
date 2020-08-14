@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -173,6 +175,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				err     error
 				opts    *querypb.ExecuteOptions
 				alias   *topodatapb.TabletAlias
+				qs      queryservice.QueryService
 			)
 			transactionID := info.transactionID
 			reservedID := info.reservedID
@@ -188,36 +191,30 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				}
 			}
 
+			qs, err = getQueryService(rs, info)
+			if err != nil {
+				return nil, err
+			}
+
 			switch info.actionNeeded {
 			case nothing:
-				qs, err := getQueryService(rs, info)
-				if err != nil {
-					return nil, err
-				}
 				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
 				if err != nil {
+					checkAndResetShardSession(info, err, session)
 					return nil, err
 				}
 			case begin:
-				qs, err := getQueryService(rs, info)
-				if err != nil {
-					return nil, err
-				}
 				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.reservedID, opts)
 				if err != nil {
 					return info.updateTransactionID(transactionID, alias), err
 				}
 			case reserve:
-				qs, err := getQueryService(rs, info)
-				if err != nil {
-					return nil, err
-				}
 				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
 				if err != nil {
 					return info.updateReservedID(reservedID, alias), err
 				}
 			case reserveBegin:
-				innerqr, transactionID, reservedID, alias, err = rs.Gateway.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
+				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
 				if err != nil {
 					return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
 				}
@@ -240,6 +237,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	}
 
 	return qr, allErrors.GetErrors()
+}
+
+func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) {
+	if info.reservedID != 0 && info.transactionID == 0 {
+		sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost {
+			session.ResetShard(info.alias)
+		}
+	}
 }
 
 func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {

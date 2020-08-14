@@ -45,8 +45,8 @@ func TestExecutorSet(t *testing.T) {
 		out *vtgatepb.Session
 		err string
 	}{{
-		in:  "set autocommit = 1",
-		out: &vtgatepb.Session{Autocommit: true},
+		in:  "set autocommit = 1, client_found_rows = 1",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
 	}, {
 		in:  "set @@autocommit = true",
 		out: &vtgatepb.Session{Autocommit: true},
