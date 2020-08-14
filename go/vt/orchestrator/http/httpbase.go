@@ -56,14 +56,7 @@ func isAuthorizedForAction(req *http.Request, user auth.User) bool {
 			return true
 		}
 	case "multi":
-		{
-			if string(user) == "readonly" {
-				// read only
-				return false
-			}
-			// passed authentication ==> writeable
-			return true
-		}
+		return string(user) != "readonly"
 	case "proxy":
 		{
 			authUser := getProxyAuthUser(req)

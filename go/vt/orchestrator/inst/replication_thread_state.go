@@ -20,9 +20,9 @@ type ReplicationThreadState int
 
 const (
 	ReplicationThreadStateNoThread ReplicationThreadState = -1
-	ReplicationThreadStateStopped                         = 0
-	ReplicationThreadStateRunning                         = 1
-	ReplicationThreadStateOther                           = 2
+	ReplicationThreadStateStopped  ReplicationThreadState = 0
+	ReplicationThreadStateRunning  ReplicationThreadState = 1
+	ReplicationThreadStateOther    ReplicationThreadState = 2
 )
 
 func ReplicationThreadStateFromStatus(status string) ReplicationThreadState {

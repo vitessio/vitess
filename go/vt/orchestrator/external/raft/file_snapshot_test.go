@@ -133,7 +133,7 @@ func TestFileSS_CreateSnapshot(t *testing.T) {
 	if latest.Term != 3 {
 		t.Fatalf("bad snapshot: %v", *latest)
 	}
-	if bytes.Compare(latest.Peers, peers) != 0 {
+	if !bytes.Equal(latest.Peers, peers) {
 		t.Fatalf("bad snapshot: %v", *latest)
 	}
 	if latest.Size != 13 {
@@ -156,7 +156,7 @@ func TestFileSS_CreateSnapshot(t *testing.T) {
 	}
 
 	// Ensure a match
-	if bytes.Compare(buf.Bytes(), []byte("first\nsecond\n")) != 0 {
+	if !bytes.Equal(buf.Bytes(), []byte("first\nsecond\n")) {
 		t.Fatalf("content mismatch")
 	}
 }
@@ -263,7 +263,7 @@ func TestFileSS_BadPerm(t *testing.T) {
 	if err := os.Chmod(dir2, 000); err != nil {
 		t.Fatalf("err: %s", err)
 	}
-	defer os.Chmod(dir2, 777) // Set perms back for delete
+	defer os.Chmod(dir2, 0777) // Set perms back for delete
 
 	// Should fail
 	if _, err := NewFileSnapshotStore(dir2, 3, nil); err == nil {

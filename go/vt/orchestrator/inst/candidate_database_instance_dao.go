@@ -17,8 +17,6 @@
 package inst
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 
@@ -33,7 +31,7 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 	}
 	args := sqlutils.Args(candidate.Hostname, candidate.Port, string(candidate.PromotionRule), candidate.LastSuggestedString)
 
-	query := fmt.Sprintf(`
+	query := `
 			insert into candidate_database_instance (
 					hostname,
 					port,
@@ -44,7 +42,7 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 				) on duplicate key update
 					last_suggested=values(last_suggested),
 					promotion_rule=values(promotion_rule)
-			`)
+			`
 	writeFunc := func() error {
 		_, err := db.ExecOrchestrator(query, args...)
 		AuditOperation("register-candidate", candidate.Key(), string(candidate.PromotionRule))

@@ -126,7 +126,7 @@ func initializeInstanceDao() {
 	clusterInjectedPseudoGTIDCache = cache.New(time.Minute, time.Second)
 	// spin off instance write buffer flushing
 	go func() {
-		flushTick := time.Tick(time.Duration(config.Config.InstanceFlushIntervalMilliseconds) * time.Millisecond)
+		flushTick := time.Tick(time.Duration(config.Config.InstanceFlushIntervalMilliseconds) * time.Millisecond) //nolint SA1015: using time.Tick leaks the underlying ticker
 		for {
 			// it is time to flush
 			select {
@@ -1353,7 +1353,7 @@ func ReadInstance(instanceKey *InstanceKey) (*Instance, bool, error) {
 
 // ReadClusterInstances reads all instances of a given cluster
 func ReadClusterInstances(clusterName string) ([](*Instance), error) {
-	if strings.Index(clusterName, "'") >= 0 {
+	if strings.Contains(clusterName, "'") {
 		return [](*Instance){}, log.Errorf("Invalid cluster name: %s", clusterName)
 	}
 	condition := `cluster_name = ?`
@@ -1655,10 +1655,10 @@ func filterOSCInstances(instances [](*Instance)) [](*Instance) {
 // GetClusterOSCReplicas returns a heuristic list of replicas which are fit as controll replicas for an OSC operation.
 // These would be intermediate masters
 func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
-	intermediateMasters := [](*Instance){}
+	var intermediateMasters [](*Instance)
 	result := [](*Instance){}
 	var err error
-	if strings.Index(clusterName, "'") >= 0 {
+	if strings.Contains(clusterName, "'") {
 		return [](*Instance){}, log.Errorf("Invalid cluster name: %s", clusterName)
 	}
 	{
@@ -2538,7 +2538,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_group_primary_port",
 	}
 
-	var values []string = make([]string, len(columns), len(columns))
+	var values []string = make([]string, len(columns))
 	for i := range columns {
 		values[i] = "?"
 	}

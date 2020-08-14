@@ -19,7 +19,6 @@ package sqlutils
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -69,7 +68,7 @@ type RowData []CellData
 
 // MarshalJSON will marshal this map as JSON
 func (this *RowData) MarshalJSON() ([]byte, error) {
-	cells := make([](*CellData), len(*this), len(*this))
+	cells := make([](*CellData), len(*this))
 	for i, val := range *this {
 		d := CellData(val)
 		cells[i] = &d
@@ -279,16 +278,17 @@ func QueryRowsMap(db *sql.DB, query string, on_row func(RowMap) error, args ...i
 func queryResultData(db *sql.DB, query string, retrieveColumns bool, args ...interface{}) (resultData ResultData, columns []string, err error) {
 	defer func() {
 		if derr := recover(); derr != nil {
-			err = errors.New(fmt.Sprintf("QueryRowsMap unexpected error: %+v", derr))
+			err = fmt.Errorf("QueryRowsMap unexpected error: %+v", derr)
 		}
 	}()
 
 	var rows *sql.Rows
 	rows, err = db.Query(query, args...)
-	defer rows.Close()
 	if err != nil && err != sql.ErrNoRows {
 		return EmptyResultData, columns, log.Errore(err)
 	}
+	defer rows.Close()
+
 	if retrieveColumns {
 		// Don't pay if you don't want to
 		columns, _ = rows.Columns()
@@ -335,7 +335,7 @@ func QueryRowsMapBuffered(db *sql.DB, query string, on_row func(RowMap) error, a
 func ExecNoPrepare(db *sql.DB, query string, args ...interface{}) (res sql.Result, err error) {
 	defer func() {
 		if derr := recover(); derr != nil {
-			err = errors.New(fmt.Sprintf("ExecNoPrepare unexpected error: %+v", derr))
+			err = fmt.Errorf("ExecNoPrepare unexpected error: %+v", derr)
 		}
 	}()
 
@@ -351,7 +351,7 @@ func ExecNoPrepare(db *sql.DB, query string, args ...interface{}) (res sql.Resul
 func execInternal(silent bool, db *sql.DB, query string, args ...interface{}) (res sql.Result, err error) {
 	defer func() {
 		if derr := recover(); derr != nil {
-			err = errors.New(fmt.Sprintf("execInternal unexpected error: %+v", derr))
+			err = fmt.Errorf("execInternal unexpected error: %+v", derr)
 		}
 	}()
 	var stmt *sql.Stmt

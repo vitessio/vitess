@@ -31,7 +31,6 @@ import (
 )
 
 const maxEmptyBinlogFiles int = 10
-const maxEventInfoDisplayLength int = 200
 
 var instanceBinlogEntryCache *cache.Cache
 
@@ -521,7 +520,7 @@ func SearchEntryInInstanceBinlogs(instance *Instance, entryText string, monotoni
 			}
 		}
 		var resultCoordinates BinlogCoordinates
-		var found bool = false
+		var found bool
 		resultCoordinates, found, err = SearchEntryInBinlog(pseudoGTIDRegexp, &instance.Key, currentBinlog.LogFile, entryText, monotonicPseudoGTIDEntries, minBinlogCoordinates)
 		if err != nil {
 			break
@@ -660,7 +659,7 @@ const anonymousGTIDNextEvent = "SET @@SESSION.GTID_NEXT= 'ANONYMOUS'"
 
 // check if the event is one we want to skip.
 func specialEventToSkip(event *BinlogEvent) bool {
-	if event != nil && strings.Index(event.Info, anonymousGTIDNextEvent) >= 0 {
+	if event != nil && strings.Contains(event.Info, anonymousGTIDNextEvent) {
 		return true
 	}
 	return false

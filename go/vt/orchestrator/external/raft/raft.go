@@ -515,7 +515,7 @@ func (r *Raft) Stats() map[string]string {
 	} else if r.getState() == Leader {
 		s["last_contact"] = "0"
 	} else {
-		s["last_contact"] = fmt.Sprintf("%v", time.Now().Sub(last))
+		s["last_contact"] = fmt.Sprintf("%v", time.Since(last))
 	}
 	return s
 }
@@ -671,7 +671,7 @@ func (r *Raft) runFollower() {
 
 			// Check if we have had a successful contact
 			lastContact := r.LastContact()
-			if time.Now().Sub(lastContact) < r.conf.HeartbeatTimeout {
+			if time.Since(lastContact) < r.conf.HeartbeatTimeout {
 				continue
 			}
 
@@ -1440,7 +1440,6 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 	// Everything went well, set success
 	resp.Success = true
 	r.setLastContact()
-	return
 }
 
 // requestVote is invoked when we get an request vote RPC call.
@@ -1495,7 +1494,7 @@ func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 	// Check if we've voted in this election before
 	if lastVoteTerm == req.Term && lastVoteCandBytes != nil {
 		r.logger.Printf("[INFO] raft: Duplicate RequestVote for same term: %d", req.Term)
-		if bytes.Compare(lastVoteCandBytes, req.Candidate) == 0 {
+		if bytes.Equal(lastVoteCandBytes, req.Candidate) {
 			r.logger.Printf("[WARN] raft: Duplicate RequestVote from candidate: %s", req.Candidate)
 			resp.Granted = true
 		}
@@ -1524,7 +1523,6 @@ func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 
 	resp.Granted = true
 	r.setLastContact()
-	return
 }
 
 // installSnapshot is invoked when we get a InstallSnapshot RPC call.
@@ -1629,7 +1627,6 @@ func (r *Raft) installSnapshot(rpc RPC, req *InstallSnapshotRequest) {
 	r.logger.Printf("[INFO] raft: Installed remote snapshot")
 	resp.Success = true
 	r.setLastContact()
-	return
 }
 
 // setLastContact is used to set the last contact time to now
