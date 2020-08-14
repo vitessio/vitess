@@ -24,7 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 

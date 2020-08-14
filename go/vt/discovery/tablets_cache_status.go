@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
