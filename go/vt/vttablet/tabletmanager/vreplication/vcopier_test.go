@@ -157,7 +157,7 @@ func TestPlayerCopyCollations(t *testing.T) {
 	}
 }
 
-// TestPlayerCopyCollations tests the copy/catchup phase for a table with a varchar primary key with character collations
+// TestPlayerCopyVarcharPK tests the copy/catchup phase for a table with a varchar primary key with character collations
 func TestPlayerCopyVarcharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -261,7 +261,7 @@ func TestPlayerCopyVarcharPK(t *testing.T) {
 	})
 }
 
-// TestPlayerCopyCollations tests the copy/catchup phase for a table with a varchar primary key with character collations
+// TestPlayerCopyVarcharPKCaseSensitiveCollation tests the copy/catchup phase for a table with a varchar primary key with character collations
 func TestPlayerCopyVarcharPKCaseSensitiveCollation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -281,9 +281,9 @@ func TestPlayerCopyVarcharPKCaseSensitiveCollation(t *testing.T) {
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
 	execStatements(t, []string{
-		"create table src(idc varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, val int, primary key(idc))",
-		"insert into src values('a', 1), ('b', 2)",
-		fmt.Sprintf("create table %s.dst(idc varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, val int, primary key(idc))", vrepldb),
+		"create table src(id int, idc varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, idc2 varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, val int, primary key(id,idc,idc2))",
+		"insert into src values(1, 'a', 'a', 1), (1, 'b', 'b', 2)",
+		fmt.Sprintf("create table %s.dst(id int, idc varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, idc2 varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin, val int, primary key(id,idc,idc2))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src",
@@ -300,7 +300,7 @@ func TestPlayerCopyVarcharPKCaseSensitiveCollation(t *testing.T) {
 		}
 		// Insert a row with PK which is < the lastPK till now because of the utf8mb4 collation
 		execStatements(t, []string{
-			"insert into src values('A', 3)",
+			"insert into src values(1, 'A', 'A', 3)",
 		})
 		// Wait for context to expire and then send the row.
 		// This will cause the copier to abort and go back to catchup mode.
@@ -348,18 +348,18 @@ func TestPlayerCopyVarcharPKCaseSensitiveCollation(t *testing.T) {
 		"/insert into _vt.vreplication",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"insert into dst(idc,val) values ('a',1)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARBINARY > rows:<lengths:1 values:\\"a\\" > ' where vrepl_id=.*`,
-		`insert into dst(idc,val) select 'A', 3 from dual where ( _utf8mb4 'A' COLLATE utf8mb4_bin ) <= ( _utf8mb4 'a' COLLATE utf8mb4_bin )`,
-		"insert into dst(idc,val) values ('b',2)",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARBINARY > rows:<lengths:1 values:\\"b\\" > ' where vrepl_id=.*`,
+		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > fields:<name:\\"idc\\" type:VARBINARY > fields:<name:\\"idc2\\" type:VARBINARY > rows:<lengths:1 lengths:1 lengths:1 values:\\"1aa\\" > ' where vrepl_id=.*`,
+		`insert into dst(id,idc,idc2,val) select 1, 'A', 'A', 3 from dual where (1, _utf8mb4 'A' COLLATE utf8mb4_bin , _utf8mb4 'A' COLLATE utf8mb4_bin ) <= (1, _utf8mb4 'a' COLLATE utf8mb4_bin , _utf8mb4 'a' COLLATE utf8mb4_bin )`,
+		"insert into dst(id,idc,idc2,val) values (1,'b','b',2)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > fields:<name:\\"idc\\" type:VARBINARY > fields:<name:\\"idc2\\" type:VARBINARY > rows:<lengths:1 lengths:1 lengths:1 values:\\"1bb\\" > ' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst", [][]string{
-		{"A", "3"},
-		{"a", "1"},
-		{"b", "2"},
+		{"1", "A", "A", "3"},
+		{"1", "a", "a", "1"},
+		{"1", "b", "b", "2"},
 	})
 }
 
