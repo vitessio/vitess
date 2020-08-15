@@ -1587,6 +1587,17 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	atomic.AddInt64(&countPendingRecoveries, 1)
 	defer atomic.AddInt64(&countPendingRecoveries, -1)
 
+	// TODO(sougou): This function gets called by GracefulMasterTakeover which may
+	// need to obtain shard lock before getting here.
+	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
+			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
+			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
+		return false, nil, err
+	}
+	defer unlock(&err)
+
 	checkAndRecoverFunction, isActionableRecovery := getCheckAndRecoverFunction(analysisEntry.Analysis, &analysisEntry.AnalyzedInstanceKey)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 	runEmergentOperations(&analysisEntry)
@@ -1959,8 +1970,8 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		return nil, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
 	}
 
-	log.Infof("GracefulMasterTakeover: Will set %+v as read_only", clusterMaster.Key)
-	if clusterMaster, err = inst.SetReadOnly(&clusterMaster.Key, true); err != nil {
+	log.Infof("GracefulMasterTakeover: invoking TabletDemoteMaster on %+v", clusterMaster.Key)
+	if err := TabletDemoteMaster(clusterMaster.Key); err != nil {
 		return nil, nil, err
 	}
 	demotedMasterSelfBinlogCoordinates := &clusterMaster.SelfBinlogCoordinates
@@ -1982,10 +1993,11 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 		return nil, nil, fmt.Errorf("GracefulMasterTakeover: recovery attempted but with no results. This should not happen")
 	}
 	if topologyRecovery.SuccessorKey == nil {
-		// Promotion fails.
-		// Undo setting read-only on original master.
-		inst.SetReadOnly(&clusterMaster.Key, false)
-		return nil, nil, fmt.Errorf("GracefulMasterTakeover: Recovery attempted yet no replica promoted; err=%+v", err)
+		// Promotion failed. Undo.
+		log.Infof("GracefulMasterTakeover: Invoking tabletUndoDemoteMaster on %+v", clusterMaster.Key)
+		if err := TabletUndoDemoteMaster(clusterMaster.Key); err != nil {
+			log.Errore(err)
+		}
 	}
 	var gtidHint inst.OperationGTIDHint = inst.GTIDHintNeutral
 	if topologyRecovery.RecoveryType == MasterRecoveryGTID {
@@ -2001,11 +2013,9 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 			err = credentialsErr
 		}
 	}
-	if auto {
-		_, startReplicationErr := inst.StartReplication(&clusterMaster.Key)
-		if err == nil {
-			err = startReplicationErr
-		}
+	_, startReplicationErr := inst.StartReplication(&clusterMaster.Key)
+	if err == nil {
+		err = startReplicationErr
 	}
 
 	if designatedInstance.AllowTLS {
