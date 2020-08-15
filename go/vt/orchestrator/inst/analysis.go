@@ -20,8 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type AnalysisCode string
@@ -57,6 +59,7 @@ const (
 	AllIntermediateMasterReplicasNotReplicating             AnalysisCode = "AllIntermediateMasterReplicasNotReplicating"
 	FirstTierReplicaFailingToConnectToMaster                AnalysisCode = "FirstTierReplicaFailingToConnectToMaster"
 	BinlogServerFailingToConnectToMaster                    AnalysisCode = "BinlogServerFailingToConnectToMaster"
+	NotConnectedToMaster                                    AnalysisCode = "NotConnectedToMaster"
 )
 
 const (
@@ -170,6 +173,8 @@ type ReplicationAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	CommandHint                               string
 	IsReadOnly                                bool
+	TabletType                                topodatapb.TabletType
+	MasterTimeStamp                           time.Time
 }
 
 type AnalysisMap map[string](*ReplicationAnalysis)
