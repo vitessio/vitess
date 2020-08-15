@@ -48,7 +48,7 @@ type tablePlanBuilder struct {
 	onInsert   insertType
 	pkCols     []*colExpr
 	lastpk     *sqltypes.Result
-	tableKey   []*TableKey
+	pkInfos    []*PrimaryKeyInfo
 }
 
 // colExpr describes the processing to be performed to
@@ -104,7 +104,7 @@ const (
 // a table-specific rule is built to be sent to the source. We don't send the
 // original rule to the source because it may not match the same tables as the
 // target.
-// tableKeys specifies the list of primary key columns for each table.
+// pkInfoMap specifies the list of primary key columns for each table.
 // copyState is a map of tables that have not been fully copied yet.
 // If a table is not present in copyState, then it has been fully copied. If so,
 // all replication events are applied. The table still has to match a Filter.Rule.
@@ -115,14 +115,14 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]*TableKey, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*PrimaryKeyInfo, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
-		tableKeys:     tableKeys,
+		PKInfoMap:     pkInfoMap,
 	}
-	for tableName := range tableKeys {
+	for tableName := range pkInfoMap {
 		lastpk, ok := copyState[tableName]
 		if ok && lastpk == nil {
 			// Don't replicate uncopied tables.
@@ -135,7 +135,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]*Ta
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, tableKeys, lastpk)
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, pkInfoMap, lastpk)
 		if err != nil {
 			return nil, err
 		}
@@ -174,7 +174,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, tableKeys map[string][]*TableKey, lastpk *sqltypes.Result) (*TablePlan, error) {
+func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -223,7 +223,7 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]*TableKey, 
 		},
 		selColumns: make(map[string]bool),
 		lastpk:     lastpk,
-		tableKey:   tableKeys[tableName],
+		pkInfos:    pkInfoMap[tableName],
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -244,7 +244,7 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]*TableKey, 
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
 		return nil, err
 	}
-	if err := tpb.analyzePK(tableKeys); err != nil {
+	if err := tpb.analyzePK(pkInfoMap); err != nil {
 		return nil, err
 	}
 
@@ -452,8 +452,8 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 }
 
 // analyzePK builds tpb.pkCols.
-func (tpb *tablePlanBuilder) analyzePK(tableKeys map[string][]*TableKey) error {
-	pkcols, ok := tableKeys[tpb.name.String()]
+func (tpb *tablePlanBuilder) analyzePK(pkInfoMap map[string][]*PrimaryKeyInfo) error {
+	pkcols, ok := pkInfoMap[tpb.name.String()]
 	if !ok {
 		return fmt.Errorf("table %s not found in schema", tpb.name)
 	}
@@ -672,13 +672,13 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 }
 
 func (tpb *tablePlanBuilder) getCharsetAndCollation(pkname string) (charSet string, collation string) {
-	for _, tableKey := range tpb.tableKey {
-		if strings.EqualFold(tableKey.Name, pkname) {
-			if tableKey.CharSet != "" {
-				charSet = fmt.Sprintf(" _%s ", tableKey.CharSet)
+	for _, pkInfo := range tpb.pkInfos {
+		if strings.EqualFold(pkInfo.Name, pkname) {
+			if pkInfo.CharSet != "" {
+				charSet = fmt.Sprintf(" _%s ", pkInfo.CharSet)
 			}
-			if tableKey.Collation != "" {
-				collation = fmt.Sprintf(" COLLATE %s ", tableKey.Collation)
+			if pkInfo.Collation != "" {
+				collation = fmt.Sprintf(" COLLATE %s ", pkInfo.Collation)
 			}
 		}
 	}
