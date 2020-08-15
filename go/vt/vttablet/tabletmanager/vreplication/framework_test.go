@@ -57,6 +57,7 @@ var (
 	vrepldb               = "vrepl"
 	globalDBQueries       = make(chan string, 1000)
 	testForeignKeyQueries = false
+	doNotLogDBQueries     = false
 )
 
 type LogExpectation struct {
@@ -392,6 +393,9 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		return nil, nil
 	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
+	if doNotLogDBQueries {
+		return qr, err
+	}
 	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
 		globalDBQueries <- query
 	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks

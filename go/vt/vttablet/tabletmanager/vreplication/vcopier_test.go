@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -102,25 +103,32 @@ func testCollations(t *testing.T, charSet string, collation string, chars []stri
 
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	id := uint32(qr.InsertID)
+	require.NoError(t, err)
 	defer func() {
-		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		globalDBQueries = make(chan string, 1000) //FIXME: new engine type
 	}()
 
-	numQueries := 0
+	var getDestCount = func() int {
+		query = fmt.Sprintf("select count(*) from %s.dst", vrepldb)
+		qr, err = env.Mysqld.FetchSuperQuery(context.Background(), query)
+		require.NoError(t, err)
+		require.True(t, len(qr.Rows) == 1 && len(qr.Rows[0]) == 1)
+		count, err := evalengine.ToInt64(qr.Rows[0][0])
+		require.NoError(t, err)
+		return int(count)
+	}
+	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if numQueries == len(globalDBQueries) {
+		if getDestCount() == len(chars) || time.Now().After(deadline) {
 			break
 		}
-		numQueries = len(globalDBQueries)
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
+	require.Equal(t, 3, getDestCount())
 
 	var expectedData [][]string
 	for _, c := range charsInOrder {
@@ -131,6 +139,10 @@ func testCollations(t *testing.T, charSet string, collation string, chars []stri
 
 // TestPlayerCopyCollations tests the copy/catchup phase for a table with a varchar primary key with character collations
 func TestPlayerCopyCollations(t *testing.T) {
+	doNotLogDBQueries = true
+	defer func() {
+		doNotLogDBQueries = false
+	}()
 	type tCase struct {
 		charSet      string
 		collation    string
