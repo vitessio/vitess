@@ -2533,6 +2533,11 @@ func RegroupReplicasGTID(
 			}
 		}
 	}
+
+	if err := TabletSetMaster(candidateReplica.Key); err != nil {
+		return emptyReplicas, emptyReplicas, emptyReplicas, candidateReplica, err
+	}
+
 	moveGTIDFunc := func() error {
 		log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
 
