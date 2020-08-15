@@ -135,7 +135,7 @@ func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, 
 				allErrors.RecordError(err)
 			} else {
 				if qr.RowsAffected == 0 {
-					allErrors.RecordError(fmt.Errorf("\nno matching streams found for workflow %s, tablet %s, query %s", workflow, master.Alias, query))
+					log.Infof("no matching streams found for workflow %s, tablet %s, query %s", workflow, master.Alias, query)
 				} else {
 					mu.Lock()
 					results[master] = qr
@@ -379,6 +379,10 @@ func (wr *Wrangler) listStreams(ctx context.Context, workflow, keyspace string) 
 	if err != nil {
 		return err
 	}
+	if len(replStatus.Statuses) == 0 {
+		return fmt.Errorf("no streams found for workflow %s in keyspace %s", workflow, keyspace)
+	}
+
 	if err := dumpStreamListAsJSON(replStatus, wr); err != nil {
 		return err
 	}
