@@ -982,6 +982,10 @@ func MasterPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinate
 
 // Attempt to read and return replication credentials from the mysql.slave_master_info system table
 func ReadReplicationCredentials(instanceKey *InstanceKey) (replicationUser string, replicationPassword string, err error) {
+	if config.Config.MySQLReplicaUser != "" {
+		return config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword, nil
+	}
+
 	if config.Config.ReplicationCredentialsQuery != "" {
 		err = ScanInstanceRow(instanceKey, config.Config.ReplicationCredentialsQuery, &replicationUser, &replicationPassword)
 		if err == nil && replicationUser == "" {
