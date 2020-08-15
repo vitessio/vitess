@@ -74,6 +74,8 @@ type Configuration struct {
 	AgentsServerPort                           string // port orchestrator agents talk back to
 	MySQLTopologyUser                          string
 	MySQLTopologyPassword                      string
+	MySQLReplicaUser                           string // If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
+	MySQLReplicaPassword                       string
 	MySQLTopologyCredentialsConfigFile         string // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
 	MySQLTopologySSLPrivateKeyFile             string // Private key file used to authenticate with a Topology mysql instance with TLS
 	MySQLTopologySSLCertFile                   string // Certificate PEM file used to authenticate with a Topology mysql instance with TLS
