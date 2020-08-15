@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -173,4 +174,26 @@ func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
 		err = tmc.UndoDemoteMaster(context.TODO(), tablet)
 	}
 	return err
+}
+
+func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, err error) {
+	tablet, err := inst.ReadTablet(*instanceKey)
+	if err != nil {
+		return nil, err
+	}
+	si, err := ts.GetShard(context.TODO(), tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, err
+	}
+	if !si.HasMaster() {
+		return nil, fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+	master, err := ts.GetTablet(context.TODO(), si.MasterAlias)
+	if err != nil {
+		return nil, err
+	}
+	return &inst.InstanceKey{
+		Hostname: master.MysqlHostname,
+		Port:     int(master.MysqlPort),
+	}, nil
 }

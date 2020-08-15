@@ -21,11 +21,15 @@ import (
 	"regexp"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
@@ -54,75 +58,9 @@ func initializeAnalysisDaoPostConfiguration() {
 func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
 	result := []ReplicationAnalysis{}
 
+	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
 	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, clusterName)
-	analysisQueryReductionClause := ``
-
-	if config.Config.ReduceReplicationAnalysisCount {
-		analysisQueryReductionClause = `
-			HAVING
-				(
-					MIN(
-						master_instance.last_checked <= master_instance.last_seen
-						and master_instance.last_attempted_check <= master_instance.last_seen + interval ? second
-					) = 1
-					/* AS is_last_check_valid */
-				) = 0
-				OR (
-					IFNULL(
-						SUM(
-							replica_instance.last_checked <= replica_instance.last_seen
-							AND replica_instance.slave_io_running = 0
-							AND replica_instance.last_io_error like '%error %connecting to master%'
-							AND replica_instance.slave_sql_running = 1
-						),
-						0
-					)
-					/* AS count_replicas_failing_to_connect_to_master */
-					> 0
-				)
-				OR (
-					IFNULL(
-						SUM(
-							replica_instance.last_checked <= replica_instance.last_seen
-						),
-						0
-					)
-					/* AS count_valid_replicas */
-					< COUNT(replica_instance.server_id)
-					/* AS count_replicas */
-				)
-				OR (
-					IFNULL(
-						SUM(
-							replica_instance.last_checked <= replica_instance.last_seen
-							AND replica_instance.slave_io_running != 0
-							AND replica_instance.slave_sql_running != 0
-						),
-						0
-					)
-					/* AS count_valid_replicating_replicas */
-					< COUNT(replica_instance.server_id)
-					/* AS count_replicas */
-				)
-				OR (
-					MIN(
-						master_instance.slave_sql_running = 1
-						AND master_instance.slave_io_running = 0
-						AND master_instance.last_io_error like '%error %connecting to master%'
-					)
-					/* AS is_failing_to_connect_to_master */
-				)
-				OR (
-					COUNT(replica_instance.server_id)
-					/* AS count_replicas */
-					> 0
-				)
-			`
-		args = append(args, ValidSecondsFromSeenToLastAttemptedCheck())
-	}
-	// "OR count_replicas > 0" above is a recent addition, which, granted, makes some previous conditions redundant.
-	// It gives more output, and more "NoProblem" messages that I am now interested in for purpose of auditing in database_instance_analysis_changelog
-	query := fmt.Sprintf(`
+	query := `
 	SELECT
 		master_instance.hostname,
 		master_instance.port,
@@ -349,7 +287,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_slave_updates then replica_instance.major_version else NULL end
-		) AS count_distinct_logging_major_versions
+		) AS count_distinct_logging_major_versions,
+		vitess_tablet.info AS tablet_info
 	FROM
 		database_instance master_instance
 		LEFT JOIN hostname_resolve ON (
@@ -387,20 +326,23 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		LEFT JOIN cluster_domain_name ON (
 			cluster_domain_name.cluster_name = master_instance.cluster_name
 		)
+		LEFT JOIN vitess_tablet ON (
+			master_instance.hostname = vitess_tablet.hostname
+			AND master_instance.port = vitess_tablet.port
+		)
 	WHERE
 		database_instance_maintenance.database_instance_maintenance_id IS NULL
 		AND ? IN ('', master_instance.cluster_name)
 	GROUP BY
 		master_instance.hostname,
 		master_instance.port
-		%s
 	ORDER BY
 		is_master DESC,
 		is_cluster_master DESC,
 		count_replicas DESC
-	`,
-		analysisQueryReductionClause)
+	`
 
+	clusterAnalysis := make(map[string]*ReplicationAnalysis)
 	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		a := ReplicationAnalysis{
 			Analysis:               NoProblem,
@@ -473,6 +415,20 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
+		tablet := &topodatapb.Tablet{}
+		if err := proto.UnmarshalText(m.GetString("tablet_info"), tablet); err == nil {
+			a.TabletType = tablet.Type
+			if tablet.Type == topodatapb.TabletType_MASTER {
+				a.MasterTimeStamp = logutil.ProtoToTime(tablet.MasterTermStartTime)
+				ca := clusterAnalysis[a.AnalyzedInstanceKey.StringCode()]
+				if ca == nil {
+					clusterAnalysis[a.AnalyzedInstanceKey.StringCode()] = &a
+				} else if ca.TabletType == topodatapb.TabletType_MASTER && a.MasterTimeStamp.After(ca.MasterTimeStamp) {
+					clusterAnalysis[a.AnalyzedInstanceKey.StringCode()] = &a
+				}
+			}
+		}
+
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: ClusterName: %+v, IsMaster: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToMaster: %+v",
 				a.ClusterDetails.ClusterName, a.IsMaster, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToMaster,
@@ -536,6 +492,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = AllMasterReplicasNotReplicatingOrDead
 			a.Description = "Master is reachable but none of its replicas is replicating"
 			//
+		} else if a.IsMaster && topo.IsReplicaType(a.TabletType) {
+			a.Analysis = NotConnectedToMaster
+			a.Description = "Not connected to the master"
 		} else /* co-master */ if a.IsCoMaster && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadCoMaster
 			a.Description = "Co-master cannot be reached by orchestrator and none of its replicas is replicating"

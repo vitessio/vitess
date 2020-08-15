@@ -1549,6 +1549,9 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 		return checkAndRecoverGenericProblem, false
 	case inst.UnreachableIntermediateMasterWithLaggingReplicas:
 		return checkAndRecoverGenericProblem, false
+	// non-master
+	case inst.NotConnectedToMaster:
+		return checkAndFixReplica, false
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
@@ -1956,8 +1959,6 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	}
 	log.Infof("GracefulMasterTakeover: Will demote %+v and promote %+v instead", clusterMaster.Key, designatedInstance.Key)
 
-	replicationUser, replicationPassword, replicationCredentialsError := inst.ReadReplicationCredentials(&designatedInstance.Key)
-
 	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadMaster, inst.GracefulMasterTakeoverCommandHint, &clusterMaster.Key)
 	if err != nil {
 		return nil, nil, err
@@ -2007,12 +2008,6 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	if !clusterMaster.SelfBinlogCoordinates.Equals(demotedMasterSelfBinlogCoordinates) {
 		log.Errorf("GracefulMasterTakeover: sanity problem. Demoted master's coordinates changed from %+v to %+v while supposed to have been frozen", *demotedMasterSelfBinlogCoordinates, clusterMaster.SelfBinlogCoordinates)
 	}
-	if !clusterMaster.HasReplicationCredentials && replicationCredentialsError == nil {
-		_, credentialsErr := inst.ChangeMasterCredentials(&clusterMaster.Key, replicationUser, replicationPassword)
-		if err == nil {
-			err = credentialsErr
-		}
-	}
 	_, startReplicationErr := inst.StartReplication(&clusterMaster.Key)
 	if err == nil {
 		err = startReplicationErr
@@ -2027,4 +2022,18 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	executeProcesses(config.Config.PostGracefulTakeoverProcesses, "PostGracefulTakeoverProcesses", topologyRecovery, false)
 
 	return topologyRecovery, promotedMasterCoordinates, err
+}
+
+// checkAndFixReplica checks and points a replica at the current master.
+func checkAndFixReplica(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	log.Infof("will fix replica %+v", analysisEntry.AnalyzedInstanceKey)
+	masterKey, err := ShardMaster(&analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		log.Info("Could not compute master for %+v", analysisEntry.AnalyzedInstanceKey)
+		return false, nil, err
+	}
+	if _, err := inst.MoveBelowGTID(&analysisEntry.AnalyzedInstanceKey, masterKey); err != nil {
+		return false, nil, err
+	}
+	return true, nil, err
 }
