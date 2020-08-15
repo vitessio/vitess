@@ -46,7 +46,7 @@ type ReplicatorPlan struct {
 	VStreamFilter *binlogdatapb.Filter
 	TargetTables  map[string]*TablePlan
 	TablePlans    map[string]*TablePlan
-	tableKeys     map[string][]*TableKey
+	PKInfoMap     map[string][]*PrimaryKeyInfo
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -86,9 +86,9 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:     sqlparser.NewTableIdent(tableName),
-		lastpk:   lastpk,
-		tableKey: rp.tableKeys[tableName],
+		name:    sqlparser.NewTableIdent(tableName),
+		lastpk:  lastpk,
+		pkInfos: rp.PKInfoMap[tableName],
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
@@ -104,7 +104,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		tpb.colExprs = append(tpb.colExprs, cexpr)
 	}
 	// The following actions are a subset of buildTablePlan.
-	if err := tpb.analyzePK(rp.tableKeys); err != nil {
+	if err := tpb.analyzePK(rp.PKInfoMap); err != nil {
 		return nil, err
 	}
 	return tpb.generate(), nil

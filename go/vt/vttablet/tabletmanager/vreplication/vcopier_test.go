@@ -31,6 +31,132 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
+func testCollations(t *testing.T, charSet string, collation string, chars []string, charsInOrder []string) {
+	defer deleteTablet(addTablet(100))
+
+	savedPacketSize := *vstreamer.PacketSize
+	// PacketSize of 1 byte will send at most one row at a time.
+	*vstreamer.PacketSize = 1
+	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+
+	savedCopyTimeout := copyTimeout
+	// copyTimeout should be low enough to have time to send one row.
+	copyTimeout = 500 * time.Millisecond
+	defer func() { copyTimeout = savedCopyTimeout }()
+
+	savedWaitRetryTime := waitRetryTime
+	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	waitRetryTime = 10 * time.Millisecond
+	defer func() { waitRetryTime = savedWaitRetryTime }()
+
+	execStatements(t, []string{
+		fmt.Sprintf("create table src(idc varchar(20) CHARACTER SET %s COLLATE %s, val varchar(10), primary key(idc))", charSet, collation),
+		fmt.Sprintf("insert into src values('%s', '%s'), ('%s', '%s')", chars[0], chars[0], chars[1], chars[1]),
+		fmt.Sprintf("create table %s.dst(idc varchar(20) CHARACTER SET %s COLLATE %s, val varchar(10), primary key(idc))", vrepldb, charSet, collation),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	count := 0
+	vstreamRowsSendHook = func(ctx context.Context) {
+		defer func() { count++ }()
+		// Allow the first two calls to go through: field info and one row.
+		if count <= 1 {
+			return
+		}
+		// Insert a row with PK which is < the lastPK till now because of the utf8mb4 collation
+		execStatements(t, []string{
+			fmt.Sprintf("insert into src values('%s', '%s')", chars[2], chars[2]),
+		})
+		// Wait for context to expire and then send the row.
+		// This will cause the copier to abort and go back to catchup mode.
+		<-ctx.Done()
+		// Do this no more than once.
+		vstreamRowsSendHook = nil
+	}
+
+	vstreamHook = func(context.Context) {
+		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
+		// This is because waitRetryTime is set to 10ms.
+		time.Sleep(50 * time.Millisecond)
+		// Do this no more than once.
+		vstreamHook = nil
+	}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		globalDBQueries = make(chan string, 1000) //FIXME: new engine type
+	}()
+
+	numQueries := 0
+	for {
+		if numQueries == len(globalDBQueries) {
+			break
+		}
+		numQueries = len(globalDBQueries)
+		time.Sleep(1 * time.Second)
+	}
+
+	var expectedData [][]string
+	for _, c := range charsInOrder {
+		expectedData = append(expectedData, []string{c, c})
+	}
+	expectData(t, "dst", expectedData)
+}
+
+// TestPlayerCopyCollations tests the copy/catchup phase for a table with a varchar primary key with character collations
+func TestPlayerCopyCollations(t *testing.T) {
+	type tCase struct {
+		charSet      string
+		collation    string
+		chars        []string
+		charsInOrder []string
+	}
+	testCases := []tCase{
+		{"utf8mb4", "utf8mb4_bin", []string{"a", "b", "A"}, []string{"A", "a", "b"}},
+		{"latin1", "latin1_general_ci", []string{"a", "b", "c"}, []string{"a", "b", "c"}},
+		{"big5", "big5_chinese_ci", []string{"人", "己", "于"}, []string{"人", "于", "己"}}, //??
+		{"big5", "big5_chinese_ci", []string{"人", "于", "己"}, []string{"人", "于", "己"}},
+		{"big5", "big5_chinese_ci", []string{"三", "二", "一"}, []string{"一", "二", "三"}}, //1,2,3
+		{"big5", "big5_chinese_ci", []string{"一", "二", "三"}, []string{"一", "二", "三"}},
+		{"utf8mb4", "utf8mb4_bin", []string{"a", "b", "A"}, []string{"A", "a", "b"}},
+		{"utf32", "utf32_esperanto_ci", []string{"Ĵ", "Ŭ", "Ĉ"}, []string{"Ĉ", "Ĵ", "Ŭ"}}, //per wikipedia
+		{"utf32", "utf32_esperanto_ci", []string{"Ĉ", "Ĵ", "Ŭ"}, []string{"Ĉ", "Ĵ", "Ŭ"}},
+		{"eucjpms", "eucjpms_japanese_ci", []string{"あ", "い", "う"}, []string{"あ", "い", "う"}}, //A,I,U, Hiragana
+		{"eucjpms", "eucjpms_japanese_ci", []string{"あ", "い", "う"}, []string{"あ", "い", "う"}},
+	}
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s/%s", tc.charSet, tc.collation), func(t *testing.T) {
+			testCollations(t, tc.charSet, tc.collation, tc.chars, tc.charsInOrder)
+		})
+	}
+}
+
 // TestPlayerCopyCollations tests the copy/catchup phase for a table with a varchar primary key with character collations
 func TestPlayerCopyVarcharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))

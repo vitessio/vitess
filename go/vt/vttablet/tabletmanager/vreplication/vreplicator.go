@@ -58,7 +58,7 @@ type vreplicator struct {
 	stats *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
-	tableKeys map[string][]*TableKey
+	pkInfoMap map[string][]*PrimaryKeyInfo
 
 	originalFKCheckSetting int64
 }
@@ -127,11 +127,11 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 }
 
 func (vr *vreplicator) replicate(ctx context.Context) error {
-	tableKeys, err := vr.buildTableKeys(ctx)
+	pkInfo, err := vr.buildPkInfoMap(ctx)
 	if err != nil {
 		return err
 	}
-	vr.tableKeys = tableKeys
+	vr.pkInfoMap = pkInfo
 	if err := vr.getSettingFKCheck(); err != nil {
 		return err
 	}
@@ -185,8 +185,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 }
 
-// TableKey is used to store charset and collation for primary keys where applicable
-type TableKey struct {
+// PrimaryKeyInfo is used to store charset and collation for primary keys where applicable
+type PrimaryKeyInfo struct {
 	Name      string
 	CharSet   string
 	Collation string
@@ -201,13 +201,13 @@ func shouldCollate(dataType string) bool {
 	return false
 }
 
-func (vr *vreplicator) buildTableKeys(ctx context.Context) (map[string][]*TableKey, error) {
+func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*PrimaryKeyInfo, error) {
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
 		return nil, err
 	}
 	queryTemplate := "select character_set_name, collation_name,column_name,data_type from information_schema.columns where table_schema=%s and table_name=%s;"
-	tableKeys := make(map[string][]*TableKey)
+	pkInfoMap := make(map[string][]*PrimaryKeyInfo)
 	for _, td := range schema.TableDefinitions {
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
 		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
@@ -224,7 +224,7 @@ func (vr *vreplicator) buildTableKeys(ctx context.Context) (map[string][]*TableK
 		} else {
 			pks = td.Columns
 		}
-		var keys []*TableKey
+		var pkInfos []*PrimaryKeyInfo
 		for _, pk := range pks {
 			charSet := ""
 			collation := ""
@@ -239,15 +239,15 @@ func (vr *vreplicator) buildTableKeys(ctx context.Context) (map[string][]*TableK
 					break
 				}
 			}
-			keys = append(keys, &TableKey{
+			pkInfos = append(pkInfos, &PrimaryKeyInfo{
 				Name:      pk,
 				CharSet:   charSet,
 				Collation: collation,
 			})
 		}
-		tableKeys[td.Name] = keys
+		pkInfoMap[td.Name] = pkInfos
 	}
-	return tableKeys, nil
+	return pkInfoMap, nil
 }
 
 func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
