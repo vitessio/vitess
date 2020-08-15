@@ -1,7 +1,7 @@
 # Explain statement
 "explain select * from user"
 {
-  "QueryType": "EXPLAIN",
+  "QueryType": "OTHER",
   "Original": "explain select * from user",
   "Instructions": {
     "OperatorType": "Send",
@@ -47,7 +47,7 @@
 # Describe statement
 "describe select * from t"
 {
-  "QueryType": "EXPLAIN",
+  "QueryType": "OTHER",
   "Original": "describe select * from t",
   "Instructions": {
     "OperatorType": "Send",
@@ -65,7 +65,7 @@
 # Desc statement
 "desc select * from t"
 {
-  "QueryType": "EXPLAIN",
+  "QueryType": "OTHER",
   "Original": "desc select * from t",
   "Instructions": {
     "OperatorType": "Send",

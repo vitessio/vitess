@@ -1932,13 +1932,13 @@ wild_opt:
   }
 | sql_id
   {
-    $$ = "" 
+    $$ = ""
   }
 | STRING
   {
-    $$ = "" 
+    $$ = ""
   }
-  
+
 explain_statement:
   explain_synonyms table_name wild_opt
   {

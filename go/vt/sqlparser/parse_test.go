@@ -1417,10 +1417,10 @@ var (
 		output: "use `ks@replica`",
 	}, {
 		input:  "describe select * from t",
-		output: "explain select * from t",
+		output: "otherread",
 	}, {
 		input:  "desc select * from t",
-		output: "explain select * from t",
+		output: "otherread",
 	}, {
 		input:  "desc foobar",
 		output: "otherread",
@@ -1431,26 +1431,35 @@ var (
 		input:  "explain t1 col",
 		output: "otherread",
 	}, {
-		input: "explain select * from t",
+		input:  "explain select * from t",
+		output: "otherread",
 	}, {
-		input: "explain format = traditional select * from t",
+		input:  "explain format = traditional select * from t",
+		output: "otherread",
 	}, {
-		input: "explain analyze select * from t",
+		input:  "explain analyze select * from t",
+		output: "otherread",
 	}, {
-		input: "explain format = tree select * from t",
+		input:  "explain format = tree select * from t",
+		output: "otherread",
 	}, {
-		input: "explain format = json select * from t",
+		input:  "explain format = json select * from t",
+		output: "otherread",
 	}, {
-		input: "explain format = vitess select * from t",
+		input:  "explain format = vitess select * from t",
+		output: "explain format = vitess select * from t",
 	}, {
 		input:  "describe format = vitess select * from t",
 		output: "explain format = vitess select * from t",
 	}, {
-		input: "explain delete from t",
+		input:  "explain delete from t",
+		output: "otherread",
 	}, {
-		input: "explain insert into t(col1, col2) values (1, 2)",
+		input:  "explain insert into t(col1, col2) values (1, 2)",
+		output: "otherread",
 	}, {
-		input: "explain update t set col = 2",
+		input:  "explain update t set col = 2",
+		output: "otherread",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",
