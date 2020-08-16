@@ -65,6 +65,7 @@ const (
 // Configuration makes for orchestrator configuration input, which can be provided by user via JSON formatted file.
 // Some of the parameteres have reasonable default values, and some (like database credentials) are
 // strictly expected from user.
+// TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
 	Debug                                      bool   // set debug mode (similar to --debug option)
 	EnableSyslog                               bool   // Should logs be directed (in addition) to syslog daemon?

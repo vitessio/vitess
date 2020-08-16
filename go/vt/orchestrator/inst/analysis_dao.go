@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"time"
 
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/process"
@@ -54,6 +53,11 @@ func initializeAnalysisDaoPostConfiguration() {
 	recentInstantAnalysis = cache.New(time.Duration(config.RecoveryPollSeconds*2)*time.Second, time.Second)
 }
 
+type clusterAnalysis struct {
+	hasClusterwideAction bool
+	masterKey            *InstanceKey
+}
+
 // GetReplicationAnalysis will check for replication problems (dead master; unreachable master; etc)
 func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
 	result := []ReplicationAnalysis{}
@@ -62,8 +66,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, clusterName)
 	query := `
 	SELECT
-		master_instance.hostname,
-		master_instance.port,
+		vitess_tablet.info AS tablet_info,
+		vitess_tablet.hostname,
+		vitess_tablet.port,
+		vitess_tablet.tablet_type,
+		vitess_tablet.master_timestamp,
 		master_instance.read_only AS read_only,
 		MIN(master_instance.data_center) AS data_center,
 		MIN(master_instance.region) AS region,
@@ -157,6 +164,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			AND master_instance.slave_io_running = 0
 			AND master_instance.last_io_error like '%%error %%connecting to master%%'
 		) AS is_failing_to_connect_to_master,
+		MIN(
+			master_instance.slave_sql_running = 0
+			AND master_instance.slave_io_running = 0
+		) AS replication_stopped,
 		MIN(
 			master_downtime.downtime_active is not null
 			and ifnull(master_downtime.end_timestamp, now()) > now()
@@ -287,10 +298,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_slave_updates then replica_instance.major_version else NULL end
-		) AS count_distinct_logging_major_versions,
-		vitess_tablet.info AS tablet_info
+		) AS count_distinct_logging_major_versions
 	FROM
-		database_instance master_instance
+		vitess_tablet
+		LEFT JOIN database_instance master_instance ON (
+			vitess_tablet.hostname = master_instance.hostname
+			AND vitess_tablet.port = master_instance.port
+		)
 		LEFT JOIN hostname_resolve ON (
 			master_instance.hostname = hostname_resolve.hostname
 		)
@@ -326,10 +340,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		LEFT JOIN cluster_domain_name ON (
 			cluster_domain_name.cluster_name = master_instance.cluster_name
 		)
-		LEFT JOIN vitess_tablet ON (
-			master_instance.hostname = vitess_tablet.hostname
-			AND master_instance.port = vitess_tablet.port
-		)
 	WHERE
 		database_instance_maintenance.database_instance_maintenance_id IS NULL
 		AND ? IN ('', master_instance.cluster_name)
@@ -337,18 +347,26 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		master_instance.hostname,
 		master_instance.port
 	ORDER BY
-		is_master DESC,
-		is_cluster_master DESC,
-		count_replicas DESC
+		tablet_type ASC,
+		master_timestamp DESC
 	`
 
-	clusterAnalysis := make(map[string]*ReplicationAnalysis)
+	clusters := make(map[string]*clusterAnalysis)
 	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		a := ReplicationAnalysis{
 			Analysis:               NoProblem,
 			ProcessingNodeHostname: process.ThisHostname,
 			ProcessingNodeToken:    util.ProcessToken.Hash,
 		}
+
+		tablet := &topodatapb.Tablet{}
+		if err := proto.UnmarshalText(m.GetString("tablet_info"), tablet); err != nil {
+			log.Errorf("could not read tablet %v: %v", m.GetString("tablet_info"), err)
+			return nil
+		}
+
+		a.TabletType = tablet.Type
+		a.MasterTimeStamp = time.Unix(0, m.GetInt64("master_timestamp"))
 
 		a.IsMaster = m.GetBool("is_master")
 		countCoMasterReplicas := m.GetUint("count_co_master_replicas")
@@ -377,6 +395,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.CountDowntimedReplicas = m.GetUint("count_downtimed_replicas")
 		a.ReplicationDepth = m.GetUint("replication_depth")
 		a.IsFailingToConnectToMaster = m.GetBool("is_failing_to_connect_to_master")
+		a.ReplicationStopped = m.GetBool("replication_stopped")
 		a.IsDowntimed = m.GetBool("is_downtimed")
 		a.DowntimeEndTimestamp = m.GetString("downtime_end_timestamp")
 		a.DowntimeRemainingSeconds = m.GetInt("downtime_remaining_seconds")
@@ -415,20 +434,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
-		tablet := &topodatapb.Tablet{}
-		if err := proto.UnmarshalText(m.GetString("tablet_info"), tablet); err == nil {
-			a.TabletType = tablet.Type
-			if tablet.Type == topodatapb.TabletType_MASTER {
-				a.MasterTimeStamp = logutil.ProtoToTime(tablet.MasterTermStartTime)
-				ca := clusterAnalysis[a.AnalyzedInstanceKey.StringCode()]
-				if ca == nil {
-					clusterAnalysis[a.AnalyzedInstanceKey.StringCode()] = &a
-				} else if ca.TabletType == topodatapb.TabletType_MASTER && a.MasterTimeStamp.After(ca.MasterTimeStamp) {
-					clusterAnalysis[a.AnalyzedInstanceKey.StringCode()] = &a
-				}
-			}
-		}
-
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: ClusterName: %+v, IsMaster: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToMaster: %+v",
 				a.ClusterDetails.ClusterName, a.IsMaster, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToMaster,
@@ -437,7 +442,44 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				log.Debugf(analysisMessage)
 			}
 		}
-		if a.IsMaster && !a.LastCheckValid && a.CountReplicas == 0 {
+		if clusters[a.ClusterDetails.ClusterAlias] == nil {
+			clusters[a.ClusterDetails.ClusterAlias] = &clusterAnalysis{}
+			if a.TabletType == topodatapb.TabletType_MASTER {
+				clusters[a.ClusterDetails.ClusterAlias].masterKey = &a.AnalyzedInstanceKey
+			}
+		}
+		// ca has clusterwide info
+		ca := clusters[a.ClusterDetails.ClusterAlias]
+		if ca.hasClusterwideAction {
+			// We can only take one cluster level action at a time.
+			return nil
+		}
+		if a.TabletType == topodatapb.TabletType_MASTER && !a.IsMaster {
+			a.Analysis = MasterHasMaster
+			a.Description = "Master is replicating from somewhere else"
+			ca.hasClusterwideAction = true
+			//
+		} else if a.TabletType == topodatapb.TabletType_MASTER && a.IsReadOnly {
+			a.Analysis = MasterIsReadOnly
+			a.Description = "Master is read-only"
+			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
+			a.Analysis = ReplicaIsReadWrite
+			a.Description = "Master is read-write"
+			//
+		} else if topo.IsReplicaType(a.TabletType) && a.IsMaster {
+			a.Analysis = NotConnectedToMaster
+			a.Description = "Not connected to the master"
+			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsMaster && ca.masterKey != nil && a.AnalyzedInstanceMasterKey != *ca.masterKey {
+			a.Analysis = ConnectedToWrongMaster
+			a.Description = "Connected to wrong master"
+			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsMaster && a.ReplicationStopped {
+			a.Analysis = ReplicationStopped
+			a.Description = "Replication is stopped"
+			//
+		} else if a.IsMaster && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadMasterWithoutReplicas
 			a.Description = "Master cannot be reached by orchestrator and has no replica"
 			//
@@ -492,9 +534,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = AllMasterReplicasNotReplicatingOrDead
 			a.Description = "Master is reachable but none of its replicas is replicating"
 			//
-		} else if a.IsMaster && topo.IsReplicaType(a.TabletType) {
-			a.Analysis = NotConnectedToMaster
-			a.Description = "Not connected to the master"
 		} else /* co-master */ if a.IsCoMaster && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadCoMaster
 			a.Description = "Co-master cannot be reached by orchestrator and none of its replicas is replicating"
