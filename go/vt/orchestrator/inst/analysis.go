@@ -31,6 +31,12 @@ type StructureAnalysisCode string
 
 const (
 	NoProblem                                               AnalysisCode = "NoProblem"
+	MasterHasMaster                                         AnalysisCode = "MasterHasMaster"
+	MasterIsReadOnly                                        AnalysisCode = "MasterIsReadOnly"
+	ReplicaIsReadWrite                                      AnalysisCode = "ReplicaIsReadWrite"
+	NotConnectedToMaster                                    AnalysisCode = "NotConnectedToMaster"
+	ConnectedToWrongMaster                                  AnalysisCode = "ConnectedToWrongMaster"
+	ReplicationStopped                                      AnalysisCode = "ReplicationStopped"
 	DeadMasterWithoutReplicas                               AnalysisCode = "DeadMasterWithoutReplicas"
 	DeadMaster                                              AnalysisCode = "DeadMaster"
 	DeadMasterAndReplicas                                   AnalysisCode = "DeadMasterAndReplicas"
@@ -59,7 +65,6 @@ const (
 	AllIntermediateMasterReplicasNotReplicating             AnalysisCode = "AllIntermediateMasterReplicasNotReplicating"
 	FirstTierReplicaFailingToConnectToMaster                AnalysisCode = "FirstTierReplicaFailingToConnectToMaster"
 	BinlogServerFailingToConnectToMaster                    AnalysisCode = "BinlogServerFailingToConnectToMaster"
-	NotConnectedToMaster                                    AnalysisCode = "NotConnectedToMaster"
 )
 
 const (
@@ -119,6 +124,8 @@ const (
 type ReplicationAnalysis struct {
 	AnalyzedInstanceKey                       InstanceKey
 	AnalyzedInstanceMasterKey                 InstanceKey
+	TabletType                                topodatapb.TabletType
+	MasterTimeStamp                           time.Time
 	ClusterDetails                            ClusterInfo
 	AnalyzedInstanceDataCenter                string
 	AnalyzedInstanceRegion                    string
@@ -137,6 +144,7 @@ type ReplicationAnalysis struct {
 	Replicas                                  InstanceKeyMap
 	SlaveHosts                                InstanceKeyMap // for backwards compatibility. Equals `Replicas`
 	IsFailingToConnectToMaster                bool
+	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
@@ -173,8 +181,6 @@ type ReplicationAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	CommandHint                               string
 	IsReadOnly                                bool
-	TabletType                                topodatapb.TabletType
-	MasterTimeStamp                           time.Time
 }
 
 type AnalysisMap map[string](*ReplicationAnalysis)

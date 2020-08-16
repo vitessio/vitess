@@ -21,6 +21,7 @@ import (
 	"errors"
 
 	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
@@ -46,7 +47,7 @@ func TabletSetMaster(instanceKey InstanceKey) error {
 	}
 	// Proactively change the tablet type locally so we don't spam this until we get the refresh.
 	tablet.Type = topodatapb.TabletType_MASTER
-	if err := SaveTablet(instanceKey, tablet); err != nil {
+	if err := SaveTablet(tablet); err != nil {
 		log.Errore(err)
 	}
 	return nil
@@ -76,17 +77,24 @@ func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
 }
 
 // SaveTablet saves the tablet record against the instanceKey.
-func SaveTablet(instanceKey InstanceKey, tablet *topodatapb.Tablet) error {
+func SaveTablet(tablet *topodatapb.Tablet) error {
+	tabletType := int(tablet.Type)
+	var timestamp int64
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		timestamp = logutil.ProtoToTime(tablet.MasterTermStartTime).UnixNano()
+	}
 	_, err := db.ExecOrchestrator(`
 		replace
 			into vitess_tablet (
-				hostname, port, info
+				hostname, port, tablet_type, master_timestamp, info
 			) values (
-				?, ?, ?
+				?, ?, ?, ?, ?
 			)
 		`,
-		instanceKey.Hostname,
-		instanceKey.Port,
+		tablet.MysqlHostname,
+		int(tablet.MysqlPort),
+		tabletType,
+		timestamp,
 		proto.CompactTextString(tablet),
 	)
 	return err

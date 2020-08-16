@@ -87,7 +87,7 @@ func RefreshTablets() {
 		if proto.Equal(tablet, old) {
 			continue
 		}
-		if err := inst.SaveTablet(instanceKey, tablet); err != nil {
+		if err := inst.SaveTablet(tablet); err != nil {
 			log.Errore(err)
 			continue
 		}
@@ -147,6 +147,19 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	}
 	_, unlock, err := ts.LockShard(context.TODO(), tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	return unlock, err
+}
+
+// TabletRefresh refreshes the tablet info.
+func TabletRefresh(instanceKey inst.InstanceKey) error {
+	tablet, err := inst.ReadTablet(instanceKey)
+	if err != nil {
+		return err
+	}
+	ti, err := ts.GetTablet(context.TODO(), tablet.Alias)
+	if err != nil {
+		return err
+	}
+	return inst.SaveTablet(ti.Tablet)
 }
 
 // TabletDemoteMaster requests the master tablet to stop accepting transactions.
