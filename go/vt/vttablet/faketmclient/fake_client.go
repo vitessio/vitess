@@ -231,7 +231,7 @@ func (client *FakeTabletManagerClient) WaitForPosition(ctx context.Context, tabl
 	return nil
 }
 
-func (c *FakeTabletManagerClient) VExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+func (c *FakeTabletManagerClient) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
 	// This result satisfies a generic VExec command
 	result := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id", "int"),

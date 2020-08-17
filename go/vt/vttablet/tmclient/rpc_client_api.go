@@ -157,7 +157,7 @@ type TabletManagerClient interface {
 	WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error
 
 	// VExec executes a generic VExec command
-	VExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)
+	VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error)
 
 	// VReplicationExec executes a VReplication command
 	VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error)

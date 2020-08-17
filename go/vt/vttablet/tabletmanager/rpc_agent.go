@@ -115,7 +115,7 @@ type RPCTM interface {
 	WaitForPosition(ctx context.Context, pos string) error
 
 	// VExec generic API
-	VExec(ctx context.Context, query string) (*querypb.QueryResult, error)
+	VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error)
 
 	// VReplication API
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
