@@ -424,6 +424,19 @@ func TestSavepointAdditionalCase(t *testing.T) {
 	assertMatches(t, conn, "select id1 from t1 order by id1", `[]`)
 }
 
+func TestExplainPassthrough(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	result := exec(t, conn, "explain select * from t1")
+	got := fmt.Sprintf("%v", result.Rows)
+	require.Contains(t, got, "SIMPLE") // there is a lot more coming from mysql,
+	// but we are trying to make the test less fragile
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
