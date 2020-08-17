@@ -85,12 +85,7 @@ type ColExpr struct {
 	Vindex        vindexes.Vindex
 	VindexColumns []int
 
-	// Alias is usually the column name, but it can be changed
-	// if the select expression aliases with an "AS" expression.
-	// Also, "keyspace_id()" will be aliased as "keyspace_id".
-	// This Alias is sent as field info for the returned stream.
-	Alias sqlparser.ColIdent
-	Type  querypb.Type
+	Field *querypb.Field
 }
 
 // Table contains the metadata for a table.
@@ -103,10 +98,7 @@ type Table struct {
 func (plan *Plan) fields() []*querypb.Field {
 	fields := make([]*querypb.Field, len(plan.ColExprs))
 	for i, ce := range plan.ColExprs {
-		fields[i] = &querypb.Field{
-			Name: ce.Alias.String(),
-			Type: ce.Type,
-		}
+		fields[i] = ce.Field
 	}
 	return fields
 }
@@ -264,8 +256,7 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 	plan.ColExprs = make([]ColExpr, len(ti.Fields))
 	for i, col := range ti.Fields {
 		plan.ColExprs[i].ColNum = i
-		plan.ColExprs[i].Alias = sqlparser.NewColIdent(col.Name)
-		plan.ColExprs[i].Type = col.Type
+		plan.ColExprs[i].Field = col
 	}
 	if filter == "" {
 		return plan, nil
@@ -435,8 +426,7 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 		plan.ColExprs = make([]ColExpr, len(plan.Table.Fields))
 		for i, col := range plan.Table.Fields {
 			plan.ColExprs[i].ColNum = i
-			plan.ColExprs[i].Alias = sqlparser.NewColIdent(col.Name)
-			plan.ColExprs[i].Type = col.Type
+			plan.ColExprs[i].Field = col
 		}
 	}
 	return nil
@@ -462,8 +452,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		}
 		return ColExpr{
 			ColNum: colnum,
-			Alias:  as,
-			Type:   plan.Table.Fields[colnum].Type,
+			Field:  plan.Table.Fields[colnum],
 		}, nil
 	case *sqlparser.FuncExpr:
 		if inner.Name.Lowered() != "keyspace_id" {
@@ -481,10 +470,12 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			return ColExpr{}, err
 		}
 		return ColExpr{
+			Field: &querypb.Field{
+				Name: "keyspace_id",
+				Type: sqltypes.VarBinary,
+			},
 			Vindex:        cv.Vindex,
 			VindexColumns: vindexColumns,
-			Alias:         sqlparser.NewColIdent("keyspace_id"),
-			Type:          sqltypes.VarBinary,
 		}, nil
 	default:
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))

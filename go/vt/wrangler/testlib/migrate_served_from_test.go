@@ -19,6 +19,9 @@ package testlib
 import (
 	"reflect"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
 
@@ -35,6 +38,12 @@ import (
 )
 
 func TestMigrateServedFrom(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())

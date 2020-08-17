@@ -214,7 +214,21 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	if err != nil {
 		return err
 	}
+	fillInTxStatusFlags(c, session)
 	return callback(result)
+}
+
+func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
+	if session.InTransaction {
+		c.StatusFlags |= mysql.ServerStatusInTransaction
+	} else {
+		c.StatusFlags &= mysql.NoServerStatusInTransaction
+	}
+	if session.Autocommit {
+		c.StatusFlags |= mysql.ServerStatusAutocommit
+	} else {
+		c.StatusFlags &= mysql.NoServerStatusAutocommit
+	}
 }
 
 // ComPrepare is the handler for command prepare.
@@ -303,6 +317,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		err = mysql.NewSQLErrorFromError(err)
 		return err
 	}
+	fillInTxStatusFlags(c, session)
 
 	return callback(qr)
 }

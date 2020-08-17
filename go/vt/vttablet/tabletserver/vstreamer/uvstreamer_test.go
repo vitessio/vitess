@@ -264,7 +264,7 @@ commit;"
 			cancel()
 		}
 	}
-
+	resetMetrics(t)
 	startVStreamCopy(ctx, t, filter, tablePKs)
 
 	select {
@@ -283,11 +283,17 @@ commit;"
 		log.Infof("Successfully received %d events", numExpectedEvents)
 	}
 	validateReceivedEvents(t)
+	validateMetrics(t)
 }
 
 func validateReceivedEvents(t *testing.T) {
 	for i, ev := range allEvents {
 		ev.Timestamp = 0
+		if ev.Type == binlogdatapb.VEventType_FIELD {
+			for j := range ev.FieldEvent.Fields {
+				ev.FieldEvent.Fields[j].Flags = 0
+			}
+		}
 		got := ev.String()
 		want := expectedEvents[i]
 		if !strings.HasPrefix(got, want) {
@@ -295,6 +301,24 @@ func validateReceivedEvents(t *testing.T) {
 			t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
 		}
 	}
+}
+
+func resetMetrics(t *testing.T) {
+	engine.vstreamerEventsStreamed.Reset()
+	engine.resultStreamerNumRows.Reset()
+	engine.rowStreamerNumRows.Reset()
+	engine.vstreamerPhaseTimings.Reset()
+	engine.vstreamerPhaseTimings.Reset()
+	engine.vstreamerPhaseTimings.Reset()
+}
+
+func validateMetrics(t *testing.T) {
+	require.Equal(t, engine.vstreamerEventsStreamed.Get(), int64(len(allEvents)))
+	require.Equal(t, engine.resultStreamerNumRows.Get(), int64(0))
+	require.Equal(t, engine.rowStreamerNumRows.Get(), int64(31))
+	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"], int64(3))
+	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"], int64(2))
+	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"], int64(2))
 }
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
@@ -423,7 +447,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 var expectedEvents = []string{
 	"type:OTHER gtid:\"Copy Start t1\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
 	"type:GTID",
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"110\" > > > ",
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"220\" > > > ",
@@ -441,18 +465,18 @@ var expectedEvents = []string{
 	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" > completed:true > ",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"11110\" > > > ",
 	"type:GTID",
 	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
 	"type:OTHER gtid:\"Copy Start t2\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"12120\" > > > ",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 > fields:<name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"120\" > > > ",
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"240\" > > > ",
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"360\" > > > ",
@@ -471,17 +495,17 @@ var expectedEvents = []string{
 	"type:COMMIT",
 	"type:OTHER gtid:\"Copy Start t3\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"13130\" > > > ",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 > fields:<name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"12240\" > > > ",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 > fields:<name:\"id32\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63 > fields:<name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"130\" > > > ",
 	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"260\" > > > ",
 	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"390\" > > > ",
@@ -499,17 +523,17 @@ var expectedEvents = []string{
 	"type:COMMIT",
 	"type:OTHER gtid:\"Copy Done\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 > fields:<name:\"id12\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"14140\" > > > ",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 > fields:<name:\"id22\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 > fields:<name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"13260\" > > > ",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 > fields:<name:\"id32\" type:INT32 > > ",
+	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63 > fields:<name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63 > > ",
 	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"12360\" > > > ",
 	"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
 	"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",

@@ -75,22 +75,28 @@ func TestAPI(t *testing.T) {
 	ts.SaveVSchema(ctx, "ks1", vs)
 
 	tablet1 := topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
-		Keyspace: "ks1",
-		Shard:    "-80",
-		Type:     topodatapb.TabletType_REPLICA,
-		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
-		PortMap:  map[string]int32{"vt": 100},
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+		Keyspace:      "ks1",
+		Shard:         "-80",
+		Type:          topodatapb.TabletType_REPLICA,
+		KeyRange:      &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
+		PortMap:       map[string]int32{"vt": 100},
+		Hostname:      "mysql1-cell1.test.net",
+		MysqlHostname: "mysql1-cell1.test.net",
+		MysqlPort:     int32(3306),
 	}
 	ts.CreateTablet(ctx, &tablet1)
 
 	tablet2 := topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: "cell2", Uid: 200},
-		Keyspace: "ks1",
-		Shard:    "-80",
-		Type:     topodatapb.TabletType_REPLICA,
-		KeyRange: &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
-		PortMap:  map[string]int32{"vt": 200},
+		Alias:         &topodatapb.TabletAlias{Cell: "cell2", Uid: 200},
+		Keyspace:      "ks1",
+		Shard:         "-80",
+		Type:          topodatapb.TabletType_REPLICA,
+		KeyRange:      &topodatapb.KeyRange{Start: nil, End: []byte{0x80}},
+		PortMap:       map[string]int32{"vt": 200},
+		Hostname:      "mysql2-cell2.test.net",
+		MysqlHostname: "mysql2-cell2.test.net",
+		MysqlPort:     int32(3306),
 	}
 	ts.CreateTablet(ctx, &tablet2)
 
@@ -126,6 +132,55 @@ func TestAPI(t *testing.T) {
 	realtimeStats.StatsUpdate(ts5)
 	realtimeStats.StatsUpdate(ts6)
 
+	// all-tablets response for keyspace/ks1/tablets/ endpoints
+	keyspaceKs1AllTablets := `[
+		{
+			"alias": {
+				"cell": "cell1",
+				"uid": 100
+			},
+			"hostname": "mysql1-cell1.test.net",
+			"port_map": {
+				"vt": 100
+			},
+			"keyspace": "ks1",
+			"shard": "-80",
+			"key_range": {
+				"end": "gA=="
+			},
+			"type": 2,
+			"mysql_hostname": "mysql1-cell1.test.net",
+			"mysql_port": 3306,
+			"stats": {
+				"realtime": {
+					"seconds_behind_master": 100
+				},
+				"serving": true,
+				"up": true
+			},
+			"url": "http://mysql1-cell1.test.net:100"
+		},
+		{
+			"alias": {
+				"cell": "cell2",
+				"uid": 200
+			},
+			"hostname": "mysql2-cell2.test.net",
+			"port_map": {
+				"vt": 200
+			},
+			"keyspace": "ks1",
+			"shard": "-80",
+			"key_range": {
+				"end": "gA=="
+			},
+			"type": 2,
+			"mysql_hostname": "mysql2-cell2.test.net",
+			"mysql_port": 3306,
+			"url": "http://mysql2-cell2.test.net:200"
+		}
+	]`
+
 	// Test cases.
 	table := []struct {
 		method, path, body, want string
@@ -139,6 +194,64 @@ func TestAPI(t *testing.T) {
 
 		// Cells
 		{"GET", "cells", "", `["cell1","cell2"]`, http.StatusOK},
+
+		// Keyspace
+		{"GET", "keyspace/doesnt-exist/tablets/", "", ``, http.StatusNotFound},
+		{"GET", "keyspace/ks1/tablets/", "", keyspaceKs1AllTablets, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/-80", "", keyspaceKs1AllTablets, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/80-", "", `[]`, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cells=cell1,cell2", "", keyspaceKs1AllTablets, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cells=cell1", "", `[
+			{
+				"alias": {
+					"cell": "cell1",
+					"uid": 100
+				},
+				"hostname": "mysql1-cell1.test.net",
+				"port_map": {
+					"vt": 100
+				},
+				"keyspace": "ks1",
+				"shard": "-80",
+				"key_range": {
+					"end": "gA=="
+				},
+				"type": 2,
+				"mysql_hostname": "mysql1-cell1.test.net",
+				"mysql_port": 3306,
+				"stats": {
+					"realtime": {
+						"seconds_behind_master": 100
+					},
+					"serving": true,
+					"up": true
+				},
+				"url": "http://mysql1-cell1.test.net:100"
+			}
+		]`, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cells=cell3", "", `[]`, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cell=cell2", "", `[
+			{
+				"alias": {
+					"cell": "cell2",
+					"uid": 200
+				},
+				"hostname": "mysql2-cell2.test.net",
+				"port_map": {
+					"vt": 200
+				},
+				"keyspace": "ks1",
+				"shard": "-80",
+				"key_range": {
+					"end": "gA=="
+				},
+				"type": 2,
+				"mysql_hostname": "mysql2-cell2.test.net",
+				"mysql_port": 3306,
+				"url": "http://mysql2-cell2.test.net:200"
+			}
+		]`, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cell=cell3", "", `[]`, http.StatusOK},
 
 		// Keyspaces
 		{"GET", "keyspaces", "", `["ks1", "ks3"]`, http.StatusOK},
@@ -194,6 +307,7 @@ func TestAPI(t *testing.T) {
 		{"GET", "tablets/?shard=ks1%2F80-&cell=cell1", "", `[]`, http.StatusOK},
 		{"GET", "tablets/cell1-100", "", `{
 				"alias": {"cell": "cell1", "uid": 100},
+				"hostname": "mysql1-cell1.test.net",
 				"port_map": {"vt": 100},
 				"keyspace": "ks1",
 				"shard": "-80",
@@ -201,7 +315,9 @@ func TestAPI(t *testing.T) {
 					"end": "gA=="
 				},
 				"type": 2,
-				"url":"http://:100"
+				"mysql_hostname": "mysql1-cell1.test.net",
+				"mysql_port": 3306,
+				"url":"http://mysql1-cell1.test.net:100"
 			}`, http.StatusOK},
 		{"GET", "tablets/nonexistent-999", "", "404 page not found", http.StatusNotFound},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{

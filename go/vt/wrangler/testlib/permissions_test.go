@@ -19,6 +19,9 @@ package testlib
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
 
@@ -34,6 +37,12 @@ import (
 )
 
 func TestPermissions(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	// Initialize our environment
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
