@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/logutil"
@@ -38,6 +40,12 @@ import (
 
 // TestTabletExternallyReparentedBasic tests the base cases for TER
 func TestTabletExternallyReparentedBasic(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -124,6 +132,12 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 }
 
 func TestTabletExternallyReparentedToReplica(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -200,6 +214,12 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 // that if mysql is restarted on the master-elect tablet and has a different
 // port, we pick it up correctly.
 func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -279,6 +299,12 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 // TestTabletExternallyReparentedContinueOnUnexpectedMaster makes sure
 // that we ignore mysql's master if the flag is set
 func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -351,6 +377,12 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 }
 
 func TestTabletExternallyReparentedRerun(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -439,6 +471,12 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 }
 
 func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	flag.Set("disable_active_reparents", "true")
 	defer flag.Set("disable_active_reparents", "false")
 

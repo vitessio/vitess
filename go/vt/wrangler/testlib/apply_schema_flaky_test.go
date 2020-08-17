@@ -19,6 +19,9 @@ package testlib
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
 
@@ -39,6 +42,12 @@ import (
 // Only if the flag is specified, potentially long running schema changes are
 // allowed.
 func TestApplySchema_AllowLongUnavailability(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	cell := "cell1"
 	db := fakesqldb.New(t)
 	defer db.Close()

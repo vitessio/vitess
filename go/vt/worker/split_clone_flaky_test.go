@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -335,15 +337,16 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 		fields = v3Fields
 	}
 	return &testQueryService{
-		t:                        t,
-		target:                   target,
+		t:              t,
+		target:         target,
+		shardIndex:     shardIndex,
+		shardCount:     shardCount,
+		alias:          alias,
+		omitKeyspaceID: omitKeyspaceID,
+		fields:         fields,
+		forceError:     make(map[int64]int),
+
 		StreamHealthQueryService: shqs,
-		shardIndex:               shardIndex,
-		shardCount:               shardCount,
-		alias:                    alias,
-		omitKeyspaceID:           omitKeyspaceID,
-		fields:                   fields,
-		forceError:               make(map[int64]int),
 	}
 }
 
@@ -521,6 +524,12 @@ var v3Fields = []*querypb.Field{
 
 // TestSplitCloneV2_Offline tests the offline phase with an empty destination.
 func TestSplitCloneV2_Offline(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -536,6 +545,12 @@ func TestSplitCloneV2_Offline(t *testing.T) {
 // --source_reader_count=10, at most 10 out of the 1000 chunk pipeplines will
 // get processed concurrently while the other pending ones are blocked.
 func TestSplitCloneV2_Offline_HighChunkCount(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUpWithConcurrency(false /* v3 */, 10, 5 /* writeQueryMaxRows */, 1000 /* rowsCount */)
 	defer tc.tearDown()
@@ -559,6 +574,12 @@ func TestSplitCloneV2_Offline_HighChunkCount(t *testing.T) {
 // TestSplitCloneV2_Offline but forces SplitClone to restart the streaming
 // query on the source before reading the last row.
 func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -600,6 +621,12 @@ func TestSplitCloneV2_Offline_RestartStreamingQuery(t *testing.T) {
 // TestSplitCloneV2_Offline_RestartStreamingQuery. However, the first restart
 // of the streaming query does not succeed here and instead vtworker will fail.
 func TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
@@ -640,6 +667,12 @@ func TestSplitCloneV2_Offline_FailOverStreamingQuery_NotAllowed(t *testing.T) {
 // query on the source *and* failover to a different source tablet before
 // reading the last row.
 func TestSplitCloneV2_Online_FailOverStreamingQuery(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
@@ -695,6 +728,12 @@ func TestSplitCloneV2_Online_FailOverStreamingQuery(t *testing.T) {
 // restartable_result_reader.go where we keep retrying while no tablet may be
 // available.
 func TestSplitCloneV2_Online_TabletsUnavailableDuringRestart(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUpWithConcurrency(false /* v3 */, 1, 10, splitCloneTestRowsCount)
 	defer tc.tearDown()
@@ -743,6 +782,11 @@ func TestSplitCloneV2_Online_TabletsUnavailableDuringRestart(t *testing.T) {
 
 // TestSplitCloneV2_Online tests the online phase with an empty destination.
 func TestSplitCloneV2_Online(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -768,6 +812,12 @@ func TestSplitCloneV2_Online(t *testing.T) {
 }
 
 func TestSplitCloneV2_Online_Offline(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -800,6 +850,12 @@ func TestSplitCloneV2_Online_Offline(t *testing.T) {
 // TestSplitCloneV2_Offline, but the destination has existing data which must be
 // reconciled.
 func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	// We reduce the parallelism to 1 to test the order of expected
 	// insert/update/delete statements on the destination master.
@@ -860,6 +916,12 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 }
 
 func TestSplitCloneV2_Throttled(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -901,6 +963,12 @@ func TestSplitCloneV2_Throttled(t *testing.T) {
 // TestSplitCloneV2 with the additional twist that the destination masters
 // fail the first write because they are read-only and succeed after that.
 func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -931,6 +999,12 @@ func TestSplitCloneV2_RetryDueToReadonly(t *testing.T) {
 // even in a period where no MASTER tablet is available according to the
 // HealthCheck instance.
 func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(false /* v3 */)
 	defer tc.tearDown()
@@ -998,6 +1072,12 @@ func TestSplitCloneV2_NoMasterAvailable(t *testing.T) {
 }
 
 func TestSplitCloneV3(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	tc := &splitCloneTestCase{t: t}
 	tc.setUp(true /* v3 */)
 	defer tc.tearDown()
