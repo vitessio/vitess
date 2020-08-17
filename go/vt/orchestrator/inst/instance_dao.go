@@ -1433,6 +1433,12 @@ func ReadWriteableClustersMasters() (instances [](*Instance), err error) {
 	return instances, err
 }
 
+// ReadClusterAliasInstances reads all instances of a cluster alias
+func ReadClusterAliasInstances(clusterAlias string) ([](*Instance), error) {
+	condition := `suggested_cluster_alias = ? `
+	return readInstancesByCondition(condition, sqlutils.Args(clusterAlias), "")
+}
+
 // ReadReplicaInstances reads replicas of a given master
 func ReadReplicaInstances(masterKey *InstanceKey) ([](*Instance), error) {
 	condition := `
