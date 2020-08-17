@@ -496,8 +496,13 @@ const (
 // Originally found in include/mysql/mysql_com.h
 // See http://dev.mysql.com/doc/internals/en/status-flags.html
 const (
-	// ServerStatusAutocommit is SERVER_STATUS_AUTOCOMMIT.
-	ServerStatusAutocommit = 0x0002
+	// ServerStatusAutocommit is SERVER_STATUS_IN_TRANS
+	ServerStatusInTransaction   = 0x0001
+	NoServerStatusInTransaction = 0xFFFE
+
+	// ServerStatusAutocommit is SERVER_STATUS_AUTOCOMMIT
+	ServerStatusAutocommit   = 0x0002
+	NoServerStatusAutocommit = 0xFFFD
 
 	// ServerMoreResultsExists is SERVER_MORE_RESULTS_EXISTS
 	ServerMoreResultsExists = 0x0008
