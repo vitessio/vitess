@@ -321,7 +321,7 @@ func (s *server) VExec(ctx context.Context, request *tabletmanagerdatapb.VExecRe
 	defer s.tm.HandleRPCPanic(ctx, "VExec", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.VExecResponse{}
-	response.Result, err = s.tm.VExec(ctx, request.Query)
+	response.Result, err = s.tm.VExec(ctx, request.Query, request.Workflow, request.Keyspace)
 	return response, err
 }
 

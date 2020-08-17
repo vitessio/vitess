@@ -960,7 +960,7 @@ func tmRPCTestGetReplicasPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "GetReplicas", false /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) VExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
