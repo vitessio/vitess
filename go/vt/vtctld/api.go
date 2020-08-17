@@ -87,7 +87,7 @@ type TabletWithStatsAndURL struct {
 	URL                 string                  `json:"url,omitempty"`
 }
 
-func NewTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) *TabletWithStatsAndURL {
+func newTabletWithStatsAndURL(t *topodatapb.Tablet, realtimeStats *realtimeStats) *TabletWithStatsAndURL {
 	tablet := &TabletWithStatsAndURL{
 		Alias:               t.Alias,
 		Hostname:            t.Hostname,
@@ -291,7 +291,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 				if err != nil {
 					return nil, err
 				}
-				tablet := NewTabletWithStatsAndURL(t.Tablet, realtimeStats)
+				tablet := newTabletWithStatsAndURL(t.Tablet, realtimeStats)
 				tablets = append(tablets, tablet)
 			}
 		}
@@ -464,7 +464,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			return nil, err
 		}
 
-		return NewTabletWithStatsAndURL(t.Tablet, nil), nil
+		return newTabletWithStatsAndURL(t.Tablet, nil), nil
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
