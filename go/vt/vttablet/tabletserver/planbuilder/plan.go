@@ -180,9 +180,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		// DDLs and other statements below don't get fully parsed.
 		// We have to use the original query at the time of execution.
 		plan = &Plan{PlanID: PlanDDL}
-	case *sqlparser.Show:
-		plan, err = &Plan{PlanID: PlanOtherRead}, nil
-	case *sqlparser.OtherRead:
+	case *sqlparser.Show, *sqlparser.OtherRead, *sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
