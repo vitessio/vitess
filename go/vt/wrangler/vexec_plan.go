@@ -118,7 +118,7 @@ func (vx *vexec) addDefaultWheres(where *sqlparser.Where) *sqlparser.Where {
 			}
 		}
 	}
-	if !hasWorkflow {
+	if !hasWorkflow && vx.workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("workflow")},
 			Operator: sqlparser.EqualStr,

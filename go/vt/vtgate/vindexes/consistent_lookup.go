@@ -99,7 +99,7 @@ func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.De
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids)
+	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids)
+	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return nil, err
 	}
