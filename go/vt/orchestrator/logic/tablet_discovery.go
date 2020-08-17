@@ -74,6 +74,9 @@ func RefreshTablets() {
 		if tablet.MysqlHostname == "" {
 			continue
 		}
+		if tablet.Type != topodatapb.TabletType_MASTER && !topo.IsReplicaType(tablet.Type) {
+			continue
+		}
 		instanceKey := inst.InstanceKey{
 			Hostname: tablet.MysqlHostname,
 			Port:     int(tablet.MysqlPort),

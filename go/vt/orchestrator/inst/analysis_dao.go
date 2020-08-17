@@ -454,7 +454,28 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			// We can only take one cluster level action at a time.
 			return nil
 		}
-		if a.TabletType == topodatapb.TabletType_MASTER && !a.IsMaster {
+		if a.IsMaster && !a.LastCheckValid && a.CountReplicas == 0 {
+			a.Analysis = DeadMasterWithoutReplicas
+			a.Description = "Master cannot be reached by orchestrator and has no replica"
+			ca.hasClusterwideAction = true
+			//
+		} else if a.IsMaster && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+			a.Analysis = DeadMaster
+			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
+			ca.hasClusterwideAction = true
+			//
+		} else if a.IsMaster && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
+			a.Analysis = DeadMasterAndReplicas
+			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
+			ca.hasClusterwideAction = true
+			//
+		} else if a.IsMaster && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
+			a.Analysis = DeadMasterAndSomeReplicas
+			a.Description = "Master cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
+			ca.hasClusterwideAction = true
+			//
+		} else if a.TabletType == topodatapb.TabletType_MASTER && !a.IsMaster {
+			// Topo issues are lower priority than dead master.
 			a.Analysis = MasterHasMaster
 			a.Description = "Master is replicating from somewhere else"
 			ca.hasClusterwideAction = true
@@ -463,6 +484,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = MasterIsReadOnly
 			a.Description = "Master is read-only"
 			//
+		} else if topo.IsReplicaType(a.TabletType) && ca.masterKey == nil {
+			a.Analysis = ClusterHasNoMaster
+			a.Description = "Cluster has no master"
+			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
 			a.Analysis = ReplicaIsReadWrite
 			a.Description = "Master is read-write"
@@ -479,22 +504,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
 			//
-		} else if a.IsMaster && !a.LastCheckValid && a.CountReplicas == 0 {
-			a.Analysis = DeadMasterWithoutReplicas
-			a.Description = "Master cannot be reached by orchestrator and has no replica"
-			//
-		} else if a.IsMaster && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadMaster
-			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
-			//
-		} else if a.IsMaster && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadMasterAndReplicas
-			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
-			//
-		} else if a.IsMaster && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadMasterAndSomeReplicas
-			a.Description = "Master cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
-			//
+			// TODO(sougou): Events below here are either ignored or not possible.
 		} else if a.IsMaster && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachableMasterWithLaggingReplicas
 			a.Description = "Master cannot be reached by orchestrator and all of its replicas are lagging"
@@ -521,7 +531,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		} else if a.IsMaster && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = MasterSingleReplicaNotReplicating
 			a.Description = "Master is reachable but its single replica is not replicating"
-			//
 		} else if a.IsMaster && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0 {
 			a.Analysis = MasterSingleReplicaDead
 			a.Description = "Master is reachable but its single replica is dead"
