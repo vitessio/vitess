@@ -852,6 +852,19 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 	return nil
 }
 
-func (e *Executor) VExec(ctx context.Context, query string, stmt sqlparser.Statement) (*querypb.QueryResult, error) {
-	return nil, nil
+func (e *Executor) VExec(ctx context.Context, query string, stmt sqlparser.Statement) (qr *querypb.QueryResult, err error) {
+	var r *sqltypes.Result
+	switch stmt.(type) {
+	case *sqlparser.Select:
+		r, err = e.execQuery(ctx, query)
+	case *sqlparser.Update:
+		return nil, fmt.Errorf("UPDATE statements not supported for this table. query=%s", query)
+	case *sqlparser.Delete:
+		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", query)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return sqltypes.ResultToProto3(r), nil
 }

@@ -26,6 +26,10 @@ import (
 	"golang.org/x/net/context"
 )
 
+const (
+	vexecTableQualifier = "_vt"
+)
+
 func (tm *TabletManager) extractTableName(stmt sqlparser.Statement) (string, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Update:
@@ -39,7 +43,7 @@ func (tm *TabletManager) extractTableName(stmt sqlparser.Statement) (string, err
 }
 
 // VExec executes a generic VExec command.
-func (tm *TabletManager) VExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
+func (tm *TabletManager) VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
@@ -48,10 +52,8 @@ func (tm *TabletManager) VExec(ctx context.Context, query string) (*querypb.Quer
 	if err != nil {
 		return nil, err
 	}
-	// TODO(shlomi) do something here!!!
-	fmt.Printf("======= VExec query: %x, table: %s \n", query, tableName)
 	switch tableName {
-	case onlineddl.SchemaMigrationsTableName:
+	case fmt.Sprintf("%s.%s", vexecTableQualifier, onlineddl.SchemaMigrationsTableName):
 		return tm.QueryServiceControl.OnlineDDLExecutor().VExec(ctx, query, stmt)
 	default:
 		return nil, fmt.Errorf("table not supported by vexec: %v", tableName)
