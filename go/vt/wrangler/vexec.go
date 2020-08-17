@@ -34,25 +34,31 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
-	vreplicationTableName     = "_vt.vreplication"
-	schemaMigrationsTableName = "_vt.schema_migrations"
+	vexecTableQualifier       = "_vt"
+	vreplicationTableName     = "vreplication"
+	schemaMigrationsTableName = "schema_migrations"
 )
 
 type vexec struct {
-	ctx      context.Context
-	workflow string
-	keyspace string
-	query    string
+	ctx       context.Context
+	workflow  string
+	keyspace  string
+	query     string
+	stmt      sqlparser.Statement
+	tableName string
+	planner   vexecPlanner
+	// plannedQuery is the result of supplementing original query with extra conditionals
+	plannedQuery string
 
 	wr *Wrangler
 
-	plan    *vexecPlan
 	masters []*topo.TabletInfo
 }
 
@@ -78,24 +84,32 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
+
 	if err := vx.getMasters(); err != nil {
 		return nil, err
 	}
-	if _, err := vx.buildVExecPlan(); err != nil {
+	if err := vx.parseQuery(); err != nil {
 		return nil, err
 	}
-	fullQuery := vx.plan.parsedQuery.Query
+	if err := vx.getPlanner(); err != nil {
+		return nil, err
+	}
+	plan, err := vx.buildPlan()
+	if err != nil {
+		return nil, err
+	}
+	vx.plannedQuery = plan.parsedQuery.Query
 	if dryRun {
 		return nil, vx.outputDryRunInfo()
 	}
-	return vx.exec(fullQuery)
+	return vx.exec()
 }
 
 func (vx *vexec) outputDryRunInfo() error {
-	return vx.plan.planner.dryRun()
+	return vx.planner.dryRun()
 }
 
-func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
@@ -106,8 +120,8 @@ func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, 
 		wg.Add(1)
 		go func(ctx context.Context, master *topo.TabletInfo) {
 			defer wg.Done()
-			log.Infof("Running %s on %s\n", query, master.AliasString())
-			qr, err := vx.plan.planner.exec(ctx, master.Alias, query)
+			log.Infof("Running %s on %s\n", vx.plannedQuery, master.AliasString())
+			qr, err := vx.planner.exec(ctx, master.Alias, vx.plannedQuery)
 			log.Infof("Result is %s: %v", master.AliasString(), qr)
 			if err != nil {
 				allErrors.RecordError(err)
@@ -122,6 +136,16 @@ func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, 
 	}
 	wg.Wait()
 	return results, allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (vx *vexec) parseQuery() (err error) {
+	if vx.stmt, err = sqlparser.Parse(vx.query); err != nil {
+		return err
+	}
+	if vx.tableName, err = extractTableName(vx.stmt); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (vx *vexec) getMasters() error {
@@ -200,25 +224,11 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 }
 
 func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
-	var err error
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
 		return nil, err
 	}
-	vx := newVExec(ctx, workflow, keyspace, query, wr)
-	err = vx.getMasters()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := vx.buildVExecPlan(); err != nil {
-		return nil, err
-	}
-	fullQuery := vx.plan.parsedQuery.Query
-	if dryRun {
-		return nil, vx.outputDryRunInfo()
-	}
-	results, err := vx.exec(fullQuery)
-	return results, err
+	return wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 }
 
 // ReplicationStatusResult represents the result of trying to get the replication status for a given workflow.

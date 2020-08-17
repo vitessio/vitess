@@ -30,28 +30,43 @@ import (
 )
 
 type vexecPlan struct {
-	query       string
 	opcode      int
 	parsedQuery *sqlparser.ParsedQuery
-	planner     vexecPlanner
+}
+
+type vexecPlannerData struct {
+	dbNameColumn         string
+	workflowColumn       string
+	immutableColumnNames []string
+	updatableColumnNames []string
 }
 
 type vexecPlanner interface {
-	dbNameColumn() (colName string)
-	workflowColumn() (colName string)
-	immutableColumnNames() (colNames []string)
-	updatableColumnNames() (colNames []string)
+	data() *vexecPlannerData
 	exec(ctx context.Context, masterAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error)
 	dryRun() error
 }
 
-type vreplicationPlanner struct{ vx *vexec }
+type vreplicationPlanner struct {
+	vx *vexec
+	d  *vexecPlannerData
+}
 
-func (p vreplicationPlanner) dbNameColumn() (colName string)            { return "db_name" }
-func (p vreplicationPlanner) workflowColumn() (colName string)          { return "workflow" }
-func (p vreplicationPlanner) immutableColumnNames() (colNames []string) { return []string{"id"} }
-func (p vreplicationPlanner) updatableColumnNames() (colNames []string) { return []string{} }
-func (p vreplicationPlanner) exec(ctx context.Context, masterAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
+func NewVreplicationPlanner(vx *vexec) vexecPlanner {
+	return &vreplicationPlanner{
+		vx: vx,
+		d: &vexecPlannerData{
+			dbNameColumn:         "db_name",
+			workflowColumn:       "workflow",
+			immutableColumnNames: []string{"id"},
+			updatableColumnNames: []string{},
+		},
+	}
+}
+func (p vreplicationPlanner) data() *vexecPlannerData { return p.d }
+func (p vreplicationPlanner) exec(
+	ctx context.Context, masterAlias *topodatapb.TabletAlias, query string,
+) (*querypb.QueryResult, error) {
 	qr, err := p.vx.wr.VReplicationExec(ctx, masterAlias, query)
 	if err != nil {
 		return nil, err
@@ -68,7 +83,7 @@ func (p vreplicationPlanner) dryRun() error {
 	}
 
 	p.vx.wr.Logger().Printf("Query: %s\nwill be run on the following streams in keyspace %s for workflow %s:\n\n",
-		p.vx.plan.parsedQuery.Query, p.vx.keyspace, p.vx.workflow)
+		p.vx.plannedQuery, p.vx.keyspace, p.vx.workflow)
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
 	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID", "MaxReplicationLag"})
@@ -87,16 +102,25 @@ func (p vreplicationPlanner) dryRun() error {
 	return nil
 }
 
-type schemaMigrationsPlanner struct{ vx *vexec }
-
-func (p schemaMigrationsPlanner) dbNameColumn() (colName string)            { return "mysql_schema" }
-func (p schemaMigrationsPlanner) workflowColumn() (colName string)          { return "migration_uuid" }
-func (p schemaMigrationsPlanner) immutableColumnNames() (colNames []string) { return []string{""} }
-func (p schemaMigrationsPlanner) updatableColumnNames() (colNames []string) {
-	return []string{"migration_status"}
+type schemaMigrationsPlanner struct {
+	vx *vexec
+	d  *vexecPlannerData
 }
+
+func NewSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
+	return &schemaMigrationsPlanner{
+		vx: vx,
+		d: &vexecPlannerData{
+			dbNameColumn:         "mysql_schema",
+			workflowColumn:       "migration_uuid",
+			immutableColumnNames: []string{},
+			updatableColumnNames: []string{"migration_status"},
+		},
+	}
+}
+func (p schemaMigrationsPlanner) data() *vexecPlannerData { return p.d }
 func (p schemaMigrationsPlanner) exec(ctx context.Context, masterAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
-	qr, err := p.vx.wr.GenericVExec(ctx, masterAlias, query)
+	qr, err := p.vx.wr.GenericVExec(ctx, masterAlias, query, p.vx.workflow, p.vx.keyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +140,7 @@ const (
 	selectQuery
 )
 
+// extractTableName returns the qualified table name (e.g. "_vt.schema_migrations") from a SELECT/DELETE/UPDATE statement
 func extractTableName(stmt sqlparser.Statement) (string, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Update:
@@ -128,46 +153,37 @@ func extractTableName(stmt sqlparser.Statement) (string, error) {
 	return "", fmt.Errorf("query not supported by vexec: %+v", sqlparser.String(stmt))
 }
 
-func (vx *vexec) buildVExecPlan() (*vexecPlan, error) {
-	stmt, err := sqlparser.Parse(vx.query)
-	if err != nil {
-		return nil, err
-	}
+func qualifiedTableName(tableName string) string {
+	return fmt.Sprintf("%s.%s", vexecTableQualifier, tableName)
+}
 
-	tableName, err := extractTableName(stmt)
-	if err != nil {
-		return nil, err
-	}
-
-	var planner vexecPlanner
-	switch tableName {
-	case schemaMigrationsTableName:
-		planner = schemaMigrationsPlanner{vx: vx}
-	case vreplicationTableName:
-		planner = vreplicationPlanner{vx: vx}
+// getPlanner returns a specific planner appropriate for the queried table
+func (vx *vexec) getPlanner() error {
+	switch vx.tableName {
+	case qualifiedTableName(schemaMigrationsTableName):
+		vx.planner = NewSchemaMigrationsPlanner(vx)
+	case qualifiedTableName(vreplicationTableName):
+		vx.planner = NewVreplicationPlanner(vx)
 	default:
-		return nil, fmt.Errorf("table not supported by vexec: %v", tableName)
+		return fmt.Errorf("table not supported by vexec: %v", vx.tableName)
 	}
+	return nil
+}
 
-	var plan *vexecPlan
-	switch stmt := stmt.(type) {
+// buildPlan builds an execution plan. More specifically, it generates the query which is then sent to
+// relevant vttablet servers
+func (vx *vexec) buildPlan() (plan *vexecPlan, err error) {
+	switch stmt := vx.stmt.(type) {
 	case *sqlparser.Update:
-		plan, err = vx.buildUpdatePlan(planner, stmt)
+		plan, err = vx.buildUpdatePlan(vx.planner, stmt)
 	case *sqlparser.Delete:
-		plan, err = vx.buildDeletePlan(planner, stmt)
+		plan, err = vx.buildDeletePlan(vx.planner, stmt)
 	case *sqlparser.Select:
-		plan, err = vx.buildSelectPlan(planner, stmt)
+		plan, err = vx.buildSelectPlan(vx.planner, stmt)
 	default:
 		return nil, fmt.Errorf("query not supported by vexec: %s", sqlparser.String(stmt))
 	}
-
-	if err != nil {
-		return nil, err
-	}
-	plan.planner = planner
-	plan.query = vx.query
-	vx.plan = plan
-	return plan, nil
+	return plan, err
 }
 
 func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
@@ -182,7 +198,8 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
-func (vx *vexec) analyzeWhere(where *sqlparser.Where) []string {
+// analyzeWhereColumns identifies column names in a WHERE clause
+func (vx *vexec) analyzeWhereColumns(where *sqlparser.Where) []string {
 	var cols []string
 	if where == nil {
 		return cols
@@ -200,20 +217,22 @@ func (vx *vexec) analyzeWhere(where *sqlparser.Where) []string {
 	return cols
 }
 
+// addDefaultWheres modifies the query to add, if appropriate, the workflow and DB-name column modifiers
 func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) *sqlparser.Where {
-	cols := vx.analyzeWhere(where)
+	cols := vx.analyzeWhereColumns(where)
 	var hasDBName, hasWorkflow bool
+	plannerData := planner.data()
 	for _, col := range cols {
-		if col == planner.dbNameColumn() {
+		if col == plannerData.dbNameColumn {
 			hasDBName = true
-		} else if col == planner.workflowColumn() {
+		} else if col == plannerData.workflowColumn {
 			hasWorkflow = true
 		}
 	}
 	newWhere := where
 	if !hasDBName {
 		expr := &sqlparser.ComparisonExpr{
-			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(planner.dbNameColumn())},
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerData.dbNameColumn)},
 			Operator: sqlparser.EqualStr,
 			Right:    sqlparser.NewStrLiteral([]byte(vx.masters[0].DbName())),
 		}
@@ -231,7 +250,7 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 	}
 	if !hasWorkflow && vx.workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
-			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(planner.workflowColumn())},
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerData.workflowColumn)},
 			Operator: sqlparser.EqualStr,
 			Right:    sqlparser.NewStrLiteral([]byte(vx.workflow)),
 		}
@@ -243,18 +262,20 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 	return newWhere
 }
 
+// buildUpdatePlan builds a plan for an UPDATE query
 func (vx *vexec) buildUpdatePlan(planner vexecPlanner, upd *sqlparser.Update) (*vexecPlan, error) {
 	if upd.OrderBy != nil || upd.Limit != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(upd))
 	}
+	plannerData := planner.data()
 	for _, expr := range upd.Exprs {
-		for _, immutableColName := range planner.immutableColumnNames() {
+		for _, immutableColName := range plannerData.immutableColumnNames {
 			if expr.Name.Name.EqualString(immutableColName) {
 				return nil, fmt.Errorf("%s cannot be changed: %v", immutableColName, sqlparser.String(expr))
 			}
 		}
 	}
-	if updatableColumnNames := planner.updatableColumnNames(); len(updatableColumnNames) > 0 {
+	if updatableColumnNames := plannerData.updatableColumnNames; len(updatableColumnNames) > 0 {
 		// if updatableColumnNames is non empty, then we must only accept changes to columns listed there
 		for _, expr := range upd.Exprs {
 			isUpdatable := false
@@ -280,6 +301,7 @@ func (vx *vexec) buildUpdatePlan(planner vexecPlanner, upd *sqlparser.Update) (*
 	}, nil
 }
 
+// buildUpdatePlan builds a plan for a DELETE query
 func (vx *vexec) buildDeletePlan(planner vexecPlanner, del *sqlparser.Delete) (*vexecPlan, error) {
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
@@ -302,6 +324,7 @@ func (vx *vexec) buildDeletePlan(planner vexecPlanner, del *sqlparser.Delete) (*
 	}, nil
 }
 
+// buildUpdatePlan builds a plan for a SELECT query
 func (vx *vexec) buildSelectPlan(planner vexecPlanner, sel *sqlparser.Select) (*vexecPlan, error) {
 	sel.Where = vx.addDefaultWheres(planner, sel.Where)
 	buf := sqlparser.NewTrackedBuffer(nil)
