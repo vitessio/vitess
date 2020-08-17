@@ -228,6 +228,7 @@ func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tabl
 	return fields, columns, schema, nil
 }
 
+// normalizedSchema returns a table schema with database names replaced, and auto_increment annotations removed.
 func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, tableType string) (string, error) {
 	backtickDBName := sqlescape.EscapeID(dbName)
 	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", dbName, sqlescape.EscapeID(tableName)))
