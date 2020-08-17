@@ -68,7 +68,15 @@ func TestVExec(t *testing.T) {
 	}
 	sort.Strings(shards)
 	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
-	plan, err := vx.buildVExecPlan()
+
+	err = vx.parseQuery()
+	require.NoError(t, err)
+	require.NotNil(t, vx.stmt)
+	err = vx.getPlanner()
+	require.NoError(t, err)
+	require.NotNil(t, vx.planner)
+
+	plan, err := vx.buildPlan()
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 
@@ -84,8 +92,8 @@ func TestVExec(t *testing.T) {
 	want := addWheres(query)
 	require.Equal(t, want, plan.parsedQuery.Query)
 
-	query = plan.parsedQuery.Query
-	vx.exec(query)
+	vx.plannedQuery = plan.parsedQuery.Query
+	vx.exec()
 
 	type TestCase struct {
 		name        string
@@ -371,7 +379,16 @@ func TestVExecValidations(t *testing.T) {
 	for _, bq := range badQueries {
 		t.Run(bq.name, func(t *testing.T) {
 			vx.query = bq.query
-			plan, err := vx.buildVExecPlan()
+			planQuery := func() (plan *vexecPlan, err error) {
+				if err := vx.parseQuery(); err != nil {
+					return nil, err
+				}
+				if err := vx.getPlanner(); err != nil {
+					return nil, err
+				}
+				return vx.buildPlan()
+			}
+			plan, err := planQuery()
 			require.EqualError(t, err, bq.errorString)
 			require.Nil(t, plan)
 		})
