@@ -259,6 +259,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		_, err = vc.tablePlan.applyBulkInsert(rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
+			if err != nil {
+				return nil, err
+			}
 			vc.vr.stats.QueryTimings.Record("copy", start)
 
 			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))
