@@ -116,7 +116,7 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 			position := vdiffStopPosition
 			if pos := positions[sourceShard+shard]; pos != "" {
 				position = pos
@@ -134,10 +134,10 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		// migrater buildMigrationTargets
 		env.tmc.setVRResults(
 			master.tablet,
-			"select id, source, message from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
+			"select id, source, message, cell, tablet_types from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message",
-				"int64|varchar|varchar"),
+				"id|source|message|cell|tablet_types",
+				"int64|varchar|varchar|varchar|varchar"),
 				rows...,
 			),
 		)
