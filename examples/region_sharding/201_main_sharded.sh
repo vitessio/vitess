@@ -19,8 +19,8 @@ source ./env.sh
 # apply sharding vschema
 vtctlclient ApplyVSchema -vschema_file main_vschema_sharded.json main
 
-# create the schema needed for lookup vindex
-vtctlclient ApplySchema -sql-file create_lookup_schema.sql main
+# optional: create the schema needed for lookup vindex
+#vtctlclient ApplySchema -sql-file create_lookup_schema.sql main
 
 # create the lookup vindex
 vtctlclient CreateLookupVindex -tablet_types=MASTER main "$(cat lookup_vindex.json)"
