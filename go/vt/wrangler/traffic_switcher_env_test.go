@@ -40,8 +40,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-const vreplQueryks = "select id, source, message from _vt.vreplication where workflow='test' and db_name='vt_ks'"
-const vreplQueryks2 = "select id, source, message from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
+const vreplQueryks = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks'"
+const vreplQueryks2 = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
 
 type testMigraterEnv struct {
 	ts              *topo.Server
@@ -182,11 +182,11 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message",
-			"int64|varchar|varchar"),
+			"id|source|message|cell|tablet_types",
+			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
 		)
 	}
@@ -301,11 +301,11 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message",
-			"int64|varchar|varchar"),
+			"id|source|message|cell|tablet_types",
+			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
 		)
 	}
