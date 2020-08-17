@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -192,15 +194,6 @@ type PrimaryKeyInfo struct {
 	Collation string
 }
 
-// should try using the mysql type helper flagisText(), it may not work since we find type VARBINARY for _bin collations
-func shouldCollate(dataType string) bool {
-	dataType = strings.ToLower(dataType)
-	if dataType == "varchar" || dataType == "text" || dataType == "char" {
-		return true
-	}
-	return false
-}
-
 func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*PrimaryKeyInfo, error) {
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
@@ -209,6 +202,7 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 	queryTemplate := "select character_set_name, collation_name,column_name,data_type from information_schema.columns where table_schema=%s and table_name=%s;"
 	pkInfoMap := make(map[string][]*PrimaryKeyInfo)
 	for _, td := range schema.TableDefinitions {
+
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
 		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
 		if err != nil {
@@ -230,9 +224,15 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 			collation := ""
 			for _, row := range qr.Rows {
 				columnName := row[2].ToString()
-				dataType := row[3].ToString()
 				if strings.EqualFold(columnName, pk) {
-					if shouldCollate(dataType) {
+					var currentField *querypb.Field
+					for _, field := range td.Fields {
+						if field.Name == pk {
+							currentField = field
+							break
+						}
+					}
+					if currentField != nil && sqltypes.IsText(currentField.Type) {
 						charSet = row[0].ToString()
 						collation = row[1].ToString()
 					}
