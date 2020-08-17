@@ -835,40 +835,21 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 	}
 
-	// First read the current PromotionRule from candidate_database_instance.
-	{
-		latency.Start("backend")
-		err = ReadInstancePromotionRule(instance)
-		latency.Stop("backend")
-		logReadTopologyInstanceError(instanceKey, "ReadInstancePromotionRule", err)
-	}
-	// Then check if the instance wants to set a different PromotionRule.
-	// We'll set it here on their behalf so there's no race between the first
-	// time an instance is discovered, and setting a rule like "must_not".
-	if config.Config.DetectPromotionRuleQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			var value string
-			err := db.QueryRow(config.Config.DetectPromotionRuleQuery).Scan(&value)
-			logReadTopologyInstanceError(instanceKey, "DetectPromotionRuleQuery", err)
-			promotionRule, err := ParseCandidatePromotionRule(value)
-			logReadTopologyInstanceError(instanceKey, "ParseCandidatePromotionRule", err)
-			if err == nil {
-				// We need to update candidate_database_instance.
-				// We register the rule even if it hasn't changed,
-				// to bump the last_suggested time.
-				instance.PromotionRule = promotionRule
-				err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, promotionRule).WithCurrentTime())
-				logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
-			}
-		}()
-	}
-	if tablet.Type == topodatapb.TabletType_MASTER || tablet.Type == topodatapb.TabletType_REPLICA {
-		instance.PromotionRule = NeutralPromoteRule
-	} else {
-		instance.PromotionRule = MustNotPromoteRule
-	}
+	// TODO(sougou): need to find out why this is async.
+	waitGroup.Add(1)
+	go func() {
+		defer waitGroup.Done()
+		// We need to update candidate_database_instance.
+		// We register the rule even if it hasn't changed,
+		// to bump the last_suggested time.
+		if tablet.Type == topodatapb.TabletType_MASTER || tablet.Type == topodatapb.TabletType_REPLICA {
+			instance.PromotionRule = NeutralPromoteRule
+		} else {
+			instance.PromotionRule = MustNotPromoteRule
+		}
+		err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
+		logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
+	}()
 
 	// TODO(sougou): delete cluster_alias_override metadata
 	ReadClusterAliasOverride(instance)
