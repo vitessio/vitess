@@ -36,7 +36,9 @@ type vexecPlan struct {
 
 type vexecPlannerData struct {
 	dbNameColumn         string
+	forceDbColumn        bool
 	workflowColumn       string
+	forceWorkflowColumn  bool
 	immutableColumnNames []string
 	updatableColumnNames []string
 }
@@ -112,7 +114,9 @@ func NewSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 		vx: vx,
 		d: &vexecPlannerData{
 			dbNameColumn:         "mysql_schema",
+			forceDbColumn:        true,
 			workflowColumn:       "migration_uuid",
+			forceWorkflowColumn:  true,
 			immutableColumnNames: []string{},
 			updatableColumnNames: []string{"migration_status"},
 		},
@@ -230,7 +234,7 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 		}
 	}
 	newWhere := where
-	if !hasDBName {
+	if plannerData.forceDbColumn || !hasDBName {
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerData.dbNameColumn)},
 			Operator: sqlparser.EqualStr,
@@ -248,7 +252,7 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 			}
 		}
 	}
-	if !hasWorkflow && vx.workflow != "" {
+	if plannerData.forceWorkflowColumn || !hasWorkflow && vx.workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerData.workflowColumn)},
 			Operator: sqlparser.EqualStr,
