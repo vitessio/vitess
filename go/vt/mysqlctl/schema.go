@@ -320,10 +320,11 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 		return nil, err
 	}
 
+	named := qr.Named()
 	colMap := map[string][]string{}
-	for _, row := range qr.Rows {
-		tableName := row[0].ToString()
-		colMap[tableName] = append(colMap[tableName], row[2].ToString())
+	for _, row := range named.Rows {
+		tableName := row.AsString("table_name", "")
+		colMap[tableName] = append(colMap[tableName], row.AsString("column_name", ""))
 	}
 	return colMap, err
 }
