@@ -71,7 +71,7 @@ var (
 	warnPayloadSize    = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 
 	// Put set-passthrough under a flag.
-	sysVarSetEnabled = flag.Bool("enable_system_settings", false, "This will enable the system settings to be changed per session at the database connection level")
+	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
