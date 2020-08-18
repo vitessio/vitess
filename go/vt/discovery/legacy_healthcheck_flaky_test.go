@@ -26,30 +26,12 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/status"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/status"
+	"vitess.io/vitess/go/vt/topo"
 )
-
-var connMap map[string]*fakeConn
-
-func init() {
-	tabletconn.RegisterDialer("fake_discovery", discoveryDialer)
-
-	//log error
-	if err := flag.Set("tablet_protocol", "fake_discovery"); err != nil {
-		log.Errorf("flag.Set(\"tablet_protocol\", \"fake_discovery\") failed : %v", err)
-	}
-	connMap = make(map[string]*fakeConn)
-}
 
 func testChecksum(t *testing.T, want, got int64) {
 	t.Helper()
@@ -88,18 +70,20 @@ func TestLegacyHealthCheck(t *testing.T) {
 
 	// one tablet after receiving a StreamHealthResponse
 	shr := &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
 	want = &LegacyTabletStats{
-		Key:                                 "a,vt:1",
-		Tablet:                              tablet,
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-		Up:                                  true,
-		Serving:                             true,
-		Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		Key:     "a,vt:1",
+		Tablet:  tablet,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Up:      true,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 		TabletExternallyReparentedTimestamp: 10,
 	}
 	input <- shr
@@ -119,12 +103,13 @@ func TestLegacyHealthCheck(t *testing.T) {
 		Cell:   "cell",
 		Target: &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
 		TabletsStats: LegacyTabletStatsList{{
-			Key:                                 "a,vt:1",
-			Tablet:                              tablet,
-			Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
-			Up:                                  true,
-			Serving:                             true,
-			Stats:                               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+			Key:     "a,vt:1",
+			Tablet:  tablet,
+			Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+			Up:      true,
+			Serving: true,
+			Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+
 			TabletExternallyReparentedTimestamp: 10,
 		}},
 	}}
@@ -135,10 +120,12 @@ func TestLegacyHealthCheck(t *testing.T) {
 
 	// TabletType changed, should get both old and new event
 	shr = &querypb.StreamHealthResponse{
-		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
-		Serving:                             true,
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+
 		TabletExternallyReparentedTimestamp: 0,
-		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
+
+		RealtimeStats: &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.5},
 	}
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
@@ -657,12 +644,4 @@ func newListener() *listener {
 
 func (l *listener) StatsUpdate(ts *LegacyTabletStats) {
 	l.output <- ts
-}
-
-func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-	key := TabletToMapKey(tablet)
-	if qs, ok := connMap[key]; ok {
-		return qs, nil
-	}
-	return nil, fmt.Errorf("tablet %v not found", key)
 }

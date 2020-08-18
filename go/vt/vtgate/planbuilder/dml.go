@@ -146,19 +146,20 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 		edml.Table = tval.vschemaTable
 	}
 
+	routingType, ksidVindex, ksidCol, vindex, values, err := getDMLRouting(where, edml.Table)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
 	if rb.eroute.TargetDestination != nil {
 		if rb.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: %s statement with a replica target", dmlType)
 		}
 		edml.Opcode = engine.ByDestination
 		edml.TargetDestination = rb.eroute.TargetDestination
-		return edml, nil, "", nil
+		return edml, ksidVindex, ksidCol, nil
 	}
 
-	routingType, ksidVindex, ksidCol, vindex, values, err := getDMLRouting(where, edml.Table)
-	if err != nil {
-		return nil, nil, "", err
-	}
 	edml.Opcode = routingType
 	if routingType == engine.Scatter {
 		if limit != nil {

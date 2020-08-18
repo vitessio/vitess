@@ -205,7 +205,9 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		// Long timeout in case failover is slow.
 		"-buffer_window", "10m",
 		"-buffer_max_failover_duration", "10m",
-		"-buffer_min_time_between_failovers", "20m"}
+		"-buffer_min_time_between_failovers", "20m",
+		// Use legacy gateway. tabletgateway test is at go/test/endtoend/tabletgateway/buffer/buffer_test.go
+		"-gateway_implementation", "discoverygateway"}
 
 	// Start vtgate
 	if err := clusterInstance.StartVtgate(); err != nil {

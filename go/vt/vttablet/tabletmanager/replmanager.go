@@ -43,11 +43,11 @@ const (
 // the tabletserver state. This will ensure that replication is fixed
 // upfront, allowing tabletserver to start off healthy.
 type replManager struct {
-	ctx          context.Context
-	tm           *TabletManager
-	markerFile   string
-	ticks        *timer.Timer
-	firstFailure bool
+	ctx        context.Context
+	tm         *TabletManager
+	markerFile string
+	ticks      *timer.Timer
+	failed     bool
 
 	// replStopped is tri-state.
 	// A nil value signifies that the value is not set.
@@ -113,20 +113,20 @@ func (rm *replManager) checkActionLocked() {
 		}
 	}
 
-	if rm.firstFailure {
+	if !rm.failed {
 		log.Infof("Replication is stopped, reconnecting to master.")
 	}
 	ctx, cancel := context.WithTimeout(rm.ctx, 5*time.Second)
 	defer cancel()
 	if err := rm.tm.repairReplication(ctx); err != nil {
-		if rm.firstFailure {
-			rm.firstFailure = false
+		if !rm.failed {
+			rm.failed = true
 			log.Infof("Failed to reconnect to master: %v, will keep retrying.", err)
 		}
 		return
 	}
 	log.Info("Successfully reconnected to master.")
-	rm.firstFailure = true
+	rm.failed = false
 }
 
 // setReplicationStopped performs a best effort attempt of

@@ -2248,15 +2248,21 @@ func TestSelectLock(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	wantSession := &vtgatepb.Session{
-		InTransaction:  true,
-		InReservedConn: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{
-			{
-				Target:        &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
-				TabletAlias:   sbc1.Tablet().Alias,
-				TransactionId: 12345,
-				ReservedId:    12345,
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestExecutor",
+				Shard:      "-20",
+				TabletType: topodatapb.TabletType_MASTER,
 			},
+			TransactionId: 12345,
+			TabletAlias:   sbc1.Tablet().Alias,
+		}},
+		LockSession: &vtgatepb.Session_ShardSession{
+
+			Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
+			TabletAlias: sbc1.Tablet().Alias,
+			ReservedId:  1,
 		},
 		FoundRows: 1,
 		RowCount:  -1,

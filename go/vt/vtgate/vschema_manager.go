@@ -71,6 +71,7 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 		// we don't know the real value. In this case, we want
 		// to use the previous value if it was set, or an
 		// empty vschema if it wasn't.
+		log.Infof("Received vschema update")
 		switch {
 		case err == nil:
 			// Good case, we can try to save that value.
@@ -79,6 +80,7 @@ func (vm *VSchemaManager) watchSrvVSchema(ctx context.Context, cell string) {
 			// Otherwise, keep what we already had before.
 			v = nil
 		default:
+			log.Errorf("SrvVschema watch error: %v", err)
 			// Watch error, increment our counters.
 			if vschemaCounters != nil {
 				vschemaCounters.Add("WatchError", 1)

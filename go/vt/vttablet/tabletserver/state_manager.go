@@ -95,6 +95,7 @@ type stateManager struct {
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
 	// All Close functions must be called before Open.
+	hs          *healthStreamer
 	se          schemaEngine
 	rt          replTracker
 	vstreamer   subComponent
@@ -104,10 +105,6 @@ type stateManager struct {
 	txThrottler txThrottler
 	te          txEngine
 	messager    subComponent
-
-	// notify will be invoked by stateManager on every state change.
-	// The implementation is provided by healthStreamer.ChangeState.
-	notify func(topodatapb.TabletType, time.Time, time.Duration, error, bool)
 
 	// hcticks starts on initialiazation and runs forever.
 	hcticks *timer.Timer
@@ -181,7 +178,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, reason string) error {
 	defer sm.ExitLameduck()
 
-	// Start is idempotent.
+	sm.hs.Open()
 	sm.hcticks.Start(sm.Broadcast)
 
 	if tabletType == topodatapb.TabletType_RESTORE || tabletType == topodatapb.TabletType_BACKUP {
@@ -313,9 +310,9 @@ func (sm *stateManager) StopService() {
 	defer close(sm.setTimeBomb())
 
 	log.Info("Stopping TabletServer")
-	// Stop replica tracking because StopService is used by all tests.
-	sm.hcticks.Stop()
 	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, "service stopped")
+	sm.hcticks.Stop()
+	sm.hs.Close()
 }
 
 // StartRequest validates the current state and target and registers
@@ -569,7 +566,7 @@ func (sm *stateManager) Broadcast() {
 	defer sm.mu.Unlock()
 
 	lag, err := sm.refreshReplHealthLocked()
-	sm.notify(sm.target.TabletType, sm.terTimestamp, lag, err, sm.isServingLocked())
+	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, err, sm.isServingLocked())
 }
 
 func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {

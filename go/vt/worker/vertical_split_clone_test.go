@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -60,6 +62,12 @@ func createVerticalSplitCloneDestinationFakeDb(t *testing.T, name string, insert
 // to the destination and the offline phase won't copy any rows as the source
 // has not changed in the meantime.
 func TestVerticalSplitClone(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	ctx := context.Background()
 	wi := NewInstance(ts, "cell1", time.Second)

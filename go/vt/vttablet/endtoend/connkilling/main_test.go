@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package endtoend
+package connkilling
 
 import (
 	"errors"
@@ -79,7 +79,9 @@ func TestMain(m *testing.M) {
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		err := framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
+		config := tabletenv.NewDefaultConfig()
+		config.Oltp.TxTimeoutSeconds = tabletenv.Seconds(3)
+		err := framework.StartCustomServer(connParams, connAppDebugParams, cluster.DbName(), config)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
