@@ -247,7 +247,7 @@ func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID i
 	if err != nil {
 		return 0, "", err
 	}
-	defer conn.Unlock()
+	defer conn.UnlockUpdateTime()
 	return conn.ID(), beginSQL, err
 }
 
@@ -570,7 +570,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	if err != nil {
 		return 0, vterrors.Wrap(err, "TxEngine.ReserveBegin")
 	}
-	defer conn.Unlock()
+	defer conn.UnlockUpdateTime()
 	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, nil)
 	if err != nil {
 		conn.Close()
