@@ -51,7 +51,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -60,7 +60,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -81,7 +81,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -93,7 +93,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -111,7 +111,8 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard})
+	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard})
 	require.NoError(t, err)
 
 	// check what was run
@@ -127,7 +128,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly is set")
 	assert.True(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly not set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, oldMaster.Agent.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
+	assert.True(t, oldMaster.TM.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
@@ -154,7 +155,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -163,7 +164,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -184,7 +185,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -196,7 +197,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -224,7 +225,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master",
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	require.NoError(t, err)
 
@@ -243,7 +244,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
 
 	assert.True(t, goodReplica2.FakeMysqlDaemon.ReadOnly, "goodReplica2.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, oldMaster.Agent.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
+	assert.True(t, oldMaster.TM.QueryServiceControl.IsServing(), "oldMaster...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
@@ -266,7 +267,7 @@ func TestPlannedReparentNoMaster(t *testing.T) {
 	NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "the shard has no master")
 }
@@ -290,7 +291,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -299,7 +300,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -329,7 +330,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
 
@@ -356,7 +357,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
 
@@ -385,7 +386,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -394,7 +395,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -423,7 +424,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -450,7 +451,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
 
@@ -472,10 +473,10 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	// old master
 	master.FakeMysqlDaemon.ReadOnly = false
 	master.FakeMysqlDaemon.Replicating = false
-	master.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	master.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -489,13 +490,13 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	}
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
-	master.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	master.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// goodReplica1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
-	// simulate error that will trigger a call to RestartSlave
+	// simulate error that will trigger a call to RestartReplication
 	goodReplica1.FakeMysqlDaemon.SetMasterError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
@@ -506,7 +507,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(master.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
@@ -517,14 +518,18 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 
 	assert.False(t, master.FakeMysqlDaemon.ReadOnly, "master.FakeMysqlDaemon.ReadOnly set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, master.Agent.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
+	assert.True(t, master.TM.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
 	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
 }
 
-func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
+// TestPlannedReparentShardRelayLogErrorStartReplication is similar to
+// TestPlannedReparentShardRelayLogError with the difference that goodReplica1
+// is not replicating to start with (IO_Thread is not running) and we
+// simulate an error from the attempt to start replication
+func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -537,10 +542,10 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	// old master
 	master.FakeMysqlDaemon.ReadOnly = false
 	master.FakeMysqlDaemon.Replicating = false
-	master.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	master.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -554,17 +559,17 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	}
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
-	master.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	master.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
-	// good replica 1 is not replicating
+	// goodReplica1 is not replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.SlaveIORunning = false
+	goodReplica1.FakeMysqlDaemon.IOThreadRunning = false
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
-	goodReplica1.FakeMysqlDaemon.CurrentMasterHost = topoproto.MysqlHostname(master.Tablet)
-	goodReplica1.FakeMysqlDaemon.CurrentMasterPort = int(topoproto.MysqlPort(master.Tablet))
-	// simulate error that will trigger a call to RestartSlave
-	goodReplica1.FakeMysqlDaemon.StartSlaveError = errors.New("Slave failed to initialize relay log info structure from the repository")
+	goodReplica1.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.MysqlHostname
+	goodReplica1.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.MysqlPort)
+	// simulate error that will trigger a call to RestartReplication
+	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 		"RESET SLAVE",
@@ -574,7 +579,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
 		topoproto.TabletAliasString(master.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
@@ -585,7 +590,7 @@ func TestPlannedReparentShardRelayLogErrorStartSlave(t *testing.T) {
 
 	assert.False(t, master.FakeMysqlDaemon.ReadOnly, "master.FakeMysqlDaemon.ReadOnly set")
 	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, master.Agent.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
+	assert.True(t, master.TM.QueryServiceControl.IsServing(), "master...QueryServiceControl not serving")
 
 	// verify the old master was told to start replicating (and not
 	// the replica that wasn't replicating in the first place)
@@ -613,7 +618,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	newMaster.FakeMysqlDaemon.PromoteError = errors.New("some error")
 	newMaster.FakeMysqlDaemon.WaitMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -622,7 +627,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 	newMaster.FakeMysqlDaemon.PromoteResult = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   456,
 				Sequence: 991,
@@ -643,7 +648,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -652,7 +657,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// SetMaster is called on new master to make sure it's replicating before reparenting.
 	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
@@ -679,7 +684,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "some error")
@@ -711,7 +716,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 
 	// run PlannedReparentShard
-	err = vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	err = vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	require.NoError(t, err)
 
 	// check that mastership changed correctly
@@ -736,10 +741,10 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = true
 	oldMaster.FakeMysqlDaemon.Replicating = false
-	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
+	oldMaster.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			7: mysql.MariadbGTID{
 				Domain:   7,
 				Server:   123,
 				Sequence: 990,
@@ -753,7 +758,7 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
-	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+	oldMaster.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
 
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
@@ -778,7 +783,7 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", oldMaster.Tablet.Keyspace + "/" + oldMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(oldMaster.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", oldMaster.Tablet.Keyspace + "/" + oldMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(oldMaster.Tablet.Alias)})
 	require.NoError(t, err)
 	assert.False(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly")
 }

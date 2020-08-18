@@ -220,7 +220,9 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 // shardName : list of shard names
 // replicaCount: total number of replicas excluding master and rdonly
 // rdonly: whether readonly tablets needed
-func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool) (err error) {
+// customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
+// after they're created.
+func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...interface{}) (err error) {
 	totalTabletsRequired := replicaCount + 1 // + 1 is for master
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
@@ -240,6 +242,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			tabletUID := cluster.GetAndReserveTabletUID()
 			tablet := &Vttablet{
 				TabletUID: tabletUID,
+				Type:      "replica",
 				HTTPPort:  cluster.GetAndReservePort(),
 				GrpcPort:  cluster.GetAndReservePort(),
 				MySQLPort: cluster.GetAndReservePort(),
@@ -276,6 +279,14 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			shard.Vttablets = append(shard.Vttablets, tablet)
+			// Apply customizations
+			for _, customizer := range customizers {
+				if f, ok := customizer.(func(*VttabletProcess)); ok {
+					f(tablet.VttabletProcess)
+				} else {
+					return fmt.Errorf("type mismatch on customizer: %T", customizer)
+				}
+			}
 		}
 
 		// wait till all mysqlctl is instantiated
@@ -397,15 +408,15 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
-	vtgateInstance := *cluster.GetVtgateInstance()
+	vtgateInstance := *cluster.NewVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
 	log.Infof("Starting vtgate on port %d", vtgateInstance.Port)
 	log.Infof("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort)
 	return cluster.VtgateProcess.Setup()
 }
 
-// GetVtgateInstance returns an instance of vtgateprocess
-func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
+// NewVtgateInstance returns an instance of vtgateprocess
+func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
 	vtgateGrpcPort := cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
@@ -637,8 +648,8 @@ func getVtStartPort() int {
 	return DefaultStartPort
 }
 
-// GetVttabletInstance creates a new vttablet object
-func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID int, cell string) *Vttablet {
+// NewVttabletInstance creates a new vttablet object
+func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID int, cell string) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
 	}
@@ -656,8 +667,8 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 	}
 }
 
-// GetVtprocessInstanceFromVttablet creates a new vttablet object
-func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
+// VtprocessInstanceFromVttablet creates a new vttablet object
+func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
 	return VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
 		tablet.TabletUID,

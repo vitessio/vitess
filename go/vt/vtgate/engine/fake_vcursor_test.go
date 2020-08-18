@@ -25,6 +25,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
@@ -40,37 +44,69 @@ import (
 )
 
 var testMaxMemoryRows = 100
+var testIgnoreMaxMemoryRows = false
 
 var _ VCursor = (*noopVCursor)(nil)
+var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
+	ctx context.Context
+}
+
+func (t noopVCursor) NeedsReservedConn() {
 }
 
 func (t noopVCursor) SetUDV(key string, value interface{}) error {
 	panic("implement me")
 }
 
+func (t noopVCursor) SetSysVar(name string, expr string) {
+	//panic("implement me")
+}
+
+func (t noopVCursor) InReservedConn() bool {
+	panic("implement me")
+}
+
+func (t noopVCursor) ShardSession() []*srvtopo.ResolvedShard {
+	panic("implement me")
+}
+
 func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
 	panic("implement me")
 }
+
 func (t noopVCursor) Session() SessionActions {
 	return t
 }
+
 func (t noopVCursor) SetTarget(target string) error {
 	panic("implement me")
 }
 
 func (t noopVCursor) Context() context.Context {
-	return context.Background()
+	if t.ctx == nil {
+		return context.Background()
+	}
+	return t.ctx
 }
-
 func (t noopVCursor) MaxMemoryRows() int {
 	return testMaxMemoryRows
 }
 
+func (t noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
+	return !testIgnoreMaxMemoryRows && numRows > testMaxMemoryRows
+}
+
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
+}
+
+func (t noopVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+	g, ctx := errgroup.WithContext(t.ctx)
+	t.ctx = ctx
+	return g
 }
 
 func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -106,6 +142,8 @@ func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, 
 
 var _ VCursor = (*loggingVCursor)(nil)
 
+var _ SessionActions = (*loggingVCursor)(nil)
+
 // loggingVCursor logs requests and allows you to verify
 // that the correct requests were made.
 type loggingVCursor struct {
@@ -127,10 +165,27 @@ type loggingVCursor struct {
 	multiShardErrs []error
 
 	log []string
+
+	resolvedTargetTabletType topodatapb.TabletType
 }
 
 func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
 	f.log = append(f.log, fmt.Sprintf("UDV set with (%s,%v)", key, value))
+	return nil
+}
+
+func (f *loggingVCursor) SetSysVar(name string, expr string) {
+	f.log = append(f.log, fmt.Sprintf("SysVar set with (%s,%v)", name, expr))
+}
+
+func (f *loggingVCursor) NeedsReservedConn() {
+}
+
+func (f *loggingVCursor) InReservedConn() bool {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	return nil
 }
 
@@ -153,6 +208,10 @@ func (f *loggingVCursor) Context() context.Context {
 
 func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
+}
+
+func (f *loggingVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -253,8 +312,9 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 				visited[shard] = vi
 				rss = append(rss, &srvtopo.ResolvedShard{
 					Target: &querypb.Target{
-						Keyspace: keyspace,
-						Shard:    shard,
+						Keyspace:   keyspace,
+						Shard:      shard,
+						TabletType: f.resolvedTargetTabletType,
 					},
 				})
 				if ids != nil {

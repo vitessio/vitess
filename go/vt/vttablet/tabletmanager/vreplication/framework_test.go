@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -47,12 +48,13 @@ import (
 )
 
 var (
-	playerEngine    *Engine
-	streamerEngine  *vstreamer.Engine
-	env             *testenv.Env
-	globalFBC       = &fakeBinlogClient{}
-	vrepldb         = "vrepl"
-	globalDBQueries = make(chan string, 1000)
+	playerEngine          *Engine
+	streamerEngine        *vstreamer.Engine
+	env                   *testenv.Env
+	globalFBC             = &fakeBinlogClient{}
+	vrepldb               = "vrepl"
+	globalDBQueries       = make(chan string, 1000)
+	testForeignKeyQueries = false
 )
 
 type LogExpectation struct {
@@ -87,8 +89,9 @@ func TestMain(m *testing.M) {
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
-		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine)
-		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
+		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, env.Cells[0])
+		streamerEngine.InitDBConfig(env.KeyspaceName)
+		streamerEngine.Open()
 		defer streamerEngine.Close()
 
 		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("create database %s", vrepldb)); err != nil {
@@ -101,13 +104,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		InitVStreamerClient(env.Dbcfgs)
-
-		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb)
-		if err := playerEngine.Open(context.Background()); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
+		externalConfig := map[string]*dbconfigs.DBConfigs{
+			"exta": env.Dbcfgs,
+			"extb": env.Dbcfgs,
 		}
+		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb, externalConfig)
+		playerEngine.Open(context.Background())
 		defer playerEngine.Close()
 
 		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
@@ -219,7 +221,7 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 var vstreamHook func(ctx context.Context)
 
 // VStream directly calls into the pre-initialized engine.
-func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if target.Keyspace != "vttest" {
 		<-ctx.Done()
 		return io.EOF
@@ -227,7 +229,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, 
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return streamerEngine.Stream(ctx, startPos, filter, send)
+	return streamerEngine.Stream(ctx, startPos, tablePKs, filter, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -389,6 +391,8 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
 	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
+		globalDBQueries <- query
+	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
 		globalDBQueries <- query
 	}
 	return qr, err

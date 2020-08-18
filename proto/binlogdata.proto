@@ -230,6 +230,9 @@ enum VEventType {
   // GTIDs.
   VGTID = 15;
   JOURNAL = 16;
+  VERSION = 17;
+  LASTPK = 18;
+  SAVEPOINT = 19;
 }
 
 // RowChange represents one row change.
@@ -262,6 +265,7 @@ message ShardGtid {
   string keyspace = 1;
   string shard = 2;
   string gtid = 3;
+  repeated TableLastPK table_p_ks = 4;
 }
 
 // A VGtid is a list of ShardGtids.
@@ -324,8 +328,8 @@ message VEvent {
   int64 timestamp = 2;
   // Gtid is set if the event type is GTID.
   string gtid = 3;
-  // Ddl is set if the event type is DDL.
-  string ddl = 4;
+  // Statement is set if the event type is DDL, DML or SAVEPOINT.
+  string statement = 4;
   // RowEvent is set if the event type is ROW.
   RowEvent row_event = 5;
   // FieldEvent is set if the event type is FIELD.
@@ -340,6 +344,18 @@ message VEvent {
   // CurrentTime specifies the current time when the message was sent.
   // This can be used to compenssate for clock skew.
   int64 current_time = 20;
+  // LastPK is the last PK for a table
+  LastPKEvent last_p_k_event = 21;
+}
+
+message MinimalTable {
+    string name = 1;
+    repeated query.Field fields = 2;
+    repeated int64 p_k_columns = 3;
+}
+
+message MinimalSchema {
+    repeated MinimalTable tables = 1;
 }
 
 // VStreamRequest is the payload for VStreamer
@@ -350,6 +366,7 @@ message VStreamRequest {
 
   string position = 4;
   Filter filter = 5;
+  repeated TableLastPK table_last_p_ks = 6;
 }
 
 // VStreamResponse is the response from VStreamer
@@ -376,7 +393,18 @@ message VStreamRowsResponse {
   query.Row lastpk = 5;
 }
 
+message LastPKEvent {
+  TableLastPK table_last_p_k = 1;
+  bool completed = 2;
+}
+
+message TableLastPK {
+  string table_name = 1;
+  query.QueryResult lastpk = 3;
+}
+
 // VStreamResultsRequest is the payload for VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
 // The ids match VStreamRows, in case we decide to merge the two.
 message VStreamResultsRequest {
   vtrpc.CallerID effective_caller_id = 1;

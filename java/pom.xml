@@ -11,7 +11,7 @@
 
   <groupId>io.vitess</groupId>
   <artifactId>vitess-parent</artifactId>
-  <version>6.0.0</version>
+  <version>7.0.0</version>
   <packaging>pom</packaging>
 
   <name>Vitess Java Client libraries [Parent]</name>
@@ -75,7 +75,7 @@
     <protobuf.java.version>3.6.1</protobuf.java.version>
     <protobuf.protoc.version>3.6.1</protobuf.protoc.version>
     <checkstyle.plugin.version>3.0.0</checkstyle.plugin.version>
-    <log4j2.version>2.13.0</log4j2.version>
+    <log4j2.version>2.13.3</log4j2.version>
   </properties>
 
   <!-- Add new dependencies here and then add it below or in your module. -->

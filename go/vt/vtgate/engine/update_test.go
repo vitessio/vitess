@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -41,7 +43,7 @@ func TestUpdateUnsharded(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -74,7 +76,7 @@ func TestUpdateEqual(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -103,7 +105,7 @@ func TestUpdateScatter(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
@@ -127,7 +129,7 @@ func TestUpdateScatter(t *testing.T) {
 		},
 	}
 
-	vc = &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc = newDMLTestVCursor("-20", "20-")
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
@@ -156,12 +158,12 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
-		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
+		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" >  false`,
 	})
 }
 
@@ -185,7 +187,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{shards: []string{"0"}}
+	vc := newDMLTestVCursor("0")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
@@ -221,10 +223,8 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		),
 		"1|4|5|6",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -245,9 +245,8 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -268,10 +267,9 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -326,10 +324,8 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		),
 		"1|4|5|6",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -348,9 +344,8 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -373,10 +368,9 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -419,7 +413,7 @@ func TestUpdateIn(t *testing.T) {
 		}},
 	}
 
-	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+	vc := newDMLTestVCursor("-20", "20-")
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -466,10 +460,8 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		"1|4|5|6",
 		"2|21|22|23",
 	)}
-	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.results = results
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -496,9 +488,8 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -520,10 +511,9 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		"1|7|8|9",
 		"2|21|22|23",
 	)}
-	vc = &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: results,
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.results = results
+
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -617,4 +607,8 @@ func buildTestVSchema() *vindexes.VSchema {
 		panic(err)
 	}
 	return vs
+}
+
+func newDMLTestVCursor(shards ...string) *loggingVCursor {
+	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_MASTER}
 }

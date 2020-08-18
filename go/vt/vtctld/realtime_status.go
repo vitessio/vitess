@@ -28,13 +28,13 @@ import (
 
 // realtimeStats holds the objects needed to obtain realtime health stats of tablets.
 type realtimeStats struct {
-	healthCheck discovery.HealthCheck
+	healthCheck discovery.LegacyHealthCheck
 	*tabletStatsCache
-	cellWatchers []*discovery.TopologyWatcher
+	cellWatchers []*discovery.LegacyTopologyWatcher
 }
 
 func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
-	hc := discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
+	hc := discovery.NewLegacyHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	tabletStatsCache := newTabletStatsCache()
 	// sendDownEvents is set to true here, as we want to receive
 	// Up=False events for a tablet.
@@ -49,9 +49,9 @@ func newRealtimeStats(ts *topo.Server) (*realtimeStats, error) {
 	if err != nil {
 		return r, fmt.Errorf("error when getting cells: %v", err)
 	}
-	var watchers []*discovery.TopologyWatcher
+	var watchers []*discovery.LegacyTopologyWatcher
 	for _, cell := range cells {
-		watcher := discovery.NewCellTabletsWatcher(context.Background(), ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
+		watcher := discovery.NewLegacyCellTabletsWatcher(context.Background(), ts, hc, cell, *vtctl.HealthCheckTopologyRefresh, true /* refreshKnownTablets */, discovery.DefaultTopoReadConcurrency)
 		watchers = append(watchers, watcher)
 	}
 	r.cellWatchers = watchers

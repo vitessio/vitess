@@ -23,9 +23,9 @@ import (
 )
 
 type myTestCase struct {
-	in, expected        string
-	liid, db, foundRows bool
-	udv                 int
+	in, expected                  string
+	liid, db, foundRows, rowCount bool
+	udv                           int
 }
 
 func TestRewrites(in *testing.T) {
@@ -110,6 +110,16 @@ func TestRewrites(in *testing.T) {
 			expected: "insert into t(id) values(:__vtudvxyx)",
 			db:       false, udv: 1,
 		},
+		{
+			in:       "select row_count()",
+			expected: "select :__vtrcount as `row_count()`",
+			rowCount: true,
+		},
+		{
+			in:       "SELECT lower(database())",
+			expected: "SELECT lower(:__vtdbname) as `lower(database())`",
+			db:       true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -128,6 +138,7 @@ func TestRewrites(in *testing.T) {
 			require.Equal(t, tc.liid, result.NeedLastInsertID, "should need last insert id")
 			require.Equal(t, tc.db, result.NeedDatabase, "should need database name")
 			require.Equal(t, tc.foundRows, result.NeedFoundRows, "should need found rows")
+			require.Equal(t, tc.rowCount, result.NeedRowCount, "should need row count")
 			require.Equal(t, tc.udv, len(result.NeedUserDefinedVariables), "should need row count")
 		})
 	}

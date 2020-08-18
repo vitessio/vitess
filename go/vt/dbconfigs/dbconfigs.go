@@ -27,6 +27,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/yaml2"
 )
 
@@ -79,6 +81,7 @@ type DBConfigs struct {
 	SslKey                     string `json:"sslKey,omitempty"`
 	ServerName                 string `json:"serverName,omitempty"`
 	ConnectTimeoutMilliseconds int    `json:"connectTimeoutMilliseconds,omitempty"`
+	DBName                     string `json:"dbName,omitempty"`
 
 	App          UserConfig `json:"app,omitempty"`
 	Dba          UserConfig `json:"dba,omitempty"`
@@ -95,8 +98,6 @@ type DBConfigs struct {
 	appdebugParams     mysql.ConnParams
 	allprivsParams     mysql.ConnParams
 	externalReplParams mysql.ConnParams
-
-	dbname string
 }
 
 // UserConfig contains user-specific configs.
@@ -191,6 +192,10 @@ func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 
 // MysqlParams returns the connections params
 func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
+	if c.connParams == nil {
+		// This is only possible during tests.
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "parameters are empty")
+	}
 	params, err := withCredentials(c.connParams)
 	if err != nil {
 		return nil, err
@@ -206,18 +211,6 @@ func (c Connector) DBName() string {
 // Host gets the host from mysql.ConnParams
 func (c Connector) Host() string {
 	return c.connParams.Host
-}
-
-// WithDBName returns a new DBConfigs with the dbname set.
-func (dbcfgs *DBConfigs) WithDBName(dbname string) *DBConfigs {
-	dbcfgs = dbcfgs.Clone()
-	dbcfgs.dbname = dbname
-	return dbcfgs
-}
-
-// DBName returns the db name.
-func (dbcfgs *DBConfigs) DBName() string {
-	return dbcfgs.dbname
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
@@ -276,7 +269,7 @@ func (dbcfgs *DBConfigs) ExternalReplWithDB() Connector {
 func (dbcfgs *DBConfigs) makeParams(cp *mysql.ConnParams, withDB bool) Connector {
 	result := *cp
 	if withDB {
-		result.DbName = dbcfgs.dbname
+		result.DbName = dbcfgs.DBName
 	}
 	return Connector{
 		connParams: &result,
@@ -326,15 +319,14 @@ func (dbcfgs *DBConfigs) Clone() *DBConfigs {
 	return &result
 }
 
-// Init will initialize all the necessary connection parameters.
+// InitWithSocket will initialize all the necessary connection parameters.
 // Precedence is as follows: if UserConfig settings are set,
 // they supersede all other settings.
 // The next priority is with per-user connection
 // parameters. This is only for legacy support.
 // If no per-user parameters are supplied, then the defaultSocketFile
 // is used to initialize the per-user conn params.
-func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
-	dbcfgs = dbcfgs.Clone()
+func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 	for _, userKey := range All {
 		uc, cp := dbcfgs.getParams(userKey, dbcfgs)
 		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
@@ -375,7 +367,6 @@ func (dbcfgs *DBConfigs) Init(defaultSocketFile string) *DBConfigs {
 	}
 
 	log.Infof("DBConfigs: %v\n", dbcfgs.String())
-	return dbcfgs
 }
 
 func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig, *mysql.ConnParams) {
@@ -409,6 +400,12 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 	return uc, cp
 }
 
+// SetDbParams sets the dba and app params
+func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
+	dbcfgs.dbaParams = dbaParams
+	dbcfgs.appParams = appParams
+}
+
 // NewTestDBConfigs returns a DBConfigs meant for testing.
 func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string) *DBConfigs {
 	return &DBConfigs{
@@ -419,6 +416,6 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		filteredParams:     genParams,
 		replParams:         genParams,
 		externalReplParams: genParams,
-		dbname:             dbname,
+		DBName:             dbname,
 	}
 }

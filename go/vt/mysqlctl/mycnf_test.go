@@ -79,6 +79,8 @@ func TestMycnf(t *testing.T) {
 // 3. go test
 // 4. \rm $VTROOT/vthook/make_mycnf
 // 5. Add No Prefix back
+
+//nolint
 func NoTestMycnfHook(t *testing.T) {
 	uid := uint32(11111)
 	cnf := NewMycnf(uid, 6802)
@@ -96,8 +98,8 @@ func NoTestMycnfHook(t *testing.T) {
 	// this is not being passed, so it should be nil
 	os.Setenv("MY_VAR", "myvalue")
 
-	dbcfgs := dbconfigs.GlobalDBConfigs.Init(cnf.SocketFile)
-	mysqld := NewMysqld(dbcfgs)
+	dbconfigs.GlobalDBConfigs.InitWithSocket(cnf.SocketFile)
+	mysqld := NewMysqld(&dbconfigs.GlobalDBConfigs)
 	servenv.OnClose(mysqld.Close)
 
 	err := mysqld.InitConfig(cnf)

@@ -214,6 +214,22 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 			bv.Values[i] = &values[i]
 		}
 		return bv, nil
+	case []Value:
+		bv := &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: make([]*querypb.Value, len(v)),
+		}
+		values := make([]querypb.Value, len(v))
+		for i, lv := range v {
+			lbv, err := BuildBindVariable(lv)
+			if err != nil {
+				return nil, err
+			}
+			values[i].Type = lbv.Type
+			values[i].Value = lbv.Value
+			bv.Values[i] = &values[i]
+		}
+		return bv, nil
 	}
 	return nil, fmt.Errorf("type %T not supported as bind var: %v", v, v)
 }

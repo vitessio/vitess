@@ -573,7 +573,6 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 }
 
 func TestOrderedAggregateMergeFail(t *testing.T) {
-	t.Skip("this looks like an invalid test")
 	fields := sqltypes.MakeTestFields(
 		"col|count(*)",
 		"varbinary|decimal",
@@ -582,7 +581,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
 			"a|1",
-			"a|b",
+			"a|0",
 		)},
 	}
 

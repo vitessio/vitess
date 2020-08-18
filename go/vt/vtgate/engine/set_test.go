@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -29,6 +30,40 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+func TestSetSystemVariableAsString(t *testing.T) {
+	setOp := SysVarSet{
+		Name: "x",
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		Expr: "dummy_expr",
+	}
+
+	set := &Set{
+		Ops:   []SetOp{&setOp},
+		Input: &SingleRow{},
+	}
+	vc := &loggingVCursor{
+		shards: []string{"-20", "20-"},
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id",
+				"varchar",
+			),
+			"foobar",
+		)},
+	}
+	_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		"ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)",
+		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
+		"SysVar set with (x,'foobar')",
+	})
+}
 
 func TestSetTable(t *testing.T) {
 	type testCase struct {
@@ -71,9 +106,6 @@ func TestSetTable(t *testing.T) {
 					Expr: "42",
 				},
 			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET x = 42"},
-			},
 		},
 		{
 			testName: "sysvar check and ignore",
@@ -99,9 +131,6 @@ func TestSetTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 				`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
 			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET x = dummy_expr"},
-			},
 		},
 		{
 			testName: "sysvar check and error",
@@ -119,9 +148,6 @@ func TestSetTable(t *testing.T) {
 			expectedQueryLog: []string{
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 				`ExecuteMultiShard ks.-20: select 1 from dual where @@x = dummy_expr {} false false`,
-			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Modification not allowed using set construct for: x"},
 			},
 		},
 		{
@@ -143,7 +169,7 @@ func TestSetTable(t *testing.T) {
 			expectedError: "Unexpected error, DestinationKeyspaceID mapping to multiple shards: DestinationAllShards()",
 		},
 		{
-			testName: "udv_ignr_chignr",
+			testName: "udv ignore checkAndIgnore ",
 			setOps: []SetOp{
 				&UserDefinedVariable{
 					Name: "x",
@@ -168,16 +194,72 @@ func TestSetTable(t *testing.T) {
 				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 				`ExecuteMultiShard ks.-20: select 1 from dual where @@z = dummy_expr {} false false`,
 			},
-			expectedWarning: []*querypb.QueryWarning{
-				{Code: 1235, Message: "Ignored inapplicable SET y = 2"},
-				{Code: 1235, Message: "Ignored inapplicable SET z = dummy_expr"},
-			},
 			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
 					"id",
 					"int64",
 				),
 				"1",
+			)},
+		},
+		{
+			testName: "sysvar set without destination",
+			setOps: []SetOp{
+				&SysVarSet{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					TargetDestination: key.DestinationAnyShard{},
+					Expr:              "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+				`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
+			},
+		},
+		{
+			testName: "sysvar set not modifying setting",
+			setOps: []SetOp{
+				&SysVarSet{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					Expr: "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+				`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
+			},
+		},
+		{
+			testName: "sysvar set modifying setting",
+			setOps: []SetOp{
+				&SysVarSet{
+					Name: "x",
+					Keyspace: &vindexes.Keyspace{
+						Name:    "ks",
+						Sharded: true,
+					},
+					Expr: "dummy_expr",
+				},
+			},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+				`ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false`,
+				`SysVar set with (x,123456)`,
+			},
+			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id",
+					"int64",
+				),
+				"123456",
 			)},
 		},
 	}
@@ -203,4 +285,35 @@ func TestSetTable(t *testing.T) {
 			vc.ExpectWarnings(t, tc.expectedWarning)
 		})
 	}
+}
+
+func TestSysVarSetErr(t *testing.T) {
+	setOps := []SetOp{
+		&SysVarSet{
+			Name: "x",
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			TargetDestination: key.DestinationAnyShard{},
+			Expr:              "dummy_expr",
+		},
+	}
+
+	expectedQueryLog := []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard ks.-20: set @@x = dummy_expr {} false false`,
+	}
+
+	set := &Set{
+		Ops:   setOps,
+		Input: &SingleRow{},
+	}
+	vc := &loggingVCursor{
+		shards:         []string{"-20", "20-"},
+		multiShardErrs: []error{fmt.Errorf("error")},
+	}
+	_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.EqualError(t, err, "error")
+	vc.ExpectLog(t, expectedQueryLog)
 }

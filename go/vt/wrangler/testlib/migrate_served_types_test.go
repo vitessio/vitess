@@ -129,7 +129,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	// also will be asked about its replication position.
 	sourceMaster.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
@@ -150,15 +150,13 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest1Master.StartActionLoop(t, wr)
 	defer dest1Master.StopActionLoop(t)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
-	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClient1.DBName())
+	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClient1.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest1Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient1.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -178,15 +176,13 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest2Master.StartActionLoop(t, wr)
 	defer dest2Master.StopActionLoop(t)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
-	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClient2.DBName())
+	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClient2.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest2Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient2.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -336,7 +332,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// also will be asked about its replication position.
 	source1Master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
@@ -382,7 +378,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// also will be asked about its replication position.
 	source2Master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
-			mysql.MariadbGTID{
+			5: mysql.MariadbGTID{
 				Domain:   5,
 				Server:   456,
 				Sequence: 892,
@@ -414,15 +410,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	dest4Master.StartActionLoop(t, wr)
 	defer dest4Master.StopActionLoop(t)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
-	dest1Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, "db")
+	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest1Master.Agent.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest1Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient1.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -431,15 +425,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	}}}, nil)
 	expectDeleteVRepl(dbClient1)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
-	dest2Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, "db")
+	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest2Master.Agent.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest2Master.TM.VREngine.Open(context.Background())
 
 	// select pos, state, message from _vt.vreplication
 	dbClient2.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
@@ -502,15 +494,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 
 	// Now migrate the second destination shard
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 = binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 = func() binlogplayer.DBClient { return dbClient1 }
-	dest3Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest3Master.FakeMysqlDaemon, dbClientFactory1, "db")
+	dest3Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest3Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest3Master.Agent.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest3Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient1.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -519,15 +509,13 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	}}}, nil)
 	expectDeleteVRepl(dbClient1)
 
-	// Override with a fake VREngine after Agent is initialized in action loop.
+	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 = binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 = func() binlogplayer.DBClient { return dbClient2 }
-	dest4Master.Agent.VREngine = vreplication.NewEngine(ts, "", dest4Master.FakeMysqlDaemon, dbClientFactory2, "db")
+	dest4Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest4Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest4Master.Agent.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest4Master.TM.VREngine.Open(context.Background())
 
 	// select pos, state, message from _vt.vreplication
 	dbClient2.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{

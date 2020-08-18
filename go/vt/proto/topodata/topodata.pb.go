@@ -93,7 +93,7 @@ const (
 	TabletType_UNKNOWN TabletType = 0
 	// MASTER is the master server for the shard. Only MASTER allows DMLs.
 	TabletType_MASTER TabletType = 1
-	// REPLICA is a slave type. It is used to serve live traffic.
+	// REPLICA replicates from master. It is used to serve live traffic.
 	// A REPLICA can be promoted to MASTER. A demoted MASTER will go to REPLICA.
 	TabletType_REPLICA TabletType = 2
 	// RDONLY (old name) / BATCH (new name) is used to serve traffic for

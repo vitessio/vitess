@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -60,6 +62,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
 	fieldResult := sqltypes.MakeTestResult(fields)
 	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
+	emptyResult := &sqltypes.Result{}
 
 	// The queries are run both in and outside a transaction.
 	testcases := []struct {
@@ -206,6 +209,36 @@ func TestQueryExecutorPlans(t *testing.T) {
 		resultWant: dmlResult,
 		planWant:   "DDL",
 		logWant:    "alter table test_table add zipcode int",
+	}, {
+		input: "savepoint a",
+		dbResponses: []dbResponse{{
+			query:  "savepoint a",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Savepoint",
+		logWant:    "savepoint a",
+		inTxWant:   "savepoint a",
+	}, {
+		input: "ROLLBACK work to SAVEPOINT a",
+		dbResponses: []dbResponse{{
+			query:  "ROLLBACK work to SAVEPOINT a",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "RollbackSavepoint",
+		logWant:    "ROLLBACK work to SAVEPOINT a",
+		inTxWant:   "ROLLBACK work to SAVEPOINT a",
+	}, {
+		input: "RELEASE savepoint a",
+		dbResponses: []dbResponse{{
+			query:  "RELEASE savepoint a",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Release",
+		logWant:    "RELEASE savepoint a",
+		inTxWant:   "RELEASE savepoint a",
 	}}
 	for _, tcase := range testcases {
 		func() {
@@ -229,9 +262,12 @@ func TestQueryExecutorPlans(t *testing.T) {
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Test inside a transaction.
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			target := tsv.sm.Target()
+			txid, alias, err := tsv.Begin(ctx, &target, nil)
 			require.NoError(t, err)
-			defer tsv.Commit(ctx, &tsv.target, txid)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, &target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			got, err = qre.Execute()
@@ -293,9 +329,12 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.resultWant, got, tcase.input)
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			target := tsv.sm.Target()
+			txid, alias, err := tsv.Begin(ctx, &target, nil)
 			require.NoError(t, err)
-			defer tsv.Commit(ctx, &tsv.target, txid)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, &target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			got, err = qre.Execute()
@@ -377,8 +416,8 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 		logWant:     "begin; delete from test_table limit 3; rollback",
 		inTxWant:    "delete from test_table limit 3",
 	}}
-	for _, tcase := range testcases {
-		func() {
+	for i, tcase := range testcases {
+		t.Run(fmt.Sprintf("%d - %s", i, tcase.input), func(t *testing.T) {
 			db := setUpQueryExecutorTest(t)
 			defer db.Close()
 			for _, dbr := range tcase.dbResponses {
@@ -393,21 +432,23 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			// Test outside a transaction.
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
 			_, err := qre.Execute()
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
-			}
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tcase.err)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
 			// Test inside a transaction.
-			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			target := tsv.sm.Target()
+			txid, alias, err := tsv.Begin(ctx, &target, nil)
 			require.NoError(t, err)
-			defer tsv.Commit(ctx, &tsv.target, txid)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, &target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			_, err = qre.Execute()
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
-			}
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tcase.err)
+
 			want := tcase.logWant
 			if tcase.inTxWant != "" {
 				want = tcase.inTxWant
@@ -418,13 +459,12 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 				return
 			}
 			// Ensure transaction was rolled back.
-			qre = newTestQueryExecutor(ctx, tsv, "update test_table set a=1", txid)
-			_, err = qre.Execute()
-			notxError := "ended at"
-			if err == nil || !strings.Contains(err.Error(), notxError) {
-				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, notxError)
-			}
-		}()
+			conn, err := tsv.te.txPool.GetAndLock(txid, "")
+			require.NoError(t, err)
+			defer conn.Release(tx.TxClose)
+
+			require.False(t, conn.IsInTransaction(), "connection is still in a transaction")
+		})
 	}
 }
 
@@ -599,7 +639,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 
-	tsv := newTestTabletServer(context.Background(), enableStrictTableACL, db)
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
 	defer tsv.StopService()
 
 	plan, err := tsv.qe.GetMessageStreamPlan("msg")
@@ -1069,12 +1109,16 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	tsv.StartService(target, dbconfigs)
+	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
+	if err != nil {
+		panic(err)
+	}
 	return tsv
 }
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target, options)
+	target := tsv.sm.Target()
+	transactionID, _, err := tsv.Begin(context.Background(), &target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}
@@ -1083,18 +1127,18 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false /* inReservedConn */)
 	if err != nil {
 		panic(err)
 	}
 	return &QueryExecutor{
-		ctx:           ctx,
-		query:         sql,
-		bindVars:      make(map[string]*querypb.BindVariable),
-		transactionID: txID,
-		plan:          plan,
-		logStats:      logStats,
-		tsv:           tsv,
+		ctx:      ctx,
+		query:    sql,
+		bindVars: make(map[string]*querypb.BindVariable),
+		connID:   txID,
+		plan:     plan,
+		logStats: logStats,
+		tsv:      tsv,
 	}
 }
 
@@ -1121,7 +1165,6 @@ func getTestTableFields() []*querypb.Field {
 func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
-		sqlTurnoffBinlog:                                {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
 		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
 		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},

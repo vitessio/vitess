@@ -25,6 +25,7 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -784,6 +785,12 @@ func TestSplitStatementToPieces(t *testing.T) {
 			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
 	}
+}
+
+func TestTypeConversion(t *testing.T) {
+	ct1 := &ColumnType{Type: "BIGINT"}
+	ct2 := &ColumnType{Type: "bigint"}
+	assert.Equal(t, ct1.SQLType(), ct2.SQLType())
 }
 
 func TestDefaultStatus(t *testing.T) {

@@ -73,18 +73,25 @@ func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string
 	return pos, gtID
 }
 
-// VerifyRowsInTablet Verify total number of rows in a tablet
-func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int) {
+// VerifyRowsInTabletForTable Verify total number of rows in a table
+// this is used to check replication caught up the changes from master
+func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
-		require.Nil(t, err)
-		if len(qr.Rows) == expectedRows {
+		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
+		// but eventually it will catch up and if not caught up in required time, testcase will fail
+		qr, _ := vttablet.VttabletProcess.QueryTablet("select * from "+tableName, ksName, true)
+		if qr != nil && len(qr.Rows) == expectedRows {
 			return
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
 	assert.Fail(t, "expected rows not found.")
+}
+
+// VerifyRowsInTablet Verify total number of rows in a tablet
+func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int) {
+	VerifyRowsInTabletForTable(t, vttablet, ksName, expectedRows, "vt_insert_test")
 }
 
 // PanicHandler handles the panic in the testcase.
@@ -145,8 +152,8 @@ func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName st
 
 // ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
 func ResetTabletDirectory(tablet Vttablet) error {
-	tablet.MysqlctlProcess.Stop()
 	tablet.VttabletProcess.TearDown()
+	tablet.MysqlctlProcess.Stop()
 	os.RemoveAll(tablet.VttabletProcess.Directory)
 
 	return tablet.MysqlctlProcess.Start()

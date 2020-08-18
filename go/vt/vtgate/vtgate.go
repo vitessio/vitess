@@ -63,8 +63,12 @@ var (
 
 	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
-	maxPayloadSize  = flag.Int("max_payload_size", 0, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
-	warnPayloadSize = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
+	// HealthCheckRetryDelay is the time to wait before retrying healthcheck
+	HealthCheckRetryDelay = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
+	// HealthCheckTimeout is the timeout on the RPC call to tablets
+	HealthCheckTimeout = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
+	maxPayloadSize     = flag.Int("max_payload_size", 0, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
+	warnPayloadSize    = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -126,7 +130,7 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -138,7 +142,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
-	gw := GatewayCreator()(ctx, hc, serv, cell, retryCount)
+	// TabletGateway can create it's own healthcheck
+	gw := NewTabletGateway(ctx, nil /*discovery.Healthcheck*/, serv, cell)
 	gw.RegisterStats()
 	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
@@ -146,10 +151,10 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
-	if len(KeyspacesToWatch) > 0 {
-		log.Infof("Keyspace filtering enabled, selecting %v", KeyspacesToWatch)
+	if len(discovery.KeyspacesToWatch) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch)
 		var err error
-		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, KeyspacesToWatch)
+		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, discovery.KeyspacesToWatch)
 		if err != nil {
 			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
 		}
@@ -157,7 +162,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
-	sc := NewScatterConn("VttabletCall", tc, gw, hc)
+	sc := NewScatterConn("VttabletCall", tc, gw)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
@@ -205,7 +210,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		log.Fatalf("error initializing query logger: %v", err)
 	}
 
-	initAPI(ctx, hc)
+	initAPI(gw.hc)
 
 	return rpcVTGate
 }
@@ -351,6 +356,13 @@ handleError:
 	return nil
 }
 
+// CloseSession closes the session, rolling back any implicit transactions. This has the
+// same effect as if a "rollback" statement was executed, but does not affect the query
+// statistics.
+func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	return vtg.executor.CloseSession(ctx, NewSafeSession(session))
+}
+
 // ResolveTransaction resolves the specified 2PC transaction.
 func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 	return formatError(vtg.txConn.Resolve(ctx, dtid))
@@ -455,4 +467,89 @@ func (vtg *VTGate) HandlePanic(err *error) {
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
 	}
+}
+
+// LegacyInit initializes VTGate server with LegacyHealthCheck
+func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+	if rpcVTGate != nil {
+		log.Fatalf("VTGate already initialized")
+	}
+
+	// vschemaCounters needs to be initialized before planner to
+	// catch the initial load stats.
+	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
+
+	// Build objects from low to high level.
+	// Start with the gateway. If we can't reach the topology service,
+	// we can't go on much further, so we log.Fatal out.
+	gw := GatewayCreator()(ctx, hc, serv, cell, retryCount)
+	gw.RegisterStats()
+	if err := WaitForTablets(gw, tabletTypesToWait); err != nil {
+		log.Fatalf("gateway.WaitForTablets failed: %v", err)
+	}
+
+	// If we want to filter keyspaces replace the srvtopo.Server with a
+	// filtering server
+	if len(discovery.KeyspacesToWatch) > 0 {
+		log.Infof("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch)
+		var err error
+		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, discovery.KeyspacesToWatch)
+		if err != nil {
+			log.Fatalf("Unable to construct SrvTopo server: %v", err.Error())
+		}
+	}
+
+	tc := NewTxConn(gw, getTxMode())
+	// ScatterConn depends on TxConn to perform forced rollbacks.
+	sc := NewLegacyScatterConn("VttabletCall", tc, gw, hc)
+	srvResolver := srvtopo.NewResolver(serv, gw, cell)
+	resolver := NewResolver(srvResolver, serv, cell, sc)
+	vsm := newVStreamManager(srvResolver, serv, cell)
+
+	rpcVTGate = &VTGate{
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
+		resolver: resolver,
+		vsm:      vsm,
+		txConn:   tc,
+		gw:       gw,
+		timings: stats.NewMultiTimings(
+			"VtgateApi",
+			"VtgateApi timings",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsReturned",
+			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
+
+		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
+	}
+
+	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
+
+	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
+
+	_ = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
+
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded")
+
+	servenv.OnRun(func() {
+		for _, f := range RegisterVTGates {
+			f(rpcVTGate)
+		}
+	})
+	rpcVTGate.registerDebugHealthHandler()
+	err := initQueryLogger(rpcVTGate)
+	if err != nil {
+		log.Fatalf("error initializing query logger: %v", err)
+	}
+
+	legacyInitAPI(hc)
+
+	return rpcVTGate
 }

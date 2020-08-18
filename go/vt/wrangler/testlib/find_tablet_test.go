@@ -18,7 +18,6 @@ package testlib
 
 import (
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -27,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -35,16 +33,14 @@ import (
 )
 
 func TestFindTablet(t *testing.T) {
-	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
-
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
-	// Create an old master, two good slaves
+	// Create an old master, two good replicas
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
+	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
 	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1", "cell2"})
@@ -62,13 +58,13 @@ func TestFindTablet(t *testing.T) {
 	if err != nil || !topoproto.TabletAliasEqual(master, oldMaster.Tablet.Alias) {
 		t.Fatalf("FindTabletByHostAndPort(master) failed: %v %v", err, master)
 	}
-	slave1, err := topotools.FindTabletByHostAndPort(tabletMap, goodSlave1.Tablet.Hostname, "vt", goodSlave1.Tablet.PortMap["vt"])
-	if err != nil || !topoproto.TabletAliasEqual(slave1, goodSlave1.Tablet.Alias) {
-		t.Fatalf("FindTabletByHostAndPort(slave1) failed: %v %v", err, master)
+	replica1, err := topotools.FindTabletByHostAndPort(tabletMap, goodReplica1.Tablet.Hostname, "vt", goodReplica1.Tablet.PortMap["vt"])
+	if err != nil || !topoproto.TabletAliasEqual(replica1, goodReplica1.Tablet.Alias) {
+		t.Fatalf("FindTabletByHostAndPort(replica1) failed: %v %v", err, master)
 	}
-	slave2, err := topotools.FindTabletByHostAndPort(tabletMap, goodSlave2.Tablet.Hostname, "vt", goodSlave2.Tablet.PortMap["vt"])
+	replica2, err := topotools.FindTabletByHostAndPort(tabletMap, goodReplica2.Tablet.Hostname, "vt", goodReplica2.Tablet.PortMap["vt"])
 	if !topo.IsErrType(err, topo.NoNode) {
-		t.Fatalf("FindTabletByHostAndPort(slave2) worked: %v %v", err, slave2)
+		t.Fatalf("FindTabletByHostAndPort(replica2) worked: %v %v", err, replica2)
 	}
 
 	// Make sure the master is not exported in other cells

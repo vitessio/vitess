@@ -90,14 +90,27 @@ func TestInsertUpdateDelete(t *testing.T) {
 	// Validate a datetime field (with micros)
 	assert.Equal(t, time.Date(2009, 5, 5, 0, 0, 0, 50000, location), data[0].DateTimeMicros)
 
+	testReplica(t)
 	// testing record update
 	updateRecord(t, dbo)
 
 	// testing record deletion
 	deleteRecord(t, dbo)
 
-	// testing recontion and deleted data validation
+	// testing reconnection and deleted data validation
 	reconnectAndTest(t)
+}
+
+func testReplica(t *testing.T) {
+	replicaConn := Connect(t, "")
+	require.NotNil(t, replicaConn, "unable to connect")
+	_, err := replicaConn.Exec("use @replica")
+	require.NoError(t, err)
+	tx, err := replicaConn.Begin()
+	require.NoError(t, err, "error creating replica transaction")
+	data := selectWhereWithTx(t, tx, "id = ?", testingID)
+	assert.Equal(t, fmt.Sprintf("%d21", testingID), data[0].Msg)
+	require.NoError(t, tx.Commit())
 }
 
 // testcount validates inserted rows count with expected count.
@@ -190,6 +203,46 @@ func reconnectAndTest(t *testing.T) {
 	data := selectWhere(t, dbo, "id = ?", testingID)
 	assert.Equal(t, 0, len(data))
 
+}
+
+// TestColumnParameter query database using column
+// parameter.
+func TestColumnParameter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	id := 1000
+	parameter1 := "param1"
+	message := "TestColumnParameter"
+	insertStmt := "INSERT INTO " + tableName + " (id, msg, keyspace_id) VALUES (?, ?, ?);"
+	values := []interface{}{
+		id,
+		message,
+		2000,
+	}
+	exec(t, dbo, insertStmt, values...)
+
+	var param, msg string
+	var recID int
+
+	selectStmt := "SELECT COALESCE(?, id), msg FROM " + tableName + " WHERE msg = ? LIMIT ?"
+
+	results1, err := dbo.Query(selectStmt, parameter1, message, 1)
+	require.Nil(t, err)
+	require.True(t, results1.Next())
+
+	results1.Scan(&param, &msg)
+	assert.Equal(t, parameter1, param)
+	assert.Equal(t, message, msg)
+
+	results2, err := dbo.Query(selectStmt, nil, message, 1)
+	require.Nil(t, err)
+	require.True(t, results2.Next())
+
+	results2.Scan(&recID, &msg)
+	assert.Equal(t, id, recID)
+	assert.Equal(t, message, msg)
 }
 
 // TestWrongTableName query database using invalid

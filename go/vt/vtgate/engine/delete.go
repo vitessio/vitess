@@ -69,7 +69,7 @@ func (del *Delete) GetTableName() string {
 }
 
 // Execute performs a non-streaming exec.
-func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -93,12 +93,12 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // StreamExecute performs a streaming exec.
-func (del *Delete) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (del *Delete) StreamExecute(VCursor, map[string]*querypb.BindVariable, bool, func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", del.Query)
 }
 
 // GetFields fetches the field info.
-func (del *Delete) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
 }
 
@@ -109,6 +109,10 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 	}
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+	}
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
 	}
 	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
 }
@@ -122,6 +126,11 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteEqual")
 	}
+	err = allowOnlyMaster(rs)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
@@ -139,6 +148,11 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, err
 	}
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
+	}
+
 	if del.OwnedVindexQuery != "" {
 		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteIn")
@@ -151,6 +165,10 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
 		return nil, vterrors.Wrap(err, "execDeleteScatter")
+	}
+	err = allowOnlyMaster(rss...)
+	if err != nil {
+		return nil, err
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))

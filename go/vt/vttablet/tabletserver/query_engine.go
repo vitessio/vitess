@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
@@ -113,8 +112,9 @@ func (ep *TabletPlan) buildAuthorized() {
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	env tabletenv.Env
-	se  *schema.Engine
+	isOpen bool
+	env    tabletenv.Env
+	se     *schema.Engine
 
 	// mu protects the following fields.
 	mu               sync.RWMutex
@@ -236,7 +236,12 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open() error {
-	qe.conns.Open(qe.env.DBConfigs().AppWithDB(), qe.env.DBConfigs().DbaWithDB(), qe.env.DBConfigs().AppDebugWithDB())
+	if qe.isOpen {
+		return nil
+	}
+	log.Info("Query Engine: opening")
+
+	qe.conns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
 	if err != nil {
@@ -253,25 +258,38 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	qe.streamConns.Open(qe.env.DBConfigs().AppWithDB(), qe.env.DBConfigs().DbaWithDB(), qe.env.DBConfigs().AppDebugWithDB())
+	qe.streamConns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
+	qe.isOpen = true
 	return nil
+}
+
+// StopServing kills all streaming queries.
+// Other queries are handled by the tsv.requests Waitgroup.
+func (qe *QueryEngine) StopServing() {
+	log.Info("Query Engine: killing all streaming queries")
+	qe.streamQList.TerminateAll()
 }
 
 // Close must be called to shut down QueryEngine.
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
+	if !qe.isOpen {
+		return
+	}
 	// Close in reverse order of Open.
 	qe.se.UnregisterNotifier("qe")
 	qe.plans.Clear()
 	qe.tables = make(map[string]*schema.Table)
 	qe.streamConns.Close()
 	qe.conns.Close()
+	qe.isOpen = false
+	log.Info("Query Engine: closed")
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, isReservedConn bool) (*TabletPlan, error) {
 	span, ctx := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
@@ -291,7 +309,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, qe.tables)
+	splan, err := planbuilder.Build(statement, qe.tables, isReservedConn)
 	if err != nil {
 		return nil, err
 	}
@@ -326,10 +344,10 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
+func (qe *QueryEngine) GetStreamPlan(sql string, isReservedConn bool) (*TabletPlan, error) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
-	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
+	splan, err := planbuilder.BuildStreaming(sql, qe.tables, isReservedConn)
 	if err != nil {
 		return nil, err
 	}
@@ -358,18 +376,15 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 	qe.plans.Clear()
 }
 
-// IsMySQLReachable returns true if we can connect to MySQL.
-func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.DBConfigs().DbaWithDB())
+// IsMySQLReachable returns an error if it cannot connect to MySQL.
+// This can be called before opening the QueryEngine.
+func (qe *QueryEngine) IsMySQLReachable() error {
+	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.Config().DB.AppWithDB())
 	if err != nil {
-		if mysql.IsConnErr(err) {
-			return false
-		}
-		log.Warningf("checking MySQL, unexpected error: %v", err)
-		return true
+		return err
 	}
 	conn.Close()
-	return true
+	return nil
 }
 
 func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {

@@ -802,7 +802,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 	}
 	dropSourcesInvalid()
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false)
 	require.Error(t, err, "Workflow has not completed, cannot DropSources")
 
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false)
@@ -815,13 +815,12 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 	}
 	dropSourcesDryRun()
-
 	wantdryRunDropSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
 		"Dropping following tables:",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1 RemovalType DROP TABLE",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2 RemovalType DROP TABLE",
 		"Blacklisted tables t1,t2 will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
@@ -832,9 +831,35 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
-	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", true)
+	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
+	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+
+	dropSourcesDryRunRename := func() {
+		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
+	}
+	dropSourcesDryRunRename()
+	wantdryRunRenameSources := []string{
+		"Lock keyspace ks1",
+		"Lock keyspace ks2",
+		"Dropping following tables:",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1 RemovalType RENAME TABLE",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2 RemovalType RENAME TABLE",
+		"Blacklisted tables t1,t2 will be removed from:",
+		"	Keyspace ks1 Shard 0 Tablet 10",
+		"Delete reverse vreplication streams on source:",
+		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
+		"Delete vreplication streams on target:",
+		"	Keyspace ks2 Shard -80 Workflow test DbName vt_ks2 Tablet 20",
+		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30",
+		"Unlock keyspace ks2",
+		"Unlock keyspace ks1",
+	}
+	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", RenameTable, true)
+	require.NoError(t, err)
+	require.Empty(t, cmp.Diff(wantdryRunRenameSources, *results))
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
 	dropSources := func() {
@@ -852,7 +877,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	}
 	dropSources()
 
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false)
 	require.NoError(t, err)
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
 

@@ -89,7 +89,7 @@ func doTestGetSrvKeyspaceNames(
 	want []string,
 	wantErr error,
 ) {
-	got, gotErr := f.GetSrvKeyspaceNames(stockCtx, cell)
+	got, gotErr := f.GetSrvKeyspaceNames(stockCtx, cell, false)
 
 	if got == nil {
 		t.Errorf("GetSrvKeyspaceNames failed: should not return nil")

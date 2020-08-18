@@ -199,11 +199,17 @@ func (ro *routeOption) canMergeOnFilter(pb *primitiveBuilder, rro *routeOption, 
 // the route.
 func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	switch ro.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference:
+	// For these opcodes, a new filter will not make any difference, so we can just exit early
+	case engine.SelectUnsharded, engine.SelectNext, engine.SelectDBA, engine.SelectReference, engine.SelectNone:
 		return
 	}
 	opcode, vindex, values := ro.computePlan(pb, filter)
 	if opcode == engine.SelectScatter {
+		return
+	}
+	// If we get SelectNone in next filters, override the previous route plan.
+	if opcode == engine.SelectNone {
+		ro.updateRoute(opcode, vindex, values)
 		return
 	}
 	switch ro.eroute.Opcode {
@@ -231,7 +237,7 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 		}
 	case engine.SelectScatter:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN:
+		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectNone:
 			ro.updateRoute(opcode, vindex, values)
 		}
 	}
@@ -252,7 +258,11 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 			return ro.computeEqualPlan(pb, node)
 		case sqlparser.InStr:
 			return ro.computeINPlan(pb, node)
+		case sqlparser.NotInStr:
+			return ro.computeNotInPlan(node.Right), nil, nil
 		}
+	case *sqlparser.IsExpr:
+		return ro.computeISPlan(pb, node)
 	}
 	return engine.SelectScatter, nil, nil
 }
@@ -261,6 +271,11 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
+
+	if sqlparser.IsNull(right) {
+		return engine.SelectNone, nil, nil
+	}
+
 	vindex = ro.FindVindex(pb, left)
 	if vindex == nil {
 		left, right = right, left
@@ -278,6 +293,24 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 	return engine.SelectEqual, vindex, right
 }
 
+// computeEqualPlan computes the plan for an equality constraint.
+func (ro *routeOption) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+	// we only handle IS NULL correct. IsExpr can contain other expressions as well
+	if comparison.Operator != sqlparser.IsNullStr {
+		return engine.SelectScatter, nil, nil
+	}
+
+	vindex = ro.FindVindex(pb, comparison.Expr)
+	// fallback to scatter gather if there is no vindex
+	if vindex == nil {
+		return engine.SelectScatter, nil, nil
+	}
+	if vindex.IsUnique() {
+		return engine.SelectEqualUnique, vindex, &sqlparser.NullVal{}
+	}
+	return engine.SelectEqual, vindex, &sqlparser.NullVal{}
+}
+
 // computeINPlan computes the plan for an IN constraint.
 func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	vindex = ro.FindVindex(pb, comparison.Left)
@@ -286,6 +319,10 @@ func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser
 	}
 	switch node := comparison.Right.(type) {
 	case sqlparser.ValTuple:
+		if len(node) == 1 && sqlparser.IsNull(node[0]) {
+			return engine.SelectNone, nil, nil
+		}
+
 		for _, n := range node {
 			if !ro.exprIsValue(n) {
 				return engine.SelectScatter, nil, nil
@@ -296,6 +333,20 @@ func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser
 		return engine.SelectIN, vindex, comparison
 	}
 	return engine.SelectScatter, nil, nil
+}
+
+// computeNotInPlan looks for null values to produce a SelectNone if found
+func (*routeOption) computeNotInPlan(right sqlparser.Expr) engine.RouteOpcode {
+	switch node := right.(type) {
+	case sqlparser.ValTuple:
+		for _, n := range node {
+			if sqlparser.IsNull(n) {
+				return engine.SelectNone
+			}
+		}
+	}
+
+	return engine.SelectScatter
 }
 
 var planCost = map[engine.RouteOpcode]int{

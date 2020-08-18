@@ -38,6 +38,7 @@ type BindVarNeeds struct {
 	NeedLastInsertID         bool
 	NeedDatabase             bool
 	NeedFoundRows            bool
+	NeedRowCount             bool
 	NeedUserDefinedVariables []string
 }
 
@@ -65,6 +66,8 @@ func RewriteAST(in Statement) (*RewriteASTResult, error) {
 			r.NeedDatabase = true
 		case FoundRowsName:
 			r.NeedFoundRows = true
+		case RowCountName:
+			r.NeedRowCount = true
 		default:
 			r.NeedUserDefinedVariables = append(r.NeedUserDefinedVariables, k)
 		}
@@ -117,6 +120,9 @@ const (
 	//FoundRowsName is a reserved bind var name for found_rows()
 	FoundRowsName = "__vtfrows"
 
+	//RowCountName is a reserved bind var name for row_count()
+	RowCountName = "__vtrcount"
+
 	//UserDefinedVariableName is what we prepend bind var names for user defined variables
 	UserDefinedVariableName = "__vtudv"
 )
@@ -124,26 +130,28 @@ const (
 func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
-	case *AliasedExpr:
-		if node.As.IsEmpty() {
-			buf := NewTrackedBuffer(nil)
-			node.Expr.Format(buf)
-			inner := newExpressionRewriter()
-			inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-			tmp := Rewrite(node.Expr, inner.goingDown, nil)
-			newExpr, ok := tmp.(Expr)
-			if !ok {
-				log.Errorf("failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
-				return false
+	case *Select:
+		for _, col := range node.SelectExprs {
+			aliasedExpr, ok := col.(*AliasedExpr)
+			if ok && aliasedExpr.As.IsEmpty() {
+				buf := NewTrackedBuffer(nil)
+				aliasedExpr.Expr.Format(buf)
+				inner := newExpressionRewriter()
+				inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
+				tmp := Rewrite(aliasedExpr.Expr, inner.goingDown, nil)
+				newExpr, ok := tmp.(Expr)
+				if !ok {
+					log.Errorf("failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
+					return false
+				}
+				aliasedExpr.Expr = newExpr
+				if inner.didAnythingChange() {
+					aliasedExpr.As = NewColIdent(buf.String())
+				}
+				for k := range inner.bindVars {
+					er.needBindVarFor(k)
+				}
 			}
-			node.Expr = newExpr
-			if inner.didAnythingChange() {
-				node.As = NewColIdent(buf.String())
-			}
-			for k := range inner.bindVars {
-				er.needBindVarFor(k)
-			}
-			return false
 		}
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
@@ -184,6 +192,14 @@ func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 		} else {
 			cursor.Replace(bindVarExpression(FoundRowsName))
 			er.needBindVarFor(FoundRowsName)
+		}
+	// row_count() -> :__vtrcount
+	case node.Name.EqualString("row_count"):
+		if len(node.Exprs) > 0 {
+			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to ROW_COUNT() not supported")
+		} else {
+			cursor.Replace(bindVarExpression(RowCountName))
+			er.needBindVarFor(RowCountName)
 		}
 	}
 }

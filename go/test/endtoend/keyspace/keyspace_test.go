@@ -60,7 +60,7 @@ var (
               "column": "keyspace_id",
               "name": "hash_index"
             }
-          ] 
+          ]
         }
       }
 	}`
@@ -246,7 +246,7 @@ func TestDeleteKeyspace(t *testing.T) {
 
 // TODO: Fix this test, not running in CI
 // tells that in zone2 after deleting shard, there is no shard #264 and in zone1 there is only 1 #269
-func RemoveKeyspaceCell(t *testing.T) {
+/*func RemoveKeyspaceCell(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace_removekscell")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/0")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/1")
@@ -314,7 +314,7 @@ func RemoveKeyspaceCell(t *testing.T) {
 
 	// Clean up
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace_removekscell")
-}
+} */
 
 func TestShardCountForAllKeyspaces(t *testing.T) {
 	defer cluster.PanicHandler(t)

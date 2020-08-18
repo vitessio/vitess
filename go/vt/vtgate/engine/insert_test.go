@@ -37,12 +37,11 @@ func TestInsertUnsharded(t *testing.T) {
 		"dummy_insert",
 	)
 
-	vc := &loggingVCursor{
-		shards: []string{"0"},
-		results: []*sqltypes.Result{{
-			InsertID: 4,
-		}},
-	}
+	vc := newDMLTestVCursor("0")
+	vc.results = []*sqltypes.Result{{
+		InsertID: 4,
+	}}
+
 	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -89,19 +88,18 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{
-		shards: []string{"0"},
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"nextval",
-					"int64",
-				),
-				"4",
+	vc := newDMLTestVCursor("0")
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"nextval",
+				"int64",
 			),
-			{InsertID: 1},
-		},
+			"4",
+		),
+		{InsertID: 1},
 	}
+
 	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -164,10 +162,9 @@ func TestInsertShardedSimple(t *testing.T) {
 		[]string{" mid1"},
 		" suffix",
 	)
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -203,10 +200,9 @@ func TestInsertShardedSimple(t *testing.T) {
 		[]string{" mid1", " mid2", " mid3"},
 		" suffix",
 	)
-	vc = &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -245,10 +241,9 @@ func TestInsertShardedSimple(t *testing.T) {
 	)
 	ins.MultiShardAutocommit = true
 
-	vc = &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-	}
+	vc = newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -385,20 +380,19 @@ func TestInsertShardedGenerate(t *testing.T) {
 		},
 	}
 
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					"nextval",
-					"int64",
-				),
-				"2",
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"nextval",
+				"int64",
 			),
-			{InsertID: 1},
-		},
+			"2",
+		),
+		{InsertID: 1},
 	}
+
 	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -529,10 +523,9 @@ func TestInsertShardedOwned(t *testing.T) {
 		" suffix",
 	)
 
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -574,9 +567,10 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 					"onecol": {
 						Type: "lookup",
 						Params: map[string]string{
-							"table": "lkp1",
-							"from":  "from",
-							"to":    "toc",
+							"table":        "lkp1",
+							"from":         "from",
+							"to":           "toc",
+							"ignore_nulls": "true",
 						},
 						Owner: "t1",
 					},
@@ -627,17 +621,14 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 		" suffix",
 	)
 
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: toc_0: type:VARBINARY ` +
-			`value:"\026k@\264J\272K\326"  true`,
 		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix mid1 suffix ` +
 			`{_c3_0: _id_0: type:INT64 value:"1" } true true`,
@@ -723,10 +714,9 @@ func TestInsertShardedGeo(t *testing.T) {
 		" suffix",
 	)
 
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20"},
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20"}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -865,6 +855,15 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		" suffix",
 	)
 
+	ksid0_lookup := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"from|to",
+			"int64|varbinary",
+		),
+		"1|\x00",
+		"3|\x00",
+		"4|\x00",
+	)
 	ksid0 := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"to",
@@ -873,37 +872,30 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		"\x00",
 	)
 	noresult := &sqltypes.Result{}
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20"},
-		results: []*sqltypes.Result{
-			// primary vindex lookups: fail row 2.
-			ksid0,
-			noresult,
-			ksid0,
-			ksid0,
-			// insert lkp2
-			noresult,
-			// fail one verification (row 3)
-			ksid0,
-			noresult,
-			ksid0,
-			// insert lkp1
-			noresult,
-			// verify lkp1 (only two rows to verify)
-			ksid0,
-			ksid0,
-		},
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20"}
+	vc.results = []*sqltypes.Result{
+		// primary vindex lookups: fail row 2.
+		ksid0_lookup,
+		// insert lkp2
+		noresult,
+		// fail one verification (row 3)
+		ksid0,
+		noresult,
+		ksid0,
+		// insert lkp1
+		noresult,
+		// verify lkp1 (only two rows to verify)
+		ksid0,
+		ksid0,
 	}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"1"  false`,
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"2"  false`,
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"3"  false`,
-		`Execute select toc from prim where from1 = :from1 from1: type:INT64 value:"4"  false`,
+		`Execute select from1, toc from prim where from1 in ::from1 from1: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > values:<type:INT64 value:"3" > values:<type:INT64 value:"4" >  false`,
 		`Execute insert ignore into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1), (:from1_2, :from2_2, :toc_2) ` +
 			`from1_0: type:INT64 value:"5" from1_1: type:INT64 value:"7" from1_2: type:INT64 value:"8" ` +
 			`from2_0: type:INT64 value:"9" from2_1: type:INT64 value:"11" from2_2: type:INT64 value:"12" ` +
@@ -949,9 +941,10 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 					"onecol": {
 						Type: "lookup",
 						Params: map[string]string{
-							"table": "lkp1",
-							"from":  "from",
-							"to":    "toc",
+							"table":        "lkp1",
+							"from":         "from",
+							"to":           "toc",
+							"ignore_nulls": "true",
 						},
 						Owner: "t1",
 					},
@@ -1009,22 +1002,19 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		),
 		"\x00",
 	)
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"-20", "20-"},
-		results: []*sqltypes.Result{
-			ksid0,
-			ksid0,
-			ksid0,
-		},
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		ksid0,
+		ksid0,
+		ksid0,
 	}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute insert ignore into lkp1(from, toc) values(:from_0, :toc_0) from_0: toc_0: type:VARBINARY ` +
-			`value:"\026k@\264J\272K\326"  true`,
 		`Execute select from from lkp1 where from = :from and toc = :toc from: toc: type:VARBINARY value:"\026k@\264J\272K\326"  false`,
 		`ResolveDestinations sharded [value:"0" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.-20: prefix mid1 suffix ` +
@@ -1145,17 +1135,15 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		"1",
 	)
 
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-		results: []*sqltypes.Result{
-			nonemptyResult,
-			nonemptyResult,
-			nonemptyResult,
-			nonemptyResult,
-			nonemptyResult,
-			nonemptyResult,
-		},
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		nonemptyResult,
+		nonemptyResult,
+		nonemptyResult,
+		nonemptyResult,
+		nonemptyResult,
+		nonemptyResult,
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
@@ -1268,15 +1256,13 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		"1",
 	)
 
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20"},
-		results: []*sqltypes.Result{
-			nonemptyResult,
-			// fail verification of second row.
-			{},
-			nonemptyResult,
-		},
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20"}
+	vc.results = []*sqltypes.Result{
+		nonemptyResult,
+		// fail verification of second row.
+		{},
+		nonemptyResult,
 	}
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
@@ -1365,9 +1351,8 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 		" suffix",
 	)
 
-	vc := &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: values [[INT64(2)]] for column [c3] does not map to keyspace ids")
 }
@@ -1485,13 +1470,12 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		"1",
 	)
 
-	vc := &loggingVCursor{
-		shards:       []string{"-20", "20-"},
-		shardForKsid: []string{"20-", "-20", "20-"},
-		results: []*sqltypes.Result{
-			nonemptyResult,
-		},
+	vc := newDMLTestVCursor("-20", "20-")
+	vc.shardForKsid = []string{"20-", "-20", "20-"}
+	vc.results = []*sqltypes.Result{
+		nonemptyResult,
 	}
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1577,9 +1561,8 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 		" suffix",
 	)
 
-	vc := &loggingVCursor{
-		shards: []string{"-20", "20-"},
-	}
+	vc := newDMLTestVCursor("-20", "20-")
+
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column [c3]")
 }

@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,7 +30,6 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -40,9 +38,9 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -53,10 +51,10 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -65,59 +63,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
-const (
-	// StateNotConnected is the state where tabletserver is not
-	// connected to an underlying mysql instance.
-	StateNotConnected = iota
-	// StateNotServing is the state where tabletserver is connected
-	// to an underlying mysql instance, but is not serving queries.
-	StateNotServing
-	// StateServing is where queries are allowed.
-	StateServing
-	// StateTransitioning is a transient state indicating that
-	// the tabletserver is tranisitioning to a new state.
-	// In order to achieve clean transitions, no requests are
-	// allowed during this state.
-	StateTransitioning
-	// StateShuttingDown indicates that the tabletserver
-	// is shutting down. In this state, we wait for outstanding
-	// requests and transactions to conclude.
-	StateShuttingDown
-)
-
 // logPoolFull is for throttling transaction / query pool full messages in the log.
 var logPoolFull = logutil.NewThrottledLogger("PoolFull", 1*time.Minute)
 
 var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
-
-// stateName names every state. The number of elements must
-// match the number of states. Names can overlap.
-var stateName = []string{
-	"NOT_SERVING",
-	"NOT_SERVING",
-	"SERVING",
-	"NOT_SERVING",
-	"SHUTTING_DOWN",
-}
-
-// stateDetail matches every state and optionally more information about the reason
-// why the state is serving / not serving.
-var stateDetail = []string{
-	"Not Connected",
-	"Not Serving",
-	"",
-	"Transitioning",
-	"Shutting Down",
-}
-
-// stateInfo returns a string representation of the state and optional detail
-// about the reason for the state transition
-func stateInfo(state int64) string {
-	if state == StateServing {
-		return "SERVING"
-	}
-	return fmt.Sprintf("%s (%s)", stateName[state], stateDetail[state])
-}
 
 // TabletServer implements the RPC interface for the query service.
 // TabletServer is initialized in the following sequence:
@@ -140,60 +89,28 @@ type TabletServer struct {
 	QueryTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
+	topoServer             *topo.Server
 
-	// mu is used to access state. The lock should only be held
-	// for short periods. For longer periods, you have to transition
-	// the state to a transient value and release the lock.
-	// Once the operation is complete, you can then transition
-	// the state back to a stable value.
-	// The lameduck mode causes tablet server to respond as unhealthy
-	// for health checks. This does not affect how queries are served.
-	// target specifies the primary target type, and also allow specifies
-	// secondary types that should be additionally allowed.
-	mu        sync.Mutex
-	state     int64
-	lameduck  sync2.AtomicInt32
-	target    querypb.Target
-	alsoAllow []topodatapb.TabletType
-	requests  sync.WaitGroup
-
-	// The following variables should be initialized only once
-	// before starting the tabletserver.
-	dbconfigs *dbconfigs.DBConfigs
-
-	// The following variables should only be accessed within
-	// the context of a startRequest-endRequest.
-	se        *schema.Engine
-	qe        *QueryEngine
-	te        *TxEngine
-	hw        *heartbeat.Writer
-	hr        *heartbeat.Reader
-	watcher   *ReplicationWatcher
-	vstreamer *vstreamer.Engine
-	messager  *messager.Engine
-
-	// checkMySQLThrottler is used to throttle the number of
-	// requests sent to CheckMySQL.
-	checkMySQLThrottler *sync2.Semaphore
-
-	// txThrottler is used to throttle transactions based on the observed replication lag.
+	// These are sub-components of TabletServer.
+	se          *schema.Engine
+	rt          *repltracker.ReplTracker
+	vstreamer   *vstreamer.Engine
+	tracker     *schema.Tracker
+	watcher     *BinlogWatcher
+	qe          *QueryEngine
 	txThrottler *txthrottler.TxThrottler
-	topoServer  *topo.Server
+	te          *TxEngine
+	messager    *messager.Engine
+	hs          *healthStreamer
 
-	// streamHealthMutex protects all the following fields
-	streamHealthMutex          sync.Mutex
-	streamHealthIndex          int
-	streamHealthMap            map[int]chan<- *querypb.StreamHealthResponse
-	lastStreamHealthResponse   *querypb.StreamHealthResponse
-	lastStreamHealthExpiration time.Time
-
-	// history records changes in state for display on the status page.
-	// It has its own internal mutex.
-	history *history.History
+	// sm manages state transitions.
+	sm *stateManager
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
 }
+
+var _ queryservice.QueryService = (*TabletServer)(nil)
 
 // RegisterFunctions is a list of all the
 // RegisterFunction that will be called upon
@@ -218,45 +135,73 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		exporter:               exporter,
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
-		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.Oltp.QueryTimeoutSeconds * 1e9)),
+		QueryTimeout:           sync2.NewAtomicDuration(config.Oltp.QueryTimeoutSeconds.Get()),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
-		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
-		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
-		history:                history.New(10),
 		topoServer:             topoServer,
 		alias:                  alias,
 	}
-	tsv.se = schema.NewEngine(tsv)
-	tsv.qe = NewQueryEngine(tsv, tsv.se)
-	tsv.te = NewTxEngine(tsv)
-	tsv.hw = heartbeat.NewWriter(tsv, alias)
-	tsv.hr = heartbeat.NewReader(tsv)
-	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
-	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se)
-	tsv.watcher = NewReplicationWatcher(tsv, tsv.vstreamer, tsv.config)
-	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 {
-		tsv.mu.Lock()
-		defer tsv.mu.Unlock()
-		return tsv.state
-	})
-	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
+	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
+
+	tsv.se = schema.NewEngine(tsv)
+	tsv.rt = repltracker.NewReplTracker(tsv, alias)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
+	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
+	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
+	tsv.qe = NewQueryEngine(tsv, tsv.se)
+	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
+	tsv.te = NewTxEngine(tsv)
+	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
+	tsv.hs = newHealthStreamer(tsv, alias)
+
+	tsv.sm = &stateManager{
+		se:          tsv.se,
+		rt:          tsv.rt,
+		vstreamer:   tsv.vstreamer,
+		tracker:     tsv.tracker,
+		watcher:     tsv.watcher,
+		qe:          tsv.qe,
+		txThrottler: tsv.txThrottler,
+		te:          tsv.te,
+		messager:    tsv.messager,
+		notify:      tsv.hs.ChangeState,
+	}
+
+	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
+	tsv.exporter.Publish("TabletStateName", stats.StringFunc(tsv.sm.IsServingString))
 
 	// TabletServerState exports the same information as the above two stats (TabletState / TabletStateName),
 	// but exported with TabletStateName as a label for Prometheus, which doesn't support exporting strings as stat values.
 	tsv.exporter.NewGaugesFuncWithMultiLabels("TabletServerState", "Tablet server state labeled by state name", []string{"name"}, func() map[string]int64 {
-		return map[string]int64{tsv.GetState(): 1}
+		return map[string]int64{tsv.sm.IsServingString(): 1}
 	})
 	tsv.exporter.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 
+	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
 	return tsv
+}
+
+// InitDBConfig initializes the db config variables for TabletServer. You must call this function
+// to complete the creation of TabletServer.
+func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+	if tsv.sm.State() != StateNotConnected {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", tsv.sm.IsServingString())
+	}
+	tsv.sm.Init(tsv, target)
+	tsv.sm.target = target
+	tsv.config.DB = dbcfgs
+
+	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
+	tsv.rt.InitDBConfig(target, mysqld)
+	tsv.txThrottler.InitDBConfig(target)
+	tsv.vstreamer.InitDBConfig(target.Keyspace)
+	tsv.hs.InitDBConfig(target)
+	return nil
 }
 
 // Register prepares TabletServer for serving by calling
@@ -275,11 +220,6 @@ func (tsv *TabletServer) Exporter() *servenv.Exporter {
 // Config satisfies tabletenv.Env.
 func (tsv *TabletServer) Config() *tabletenv.TabletConfig {
 	return tsv.config
-}
-
-// DBConfigs satisfies tabletenv.Env.
-func (tsv *TabletServer) DBConfigs() *dbconfigs.DBConfigs {
-	return tsv.dbconfigs
 }
 
 // Stats satisfies tabletenv.Env.
@@ -312,56 +252,6 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *rules.Rules) erro
 		return err
 	}
 	tsv.qe.ClearQueryPlanCache()
-	return nil
-}
-
-// GetState returns the name of the current TabletServer state.
-func (tsv *TabletServer) GetState() string {
-	if tsv.lameduck.Get() != 0 {
-		return "NOT_SERVING"
-	}
-	tsv.mu.Lock()
-	name := stateName[tsv.state]
-	tsv.mu.Unlock()
-	return name
-}
-
-// setState changes the state and logs the event.
-// It requires the caller to hold a lock on mu.
-func (tsv *TabletServer) setState(state int64) {
-	log.Infof("TabletServer state: %s -> %s", stateInfo(tsv.state), stateInfo(state))
-	tsv.state = state
-	tsv.history.Add(&historyRecord{
-		Time:         time.Now(),
-		ServingState: stateInfo(state),
-		TabletType:   tsv.target.TabletType.String(),
-	})
-}
-
-// transition obtains a lock and changes the state.
-func (tsv *TabletServer) transition(newState int64) {
-	tsv.mu.Lock()
-	tsv.setState(newState)
-	tsv.mu.Unlock()
-}
-
-// IsServing returns true if TabletServer is in SERVING state.
-func (tsv *TabletServer) IsServing() bool {
-	return tsv.GetState() == "SERVING"
-}
-
-// InitDBConfig initializes the db config variables for TabletServer. You must call this function before
-// calling SetServingType.
-func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) error {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
-	if tsv.state != StateNotConnected {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", stateName[tsv.state])
-	}
-	tsv.target = target
-	tsv.dbconfigs = dbcfgs
-
-	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	return nil
 }
 
@@ -403,261 +293,41 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 	}
 }
 
+// SetServingType changes the serving type of the tabletserver. It starts or
+// stops internal services as deemed necessary.
+// Returns true if the state of QueryService or the tablet type changed.
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, terTimestamp time.Time, serving bool, reason string) error {
+	state := StateNotServing
+	if serving {
+		state = StateServing
+	}
+	return tsv.sm.SetServingType(tabletType, terTimestamp, state, reason)
+}
+
 // StartService is a convenience function for InitDBConfig->SetServingType
 // with serving=true.
-func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs) (err error) {
-	// Save tablet type away to prevent data races
-	tabletType := target.TabletType
-	err = tsv.InitDBConfig(target, dbcfgs)
-	if err != nil {
+func (tsv *TabletServer) StartService(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+	if err := tsv.InitDBConfig(target, dbcfgs, mysqld); err != nil {
 		return err
 	}
-	_ /* state changed */, err = tsv.SetServingType(tabletType, true, nil)
-	return err
-}
-
-// EnterLameduck causes tabletserver to enter the lameduck state. This
-// state causes health checks to fail, but the behavior of tabletserver
-// otherwise remains the same. Any subsequent calls to SetServingType will
-// cause the tabletserver to exit this mode.
-func (tsv *TabletServer) EnterLameduck() {
-	tsv.lameduck.Set(1)
-}
-
-// ExitLameduck causes the tabletserver to exit the lameduck mode.
-func (tsv *TabletServer) ExitLameduck() {
-	tsv.lameduck.Set(0)
-}
-
-const (
-	actionNone = iota
-	actionFullStart
-	actionServeNewType
-	actionGracefulStop
-)
-
-// SetServingType changes the serving type of the tabletserver. It starts or
-// stops internal services as deemed necessary. The tabletType determines the
-// primary serving type, while alsoAllow specifies other tablet types that
-// should also be honored for serving.
-// Returns true if the state of QueryService or the tablet type changed.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
-	defer tsv.ExitLameduck()
-
-	action, err := tsv.decideAction(tabletType, serving, alsoAllow)
-	if err != nil {
-		return false, err
-	}
-	switch action {
-	case actionNone:
-		return false, nil
-	case actionFullStart:
-		if err := tsv.fullStart(); err != nil {
-			tsv.closeAll()
-			return true, err
-		}
-		return true, nil
-	case actionServeNewType:
-		if err := tsv.serveNewType(); err != nil {
-			tsv.closeAll()
-			return true, err
-		}
-		return true, nil
-	case actionGracefulStop:
-		tsv.gracefulStop()
-		return true, nil
-	}
-	panic("unreachable")
-}
-
-func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (action int, err error) {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
-
-	tsv.alsoAllow = alsoAllow
-
-	// Handle the case where the requested TabletType and serving state
-	// match our current state. This avoids an unnecessary transition.
-	// There's no similar shortcut if serving is false, because there
-	// are different 'not serving' states that require different actions.
-	if tsv.target.TabletType == tabletType {
-		if serving && tsv.state == StateServing {
-			// We're already in the desired state.
-			return actionNone, nil
-		}
-	}
-	tsv.target.TabletType = tabletType
-	switch tsv.state {
-	case StateNotConnected:
-		if serving {
-			tsv.setState(StateTransitioning)
-			return actionFullStart, nil
-		}
-	case StateNotServing:
-		if serving {
-			tsv.setState(StateTransitioning)
-			return actionServeNewType, nil
-		}
-	case StateServing:
-		if !serving {
-			tsv.setState(StateShuttingDown)
-			return actionGracefulStop, nil
-		}
-		tsv.setState(StateTransitioning)
-		return actionServeNewType, nil
-	case StateTransitioning, StateShuttingDown:
-		return actionNone, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot SetServingType, current state: %s", stateName[tsv.state])
-	default:
-		panic("unreachable")
-	}
-	return actionNone, nil
-}
-
-func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(context.TODO(), tsv.dbconfigs.AppWithDB())
-	if err != nil {
-		log.Errorf("error creating db app connection: %v", err)
-		return err
-	}
-	c.Close()
-
-	if err := tsv.se.Open(); err != nil {
-		log.Errorf("Could not load schema, but starting the query service anyways: %v", err)
-	}
-	if err := tsv.qe.Open(); err != nil {
-		return err
-	}
-	if err := tsv.te.Init(); err != nil {
-		return err
-	}
-	if err := tsv.hw.Init(tsv.target); err != nil {
-		return err
-	}
-	tsv.hr.Init(tsv.target)
-	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
-	tsv.watcher.Open()
-	return tsv.serveNewType()
-}
-
-func (tsv *TabletServer) serveNewType() (err error) {
-	// Wait for in-flight transactional requests to complete
-	// before rolling back everything. In this state new
-	// transactional requests are not allowed. So, we can
-	// be sure that the tx pool won't change after the wait.
-	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.te.AcceptReadWrite()
-		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
-			return err
-		}
-		tsv.messager.Open()
-		tsv.hr.Close()
-		tsv.hw.Open()
-	} else {
-		tsv.te.AcceptReadOnly()
-		tsv.messager.Close()
-		tsv.hr.Open()
-		tsv.hw.Close()
-		tsv.watcher.Open()
-
-		// Reset the sequences.
-		tsv.se.MakeNonMaster()
-	}
-	tsv.transition(StateServing)
-	return nil
-}
-
-func (tsv *TabletServer) gracefulStop() {
-	defer close(tsv.setTimeBomb())
-	tsv.waitForShutdown()
-	tsv.transition(StateNotServing)
+	// StartService is only used for testing. So, we cheat by aggressively setting replication to healthy.
+	return tsv.sm.SetServingType(target.TabletType, time.Time{}, StateServing, "")
 }
 
 // StopService shuts down the tabletserver to the uninitialized state.
 // It first transitions to StateShuttingDown, then waits for active
-// services to shut down. Then it shuts down QueryEngine. This function
+// services to shut down. Then it shuts down the rest. This function
 // should be called before process termination, or if MySQL is unreachable.
-// Under normal circumstances, SetServingType should be called, which will
-// keep QueryEngine open.
+// Under normal circumstances, SetServingType should be called.
 func (tsv *TabletServer) StopService() {
-	defer close(tsv.setTimeBomb())
-	defer tsv.LogError()
-
-	tsv.mu.Lock()
-	if tsv.state != StateServing && tsv.state != StateNotServing {
-		tsv.mu.Unlock()
-		return
-	}
-	tsv.setState(StateShuttingDown)
-	tsv.mu.Unlock()
-
-	log.Infof("Executing complete shutdown.")
-	tsv.waitForShutdown()
-	tsv.watcher.Close()
-	tsv.vstreamer.Close()
-	tsv.qe.Close()
-	tsv.se.Close()
-	tsv.hw.Close()
-	tsv.hr.Close()
-	log.Infof("Shutdown complete.")
-	tsv.transition(StateNotConnected)
-}
-
-func (tsv *TabletServer) waitForShutdown() {
-	// Wait till beginRequests have completed before waiting on tx pool.
-	// During this state, new Begins are not allowed. After the wait,
-	// we have the assurance that only non-begin transactional calls
-	// will be allowed. They will enable the conclusion of outstanding
-	// transactions.
-	tsv.messager.Close()
-	tsv.te.StopGently()
-	tsv.qe.streamQList.TerminateAll()
-	tsv.watcher.Close()
-	tsv.requests.Wait()
-	tsv.txThrottler.Close()
-}
-
-// closeAll is called if TabletServer fails to start.
-// It forcibly shuts down everything.
-func (tsv *TabletServer) closeAll() {
-	tsv.messager.Close()
-	tsv.watcher.Close()
-	tsv.vstreamer.Close()
-	tsv.hr.Close()
-	tsv.hw.Close()
-	tsv.te.StopGently()
-	tsv.watcher.Close()
-	tsv.qe.Close()
-	tsv.se.Close()
-	tsv.txThrottler.Close()
-	tsv.transition(StateNotConnected)
-}
-
-func (tsv *TabletServer) setTimeBomb() chan struct{} {
-	done := make(chan struct{})
-	go func() {
-		qt := tsv.QueryTimeout.Get()
-		if qt == 0 {
-			return
-		}
-		tmr := time.NewTimer(10 * qt)
-		defer tmr.Stop()
-		select {
-		case <-tmr.C:
-			log.Fatal("Shutdown took too long. Crashing")
-		case <-done:
-		}
-	}()
-	return done
+	tsv.sm.StopService()
 }
 
 // IsHealthy returns nil for non-serving types or if the query service is healthy (able to
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	tsv.mu.Lock()
-	tabletType := tsv.target.TabletType
-	tsv.mu.Unlock()
-	switch tabletType {
+	switch tsv.sm.Target().TabletType {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
@@ -665,60 +335,13 @@ func (tsv *TabletServer) IsHealthy() error {
 			"/* health */ select 1 from dual",
 			nil,
 			0,
+			0,
 			nil,
 		)
 		return err
 	default:
 		return nil
 	}
-}
-
-// CheckMySQL initiates a check to see if MySQL is reachable.
-// If not, it shuts down the query service. The check is rate-limited
-// to no more than once per second.
-// The function satisfies tabletenv.Env.
-func (tsv *TabletServer) CheckMySQL() {
-	if !tsv.checkMySQLThrottler.TryAcquire() {
-		return
-	}
-	go func() {
-		defer func() {
-			tsv.LogError()
-			time.Sleep(1 * time.Second)
-			tsv.checkMySQLThrottler.Release()
-		}()
-		if tsv.isMySQLReachable() {
-			return
-		}
-		log.Info("Check MySQL failed. Shutting down query service")
-		tsv.StopService()
-	}()
-}
-
-// isMySQLReachable returns true if we can connect to MySQL.
-// The function returns false only if the query service is
-// in StateServing or StateNotServing.
-func (tsv *TabletServer) isMySQLReachable() bool {
-	tsv.mu.Lock()
-	switch tsv.state {
-	case StateServing:
-		// Prevent transition out of this state by
-		// reserving a request.
-		tsv.requests.Add(1)
-		defer tsv.requests.Done()
-	case StateNotServing:
-		// Prevent transition out of this state by
-		// temporarily switching to StateTransitioning.
-		tsv.setState(StateTransitioning)
-		defer func() {
-			tsv.transition(StateNotServing)
-		}()
-	default:
-		tsv.mu.Unlock()
-		return true
-	}
-	tsv.mu.Unlock()
-	return tsv.qe.IsMySQLReachable()
 }
 
 // ReloadSchema reloads the schema.
@@ -745,7 +368,11 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
+	return tsv.begin(ctx, target, nil, 0, options)
+}
+
+func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (transactionID int64, tablet *topodatapb.TabletAlias, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
@@ -756,8 +383,9 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.te.Begin(ctx, options)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, preQueries, reservedID, options)
 			logStats.TransactionID = transactionID
+			logStats.ReservedID = reservedID
 
 			// Record the actual statements that were executed in the logStats.
 			// If nothing was actually executed, don't count the operation in
@@ -772,12 +400,12 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 			return err
 		},
 	)
-	return transactionID, err
+	return transactionID, &tsv.alias, err
 }
 
 // Commit commits the specified transaction.
-func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (err error) {
-	return tsv.execRequest(
+func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (newReservedID int64, err error) {
+	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Commit", "commit", nil,
 		target, nil, true, /* allowOnShutdown */
@@ -786,7 +414,11 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			logStats.TransactionID = transactionID
 
 			var commitSQL string
-			commitSQL, err = tsv.te.Commit(ctx, transactionID)
+			newReservedID, commitSQL, err = tsv.te.Commit(ctx, transactionID)
+			if newReservedID > 0 {
+				// commit executed on old reserved id.
+				logStats.ReservedID = transactionID
+			}
 
 			// If nothing was actually executed, don't count the operation in
 			// the tablet metrics, and clear out the logStats Method so that
@@ -799,20 +431,27 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			return err
 		},
 	)
+	return newReservedID, err
 }
 
 // Rollback rollsback the specified transaction.
-func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (err error) {
-	return tsv.execRequest(
+func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (newReservedID int64, err error) {
+	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Rollback", "rollback", nil,
 		target, nil, true, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.te.Rollback(ctx, transactionID)
+			newReservedID, err = tsv.te.Rollback(ctx, transactionID)
+			if newReservedID > 0 {
+				// rollback executed on old reserved id.
+				logStats.ReservedID = transactionID
+			}
+			return err
 		},
 	)
+	return newReservedID, err
 }
 
 // Prepare prepares the specified transaction.
@@ -957,12 +596,16 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 }
 
 // Execute executes the query and returns the result as response.
-func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.Execute")
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
-	allowOnShutdown := (transactionID != 0)
+	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "transactionID and reserveID must match if both are non-zero")
+	}
+
+	allowOnShutdown := transactionID != 0
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"Execute", sql, bindVariables,
@@ -972,15 +615,22 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), reservedID != 0)
 			if err != nil {
 				return err
 			}
+			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
+			connID := reservedID
+			if transactionID != 0 {
+				connID = transactionID
+			}
+			logStats.ReservedID = reservedID
+			logStats.TransactionID = transactionID
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				transactionID:  transactionID,
+				connID:         connID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
@@ -1012,7 +662,8 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
-			plan, err := tsv.qe.GetStreamPlan(query)
+			// TODO: update the isReservedConn logic when StreamExecute supports reserved connections.
+			plan, err := tsv.qe.GetStreamPlan(query, false /* isReservedConn */)
 			if err != nil {
 				return err
 			}
@@ -1020,7 +671,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				transactionID:  transactionID,
+				connID:         transactionID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
@@ -1036,6 +687,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // ExecuteBatch can be called for an existing transaction, or it can be called with
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
+// TODO(reserve-conn): Validate the use-case and Add support for reserve connection in ExecuteBatch
 func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
 	defer span.Finish()
@@ -1049,9 +701,9 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 
 	if tsv.enableHotRowProtection && asTransaction {
 		// Serialize transactions which target the same hot row range.
-		// NOTE: We put this intentionally at this place *before* tsv.startRequest()
-		// gets called below. Otherwise, the startRequest()/endRequest() section from
-		// below would overlap with the startRequest()/endRequest() section executed
+		// NOTE: We put this intentionally at this place *before* StartRequest()
+		// gets called below. Otherwise, the StartRequest()/EndRequest() section from
+		// below would overlap with the StartRequest()/EndRequest() section executed
 		// by tsv.beginWaitForSameRangeTransactions().
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, queries[0].Sql, queries[0].BindVariables)
 		if err != nil {
@@ -1062,17 +714,17 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	allowOnShutdown := (transactionID != 0)
-	// TODO(sougou): Convert startRequest/endRequest pattern to use wrapper
+	allowOnShutdown := transactionID != 0
+	// TODO(sougou): Convert StartRequest/EndRequest pattern to use wrapper
 	// function tsv.execRequest() instead.
 	// Note that below we always return "err" right away and do not call
 	// tsv.convertAndLogError. That's because the methods which returned "err",
 	// e.g. tsv.Execute(), already called that function and therefore already
 	// converted and logged the error.
-	if err = tsv.startRequest(ctx, target, allowOnShutdown); err != nil {
+	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return nil, err
 	}
-	defer tsv.endRequest()
+	defer tsv.sm.EndRequest()
 	defer tsv.handlePanicAndSendLogStats("batch", nil, nil)
 
 	if options == nil {
@@ -1091,7 +743,8 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 
 	if asTransaction {
-		transactionID, err = tsv.Begin(ctx, target, options)
+		// We ignore the return alias because this transaction only exists in the scope of this call
+		transactionID, _, err = tsv.Begin(ctx, target, options)
 		if err != nil {
 			return nil, err
 		}
@@ -1105,14 +758,14 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
-		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, options)
+		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, 0, options)
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, *localReply)
 	}
 	if asTransaction {
-		if err = tsv.Commit(ctx, target, transactionID); err != nil {
+		if _, err = tsv.Commit(ctx, target, transactionID); err != nil {
 			transactionID = 0
 			return nil, err
 		}
@@ -1122,24 +775,26 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // BeginExecute combines Begin and Execute.
-func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	if tsv.enableHotRowProtection {
+func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+
+	// Disable hot row protection in case of reserve connection.
+	if tsv.enableHotRowProtection && reservedID == 0 {
 		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, options, sql, bindVariables)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, nil, err
 		}
 		if txDone != nil {
 			defer txDone()
 		}
 	}
 
-	transactionID, err := tsv.Begin(ctx, target, options)
+	transactionID, alias, err := tsv.begin(ctx, target, preQueries, reservedID, options)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
-	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
-	return result, transactionID, err
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
+	return result, transactionID, alias, err
 }
 
 func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions, sql string, bindVariables map[string]*querypb.BindVariable) (txserializer.DoneFunc, error) {
@@ -1189,7 +844,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
 	sql, _ = sqlparser.SplitMarginComments(sql)
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false /* skipQueryPlanCache */)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false /* skipQueryPlanCache */, false /* isReservedConn */)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
 		return "", ""
@@ -1221,16 +876,16 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 }
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
-func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
+func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	// TODO(mberlin): Integrate hot row protection here as we did for BeginExecute()
 	// and ExecuteBatch(asTransaction=true).
-	transactionID, err := tsv.Begin(ctx, target, options)
+	transactionID, alias, err := tsv.Begin(ctx, target, options)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
 	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, err
+	return results, transactionID, alias, err
 }
 
 // MessageStream streams messages from the requested table.
@@ -1290,10 +945,10 @@ func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Targ
 }
 
 func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]*querypb.BindVariable, error)) (count int64, err error) {
-	if err = tsv.startRequest(ctx, target, false /* allowOnShutdown */); err != nil {
+	if err = tsv.sm.StartRequest(ctx, target, false /* allowOnShutdown */); err != nil {
 		return 0, err
 	}
-	defer tsv.endRequest()
+	defer tsv.sm.EndRequest()
 	defer tsv.handlePanicAndSendLogStats("ack", nil, nil)
 
 	query, bv, err := queryGenerator()
@@ -1301,7 +956,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 
-	transactionID, err := tsv.Begin(ctx, target, nil)
+	transactionID, _, err := tsv.Begin(ctx, target, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1312,11 +967,11 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 			tsv.Rollback(ctx, target, transactionID)
 		}
 	}()
-	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, nil)
+	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, 0, nil)
 	if err != nil {
 		return 0, err
 	}
-	if err = tsv.Commit(ctx, target, transactionID); err != nil {
+	if _, err = tsv.Commit(ctx, target, transactionID); err != nil {
 		transactionID = 0
 		return 0, err
 	}
@@ -1325,16 +980,16 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 }
 
 // VStream streams VReplication events.
-func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	if err := tsv.verifyTarget(ctx, target); err != nil {
+func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, startPos, filter, send)
+	return tsv.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
 }
 
 // VStreamRows streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	if err := tsv.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
 		return err
 	}
 	var row []sqltypes.Value
@@ -1350,10 +1005,93 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 
 // VStreamResults streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
-	if err := tsv.verifyTarget(ctx, target); err != nil {
+	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
+}
+
+//ReserveBeginExecute implements the QueryService interface
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+
+	var connID int64
+	var err error
+
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"ReserveBegin", "begin", bindVariables,
+		target, options, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries)
+			if err != nil {
+				return err
+			}
+			logStats.TransactionID = connID
+			logStats.ReservedID = connID
+			return nil
+		},
+	)
+
+	if err != nil {
+		return nil, 0, 0, nil, err
+	}
+
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, connID, options)
+	return result, connID, connID, &tsv.alias, err
+}
+
+//ReserveExecute implements the QueryService interface
+func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	var connID int64
+	var err error
+
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"Reserve", "", bindVariables,
+		target, options, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			connID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
+			if err != nil {
+				return err
+			}
+			logStats.TransactionID = transactionID
+			logStats.ReservedID = connID
+			return nil
+		},
+	)
+
+	if err != nil {
+		return nil, 0, nil, err
+	}
+
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, connID, options)
+	return result, connID, &tsv.alias, err
+}
+
+//Release implements the QueryService interface
+func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
+	if reservedID == 0 && transactionID == 0 {
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Connection Id and Transaction ID does not exists")
+	}
+	return tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"Release", "", nil,
+		target, nil, true, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
+			logStats.TransactionID = transactionID
+			logStats.ReservedID = reservedID
+			if reservedID != 0 {
+				//Release to close the underlying connection.
+				return tsv.te.Release(reservedID)
+			}
+			// Rollback to cleanup the transaction before returning to the pool.
+			_, err := tsv.te.Rollback(ctx, transactionID)
+			return err
+		},
+	)
 }
 
 // execRequest performs verifications, sets up the necessary environments
@@ -1381,45 +1119,19 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
-	if err = tsv.startRequest(ctx, target, allowOnShutdown); err != nil {
+	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return err
 	}
 
 	ctx, cancel := withTimeout(ctx, timeout, options)
 	defer func() {
 		cancel()
-		tsv.endRequest()
+		tsv.sm.EndRequest()
 	}()
 
 	err = exec(ctx, logStats)
 	if err != nil {
 		return tsv.convertAndLogError(ctx, sql, bindVariables, err, logStats)
-	}
-	return nil
-}
-
-// verifyTarget allows requests to be executed even in non-serving state.
-func (tsv *TabletServer) verifyTarget(ctx context.Context, target *querypb.Target) error {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
-
-	if target != nil {
-		// a valid target needs to be used
-		switch {
-		case target.Keyspace != tsv.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
-		case target.Shard != tsv.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-		case target.TabletType != tsv.target.TabletType:
-			for _, otherType := range tsv.alsoAllow {
-				if target.TabletType == otherType {
-					return nil
-				}
-			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
-		}
-	} else if !tabletenv.IsLocalContext(ctx) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 	}
 	return nil
 }
@@ -1631,97 +1343,39 @@ func convertErrorCode(err error) vtrpcpb.Code {
 }
 
 // StreamHealth streams the health status to callback.
-// At the beginning, if TabletServer has a valid health
-// state, that response is immediately sent.
 func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	tsv.streamHealthMutex.Lock()
-	shr := tsv.lastStreamHealthResponse
-	shrExpiration := tsv.lastStreamHealthExpiration
-	tsv.streamHealthMutex.Unlock()
-	// Send current state immediately.
-	if shr != nil && time.Now().Before(shrExpiration) {
-		if err := callback(shr); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
-
-	// Broadcast periodic updates.
-	id, ch := tsv.streamHealthRegister()
-	defer tsv.streamHealthUnregister(id)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case shr = <-ch:
-		}
-		if err := callback(shr); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
-}
-
-func (tsv *TabletServer) streamHealthRegister() (int, chan *querypb.StreamHealthResponse) {
-	tsv.streamHealthMutex.Lock()
-	defer tsv.streamHealthMutex.Unlock()
-
-	id := tsv.streamHealthIndex
-	tsv.streamHealthIndex++
-	ch := make(chan *querypb.StreamHealthResponse, 10)
-	tsv.streamHealthMap[id] = ch
-	return id, ch
-}
-
-func (tsv *TabletServer) streamHealthUnregister(id int) {
-	tsv.streamHealthMutex.Lock()
-	defer tsv.streamHealthMutex.Unlock()
-	delete(tsv.streamHealthMap, id)
+	return tsv.hs.Stream(ctx, callback)
 }
 
 // BroadcastHealth will broadcast the current health to all listeners
-func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats, maxCache time.Duration) {
-	tsv.mu.Lock()
-	target := tsv.target
-	tsv.mu.Unlock()
-	shr := &querypb.StreamHealthResponse{
-		Target:                              &target,
-		TabletAlias:                         &tsv.alias,
-		Serving:                             tsv.IsServing(),
-		TabletExternallyReparentedTimestamp: terTimestamp,
-		RealtimeStats:                       stats,
-	}
-
-	tsv.streamHealthMutex.Lock()
-	defer tsv.streamHealthMutex.Unlock()
-	for _, c := range tsv.streamHealthMap {
-		// Do not block on any write.
-		select {
-		case c <- shr:
-		default:
-		}
-	}
-	tsv.lastStreamHealthResponse = shr
-	tsv.lastStreamHealthExpiration = time.Now().Add(maxCache)
+func (tsv *TabletServer) BroadcastHealth() {
+	tsv.sm.Broadcast()
 }
 
-// HeartbeatLag returns the current lag as calculated by the heartbeat
-// package, if heartbeat is enabled. Otherwise returns 0.
-func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
-	// If the reader is closed and we are not serving, then the
-	// query service is shutdown and this value is not being updated.
-	// We return healthy from this as a signal to the healtcheck to attempt
-	// to start the query service again. If the query service fails to start
-	// with an error, then that error is be reported by the healthcheck.
-	if !tsv.hr.IsOpen() && !tsv.IsServing() {
-		return 0, nil
-	}
-	return tsv.hr.GetLatest()
+// EnterLameduck causes tabletserver to enter the lameduck state. This
+// state causes health checks to fail, but the behavior of tabletserver
+// otherwise remains the same. Any subsequent calls to SetServingType will
+// cause the tabletserver to exit this mode.
+func (tsv *TabletServer) EnterLameduck() {
+	tsv.sm.EnterLameduck()
+}
+
+// ExitLameduck causes the tabletserver to exit the lameduck mode.
+func (tsv *TabletServer) ExitLameduck() {
+	tsv.sm.ExitLameduck()
+}
+
+// IsServing returns true if TabletServer is in SERVING state.
+func (tsv *TabletServer) IsServing() bool {
+	return tsv.sm.IsServing()
+}
+
+// CheckMySQL initiates a check to see if MySQL is reachable.
+// If not, it shuts down the query service. The check is rate-limited
+// to no more than once per second.
+// The function satisfies tabletenv.Env.
+func (tsv *TabletServer) CheckMySQL() {
+	tsv.sm.CheckMySQL()
 }
 
 // TopoServer returns the topo server.
@@ -1741,50 +1395,22 @@ func (tsv *TabletServer) Close(ctx context.Context) error {
 	return nil
 }
 
-// startRequest validates the current state and target and registers
-// the request (a waitgroup) as started. Every startRequest requires
-// one and only one corresponding endRequest. When the service shuts
-// down, StopService will wait on this waitgroup to ensure that there
-// are no requests in flight.
-func (tsv *TabletServer) startRequest(ctx context.Context, target *querypb.Target, allowOnShutdown bool) (err error) {
-	tsv.mu.Lock()
-	defer tsv.mu.Unlock()
-	if tsv.state == StateServing {
-		goto verifyTarget
-	}
-	if allowOnShutdown && tsv.state == StateShuttingDown {
-		goto verifyTarget
-	}
-	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[tsv.state])
+var okMessage = []byte("ok\n")
 
-verifyTarget:
-	if target != nil {
-		// a valid target needs to be used
-		switch {
-		case target.Keyspace != tsv.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
-		case target.Shard != tsv.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
-		case target.TabletType != tsv.target.TabletType:
-			for _, otherType := range tsv.alsoAllow {
-				if target.TabletType == otherType {
-					goto ok
-				}
-			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+func (tsv *TabletServer) registerHealthzHealthHandler() {
+	tsv.exporter.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
+			acl.SendError(w, err)
+			return
 		}
-	} else if !tabletenv.IsLocalContext(ctx) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
-	}
-
-ok:
-	tsv.requests.Add(1)
-	return nil
-}
-
-// endRequest unregisters the current request (a waitgroup) as done.
-func (tsv *TabletServer) endRequest() {
-	tsv.requests.Done()
+		if !tsv.sm.IsServing() {
+			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(okMessage)
+	})
 }
 
 func (tsv *TabletServer) registerDebugHealthHandler() {
@@ -1829,6 +1455,18 @@ func (tsv *TabletServer) registerTwopczHandler() {
 	})
 }
 
+// SetTracking forces tracking to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) SetTracking(enabled bool) {
+	tsv.tracker.Enable(enabled)
+}
+
+// EnableHistorian forces historian to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) EnableHistorian(enabled bool) {
+	_ = tsv.se.EnableHistorian(enabled)
+}
+
 // SetPoolSize changes the pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetPoolSize(val int) {
@@ -1854,12 +1492,12 @@ func (tsv *TabletServer) StreamPoolSize() int {
 // SetTxPoolSize changes the tx pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te.txPool.conns.SetCapacity(val)
+	tsv.te.txPool.scp.conns.SetCapacity(val)
 }
 
 // TxPoolSize returns the tx pool size.
 func (tsv *TabletServer) TxPoolSize() int {
-	return int(tsv.te.txPool.conns.Capacity())
+	return tsv.te.txPool.scp.Capacity()
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.

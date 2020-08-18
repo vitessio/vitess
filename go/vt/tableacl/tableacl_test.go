@@ -23,11 +23,9 @@ import (
 	"os"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 
@@ -246,50 +244,5 @@ func TestGetCurrentACLFactoryWithWrongDefault(t *testing.T) {
 	_, err := GetCurrentACLFactory()
 	if err == nil {
 		t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
-	}
-}
-
-func TestHealthWithACL(t *testing.T) {
-	tacl := tableACL{factory: &simpleacl.Factory{}}
-	ha := health.NewAggregator()
-	tests := []struct {
-		config *tableaclpb.Config
-		wantOK bool
-	}{
-		{
-			config: nil,
-			wantOK: false,
-		},
-		{
-			config: &tableaclpb.Config{
-				TableGroups: []*tableaclpb.TableGroupSpec{{
-					Name:                 "group01",
-					TableNamesOrPrefixes: []string{"test_table"},
-					Readers:              []string{"vt"},
-					Writers:              []string{"vt"},
-				}}},
-			wantOK: true,
-		},
-		{
-			config: &tableaclpb.Config{},
-			wantOK: true,
-		},
-	}
-	ha.RegisterSimpleCheck("tableacl", func() error { return checkHealth(&tacl) })
-	for _, test := range tests {
-		if test.config != nil {
-			if err := tacl.Set(test.config); err != nil {
-				t.Fatalf("tacl.Set(%#v) = %v, want %v", test.config, err, nil)
-			}
-		}
-		delay, err := ha.Report(true, true)
-		wantErr := error(nil)
-		if !test.wantOK {
-			wantErr = errors.New("<not nil>")
-		}
-		wantDelay := time.Duration(0)
-		if delay != wantDelay || (err == nil) != test.wantOK {
-			t.Errorf("ha.Report(true, true) == (%v, %v), want (%v, %v)", delay, err, wantDelay, wantErr)
-		}
 	}
 }

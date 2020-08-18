@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -47,12 +46,12 @@ var (
 // Since we don't want to use them all, we require at least
 // minHealthyRdonlyTablets servers to be healthy.
 // May block up to -wait_for_healthy_rdonly_tablets_timeout.
-func FindHealthyTablet(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int, tabletType topodatapb.TabletType) (*topodatapb.TabletAlias, error) {
+func FindHealthyTablet(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.LegacyTabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int, tabletType topodatapb.TabletType) (*topodatapb.TabletAlias, error) {
 	if tsc == nil {
 		// No healthcheck instance provided. Create one.
-		healthCheck := discovery.NewHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
-		tsc = discovery.NewTabletStatsCache(healthCheck, wr.TopoServer(), cell)
-		watcher := discovery.NewShardReplicationWatcher(ctx, wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+		healthCheck := discovery.NewLegacyHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
+		tsc = discovery.NewLegacyTabletStatsCache(healthCheck, wr.TopoServer(), cell)
+		watcher := discovery.NewLegacyShardReplicationWatcher(ctx, wr.TopoServer(), healthCheck, cell, keyspace, shard, *healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
 		defer watcher.Stop()
 		defer healthCheck.Close()
 	}
@@ -67,7 +66,7 @@ func FindHealthyTablet(ctx context.Context, wr *wrangler.Wrangler, tsc *discover
 	return healthyTablets[index].Tablet.Alias, nil
 }
 
-func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int, timeout time.Duration, tabletType topodatapb.TabletType) ([]discovery.TabletStats, error) {
+func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *discovery.LegacyTabletStatsCache, cell, keyspace, shard string, minHealthyRdonlyTablets int, timeout time.Duration, tabletType topodatapb.TabletType) ([]discovery.LegacyTabletStats, error) {
 	busywaitCtx, busywaitCancel := context.WithTimeout(ctx, timeout)
 	defer busywaitCancel()
 
@@ -81,7 +80,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 		return nil, vterrors.Wrapf(err, "error waiting for %v tablets for (%v,%v/%v)", tabletType, cell, keyspace, shard)
 	}
 
-	var healthyTablets []discovery.TabletStats
+	var healthyTablets []discovery.LegacyTabletStats
 	for {
 		select {
 		case <-busywaitCtx.Done():
@@ -115,7 +114,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 // - find a tabletType instance in the keyspace / shard
 // - mark it as worker
 // - tag it with our worker process
-func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, tsc *discovery.TabletStatsCache, cell, keyspace, shard string, minHealthyTablets int, tabletType topodatapb.TabletType) (*topodatapb.TabletAlias, error) {
+func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrangler.Cleaner, tsc *discovery.LegacyTabletStatsCache, cell, keyspace, shard string, minHealthyTablets int, tabletType topodatapb.TabletType) (*topodatapb.TabletAlias, error) {
 	tabletAlias, err := FindHealthyTablet(ctx, wr, tsc, cell, keyspace, shard, minHealthyTablets, tabletType)
 	if err != nil {
 		return nil, err
@@ -123,44 +122,12 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 
 	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), topodatapb.TabletType_DRAINED)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = wr.ChangeSlaveType(shortCtx, tabletAlias, topodatapb.TabletType_DRAINED)
-	cancel()
-	if err != nil {
+	defer cancel()
+	if err := wr.ChangeTabletType(shortCtx, tabletAlias, topodatapb.TabletType_DRAINED); err != nil {
 		return nil, err
 	}
-
-	ourURL := servenv.ListeningURL.String()
-	wr.Logger().Infof("Adding tag[worker]=%v to tablet %v", ourURL, topoproto.TabletAliasString(tabletAlias))
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	_, err = wr.TopoServer().UpdateTabletFields(shortCtx, tabletAlias, func(tablet *topodatapb.Tablet) error {
-		if tablet.Tags == nil {
-			tablet.Tags = make(map[string]string)
-		}
-		tablet.Tags["worker"] = ourURL
-		tablet.Tags["drain_reason"] = "Used by vtworker"
-		return nil
-	})
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	// Using "defer" here because we remove the tag *before* calling
-	// ChangeSlaveType back, so we need to record this tag change after the change
-	// slave type change in the cleaner.
-	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
-	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "drain_reason", "")
-
 	// Record a clean-up action to take the tablet back to tabletAlias.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, tabletType)
-
-	// We refresh the destination vttablet reloads the worker URL when it reloads the tablet.
-	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	wr.RefreshTabletState(shortCtx, tabletAlias)
-	if err != nil {
-		return nil, err
-	}
-	cancel()
-
+	wrangler.RecordChangeTabletTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, tabletType)
 	return tabletAlias, nil
 }
 

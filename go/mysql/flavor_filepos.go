@@ -63,27 +63,31 @@ func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	}, nil
 }
 
-func (flv *filePosFlavor) startSlaveCommand() string {
+func (flv *filePosFlavor) startReplicationCommand() string {
 	return "unsupported"
 }
 
-func (flv *filePosFlavor) restartSlaveCommands() []string {
+func (flv *filePosFlavor) restartReplicationCommands() []string {
 	return []string{"unsupported"}
 }
 
-func (flv *filePosFlavor) stopSlaveCommand() string {
+func (flv *filePosFlavor) stopReplicationCommand() string {
+	return "unsupported"
+}
+
+func (flv *filePosFlavor) stopIOThreadCommand() string {
 	return "unsupported"
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
+func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
 	rpos, ok := startPos.GTIDSet.(filePosGTID)
 	if !ok {
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected filePosGTID, got: %#v", startPos.GTIDSet)
 	}
 
 	flv.file = rpos.file
-	return c.WriteComBinlogDump(slaveID, rpos.file, uint32(rpos.pos), 0)
+	return c.WriteComBinlogDump(serverID, rpos.file, uint32(rpos.pos), 0)
 }
 
 // readBinlogEvent is part of the Flavor interface.
@@ -168,45 +172,71 @@ func (flv *filePosFlavor) resetReplicationCommands(c *Conn) []string {
 	}
 }
 
-// setSlavePositionCommands is part of the Flavor interface.
-func (flv *filePosFlavor) setSlavePositionCommands(pos Position) []string {
+// setReplicationPositionCommands is part of the Flavor interface.
+func (flv *filePosFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{
 		"unsupported",
 	}
 }
 
-// setSlavePositionCommands is part of the Flavor interface.
+// setReplicationPositionCommands is part of the Flavor interface.
 func (flv *filePosFlavor) changeMasterArg() string {
 	return "unsupported"
 }
 
 // status is part of the Flavor interface.
-func (flv *filePosFlavor) status(c *Conn) (SlaveStatus, error) {
+func (flv *filePosFlavor) status(c *Conn) (ReplicationStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return SlaveStatus{}, err
+		return ReplicationStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data, meaning the server
-		// is not configured as a slave.
-		return SlaveStatus{}, ErrNotSlave
+		// is not configured as a replica.
+		return ReplicationStatus{}, ErrNotReplica
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return SlaveStatus{}, err
+		return ReplicationStatus{}, err
 	}
 
-	status := parseSlaveStatus(resultMap)
-	pos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
+	return parseFilePosReplicationStatus(resultMap)
+}
+
+func parseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStatus, error) {
+	status := parseReplicationStatus(resultMap)
+
+	status.Position = status.FilePosition
+	status.RelayLogPosition = status.FileRelayLogPosition
+
+	return status, nil
+}
+
+// masterStatus is part of the Flavor interface.
+func (flv *filePosFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+		return MasterStatus{}, err
+	}
+	if len(qr.Rows) == 0 {
+		// The query returned no data. We don't know how this could happen.
+		return MasterStatus{}, ErrNoMasterStatus
 	}
 
-	status.Position.GTIDSet = filePosGTID{
-		file: resultMap["Relay_Master_Log_File"],
-		pos:  pos,
+	resultMap, err := resultToMap(qr)
+	if err != nil {
+		return MasterStatus{}, err
 	}
+
+	return parseFilePosMasterStatus(resultMap)
+}
+
+func parseFilePosMasterStatus(resultMap map[string]string) (MasterStatus, error) {
+	status := parseMasterStatus(resultMap)
+
+	status.Position = status.FilePosition
+
 	return status, nil
 }
 
@@ -228,7 +258,7 @@ func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos Posi
 	return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.file, filePosPos.pos), nil
 }
 
-func (*filePosFlavor) startSlaveUntilAfter(pos Position) string {
+func (*filePosFlavor) startReplicationUntilAfter(pos Position) string {
 	return "unsupported"
 }
 

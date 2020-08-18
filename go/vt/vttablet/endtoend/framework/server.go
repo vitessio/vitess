@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
+
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -47,6 +49,8 @@ var (
 	ServerAddress string
 	// ResolveChan is the channel that sends dtids that are to be resolved.
 	ResolveChan = make(chan string, 1)
+	// TopoServer is the topology for the server
+	TopoServer *topo.Server
 )
 
 // StartServer starts the server and initializes
@@ -70,16 +74,18 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"
 	config.HotRowProtection.Mode = tabletenv.Enable
+	config.TrackSchemaVersions = true
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
 		TabletType: topodatapb.TabletType_MASTER,
 	}
+	TopoServer = memorytopo.NewServer("")
 
-	Server = tabletserver.NewTabletServer("", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	Server = tabletserver.NewTabletServer("", config, TopoServer, topodatapb.TabletAlias{})
 	Server.Register()
-	err := Server.StartService(Target, dbcfgs)
+	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {
 		return vterrors.Wrap(err, "could not start service")
 	}

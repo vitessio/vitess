@@ -75,7 +75,7 @@ var (
 	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 
 	// masterConnectRetry is used in 'SET MASTER' commands
-	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
+	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
@@ -343,7 +343,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
-		name = "mysqld_start hook"
+		name = "mysqld_start hook" //nolint
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
@@ -1096,13 +1096,13 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledD
 }
 
 // GetDbaConnection creates a new DBConnection.
-func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(context.TODO(), mysqld.dbcfgs.DbaConnector())
+func (mysqld *Mysqld) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.DbaConnector())
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
-func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(context.TODO(), mysqld.dbcfgs.AllPrivsWithDB())
+func (mysqld *Mysqld) GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return dbconnpool.NewDBConnection(ctx, mysqld.dbcfgs.AllPrivsWithDB())
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

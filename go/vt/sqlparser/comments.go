@@ -34,6 +34,8 @@ const (
 	DirectiveScatterErrorsAsWarnings = "SCATTER_ERRORS_AS_WARNINGS"
 	// DirectiveIgnoreMaxPayloadSize skips payload size validation when set.
 	DirectiveIgnoreMaxPayloadSize = "IGNORE_MAX_PAYLOAD_SIZE"
+	// DirectiveIgnoreMaxMemoryRows skips memory row validation when set.
+	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 )
 
 func isNonSpace(r rune) bool {
@@ -168,7 +170,7 @@ func hasCommentPrefix(sql string) bool {
 
 // ExtractMysqlComment extracts the version and SQL from a comment-only query
 // such as /*!50708 sql here */
-func ExtractMysqlComment(sql string) (version string, innerSQL string) {
+func ExtractMysqlComment(sql string) (string, string) {
 	sql = sql[3 : len(sql)-2]
 
 	digitCount := 0
@@ -176,8 +178,11 @@ func ExtractMysqlComment(sql string) (version string, innerSQL string) {
 		digitCount++
 		return !unicode.IsDigit(c) || digitCount == 6
 	})
-	version = sql[0:endOfVersionIndex]
-	innerSQL = strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
+	if endOfVersionIndex < 0 {
+		return "", ""
+	}
+	version := sql[0:endOfVersionIndex]
+	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
 
 	return version, innerSQL
 }
@@ -314,6 +319,27 @@ func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
 	case *Delete:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)
+	default:
+		return false
+	}
+}
+
+// IgnoreMaxMaxMemoryRowsDirective returns true if the max memory rows override
+// directive is set to true.
+func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Insert:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Update:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
+	case *Delete:
+		directives := ExtractCommentDirectives(stmt.Comments)
+		return directives.IsSet(DirectiveIgnoreMaxMemoryRows)
 	default:
 		return false
 	}

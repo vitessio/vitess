@@ -16,14 +16,13 @@ MAKEFLAGS = -s
 
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
-export GODEBUG=tls13=0
 export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build build_web install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start
 
 all: build
 
@@ -38,21 +37,10 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
-# This target needs to be manually run every time any file within web/vtctld2/app is modified to regenerate rice-box.go
-embed_static: 
-	cd go/vt/vtctld
-	go run github.com/GeertJohan/go.rice/rice embed-go
-	go build .
-
 embed_config:
 	cd go/vt/mysqlctl
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
-
-build_web:
-	echo $$(date): Building web artifacts
-	cd web/vtctld2 && ng build -prod
-	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
 
 build:
 ifndef NOBANNER
@@ -74,6 +62,18 @@ install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+
+# install copies the files needed to run test Vitess using vtcombo into the given directory tree.
+# Usage: make install PREFIX=/path/to/install/root
+install-testing: build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
+	cp "$${VTROOT}/bin/"{mysqlctld,mysqlctl,vtcombo,vttestserver} "$${PREFIX}/bin/"
+	# config files
+	cp -R config "$${PREFIX}/"
+	# vtctld web UI files
+	mkdir -p "$${PREFIX}/web/vtctld2"
+	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
 parser:
 	make -C go/vt/sqlparser
@@ -272,6 +272,18 @@ docker_lite_alpine:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
 
+docker_lite_testing:
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.testing -t vitess/lite:testing .
+
+docker_local:
+	chmod -R o=g *
+	docker build -f docker/local/Dockerfile -t vitess/local .
+
+docker_mini:
+	chmod -R o=g *
+	docker build -f docker/mini/Dockerfile -t vitess/mini .
+
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
@@ -314,3 +326,41 @@ minimaltools:
 
 dependency_check:
 	./tools/dependency_check.sh
+
+GEN_BASE_DIR ?= ./go/vt/topo/k8stopo
+
+client_go_gen:
+	echo $$(date): Regenerating client-go code
+	# Delete and re-generate the deepcopy types
+	find $(GEN_BASE_DIR)/apis/topo/v1beta1 -type f -name 'zz_generated*' -exec rm '{}' \;
+	deepcopy-gen -i $(GEN_BASE_DIR)/apis/topo/v1beta1 -O zz_generated.deepcopy -o ./ --bounding-dirs $(GEN_BASE_DIR)/apis --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+
+	# Delete, generate, and move the client libraries
+	rm -rf go/vt/topo/k8stopo/client
+
+	# There is no way to get client-gen to automatically put files in the right place and still have the right import path so we generate and move them
+
+	# Generate client, informers, and listers
+	client-gen -o ./ --input 'topo/v1beta1' --clientset-name versioned --input-base 'vitess.io/vitess/go/vt/topo/k8stopo/apis/' -i vitess.io/vitess --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	lister-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	informer-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --versioned-clientset-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned --listers-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/informers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+
+	# Move and cleanup
+	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
+	rmdir -p vitess.io/vitess/go/vt/topo/k8stopo/
+
+# Check prerequisites and install dependencies
+web_bootstrap:
+	./tools/web_bootstrap.sh
+
+# Do a production build of the vtctld UI.
+# This target needs to be manually run every time any file within web/vtctld2/app 
+# is modified to regenerate rice-box.go
+web_build: web_bootstrap
+	./tools/web_build.sh
+
+# Start a front-end dev server with hot reloading on http://localhost:4200.
+# This expects that you have a vtctld API server running on http://localhost:15000.
+# Following the local Docker install guide is recommended: https://vitess.io/docs/get-started/local-docker/
+web_start: web_bootstrap
+	cd web/vtctld2 && npm run start

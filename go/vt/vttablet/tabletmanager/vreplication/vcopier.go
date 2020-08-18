@@ -201,12 +201,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	err = vc.vr.sourceVStreamer.Open(ctx)
-	if err != nil {
-		return fmt.Errorf("error opening vsclient: %v", err)
-	}
-	defer vc.vr.sourceVStreamer.Close(ctx)
-
 	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
 	defer cancel()
 

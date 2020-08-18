@@ -81,11 +81,12 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 }
 
 func (rs *rowStreamer) Cancel() {
+	log.Info("Rowstreamer Cancel() called")
 	rs.cancel()
 }
 
 func (rs *rowStreamer) Stream() error {
-	// Ensure se is Open. If vttablet came up in a non_serving role,
+	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := rs.se.Open(); err != nil {
 		return err
@@ -113,12 +114,12 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	st := rs.se.GetTable(fromTable)
-	if st == nil {
-		return fmt.Errorf("unknown table %v in schema", fromTable)
+	st, err := rs.se.GetTableForPos(fromTable, "")
+	if err != nil {
+		return err
 	}
 	ti := &Table{
-		Name:   st.Name.String(),
+		Name:   st.Name,
 		Fields: st.Fields,
 	}
 	// The plan we build is identical to the one for vstreamer.
@@ -137,23 +138,26 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
+	log.Infof("Rowstreamer, table plan %v, pkColumns %v, fields %v", rs.plan, rs.pkColumns, rs.plan.fields())
 	return err
 }
 
-func buildPKColumns(st *schema.Table) ([]int, error) {
+func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
+	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
-		pkColumns := make([]int, len(st.Fields))
+		pkColumns = make([]int, len(st.Fields))
 		for i := range st.Fields {
 			pkColumns[i] = i
 		}
 		return pkColumns, nil
 	}
 	for _, pk := range st.PKColumns {
-		if pk >= len(st.Fields) {
+		if pk >= int64(len(st.Fields)) {
 			return nil, fmt.Errorf("primary key %d refers to non-existent column", pk)
 		}
+		pkColumns = append(pkColumns, int(pk))
 	}
-	return st.PKColumns, nil
+	return pkColumns, nil
 }
 
 func (rs *rowStreamer) buildSelect() (string, error) {
@@ -232,8 +236,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
+		//log.Infof("StreamResponse for loop iteration starts")
 		select {
 		case <-rs.ctx.Done():
+			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
 		default:
 		}
@@ -245,7 +251,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if row == nil {
 			break
 		}
-		// Compute lastpk here, because we'll neeed it
+		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
 			lastpk[i] = row[pk]
@@ -266,6 +272,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
 			err = send(response)
 			if err != nil {
+				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
 			// empty the rows so we start over, but we keep the

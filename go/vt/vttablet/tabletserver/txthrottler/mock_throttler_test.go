@@ -71,7 +71,7 @@ func (mr *MockThrottlerInterfaceMockRecorder) MaxRate() *gomock.Call {
 }
 
 // RecordReplicationLag mocks base method
-func (m *MockThrottlerInterface) RecordReplicationLag(arg0 time.Time, arg1 *discovery.TabletStats) {
+func (m *MockThrottlerInterface) RecordReplicationLag(arg0 time.Time, arg1 *discovery.LegacyTabletStats) {
 	m.ctrl.Call(m, "RecordReplicationLag", arg0, arg1)
 }
 

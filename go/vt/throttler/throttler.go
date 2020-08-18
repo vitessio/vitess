@@ -295,7 +295,7 @@ func (t *Throttler) SetMaxRate(rate int64) {
 // RecordReplicationLag must be called by users to report the "ts" tablet health
 // data observed at "time".
 // Note: After Close() is called, this method must not be called anymore.
-func (t *Throttler) RecordReplicationLag(time time.Time, ts *discovery.TabletStats) {
+func (t *Throttler) RecordReplicationLag(time time.Time, ts *discovery.LegacyTabletStats) {
 	t.maxReplicationLagModule.RecordReplicationLag(time, ts)
 }
 

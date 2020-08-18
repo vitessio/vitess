@@ -26,7 +26,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,6 +42,9 @@ var (
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
 	}, {
+		input:  "select * from information_schema.processlist",
+		output: "select * from information_schema.`processlist`",
+	}, {
 		input: "select .1 from t",
 	}, {
 		input: "select 1.2e1 from t",
@@ -57,6 +59,12 @@ var (
 	}, {
 		input:  "select - -1 from t",
 		output: "select 1 from t",
+	}, {
+		input: "select a from t",
+	}, {
+		input: "select $ from t",
+	}, {
+		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",
 		output: "select 1 from t",
@@ -134,6 +142,22 @@ var (
 		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
+	}, {
+		input: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
+	}, {
+		input: "(select 1 from dual) order by 1 asc limit 2",
+	}, {
+		input: "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+	}, {
+		input: "(select 1 from dual)",
+	}, {
+		input: "((select 1 from dual))",
+	}, {
+		input: "select 1 from (select 1 from dual) as t",
+	}, {
+		input: "select 1 from (select 1 from dual union select 2 from dual) as t",
+	}, {
+		input: "select 1 from ((select 1 from dual) union select 2 from dual) as t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -612,6 +636,16 @@ var (
 		input:  "select /* OR in select columns */ (a or b) from t where c = 5",
 		output: "select /* OR in select columns */ a or b from t where c = 5",
 	}, {
+		input: "select /* XOR of columns in where */ * from t where a xor b",
+	}, {
+		input: "select /* XOR of mixed columns in where */ * from t where a = 5 xor b and c is not null",
+	}, {
+		input:  "select /* XOR in select columns */ (a xor b) from t where c = 5",
+		output: "select /* XOR in select columns */ a xor b from t where c = 5",
+	}, {
+		input:  "select /* XOR in select columns */ * from t where (1 xor c1 > 0)",
+		output: "select /* XOR in select columns */ * from t where 1 xor c1 > 0",
+	}, {
 		input: "select /* bool as select value */ a, true from t",
 	}, {
 		input: "select /* bool column in ON clause */ * from t join s on t.id = s.id and s.foo where t.bar",
@@ -674,11 +708,9 @@ var (
 		input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
 		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
 	}, {
-		input:  "insert /* no cols & paren select */ into a(select * from t)",
-		output: "insert /* no cols & paren select */ into a select * from t",
+		input: "insert /* no cols & paren select */ into a (select * from t)",
 	}, {
-		input:  "insert /* cols & paren select */ into a(a,b,c) (select * from t)",
-		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
+		input: "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
 	}, {
 		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
 	}, {
@@ -695,6 +727,9 @@ var (
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
 		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
+	}, {
+		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
+		output: "insert into user(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
 	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
@@ -1375,14 +1410,41 @@ var (
 		input:  "use ks@replica",
 		output: "use `ks@replica`",
 	}, {
-		input:  "describe foobar",
-		output: "otherread",
+		input:  "describe select * from t",
+		output: "explain select * from t",
+	}, {
+		input:  "desc select * from t",
+		output: "explain select * from t",
 	}, {
 		input:  "desc foobar",
 		output: "otherread",
 	}, {
-		input:  "explain foobar",
+		input:  "explain t1",
 		output: "otherread",
+	}, {
+		input:  "explain t1 col",
+		output: "otherread",
+	}, {
+		input: "explain select * from t",
+	}, {
+		input: "explain format = traditional select * from t",
+	}, {
+		input: "explain analyze select * from t",
+	}, {
+		input: "explain format = tree select * from t",
+	}, {
+		input: "explain format = json select * from t",
+	}, {
+		input: "explain format = vitess select * from t",
+	}, {
+		input:  "describe format = vitess select * from t",
+		output: "explain format = vitess select * from t",
+	}, {
+		input: "explain delete from t",
+	}, {
+		input: "explain insert into t(col1, col2) values (1, 2)",
+	}, {
+		input: "explain update t set col = 2",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",
@@ -1470,6 +1532,8 @@ var (
 		input: "select binary 'a' = 'A' from t",
 	}, {
 		input: "select 1 from t where foo = _binary 'bar'",
+	}, {
+		input: "select 1 from t where foo = _utf8 'bar' and bar = _latin1 'sjösjuk'",
 	}, {
 		input:  "select 1 from t where foo = _binary'bar'",
 		output: "select 1 from t where foo = _binary 'bar'",
@@ -1599,6 +1663,33 @@ var (
 	}, {
 		input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
 		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+	}, {
+		input:  "do 1",
+		output: "otheradmin",
+	}, {
+		input:  "do funcCall(), 2 = 1, 3 + 1",
+		output: "otheradmin",
+	}, {
+		input: "savepoint a",
+	}, {
+		input: "savepoint `@@@;a`",
+	}, {
+		input: "rollback to a",
+	}, {
+		input: "rollback to `@@@;a`",
+	}, {
+		input:  "rollback work to a",
+		output: "rollback to a",
+	}, {
+		input:  "rollback to savepoint a",
+		output: "rollback to a",
+	}, {
+		input:  "rollback work to savepoint a",
+		output: "rollback to a",
+	}, {
+		input: "release savepoint a",
+	}, {
+		input: "release savepoint `@@@;a`",
 	}}
 )
 
@@ -1609,10 +1700,10 @@ func TestValid(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := Parse(tcase.input)
-			require.NoError(t, err)
+			require.NoError(t, err, tcase.input)
 			out := String(tree)
-			if diff := cmp.Diff(tcase.output, out); diff != "" {
-				t.Errorf("Parse(%q):\n%s", tcase.input, diff)
+			if tcase.output != out {
+				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
@@ -1660,11 +1751,11 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
-		input: "select a from (select * from tbl)",
-		err:   "Every derived table must have its own alias",
-	}, {
 		input: "select a, b from (select * from tbl) sort by a",
 		err:   "syntax error",
+	}, {
+		input: "/*!*/",
+		err:   "empty statement",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2012,6 +2103,9 @@ func TestPositionedErr(t *testing.T) {
 	}, {
 		input:  "select * from a left join b",
 		output: PositionedErr{"syntax error", 28, nil},
+	}, {
+		input:  "select a from (select * from tbl)",
+		output: PositionedErr{"syntax error", 34, nil},
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2560,9 +2654,6 @@ var (
 		output       string
 		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
-		input:  "select $ from t",
-		output: "syntax error at position 9 near '$'",
-	}, {
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {
@@ -2653,9 +2744,6 @@ var (
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
 	}, {
-		input:  "(select /* parenthesized select */ * from t)",
-		output: "syntax error at position 45",
-	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
 	}, {
@@ -2678,10 +2766,10 @@ var (
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			require.Error(t, err, tcase.output)
+		})
 	}
 }
 

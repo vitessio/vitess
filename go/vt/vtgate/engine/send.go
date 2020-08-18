@@ -141,13 +141,12 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 
 // GetFields implements Primitive interface
 func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	// We don't need to worry about GetFields being needed for joins since the Send primitive currently doesn't
-	// get nested with other types of primitives.
-	// However, GetFields is used for prepared statements. Because of that, prepared statements are not yet
-	// compatible with the Send primitive.
-	//
-	// TODO: implement this
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
+	qr, err := s.Execute(vcursor, bindVars, false)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "sendGetFields")
+	}
+	qr.Rows = nil
+	return qr, nil
 }
 
 func (s *Send) description() PrimitiveDescription {

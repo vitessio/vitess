@@ -68,7 +68,7 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "show variable like 'a%'",
 		output: nil,
 	}, {
-		input:  "describe t",
+		input:  "describe select * from t",
 		output: nil,
 	}, {
 		input: "create table t",

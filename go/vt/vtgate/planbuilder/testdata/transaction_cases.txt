@@ -1,0 +1,48 @@
+# Begin
+"begin"
+{
+  "QueryType": "BEGIN",
+  "Original": "begin"
+}
+
+# Start Transaction
+"start transaction"
+{
+  "QueryType": "BEGIN",
+  "Original": "start transaction"
+}
+
+# Commit
+"commit"
+{
+  "QueryType": "COMMIT",
+  "Original": "commit"
+}
+
+# Rollback
+"rollback"
+{
+  "QueryType": "ROLLBACK",
+  "Original": "rollback"
+}
+
+# Savepoint
+"savepoint a"
+{
+  "QueryType": "SAVEPOINT",
+  "Original": "savepoint a"
+}
+
+# Savepoint rollback
+"rollback work to savepoint a"
+{
+  "QueryType": "SAVEPOINT_ROLLBACK",
+  "Original": "rollback work to savepoint a"
+}
+
+# Savepoint release
+"release savepoint a"
+{
+  "QueryType": "RELEASE",
+  "Original": "release savepoint a"
+}

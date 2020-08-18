@@ -31,9 +31,9 @@ import (
 
 // Utility function to write sql query as packets to test parseComPrepare
 func MockQueryPackets(t *testing.T, query string) []byte {
-	data := make([]byte, len(query)+1)
+	data := make([]byte, len(query)+1+packetHeaderSize)
 	// Not sure if it makes a difference
-	pos := 0
+	pos := packetHeaderSize
 	pos = writeByte(data, pos, ComPrepare)
 	copy(data[pos:], query)
 	return data
@@ -641,7 +641,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 }
 
-//lint:ignore U1000 for now, because deleting this function causes more errors
+//nolint
 func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)

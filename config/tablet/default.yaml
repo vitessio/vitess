@@ -78,16 +78,27 @@ oltp:
   maxRows: 10000          # queryserver-config-max-result-size
   warnRows: 0             # queryserver-config-warn-result-size
 
+healthcheck:
+  intervalSeconds: 20             # health_check_interval
+  degradedThresholdSeconds: 30    # degraded_threshold
+  unhealthyThresholdSeconds: 7200 # unhealthy_threshold
+
+gracePeriods:
+  transactionShutdownSeconds: 0 # transaction_shutdown_grace_period
+  transitionSeconds: 0          # serving_state_grace_period
+
+replicationTracker:
+  mode: disable                    # enable_replication_reporter
+  heartbeatIntervalMilliseconds: 0 # heartbeat_enable, heartbeat_interval
+
 hotRowProtection:
   mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run
-  # Default value is same as txPool.size.
+  # Recommended value: same as txPool.size.
   maxQueueSize: 20            # hot_row_protection_max_queue_size
   maxGlobalQueueSize: 1000    # hot_row_protection_max_global_queue_size
   maxConcurrency: 5           # hot_row_protection_concurrent_transactions
 
 consolidator: enable|disable|notOnMaster # enable-consolidator, enable-consolidator-replicas
-heartbeatIntervalMilliseconds: 0         # heartbeat_enable, heartbeat_interval
-shutdownGracePeriodSeconds: 0            # transaction_shutdown_grace_period
 passthroughDML: false                    # queryserver-config-passthrough-dmls
 streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
 queryCacheSize: 5000                     # queryserver-config-query-cache-size

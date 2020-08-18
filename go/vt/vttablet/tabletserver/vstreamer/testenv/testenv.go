@@ -97,10 +97,14 @@ func Init() (*Env, error) {
 
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	config := tabletenv.NewDefaultConfig()
-	te.TabletEnv = tabletenv.NewTestEnv(config, te.Dbcfgs, "VStreamerTest")
+	config.DB = te.Dbcfgs
+	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
+	if err := te.SchemaEngine.Open(); err != nil {
+		return nil, err
+	}
 
 	// The first vschema should not be empty. Leads to Node not found error.
 	// TODO(sougou): need to fix the bug.

@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -25,7 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-const mariadbFlavorID = "MariaDB"
+// MariadbFlavorID is the string identifier for the MariaDB flavor.
+const MariadbFlavorID = "MariaDB"
 
 // parseMariadbGTID is registered as a GTID parser.
 func parseMariadbGTID(s string) (GTID, error) {
@@ -64,12 +66,13 @@ func parseMariadbGTID(s string) (GTID, error) {
 func parseMariadbGTIDSet(s string) (GTIDSet, error) {
 	gtidStrings := strings.Split(s, ",")
 	gtidSet := make(MariadbGTIDSet, len(gtidStrings))
-	for i, gtidString := range gtidStrings {
+	for _, gtidString := range gtidStrings {
 		gtid, err := parseMariadbGTID(gtidString)
 		if err != nil {
 			return nil, err
 		}
-		gtidSet[i] = gtid.(MariadbGTID)
+		mdbGTID := gtid.(MariadbGTID)
+		gtidSet[mdbGTID.Domain] = mdbGTID
 	}
 	return gtidSet, nil
 }
@@ -84,9 +87,6 @@ type MariadbGTID struct {
 	Sequence uint64
 }
 
-// MariadbGTIDSet implements GTIDSet
-type MariadbGTIDSet []MariadbGTID
-
 // String implements GTID.String().
 func (gtid MariadbGTID) String() string {
 	return fmt.Sprintf("%d-%d-%d", gtid.Domain, gtid.Server, gtid.Sequence)
@@ -94,7 +94,7 @@ func (gtid MariadbGTID) String() string {
 
 // Flavor implements GTID.Flavor().
 func (gtid MariadbGTID) Flavor() string {
-	return mariadbFlavorID
+	return MariadbFlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
@@ -114,21 +114,34 @@ func (gtid MariadbGTID) SequenceNumber() interface{} {
 
 // GTIDSet implements GTID.GTIDSet().
 func (gtid MariadbGTID) GTIDSet() GTIDSet {
-	return MariadbGTIDSet{gtid}
+	return MariadbGTIDSet{gtid.Domain: gtid}
 }
+
+// MariadbGTIDSet implements GTIDSet.
+type MariadbGTIDSet map[uint32]MariadbGTID
 
 // String implements GTIDSet.String()
 func (gtidSet MariadbGTIDSet) String() string {
+	// Sort domains so the string format is deterministic.
+	domains := make([]uint32, 0, len(gtidSet))
+	for domain := range gtidSet {
+		domains = append(domains, domain)
+	}
+	sort.Slice(domains, func(i, j int) bool {
+		return domains[i] < domains[j]
+	})
+
+	// Convert each domain's GTID to a string and join all with comma.
 	s := make([]string, len(gtidSet))
-	for i, gtid := range gtidSet {
-		s[i] = gtid.String()
+	for i, domain := range domains {
+		s[i] = gtidSet[domain].String()
 	}
 	return strings.Join(s, ",")
 }
 
 // Flavor implements GTIDSet.Flavor()
 func (gtidSet MariadbGTIDSet) Flavor() string {
-	return mariadbFlavorID
+	return MariadbFlavorID
 }
 
 // ContainsGTID implements GTIDSet.ContainsGTID().
@@ -140,19 +153,17 @@ func (gtidSet MariadbGTIDSet) ContainsGTID(other GTID) bool {
 	if !ok {
 		return false
 	}
-	for _, gtid := range gtidSet {
-		if gtid.Domain != mdbOther.Domain {
-			continue
-		}
-		return gtid.Sequence >= mdbOther.Sequence
+	gtid, ok := gtidSet[mdbOther.Domain]
+	if !ok {
+		return false
 	}
-	return false
+	return gtid.Sequence >= mdbOther.Sequence
 }
 
 // Contains implements GTIDSet.Contains().
 func (gtidSet MariadbGTIDSet) Contains(other GTIDSet) bool {
 	if other == nil {
-		return true
+		return false
 	}
 	mdbOther, ok := other.(MariadbGTIDSet)
 	if !ok {
@@ -175,8 +186,12 @@ func (gtidSet MariadbGTIDSet) Equal(other GTIDSet) bool {
 	if len(gtidSet) != len(mdbOther) {
 		return false
 	}
-	for i, gtid := range gtidSet {
-		if gtid != mdbOther[i] {
+	for domain, gtid := range gtidSet {
+		otherGTID, ok := mdbOther[domain]
+		if !ok {
+			return false
+		}
+		if gtid != otherGTID {
 			return false
 		}
 	}
@@ -185,22 +200,73 @@ func (gtidSet MariadbGTIDSet) Equal(other GTIDSet) bool {
 
 // AddGTID implements GTIDSet.AddGTID().
 func (gtidSet MariadbGTIDSet) AddGTID(other GTID) GTIDSet {
-	mdbOther, ok := other.(MariadbGTID)
-	if !ok || other == nil {
+	if other == nil {
 		return gtidSet
 	}
-	for i, gtid := range gtidSet {
-		if mdbOther.Domain == gtid.Domain {
-			if mdbOther.Sequence > gtid.Sequence {
-				gtidSet[i] = mdbOther
-			}
-			return gtidSet
-		}
+	mdbOther, ok := other.(MariadbGTID)
+	if !ok {
+		return gtidSet
 	}
-	return append(gtidSet, mdbOther)
+	newSet := gtidSet.deepCopy()
+	newSet.addGTID(mdbOther)
+	return newSet
+}
+
+// Union implements GTIDSet.Union(). This is a pure method, and does not mutate the receiver.
+func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
+	if gtidSet == nil && other != nil {
+		return other
+	}
+	if gtidSet == nil || other == nil {
+		return gtidSet
+	}
+
+	mdbOther, ok := other.(MariadbGTIDSet)
+	if !ok {
+		return gtidSet
+	}
+
+	newSet := gtidSet.deepCopy()
+	for _, otherGTID := range mdbOther {
+		newSet.addGTID(otherGTID)
+	}
+	return newSet
+}
+
+//Last returns the last gtid
+func (gtidSet MariadbGTIDSet) Last() string {
+	// Sort domains so the string format is deterministic.
+	domains := make([]uint32, 0, len(gtidSet))
+	for domain := range gtidSet {
+		domains = append(domains, domain)
+	}
+	sort.Slice(domains, func(i, j int) bool {
+		return domains[i] < domains[j]
+	})
+
+	lastGTID := domains[len(gtidSet)-1]
+	return gtidSet[lastGTID].String()
+}
+
+// deepCopy returns a deep copy of the set.
+func (gtidSet MariadbGTIDSet) deepCopy() MariadbGTIDSet {
+	newSet := make(MariadbGTIDSet, len(gtidSet))
+	for domain, gtid := range gtidSet {
+		newSet[domain] = gtid
+	}
+	return newSet
+}
+
+// addGTID is an internal method that adds a GTID to the set.
+// Unlike the exported methods, this mutates the receiver.
+func (gtidSet MariadbGTIDSet) addGTID(otherGTID MariadbGTID) {
+	gtid, ok := gtidSet[otherGTID.Domain]
+	if !ok || otherGTID.Sequence > gtid.Sequence {
+		gtidSet[otherGTID.Domain] = otherGTID
+	}
 }
 
 func init() {
-	gtidParsers[mariadbFlavorID] = parseMariadbGTID
-	gtidSetParsers[mariadbFlavorID] = parseMariadbGTIDSet
+	gtidParsers[MariadbFlavorID] = parseMariadbGTID
+	gtidSetParsers[MariadbFlavorID] = parseMariadbGTIDSet
 }

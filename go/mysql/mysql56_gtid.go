@@ -26,7 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-const mysql56FlavorID = "MySQL56"
+// Mysql56FlavorID is the string identifier for the Mysql56 flavor.
+const Mysql56FlavorID = "MySQL56"
 
 // parseMysql56GTID is registered as a GTID parser.
 func parseMysql56GTID(s string) (GTID, error) {
@@ -101,7 +102,7 @@ func (gtid Mysql56GTID) String() string {
 
 // Flavor implements GTID.Flavor().
 func (gtid Mysql56GTID) Flavor() string {
-	return mysql56FlavorID
+	return Mysql56FlavorID
 }
 
 // SequenceDomain implements GTID.SequenceDomain().
@@ -125,5 +126,5 @@ func (gtid Mysql56GTID) GTIDSet() GTIDSet {
 }
 
 func init() {
-	gtidParsers[mysql56FlavorID] = parseMysql56GTID
+	gtidParsers[Mysql56FlavorID] = parseMysql56GTID
 }

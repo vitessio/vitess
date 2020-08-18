@@ -22,6 +22,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	proxyproto "github.com/pires/go-proxyproto"
@@ -47,6 +48,7 @@ const (
 	versionTLS10      = "TLS10"
 	versionTLS11      = "TLS11"
 	versionTLS12      = "TLS12"
+	versionTLS13      = "TLS13"
 	versionTLSUnknown = "UnknownTLSVersion"
 	versionNoTLS      = "None"
 )
@@ -99,7 +101,7 @@ type Handler interface {
 
 	// ComPrepare is called when a connection receives a prepared
 	// statement query.
-	ComPrepare(c *Conn, query string) ([]*querypb.Field, error)
+	ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error)
 
 	// ComStmtExecute is called when a connection receives a statement
 	// execute query.
@@ -138,7 +140,8 @@ type Listener struct {
 
 	// TLSConfig is the server TLS config. If set, we will advertise
 	// that we support SSL.
-	TLSConfig *tls.Config
+	// atomic value stores *tls.Config
+	TLSConfig atomic.Value
 
 	// AllowClearTextWithoutTLS needs to be set for the
 	// mysql_clear_password authentication method to be accepted
@@ -291,7 +294,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	defer connCount.Add(-1)
 
 	// First build and send the server handshake packet.
-	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
+	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig.Load() != nil)
 	if err != nil {
 		if err != io.EOF {
 			log.Errorf("Cannot send HandshakeV10 packet to %s: %v", c, err)
@@ -525,8 +528,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 			13 + // auth-plugin-data
 			lenNullString(MysqlNativePassword) // auth-plugin-name
 
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Protocol version.
 	pos = writeByte(data, pos, protocolVersion)
@@ -638,9 +640,9 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	pos += 23
 
 	// Check for SSL.
-	if firstTime && l.TLSConfig != nil && clientFlags&CapabilityClientSSL > 0 {
+	if firstTime && l.TLSConfig.Load() != nil && clientFlags&CapabilityClientSSL > 0 {
 		// Need to switch to TLS, and then re-read the packet.
-		conn := tls.Server(c.conn, l.TLSConfig)
+		conn := tls.Server(c.conn, l.TLSConfig.Load().(*tls.Config))
 		c.conn = conn
 		c.bufferedReader.Reset(conn)
 		c.Capabilities |= CapabilityClientSSL
@@ -772,8 +774,7 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 		len(pluginName) + 1 + // 0-terminated pluginName
 		len(pluginData)
 
-	data := c.startEphemeralPacket(length)
-	pos := 0
+	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Packet header.
 	pos = writeByte(data, pos, AuthSwitchRequestPacket)
@@ -800,6 +801,8 @@ func tlsVersionToString(version uint16) string {
 		return versionTLS11
 	case tls.VersionTLS12:
 		return versionTLS12
+	case tls.VersionTLS13:
+		return versionTLS13
 	default:
 		return versionTLSUnknown
 	}
