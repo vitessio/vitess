@@ -847,7 +847,7 @@ func (wr *Wrangler) chooseNewMaster(
 // the shard, when the old master is completely unreachable.
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, unreachableReplicas sets.String) (err error) {
 	// lock the shard
-	actionMsg := "EmergencyReparentShard"
+	actionMsg := emergencyReparentShardOperation
 	if masterElectTabletAlias != nil {
 		actionMsg += fmt.Sprintf("(%v)", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
@@ -953,7 +953,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 	}
 	if winningTabletAlias == "" {
-		return fmt.Errorf("could not find a valid candidate for new master that applied its relay logs under the provided wait_replicas_timeout: %v", rec.Error())
+		return fmt.Errorf("could not find a valid candidate for new master that applied its relay logs within the provided wait_replicas_timeout: %v", rec.Error())
 	}
 	newMasterTabletAliasStr = winningTabletAlias
 
