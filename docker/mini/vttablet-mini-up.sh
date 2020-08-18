@@ -54,6 +54,7 @@ vttablet \
  -heartbeat_interval 500ms \
  -enable_semi_sync \
  -enable_replication_reporter \
+ -enforce_strict_trans_tables=false \
  -backup_storage_implementation file \
  -file_backup_storage_root $VTDATAROOT/backups \
  -port $port \
@@ -64,6 +65,14 @@ vttablet \
  -db_app_password $TOPOLOGY_PASSWORD \
  -db_dba_user $TOPOLOGY_USER \
  -db_dba_password $TOPOLOGY_PASSWORD \
+ -db_allprivs_user $TOPOLOGY_USER \
+ -db_allprivs_password $TOPOLOGY_PASSWORD \
+ -db_filterd_user $TOPOLOGY_USER \
+ -db_filterd_password $TOPOLOGY_PASSWORD \
+ -db_repl_user $TOPOLOGY_USER \
+ -db_repl_password $TOPOLOGY_PASSWORD \
+ -db_appdebug_user $TOPOLOGY_USER \
+ -db_appdebug_password $TOPOLOGY_PASSWORD \
  -mycnf_mysql_port $mysql_port \
  -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
