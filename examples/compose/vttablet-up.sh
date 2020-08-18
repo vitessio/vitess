@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -119,8 +119,6 @@ $VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo -root vitess/$CELL -server_address
 
 $VTROOT/bin/vtctl $TOPOLOGY_FLAGS CreateKeyspace $keyspace || true
 $VTROOT/bin/vtctl $TOPOLOGY_FLAGS CreateShard $keyspace/$shard || true
-
-$VTROOT/bin/vtctl $TOPOLOGY_FLAGS InitTablet -shard $shard -keyspace $keyspace -grpc_port $grpc_port -port $web_port -allow_master_override $alias $tablet_role
 
 #Populate external db conditional args
 if [ "$external" = "1" ]; then
