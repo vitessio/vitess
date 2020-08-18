@@ -250,6 +250,61 @@ func (txc *TxConn) Release(ctx context.Context, session *SafeSession) error {
 	})
 }
 
+//ReleaseLock releases the reserved connection used for locking.
+func (txc *TxConn) ReleaseLock(ctx context.Context, session *SafeSession) error {
+	if !session.InLockSession() {
+		return nil
+	}
+	defer session.ResetLock()
+
+	ls := session.LockSession
+	if ls.ReservedId == 0 {
+		return nil
+	}
+	qs, err := txc.queryService(ls.TabletAlias)
+	if err != nil {
+		return err
+	}
+	err = qs.Release(ctx, ls.Target, 0, ls.ReservedId)
+	if err != nil {
+		return err
+	}
+	ls.ReservedId = 0
+	return nil
+
+}
+
+//ReleaseAll releases all the shard sessions and lock session.
+func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
+	if !session.InTransaction() && !session.InReservedConn() && !session.InLockSession() {
+		return nil
+	}
+	defer session.ResetAll()
+
+	allsessions := append(session.PreSessions, session.ShardSessions...)
+	allsessions = append(allsessions, session.PostSessions...)
+	if session.LockSession != nil {
+		allsessions = append(allsessions, session.LockSession)
+	}
+
+	return txc.runSessions(ctx, allsessions, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+		if s.ReservedId == 0 && s.TransactionId == 0 {
+			return nil
+		}
+		qs, err := txc.queryService(s.TabletAlias)
+		if err != nil {
+			return err
+		}
+		err = qs.Release(ctx, s.Target, s.TransactionId, s.ReservedId)
+		if err != nil {
+			return err
+		}
+		s.TransactionId = 0
+		s.ReservedId = 0
+		return nil
+	})
+}
+
 // Resolve resolves the specified 2PC transaction.
 func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	mmShard, err := dtids.ShardSession(dtid)

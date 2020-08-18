@@ -105,6 +105,9 @@ type trafficSwitcher struct {
 	targetKeyspace  string
 	tables          []string
 	sourceKSSchema  *vindexes.KeyspaceSchema
+	optCells        string //cells option passed to MoveTables/Reshard
+	optTabletTypes  string //tabletTypes option passed to MoveTables/Reshard
+
 }
 
 // tsTarget contains the metadata for each migration target.
@@ -371,7 +374,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, error) {
-	targets, frozen, err := wr.buildTargets(ctx, targetKeyspace, workflow)
+	targets, frozen, optCells, optTabletTypes, err := wr.buildTargets(ctx, targetKeyspace, workflow)
 	if err != nil {
 		return nil, err
 	}
@@ -385,6 +388,8 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		sources:         make(map[string]*tsSource),
 		targetKeyspace:  targetKeyspace,
 		frozen:          frozen,
+		optCells:        optCells,
+		optTabletTypes:  optTabletTypes,
 	}
 	ts.wr.Logger().Infof("Migration ID for workflow %s: %d", workflow, ts.id)
 
@@ -455,11 +460,11 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	return ts, nil
 }
 
-func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow string) (targets map[string]*tsTarget, frozen bool, err error) {
+func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow string) (targets map[string]*tsTarget, frozen bool, optCells string, optTabletTypes string, err error) {
 	targets = make(map[string]*tsTarget)
 	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
 	if err != nil {
-		return nil, false, err
+		return nil, false, "", "", err
 	}
 	// We check all target shards. All of them may not have a stream.
 	// For example, if we're splitting -80 to -40,40-80, only those
@@ -467,19 +472,19 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 	for _, targetShard := range targetShards {
 		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
-			return nil, false, err
+			return nil, false, "", "", err
 		}
 		if targetsi.MasterAlias == nil {
 			// This can happen if bad inputs are given.
-			return nil, false, fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
+			return nil, false, "", "", fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
 		}
 		targetMaster, err := wr.ts.GetTablet(ctx, targetsi.MasterAlias)
 		if err != nil {
-			return nil, false, err
+			return nil, false, "", "", err
 		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source, message from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source, message, cell, tablet_types from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
 		if err != nil {
-			return nil, false, err
+			return nil, false, "", "", err
 		}
 		// If there's no vreplication stream, check the next target.
 		if len(p3qr.Rows) < 1 {
@@ -495,24 +500,26 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 		for _, row := range qr.Rows {
 			id, err := evalengine.ToInt64(row[0])
 			if err != nil {
-				return nil, false, err
+				return nil, false, "", "", err
 			}
 
 			var bls binlogdatapb.BinlogSource
 			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
-				return nil, false, err
+				return nil, false, "", "", err
 			}
 			targets[targetShard].sources[uint32(id)] = &bls
 
 			if row[2].ToString() == frozenStr {
 				frozen = true
 			}
+			optCells = row[3].ToString()
+			optTabletTypes = row[4].ToString()
 		}
 	}
 	if len(targets) == 0 {
-		return nil, false, fmt.Errorf("no streams found in keyspace %s for: %s", targetKeyspace, workflow)
+		return nil, false, "", "", fmt.Errorf("no streams found in keyspace %s for: %s", targetKeyspace, workflow)
 	}
-	return targets, frozen, nil
+	return targets, frozen, optCells, optTabletTypes, nil
 }
 
 // hashStreams produces a reproducible hash based on the input parameters.
@@ -848,9 +855,35 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		}
 
 		_, err := ts.wr.VReplicationExec(ctx, source.master.Alias, binlogplayer.CreateVReplicationState(ts.reverseWorkflow, reverseBls, target.position, binlogplayer.BlpStopped, source.master.DbName()))
-		return err
+		if err != nil {
+			return err
+		}
+
+		// if user has defined the cell/tablet_types parameters in the forward workflow, update the reverse workflow as well
+		updateQuery := ts.getReverseVReplicationUpdateQuery(target.master.Alias.Cell, source.master.Alias.Cell, source.master.DbName())
+		if updateQuery != "" {
+			_, err = ts.wr.VReplicationExec(ctx, source.master.Alias, updateQuery)
+			return err
+		}
+		return nil
 	})
 	return err
+}
+
+func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, sourceCell string, dbname string) string {
+	// we try to be clever to understand what user intends:
+	// if target's cell is present in cells but not source's cell we replace it with the source's cell
+	if ts.optCells != "" && targetCell != sourceCell && strings.Contains(ts.optCells+",", targetCell+",") &&
+		!strings.Contains(ts.optCells+",", sourceCell+",") {
+		ts.optCells = strings.Replace(ts.optCells, targetCell, sourceCell, 1)
+	}
+
+	if ts.optCells != "" || ts.optTabletTypes != "" {
+		query := fmt.Sprintf("update _vt.vreplication set cell = '%s', tablet_types = '%s' where workflow = '%s' and db_name = '%s'",
+			ts.optCells, ts.optTabletTypes, ts.reverseWorkflow, dbname)
+		return query
+	}
+	return ""
 }
 
 func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error {
