@@ -282,10 +282,6 @@ func (vw *vschemaWrapper) SysVarSetEnabled() bool {
 	return vw.sysVarEnabled
 }
 
-func (vw *vschemaWrapper) SysVarSetEnabled() bool {
-	return true
-}
-
 func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
 	var keyspaceName string
 	if vw.keyspace != nil {
