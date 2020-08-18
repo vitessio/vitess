@@ -330,18 +330,22 @@ func buildSetOpIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (en
 
 func buildSetOpCheckAndIgnore(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema) (engine.SetOp, error) {
-		keyspace, dest, err := resolveDestination(schema)
-		if err != nil {
-			return nil, err
-		}
-
-		return &engine.SysVarCheckAndIgnore{
-			Name:              expr.Name.Lowered(),
-			Keyspace:          keyspace,
-			TargetDestination: dest,
-			Expr:              extractValue(expr, boolean),
-		}, nil
+		return planSysVarCheckIgnore(expr, schema, boolean)
 	}
+}
+
+func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema ContextVSchema, boolean bool) (engine.SetOp, error) {
+	keyspace, dest, err := resolveDestination(schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return &engine.SysVarCheckAndIgnore{
+		Name:              expr.Name.Lowered(),
+		Keyspace:          keyspace,
+		TargetDestination: dest,
+		Expr:              extractValue(expr, boolean),
+	}, nil
 }
 
 func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
@@ -362,10 +366,13 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 }
 
 func buildSetOpVarSet(boolean bool) func(*sqlparser.SetExpr, ContextVSchema) (engine.SetOp, error) {
+
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
-		return buildSetOpCheckAndIgnore(expr, vschema)
-	}ks, err := vschema.AnyKeyspace()
+			return planSysVarCheckIgnore(expr, vschema, boolean)
+		}
+
+		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
