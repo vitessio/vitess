@@ -21,7 +21,7 @@ source ./env.sh
 
 ./scripts/vtgate-down.sh
 
-for tablet in 100 200 300 400; do
+for tablet in 200 300 400 500; do
 	if vtctlclient -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
 		echo "Shutting down tablet zone1-$tablet"
 		CELL=zone1 TABLET_UID=$tablet ./scripts/vttablet-down.sh
@@ -45,7 +45,7 @@ fi
 if [ ! -z "$VTDATAROOT" ]; then
 
 	if pgrep -f -l "$VTDATAROOT" >/dev/null; then
-		echo "ERROR: Stale processes detected! It is recommended to manuallly kill them:"
+		echo "ERROR: Stale processes detected! It is recommended to manually kill them:"
 		pgrep -f -l "$VTDATAROOT"
 	else
 		echo "All good! It looks like every process has shut down"

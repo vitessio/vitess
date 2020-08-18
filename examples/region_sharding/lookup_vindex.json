@@ -1,0 +1,24 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "customer_region_lookup": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "main.customer_lookup",
+        "from": "id",
+        "to": "keyspace_id"
+      },
+      "owner": "customer"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "customer_region_lookup"
+        }
+      ]
+    }
+  }
+}
