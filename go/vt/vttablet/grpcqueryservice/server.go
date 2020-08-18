@@ -63,7 +63,7 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	results, err := q.server.ExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.TransactionId, request.Options)
+	results, err := q.server.ExecuteBatch(ctx, request.Target, request.Queries, request.TransactionId, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -268,32 +268,6 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 	}
 	return &querypb.BeginExecuteResponse{
 		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: transactionID,
-		TabletAlias:   alias,
-	}, nil
-}
-
-// BeginExecuteBatch is part of the queryservice.QueryServer interface
-func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExecuteBatchRequest) (response *querypb.BeginExecuteBatchResponse, err error) {
-	defer q.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.EffectiveCallerId,
-		request.ImmediateCallerId,
-	)
-	results, transactionID, alias, err := q.server.BeginExecuteBatch(ctx, request.Target, request.Queries, request.AsTransaction, request.Options)
-	if err != nil {
-		// if we have a valid transactionID, return the error in-band
-		if transactionID != 0 {
-			return &querypb.BeginExecuteBatchResponse{
-				Error:         vterrors.ToVTRPC(err),
-				TransactionId: transactionID,
-				TabletAlias:   alias,
-			}, nil
-		}
-		return nil, vterrors.ToGRPC(err)
-	}
-	return &querypb.BeginExecuteBatchResponse{
-		Results:       sqltypes.ResultsToProto3(results),
 		TransactionId: transactionID,
 		TabletAlias:   alias,
 	}, nil

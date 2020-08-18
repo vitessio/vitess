@@ -159,11 +159,8 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 }
 
 // ExecuteBatch is part of the QueryService interface.
-func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
-	if asTransaction {
-		sbc.AsTransactionCount.Add(1)
-	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
@@ -343,16 +340,6 @@ func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target
 	}
 	result, err := sbc.Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
 	return result, transactionID, alias, err
-}
-
-// BeginExecuteBatch is part of the QueryService interface.
-func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := sbc.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	results, err := sbc.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, alias, err
 }
 
 // MessageStream is part of the QueryService interface.

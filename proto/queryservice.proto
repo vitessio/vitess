@@ -76,9 +76,6 @@ service Query {
   // BeginExecute executes a begin and the specified SQL query.
   rpc BeginExecute(query.BeginExecuteRequest) returns (query.BeginExecuteResponse) {};
 
-  // BeginExecuteBatch executes a begin and a list of queries.
-  rpc BeginExecuteBatch(query.BeginExecuteBatchRequest) returns (query.BeginExecuteBatchResponse) {};
-
   // MessageStream streams messages from a message table.
   rpc MessageStream(query.MessageStreamRequest) returns (stream query.MessageStreamResponse) {};
 

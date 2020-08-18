@@ -414,7 +414,7 @@ message ExecuteResponse {
 
 // ResultWithError represents a query response
 // in the form of result or error but not both.
-// TODO: To be used in ExecuteBatchResponse and BeginExecuteBatchResponse.
+// TODO: To be used in ExecuteBatchResponse
 message ResultWithError {
   // error contains an query level error, only set if result is unset.
   vtrpc.RPCError error = 1;
@@ -429,9 +429,8 @@ message ExecuteBatchRequest {
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   repeated BoundQuery queries = 4;
-  bool as_transaction = 5;
-  int64 transaction_id = 6;
-  ExecuteOptions options = 7;
+  int64 transaction_id = 5;
+  ExecuteOptions options = 6;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
@@ -608,30 +607,6 @@ message BeginExecuteResponse {
   vtrpc.RPCError error = 1;
 
   QueryResult result = 2;
-
-  // transaction_id might be non-zero even if an error is present.
-  int64 transaction_id = 3;
-  topodata.TabletAlias tablet_alias = 4;
-}
-
-// BeginExecuteBatchRequest is the payload to BeginExecuteBatch
-message BeginExecuteBatchRequest {
-  vtrpc.CallerID effective_caller_id = 1;
-  VTGateCallerID immediate_caller_id = 2;
-  Target target = 3;
-  repeated BoundQuery queries = 4;
-  bool as_transaction = 5;
-  ExecuteOptions options = 6;
-}
-
-// BeginExecuteBatchResponse is the returned value from BeginExecuteBatch
-message BeginExecuteBatchResponse {
-  // error contains an application level error if necessary. Note the
-  // transaction_id may be set, even when an error is returned, if the begin
-  // worked but the execute failed.
-  vtrpc.RPCError error = 1;
-
-  repeated QueryResult results = 2;
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;

@@ -231,7 +231,7 @@ func (t *explainTablet) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // ExecuteBatch is part of the QueryService interface.
-func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	t.mu.Lock()
 	t.currentTime = batchTime.Wait()
 
@@ -247,7 +247,7 @@ func (t *explainTablet) ExecuteBatch(ctx context.Context, target *querypb.Target
 	}
 	t.mu.Unlock()
 
-	return t.tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
+	return t.tsv.ExecuteBatch(ctx, target, queries, transactionID, options)
 }
 
 // BeginExecute is part of the QueryService interface.

@@ -118,7 +118,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 }
 
 // ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -130,7 +130,6 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.T
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Queries:           queries,
-		AsTransaction:     asTransaction,
 		TransactionId:     transactionID,
 		Options:           options,
 	}
@@ -470,33 +469,6 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 		return nil, reply.TransactionId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, conn.tablet.Alias, nil
-}
-
-// BeginExecuteBatch starts a transaction and runs an ExecuteBatch.
-func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, 0, nil, tabletconn.ConnClosed
-	}
-
-	req := &querypb.BeginExecuteBatchRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Queries:           queries,
-		AsTransaction:     asTransaction,
-		Options:           options,
-	}
-
-	reply, err := conn.c.BeginExecuteBatch(ctx, req)
-	if err != nil {
-		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
-	}
-	if reply.Error != nil {
-		return nil, reply.TransactionId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
-	}
-	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, conn.tablet.Alias, nil
 }
 
 // MessageStream streams messages.

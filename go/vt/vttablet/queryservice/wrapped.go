@@ -202,11 +202,11 @@ func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Tar
 	})
 }
 
-func (ws *wrappedService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
+func (ws *wrappedService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
 	inTransaction := transactionID != 0
 	err = ws.wrapper(ctx, target, ws.impl, "ExecuteBatch", inTransaction, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
-		qrs, innerErr = conn.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
+		qrs, innerErr = conn.ExecuteBatch(ctx, target, queries, transactionID, options)
 		// You cannot retry if you're in a transaction.
 		retryable := canRetry(ctx, innerErr) && (!inTransaction)
 		return retryable, innerErr
@@ -221,15 +221,6 @@ func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Targ
 		return canRetry(ctx, innerErr), innerErr
 	})
 	return qr, transactionID, alias, err
-}
-
-func (ws *wrappedService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
-	err = ws.wrapper(ctx, target, ws.impl, "BeginExecuteBatch", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		var innerErr error
-		qrs, transactionID, alias, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
-		return canRetry(ctx, innerErr), innerErr
-	})
-	return qrs, transactionID, alias, err
 }
 
 func (ws *wrappedService) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {

@@ -108,9 +108,6 @@ var TestExecuteOptions = &querypb.ExecuteOptions{
 	ClientFoundRows: true,
 }
 
-// TestAsTransaction is a test 'asTransaction' flag.
-const TestAsTransaction bool = true
-
 func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target) {
 	if !proto.Equal(target, TestTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, TestTarget)
@@ -553,7 +550,7 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	if f.HasError {
 		return nil, f.TabletError
 	}
@@ -570,9 +567,6 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 		f.t.Errorf("invalid ExecuteBatch.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
-	if !asTransaction {
-		f.t.Errorf("invalid ExecuteBatch.AsTransaction: got %v expected %v", asTransaction, TestAsTransaction)
-	}
 	if transactionID != f.ExpectedTransactionID {
 		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, f.ExpectedTransactionID)
 	}
@@ -589,18 +583,6 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 	// TODO(deepthi): what alias should we actually return here?
 	result, err := f.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	return result, transactionID, nil, err
-}
-
-// BeginExecuteBatch combines Begin and ExecuteBatch.
-func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, _, err := f.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	// TODO(deepthi): what alias should we actually return here?
-	results, err := f.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, nil, err
 }
 
 var (

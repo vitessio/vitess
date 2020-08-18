@@ -118,7 +118,7 @@ func TestBatchRead(t *testing.T) {
 	}
 	want := []sqltypes.Result{qr1, qr2}
 
-	qrl, err := client.ExecuteBatch(queries, false)
+	qrl, err := client.ExecuteBatch(queries)
 	require.NoError(t, err)
 	if !reflect.DeepEqual(qrl, want) {
 		t.Errorf("ExecueBatch: \n%#v, want \n%#v", prettyPrintArr(qrl), prettyPrintArr(want))
@@ -146,14 +146,7 @@ func TestBatchTransaction(t *testing.T) {
 	}
 
 	// Not in transaction, AsTransaction false
-	qrl, err := client.ExecuteBatch(queries, false)
-	require.NoError(t, err)
-	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
-		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
-	}
-
-	// Not in transaction, AsTransaction true
-	qrl, err = client.ExecuteBatch(queries, true)
+	qrl, err := client.ExecuteBatch(queries)
 	require.NoError(t, err)
 	if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
 		t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
@@ -164,20 +157,10 @@ func TestBatchTransaction(t *testing.T) {
 		err = client.Begin(false)
 		require.NoError(t, err)
 		defer client.Commit()
-		qrl, err = client.ExecuteBatch(queries, false)
+		qrl, err = client.ExecuteBatch(queries)
 		require.NoError(t, err)
 		if !reflect.DeepEqual(qrl[1].Rows, wantRows) {
 			t.Errorf("Rows: \n%#v, want \n%#v", qrl[1].Rows, wantRows)
 		}
-	}()
-
-	// In transaction, AsTransaction true
-	func() {
-		err = client.Begin(false)
-		require.NoError(t, err)
-		defer client.Rollback()
-		qrl, err = client.ExecuteBatch(queries, true)
-		want := "cannot start a new transaction in the scope of an existing one"
-		require.EqualError(t, err, want)
 	}()
 }

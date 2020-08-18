@@ -52,12 +52,12 @@ func TestDiscoveryGatewayExecute(t *testing.T) {
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
+		_, err := dg.ExecuteBatch(context.Background(), target, queries, 0, nil)
 		return err
 	})
 	testDiscoveryGatewayTransact(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
+		_, err := dg.ExecuteBatch(context.Background(), target, queries, 1, nil)
 		return err
 	})
 }
@@ -95,14 +95,6 @@ func TestDiscoveryGatewayRollback(t *testing.T) {
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
 		_, _, _, err := dg.BeginExecute(context.Background(), target, nil, "query", nil, 0, nil)
-		return err
-	})
-}
-
-func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, func(dg *DiscoveryGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
 	})
 }

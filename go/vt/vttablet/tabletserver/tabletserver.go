@@ -688,18 +688,16 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // the AsTransaction flag which will execute all statements inside an independent
 // transaction. If AsTransaction is true, TransactionId must be 0.
 // TODO(reserve-conn): Validate the use-case and Add support for reserve connection in ExecuteBatch
-func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
+// TODO: we need all the queries to run on the same connection to mysql
+func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteBatch")
 	defer span.Finish()
 
 	if len(queries) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Empty query list")
 	}
-	if asTransaction && transactionID != 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot start a new transaction in the scope of an existing one")
-	}
 
-	if tsv.enableHotRowProtection && asTransaction {
+	if tsv.enableHotRowProtection {
 		// Serialize transactions which target the same hot row range.
 		// NOTE: We put this intentionally at this place *before* StartRequest()
 		// gets called below. Otherwise, the StartRequest()/EndRequest() section from
@@ -737,25 +735,10 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	// Setting ExecuteOptions_AUTOCOMMIT will get a connection out of the
 	// pool without actually begin/commit the transaction.
 	if (options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
-		asTransaction &&
 		planbuilder.PassthroughDMLs {
 		options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 	}
 
-	if asTransaction {
-		// We ignore the return alias because this transaction only exists in the scope of this call
-		transactionID, _, err = tsv.Begin(ctx, target, options)
-		if err != nil {
-			return nil, err
-		}
-		// If transaction was not committed by the end, it means
-		// that there was an error, roll it back.
-		defer func() {
-			if transactionID != 0 {
-				tsv.Rollback(ctx, target, transactionID)
-			}
-		}()
-	}
 	results = make([]sqltypes.Result, 0, len(queries))
 	for _, bound := range queries {
 		localReply, err := tsv.Execute(ctx, target, bound.Sql, bound.BindVariables, transactionID, 0, options)
@@ -763,13 +746,6 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 			return nil, err
 		}
 		results = append(results, *localReply)
-	}
-	if asTransaction {
-		if _, err = tsv.Commit(ctx, target, transactionID); err != nil {
-			transactionID = 0
-			return nil, err
-		}
-		transactionID = 0
 	}
 	return results, nil
 }
@@ -873,19 +849,6 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	// Example: table1 where id = 1 and sub_id = 2
 	key := fmt.Sprintf("%s%s", tableName, where)
 	return key, tableName.String()
-}
-
-// BeginExecuteBatch combines Begin and ExecuteBatch.
-func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	// TODO(mberlin): Integrate hot row protection here as we did for BeginExecute()
-	// and ExecuteBatch(asTransaction=true).
-	transactionID, alias, err := tsv.Begin(ctx, target, options)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-	return results, transactionID, alias, err
 }
 
 // MessageStream streams messages from the requested table.

@@ -1383,9 +1383,6 @@ func (m *VEvent) GetJournal() *Journal {
 
 func (m *VEvent) GetDml() string {
 	if m != nil {
-		if m.Statement != "" {
-			return m.Statement
-		}
 		return m.Dml
 	}
 	return ""
