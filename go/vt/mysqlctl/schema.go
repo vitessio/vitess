@@ -309,8 +309,12 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	if err != nil {
 		return nil, err
 	}
+	// sql uses column name aliases to guarantee lower case sensitivity.
 	sql := fmt.Sprintf(`
-		SELECT table_name, ordinal_position, column_name
+		SELECT
+			table_name AS table_name,
+			ordinal_position AS ordinal_position,
+			column_name AS column_name
 		FROM information_schema.key_column_usage
 		WHERE table_schema = '%s'
 			AND table_name IN %s
