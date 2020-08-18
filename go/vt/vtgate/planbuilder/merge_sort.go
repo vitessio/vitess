@@ -99,24 +99,22 @@ func (ms *mergeSort) Wireup(bldr builder, jt *jointab) error {
 	// and use that value instead. This is because we cannot mimic
 	// mysql's collation behavior yet.
 	rb := ms.input.(*route)
-	rb.finalizeOptions()
-	ro := rb.routeOptions[0]
-	for i, orderby := range ro.eroute.OrderBy {
+	for i, orderby := range rb.eroute.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
 		if sqltypes.IsText(rc.column.typ) {
 			// If a weight string was previously requested, reuse it.
 			if colNumber, ok := ms.weightStrings[rc]; ok {
-				ro.eroute.OrderBy[i].Col = colNumber
+				rb.eroute.OrderBy[i].Col = colNumber
 				continue
 			}
 			var err error
-			ro.eroute.OrderBy[i].Col, err = rb.SupplyWeightString(orderby.Col)
+			rb.eroute.OrderBy[i].Col, err = rb.SupplyWeightString(orderby.Col)
 			if err != nil {
 				return err
 			}
 			ms.truncateColumnCount = len(ms.resultColumns)
 		}
 	}
-	ro.eroute.TruncateColumnCount = ms.truncateColumnCount
+	rb.eroute.TruncateColumnCount = ms.truncateColumnCount
 	return ms.input.Wireup(bldr, jt)
 }
