@@ -58,7 +58,7 @@ func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 		return nil
 	}
 	rb, ok := pb.bldr.(*route)
-	if ok && rb.removeMultishardOptions() {
+	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return nil
 	}

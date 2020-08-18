@@ -84,79 +84,63 @@ func newSymtabWithRoute(rb *route) *symtab {
 	}
 }
 
-// AddVSchemaTable takes a list of vschema tables as input and
-// creates a table with multiple route options. It returns a
-// list of vindex maps, one for each input.
-func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vindexes.Table, rb *route) (vindexMaps []map[*column]vindexes.SingleColumn, err error) {
+// AddVSchemaTable adds a vschema table to symtab.
+func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vindexes.Table, rb *route) error {
 	t := &table{
-		alias:  alias,
-		origin: rb,
+		alias:        alias,
+		origin:       rb,
+		vschemaTable: vschemaTable,
 	}
 
-	vindexMaps = make([]map[*column]vindexes.SingleColumn, len(vschemaTables))
-	for i, vst := range vschemaTables {
-		// The following logic allows the first table to be authoritative while the rest
-		// are not. But there's no need to reveal this flexibility to the user.
-		if i != 0 && vst.ColumnListAuthoritative && !t.isAuthoritative {
-			return nil, fmt.Errorf("intermixing of authoritative and non-authoritative tables not allowed: %v", vst.Name)
+	for _, col := range vschemaTable.Columns {
+		if _, err := t.mergeColumn(col.Name, &column{
+			origin: rb,
+			st:     st,
+			typ:    col.Type,
+		}); err != nil {
+			return err
 		}
+	}
+	if vschemaTable.ColumnListAuthoritative {
+		// This will prevent new columns from being added.
+		t.isAuthoritative = true
+	}
 
-		for _, col := range vst.Columns {
-			if _, err := t.mergeColumn(col.Name, &column{
+	for _, cv := range vschemaTable.ColumnVindexes {
+		single, ok := cv.Vindex.(vindexes.SingleColumn)
+		if !ok {
+			continue
+		}
+		for i, cvcol := range cv.Columns {
+			col, err := t.mergeColumn(cvcol, &column{
 				origin: rb,
 				st:     st,
-				typ:    col.Type,
+			})
+			if err != nil {
+				return err
+			}
+			if i == 0 {
+				if col.vindex == nil || col.vindex.Cost() > single.Cost() {
+					col.vindex = single
+				}
+			}
+		}
+	}
+
+	if ai := vschemaTable.AutoIncrement; ai != nil {
+		if _, ok := t.columns[ai.Column.Lowered()]; !ok {
+			if _, err := t.mergeColumn(ai.Column, &column{
+				origin: rb,
+				st:     st,
 			}); err != nil {
-				return nil, err
-			}
-		}
-		if i == 0 && vst.ColumnListAuthoritative {
-			// This will prevent new columns from being added.
-			t.isAuthoritative = true
-		}
-
-		var vindexMap map[*column]vindexes.SingleColumn
-		for _, cv := range vst.ColumnVindexes {
-			single, ok := cv.Vindex.(vindexes.SingleColumn)
-			if !ok {
-				continue
-			}
-			for j, cvcol := range cv.Columns {
-				col, err := t.mergeColumn(cvcol, &column{
-					origin: rb,
-					st:     st,
-				})
-				if err != nil {
-					return nil, err
-				}
-				if j == 0 {
-					// For now, only the first column is used for vindex Map functions.
-					if vindexMap == nil {
-						vindexMap = make(map[*column]vindexes.SingleColumn)
-					}
-					if vindexMap[col] == nil || vindexMap[col].Cost() > single.Cost() {
-						vindexMap[col] = single
-					}
-				}
-			}
-		}
-		vindexMaps[i] = vindexMap
-
-		if ai := vst.AutoIncrement; ai != nil {
-			if _, ok := t.columns[ai.Column.Lowered()]; !ok {
-				if _, err := t.mergeColumn(ai.Column, &column{
-					origin: rb,
-					st:     st,
-				}); err != nil {
-					return nil, err
-				}
+				return err
 			}
 		}
 	}
 	if err := st.AddTable(t); err != nil {
-		return nil, err
+		return err
 	}
-	return vindexMaps, nil
+	return nil
 }
 
 // Merge merges the new symtab into the current one.
@@ -406,6 +390,26 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 	return int(num - 1), nil
 }
 
+// Vindex returns the vindex if the expression is a plain column reference
+// that is part of the specified route, and has an associated vindex.
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.SingleColumn {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok {
+		return nil
+	}
+	if col.Metadata == nil {
+		// Find will set the Metadata.
+		if _, _, err := st.Find(col); err != nil {
+			return nil
+		}
+	}
+	c := col.Metadata.(*column)
+	if c.Origin() != scope {
+		return nil
+	}
+	return c.vindex
+}
+
 // BuildColName builds a *sqlparser.ColName for the resultColumn specified
 // by the index. The built ColName will correctly reference the resultColumn
 // it was built from.
@@ -455,6 +459,7 @@ type table struct {
 	columnNames     []sqlparser.ColIdent
 	isAuthoritative bool
 	origin          builder
+	vschemaTable    *vindexes.Table
 }
 
 func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
@@ -503,6 +508,8 @@ func (t *table) Origin() builder {
 // column represents a unique symbol in the query that other
 // parts can refer to.
 // Every column contains the builder it originates from.
+// If a column has associated vindexes, then the one with the
+// lowest cost is set.
 //
 // Two columns are equal if their pointer values match.
 //
@@ -511,6 +518,7 @@ func (t *table) Origin() builder {
 type column struct {
 	origin    builder
 	st        *symtab
+	vindex    vindexes.SingleColumn
 	typ       querypb.Type
 	colNumber int
 }
