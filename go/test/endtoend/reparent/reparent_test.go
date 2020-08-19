@@ -119,16 +119,17 @@ func TestReparentDownMaster(t *testing.T) {
 	require.Error(t, err)
 
 	// Run forced reparent operation, this should now proceed unimpeded.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"EmergencyReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias,
 		"-wait_replicas_timeout", "30s")
+	log.Infof("EmergencyReparentShard Output: %v", out)
 	require.Nil(t, err)
 	require.NoError(t, err)
 
 	// Check that old master tablet is left around for human intervention.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
+	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
 	require.Contains(t, out, "already has master")
 
