@@ -888,7 +888,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		newMasterTabletAliasStr = topoproto.TabletAliasString(masterElectTabletAlias)
 		_, ok := tabletMap[newMasterTabletAliasStr]
 		if !ok {
-			return fmt.Errorf("master-elect tablet %v is not in the shard", newMasterTabletAliasStr)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master-elect tablet %v is not in the shard", newMasterTabletAliasStr)
 		}
 	}
 
@@ -899,7 +899,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return fmt.Errorf("lost topology lock, aborting: %v", err)
+		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "lost topology lock, aborting: %v", err)
 	}
 
 	validCandidates, err := wr.findValidReparentCandidates(statusMap, masterStatusMap)
@@ -907,13 +907,13 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return err
 	}
 	if len(validCandidates) == 0 {
-		return fmt.Errorf("no valid candidates for emergency reparent")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
 	validCandidatesSet := sets.NewString(validCandidates...)
 	if masterElectTabletAlias != nil {
 		if !validCandidatesSet.Has(newMasterTabletAliasStr) {
-			return fmt.Errorf("master elect is either not fully caught up, or has errant GTIDs")
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect is either not fully caught up, or has errant GTIDs")
 		}
 		validCandidatesSet = sets.NewString(newMasterTabletAliasStr)
 	}
@@ -953,13 +953,13 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 	}
 	if winningTabletAlias == "" {
-		return fmt.Errorf("could not find a valid candidate for new master that applied its relay logs within the provided wait_replicas_timeout: %v", rec.Error())
+		return vterrors.Wrapf(rec.Error(), "could not find a valid candidate for new master that applied its relay logs within the provided wait_replicas_timeout: %v", rec.Error())
 	}
 	newMasterTabletAliasStr = winningTabletAlias
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return fmt.Errorf("lost topology lock, aborting: %v", err)
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
 	// Promote the masterElect
@@ -967,12 +967,12 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "promoting replica")
 	rp, err := wr.tmc.PromoteReplica(ctx, tabletMap[newMasterTabletAliasStr].Tablet)
 	if err != nil {
-		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", newMasterTabletAliasStr, err)
+		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", newMasterTabletAliasStr, err)
 	}
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return fmt.Errorf("lost topology lock, aborting: %v", err)
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -1004,7 +1004,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 		err = wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, tabletMap[newMasterTabletAliasStr].Alias, now, "", forceStart)
 		if err != nil {
-			err = fmt.Errorf("tablet %v SetMaster failed: %v", alias, err)
+			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", alias, err)
 		}
 	}
 	waitOnTablets := func() *concurrency.AllErrorRecorder {
@@ -1024,7 +1024,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	if masterErr != nil {
 		wr.logger.Warningf("master failed to PopulateReparentJournal")
 		replCancel()
-		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
+		return vterrors.Wrapf(masterErr, "failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 
 	return nil
@@ -1076,7 +1076,7 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 			break
 		} else if status.RelayLogPosition.IsZero() {
 			// Bail. We have an odd one in the bunch.
-			return nil, fmt.Errorf("encountered tablet %v with no relay log position, when at least one other tablet in the status map has a relay log positions", alias)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has a relay log positions", alias)
 		}
 	}
 
@@ -1106,7 +1106,7 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 
 			relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
 			if !ok {
-				return nil, fmt.Errorf("we got a filled in relay log position for a tablet, even though the GTIDSet is not of type Mysql56GTIDSet. We don't know how this could happen")
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "we got a filled in relay log position for a tablet, even though the GTIDSet is not of type Mysql56GTIDSet. We don't know how this could happen")
 			}
 			cleanedGTIDSet := relayLogGTIDSet.Difference(errantGTIDs)
 			cleanedRelayLogPosition := mysql.Position{GTIDSet: cleanedGTIDSet}
@@ -1195,7 +1195,8 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 		switch err {
 		case mysql.ErrNotReplica:
 			fmt.Printf("Found ErrNotReplica for alias: %v", alias)
-			masterStatus, err := wr.tmc.DemoteMaster(ctx, tabletInfo.Tablet)
+			var masterStatus *replicationdatapb.MasterStatus
+			masterStatus, err = wr.tmc.DemoteMaster(ctx, tabletInfo.Tablet)
 			if err != nil {
 				wr.logger.Warningf("replica %v thinks it's master but we failed to demote it", alias)
 				return
@@ -1211,7 +1212,7 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 
 		default:
 			wr.logger.Warningf("failed to get replication status from %v: %v", alias, err)
-			err = fmt.Errorf("error when getting replication status for alias %v: %v", alias, err)
+			err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 		}
 	}
 
@@ -1224,7 +1225,7 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 	errRecorder := waitOnNMinusOneTablets(groupCancel, len(tabletMap)-unreachableReplicas.Len(), errChan, 1)
 
 	if len(errRecorder.Errors) > 1 {
-		return nil, nil, fmt.Errorf("encountered more than one error when trying to stop replication and get positions: %v", errRecorder.Error())
+		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "encountered more than one error when trying to stop replication and get positions: %v", errRecorder.Error())
 	}
 	return statusMap, masterStatusMap, nil
 }
