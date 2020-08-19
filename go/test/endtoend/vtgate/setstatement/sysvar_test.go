@@ -47,7 +47,7 @@ func TestCharsetIntro(t *testing.T) {
 	require.EqualValues(t, 0, qr.RowsAffected)
 }
 
-func TestSetSysVar(t *testing.T) {
+func TestSetSysVarSingle(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
@@ -59,25 +59,41 @@ func TestSetSysVar(t *testing.T) {
 	}
 
 	queries := []queriesWithExpectations{{
-		name:     "default_storage_engine",
+		name:     "default_storage_engine", // ignored
 		expr:     "INNODB",
 		expected: `[[VARCHAR("InnoDB")]]`,
 	}, {
-		name:     "sql_mode",
+		name:     "character_set_client", // check and ignored
+		expr:     "utf8",
+		expected: `[[VARCHAR("utf8")]]`,
+	}, {
+		name:     "character_set_client", // ignored so will keep the actual value
+		expr:     "@charvar",
+		expected: `[[VARCHAR("utf8")]]`,
+	}, {
+		name:     "sql_mode", // use reserved conn
 		expr:     "''",
 		expected: `[[VARCHAR("")]]`,
 	}, {
-		name:     "sql_mode",
+		name:     "sql_mode", // use reserved conn
 		expr:     `concat(@@sql_mode,"NO_ZERO_DATE")`,
 		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
 	}, {
-		name:     "sql_mode",
+		name:     "sql_mode", // use reserved conn
 		expr:     "@@sql_mode",
 		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
 	}, {
-		name:     "SQL_SAFE_UPDATES",
+		name:     "SQL_SAFE_UPDATES", // use reserved conn
 		expr:     "1",
 		expected: "[[INT64(1)]]",
+	}, {
+		name:     "sql_auto_is_null", // ignored so will keep the actual value
+		expr:     "on",
+		expected: `[[INT64(0)]]`,
+	}, {
+		name:     "sql_notes", // use reserved conn
+		expr:     "off",
+		expected: "[[INT64(0)]]",
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -103,14 +119,14 @@ func TestSetSystemVariable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	checkedExec(t, conn, "set @@sql_mode = 'NO_ZERO_DATE'")
-	q := `select str_to_date('00/00/0000', '%m/%d/%Y')`
-	assertMatches(t, conn, q, `[[NULL]]`)
+	checkedExec(t, conn, "set session sql_mode = 'NO_ZERO_DATE', session default_week_format = 1")
+	q := `select str_to_date('00/00/0000', '%m/%d/%Y'), WEEK('2008-02-20')`
+	assertMatches(t, conn, q, `[[NULL INT64(8)]]`)
 
 	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`)
-	checkedExec(t, conn, "set @@sql_mode = ''")
+	checkedExec(t, conn, "set @@sql_mode = '', session default_week_format = 0")
 
-	assertMatches(t, conn, q, `[[DATE("0000-00-00")]]`)
+	assertMatches(t, conn, q, `[[DATE("0000-00-00") INT64(7)]]`)
 
 	checkedExec(t, conn, "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'),  @@SESSION.sql_auto_is_null = 0, @@SESSION.wait_timeout = 2147483")
 	assertMatches(t, conn, "select @@sql_mode", `[[VARCHAR("NO_AUTO_VALUE_ON_ZERO,STRICT_ALL_TABLES")]]`)
@@ -209,6 +225,77 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 	checkedExec(t, conn, "commit")
 	assertMatches(t, conn, "select id, val1 from test", "[[INT64(54) NULL]]")
 	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
+}
+
+func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "delete from test")
+	checkedExec(t, conn, "insert into test (id, val1) values (1, null), (4, null)")
+
+	checkedExec(t, conn, "set sql_safe_updates = 1") // this should force us into a reserved connection
+	assertMatches(t, conn, "select id from test order by id", "[[INT64(1)] [INT64(4)]]")
+	qr := checkedExec(t, conn, "select connection_id() from test where id = 1")
+
+	// kill the mysql connection shard which has transaction open.
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // -80
+	_, err = vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	require.NoError(t, err)
+
+	// first query to 80- shard should pass
+	assertMatches(t, conn, "select id, val1 from test where id = 4", "[[INT64(4) NULL]]")
+
+	// first query to -80 shard will fail
+	_, err = exec(t, conn, "insert into test (id, val1) values (2, null)")
+	require.Error(t, err)
+
+	// subsequent queries on -80 will pass
+	assertMatches(t, conn, "select id from test where id = 2", "[]")
+	assertMatches(t, conn, "insert into test (id, val1) values (2, null)", "[]")
+	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 2", "[[INT64(2) INT64(1)]]")
+}
+
+func TestSetSystemVarInTxWithConnError(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "delete from test")
+	checkedExec(t, conn, "insert into test (id, val1) values (1, null), (4, null)")
+
+	checkedExec(t, conn, "set sql_safe_updates = 1") // this should force us into a reserved connection
+	qr := checkedExec(t, conn, "select connection_id() from test where id = 4")
+	checkedExec(t, conn, "begin")
+	checkedExec(t, conn, "insert into test (id, val1) values (2, null)")
+
+	// kill the mysql connection shard which has transaction open.
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].MasterTablet() // 80-
+	_, err = vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	require.NoError(t, err)
+
+	// query to -80 shard should pass and remain in transaction.
+	assertMatches(t, conn, "select id, val1 from test where id = 2", "[[INT64(2) NULL]]")
+	checkedExec(t, conn, "rollback")
+	assertMatches(t, conn, "select id, val1 from test where id = 2", "[]")
+
+	// first query to 80- shard will fail
+	_, err = exec(t, conn, "select @@sql_safe_updates from test where id = 4")
+	require.Error(t, err)
+
+	// subsequent queries on 80- will pass
+	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

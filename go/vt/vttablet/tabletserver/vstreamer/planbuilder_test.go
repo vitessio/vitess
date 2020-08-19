@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -224,12 +223,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}, {
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}},
 		},
 	}, {
@@ -238,12 +241,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}, {
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}},
 			Filters: []Filter{{
 				Opcode:        VindexMatch,
@@ -260,12 +267,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}, {
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}},
 		},
 	}, {
@@ -274,12 +285,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}, {
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}},
 		},
 	}, {
@@ -288,12 +303,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}, {
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}},
 		},
 	}, {
@@ -302,12 +321,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}, {
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}},
 			Filters: []Filter{{
 				Opcode:        VindexMatch,
@@ -324,12 +347,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}, {
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}},
 			Filters: []Filter{{
 				Opcode:        VindexMatch,
@@ -346,12 +373,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}, {
 				ColNum: 0,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}},
 			Filters: []Filter{{
 				Opcode:        Equal,
@@ -371,12 +402,16 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 2,
-				Alias:  sqlparser.NewColIdent("val"),
-				Type:   sqltypes.VarBinary,
+				Field: &querypb.Field{
+					Name: "val",
+					Type: sqltypes.VarBinary,
+				},
 			}, {
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}},
 			Filters: []Filter{{
 				Opcode:        VindexMatch,
@@ -393,13 +428,17 @@ func TestPlanbuilder(t *testing.T) {
 		outPlan: &Plan{
 			ColExprs: []ColExpr{{
 				ColNum: 1,
-				Alias:  sqlparser.NewColIdent("id"),
-				Type:   sqltypes.Int64,
+				Field: &querypb.Field{
+					Name: "id",
+					Type: sqltypes.Int64,
+				},
 			}, {
-				Alias:         sqlparser.NewColIdent("keyspace_id"),
+				Field: &querypb.Field{
+					Name: "keyspace_id",
+					Type: sqltypes.VarBinary,
+				},
 				Vindex:        testLocalVSchema.vschema.Keyspaces["ks"].Vindexes["region_vdx"],
 				VindexColumns: []int{0, 1},
-				Type:          sqltypes.VarBinary,
 			}},
 		},
 	}, {
@@ -536,6 +575,5 @@ func TestPlanbuilder(t *testing.T) {
 		if gotErr != tcase.outErr {
 			t.Errorf("Plan(%v, %v) err: %v, want %v", tcase.inTable, tcase.inRule, err, tcase.outErr)
 		}
-
 	}
 }

@@ -18,12 +18,13 @@ package mysql
 
 import (
 	"crypto/tls"
-	"fmt"
 	"io"
 	"net"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"vitess.io/vitess/go/sqlescape"
 
 	proxyproto "github.com/pires/go-proxyproto"
 	"vitess.io/vitess/go/netutil"
@@ -443,7 +444,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Set initial db name.
 	if c.schemaName != "" {
-		err = l.handler.ComQuery(c, fmt.Sprintf("use `%s`", c.schemaName), func(result *sqltypes.Result) error {
+		err = l.handler.ComQuery(c, "use "+sqlescape.EscapeID(c.schemaName), func(result *sqltypes.Result) error {
 			return nil
 		})
 		if err != nil {

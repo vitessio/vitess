@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"golang.org/x/net/context"
@@ -101,6 +100,7 @@ type Executor struct {
 var executorOnce sync.Once
 
 const pathQueryPlans = "/debug/query_plans"
+
 const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
@@ -344,7 +344,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 // CloseSession releases the current connection, which rollbacks open transactions and closes reserved connections.
 // It is called then the MySQL servers closes the connection to its client.
 func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) error {
-	return e.txConn.Release(ctx, safeSession)
+	return e.txConn.ReleaseAll(ctx, safeSession)
 }
 
 func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
@@ -375,6 +375,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
+	var value interface{}
 	for _, expr := range set.Exprs {
 		// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
 		// it will remove backticks and double quotes that might surround the part after the first period
@@ -384,13 +385,13 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		case sqlparser.GlobalStr:
 			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
 		case sqlparser.SessionStr:
-			value, err := getValueFor(expr)
+			value, err = getValueFor(expr)
 			if err != nil {
 				return nil, err
 			}
-			return &sqltypes.Result{}, handleSessionSetting(ctx, name, safeSession, value, e.txConn, sql)
+			err = handleSessionSetting(ctx, name, safeSession, value, e.txConn, sql)
 		case sqlparser.VitessMetadataStr:
-			value, err := getValueFor(expr)
+			value, err = getValueFor(expr)
 			if err != nil {
 				return nil, err
 			}
@@ -398,10 +399,13 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset: %v", value)
 			}
-			return e.handleSetVitessMetadata(ctx, name, val)
+			_, err = e.handleSetVitessMetadata(ctx, name, val)
 		case "": // we should only get here with UDVs
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should have been handled by planning")
 
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -500,18 +504,6 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for skip_query_plan_cache: %d", val)
 		}
-	case "sql_safe_updates":
-		val, err := validateSetOnOff(value, name)
-		if err != nil {
-			return err
-		}
-
-		switch val {
-		case 0, 1:
-			// no op
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_safe_updates: %d", val)
-		}
 	case "transaction_mode":
 		val, ok := value.(string)
 		if !ok {
@@ -522,17 +514,6 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
 		}
 		session.TransactionMode = vtgatepb.TransactionMode(out)
-	case "tx_isolation": // TODO move this to set tx
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for tx_isolation: %T", value)
-		}
-		switch val {
-		case "repeatable read", "read committed", "read uncommitted", "serializable":
-			// TODO (4127): This is a dangerous NOP.
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for tx_isolation: %v", val)
-		}
 	case "tx_read_only", "transaction_read_only": // TODO move this to set tx
 		val, err := validateSetOnOff(value, name)
 		if err != nil {
@@ -575,34 +556,6 @@ func handleSessionSetting(ctx context.Context, name string, session *SafeSession
 			session.Options = &querypb.ExecuteOptions{}
 		}
 		session.Options.SqlSelectLimit = val
-	case "sql_auto_is_null":
-		val, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_auto_is_null: %T", value)
-		}
-		switch val {
-		case 0:
-			// This is the default setting for MySQL. Do nothing.
-		case 1:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql_auto_is_null is not currently supported")
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_auto_is_null: %d", val)
-		}
-	case "character_set_results":
-		// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
-		switch value {
-		case nil, "binary", "utf8", "utf8mb4", "latin1":
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", value)
-		}
-	case "wait_timeout":
-		_, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", value)
-		}
-	case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection", "foreign_key_checks", "sql_quote_show_create", "unique_checks":
-		log.Warningf("Ignored inapplicable SET %v = %v", name, value)
-		warnings.Add("IgnoredSet", 1)
 	case "charset", "names":
 		val, ok := value.(string)
 		if !ok {
@@ -1665,4 +1618,9 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 // StreamExecuteMulti implements the IExecutor interface
 func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
+}
+
+//ExecuteLock implments the IExecutor interface
+func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
+	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
 }

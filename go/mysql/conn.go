@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
+
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -774,7 +776,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	case ComInitDB:
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
-		if err := c.execQuery(fmt.Sprintf("use `%s`", db), handler, false); err != nil {
+		if err := c.execQuery("use "+sqlescape.EscapeID(db), handler, false); err != nil {
 			return err
 		}
 	case ComQuery:

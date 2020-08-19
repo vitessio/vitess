@@ -105,16 +105,14 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 
 	if rb, ok := pb.bldr.(*route); ok {
 		// TODO(sougou): this can probably be improved.
-		for _, ro := range rb.routeOptions {
-			directives := sqlparser.ExtractCommentDirectives(sel.Comments)
-			ro.eroute.QueryTimeout = queryTimeout(directives)
-			if ro.eroute.TargetDestination != nil {
-				return errors.New("unsupported: SELECT with a target destination")
-			}
+		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+		rb.eroute.QueryTimeout = queryTimeout(directives)
+		if rb.eroute.TargetDestination != nil {
+			return errors.New("unsupported: SELECT with a target destination")
+		}
 
-			if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-				ro.eroute.ScatterErrorsAsWarnings = true
-			}
+		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+			rb.eroute.ScatterErrorsAsWarnings = true
 		}
 	}
 
@@ -186,14 +184,10 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engin
 	if err != nil {
 		return nil, err
 	}
-	return &engine.Reserve{
-		Input: &engine.Send{
-			Keyspace:          ks,
-			TargetDestination: key.DestinationKeyspaceID{0},
-			Query:             sqlparser.String(sel),
-			IsDML:             false,
-			SingleShardOnly:   true,
-		},
+	return &engine.Lock{
+		Keyspace:          ks,
+		TargetDestination: key.DestinationKeyspaceID{0},
+		Query:             sqlparser.String(sel),
 	}, nil
 }
 
@@ -318,12 +312,10 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
-			for _, ro := range rb.routeOptions {
-				if ro.eroute.Opcode != engine.SelectNext {
-					return nil, errors.New("NEXT used on a non-sequence table")
-				}
-				ro.eroute.Opcode = engine.SelectNext
+			if rb.eroute.Opcode != engine.SelectNext {
+				return nil, errors.New("NEXT used on a non-sequence table")
 			}
+			rb.eroute.Opcode = engine.SelectNext
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
 			return nil, fmt.Errorf("BUG: unexpected select expression type: %T", node)

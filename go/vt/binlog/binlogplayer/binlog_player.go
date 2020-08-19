@@ -83,6 +83,12 @@ type Stats struct {
 	History             *history.History
 
 	State sync2.AtomicString
+
+	PhaseTimings  *stats.Timings
+	QueryTimings  *stats.Timings
+	QueryCount    *stats.CountersWithSingleLabel
+	CopyRowCount  *stats.Counter
+	CopyLoopCount *stats.Counter
 }
 
 // SetLastPosition sets the last replication position.
@@ -118,6 +124,12 @@ func NewStats() *Stats {
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
 	bps.SecondsBehindMaster.Set(math.MaxInt64)
+	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
+	bps.QueryTimings = stats.NewTimings("", "", "Phase")
+	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
+	bps.CopyRowCount = stats.NewCounter("", "")
+	bps.CopyLoopCount = stats.NewCounter("", "")
+
 	return bps
 }
 

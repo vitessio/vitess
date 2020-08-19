@@ -329,17 +329,12 @@ func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
-	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__lastInsertId as id from dual union select id from user",
-		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
-	}}
-
-	assert.Equal(t, wantQueries, sbc1.Queries)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported: UNION cannot be executed as a single route")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
@@ -2253,15 +2248,21 @@ func TestSelectLock(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	wantSession := &vtgatepb.Session{
-		InTransaction:  true,
-		InReservedConn: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{
-			{
-				Target:        &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
-				TabletAlias:   sbc1.Tablet().Alias,
-				TransactionId: 12345,
-				ReservedId:    12345,
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestExecutor",
+				Shard:      "-20",
+				TabletType: topodatapb.TabletType_MASTER,
 			},
+			TransactionId: 12345,
+			TabletAlias:   sbc1.Tablet().Alias,
+		}},
+		LockSession: &vtgatepb.Session_ShardSession{
+
+			Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
+			TabletAlias: sbc1.Tablet().Alias,
+			ReservedId:  1,
 		},
 		FoundRows: 1,
 		RowCount:  -1,

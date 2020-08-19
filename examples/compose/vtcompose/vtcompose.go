@@ -434,6 +434,7 @@ func applyKeyspaceDependentPatches(
 	if keyspaceData.shards < 2 {
 		tabAlias = tabAlias + 100
 		dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
+		dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, opts)
 	} else {
 		// Determine shard range
 		for i := 0; i < keyspaceData.shards; i++ {
@@ -446,6 +447,7 @@ func applyKeyspaceDependentPatches(
 			}
 			tabAlias = tabAlias + 100
 			dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
+			dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, opts)
 		}
 	}
 
@@ -473,6 +475,39 @@ func applyDockerComposePatches(
 	}
 
 	return dockerComposeFile
+}
+
+func applyShardPatches(
+	dockerComposeFile []byte,
+	tabAlias int,
+	shard string,
+	keyspaceData keyspaceInfo,
+	opts vtOptions,
+) []byte {
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultShard(tabAlias, shard, keyspaceData, opts))
+	return dockerComposeFile
+}
+
+func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo, opts vtOptions) string {
+	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	for i := 0; i < keyspaceData.replicaTablets; i++ {
+		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
+	}
+	tabletDepends := make([]string, len(aliases))
+	for i, tabletId := range aliases {
+		tabletDepends[i] = fmt.Sprintf("vttablet%d: {condition : service_healthy}", tabletId)
+	}
+	// Wait on all shard tablets to be healthy
+	dependsOn := "depends_on: {" + strings.Join(tabletDepends, ", ") + "}"
+
+	return fmt.Sprintf(`
+- op: add
+  path: /services/init_shard_master%[2]d
+  value:
+    image: vitess/base
+    command: ["sh", "-c", "$$VTROOT/bin/vtctl %[5]s InitShardMaster -force %[4]s/%[3]s %[6]s-%[2]d "]
+    %[1]s
+`, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
 }
 
 func applyTabletPatches(
@@ -674,7 +709,7 @@ func generatePrimaryVIndex(tableName, column, name string) string {
 	return fmt.Sprintf(`
 [{"op": "add",
 "path": "/tables/%[1]s",
-"value": 
+"value":
   {"column_vindexes": [
     {
       "column": "%[2]s",

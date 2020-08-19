@@ -799,6 +799,58 @@ func TestReserveExecuteWithExecuteFailureAndCheckConnectionAndDBState(t *testing
 	require.Error(t, client.Release())
 }
 
+func TestReserveExecuteDDLWithoutTx(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Release()
+
+	connQuery := "select connection_id()"
+	createQuery := "create table vitess_test_ddl(id bigint primary key)"
+	dropQuery := "drop table vitess_test_ddl"
+	descQuery := "describe vitess_test_ddl"
+
+	qr1, err := client.ReserveExecute(connQuery, nil, nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute(createQuery, nil)
+	require.NoError(t, err)
+	require.Zero(t, client.TransactionID())
+	defer client.Execute(dropQuery, nil)
+
+	qr2, err := client.Execute(connQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, qr1.Rows, qr2.Rows)
+
+	qr3, err := client.Execute(descQuery, nil)
+	require.NoError(t, err)
+	require.NotZero(t, qr3.Rows)
+}
+
+func TestReserveExecuteDDLWithTx(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Release()
+
+	connQuery := "select connection_id()"
+	createQuery := "create table vitess_test_ddl(id bigint primary key)"
+	dropQuery := "drop table vitess_test_ddl"
+	descQuery := "describe vitess_test_ddl"
+
+	qr1, err := client.ReserveBeginExecute(connQuery, nil, nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute(createQuery, nil)
+	require.NoError(t, err)
+	require.NotZero(t, client.TransactionID())
+	defer client.Execute(dropQuery, nil)
+
+	qr2, err := client.Execute(connQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, qr1.Rows, qr2.Rows)
+
+	qr3, err := client.Execute(descQuery, nil)
+	require.NoError(t, err)
+	require.NotZero(t, qr3.Rows)
+}
+
 func killConnection(t *testing.T, connID string) {
 	client := framework.NewClient()
 	_, err := client.ReserveExecute("select 1", []string{fmt.Sprintf("kill %s", connID)}, nil)

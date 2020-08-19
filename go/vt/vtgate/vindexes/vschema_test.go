@@ -679,9 +679,6 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			}, {
 				FromTable: "notfound",
 				ToTables:  []string{"ks1.t2"},
-			}, {
-				FromTable: "doubletable",
-				ToTables:  []string{"ks1.t1", "ks1.t1"},
 			}},
 		},
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -751,7 +748,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{
 			"rt1": {
-				Tables: []*Table{t1, t2},
+				Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
 			},
 			"rt2": {
 				Tables: []*Table{t2},
@@ -767,9 +764,6 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			},
 			"notfound": {
 				Error: errors.New("table t2 not found"),
-			},
-			"doubletable": {
-				Error: errors.New("table ks1.t1 specified more than once"),
 			},
 		},
 		uniqueTables: map[string]*Table{
@@ -801,11 +795,9 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		gotb, _ := json.Marshal(got)
-		wantb, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
-	}
+	gotb, _ := json.MarshalIndent(got, "", "  ")
+	wantb, _ := json.MarshalIndent(want, "", "  ")
+	assert.Equal(t, string(wantb), string(gotb), string(gotb))
 }
 
 func TestChooseVindexForType(t *testing.T) {
@@ -2201,15 +2193,15 @@ func TestFindTable(t *testing.T) {
 	}
 }
 
-func TestFindTablesOrVindex(t *testing.T) {
+func TestFindTableOrVindex(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		RoutingRules: &vschemapb.RoutingRules{
 			Rules: []*vschemapb.RoutingRule{{
 				FromTable: "unqualified",
-				ToTables:  []string{"ksa.ta", "ksb.t1"},
+				ToTables:  []string{"ksa.ta"},
 			}, {
 				FromTable: "unqualified@replica",
-				ToTables:  []string{"ksb.t1", "ksa.ta"},
+				ToTables:  []string{"ksb.t1"},
 			}, {
 				FromTable: "newks.qualified",
 				ToTables:  []string{"ksa.ta"},
@@ -2267,27 +2259,27 @@ func TestFindTablesOrVindex(t *testing.T) {
 	ta := vschema.Keyspaces["ksa"].Tables["ta"]
 	t1 := vschema.Keyspaces["ksb"].Tables["t1"]
 
-	_, _, err := vschema.FindTablesOrVindex("", "t1", topodatapb.TabletType_MASTER)
+	_, _, err := vschema.FindTableOrVindex("", "t1", topodatapb.TabletType_MASTER)
 	wantErr := "ambiguous table reference: t1"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	_, _, err = vschema.FindTablesOrVindex("", "none", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "none", topodatapb.TabletType_MASTER)
 	wantErr = "table none not found"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	got, _, err := vschema.FindTablesOrVindex("", "ta", topodatapb.TabletType_MASTER)
+	got, _, err := vschema.FindTableOrVindex("", "ta", topodatapb.TabletType_MASTER)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, []*Table{ta}) {
-		t.Errorf("FindTablesOrVindex(\"t1a\"): %+v, want %+v", got, ta)
+	if !reflect.DeepEqual(got, ta) {
+		t.Errorf("FindTableOrVindex(\"t1a\"): %+v, want %+v", got, ta)
 	}
 
-	_, vindex, err := vschema.FindTablesOrVindex("", "stfu1", topodatapb.TabletType_MASTER)
+	_, vindex, err := vschema.FindTableOrVindex("", "stfu1", topodatapb.TabletType_MASTER)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2295,10 +2287,10 @@ func TestFindTablesOrVindex(t *testing.T) {
 		name: "stfu1",
 	}
 	if !reflect.DeepEqual(vindex, wantVindex) {
-		t.Errorf("FindTablesOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
+		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, vindex, err = vschema.FindTablesOrVindex("ksc", "ta", topodatapb.TabletType_MASTER)
+	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta", topodatapb.TabletType_MASTER)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2306,51 +2298,51 @@ func TestFindTablesOrVindex(t *testing.T) {
 		name: "ta",
 	}
 	if !reflect.DeepEqual(vindex, wantVindex) {
-		t.Errorf("FindTablesOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
+		t.Errorf("FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 	}
 
-	_, _, err = vschema.FindTablesOrVindex("", "dup", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "dup", topodatapb.TabletType_MASTER)
 	wantErr = "ambiguous vindex reference: dup"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 
-	got, _, err = vschema.FindTablesOrVindex("", "unqualified", topodatapb.TabletType_MASTER)
+	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_MASTER)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{ta, t1}; !reflect.DeepEqual(got, want) {
-		t.Errorf("FindTablesOrVindex(unqualified): %+v, want %+v", got, want)
+	if want := ta; !reflect.DeepEqual(got, want) {
+		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	got, _, err = vschema.FindTablesOrVindex("", "unqualified", topodatapb.TabletType_REPLICA)
+	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{t1, ta}; !reflect.DeepEqual(got, want) {
-		t.Errorf("FindTablesOrVindex(unqualified): %+v, want %+v", got, want)
+	if want := t1; !reflect.DeepEqual(got, want) {
+		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	got, _, err = vschema.FindTablesOrVindex("newks", "qualified", topodatapb.TabletType_MASTER)
+	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_MASTER)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{ta}; !reflect.DeepEqual(got, want) {
-		t.Errorf("FindTablesOrVindex(unqualified): %+v, want %+v", got, want)
+	if want := ta; !reflect.DeepEqual(got, want) {
+		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	got, _, err = vschema.FindTablesOrVindex("newks", "qualified", topodatapb.TabletType_REPLICA)
+	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []*Table{t1}; !reflect.DeepEqual(got, want) {
-		t.Errorf("FindTablesOrVindex(unqualified): %+v, want %+v", got, want)
+	if want := t1; !reflect.DeepEqual(got, want) {
+		t.Errorf("FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 	}
 
-	_, _, err = vschema.FindTablesOrVindex("", "notarget", topodatapb.TabletType_MASTER)
+	_, _, err = vschema.FindTableOrVindex("", "notarget", topodatapb.TabletType_MASTER)
 	wantErr = "table notarget has been disabled"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("FindTablesOrVindex(\"\"): %v, want %s", err, wantErr)
+		t.Errorf("FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 	}
 }
 

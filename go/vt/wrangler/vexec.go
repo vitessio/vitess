@@ -24,9 +24,11 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"vitess.io/vitess/go/vt/log"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -133,7 +135,7 @@ func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, 
 				allErrors.RecordError(err)
 			} else {
 				if qr.RowsAffected == 0 {
-					allErrors.RecordError(fmt.Errorf("\nno matching streams found for workflow %s, tablet %s, query %s", workflow, master.Alias, query))
+					log.Infof("no matching streams found for workflow %s, tablet %s, query %s", workflow, master.Alias, query)
 				} else {
 					mu.Lock()
 					results[master] = qr
@@ -188,10 +190,13 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 	return master, nil
 }
 
-// WorkflowAction can start/stop/delete or list strams in _vt.vreplication on all masters in the target keyspace of the workflow
+// WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	if action == "list" {
 		return nil, wr.listStreams(ctx, workflow, keyspace)
+	} else if action == "listall" {
+		_, err := wr.ListAllWorkflows(ctx, keyspace)
+		return nil, err
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
@@ -344,11 +349,40 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	return &rsr, nil
 }
 
+// ListAllWorkflows will return a list of all active workflows for the given keyspace.
+func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string) ([]string, error) {
+	query := "select distinct workflow from _vt.vreplication where state <> 'Stopped'"
+	results, err := wr.runVexec(ctx, "", keyspace, query, false)
+	if err != nil {
+		return nil, err
+	}
+	workflowsSet := sets.NewString()
+	for _, result := range results {
+		if len(result.Rows) == 0 {
+			continue
+		}
+		qr := sqltypes.Proto3ToResult(result)
+		for _, row := range qr.Rows {
+			for _, value := range row {
+				// Even though we query for distinct, we must de-dup because we query per master tablet.
+				workflowsSet.Insert(value.ToString())
+			}
+		}
+	}
+	workflows := workflowsSet.List()
+	wr.printWorkflowList(workflows)
+	return workflows, nil
+}
+
 func (wr *Wrangler) listStreams(ctx context.Context, workflow, keyspace string) error {
 	replStatus, err := wr.getStreams(ctx, workflow, keyspace)
 	if err != nil {
 		return err
 	}
+	if len(replStatus.Statuses) == 0 {
+		return fmt.Errorf("no streams found for workflow %s in keyspace %s", workflow, keyspace)
+	}
+
 	if err := dumpStreamListAsJSON(replStatus, wr); err != nil {
 		return err
 	}
@@ -374,6 +408,11 @@ func dumpStreamListAsJSON(replStatus *replicationStatusResult, wr *Wrangler) err
 	}
 	wr.Logger().Printf("%s\n", text)
 	return nil
+}
+
+func (wr *Wrangler) printWorkflowList(workflows []string) {
+	list := strings.Join(workflows, ", ")
+	wr.Logger().Printf("Workflows: %v", list)
 }
 
 func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {

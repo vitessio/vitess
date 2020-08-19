@@ -28,8 +28,8 @@ import (
 
 // This file has functions to analyze the FROM clause.
 
-// processDMLTable analyzes the FROM clause for DMLs and returns a routeOption.
-func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*routeOption, error) {
+// processDMLTable analyzes the FROM clause for DMLs and returns a route.
+func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*route, error) {
 	if err := pb.processTableExprs(tableExprs); err != nil {
 		return nil, err
 	}
@@ -37,11 +37,10 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*r
 	if !ok {
 		return nil, errors.New("unsupported: multi-shard or vindex write statement")
 	}
-	ro := rb.routeOptions[0]
-	for _, sub := range ro.substitutions {
+	for _, sub := range rb.substitutions {
 		*sub.oldExpr = *sub.newExpr
 	}
-	return ro, nil
+	return rb, nil
 }
 
 // processTableExprs analyzes the FROM clause. It produces a builder
@@ -124,6 +123,10 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// FROM clause. This allows for other constructs to be
 		// later pushed into it.
 		rb, st := newRoute(&sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}})
+		rb.substitutions = subroute.substitutions
+		rb.condition = subroute.condition
+		rb.eroute = subroute.eroute
+		subroute.Redirect = rb
 
 		// The subquery needs to be represented as a new logical table in the symtab.
 		// The new route will inherit the routeOptions of the underlying subquery.
@@ -132,39 +135,29 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// a new set of column references will be generated against the new tables,
 		// and those vindex maps will be returned. They have to replace the old vindex
 		// maps of the inherited route options.
-		vschemaTables := make([]*vindexes.Table, 0, len(subroute.routeOptions))
-		for _, ro := range subroute.routeOptions {
-			vst := &vindexes.Table{
-				Keyspace: ro.eroute.Keyspace,
-			}
-			vschemaTables = append(vschemaTables, vst)
-			for _, rc := range subroute.ResultColumns() {
-				vindex, ok := ro.vindexMap[rc.column]
-				if !ok {
-					continue
-				}
-				// Check if a colvindex of the same name already exists.
-				// Dups are not allowed in subqueries in this situation.
-				for _, colVindex := range vst.ColumnVindexes {
-					if colVindex.Columns[0].Equal(rc.alias) {
-						return fmt.Errorf("duplicate column aliases: %v", rc.alias)
-					}
-				}
-				vst.ColumnVindexes = append(vst.ColumnVindexes, &vindexes.ColumnVindex{
-					Columns: []sqlparser.ColIdent{rc.alias},
-					Vindex:  vindex,
-				})
-			}
+		vschemaTable := &vindexes.Table{
+			Keyspace: subroute.eroute.Keyspace,
 		}
-		vindexMaps, err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTables, rb)
-		if err != nil {
+		for _, rc := range subroute.ResultColumns() {
+			if rc.column.vindex == nil {
+				continue
+			}
+			// Check if a colvindex of the same name already exists.
+			// Dups are not allowed in subqueries in this situation.
+			for _, colVindex := range vschemaTable.ColumnVindexes {
+				if colVindex.Columns[0].Equal(rc.alias) {
+					return fmt.Errorf("duplicate column aliases: %v", rc.alias)
+				}
+			}
+			vschemaTable.ColumnVindexes = append(vschemaTable.ColumnVindexes, &vindexes.ColumnVindex{
+				Columns: []sqlparser.ColIdent{rc.alias},
+				Vindex:  rc.column.vindex,
+			})
+		}
+		if err := st.AddVSchemaTable(sqlparser.TableName{Name: tableExpr.As}, vschemaTable, rb); err != nil {
 			return err
 		}
-		for i, ro := range subroute.routeOptions {
-			ro.SubqueryToTable(rb, vindexMaps[i])
-		}
-		rb.routeOptions = subroute.routeOptions
-		subroute.Redirect = rb
+
 		pb.bldr, pb.st = rb, st
 		return nil
 	}
@@ -185,7 +178,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRoute(sel)
-		rb.routeOptions = []*routeOption{newSimpleRouteOption(rb, engine.NewSimpleRoute(engine.SelectDBA, ks))}
+		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
 		pb.bldr, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
@@ -194,7 +187,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		})
 	}
 
-	vschemaTables, vindex, _, destTableType, destTarget, err := pb.vschema.FindTablesOrVindex(tableName)
+	vschemaTable, vindex, _, destTableType, destTarget, err := pb.vschema.FindTableOrVindex(tableName)
 	if err != nil {
 		return err
 	}
@@ -209,58 +202,59 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 
 	rb, st := newRoute(sel)
 	pb.bldr, pb.st = rb, st
-	vindexMaps, err := st.AddVSchemaTable(alias, vschemaTables, rb)
-	if err != nil {
+	if err := st.AddVSchemaTable(alias, vschemaTable, rb); err != nil {
 		return err
 	}
-	for i, vst := range vschemaTables {
-		sub := &tableSubstitution{
-			oldExpr: tableExpr,
-		}
-		if tableExpr.As.IsEmpty() {
-			if tableName.Name != vst.Name {
-				// Table name does not match. Change and alias it to old name.
-				sub.newExpr = &sqlparser.AliasedTableExpr{
-					Expr: sqlparser.TableName{Name: vst.Name},
-					As:   tableName.Name,
-				}
-			}
-		} else {
-			// Table is already aliased.
-			if tableName.Name != vst.Name {
-				// Table name does not match. Change it and reuse existing alias.
-				sub.newExpr = &sqlparser.AliasedTableExpr{
-					Expr: sqlparser.TableName{Name: vst.Name},
-					As:   tableExpr.As,
-				}
-			}
-		}
-		var eroute *engine.Route
-		switch {
-		case vst.Type == vindexes.TypeSequence:
-			eroute = engine.NewSimpleRoute(engine.SelectNext, vst.Keyspace)
-		case vst.Type == vindexes.TypeReference:
-			eroute = engine.NewSimpleRoute(engine.SelectReference, vst.Keyspace)
-		case !vst.Keyspace.Sharded:
-			eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vst.Keyspace)
-		case vst.Pinned == nil:
-			eroute = engine.NewSimpleRoute(engine.SelectScatter, vst.Keyspace)
-			eroute.TargetDestination = destTarget
-			eroute.TargetTabletType = destTableType
-		default:
-			// Pinned tables have their keyspace ids already assigned.
-			// Use the Binary vindex, which is the identity function
-			// for keyspace id.
-			eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
-			vindex, _ = vindexes.NewBinary("binary", nil)
-			eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
-			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
-		}
-		// set table name into route
-		eroute.TableName = vst.Name.String()
 
-		rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vst, sub, vindexMaps[i], eroute))
+	sub := &tableSubstitution{
+		oldExpr: tableExpr,
 	}
+	if tableExpr.As.IsEmpty() {
+		if tableName.Name != vschemaTable.Name {
+			// Table name does not match. Change and alias it to old name.
+			sub.newExpr = &sqlparser.AliasedTableExpr{
+				Expr: sqlparser.TableName{Name: vschemaTable.Name},
+				As:   tableName.Name,
+			}
+		}
+	} else {
+		// Table is already aliased.
+		if tableName.Name != vschemaTable.Name {
+			// Table name does not match. Change it and reuse existing alias.
+			sub.newExpr = &sqlparser.AliasedTableExpr{
+				Expr: sqlparser.TableName{Name: vschemaTable.Name},
+				As:   tableExpr.As,
+			}
+		}
+	}
+	if sub != nil && sub.newExpr != nil {
+		rb.substitutions = []*tableSubstitution{sub}
+	}
+
+	var eroute *engine.Route
+	switch {
+	case vschemaTable.Type == vindexes.TypeSequence:
+		eroute = engine.NewSimpleRoute(engine.SelectNext, vschemaTable.Keyspace)
+	case vschemaTable.Type == vindexes.TypeReference:
+		eroute = engine.NewSimpleRoute(engine.SelectReference, vschemaTable.Keyspace)
+	case !vschemaTable.Keyspace.Sharded:
+		eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vschemaTable.Keyspace)
+	case vschemaTable.Pinned == nil:
+		eroute = engine.NewSimpleRoute(engine.SelectScatter, vschemaTable.Keyspace)
+		eroute.TargetDestination = destTarget
+		eroute.TargetTabletType = destTableType
+	default:
+		// Pinned tables have their keyspace ids already assigned.
+		// Use the Binary vindex, which is the identity function
+		// for keyspace id.
+		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
+		vindex, _ = vindexes.NewBinary("binary", nil)
+		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
+		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
+	}
+	eroute.TableName = vschemaTable.Name.String()
+	rb.eroute = eroute
+
 	return nil
 }
 
@@ -316,45 +310,30 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 
 	// Try merging the routes.
-	isLeftJoin := ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr
-	var mergedRouteOptions []*routeOption
-outer:
-	for _, lro := range lRoute.routeOptions {
-		for _, rro := range rRoute.routeOptions {
-			if lro.JoinCanMerge(pb, rro, ajoin) {
-				lro.MergeJoin(rro, isLeftJoin)
-				mergedRouteOptions = append(mergedRouteOptions, lro)
-				continue outer
-			}
-		}
-	}
-	if len(mergedRouteOptions) != 0 {
-		return pb.mergeRoutes(rpb, mergedRouteOptions, ajoin)
+	if !lRoute.JoinCanMerge(pb, rRoute, ajoin) {
+		return newJoin(pb, rpb, ajoin)
 	}
 
-	return newJoin(pb, rpb, ajoin)
-}
+	if lRoute.eroute.Opcode == engine.SelectReference {
+		// Swap the conditions & eroutes, and then merge.
+		lRoute.condition, rRoute.condition = rRoute.condition, lRoute.condition
+		lRoute.eroute, rRoute.eroute = rRoute.eroute, lRoute.eroute
+	}
+	lRoute.substitutions = append(lRoute.substitutions, rRoute.substitutions...)
+	rRoute.Redirect = lRoute
 
-// mergeRoutes merges the two routes. The ON clause is also analyzed to
-// see if the primitive can be improved. The operation can fail if
-// the expression contains a non-pushable subquery. ajoin can be nil
-// if the join is on a ',' operator.
-func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*routeOption, ajoin *sqlparser.JoinTableExpr) error {
-	lRoute := pb.bldr.(*route)
-	rRoute := rpb.bldr.(*route)
+	// Merge the AST.
 	sel := lRoute.Select.(*sqlparser.Select)
-
 	if ajoin == nil {
 		rhsSel := rRoute.Select.(*sqlparser.Select)
 		sel.From = append(sel.From, rhsSel.From...)
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 	}
-	rRoute.Redirect = lRoute
+
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
 	pb.st.singleRoute = lRoute
-	lRoute.routeOptions = routeOptions
 	if ajoin == nil {
 		return nil
 	}
@@ -365,7 +344,7 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*r
 	ajoin.Condition.On = expr
 	pb.addPullouts(pullouts)
 	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
-		lRoute.UpdatePlans(pb, filter)
+		lRoute.UpdatePlan(pb, filter)
 	}
 	return nil
 }

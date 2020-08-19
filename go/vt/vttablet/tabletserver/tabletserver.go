@@ -144,6 +144,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
+	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
@@ -153,9 +154,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-	tsv.hs = newHealthStreamer(tsv, alias)
 
 	tsv.sm = &stateManager{
+		hs:          tsv.hs,
 		se:          tsv.se,
 		rt:          tsv.rt,
 		vstreamer:   tsv.vstreamer,
@@ -165,7 +166,6 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		txThrottler: tsv.txThrottler,
 		te:          tsv.te,
 		messager:    tsv.messager,
-		notify:      tsv.hs.ChangeState,
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })

@@ -87,7 +87,7 @@ func TestConsistentLookupMap(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
+		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
 
 	// Test query fail.
@@ -132,7 +132,7 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
+		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
 
 	// More than one result is invalid
@@ -177,7 +177,7 @@ func TestConsistentLookupMapAbsent(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
+		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
 }
 

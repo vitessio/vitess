@@ -80,11 +80,6 @@ type syslogWriter interface {
 var writer syslogWriter
 
 func listener(ev Syslogger) {
-	if writer == nil {
-		log.Errorf("no connection, dropping syslog event: %#v", ev)
-		return
-	}
-
 	// Ask the event to convert itself to a syslog message.
 	sev, msg := ev.Syslog()
 
@@ -92,21 +87,53 @@ func listener(ev Syslogger) {
 	var err error
 	switch sev {
 	case syslog.LOG_EMERG:
-		err = writer.Emerg(msg)
+		if writer != nil {
+			err = writer.Emerg(msg)
+		} else {
+			log.Errorf(msg)
+		}
 	case syslog.LOG_ALERT:
-		err = writer.Alert(msg)
+		if writer != nil {
+			err = writer.Alert(msg)
+		} else {
+			log.Errorf(msg)
+		}
 	case syslog.LOG_CRIT:
-		err = writer.Crit(msg)
+		if writer != nil {
+			err = writer.Crit(msg)
+		} else {
+			log.Errorf(msg)
+		}
 	case syslog.LOG_ERR:
-		err = writer.Err(msg)
+		if writer != nil {
+			err = writer.Err(msg)
+		} else {
+			log.Errorf(msg)
+		}
 	case syslog.LOG_WARNING:
-		err = writer.Warning(msg)
+		if writer != nil {
+			err = writer.Warning(msg)
+		} else {
+			log.Warningf(msg)
+		}
 	case syslog.LOG_NOTICE:
-		err = writer.Notice(msg)
+		if writer != nil {
+			err = writer.Notice(msg)
+		} else {
+			log.Infof(msg)
+		}
 	case syslog.LOG_INFO:
-		err = writer.Info(msg)
+		if writer != nil {
+			err = writer.Info(msg)
+		} else {
+			log.Infof(msg)
+		}
 	case syslog.LOG_DEBUG:
-		err = writer.Debug(msg)
+		if writer != nil {
+			err = writer.Debug(msg)
+		} else {
+			log.Infof(msg)
+		}
 	default:
 		err = fmt.Errorf("invalid syslog severity: %v", sev)
 	}
