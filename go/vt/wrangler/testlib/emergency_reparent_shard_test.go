@@ -123,6 +123,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: goodReplica1RelayLogPos,
 	}
+	goodReplica1.FakeMysqlDaemon.WaitMasterPosition = goodReplica1.FakeMysqlDaemon.CurrentMasterFilePosition
 	goodReplica1.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
@@ -149,6 +150,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: goodReplica2RelayLogPos,
 	}
+	goodReplica2.FakeMysqlDaemon.WaitMasterPosition = goodReplica2.FakeMysqlDaemon.CurrentMasterFilePosition
 	goodReplica2.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	goodReplica2.StartActionLoop(t, wr)
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -184,7 +186,9 @@ func TestEmergencyReparentShard(t *testing.T) {
 // TestEmergencyReparentShardMasterElectNotBest tries to emergency reparent
 // to a host that is not the latest in replication position.
 func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
@@ -220,6 +224,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	newMaster.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: newMasterRelayLogPos,
 	}
+	newMaster.FakeMysqlDaemon.WaitMasterPosition = newMaster.FakeMysqlDaemon.CurrentMasterFilePosition
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
@@ -257,6 +262,7 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition = mysql.Position{
 		GTIDSet: moreAdvancedReplicaLogPos,
 	}
+	moreAdvancedReplica.FakeMysqlDaemon.WaitMasterPosition = moreAdvancedReplica.FakeMysqlDaemon.CurrentMasterFilePosition
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 	}
@@ -265,8 +271,10 @@ func TestEmergencyReparentShardMasterElectNotBest(t *testing.T) {
 
 	// run EmergencyReparentShard
 	err := wr.EmergencyReparentShard(ctx, newMaster.Tablet.Keyspace, newMaster.Tablet.Shard, newMaster.Tablet.Alias, 10*time.Second, sets.NewString())
+	cancel()
+
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "master elect is either not fully caught up, or")
+	assert.Contains(t, err.Error(), "is not fully caught up")
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)

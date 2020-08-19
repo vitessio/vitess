@@ -883,15 +883,6 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return err
 	}
 
-	var newMasterTabletAliasStr string
-	if masterElectTabletAlias != nil {
-		newMasterTabletAliasStr = topoproto.TabletAliasString(masterElectTabletAlias)
-		_, ok := tabletMap[newMasterTabletAliasStr]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master-elect tablet %v is not in the shard", newMasterTabletAliasStr)
-		}
-	}
-
 	statusMap, masterStatusMap, err := wr.stopReplicationAndBuildStatusMaps(ctx, ev, tabletMap, waitReplicasTimeout, ignoredTablets)
 	if err != nil {
 		return err
@@ -910,14 +901,6 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	if masterElectTabletAlias != nil {
-		masterPos, ok := validCandidates[newMasterTabletAliasStr]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect is either not fully caught up, or has errant GTIDs")
-		}
-		validCandidates[newMasterTabletAliasStr] = masterPos
-	}
-
 	errChan := make(chan error)
 	rec := &concurrency.AllErrorRecorder{}
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
@@ -926,11 +909,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		go func(alias string) {
 			var err error
 			defer func() { errChan <- err }()
-
 			err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
-			if err != nil {
-				rec.RecordError(err)
-			}
 		}(candidate)
 	}
 
@@ -938,10 +917,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	for waitErr := range errChan {
 		resultCounter++
 		if waitErr != nil {
+			rec.RecordError(waitErr)
 			groupCancel()
 		}
 		if resultCounter == len(validCandidates) {
-			groupCancel()
 			break
 		}
 	}
@@ -950,6 +929,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 
 	var winningPosition mysql.Position
+	var newMasterTabletAliasStr string
 	for alias, position := range validCandidates {
 		if winningPosition.IsZero() {
 			winningPosition = position
@@ -959,6 +939,17 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		if position.AtLeast(winningPosition) {
 			winningPosition = position
 			newMasterTabletAliasStr = alias
+		}
+	}
+
+	if masterElectTabletAlias != nil {
+		newMasterTabletAliasStr = topoproto.TabletAliasString(masterElectTabletAlias)
+		masterPos, ok := validCandidates[newMasterTabletAliasStr]
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", newMasterTabletAliasStr)
+		}
+		if !masterPos.AtLeast(winningPosition) {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect: %v at position %v, is not fully caught up. Winning position: %v", newMasterTabletAliasStr, masterPos, winningPosition)
 		}
 	}
 
