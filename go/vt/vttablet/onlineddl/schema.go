@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	// SchemaMigrationsTableName is used by VExec interceptor to call the correct handler
 	SchemaMigrationsTableName      = "schema_migrations"
 	sqlCreateSidecarDB             = "create database if not exists %s"
 	sqlCreateSchemaMigrationsTable = `CREATE TABLE IF NOT EXISTS %s.schema_migrations (
@@ -85,6 +86,18 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlRetryMigration = `UPDATE %s.schema_migrations
+		SET
+			migration_status='queued',
+			ready_timestamp=NULL,
+			started_timestamp=NULL,
+			liveness_timestamp=NULL,
+			completed_timestamp=NULL
+		WHERE
+			migration_status IN ('failed', 'cancelled')
+			AND (%s)
+			LIMIT 1
+	`
 	sqlSelectCountReadyMigrations = `SELECT
 			count(*) as count_ready
 		FROM %s.schema_migrations
@@ -111,6 +124,11 @@ const (
 			migration_status='ready'
 		LIMIT 1
 	`
+)
+
+const (
+	retryHint  = "retry"
+	cancelHint = "cancel"
 )
 
 var (

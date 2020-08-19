@@ -20,42 +20,22 @@ import (
 	"fmt"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
+	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	"golang.org/x/net/context"
 )
 
-const (
-	vexecTableQualifier = "_vt"
-)
-
-func (tm *TabletManager) extractTableName(stmt sqlparser.Statement) (string, error) {
-	switch stmt := stmt.(type) {
-	case *sqlparser.Update:
-		return sqlparser.String(stmt.TableExprs), nil
-	case *sqlparser.Delete:
-		return sqlparser.String(stmt.TableExprs), nil
-	case *sqlparser.Select:
-		return sqlparser.String(stmt.From), nil
-	}
-	return "", fmt.Errorf("query not supported by vexec: %+v", sqlparser.String(stmt))
-}
-
 // VExec executes a generic VExec command.
 func (tm *TabletManager) VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	stmt, err := sqlparser.Parse(query)
-	if err != nil {
+	vx := vexec.NewTabletVExec(workflow, keyspace)
+	if err := vx.AnalyzeQuery(ctx, query); err != nil {
 		return nil, err
 	}
-	tableName, err := tm.extractTableName(stmt)
-	if err != nil {
-		return nil, err
-	}
-	switch tableName {
-	case fmt.Sprintf("%s.%s", vexecTableQualifier, onlineddl.SchemaMigrationsTableName):
-		return tm.QueryServiceControl.OnlineDDLExecutor().VExec(ctx, query, stmt)
+	switch vx.TableName {
+	case fmt.Sprintf("%s.%s", vexec.TableQualifier, onlineddl.SchemaMigrationsTableName):
+		return tm.QueryServiceControl.OnlineDDLExecutor().VExec(ctx, vx)
 	default:
-		return nil, fmt.Errorf("table not supported by vexec: %v", tableName)
+		return nil, fmt.Errorf("table not supported by vexec: %v", vx.TableName)
 	}
 }
