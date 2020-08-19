@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -557,6 +558,7 @@ export MYSQL_PWD
 		if err := runPTOSC(false); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			log.Errorf("Error executing pt-online-schema-change dry run: %+v", err)
 			return err
 		}
@@ -567,6 +569,7 @@ export MYSQL_PWD
 		if err := runPTOSC(true); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			failedMigrations.Add(1)
 			log.Errorf("Error running pt-online-schema-change: %+v", err)
 			return err
@@ -812,6 +815,14 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 	return err
 }
 
+func (e *Executor) retryMigration(ctx context.Context, uuid string, whereExpr string) (result *sqltypes.Result, err error) {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, "_vt", whereExpr)
+	result, err = e.execQuery(ctx, parsed.Query)
+	return result, err
+}
+
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
 func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam string) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
@@ -852,15 +863,49 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 	return nil
 }
 
-func (e *Executor) VExec(ctx context.Context, query string, stmt sqlparser.Statement) (qr *querypb.QueryResult, err error) {
+// VExec is called by a VExec invocation
+func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *querypb.QueryResult, err error) {
 	var r *sqltypes.Result
-	switch stmt.(type) {
+	switch stmt := vx.Stmt.(type) {
 	case *sqlparser.Select:
-		r, err = e.execQuery(ctx, query)
+		r, err = e.execQuery(ctx, vx.Query)
 	case *sqlparser.Update:
-		return nil, fmt.Errorf("UPDATE statements not supported for this table. query=%s", query)
+		expectColumn := "migration_uuid"
+		val, ok := vx.WhereCols[expectColumn]
+		if !ok {
+			return nil, fmt.Errorf("UPDATE query must include column %s in query: %s", expectColumn, vx.Query)
+		}
+		uuid := string(val.Val)
+		if uuid != vx.Workflow {
+			return nil, fmt.Errorf("UPDATE query must use same %s value as workflow %s", expectColumn, vx.Workflow)
+		}
+
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("%v", stmt.Where.Expr)
+		whereExpr := buf.ParsedQuery().Query
+
+		statusColumn := "migration_status"
+		for colName := range vx.UpdateCols {
+			if colName != statusColumn {
+				return nil, fmt.Errorf("column %s cannot be changed", colName)
+			}
+		}
+		statusVal, ok := vx.UpdateCols[statusColumn]
+		if !ok {
+			return nil, fmt.Errorf("expecting literal value for column %s", statusColumn)
+		}
+		switch string(statusVal.Val) {
+		case retryHint:
+			r, err = e.retryMigration(ctx, uuid, whereExpr)
+		case cancelHint:
+			// TODO(shlomi): implement
+			return nil, fmt.Errorf("migration cancellation is not implemented yet")
+		default:
+			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
+				string(statusVal.Val), retryHint, cancelHint)
+		}
 	case *sqlparser.Delete:
-		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", query)
+		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", vx.Query)
 	}
 
 	if err != nil {
