@@ -910,52 +910,57 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	validCandidatesSet := sets.NewString(validCandidates...)
 	if masterElectTabletAlias != nil {
-		if !validCandidatesSet.Has(newMasterTabletAliasStr) {
+		masterPos, ok := validCandidates[newMasterTabletAliasStr]
+		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect is either not fully caught up, or has errant GTIDs")
 		}
-		validCandidatesSet = sets.NewString(newMasterTabletAliasStr)
+		validCandidates[newMasterTabletAliasStr] = masterPos
 	}
 
-	// We run a race among our valid candidates.
-	// The first candidate (tablet) to succeed at applying its relay logs is the winner.
-	aliasChan := make(chan string)
+	errChan := make(chan error)
 	rec := &concurrency.AllErrorRecorder{}
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
-	for candidate := range validCandidatesSet {
+	for candidate := range validCandidates {
 		go func(alias string) {
-			var resultAlias string
-			defer func() { aliasChan <- resultAlias }()
+			var err error
+			defer func() { errChan <- err }()
 
 			err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
-			if err == nil {
-				resultAlias = alias
-			} else {
+			if err != nil {
 				rec.RecordError(err)
 			}
 		}(candidate)
 	}
 
 	resultCounter := 0
-	var winningTabletAlias string
-	for alias := range aliasChan {
+	for waitErr := range errChan {
 		resultCounter++
-		if alias != "" && winningTabletAlias == "" {
-			winningTabletAlias = alias
-			// We only need the first tablet that succeeds, so we can cancel the other tablets
-			// and move along.
+		if waitErr != nil {
 			groupCancel()
 		}
-		if resultCounter == validCandidatesSet.Len() {
+		if resultCounter == len(validCandidates) {
+			groupCancel()
 			break
 		}
 	}
-	if winningTabletAlias == "" {
-		return vterrors.Wrapf(rec.Error(), "could not find a valid candidate for new master that applied its relay logs within the provided wait_replicas_timeout: %v", rec.Error())
+	if len(rec.Errors) != 0 {
+		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided wait_replicas_timeout: %v", rec.Error())
 	}
-	newMasterTabletAliasStr = winningTabletAlias
+
+	var winningPosition mysql.Position
+	for alias, position := range validCandidates {
+		if winningPosition.IsZero() {
+			winningPosition = position
+			newMasterTabletAliasStr = alias
+			continue
+		}
+		if position.AtLeast(winningPosition) {
+			winningPosition = position
+			newMasterTabletAliasStr = alias
+		}
+	}
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
@@ -987,7 +992,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// - everybody else: reparent to new master, wait for row
 	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
-	errChan := make(chan error)
+	errChan = make(chan error)
 
 	handleMaster := func(alias string, tabletInfo *topo.TabletInfo) error {
 		wr.logger.Infof("populating reparent journal on new master %v", alias)
@@ -1007,9 +1012,6 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", alias, err)
 		}
 	}
-	waitOnTablets := func() *concurrency.AllErrorRecorder {
-		return waitOnNMinusOneTablets(replCancel, len(tabletMap)-ignoredTablets.Len()-1, errChan, len(tabletMap))
-	}
 
 	for alias, tabletInfo := range tabletMap {
 		if alias == newMasterTabletAliasStr {
@@ -1018,7 +1020,6 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			go handleReplica(alias, tabletInfo)
 		}
 	}
-	defer waitOnTablets()
 
 	masterErr := handleMaster(newMasterTabletAliasStr, tabletMap[newMasterTabletAliasStr])
 	if masterErr != nil {
@@ -1059,7 +1060,7 @@ func waitOnNMinusOneTablets(ctxCancel context.CancelFunc, tabletCount int, error
 }
 
 // findValidReparentCandidates will find valid candidates for emergency reparent, and if successful, returning them as a list of tablet aliases.
-func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicationdatapb.StopReplicationStatus, masterStatusMap map[string]*replicationdatapb.MasterStatus) ([]string, error) {
+func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicationdatapb.StopReplicationStatus, masterStatusMap map[string]*replicationdatapb.MasterStatus) (map[string]mysql.Position, error) {
 	// Build out replication status list from proto types.
 	replicationStatusMap := make(map[string]*mysql.ReplicationStatus, len(statusMap))
 	for alias, protoStatus := range statusMap {
@@ -1071,18 +1072,18 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 	var gtidBased *bool
 	for alias, status := range replicationStatusMap {
 		if gtidBased == nil {
-			gtidBased = pointer.BoolPtr(!status.RelayLogPosition.IsZero())
+			_, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
+			gtidBased = pointer.BoolPtr(ok)
 		} else if !*gtidBased {
 			break
 		} else if status.RelayLogPosition.IsZero() {
 			// Bail. We have an odd one in the bunch.
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has a relay log positions", alias)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias)
 		}
 	}
 
-	// Create relevant position list for comparison.
+	// Create relevant position list of errant GTID based positions for later comparison.
 	positionMap := make(map[string]mysql.Position)
-	badTablets := sets.NewString()
 	for alias, status := range replicationStatusMap {
 		// Find errantGTIDs and clean them from status map if relevant.
 		if *gtidBased {
@@ -1093,26 +1094,24 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 					statusList = append(statusList, s)
 				}
 			}
+			relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "We got a filled in relay log position, but it's not of type Mysql56GTIDSet, even though we've determined we need to use GTID based assessment")
+			}
 			errantGTIDs, err := status.FindErrantGTIDs(statusList)
 			if err != nil {
 				// Could not find errant GTIDs when we must.
 				return nil, err
 			}
-			// We'll keep track of bad replicas. Errant free these can still be used to determine high water mark
-			// but should not be considered for emergency reparent.
 			if len(errantGTIDs) != 0 {
-				badTablets.Insert(alias)
+				// Skip inserting this tablet. It's not a valid candidate.
+				continue
 			}
 
-			relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "we got a filled in relay log position for a tablet, even though the GTIDSet is not of type Mysql56GTIDSet. We don't know how this could happen")
-			}
-			cleanedGTIDSet := relayLogGTIDSet.Difference(errantGTIDs)
-			cleanedRelayLogPosition := mysql.Position{GTIDSet: cleanedGTIDSet}
-			positionMap[alias] = cleanedRelayLogPosition
+			pos := mysql.Position{GTIDSet: relayLogGTIDSet}
+			positionMap[alias] = pos
 		} else {
-			positionMap[alias] = status.FileRelayLogPosition
+			positionMap[alias] = status.FilePosition
 		}
 	}
 
@@ -1143,33 +1142,7 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 		}
 	}
 
-	// Find a position that is fully caught up when errant GTIDs are taken out of the equation.
-	var winningPosition mysql.Position
-	for _, position := range positionMap {
-		if winningPosition.IsZero() {
-			winningPosition = position
-			continue
-		}
-		if position.AtLeast(winningPosition) {
-			winningPosition = position
-		}
-	}
-
-	// Now that we have a high water mark, we can get a list of all tablets that are errant GTID free
-	// that hit this high water mark.
-	var validCandidates []string
-	for alias, position := range positionMap {
-		if badTablets.Has(alias) {
-			// We should exclude tablets we've already determined have errant GTIDs from consideration.
-			continue
-		}
-
-		if position.AtLeast(winningPosition) {
-			validCandidates = append(validCandidates, alias)
-		}
-	}
-
-	return validCandidates, nil
+	return positionMap, nil
 }
 
 func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *events.Reparent, tabletMap map[string]*topo.TabletInfo, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.MasterStatus, error) {
