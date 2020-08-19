@@ -118,6 +118,8 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		{"2", "22"},
 	})
 
+	validateCopyRowCountStat(t, 4)
+
 	query = fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
@@ -208,6 +210,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		{"2", "bbb"},
 	})
 	expectData(t, "yes", [][]string{})
+	validateCopyRowCountStat(t, 2)
 }
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
@@ -279,6 +282,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
+
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
@@ -319,6 +323,8 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		{"2", "bbb"},
 		{"3", "ccc"},
 	})
+	validateCopyRowCountStat(t, 3)
+	validateQueryCountStat(t, "catchup", 1)
 }
 
 // TestPlayerCopyWildcardRule ensures the copy-catchup back-and-forth loop works correctly

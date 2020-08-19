@@ -1143,7 +1143,7 @@
   }
 }
 
-# routing rules for aggregates where sharded and unsharded match. Unsharded always wins.
+# routing rules for aggregates
 "select id, count(*) from route2 group by id"
 {
   "QueryType": "SELECT",
@@ -1161,25 +1161,7 @@
   }
 }
 
-# routing rules for select distinct where sharded and unsharded match. Unsharded always wins.
-"select distinct id, a from route2"
-{
-  "QueryType": "SELECT",
-  "Original": "select distinct id, a from route2",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select id, a from unsharded as route2 where 1 != 1",
-    "Query": "select distinct id, a from unsharded as route2",
-    "Table": "unsharded"
-  }
-}
-
-# oreder by on a reference table
+# order by on a reference table
 "select col from ref order by col"
 {
   "QueryType": "SELECT",

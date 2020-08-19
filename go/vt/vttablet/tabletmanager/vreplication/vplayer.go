@@ -59,6 +59,8 @@ type vplayer struct {
 	timeOffsetNs int64
 	// canAcceptStmtEvents is set to true if the current player can accept events in statement mode. Only true for filters that are match all.
 	canAcceptStmtEvents bool
+
+	phase string
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -70,7 +72,7 @@ type vplayer struct {
 //   replication is only applied to parts that have been copied so far.
 // pausePos: if set, replication will stop at that position without updating the state to "Stopped".
 //   This is used by the fastForward function during copying.
-func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
+func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position, phase string) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
 		settings.StopPos = pausePos
@@ -85,6 +87,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		copyState:     copyState,
 		timeLastSaved: time.Now(),
 		tablePlans:    make(map[string]*TablePlan),
+		phase:         phase,
 	}
 }
 
@@ -189,7 +192,10 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 		sql = event.Dml
 	}
 	if event.Type == binlogdatapb.VEventType_SAVEPOINT || vp.canAcceptStmtEvents {
+		start := time.Now()
 		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		vp.vr.stats.QueryTimings.Record(vp.phase, start)
+		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		return err
 	}
 	return fmt.Errorf("filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
@@ -203,9 +209,12 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	for _, change := range rowEvent.RowChanges {
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
 			stats := NewVrLogStats("ROWCHANGE")
-			result, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+			start := time.Now()
+			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+			vp.vr.stats.QueryCount.Add(vp.phase, 1)
+			vp.vr.stats.QueryTimings.Record(vp.phase, start)
 			stats.Send(sql)
-			return result, err
+			return qr, err
 		})
 		if err != nil {
 			return err

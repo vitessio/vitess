@@ -360,3 +360,87 @@ func (session *SafeSession) SetPreQueries() []string {
 	}
 	return result
 }
+
+//SetLockSession sets the lock session.
+func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSession) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LockSession = lockSession
+}
+
+//InLockSession returns whether locking is used on this session.
+func (session *SafeSession) InLockSession() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.LockSession != nil
+}
+
+//ResetLock resets the lock session
+func (session *SafeSession) ResetLock() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LockSession = nil
+}
+
+//ResetAll resets the shard sessions and lock session.
+func (session *SafeSession) ResetAll() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.mustRollback = false
+	session.autocommitState = notAutocommittable
+	session.Session.InTransaction = false
+	session.commitOrder = vtgatepb.CommitOrder_NORMAL
+	session.Savepoints = nil
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.LockSession = nil
+}
+
+//ResetShard reset the shard session for the provided tablet alias.
+func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) error {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// Always append, in order for rollback to succeed.
+	switch session.commitOrder {
+	case vtgatepb.CommitOrder_NORMAL:
+		newSessions, err := removeShard(tabletAlias, session.ShardSessions)
+		if err != nil {
+			return err
+		}
+		session.ShardSessions = newSessions
+	case vtgatepb.CommitOrder_PRE:
+		newSessions, err := removeShard(tabletAlias, session.PreSessions)
+		if err != nil {
+			return err
+		}
+		session.PreSessions = newSessions
+	case vtgatepb.CommitOrder_POST:
+		newSessions, err := removeShard(tabletAlias, session.PostSessions)
+		if err != nil {
+			return err
+		}
+		session.PostSessions = newSessions
+	default:
+		// Should be unreachable
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: unexpected commitOrder")
+	}
+	return nil
+}
+
+func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
+	idx := -1
+	for i, session := range sessions {
+		if proto.Equal(session.TabletAlias, tabletAlias) {
+			if session.TransactionId != 0 {
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: in transaction")
+			}
+			idx = i
+		}
+	}
+	if idx == -1 {
+		return sessions, nil
+	}
+	return append(sessions[:idx], sessions[idx+1:]...), nil
+}

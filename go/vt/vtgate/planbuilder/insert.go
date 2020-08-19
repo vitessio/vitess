@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -33,25 +34,35 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
-	ro, err := pb.processDMLTable(exprs)
+	rb, err := pb.processDMLTable(exprs)
 	if err != nil {
 		return nil, err
 	}
 	// The table might have been routed to a different one.
 	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName)
-	if ro.eroute.TargetDestination != nil {
+	if rb.eroute.TargetDestination != nil {
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}
-	if !ro.vschemaTable.Keyspace.Sharded {
+
+	if len(pb.st.tables) != 1 {
+		// Unreachable.
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-table insert statement in sharded keyspace")
+	}
+	var vschemaTable *vindexes.Table
+	for _, tval := range pb.st.tables {
+		// There is only one table.
+		vschemaTable = tval.vschemaTable
+	}
+	if !rb.eroute.Keyspace.Sharded {
 		if !pb.finalizeUnshardedDMLSubqueries(ins) {
 			return nil, errors.New("unsupported: sharded subquery in insert values")
 		}
-		return buildInsertUnshardedPlan(ins, ro.vschemaTable)
+		return buildInsertUnshardedPlan(ins, vschemaTable)
 	}
 	if ins.Action == sqlparser.ReplaceStr {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
-	return buildInsertShardedPlan(ins, ro.vschemaTable)
+	return buildInsertShardedPlan(ins, vschemaTable)
 }
 
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engine.Primitive, error) {

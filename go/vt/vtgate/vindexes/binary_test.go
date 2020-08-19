@@ -35,7 +35,7 @@ func init() {
 }
 
 func TestBinaryInfo(t *testing.T) {
-	assert.Equal(t, 1, binOnlyVindex.Cost())
+	assert.Equal(t, 0, binOnlyVindex.Cost())
 	assert.Equal(t, "binary_varchar", binOnlyVindex.String())
 	assert.True(t, binOnlyVindex.IsUnique())
 	assert.False(t, binOnlyVindex.NeedsVCursor())

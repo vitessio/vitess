@@ -180,7 +180,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
 				return err
 			}
-			return newVPlayer(vr, settings, nil, mysql.Position{}).play(ctx)
+			return newVPlayer(vr, settings, nil, mysql.Position{}, "replicate").play(ctx)
 		}
 	}
 }

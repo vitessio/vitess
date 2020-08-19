@@ -120,8 +120,19 @@ func TestVStream(t *testing.T) {
 				Type: querypb.Type_INT64,
 			}},
 		}
+
 		gotFields := events[1].FieldEvent
-		if !proto.Equal(gotFields, wantFields) {
+		filteredFields := &binlogdatapb.FieldEvent{
+			TableName: gotFields.TableName,
+			Fields:    []*querypb.Field{},
+		}
+		for _, field := range gotFields.Fields {
+			filteredFields.Fields = append(filteredFields.Fields, &querypb.Field{
+				Name: field.Name,
+				Type: field.Type,
+			})
+		}
+		if !proto.Equal(filteredFields, wantFields) {
 			t.Errorf("FieldEvent:\n%v, want\n%v", gotFields, wantFields)
 		}
 		wantRows := &binlogdatapb.RowEvent{

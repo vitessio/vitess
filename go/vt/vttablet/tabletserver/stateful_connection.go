@@ -116,13 +116,25 @@ func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, m
 // Unlock returns the connection to the pool. The connection remains active.
 // This method is idempotent and can be called multiple times
 func (sc *StatefulConnection) Unlock() {
+	// when in a transaction, we count from the time created, so each use of the connection does not update the time
+	updateTime := !sc.IsInTransaction()
+	sc.unlock(updateTime)
+}
+
+// UnlockUpdateTime returns the connection to the pool. The connection remains active.
+// This method is idempotent and can be called multiple times
+func (sc *StatefulConnection) UnlockUpdateTime() {
+	sc.unlock(true)
+}
+
+func (sc *StatefulConnection) unlock(updateTime bool) {
 	if sc.dbConn == nil {
 		return
 	}
 	if sc.dbConn.IsClosed() {
 		sc.Releasef("unlocked closed connection")
 	} else {
-		sc.pool.markAsNotInUse(sc.ConnID)
+		sc.pool.markAsNotInUse(sc.ConnID, updateTime)
 	}
 }
 
