@@ -127,8 +127,8 @@ const (
 )
 
 const (
-	retryHint  = "retry"
-	cancelHint = "cancel"
+	retryMigrationHint  = "retry"
+	cancelMigrationHint = "cancel"
 )
 
 var (

@@ -895,14 +895,14 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			return nil, fmt.Errorf("expecting literal value for column %s", statusColumn)
 		}
 		switch string(statusVal.Val) {
-		case retryHint:
+		case retryMigrationHint:
 			r, err = e.retryMigration(ctx, uuid, whereExpr)
-		case cancelHint:
+		case cancelMigrationHint:
 			// TODO(shlomi): implement
 			return nil, fmt.Errorf("migration cancellation is not implemented yet")
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
-				string(statusVal.Val), retryHint, cancelHint)
+				string(statusVal.Val), retryMigrationHint, cancelMigrationHint)
 		}
 	case *sqlparser.Delete:
 		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", vx.Query)
