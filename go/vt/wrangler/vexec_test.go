@@ -69,14 +69,7 @@ func TestVExec(t *testing.T) {
 	sort.Strings(shards)
 	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
 
-	err = vx.parseQuery()
-	require.NoError(t, err)
-	require.NotNil(t, vx.stmt)
-	err = vx.getPlanner()
-	require.NoError(t, err)
-	require.NotNil(t, vx.planner)
-
-	plan, err := vx.buildPlan()
+	plan, err := vx.parseAndPlan()
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 
@@ -379,16 +372,7 @@ func TestVExecValidations(t *testing.T) {
 	for _, bq := range badQueries {
 		t.Run(bq.name, func(t *testing.T) {
 			vx.query = bq.query
-			planQuery := func() (plan *vexecPlan, err error) {
-				if err := vx.parseQuery(); err != nil {
-					return nil, err
-				}
-				if err := vx.getPlanner(); err != nil {
-					return nil, err
-				}
-				return vx.buildPlan()
-			}
-			plan, err := planQuery()
+			plan, err := vx.parseAndPlan()
 			require.EqualError(t, err, bq.errorString)
 			require.Nil(t, plan)
 		})

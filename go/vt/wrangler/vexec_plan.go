@@ -29,35 +29,37 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
+// vexecPlan contains the final query to be sent to the tablets
 type vexecPlan struct {
 	opcode      int
 	parsedQuery *sqlparser.ParsedQuery
 }
 
-type vexecPlannerData struct {
+// vexecPlannerParams controls how some queries/columns are handled
+type vexecPlannerParams struct {
 	dbNameColumn         string
-	forceDbColumn        bool
 	workflowColumn       string
-	forceWorkflowColumn  bool
 	immutableColumnNames []string
 	updatableColumnNames []string
 }
 
+// vexecPlanner generates and executes a plan
 type vexecPlanner interface {
-	data() *vexecPlannerData
+	params() *vexecPlannerParams
 	exec(ctx context.Context, masterAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error)
 	dryRun() error
 }
 
+// vreplicationPlanner is a vexecPlanner implementation, specific to _vt.vreplication table
 type vreplicationPlanner struct {
 	vx *vexec
-	d  *vexecPlannerData
+	d  *vexecPlannerParams
 }
 
-func NewVreplicationPlanner(vx *vexec) vexecPlanner {
+func newVreplicationPlanner(vx *vexec) vexecPlanner {
 	return &vreplicationPlanner{
 		vx: vx,
-		d: &vexecPlannerData{
+		d: &vexecPlannerParams{
 			dbNameColumn:         "db_name",
 			workflowColumn:       "workflow",
 			immutableColumnNames: []string{"id"},
@@ -65,7 +67,7 @@ func NewVreplicationPlanner(vx *vexec) vexecPlanner {
 		},
 	}
 }
-func (p vreplicationPlanner) data() *vexecPlannerData { return p.d }
+func (p vreplicationPlanner) params() *vexecPlannerParams { return p.d }
 func (p vreplicationPlanner) exec(
 	ctx context.Context, masterAlias *topodatapb.TabletAlias, query string,
 ) (*querypb.QueryResult, error) {
@@ -104,25 +106,24 @@ func (p vreplicationPlanner) dryRun() error {
 	return nil
 }
 
+// vreplicationPlanner is a vexecPlanner implementation, specific to _vt.schema_migrations table
 type schemaMigrationsPlanner struct {
 	vx *vexec
-	d  *vexecPlannerData
+	d  *vexecPlannerParams
 }
 
-func NewSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
+func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 	return &schemaMigrationsPlanner{
 		vx: vx,
-		d: &vexecPlannerData{
+		d: &vexecPlannerParams{
 			dbNameColumn:         "mysql_schema",
-			forceDbColumn:        true,
 			workflowColumn:       "migration_uuid",
-			forceWorkflowColumn:  true,
 			immutableColumnNames: []string{},
 			updatableColumnNames: []string{"migration_status"},
 		},
 	}
 }
-func (p schemaMigrationsPlanner) data() *vexecPlannerData { return p.d }
+func (p schemaMigrationsPlanner) params() *vexecPlannerParams { return p.d }
 func (p schemaMigrationsPlanner) exec(ctx context.Context, masterAlias *topodatapb.TabletAlias, query string) (*querypb.QueryResult, error) {
 	qr, err := p.vx.wr.GenericVExec(ctx, masterAlias, query, p.vx.workflow, p.vx.keyspace)
 	if err != nil {
@@ -135,6 +136,7 @@ func (p schemaMigrationsPlanner) exec(ctx context.Context, masterAlias *topodata
 }
 func (p schemaMigrationsPlanner) dryRun() error { return nil }
 
+// make sure these planners implement vexecPlanner interface
 var _ vexecPlanner = vreplicationPlanner{}
 var _ vexecPlanner = schemaMigrationsPlanner{}
 
@@ -157,6 +159,7 @@ func extractTableName(stmt sqlparser.Statement) (string, error) {
 	return "", fmt.Errorf("query not supported by vexec: %+v", sqlparser.String(stmt))
 }
 
+// qualifiedTableName qualifies a table with "_vt." schema
 func qualifiedTableName(tableName string) string {
 	return fmt.Sprintf("%s.%s", vexecTableQualifier, tableName)
 }
@@ -165,9 +168,9 @@ func qualifiedTableName(tableName string) string {
 func (vx *vexec) getPlanner() error {
 	switch vx.tableName {
 	case qualifiedTableName(schemaMigrationsTableName):
-		vx.planner = NewSchemaMigrationsPlanner(vx)
+		vx.planner = newSchemaMigrationsPlanner(vx)
 	case qualifiedTableName(vreplicationTableName):
-		vx.planner = NewVreplicationPlanner(vx)
+		vx.planner = newVreplicationPlanner(vx)
 	default:
 		return fmt.Errorf("table not supported by vexec: %v", vx.tableName)
 	}
@@ -190,6 +193,7 @@ func (vx *vexec) buildPlan() (plan *vexecPlan, err error) {
 	return plan, err
 }
 
+// splitAndExpression assumes expression is of the form "expr AND expr [AND ...]" and returns AND tokens
 func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
 	if node == nil {
 		return filters
@@ -202,8 +206,8 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
-// analyzeWhereColumns identifies column names in a WHERE clause
-func (vx *vexec) analyzeWhereColumns(where *sqlparser.Where) []string {
+// analyzeWhereEqualsColumns identifies column names in a WHERE clause that have a comparison expression
+func (vx *vexec) analyzeWhereEqualsColumns(where *sqlparser.Where) []string {
 	var cols []string
 	if where == nil {
 		return cols
@@ -223,20 +227,20 @@ func (vx *vexec) analyzeWhereColumns(where *sqlparser.Where) []string {
 
 // addDefaultWheres modifies the query to add, if appropriate, the workflow and DB-name column modifiers
 func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) *sqlparser.Where {
-	cols := vx.analyzeWhereColumns(where)
+	cols := vx.analyzeWhereEqualsColumns(where)
 	var hasDBName, hasWorkflow bool
-	plannerData := planner.data()
+	plannerParams := planner.params()
 	for _, col := range cols {
-		if col == plannerData.dbNameColumn {
+		if col == plannerParams.dbNameColumn {
 			hasDBName = true
-		} else if col == plannerData.workflowColumn {
+		} else if col == plannerParams.workflowColumn {
 			hasWorkflow = true
 		}
 	}
 	newWhere := where
-	if plannerData.forceDbColumn || !hasDBName {
+	if !hasDBName {
 		expr := &sqlparser.ComparisonExpr{
-			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerData.dbNameColumn)},
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerParams.dbNameColumn)},
 			Operator: sqlparser.EqualStr,
 			Right:    sqlparser.NewStrLiteral([]byte(vx.masters[0].DbName())),
 		}
@@ -252,9 +256,9 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 			}
 		}
 	}
-	if plannerData.forceWorkflowColumn || !hasWorkflow && vx.workflow != "" {
+	if !hasWorkflow && vx.workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
-			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerData.workflowColumn)},
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerParams.workflowColumn)},
 			Operator: sqlparser.EqualStr,
 			Right:    sqlparser.NewStrLiteral([]byte(vx.workflow)),
 		}
@@ -271,15 +275,15 @@ func (vx *vexec) buildUpdatePlan(planner vexecPlanner, upd *sqlparser.Update) (*
 	if upd.OrderBy != nil || upd.Limit != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(upd))
 	}
-	plannerData := planner.data()
+	plannerParams := planner.params()
 	for _, expr := range upd.Exprs {
-		for _, immutableColName := range plannerData.immutableColumnNames {
+		for _, immutableColName := range plannerParams.immutableColumnNames {
 			if expr.Name.Name.EqualString(immutableColName) {
 				return nil, fmt.Errorf("%s cannot be changed: %v", immutableColName, sqlparser.String(expr))
 			}
 		}
 	}
-	if updatableColumnNames := plannerData.updatableColumnNames; len(updatableColumnNames) > 0 {
+	if updatableColumnNames := plannerParams.updatableColumnNames; len(updatableColumnNames) > 0 {
 		// if updatableColumnNames is non empty, then we must only accept changes to columns listed there
 		for _, expr := range upd.Exprs {
 			isUpdatable := false

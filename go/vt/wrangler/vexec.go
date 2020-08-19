@@ -46,14 +46,21 @@ const (
 	schemaMigrationsTableName = "schema_migrations"
 )
 
+// vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
+// interface, like vtctl or vtgate.
+// vexec parses, analyzes and plans th equery, and maintains state of each such step's result.
 type vexec struct {
-	ctx       context.Context
-	workflow  string
-	keyspace  string
-	query     string
-	stmt      sqlparser.Statement
+	ctx      context.Context
+	workflow string
+	keyspace string
+	// query is vexec's input
+	query string
+	// stmt is parsed from the query
+	stmt sqlparser.Statement
+	// tableName is extracted from the query, and used to determine the plan
 	tableName string
-	planner   vexecPlanner
+	// planner will plan and execute a (possibly rewritten) query on backend shards
+	planner vexecPlanner
 	// plannedQuery is the result of supplementing original query with extra conditionals
 	plannedQuery string
 
@@ -82,19 +89,14 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 	return retResults, err
 }
 
+// runVexec is th emain function that runs a dry or wet execution of 'query` on backend shards.
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
 	if err := vx.getMasters(); err != nil {
 		return nil, err
 	}
-	if err := vx.parseQuery(); err != nil {
-		return nil, err
-	}
-	if err := vx.getPlanner(); err != nil {
-		return nil, err
-	}
-	plan, err := vx.buildPlan()
+	plan, err := vx.parseAndPlan()
 	if err != nil {
 		return nil, err
 	}
@@ -105,10 +107,27 @@ func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query stri
 	return vx.exec()
 }
 
+// parseAndPlan parses and analyses the query, then generates a plan
+func (vx *vexec) parseAndPlan() (plan *vexecPlan, err error) {
+	if err := vx.parseQuery(); err != nil {
+		return nil, err
+	}
+	if err := vx.getPlanner(); err != nil {
+		return nil, err
+	}
+	plan, err = vx.buildPlan()
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
 func (vx *vexec) outputDryRunInfo() error {
 	return vx.planner.dryRun()
 }
 
+// exec runs our planned query on backend shard masters. It collects query results from all
+// shards and returns an aggregate (UNION ALL -like) result.
 func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
@@ -138,6 +157,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	return results, allErrors.AggrError(vterrors.Aggregate)
 }
 
+// parseQuery parses the input query
 func (vx *vexec) parseQuery() (err error) {
 	if vx.stmt, err = sqlparser.Parse(vx.query); err != nil {
 		return err
@@ -148,6 +168,7 @@ func (vx *vexec) parseQuery() (err error) {
 	return nil
 }
 
+// getMasters identifies master tablet for all shards relevant to our keyspace
 func (vx *vexec) getMasters() error {
 	var err error
 	shards, err := vx.wr.ts.GetShardNames(vx.ctx, vx.keyspace)
