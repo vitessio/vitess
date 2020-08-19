@@ -30,10 +30,12 @@ import (
 )
 
 var (
-	migrationCheckInterval = time.Second * 10
+	migrationCheckTicks *timer.Timer
 )
 
-var migrationCheckTicks *timer.Timer
+var (
+	migrationCheckInterval = time.Second * 10
+)
 
 func initSchemaManager(ts *topo.Server) {
 	migrationCheckTicks = timer.NewTimer(migrationCheckInterval)
