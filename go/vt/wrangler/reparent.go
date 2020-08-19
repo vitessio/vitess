@@ -1111,35 +1111,16 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 			pos := mysql.Position{GTIDSet: relayLogGTIDSet}
 			positionMap[alias] = pos
 		} else {
-			positionMap[alias] = status.FilePosition
+			positionMap[alias] = status.Position
 		}
 	}
 
 	for alias, masterStatus := range masterStatusMap {
-		if *gtidBased {
-			executedPosition, err := mysql.DecodePosition(masterStatus.Position)
-			if err != nil {
-				return nil, err
-			}
-			positionMap[alias] = executedPosition
-		} else {
-			executedFilePosition, err := mysql.DecodePosition(masterStatus.FilePosition)
-			if err != nil {
-				return nil, err
-			}
-			positionMap[alias] = executedFilePosition
+		executedPosition, err := mysql.DecodePosition(masterStatus.Position)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	if !*gtidBased {
-		// If all positions are not comparable, we can't do file based comparisons at all.
-		filePositionList := make([]mysql.Position, 0, len(replicationStatusMap))
-		for _, p := range positionMap {
-			filePositionList = append(filePositionList, p)
-		}
-		if !mysql.AllPositionsComparable(filePositionList) {
-			return nil, fmt.Errorf("we can't compare all file based positions")
-		}
+		positionMap[alias] = executedPosition
 	}
 
 	return positionMap, nil
