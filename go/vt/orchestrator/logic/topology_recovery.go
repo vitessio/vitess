@@ -819,6 +819,7 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 // checkAndRecoverDeadMaster checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
 func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+	log.Infof("IN RECOV")
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedMasterRecovery) {
 		return false, nil, nil
 	}
@@ -2030,7 +2031,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 
 // electNewMaster elects a new master while none were present before.
 func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	log.Infof("will elect a new master: %v", analysisEntry.ClusterDetails.ClusterAlias)
+	log.Infof("will elect a new master: %v", analysisEntry.SuggestedClusterAlias)
 
 	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
@@ -2041,14 +2042,14 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 	}
 	defer unlock(&err)
 
-	replicas, err := inst.ReadClusterAliasInstances(analysisEntry.ClusterDetails.ClusterAlias)
+	replicas, err := inst.ReadClusterAliasInstances(analysisEntry.SuggestedClusterAlias)
 	if err != nil {
 		return false, nil, err
 	}
 	// TODO(sougou): this is not reliable, because of the timeout.
 	replicas = inst.StopReplicasNicely(replicas, time.Duration(config.Config.InstanceBulkOperationsWaitTimeoutSeconds)*time.Second)
 	if len(replicas) == 0 {
-		return false, nil, fmt.Errorf("no instances in cluster %v", analysisEntry.ClusterDetails.ClusterAlias)
+		return false, nil, fmt.Errorf("no instances in cluster %v", analysisEntry.SuggestedClusterAlias)
 	}
 
 	var candidate *inst.Instance
@@ -2092,6 +2093,14 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 // fixClusterAndMaster performs a traditional vitess PlannedReparentShard.
 func fixClusterAndMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	log.Infof("will fix incorrect mastership %+v", analysisEntry.AnalyzedInstanceKey)
+
+	// Reset replication on current master. This will prevent the comaster code-path.
+	// TODO(sougou): this should probably done while holding a lock.
+	_, err = inst.ResetReplicationOperation(&analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		return false, nil, err
+	}
+
 	altAnalysis, err := forceAnalysisEntry(analysisEntry.ClusterDetails.ClusterName, inst.DeadMaster, "", &analysisEntry.AnalyzedInstanceMasterKey)
 	if err != nil {
 		return false, nil, err
@@ -2106,7 +2115,7 @@ func fixClusterAndMaster(analysisEntry inst.ReplicationAnalysis, candidateInstan
 	return recoveryAttempted, topologyRecovery, err
 }
 
-// fixMaster sets the master as read-only.
+// fixMaster sets the master as read-write.
 func fixMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	log.Infof("will fix master to read-write %+v", analysisEntry.AnalyzedInstanceKey)
 
