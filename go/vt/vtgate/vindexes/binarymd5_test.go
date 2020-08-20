@@ -96,6 +96,7 @@ func BenchmarkMD5Hash(b *testing.B) {
 		n    int
 	}{
 		{"8B", 8},
+		{"32B", 32},
 		{"64B", 64},
 		{"512B", 512},
 		{"1KB", 1e3},
