@@ -65,9 +65,6 @@ func TestNormalizeSetExpr(t *testing.T) {
 	}, {
 		in:       "@@vitess_metadata.`foo` = 1",
 		expected: "vitess_metadata foo = 1",
-	}, {
-		in:       "@@session.x.foo = 42",
-		expected: "session `x.foo` = 42",
 		//}, { TODO: we should support local scope as well
 		//	in:  "local foo = 42",
 		//	expected: "session foo = 42",
