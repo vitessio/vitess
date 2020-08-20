@@ -26,8 +26,8 @@ func TestNormalizeSetExpr(t *testing.T) {
 	tests := []struct {
 		in, expected, err string
 	}{{
-		in:       "@@foo = 42",
-		expected: "session foo = 42",
+		in:       "@@session.x.foo = 42",
+		expected: "session `x.foo` = 42",
 	}, {
 		in:       "@@session.foo = 42",
 		expected: "session foo = 42",
@@ -57,8 +57,14 @@ func TestNormalizeSetExpr(t *testing.T) {
 		in:       "@@x.foo = 42",
 		expected: "session `x.foo` = 42",
 	}, {
-		in:       "@@session.x.foo = 42",
-		expected: "session `x.foo` = 42",
+		in:       "@@session.`foo` = 1",
+		expected: "session foo = 1",
+	}, {
+		in:       "@@global.`foo` = 1",
+		expected: "global foo = 1",
+	}, {
+		in:       "@@vitess_metadata.`foo` = 1",
+		expected: "vitess_metadata foo = 1",
 		//}, { TODO: we should support local scope as well
 		//	in:  "local foo = 42",
 		//	expected: "session foo = 42",

@@ -22,7 +22,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var ExprNotSupported = fmt.Errorf("Expr Not Supported")
+// ErrExprNotSupported signals that the expression cannot be handled by expression evaluation engine.
+var ErrExprNotSupported = fmt.Errorf("Expr Not Supported")
 
 //Convert converts between AST expressions and executable expressions
 func Convert(e Expr) (evalengine.Expr, error) {
@@ -30,14 +31,19 @@ func Convert(e Expr) (evalengine.Expr, error) {
 	case *SQLVal:
 		switch node.Type {
 		case IntVal:
-			return evalengine.NewLiteralInt(node.Val)
+			return evalengine.NewLiteralIntFromBytes(node.Val)
 		case FloatVal:
 			return evalengine.NewLiteralFloat(node.Val)
 		case ValArg:
-			return &evalengine.BindVariable{Key: string(node.Val[1:])}, nil
+			return evalengine.NewBindVar(string(node.Val[1:])), nil
 		case StrVal:
-			return evalengine.NewLiteralString(node.Val)
+			return evalengine.NewLiteralString(node.Val), nil
 		}
+	case BoolVal:
+		if node {
+			return evalengine.NewLiteralIntFromBytes([]byte("1"))
+		}
+		return evalengine.NewLiteralIntFromBytes([]byte("0"))
 	case *BinaryExpr:
 		var op evalengine.BinaryExpr
 		switch node.Operator {
@@ -50,7 +56,7 @@ func Convert(e Expr) (evalengine.Expr, error) {
 		case DivStr:
 			op = &evalengine.Division{}
 		default:
-			return nil, ExprNotSupported
+			return nil, ErrExprNotSupported
 		}
 		left, err := Convert(node.Left)
 		if err != nil {
@@ -67,5 +73,5 @@ func Convert(e Expr) (evalengine.Expr, error) {
 		}, nil
 
 	}
-	return nil, ExprNotSupported
+	return nil, ErrExprNotSupported
 }

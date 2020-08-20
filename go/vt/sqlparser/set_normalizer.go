@@ -50,13 +50,13 @@ func (n *setNormalizer) normalizeSetExpr(in *SetExpr) (*SetExpr, error) {
 		}
 		switch {
 		case strings.HasPrefix(in.Name.Lowered(), "session."):
-			in.Name = NewColIdent(in.Name.Lowered()[8:])
+			in.Name = createColumn(in.Name.Lowered()[8:])
 			in.Scope = SessionStr
 		case strings.HasPrefix(in.Name.Lowered(), "global."):
-			in.Name = NewColIdent(in.Name.Lowered()[7:])
+			in.Name = createColumn(in.Name.Lowered()[7:])
 			in.Scope = GlobalStr
 		case strings.HasPrefix(in.Name.Lowered(), "vitess_metadata."):
-			in.Name = NewColIdent(in.Name.Lowered()[16:])
+			in.Name = createColumn(in.Name.Lowered()[16:])
 			in.Scope = VitessMetadataStr
 		default:
 			in.Name.at = NoAt
@@ -78,4 +78,12 @@ func (n *setNormalizer) normalizeSetExpr(in *SetExpr) (*SetExpr, error) {
 		return in, nil
 	}
 	panic("this should never happen")
+}
+
+func createColumn(str string) ColIdent {
+	size := len(str)
+	if str[0] == '`' && str[size-1] == '`' {
+		str = str[1 : size-1]
+	}
+	return NewColIdent(str)
 }
