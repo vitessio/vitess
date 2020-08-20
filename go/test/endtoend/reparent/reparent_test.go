@@ -78,10 +78,6 @@ func TestReparentDownMaster(t *testing.T) {
 		// Reset status, don't wait for the tablet status. We will check it later
 		tablet.VttabletProcess.ServingStatus = ""
 
-		// Init Tablet
-		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
-		require.NoError(t, err)
-
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
@@ -184,9 +180,6 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 
 		// Reset status, don't wait for the tablet status. We will check it later
 		tablet.VttabletProcess.ServingStatus = ""
-		// Init Tablet
-		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
-		require.NoError(t, err)
 
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
