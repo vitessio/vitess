@@ -81,7 +81,7 @@ func main() {
 	servenv.OnClose(mysqld.Close)
 
 	if err := extractOnlineDDL(); err != nil {
-		log.Exitf("failed to extract gh-ost binary: %v", err)
+		log.Exitf("failed to extract online DDL binaries: %v", err)
 	}
 
 	// Initialize and start tm.
