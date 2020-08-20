@@ -137,7 +137,7 @@
   }
 }
 
-# routing rules: subquery chooses unsharded route for update
+# update: routing rules for subquery.
 "update unsharded_a set a=(select a from route2)"
 {
   "QueryType": "UPDATE",
@@ -504,7 +504,7 @@
   }
 }
 
-# routing rules: subquery chooses unsharded route for delete
+# delete: routing rules for subquery
 "delete from  unsharded_a where a=(select a from route2)"
 {
   "QueryType": "DELETE",
@@ -2148,5 +2148,69 @@
     "OwnedVindexQuery": "select Id, Name, Costly from user where name = _binary 'abc' for update",
     "Query": "delete from user where name = _binary 'abc'",
     "Table": "user"
+  }
+}
+
+# delete with shard targeting
+"delete from `user[-]`.user"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from `user[-]`.user",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "ByDestination",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "Query": "delete from user",
+    "Table": "user"
+  }
+}
+
+# update with shard targeting
+"update `user[-]`.user set name = 'myname'"
+{
+  "QueryType": "UPDATE",
+  "Original": "update `user[-]`.user set name = 'myname'",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "ByDestination",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "ChangedVindexValues": [
+      "name_user_map"
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "Query": "update user set name = 'myname'",
+    "Table": "user"
+  }
+}
+
+# update with shard targeting without vindex
+"update `user[-]`.user_extra set val = 1"
+{
+  "QueryType": "UPDATE",
+  "Original": "update `user[-]`.user_extra set val = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "ByDestination",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
+    "Query": "update user_extra set val = 1",
+    "Table": "user_extra"
   }
 }

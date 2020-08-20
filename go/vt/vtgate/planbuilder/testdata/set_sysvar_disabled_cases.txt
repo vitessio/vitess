@@ -1,0 +1,36 @@
+# set passthrough disabled - check and ignore plan
+"set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER'), @@sql_safe_updates = 1"
+{
+  "QueryType": "SET",
+  "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER'), @@sql_safe_updates = 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarCheckAndIgnore",
+        "Name": "sql_mode",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": {},
+        "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+      },
+      {
+        "Type": "SysVarCheckAndIgnore",
+        "Name": "sql_safe_updates",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": {},
+        "Expr": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}

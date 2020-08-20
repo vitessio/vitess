@@ -20,6 +20,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,6 +39,12 @@ import (
 )
 
 func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -139,6 +148,12 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 }
 
 func TestPlannedReparentShardNoError(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -257,6 +272,12 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 }
 
 func TestPlannedReparentNoMaster(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -275,6 +296,12 @@ func TestPlannedReparentNoMaster(t *testing.T) {
 // TestPlannedReparentShardWaitForPositionFail simulates a failure of the WaitForPosition call
 // on the desired new master tablet
 func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -369,6 +396,12 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 // TestPlannedReparentShardWaitForPositionTimeout simulates a context timeout
 // during the WaitForPosition call to the desired new master
 func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -461,6 +494,12 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 }
 
 func TestPlannedReparentShardRelayLogError(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -530,6 +569,12 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 // is not replicating to start with (IO_Thread is not running) and we
 // simulate an error from the attempt to start replication
 func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -600,6 +645,12 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 // TestPlannedReparentShardPromoteReplicaFail simulates a failure of the PromoteReplica call
 // on the desired new master tablet
 func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -728,6 +779,12 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 // Simulate failure of previous PRS and oldMaster is ReadOnly
 // Verify that master correctly gets set to ReadWrite
 func TestPlannedReparentShardSameMaster(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)

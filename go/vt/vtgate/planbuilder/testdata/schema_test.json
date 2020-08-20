@@ -2,10 +2,10 @@
   "routing_rules": {
     "rules": [{
       "from_table": "route1",
-      "to_tables": ["user.user", "user.user_metadata"]
+      "to_tables": ["user.user"]
     }, {
       "from_table": "route2",
-      "to_tables": ["user.user", "main.unsharded"]
+      "to_tables": ["main.unsharded"]
     }, {
       "from_table": "second_user.user",
       "to_tables": ["user.user"]
