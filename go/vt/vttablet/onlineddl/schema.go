@@ -112,6 +112,27 @@ const (
 		WHERE
 			migration_status='ready'
 	`
+	sqlSelectMigration = `SELECT
+			id,
+			migration_uuid,
+			keyspace,
+			shard,
+			mysql_schema,
+			mysql_table,
+			migration_statement,
+			strategy,
+			options,
+			added_timestamp,
+			ready_timestamp,
+			started_timestamp,
+			liveness_timestamp,
+			completed_timestamp,
+			migration_status,
+			log_path
+		FROM %s.schema_migrations
+		WHERE
+			migration_uuid=%a
+	`
 	sqlSelectReadyMigration = `SELECT
 			id,
 			migration_uuid,
