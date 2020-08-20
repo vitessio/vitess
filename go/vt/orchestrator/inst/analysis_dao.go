@@ -80,6 +80,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(master_instance.cluster_name) AS cluster_name,
 		MIN(master_instance.binary_log_file) AS binary_log_file,
 		MIN(master_instance.binary_log_pos) AS binary_log_pos,
+		MIN(master_instance.suggested_cluster_alias) AS suggested_cluster_alias,
 		MIN(
 			IFNULL(
 				master_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
@@ -382,6 +383,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			Type:    BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
+		a.SuggestedClusterAlias = m.GetString("suggested_cluster_alias")
 		a.ClusterDetails.ClusterName = m.GetString("cluster_name")
 		a.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
 		a.ClusterDetails.ClusterDomain = m.GetString("cluster_domain")
@@ -442,14 +444,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				log.Debugf(analysisMessage)
 			}
 		}
-		if clusters[a.ClusterDetails.ClusterAlias] == nil {
-			clusters[a.ClusterDetails.ClusterAlias] = &clusterAnalysis{}
+		if clusters[a.SuggestedClusterAlias] == nil {
+			clusters[a.SuggestedClusterAlias] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_MASTER {
-				clusters[a.ClusterDetails.ClusterAlias].masterKey = &a.AnalyzedInstanceKey
+				clusters[a.SuggestedClusterAlias].masterKey = &a.AnalyzedInstanceKey
 			}
 		}
 		// ca has clusterwide info
-		ca := clusters[a.ClusterDetails.ClusterAlias]
+		ca := clusters[a.SuggestedClusterAlias]
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
 			return nil

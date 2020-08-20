@@ -852,30 +852,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}()
 
 	// TODO(sougou): delete cluster_alias_override metadata
-	ReadClusterAliasOverride(instance)
-	if !isMaxScale {
-		instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
+	instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
 
-		// TODO(sougou): delete DetectClusterAliasQuery
-		if instance.SuggestedClusterAlias == "" {
-			// Only need to do on masters
-			if config.Config.DetectClusterAliasQuery != "" {
-				clusterAlias := ""
-				if err := db.QueryRow(config.Config.DetectClusterAliasQuery).Scan(&clusterAlias); err != nil {
-					logReadTopologyInstanceError(instanceKey, "DetectClusterAliasQuery", err)
-				} else {
-					instance.SuggestedClusterAlias = clusterAlias
-				}
-			}
-		}
-		if instance.SuggestedClusterAlias == "" {
-			// Not found by DetectClusterAliasQuery...
-			// See if a ClusterNameToAlias configuration applies
-			if clusterAlias := mappedClusterNameToAlias(instance.ClusterName); clusterAlias != "" {
-				instance.SuggestedClusterAlias = clusterAlias
-			}
-		}
-	}
 	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" && !isMaxScale {
 		// Only need to do on masters
 		domainName := ""
@@ -972,28 +950,6 @@ Cleanup:
 	return nil, err
 }
 
-// ReadClusterAliasOverride reads and applies SuggestedClusterAlias based on cluster_alias_override
-func ReadClusterAliasOverride(instance *Instance) (err error) {
-	aliasOverride := ""
-	query := `
-		select
-			alias
-		from
-			cluster_alias_override
-		where
-			cluster_name = ?
-			`
-	err = db.QueryOrchestrator(query, sqlutils.Args(instance.ClusterName), func(m sqlutils.RowMap) error {
-		aliasOverride = m.GetString("alias")
-
-		return nil
-	})
-	if aliasOverride != "" {
-		instance.SuggestedClusterAlias = aliasOverride
-	}
-	return err
-}
-
 func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 	query := `
 	SELECT
@@ -1026,7 +982,6 @@ func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var masterOrGroupPrimaryInstanceKey InstanceKey
 	var masterOrGroupPrimaryClusterName string
-	var masterOrGroupPrimarySuggestedClusterAlias string
 	var masterOrGroupPrimaryReplicationDepth uint
 	var ancestryUUID string
 	var masterOrGroupPrimaryExecutedGtidSet string
@@ -1056,7 +1011,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	args := sqlutils.Args(masterOrGroupPrimaryInstanceKey.Hostname, masterOrGroupPrimaryInstanceKey.Port)
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		masterOrGroupPrimaryClusterName = m.GetString("cluster_name")
-		masterOrGroupPrimarySuggestedClusterAlias = m.GetString("suggested_cluster_alias")
 		masterOrGroupPrimaryReplicationDepth = m.GetUint("replication_depth")
 		masterOrGroupPrimaryInstanceKey.Hostname = m.GetString("master_host")
 		masterOrGroupPrimaryInstanceKey.Port = m.GetInt("master_port")
@@ -1098,7 +1052,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		} // While the other stays "1"
 	}
 	instance.ClusterName = clusterName
-	instance.SuggestedClusterAlias = masterOrGroupPrimarySuggestedClusterAlias
 	instance.ReplicationDepth = replicationDepth
 	instance.IsCoMaster = isCoMaster
 	instance.AncestryUUID = ancestryUUID
