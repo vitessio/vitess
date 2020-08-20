@@ -112,6 +112,13 @@ const (
 			AND (%s)
 			LIMIT 1
 	`
+	sqlSelectRunningMigrations = `SELECT
+			migration_uuid
+		FROM %s.schema_migrations
+		WHERE
+			migration_status='running'
+			AND strategy=%a
+	`
 	sqlSelectCountReadyMigrations = `SELECT
 			count(*) as count_ready
 		FROM %s.schema_migrations

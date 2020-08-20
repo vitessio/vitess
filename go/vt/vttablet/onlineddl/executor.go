@@ -20,11 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -574,12 +577,6 @@ export MYSQL_PWD
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
 
-		livenessTicker := timer.NewTimer(time.Minute)
-		defer livenessTicker.Stop()
-		livenessTicker.Start(func() {
-			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", onlineDDL.UUID)
-		})
-
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
 		if err := runPTOSC(false); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
@@ -843,11 +840,63 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	return nil
 }
 
+func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
+	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, "_vt", ":strategy")
+	bindVars := map[string]*querypb.BindVariable{
+		"strategy": sqltypes.StringBindVariable(string(schema.DDLStrategyPTOSC)),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	r, err := e.execQuery(ctx, bound)
+	if err != nil {
+		return err
+	}
+	for _, row := range r.Named().Rows {
+		// A pt-osc UUID is found which claims to be 'running'. Is it?
+		uuid := row["uuid"].ToString()
+		// Try and read its PID file:
+		content, err := ioutil.ReadFile(e.ptPidFileName(uuid))
+		if err != nil {
+			// file probably does not exist (migration not running)
+			// or any other issue --> we can't confirm that the migration is actually running
+			continue
+		}
+		//
+		pid, err := strconv.Atoi(string(content))
+		if err != nil {
+			// can't get the PID right. Can't confirm migration is running.
+			continue
+		}
+		p, err := os.FindProcess(pid)
+		if err != nil {
+			// can't find the process. Can't confirm migration is running.
+			continue
+		}
+		err = p.Signal(syscall.Signal(0))
+		if err != nil {
+			// can't verify process is running. Can't confirm migration is running.
+			continue
+		}
+		// AHA! We are able to confirm this pt-osc migration is actually running!
+		_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+	}
+	return err
+}
+
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
 // shown no liveness in past X minutes
 func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
-	parsed := sqlparser.BuildParsedQuery(sqlFailStaleMigrations, "_vt", staleMigrationMinutes)
-	_, err := e.execQuery(ctx, parsed.Query)
+	parsed := sqlparser.BuildParsedQuery(sqlFailStaleMigrations, "_vt", ":minutes")
+	bindVars := map[string]*querypb.BindVariable{
+		"minutes": sqltypes.Int64BindVariable(staleMigrationMinutes),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
 	return err
 }
 
@@ -866,6 +915,7 @@ func (e *Executor) onMigrationCheckTick() {
 	e.reviewMigrationJobs(ctx)
 	e.scheduleNextMigration(ctx)
 	e.runNextMigration(ctx)
+	e.reviewRunningMigrations(ctx)
 	e.reviewStaleMigrations(ctx)
 }
 
