@@ -1087,7 +1087,7 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 			}
 			relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
 			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "We got a filled in relay log position, but it's not of type Mysql56GTIDSet, even though we've determined we need to use GTID based assessment")
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "we got a filled in relay log position, but it's not of type Mysql56GTIDSet, even though we've determined we need to use GTID based assessment")
 			}
 			errantGTIDs, err := status.FindErrantGTIDs(statusList)
 			if err != nil {
@@ -1109,7 +1109,7 @@ func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicatio
 	for alias, masterStatus := range masterStatusMap {
 		executedPosition, err := mysql.DecodePosition(masterStatus.Position)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Wrapf(err, "could not decode a master status executed position for tablet %v: %v", alias, err)
 		}
 		positionMap[alias] = executedPosition
 	}
@@ -1129,7 +1129,7 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 	fillStatus := func(alias string, tabletInfo *topo.TabletInfo) {
-		err := fmt.Errorf("fillStatus did not successfully complete")
+		err := vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "fillStatus did not successfully complete")
 		defer func() { errChan <- err }()
 
 		wr.logger.Infof("getting replication position from %v", alias)
@@ -1137,11 +1137,11 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 		_, stopReplicationStatus, err = wr.tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		switch err {
 		case mysql.ErrNotReplica:
-			fmt.Printf("Found ErrNotReplica for alias: %v", alias)
 			var masterStatus *replicationdatapb.MasterStatus
 			masterStatus, err = wr.tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
 			if err != nil {
 				wr.logger.Warningf("replica %v thinks it's master but we failed to demote it", alias)
+				err = vterrors.Wrapf(err, "replica %v thinks it's master but we failed to demote it: %v", alias, err)
 				return
 			}
 			mu.Lock()
