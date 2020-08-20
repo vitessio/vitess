@@ -880,17 +880,17 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to get tablet map for shard %v in keyspace %v: %v", shard, keyspace, err)
 	}
 
 	statusMap, masterStatusMap, err := wr.stopReplicationAndBuildStatusMaps(ctx, ev, tabletMap, waitReplicasTimeout, ignoredTablets)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "lost topology lock, aborting: %v", err)
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
 	validCandidates, err := wr.findValidReparentCandidates(statusMap, masterStatusMap)
