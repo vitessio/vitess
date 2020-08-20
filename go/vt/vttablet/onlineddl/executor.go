@@ -159,8 +159,18 @@ func (e *Executor) Close() {
 	e.isOpen = false
 }
 
-func (e *Executor) ghostPanicFlagFileName(onlineDDL *schema.OnlineDDL) string {
-	return fmt.Sprintf("/tmp/ghost.%s.panic.flag", onlineDDL.UUID)
+func (e *Executor) ghostPanicFlagFileName(uuid string) string {
+	return fmt.Sprintf("/tmp/ghost.%s.panic.flag", uuid)
+}
+
+func (e *Executor) createGhostPanicFlagFile(uuid string) error {
+	_, err := os.Create(e.ghostPanicFlagFileName(uuid))
+	return err
+}
+func (e *Executor) deleteGhostPanicFlagFile(uuid string) error {
+	// We use RemoveAll because if the file does not exist that's fine. Remove will return an error
+	// if file does not exist; RemoveAll does not.
+	return os.RemoveAll(e.ghostPanicFlagFileName(uuid))
 }
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
@@ -217,14 +227,14 @@ func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, er
 }
 
 // dropOnlineDDLUser drops the given ddl user account at the end of migration
-func (e *Executor) dropOnlineDDLUser(ctx context.Context, user string) error {
+func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	parsed := sqlparser.BuildParsedQuery(sqlDropOnlineDDLUser, user)
+	parsed := sqlparser.BuildParsedQuery(sqlDropOnlineDDLUser, onlineDDLGrant)
 	_, err = conn.ExecuteFetch(parsed.Query, 0, false)
 	return err
 }
@@ -309,6 +319,11 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
+
+	if err := e.deleteGhostPanicFlagFile(onlineDDL.UUID); err != nil {
+		log.Errorf("Error removing gh-ost panic filag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
+		return err
+	}
 	// Validate gh-ost binary:
 	log.Infof("Will now validate gh-ost binary")
 	_, err = execCmd(
@@ -341,43 +356,38 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
 
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
-		_, err := execCmd(
-			"bash",
-			[]string{
-				wrapperScriptFileName,
-				fmt.Sprintf(`--host=%s`, mysqlHost),
-				fmt.Sprintf(`--port=%d`, mysqlPort),
-				fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
-				`--allow-on-master`,
-				`--max-load=Threads_running=100`,
-				`--critical-load=Threads_running=200`,
-				`--critical-load-hibernate-seconds=60`,
-				`--approve-renamed-columns`,
-				`--debug`,
-				`--exact-rowcount`,
-				`--timestamp-old-table`,
-				`--initially-drop-ghost-table`,
-				`--default-retries=120`,
-				fmt.Sprintf("--hooks-path=%s", tempDir),
-				fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
-				fmt.Sprintf(`--database=%s`, e.dbName),
-				fmt.Sprintf(`--table=%s`, onlineDDL.Table),
-				fmt.Sprintf(`--alter=%s`, alterOptions),
-				fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL)),
-				fmt.Sprintf(`--execute=%t`, execute),
-			},
-			os.Environ(),
-			"/tmp",
-			nil,
-			nil,
-		)
+		args := []string{
+			wrapperScriptFileName,
+			fmt.Sprintf(`--host=%s`, mysqlHost),
+			fmt.Sprintf(`--port=%d`, mysqlPort),
+			fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
+			`--allow-on-master`,
+			`--max-load=Threads_running=100`,
+			`--critical-load=Threads_running=200`,
+			`--critical-load-hibernate-seconds=60`,
+			`--approve-renamed-columns`,
+			`--debug`,
+			`--exact-rowcount`,
+			`--timestamp-old-table`,
+			`--initially-drop-ghost-table`,
+			`--default-retries=120`,
+			fmt.Sprintf("--hooks-path=%s", tempDir),
+			fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
+			fmt.Sprintf(`--database=%s`, e.dbName),
+			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
+			fmt.Sprintf(`--alter=%s`, alterOptions),
+			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
+			fmt.Sprintf(`--execute=%t`, execute),
+		}
+		args = append(args, strings.Fields(onlineDDL.Options)...)
+		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
 
 	atomic.StoreInt64(&e.migrationRunning, 1)
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
-		defer e.dropOnlineDDLUser(ctx, onlineDDLGrant)
+		defer e.dropOnlineDDLUser(ctx)
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
 		if err := runGhost(false); err != nil {
@@ -538,29 +548,24 @@ export MYSQL_PWD
 			log.Errorf("Error creating script: %+v", err)
 			return err
 		}
-		_, err = execCmd(
-			"bash",
-			[]string{
-				wrapperScriptFileName,
-				`--plugin`,
-				pluginFile,
-				`--alter`,
-				alterOptions,
-				executeFlag,
-				fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
-			},
-			os.Environ(),
-			"/tmp",
-			nil,
-			nil,
-		)
+		args := []string{
+			wrapperScriptFileName,
+			`--plugin`,
+			pluginFile,
+			`--alter`,
+			alterOptions,
+			executeFlag,
+			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
+		}
+		args = append(args, strings.Fields(onlineDDL.Options)...)
+		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
 
 	atomic.StoreInt64(&e.migrationRunning, 1)
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
-		defer e.dropOnlineDDLUser(ctx, onlineDDLGrant)
+		defer e.dropOnlineDDLUser(ctx)
 
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
 		if err := runPTOSC(false); err != nil {
@@ -591,13 +596,75 @@ export MYSQL_PWD
 	return nil
 }
 
-// Cancel attempts to abort a running migration by touching the panic flag file
-func (e *Executor) Cancel(onlineDDL *schema.OnlineDDL) error {
-	file, err := os.OpenFile(e.ghostPanicFlagFileName(onlineDDL), os.O_RDONLY|os.O_CREATE, 0666)
-	if file != nil {
-		defer file.Close()
+func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, err error) {
+
+	parsed := sqlparser.BuildParsedQuery(sqlSelectMigration, "_vt", ":migration_uuid")
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_uuid": sqltypes.StringBindVariable(uuid),
 	}
-	return err
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return onlineDDL, err
+	}
+	r, err := e.execQuery(ctx, bound)
+	if err != nil {
+		return onlineDDL, err
+	}
+	row := r.Named().Row()
+	if row == nil {
+		// No results
+		return nil, nil
+	}
+	onlineDDL = &schema.OnlineDDL{
+		Keyspace: row["keyspace"].ToString(),
+		Table:    row["mysql_table"].ToString(),
+		SQL:      row["migration_statement"].ToString(),
+		UUID:     row["migration_uuid"].ToString(),
+		Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
+		Options:  row["options"].ToString(),
+		Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
+	}
+	return onlineDDL, nil
+}
+
+// cancelMigration attempts to abort a running migration by touching the panic flag file
+func (e *Executor) cancelMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	var rowsAffected uint64
+
+	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+		// An active migration! Let's terminate it
+		// Attempt both operations first, then report errors
+		panicErr := e.createGhostPanicFlagFile(uuid)
+		dropUserErr := e.dropOnlineDDLUser(ctx)
+		//
+		if panicErr != nil {
+			return nil, fmt.Errorf("Error cancelling migration, flag file error: %+v", panicErr)
+		}
+		if dropUserErr != nil {
+			return nil, fmt.Errorf("Error cancelling migration, drop account error: %+v", dropUserErr)
+		}
+		rowsAffected = 1
+	}
+	onlineDDL, err := e.readMigration(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+	switch onlineDDL.Status {
+	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
+		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
+			return nil, err
+		}
+		rowsAffected = 1
+	}
+
+	result = &sqltypes.Result{
+		RowsAffected: rowsAffected,
+	}
+
+	return result, nil
 }
 
 func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
@@ -927,8 +994,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		case retryMigrationHint:
 			r, err = e.retryMigration(ctx, uuid, whereExpr)
 		case cancelMigrationHint:
-			// TODO(shlomi): implement
-			return nil, fmt.Errorf("migration cancellation is not implemented yet")
+			r, err = e.cancelMigration(ctx, uuid)
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				string(statusVal.Val), retryMigrationHint, cancelMigrationHint)
