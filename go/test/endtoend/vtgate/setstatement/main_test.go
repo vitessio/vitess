@@ -120,7 +120,9 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		if err := clusterInstance.StartVtgate(); err != nil {
+		vtgateProcess := clusterInstance.NewVtgateInstance()
+		vtgateProcess.SysVarSetEnabled = true
+		if err := vtgateProcess.Setup(); err != nil {
 			return 1
 		}
 

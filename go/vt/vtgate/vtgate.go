@@ -69,6 +69,9 @@ var (
 	HealthCheckTimeout = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
 	maxPayloadSize     = flag.Int("max_payload_size", 0, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
 	warnPayloadSize    = flag.Int("warn_payload_size", 0, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
+
+	// Put set-passthrough under a flag.
+	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
