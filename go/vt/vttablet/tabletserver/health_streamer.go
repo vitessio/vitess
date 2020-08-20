@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/history"
 	querypb "vitess.io/vitess/go/vt/proto/query"

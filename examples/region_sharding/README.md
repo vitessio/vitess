@@ -10,13 +10,45 @@ This document contains the summary of the commands to be run.
 	    "region_map": "/home/user/vitess/examples/region_sharding/countries.json",
 
 
-# Bring up initial cluster and main keyspace
+# Bring up initial cluster and main keyspace (unsharded)
 ./101_initial_cluster.sh
+
+# setup aliases
+alias mysql="command mysql -h 127.0.0.1 -P 15306"
+alias vtctlclient="command vtctlclient -server localhost:15999 -log_dir ${VTDATAROOT}/tmp -alsologtostderr"
 
 # Insert and verify data
 mysql < insert_customers.sql
+mysql --table < show_initial_data.sql
+
+# create schema and vschema for sharding (+lookup vindex)
+./201_main_sharded.sh
+
+# bring up shards and tablets
+./202_new_tablets.sh
+
+# reshard
+./203_reshard.sh
+
+# SwitchReads
+./204_switch_reads.sh
+
+# run script to create traffic before switching writes
+#./client.sh
+
+# SwitchWrites
+./205_switch_writes.sh
+# show no / minimal write errors during switch
+
+# verify sharded data
 mysql --table < show_data.sql
 
+# down shard
+./206_down_shard_0.sh
+
+# delete shard 0
+./207_delete_shard_0.sh
+
 # Down cluster
-./201_teardown.sh
+./301_teardown.sh
 ```

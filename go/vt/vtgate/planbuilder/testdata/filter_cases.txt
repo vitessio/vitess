@@ -672,7 +672,7 @@
   }
 }
 
-# routing rules: choose first table due to better plan
+# routing rules: choose the redirected table
 "select col from route1 where id = 1"
 {
   "QueryType": "SELECT",
@@ -691,28 +691,6 @@
       1
     ],
     "Vindex": "user_index"
-  }
-}
-
-# routing rules: choose second table due to better plan
-"select col from route1 where email = 'aaa'"
-{
-  "QueryType": "SELECT",
-  "Original": "select col from route1 where email = 'aaa'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select col from user_metadata as route1 where 1 != 1",
-    "Query": "select col from user_metadata as route1 where email = 'aaa'",
-    "Table": "user_metadata",
-    "Values": [
-      "aaa"
-    ],
-    "Vindex": "email_user_map"
   }
 }
 
@@ -1174,10 +1152,10 @@
 }
 
 # routing rules subquery merge
-"select col from user where id = (select id from route2 where route2.id = user.id)"
+"select col from user where id = (select id from route1 where route1.id = user.id)"
 {
   "QueryType": "SELECT",
-  "Original": "select col from user where id = (select id from route2 where route2.id = user.id)",
+  "Original": "select col from user where id = (select id from route1 where route1.id = user.id)",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -1186,7 +1164,7 @@
       "Sharded": true
     },
     "FieldQuery": "select col from user where 1 != 1",
-    "Query": "select col from user where id = (select id from user as route2 where route2.id = user.id)",
+    "Query": "select col from user where id = (select id from user as route1 where route1.id = user.id)",
     "Table": "user"
   }
 }
