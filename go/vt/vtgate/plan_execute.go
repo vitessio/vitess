@@ -77,7 +77,7 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	// will fall through and be handled through planning
 	switch plan.Type {
 	case sqlparser.StmtBegin:
-		qr, err := e.handleBegin(ctx, safeSession, vcursor.tabletType, logStats)
+		qr, err := e.handleBegin(ctx, safeSession, logStats)
 		return sqlparser.StmtBegin, qr, err
 	case sqlparser.StmtCommit:
 		qr, err := e.handleCommit(ctx, safeSession, logStats)

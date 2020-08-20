@@ -61,6 +61,7 @@ type iExecute interface {
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
+	Commit(ctx context.Context, safeSession *SafeSession) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -471,6 +472,42 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
 	}
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
+}
+
+//SetAutocommit implementes the SessionActions interface
+func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
+	if autocommit && vc.safeSession.InTransaction() {
+		if err := vc.executor.Commit(vc.ctx, vc.safeSession); err != nil {
+			return err
+		}
+	}
+	vc.safeSession.Autocommit = autocommit
+	return nil
+}
+
+//SetClientFoundRows implementes the SessionActions interface
+func (vc *vcursorImpl) SetClientFoundRows(clientFoundRows bool) {
+	vc.safeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
+}
+
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) {
+	vc.safeSession.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
+}
+
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) {
+	vc.safeSession.GetOrCreateOptions().SqlSelectLimit = limit
+}
+
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
+	vc.safeSession.TransactionMode = mode
+}
+
+//SetWorkload implementes the SessionActions interface
+func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
+	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
 func (vc *vcursorImpl) SysVarSetEnabled() bool {

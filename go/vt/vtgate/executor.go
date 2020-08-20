@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/trace"
 
@@ -222,7 +220,7 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 		sqlparser.StmtDelete, sqlparser.StmtDDL, sqlparser.StmtUse, sqlparser.StmtExplain, sqlparser.StmtOther:
 		return 0, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: not reachable as handled with plan execute")
 	case sqlparser.StmtSet:
-		qr, err := e.handleSet(ctx, safeSession, sql, logStats)
+		qr, err := e.handleSet(ctx, sql, logStats)
 		return sqlparser.StmtSet, qr, err
 	case sqlparser.StmtShow:
 		qr, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
@@ -272,7 +270,7 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, safeSession.Options, logStats, false /* canAutocommit */, ignoreMaxMemoryRows)
 }
 
-func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	err := e.txConn.Begin(ctx, safeSession)
@@ -292,6 +290,11 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, l
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
+}
+
+//Commit commits the existing transactions
+func (e *Executor) Commit(ctx context.Context, safeSession *SafeSession) error {
+	return e.txConn.Commit(ctx, safeSession)
 }
 
 func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
@@ -347,7 +350,7 @@ func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) e
 	return e.txConn.ReleaseAll(ctx, safeSession)
 }
 
-func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql string, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -382,14 +385,6 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		_, out := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
 		name := string(out)
 		switch expr.Scope {
-		case sqlparser.GlobalStr:
-			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
-		case sqlparser.SessionStr:
-			value, err = getValueFor(expr)
-			if err != nil {
-				return nil, err
-			}
-			err = handleSessionSetting(ctx, name, safeSession, value, e.txConn, sql)
 		case sqlparser.VitessMetadataStr:
 			value, err = getValueFor(expr)
 			if err != nil {
@@ -400,8 +395,8 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset: %v", value)
 			}
 			_, err = e.handleSetVitessMetadata(ctx, name, val)
-		case "": // we should only get here with UDVs
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should have been handled by planning")
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should have been handled by planning: %s", sql)
 
 		}
 		if err != nil {
@@ -448,129 +443,6 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", sqlparser.String(expr))
 	}
-
-}
-
-func handleSessionSetting(ctx context.Context, name string, session *SafeSession, value interface{}, conn *TxConn, sql string) error {
-	switch name {
-	case "autocommit":
-		val, err := validateSetOnOff(value, name)
-		if err != nil {
-			return err
-		}
-
-		switch val {
-		case 0:
-			session.Autocommit = false
-		case 1:
-			if session.InTransaction() {
-				if err := conn.Commit(ctx, session); err != nil {
-					return err
-				}
-			}
-			session.Autocommit = true
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for autocommit: %d", val)
-		}
-	case "client_found_rows":
-		val, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for client_found_rows: %T", value)
-		}
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		switch val {
-		case 0:
-			session.Options.ClientFoundRows = false
-		case 1:
-			session.Options.ClientFoundRows = true
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for client_found_rows: %d", val)
-		}
-	case "skip_query_plan_cache":
-		val, ok := value.(int64)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for skip_query_plan_cache: %T", value)
-		}
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		switch val {
-		case 0:
-			session.Options.SkipQueryPlanCache = false
-		case 1:
-			session.Options.SkipQueryPlanCache = true
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for skip_query_plan_cache: %d", val)
-		}
-	case "transaction_mode":
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for transaction_mode: %T", value)
-		}
-		out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(val)]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
-		}
-		session.TransactionMode = vtgatepb.TransactionMode(out)
-	case "tx_read_only", "transaction_read_only": // TODO move this to set tx
-		val, err := validateSetOnOff(value, name)
-		if err != nil {
-			return err
-		}
-		switch val {
-		case 0, 1:
-			// TODO (4127): This is a dangerous NOP.
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %v: %d", name, val)
-		}
-	case "workload":
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for workload: %T", value)
-		}
-		out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(val)]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", val)
-		}
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		session.Options.Workload = querypb.ExecuteOptions_Workload(out)
-	case "sql_select_limit":
-		var val int64
-
-		switch cast := value.(type) {
-		case int64:
-			val = cast
-		case string:
-			if !strings.EqualFold(cast, "default") {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected string value for sql_select_limit: %v", value)
-			}
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value)
-		}
-
-		if session.Options == nil {
-			session.Options = &querypb.ExecuteOptions{}
-		}
-		session.Options.SqlSelectLimit = val
-	case "charset", "names":
-		val, ok := value.(string)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset/names: %T", value)
-		}
-		switch val {
-		case "", "utf8", "utf8mb4", "latin1", "default":
-			break
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", val)
-		}
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
-	}
-	return nil
 }
 
 func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value string) (*sqltypes.Result, error) {
@@ -629,26 +501,6 @@ func (e *Executor) handleShowVitessMetadata(ctx context.Context, opt *sqlparser.
 		Rows:         rows,
 		RowsAffected: uint64(len(rows)),
 	}, nil
-}
-
-func validateSetOnOff(v interface{}, typ string) (int64, error) {
-	var val int64
-	switch v := v.(type) {
-	case int64:
-		val = v
-	case string:
-		lcaseV := strings.ToLower(v)
-		if lcaseV == "on" {
-			val = 1
-		} else if lcaseV == "off" {
-			val = 0
-		} else {
-			return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %s: %s", typ, v)
-		}
-	default:
-		return -1, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %T", typ, v)
-	}
-	return val, nil
 }
 
 func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {

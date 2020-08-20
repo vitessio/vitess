@@ -107,6 +107,13 @@ type (
 
 		// ShardSession returns shard info about open connections
 		ShardSession() []*srvtopo.ResolvedShard
+
+		SetAutocommit(bool) error
+		SetClientFoundRows(bool)
+		SetSkipQueryPlanCache(bool)
+		SetSQLSelectLimit(int64)
+		SetTransactionMode(vtgatepb.TransactionMode)
+		SetWorkload(querypb.ExecuteOptions_Workload)
 	}
 
 	// Plan represents the execution strategy for a given query.

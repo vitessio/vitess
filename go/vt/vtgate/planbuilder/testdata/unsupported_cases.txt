@@ -2,14 +2,6 @@
 "select * from user union select * from user_extra"
 "unsupported: UNION cannot be executed as a single route"
 
-# SET
-"set a=1"
-"plan building not supported"
-
-# set user defined and system variable
-"set @foo = 42, @bar = @foo, @@xyz = 28800"
-"plan building not supported"
-
 # SHOW
 "show create database"
 "plan building not supported"
