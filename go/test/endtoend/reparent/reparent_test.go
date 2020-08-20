@@ -281,7 +281,7 @@ func TestReparentNoChoiceDownMaster(t *testing.T) {
 	killTablets(t)
 }
 
-func TestReparentUnreachableReplicas(t *testing.T) {
+func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
