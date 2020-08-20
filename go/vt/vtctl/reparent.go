@@ -49,8 +49,8 @@ func init() {
 	addCommand("Shards", command{
 		"EmergencyReparentShard",
 		commandEmergencyReparentShard,
-		"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias> [-wait_replicas_timeout=<duration>]",
-		"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
+		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>]",
+		"Reparents the shard to the new master. Assumes the old master is dead and not responding."})
 	addCommand("Shards", command{
 		"TabletExternallyReparented",
 		commandTabletExternallyReparented,
@@ -166,7 +166,8 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		*waitReplicasTimeout = *deprecatedTimeout
 	}
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
-	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
+	newMaster := subFlags.String("new_master", "", "optional alias of a tablet that should be the new master. If not specified, Vitess will select the best candidate")
+	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -178,18 +179,22 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		*keyspaceShard = subFlags.Arg(0)
 		*newMaster = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
-		return fmt.Errorf("action EmergencyReparentShard requires -keyspace_shard=<keyspace/shard> -new_master=<tablet alias>")
+		return fmt.Errorf("action EmergencyReparentShard requires -keyspace_shard=<keyspace/shard>")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
 	if err != nil {
 		return err
 	}
-	tabletAlias, err := topoproto.ParseTabletAlias(*newMaster)
-	if err != nil {
-		return err
+	var tabletAlias *topodatapb.TabletAlias
+	if *newMaster != "" {
+		tabletAlias, err = topoproto.ParseTabletAlias(*newMaster)
+		if err != nil {
+			return err
+		}
 	}
-	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout)
+	unreachableReplicas := topoproto.ParseTabletSet(*ignoreReplicasList)
+	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas)
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
