@@ -1133,15 +1133,13 @@ func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *e
 		defer func() { errChan <- err }()
 
 		wr.logger.Infof("getting replication position from %v", alias)
-		ctx, cancel := context.WithCancel(groupCtx)
-		defer cancel()
 		var stopReplicationStatus *replicationdatapb.StopReplicationStatus
-		_, stopReplicationStatus, err = wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		_, stopReplicationStatus, err = wr.tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		switch err {
 		case mysql.ErrNotReplica:
 			fmt.Printf("Found ErrNotReplica for alias: %v", alias)
 			var masterStatus *replicationdatapb.MasterStatus
-			masterStatus, err = wr.tmc.DemoteMaster(ctx, tabletInfo.Tablet)
+			masterStatus, err = wr.tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
 			if err != nil {
 				wr.logger.Warningf("replica %v thinks it's master but we failed to demote it", alias)
 				return
