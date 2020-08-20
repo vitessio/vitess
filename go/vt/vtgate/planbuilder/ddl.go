@@ -1,6 +1,8 @@
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -32,11 +34,15 @@ func buildOnlineDDLPlan(query string, stmt *sqlparser.DDL, vschema ContextVSchem
 	if err != nil {
 		return nil, err
 	}
+	if stmt.OnlineHint == nil {
+		return nil, fmt.Errorf("Not an online DDL: %s", query)
+	}
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
 		DDL:      stmt,
 		SQL:      query,
-		Strategy: stmt.Strategy,
+		Strategy: stmt.OnlineHint.Strategy,
+		Options:  stmt.OnlineHint.Options,
 	}, nil
 }
 

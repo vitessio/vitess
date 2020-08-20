@@ -23,23 +23,28 @@ import (
 )
 
 var (
+	// ALTER TABLE
+	// ALTER WITH_GHOST TABLE
+	// ALTER WITH_GHOST LAG_'--max-lag-millis=2.5 --throttle-http=...' TABLE
+	// ALTER WITH_PT TABLE
+	alterTableBasicPattern               = `(?i)\balter\s+(with_ghost\s+|with_pt\s+|).*?table\s+`
 	alterTableExplicitSchemaTableRegexps = []*regexp.Regexp{
 		// ALTER TABLE `scm`.`tbl` something
 		// ALTER WITH_GHOST TABLE `scm`.`tbl` something
 		// ALTER WITH_PT TABLE `scm`.`tbl` something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
+		regexp.MustCompile(alterTableBasicPattern + "`" + `([^` + "`" + `]+)` + "`" + `[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
 		// ALTER TABLE `scm`.tbl something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `[.]([\S]+)\s+(.*$)`),
+		regexp.MustCompile(alterTableBasicPattern + "`" + `([^` + "`" + `]+)` + "`" + `[.]([\S]+)\s+(.*$)`),
 		// ALTER TABLE scm.`tbl` something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+([\S]+)[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
+		regexp.MustCompile(alterTableBasicPattern + `([\S]+)[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
 		// ALTER TABLE scm.tbl something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+([\S]+)[.]([\S]+)\s+(.*$)`),
+		regexp.MustCompile(alterTableBasicPattern + `([\S]+)[.]([\S]+)\s+(.*$)`),
 	}
 	alterTableExplicitTableRegexps = []*regexp.Regexp{
 		// ALTER TABLE `tbl` something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
+		regexp.MustCompile(alterTableBasicPattern + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
 		// ALTER TABLE tbl something
-		regexp.MustCompile(`(?i)\balter\s+(with_ghost\s+|with_pt\s+|)table\s+([\S]+)\s+(.*$)`),
+		regexp.MustCompile(alterTableBasicPattern + `([\S]+)\s+(.*$)`),
 	}
 )
 
