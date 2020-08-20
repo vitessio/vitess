@@ -100,6 +100,7 @@ func skipToEnd(yylex interface{}) {
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
+  OnlineDDLHint *OnlineDDLHint
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
@@ -282,7 +283,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
-%type <str> online_hint_opt
+%type <OnlineDDLHint> online_hint_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
@@ -1376,15 +1377,15 @@ table_opt_value:
 alter_statement:
   ALTER online_hint_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Strategy: DDLStrategy($2), Table: $4}
+    $$ = &DDL{Action: AlterStr, OnlineHint: $2, Table: $4}
   }
 | ALTER online_hint_opt TABLE table_name ADD alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Strategy: DDLStrategy($2), Table: $4}
+    $$ = &DDL{Action: AlterStr, OnlineHint: $2, Table: $4}
   }
 | ALTER online_hint_opt TABLE table_name DROP alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr,Strategy: DDLStrategy($2), Table: $4}
+    $$ = &DDL{Action: AlterStr, OnlineHint: $2, Table: $4}
   }
 | ALTER online_hint_opt TABLE table_name RENAME to_opt table_name
   {
@@ -1394,7 +1395,7 @@ alter_statement:
 | ALTER online_hint_opt TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr,Strategy: DDLStrategy($2), Table: $4}
+    $$ = &DDL{Action: AlterStr, OnlineHint: $2, Table: $4}
   }
 | ALTER VIEW table_name ddl_skip_to_end
   {
@@ -1402,7 +1403,7 @@ alter_statement:
   }
 | ALTER online_hint_opt TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: AlterStr,Strategy: DDLStrategy($2), Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterStr, OnlineHint: $2, Table: $4, PartitionSpec: $5}
   }
 | ALTER DATABASE id_or_var ddl_skip_to_end
   {
@@ -3409,12 +3410,37 @@ non_add_drop_or_rename_operation:
 | id_or_var
   { $$ = struct{}{} }
 
+
 online_hint_opt:
-  { $$ = "" }
+  {
+    $$ = &OnlineDDLHint{Strategy: "", Options: "",}
+  }
 | WITH_GHOST
-  { $$ = "gh-ost" }
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: "gh-ost",
+    }
+  }
+| WITH_GHOST STRING
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: "gh-ost",
+        Options: string($2),
+    }
+  }
 | WITH_PT
-  { $$ = "pt-osc" }
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: "pt-osc",
+    }
+  }
+| WITH_PT STRING
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: "pt-osc",
+        Options: string($2),
+    }
+  }
 
 to_opt:
   { $$ = struct{}{} }

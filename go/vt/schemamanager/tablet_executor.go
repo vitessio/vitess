@@ -163,9 +163,11 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr, sqlparser.RenameStr:
 			continue
 		case sqlparser.AlterStr:
-			if ddl.Strategy != schema.DDLStrategyNormal {
-				// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
-				continue
+			if ddl.OnlineHint != nil {
+				if ddl.OnlineHint.Strategy != schema.DDLStrategyNormal {
+					// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
+					continue
+				}
 			}
 		}
 		tableName := ddl.Table.Name.String()
@@ -242,16 +244,20 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			return &execResult
 		}
 		strategy := schema.DDLStrategyNormal
+		options := ""
 		tableName := ""
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
 			if ddl.Action == sqlparser.AlterStr {
-				strategy = ddl.Strategy
+				if ddl.OnlineHint != nil {
+					strategy = ddl.OnlineHint.Strategy
+					options = ddl.OnlineHint.Options
+				}
 			}
 			tableName = ddl.Table.Name.String()
 		}
 		exec.wr.Logger().Infof("Received DDL request. strategy = %+v", strategy)
-		exec.executeOnAllTablets(ctx, &execResult, sql, tableName, strategy)
+		exec.executeOnAllTablets(ctx, &execResult, sql, tableName, strategy, options)
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -261,10 +267,10 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 func (exec *TabletExecutor) executeOnAllTablets(
 	ctx context.Context, execResult *ExecuteResult, sql string,
-	tableName string, strategy sqlparser.DDLStrategy,
+	tableName string, strategy sqlparser.DDLStrategy, options string,
 ) {
 	if strategy != schema.DDLStrategyNormal {
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return

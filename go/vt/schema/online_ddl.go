@@ -85,6 +85,7 @@ type OnlineDDL struct {
 	SQL         string                `json:"sql,omitempty"`
 	UUID        string                `json:"uuid,omitempty"`
 	Strategy    sqlparser.DDLStrategy `json:"strategy,omitempty"`
+	Options     string                `json:"options,omitempty"`
 	RequestTime int64                 `json:"time_created,omitempty"`
 	Status      OnlineDDLStatus       `json:"status,omitempty"`
 }
@@ -110,7 +111,7 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.DDLStrategy) (*OnlineDDL, error) {
+func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.DDLStrategy, options string) (*OnlineDDL, error) {
 	uuid, err := CreateUUID()
 	if err != nil {
 		return nil, err
@@ -121,6 +122,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.
 		SQL:         sql,
 		UUID:        uuid,
 		Strategy:    strategy,
+		Options:     options,
 		RequestTime: time.Now().UnixNano(),
 		Status:      OnlineDDLStatusRequested,
 	}, nil

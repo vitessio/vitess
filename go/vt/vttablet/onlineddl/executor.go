@@ -328,6 +328,10 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	}
 	log.Infof("+ OK")
 
+	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
+		return err
+	}
+
 	runGhost := func(execute bool) error {
 		// Temporary hack (2020-08-11)
 		// Because sqlparser does not do full blown ALTER TABLE parsing,
@@ -511,6 +515,10 @@ export MYSQL_PWD
 	}
 	log.Infof("+ OK")
 
+	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
+		return err
+	}
+
 	// Temporary hack (2020-08-11)
 	// Because sqlparser does not do full blown ALTER TABLE parsing,
 	// and because pt-online-schema-change requires only the table options part of the ALTER TABLE statement,
@@ -601,6 +609,7 @@ func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.Onli
 		":mysql_table",
 		":migration_statement",
 		":strategy",
+		":options",
 		":requested_timestamp",
 		":migration_status",
 	)
@@ -612,6 +621,7 @@ func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.Onli
 		"mysql_table":         sqltypes.StringBindVariable(onlineDDL.Table),
 		"migration_statement": sqltypes.StringBindVariable(onlineDDL.SQL),
 		"strategy":            sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
+		"options":             sqltypes.StringBindVariable(onlineDDL.Options),
 		"requested_timestamp": sqltypes.Int64BindVariable(onlineDDL.RequestTimeSeconds()),
 		"migration_status":    sqltypes.StringBindVariable(string(onlineDDL.Status)),
 	}
@@ -721,6 +731,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			SQL:      row["migration_statement"].ToString(),
 			UUID:     row["migration_uuid"].ToString(),
 			Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
+			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
 		switch onlineDDL.Strategy {
@@ -788,6 +799,24 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 		":migration_uuid",
 	)
 	bindVars := map[string]*querypb.BindVariable{
+		"migration_uuid": sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, path string) error {
+	logPath := fmt.Sprintf("%s:%s", hostname, path)
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationLogPath, "_vt",
+		":log_path",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"log_path":       sqltypes.StringBindVariable(logPath),
 		"migration_uuid": sqltypes.StringBindVariable(uuid),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)

@@ -175,7 +175,14 @@ type (
 		Charset  string
 	}
 
+	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
 	DDLStrategy string
+
+	// OnlineDDLHint indicates strategy and options for running an online DDL
+	OnlineDDLHint struct {
+		Strategy DDLStrategy
+		Options  string
+	}
 
 	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 	DDL struct {
@@ -195,7 +202,7 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
-		Strategy      DDLStrategy
+		OnlineHint    *OnlineDDLHint
 
 		// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
 		VindexSpec *VindexSpec

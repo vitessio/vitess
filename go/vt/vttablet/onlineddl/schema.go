@@ -35,6 +35,7 @@ const (
 		mysql_table varchar(128) NOT NULL,
 		migration_statement text NOT NULL,
 		strategy varchar(128) NOT NULL,
+		options varchar(8192) NOT NULL,
 		added_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		requested_timestamp timestamp NOT NULL,
 		ready_timestamp timestamp NULL DEFAULT NULL,
@@ -42,6 +43,7 @@ const (
 		liveness_timestamp timestamp NULL DEFAULT NULL,
 		completed_timestamp timestamp NULL DEFAULT NULL,
 		migration_status varchar(128) NOT NULL,
+		log_path varchar(1024) NOT NULL,
 		PRIMARY KEY (id),
 		UNIQUE KEY uuid_idx (migration_uuid),
 		KEY keyspace_shard_idx (keyspace,shard),
@@ -56,10 +58,11 @@ const (
 		mysql_table,
 		migration_statement,
 		strategy,
+		options,
 		requested_timestamp,
 		migration_status
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
+		%a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
 	)`
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
@@ -83,6 +86,11 @@ const (
 	`
 	sqlUpdateMigrationTimestamp = `UPDATE %s.schema_migrations
 			SET %s=NOW()
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationLogPath = `UPDATE %s.schema_migrations
+			SET log_path=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -113,6 +121,7 @@ const (
 			mysql_table,
 			migration_statement,
 			strategy,
+			options,
 			added_timestamp,
 			ready_timestamp,
 			started_timestamp,
