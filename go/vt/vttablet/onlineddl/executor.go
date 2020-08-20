@@ -645,19 +645,22 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string) (result *sq
 	var rowsAffected uint64
 
 	if atomic.LoadInt64(&e.migrationRunning) > 0 {
-		// An active migration! Let's terminate it
-		// Attempt both operations first, then report errors
-		panicErr := e.createGhostPanicFlagFile(uuid)
-		dropUserErr := e.dropOnlineDDLUser(ctx)
-		//
-		if panicErr != nil {
-			return nil, fmt.Errorf("Error cancelling migration, flag file error: %+v", panicErr)
-		}
-		if dropUserErr != nil {
-			return nil, fmt.Errorf("Error cancelling migration, drop account error: %+v", dropUserErr)
-		}
+		// assuming all goes well in next steps, we can already report that there has indeed been a migration
 		rowsAffected = 1
 	}
+
+	// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
+	if running, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
+		rowsAffected = 1
+		if err := e.dropOnlineDDLUser(ctx); err != nil {
+			return nil, fmt.Errorf("Error cancelling migration, drop account error: %+v", err)
+		}
+	}
+	// gh-ost migrations are easy to kill: just touch their specific panic flag files
+	if err := e.createGhostPanicFlagFile(uuid); err != nil {
+		return nil, fmt.Errorf("Error cancelling migration, flag file error: %+v", err)
+	}
+
 	onlineDDL, err := e.readMigration(ctx, uuid)
 	if err != nil {
 		return nil, err
@@ -836,8 +839,37 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			break
 		}
 	}
-
 	return nil
+}
+
+// isPTOSCMigrationRunning sees if pt-online-schema-change is running a specific migration,
+// by examining its PID file
+func (e *Executor) isPTOSCMigrationRunning(ctx context.Context, uuid string) (bool, error) {
+	// Try and read its PID file:
+	content, err := ioutil.ReadFile(e.ptPidFileName(uuid))
+	if err != nil {
+		// file probably does not exist (migration not running)
+		// or any other issue --> we can't confirm that the migration is actually running
+		return false, err
+	}
+	//
+	pid, err := strconv.Atoi(string(content))
+	if err != nil {
+		// can't get the PID right. Can't confirm migration is running.
+		return false, err
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		// can't find the process. Can't confirm migration is running.
+		return false, err
+	}
+	err = p.Signal(syscall.Signal(0))
+	if err != nil {
+		// can't verify process is running. Can't confirm migration is running.
+		return false, err
+	}
+	// AHA! We are able to confirm this pt-osc migration is actually running!
+	return true, nil
 }
 
 func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
@@ -856,31 +888,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
 	for _, row := range r.Named().Rows {
 		// A pt-osc UUID is found which claims to be 'running'. Is it?
 		uuid := row["uuid"].ToString()
-		// Try and read its PID file:
-		content, err := ioutil.ReadFile(e.ptPidFileName(uuid))
-		if err != nil {
-			// file probably does not exist (migration not running)
-			// or any other issue --> we can't confirm that the migration is actually running
-			continue
+
+		if running, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
+			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 		}
-		//
-		pid, err := strconv.Atoi(string(content))
-		if err != nil {
-			// can't get the PID right. Can't confirm migration is running.
-			continue
-		}
-		p, err := os.FindProcess(pid)
-		if err != nil {
-			// can't find the process. Can't confirm migration is running.
-			continue
-		}
-		err = p.Signal(syscall.Signal(0))
-		if err != nil {
-			// can't verify process is running. Can't confirm migration is running.
-			continue
-		}
-		// AHA! We are able to confirm this pt-osc migration is actually running!
-		_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 	}
 	return err
 }
