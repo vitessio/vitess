@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -36,6 +35,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
@@ -60,7 +60,7 @@ func encodeTableName(tableName string) string {
 // tableListSql returns an IN clause "('t1', 't2'...) for a list of tables."
 func tableListSql(tables []string) (string, error) {
 	if len(tables) == 0 {
-		return "", errors.New("no tables for tableListSql")
+		return "", vterrors.New(vtrpc.Code_INTERNAL, "no tables for tableListSql")
 	}
 
 	encodedTables := make([]string, len(tables))
