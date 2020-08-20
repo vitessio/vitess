@@ -53,7 +53,8 @@ var (
 )
 
 const (
-	maxPasswordLength = 32 // MySQL's *replication* password may not exceed 32 characters
+	maxPasswordLength     = 32 // MySQL's *replication* password may not exceed 32 characters
+	staleMigrationMinutes = 10
 )
 
 var (
@@ -160,7 +161,7 @@ func (e *Executor) Close() {
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
-	return fmt.Sprintf("/tmp/ghost.%s.panic.flag", uuid)
+	return path.Join(os.TempDir(), fmt.Sprintf("ghost.%s.panic.flag", uuid))
 }
 
 func (e *Executor) createGhostPanicFlagFile(uuid string) error {
@@ -171,6 +172,10 @@ func (e *Executor) deleteGhostPanicFlagFile(uuid string) error {
 	// We use RemoveAll because if the file does not exist that's fine. Remove will return an error
 	// if file does not exist; RemoveAll does not.
 	return os.RemoveAll(e.ghostPanicFlagFileName(uuid))
+}
+
+func (e *Executor) ptPidFileName(uuid string) string {
+	return path.Join(os.TempDir(), fmt.Sprintf("pt-online-schema-change.%s.pid", uuid))
 }
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
@@ -550,6 +555,8 @@ export MYSQL_PWD
 		}
 		args := []string{
 			wrapperScriptFileName,
+			`--pid`,
+			e.ptPidFileName(onlineDDL.UUID),
 			`--plugin`,
 			pluginFile,
 			`--alter`,
@@ -566,6 +573,12 @@ export MYSQL_PWD
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
+
+		livenessTicker := timer.NewTimer(time.Minute)
+		defer livenessTicker.Stop()
+		livenessTicker.Start(func() {
+			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", onlineDDL.UUID)
+		})
 
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
 		if err := runPTOSC(false); err != nil {
@@ -830,6 +843,15 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	return nil
 }
 
+// reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
+// shown no liveness in past X minutes
+func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
+	parsed := sqlparser.BuildParsedQuery(sqlFailStaleMigrations, "_vt", staleMigrationMinutes)
+	_, err := e.execQuery(ctx, parsed.Query)
+	return err
+}
+
+// onMigrationCheckTick runs all migrations life cycle
 func (e *Executor) onMigrationCheckTick() {
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
 		return
@@ -844,6 +866,7 @@ func (e *Executor) onMigrationCheckTick() {
 	e.reviewMigrationJobs(ctx)
 	e.scheduleNextMigration(ctx)
 	e.runNextMigration(ctx)
+	e.reviewStaleMigrations(ctx)
 }
 
 func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid string) error {
