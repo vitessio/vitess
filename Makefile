@@ -149,14 +149,19 @@ PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 
 # This rule rebuilds all the go files from the proto definitions for gRPC.
-proto: $(PROTO_SRCS)
+proto: $(PROTO_GO_OUTS)
+
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
-	docker build -t proto-builder -f docker/proto/Dockerfile .
-	docker run --rm --mount type=bind,src=$(shell pwd)/go/vt/proto/,dst=/go/vt/proto/ proto-builder
-	# Because we're bind mounting, they'll get created by root:root in the proto-builder.
-	sudo chown -R $(shell id -u):$(shell id -g) ./go/vt/proto/
+
+$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
+	for name in $(PROTO_SRC_NAMES); do \
+		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
+		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
+	done
+	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
+	rm -rf vitess.io/vitess/go/vt/proto/
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.
