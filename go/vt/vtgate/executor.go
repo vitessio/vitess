@@ -630,14 +630,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.TABLES):
-		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
-			if destKeyspace == "" {
-				// Change "show tables from <keyspace>" to "show tables" directed to that keyspace.
-				destKeyspace = show.ShowTablesOpt.DbName
-			}
-			show.ShowTablesOpt.DbName = ""
-		}
-		sql = sqlparser.String(show)
+		destKeyspace, sql = handleShowTables(show, destKeyspace)
 	case sqlparser.KeywordString(sqlparser.DATABASES), "vitess_keyspaces", "keyspaces":
 		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 		if err != nil {
@@ -825,6 +818,19 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 	// Any other show statement is passed through
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
+}
+
+func handleShowTables(show *sqlparser.Show, destKeyspace string) (string, string) {
+	if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
+		if destKeyspace == "" {
+			// Change "show tables from <keyspace>" to "show tables" directed to that keyspace.
+			destKeyspace = show.ShowTablesOpt.DbName
+		}
+		show.ShowTablesOpt.DbName = ""
+	}
+
+	sql := sqlparser.String(show)
+	return destKeyspace, sql
 }
 
 func (e *Executor) showTablets() (*sqltypes.Result, error) {
