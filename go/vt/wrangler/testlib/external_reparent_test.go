@@ -74,7 +74,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 
 	// First test: reparent to the same master, make sure it works
 	// as expected.
-	if err := vp.Run([]string{"TabletExternallyReparented", topoproto.TabletAliasString(oldMaster.Tablet.Alias)}); err != nil {
+	if err := vp.Run([]string{"TabletExternallyReparented", topoproto.TabletAliasString(oldMaster.Tablet.Alias)}, nil); err != nil {
 		t.Fatalf("TabletExternallyReparented(same master) should have worked: %v", err)
 	}
 

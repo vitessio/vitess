@@ -110,7 +110,7 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 	db.AddQuery(addColumn, &sqltypes.Result{})
 
 	// First ApplySchema fails because the table is very big and -allow_long_unavailability is missing.
-	if err := vp.Run([]string{"ApplySchema", "-sql", addColumn, "ks"}); err == nil {
+	if err := vp.Run([]string{"ApplySchema", "-sql", addColumn, "ks"}, nil); err == nil {
 		t.Fatal("ApplySchema should have failed but did not.")
 	} else if !strings.Contains(err.Error(), "big schema change detected") ||
 		!strings.Contains(strings.ToLower(err.Error()), "alter table table1") {
@@ -118,7 +118,7 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 	}
 
 	// Second ApplySchema succeeds because -allow_long_unavailability is set.
-	if err := vp.Run([]string{"ApplySchema", "-allow_long_unavailability", "-sql", addColumn, "ks"}); err != nil {
+	if err := vp.Run([]string{"ApplySchema", "-allow_long_unavailability", "-sql", addColumn, "ks"}, nil); err != nil {
 		t.Fatalf("ApplySchema failed: %v", err)
 	}
 	if count := db.GetQueryCalledNum(changeToDb); count != 2 {
