@@ -19,6 +19,9 @@ package testlib
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
 
@@ -39,6 +42,12 @@ import (
 // Only if the flag is specified, potentially long running schema changes are
 // allowed.
 func TestApplySchema_AllowLongUnavailability(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	cell := "cell1"
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -95,7 +104,7 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 		ft.FakeMysqlDaemon.PreflightSchemaChangeResult = preflightSchemaChanges
 	}
 
-	changeToDb := "USE vt_ks"
+	changeToDb := "USE `vt_ks`"
 	addColumn := "ALTER TABLE table1 ADD COLUMN new_id bigint(20)"
 	db.AddQuery(changeToDb, &sqltypes.Result{})
 	db.AddQuery(addColumn, &sqltypes.Result{})

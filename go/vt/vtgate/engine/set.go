@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -78,13 +81,11 @@ type (
 		Expr              string
 	}
 
-	// SysVarSetSpecial implements the SetOp interface and will write the changes variable into the session
+	// SysVarSetAware implements the SetOp interface and will write the changes variable into the session
 	// The special part is that these settings change the sessions behaviour in different ways
-	SysVarSetSpecial struct {
-		Name              string
-		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination `json:",omitempty"`
-		Expr              string
+	SysVarSetAware struct {
+		Name string
+		Expr evalengine.Expr
 	}
 )
 
@@ -337,4 +338,120 @@ func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.Expre
 	vcursor.Session().SetSysVar(svs.Name, buf.String())
 	vcursor.Session().NeedsReservedConn()
 	return true, nil
+}
+
+var _ SetOp = (*SysVarSetAware)(nil)
+
+// System variables that needs special handling
+const (
+	Autocommit          = "autocommit"
+	ClientFoundRows     = "client_found_rows"
+	SkipQueryPlanCache  = "skip_query_plan_cache"
+	TxReadOnly          = "tx_read_only"
+	TransactionReadOnly = "transaction_read_only"
+	SQLSelectLimit      = "sql_select_limit"
+	TransactionMode     = "transaction_mode"
+	Workload            = "workload"
+	Charset             = "charset"
+	Names               = "names"
+)
+
+//MarshalJSON provides the type to SetOp for plan json
+func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type string
+		Name string
+		Expr string
+	}{
+		Type: "SysVarAware",
+		Name: svss.Name,
+		Expr: svss.Expr.String(),
+	})
+}
+
+//Execute implements the SetOp interface method
+func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+	switch svss.Name {
+	// These are all the boolean values we need to handle
+	case Autocommit, ClientFoundRows, SkipQueryPlanCache, TxReadOnly, TransactionReadOnly:
+		value, err := svss.Expr.Evaluate(env)
+		if err != nil {
+			return err
+		}
+		boolValue, err := value.ToBooleanStrict()
+		if err != nil {
+			return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
+		}
+		switch svss.Name {
+		case Autocommit:
+			vcursor.Session().SetAutocommit(boolValue)
+		case ClientFoundRows:
+			vcursor.Session().SetClientFoundRows(boolValue)
+		case SkipQueryPlanCache:
+			vcursor.Session().SetSkipQueryPlanCache(boolValue)
+		case TxReadOnly, TransactionReadOnly:
+			// TODO (4127): This is a dangerous NOP.
+		}
+
+	case SQLSelectLimit:
+		value, err := svss.Expr.Evaluate(env)
+		if err != nil {
+			return err
+		}
+
+		v := value.Value()
+		if !v.IsIntegral() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
+		}
+		intValue, err := v.ToInt64()
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetSQLSelectLimit(intValue)
+
+		// String settings
+	case TransactionMode, Workload, Charset, Names:
+		value, err := svss.Expr.Evaluate(env)
+		if err != nil {
+			return err
+		}
+		v := value.Value()
+		if !v.IsText() && !v.IsBinary() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %s", svss.Name, value.Value().Type().String())
+		}
+
+		str := v.ToString()
+		switch svss.Name {
+		case TransactionMode:
+			out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", str)
+			}
+			vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
+		case Workload:
+			out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(str)]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
+			}
+			vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
+		case Charset, Names:
+			switch strings.ToLower(str) {
+			case "", "utf8", "utf8mb4", "latin1", "default":
+				// do nothing
+				break
+			default:
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
+			}
+		}
+
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
+	}
+
+	return nil
+}
+
+//VariableName implements the SetOp interface method
+func (svss *SysVarSetAware) VariableName() string {
+	return svss.Name
 }

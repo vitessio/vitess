@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -42,6 +44,12 @@ import (
 )
 
 func TestBackupRestore(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	// Initialize our environment
 	ctx := context.Background()
 	db := fakesqldb.New(t)
@@ -214,6 +222,12 @@ func TestBackupRestore(t *testing.T) {
 }
 
 func TestRestoreUnreachableMaster(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	// Initialize our environment
 	ctx := context.Background()
 	db := fakesqldb.New(t)

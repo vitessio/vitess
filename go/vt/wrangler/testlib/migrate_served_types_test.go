@@ -20,6 +20,9 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
 
@@ -244,6 +247,12 @@ func TestMigrateServedTypes(t *testing.T) {
 }
 
 func TestMultiShardMigrateServedTypes(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	// TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
 	flag.Set("wait_for_drain_sleep_rdonly", "0s")
 	flag.Set("wait_for_drain_sleep_replica", "0s")

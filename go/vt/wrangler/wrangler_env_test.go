@@ -114,7 +114,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 			position := testStopPosition
 			if pos := positions[sourceShard+shard]; pos != "" {
 				position = pos
@@ -130,10 +130,10 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		// migrater buildMigrationTargets
 		env.tmc.setVRResults(
 			master.tablet,
-			"select id, source, message from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'",
+			"select id, source, message, cell, tablet_types from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message",
-				"int64|varchar|varchar"),
+				"id|source|message|cell|tablet_types",
+				"int64|varchar|varchar|varchar|varchar"),
 				rows...,
 			),
 		)

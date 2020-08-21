@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"testing"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -45,22 +46,16 @@ func TestExecutorSet(t *testing.T) {
 		out *vtgatepb.Session
 		err string
 	}{{
-		in:  "set autocommit = 1, client_found_rows = 1",
-		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
-	}, {
 		in:  "set @@autocommit = true",
 		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = 1, client_found_rows = 1",
+		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
 	}, {
 		in:  "set @@session.autocommit = true",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set @@session.`autocommit` = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set @@session.'autocommit' = true",
-		out: &vtgatepb.Session{Autocommit: true},
-	}, {
-		in:  "set @@session.\"autocommit\" = true",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set autocommit = true",
@@ -94,10 +89,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 'aa'",
-		err: "unexpected value for autocommit: aa",
+		err: "System setting 'autocommit' can't be set to this value: 'aa' is not a boolean",
 	}, {
 		in:  "set autocommit = 2",
-		err: "unexpected value for autocommit: 2",
+		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set client_found_rows = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
@@ -112,19 +107,19 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set @@global.client_found_rows = 1",
-		err: "unsupported in set: global",
+		err: "unsupported global scope in set: global client_found_rows = 1",
 	}, {
 		in:  "set global client_found_rows = 1",
-		err: "unsupported in set: global",
+		err: "unsupported global scope in set: global client_found_rows = 1",
 	}, {
 		in:  "set global @@session.client_found_rows = 1",
 		err: "cannot use scope and @@",
 	}, {
 		in:  "set client_found_rows = 'aa'",
-		err: "unexpected value type for client_found_rows: string",
+		err: "System setting 'client_found_rows' can't be set to this value: 'aa' is not a boolean",
 	}, {
 		in:  "set client_found_rows = 2",
-		err: "unexpected value for client_found_rows: 2",
+		err: "System setting 'client_found_rows' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
@@ -145,7 +140,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid transaction_mode: aa",
 	}, {
 		in:  "set transaction_mode = 1",
-		err: "unexpected value type for transaction_mode: int64",
+		err: "unexpected value type for transaction_mode: INT64",
 	}, {
 		in:  "set workload = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
@@ -163,7 +158,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid workload: aa",
 	}, {
 		in:  "set workload = 1",
-		err: "unexpected value type for workload: int64",
+		err: "unexpected value type for workload: INT64",
 	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
@@ -175,13 +170,19 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "unexpected string value for sql_select_limit: asdfasfd",
+		err: "unexpected value type for sql_select_limit: string",
 	}, {
 		in:  "set autocommit = 1+1",
-		err: "invalid syntax: 1 + 1",
+		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+	}, {
+		in:  "set autocommit = 1+0",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set autocommit = default",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set foo = 1",
-		err: "unsupported construct: set foo = 1",
+		err: "unsupported construct in set: session foo = 1",
 	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -205,10 +206,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set tx_read_only = 2",
-		err: "unexpected value for tx_read_only: 2",
+		err: "System setting 'tx_read_only' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_read_only = 2",
-		err: "unexpected value for transaction_read_only: 2",
+		err: "System setting 'transaction_read_only' can't be set to this value: 2 is not a boolean",
 	}, {
 		in:  "set session transaction isolation level repeatable read",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -234,8 +235,8 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
 	}}
-	for _, tcase := range testcases {
-		t.Run(tcase.in, func(t *testing.T) {
+	for i, tcase := range testcases {
+		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
 			session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
 			_, err := executorEnv.Execute(context.Background(), "TestExecute", session, tcase.in, nil)
 			if tcase.err == "" {
@@ -250,6 +251,7 @@ func TestExecutorSet(t *testing.T) {
 
 func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
+	*sysVarSetEnabled = true
 
 	sbclookup.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_mode", "varchar"), "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),

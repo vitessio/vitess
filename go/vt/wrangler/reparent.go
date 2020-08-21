@@ -26,6 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/pointer"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -842,9 +845,13 @@ func (wr *Wrangler) chooseNewMaster(
 
 // EmergencyReparentShard will make the provided tablet the master for
 // the shard, when the old master is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (err error) {
 	// lock the shard
-	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("EmergencyReparentShard(%v)", topoproto.TabletAliasString(masterElectTabletAlias)))
+	actionMsg := emergencyReparentShardOperation
+	if masterElectTabletAlias != nil {
+		actionMsg += fmt.Sprintf("(%v)", topoproto.TabletAliasString(masterElectTabletAlias))
+	}
+	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, actionMsg)
 	if lockErr != nil {
 		return lockErr
 	}
@@ -854,7 +861,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 	ev := &events.Reparent{}
 
 	// do the work
-	err = wr.emergencyReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitReplicasTimeout)
+	err = wr.emergencyReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitReplicasTimeout, ignoredTablets)
 	if err != nil {
 		event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
 	} else {
@@ -863,7 +870,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 	return err
 }
 
-func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) error {
+func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -873,120 +880,100 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to get tablet map for shard %v in keyspace %v: %v", shard, keyspace, err)
 	}
 
-	// Check invariants we're going to depend on.
-	masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
-	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
-	if !ok {
-		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAliasStr)
+	statusMap, masterStatusMap, err := wr.stopReplicationAndBuildStatusMaps(ctx, ev, tabletMap, waitReplicasTimeout, ignoredTablets)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
-	ev.NewMaster = *masterElectTabletInfo.Tablet
-	if topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
-		return fmt.Errorf("master-elect tablet %v is already the master", topoproto.TabletAliasString(masterElectTabletAlias))
-	}
-
-	// Deal with the old master: try to remote-scrap it, if it's
-	// truly dead we force-scrap it. Remove it from our map in any case.
-	if shardInfo.HasMaster() {
-		deleteOldMaster := true
-		shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
-		oldMasterTabletInfo, ok := tabletMap[shardInfoMasterAliasStr]
-		if ok {
-			delete(tabletMap, shardInfoMasterAliasStr)
-		} else {
-			oldMasterTabletInfo, err = wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
-			if err != nil {
-				wr.logger.Warningf("cannot read old master tablet %v, won't touch it: %v", shardInfoMasterAliasStr, err)
-				deleteOldMaster = false
-			}
-		}
-
-		if deleteOldMaster {
-			ev.OldMaster = *oldMasterTabletInfo.Tablet
-			wr.logger.Infof("deleting old master %v", shardInfoMasterAliasStr)
-
-			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
-			defer cancel()
-
-			if err := topotools.DeleteTablet(ctx, wr.ts, oldMasterTabletInfo.Tablet); err != nil {
-				wr.logger.Warningf("failed to delete old master tablet %v: %v", shardInfoMasterAliasStr, err)
-			}
-		}
-	}
-
-	// Stop replication on all replicas, get their current
-	// replication position
-	event.DispatchUpdate(ev, "stop replication on all replicas")
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	statusMap := make(map[string]*replicationdatapb.StopReplicationStatus)
-	for alias, tabletInfo := range tabletMap {
-		wg.Add(1)
-		go func(alias string, tabletInfo *topo.TabletInfo) {
-			defer wg.Done()
-			wr.logger.Infof("getting replication position from %v", alias)
-			ctx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
-			defer cancel()
-			// TODO: Once we refactor EmergencyReparent, change the stopReplicationOption argument to IOThreadOnly.
-			_, stopReplicationStatus, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
-			if err != nil {
-				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
-				return
-			}
-			mu.Lock()
-			statusMap[alias] = stopReplicationStatus
-			mu.Unlock()
-		}(alias, tabletInfo)
-	}
-	wg.Wait()
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return fmt.Errorf("lost topology lock, aborting: %v", err)
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	// Verify masterElect is alive and has the most advanced position
-	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
-	if !ok {
-		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
-	}
-	masterElectStrPos := masterElectStatus.After.Position
-	masterElectPos, err := mysql.DecodePosition(masterElectStrPos)
+	validCandidates, err := wr.findValidReparentCandidates(statusMap, masterStatusMap)
 	if err != nil {
-		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStrPos, err)
+		return err
 	}
-	for alias, status := range statusMap {
-		if alias == masterElectTabletAliasStr {
+	if len(validCandidates) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
+	}
+
+	errChan := make(chan error)
+	rec := &concurrency.AllErrorRecorder{}
+	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+	defer groupCancel()
+	for candidate := range validCandidates {
+		go func(alias string) {
+			var err error
+			defer func() { errChan <- err }()
+			err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
+		}(candidate)
+	}
+
+	resultCounter := 0
+	for waitErr := range errChan {
+		resultCounter++
+		if waitErr != nil {
+			rec.RecordError(waitErr)
+			groupCancel()
+		}
+		if resultCounter == len(validCandidates) {
+			break
+		}
+	}
+	if len(rec.Errors) != 0 {
+		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided wait_replicas_timeout: %v", rec.Error())
+	}
+
+	var winningPosition mysql.Position
+	var newMasterTabletAliasStr string
+	for alias, position := range validCandidates {
+		if winningPosition.IsZero() {
+			winningPosition = position
+			newMasterTabletAliasStr = alias
 			continue
 		}
-		posStr := status.After.Position
-		pos, err := mysql.DecodePosition(posStr)
-		if err != nil {
-			return fmt.Errorf("cannot decode replica %v position %v: %v", alias, posStr, err)
+		if position.AtLeast(winningPosition) {
+			winningPosition = position
+			newMasterTabletAliasStr = alias
 		}
-		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, posStr, masterElectStrPos)
+	}
+
+	if masterElectTabletAlias != nil {
+		newMasterTabletAliasStr = topoproto.TabletAliasString(masterElectTabletAlias)
+		masterPos, ok := validCandidates[newMasterTabletAliasStr]
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", newMasterTabletAliasStr)
 		}
+		if !masterPos.AtLeast(winningPosition) {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect: %v at position %v, is not fully caught up. Winning position: %v", newMasterTabletAliasStr, masterPos, winningPosition)
+		}
+	}
+
+	// Check we still have the topology lock.
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
 	// Promote the masterElect
-	wr.logger.Infof("promote tablet %v to master", topoproto.TabletAliasString(masterElectTabletAlias))
+	wr.logger.Infof("promote tablet %v to master", newMasterTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting replica")
-	rp, err := wr.tmc.PromoteReplica(ctx, masterElectTabletInfo.Tablet)
+	rp, err := wr.tmc.PromoteReplica(ctx, tabletMap[newMasterTabletAliasStr].Tablet)
 	if err != nil {
-		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", topoproto.TabletAliasString(masterElectTabletAlias), err)
+		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", newMasterTabletAliasStr, err)
 	}
 
-	// Check we stil have the topology lock.
+	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return fmt.Errorf("lost topology lock, aborting: %v", err)
+		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
 	// If error conditions happen, we can cancel all outgoing RPCs.
-	replCtx, replCancel := context.WithCancel(ctx)
+	replCtx, replCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer replCancel()
 
 	// Reset replication on all replicas to point to the new master, and
@@ -996,53 +983,206 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// - everybody else: reparent to new master, wait for row
 	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
-	wgMaster := sync.WaitGroup{}
-	wgReplicas := sync.WaitGroup{}
-	rec := concurrency.AllErrorRecorder{}
-	var masterErr error
-	for alias, tabletInfo := range tabletMap {
-		if alias == masterElectTabletAliasStr {
-			wgMaster.Add(1)
-			go func(alias string, tabletInfo *topo.TabletInfo) {
-				defer wgMaster.Done()
-				wr.logger.Infof("populating reparent journal on new master %v", alias)
-				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, masterElectTabletAlias, rp)
-			}(alias, tabletInfo)
-		} else {
-			wgReplicas.Add(1)
-			go func(alias string, tabletInfo *topo.TabletInfo) {
-				defer wgReplicas.Done()
-				wr.logger.Infof("setting new master on replica %v", alias)
-				forceStart := false
-				if status, ok := statusMap[alias]; ok {
-					forceStart = replicaWasRunning(status)
-				}
-				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, "", forceStart); err != nil {
-					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
-				}
-			}(alias, tabletInfo)
+	errChan = make(chan error)
+
+	handleMaster := func(alias string, tabletInfo *topo.TabletInfo) error {
+		wr.logger.Infof("populating reparent journal on new master %v", alias)
+		return wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, tabletMap[newMasterTabletAliasStr].Alias, rp)
+	}
+	handleReplica := func(alias string, tabletInfo *topo.TabletInfo) {
+		var err error
+		defer func() { errChan <- err }()
+
+		wr.logger.Infof("setting new master on replica %v", alias)
+		forceStart := false
+		if status, ok := statusMap[alias]; ok {
+			forceStart = replicaWasRunning(status)
+		}
+		err = wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, tabletMap[newMasterTabletAliasStr].Alias, now, "", forceStart)
+		if err != nil {
+			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", alias, err)
 		}
 	}
 
-	wgMaster.Wait()
-	if masterErr != nil {
-		// The master failed, there is no way the
-		// replicas will work.  So we cancel them all.
-		wr.logger.Warningf("master failed to PopulateReparentJournal, canceling replicas")
-		replCancel()
-		wgReplicas.Wait()
-		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
+	for alias, tabletInfo := range tabletMap {
+		if alias == newMasterTabletAliasStr {
+			continue
+		} else if !ignoredTablets.Has(alias) {
+			go handleReplica(alias, tabletInfo)
+		}
 	}
 
-	// Wait for the replicas to complete. If some of them fail, we
-	// will rebuild the shard serving graph anyway
-	wgReplicas.Wait()
-	if err := rec.Error(); err != nil {
-		wr.Logger().Errorf2(err, "some replicas failed to reparent")
-		return err
+	masterErr := handleMaster(newMasterTabletAliasStr, tabletMap[newMasterTabletAliasStr])
+	if masterErr != nil {
+		wr.logger.Warningf("master failed to PopulateReparentJournal")
+		replCancel()
+		return vterrors.Wrapf(masterErr, "failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 
 	return nil
+}
+
+// waitOnNMinusOneTablets will wait until N-1 tablets have responded via a supplied error channel. In that case that N-1 tablets have responded,
+// the supplied cancel function will be called, and we will wait until N tablets return their errors, and then return an AllErrorRecorder to the caller.
+func waitOnNMinusOneTablets(ctxCancel context.CancelFunc, tabletCount int, errorChannel chan error, acceptableErrCnt int) *concurrency.AllErrorRecorder {
+	errCounter := 0
+	successCounter := 0
+	responseCounter := 0
+	rec := &concurrency.AllErrorRecorder{}
+
+	for err := range errorChannel {
+		responseCounter++
+		if err != nil {
+			errCounter++
+			rec.RecordError(err)
+		} else {
+			successCounter++
+		}
+		if responseCounter == tabletCount {
+			// We must wait for any cancelled goroutines to return their error.
+			break
+		}
+		if errCounter > acceptableErrCnt || successCounter == tabletCount-1 {
+			ctxCancel()
+		}
+	}
+
+	return rec
+}
+
+// findValidReparentCandidates will find valid candidates for emergency reparent, and if successful, returning them as a list of tablet aliases.
+func (wr *Wrangler) findValidReparentCandidates(statusMap map[string]*replicationdatapb.StopReplicationStatus, masterStatusMap map[string]*replicationdatapb.MasterStatus) (map[string]mysql.Position, error) {
+	// Build out replication status list from proto types.
+	replicationStatusMap := make(map[string]*mysql.ReplicationStatus, len(statusMap))
+	for alias, protoStatus := range statusMap {
+		status := mysql.ProtoToReplicationStatus(protoStatus.After)
+		replicationStatusMap[alias] = &status
+	}
+
+	// Determine if we need to find errant GTIDs.
+	var gtidBased *bool
+	for alias, status := range replicationStatusMap {
+		if gtidBased == nil {
+			_, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
+			gtidBased = pointer.BoolPtr(ok)
+		} else if !*gtidBased {
+			break
+		} else if status.RelayLogPosition.IsZero() {
+			// Bail. We have an odd one in the bunch.
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias)
+		}
+	}
+
+	// Create relevant position list of errant GTID based positions for later comparison.
+	positionMap := make(map[string]mysql.Position)
+	for alias, status := range replicationStatusMap {
+		// Find errantGTIDs and clean them from status map if relevant.
+		if *gtidBased {
+			// We need to remove this status from a copy of the list, otherwise the diff will be empty always.
+			statusList := make([]*mysql.ReplicationStatus, 0, len(replicationStatusMap)-1)
+			for a, s := range replicationStatusMap {
+				if a != alias {
+					statusList = append(statusList, s)
+				}
+			}
+			relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "we got a filled in relay log position, but it's not of type Mysql56GTIDSet, even though we've determined we need to use GTID based assessment")
+			}
+			errantGTIDs, err := status.FindErrantGTIDs(statusList)
+			if err != nil {
+				// Could not find errant GTIDs when we must.
+				return nil, err
+			}
+			if len(errantGTIDs) != 0 {
+				// Skip inserting this tablet. It's not a valid candidate.
+				continue
+			}
+
+			pos := mysql.Position{GTIDSet: relayLogGTIDSet}
+			positionMap[alias] = pos
+		} else {
+			positionMap[alias] = status.Position
+		}
+	}
+
+	for alias, masterStatus := range masterStatusMap {
+		executedPosition, err := mysql.DecodePosition(masterStatus.Position)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "could not decode a master status executed position for tablet %v: %v", alias, err)
+		}
+		positionMap[alias] = executedPosition
+	}
+
+	return positionMap, nil
+}
+
+func (wr *Wrangler) stopReplicationAndBuildStatusMaps(ctx context.Context, ev *events.Reparent, tabletMap map[string]*topo.TabletInfo, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.MasterStatus, error) {
+	// Stop replication on all replicas, get their current
+	// replication position
+	event.DispatchUpdate(ev, "stop replication on all replicas")
+	statusMap := make(map[string]*replicationdatapb.StopReplicationStatus)
+	masterStatusMap := make(map[string]*replicationdatapb.MasterStatus)
+	mu := sync.Mutex{}
+
+	errChan := make(chan error)
+	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+	defer groupCancel()
+	fillStatus := func(alias string, tabletInfo *topo.TabletInfo) {
+		err := vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "fillStatus did not successfully complete")
+		defer func() { errChan <- err }()
+
+		wr.logger.Infof("getting replication position from %v", alias)
+		var stopReplicationStatus *replicationdatapb.StopReplicationStatus
+		_, stopReplicationStatus, err = wr.tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		switch err {
+		case mysql.ErrNotReplica:
+			var masterStatus *replicationdatapb.MasterStatus
+			masterStatus, err = wr.tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
+			if err != nil {
+				wr.logger.Warningf("replica %v thinks it's master but we failed to demote it", alias)
+				err = vterrors.Wrapf(err, "replica %v thinks it's master but we failed to demote it: %v", alias, err)
+				return
+			}
+			mu.Lock()
+			masterStatusMap[alias] = masterStatus
+			mu.Unlock()
+
+		case nil:
+			mu.Lock()
+			statusMap[alias] = stopReplicationStatus
+			mu.Unlock()
+
+		default:
+			wr.logger.Warningf("failed to get replication status from %v: %v", alias, err)
+			err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
+		}
+	}
+
+	for alias, tabletInfo := range tabletMap {
+		if !ignoredTablets.Has(alias) {
+			go fillStatus(alias, tabletInfo)
+		}
+	}
+
+	errRecorder := waitOnNMinusOneTablets(groupCancel, len(tabletMap)-ignoredTablets.Len(), errChan, 1)
+
+	if len(errRecorder.Errors) > 1 {
+		return nil, nil, vterrors.Wrapf(errRecorder.Error(), "encountered more than one error when trying to stop replication and get positions: %v", errRecorder.Error())
+	}
+	return statusMap, masterStatusMap, nil
+}
+
+// WaitForRelayLogsToApply will block execution waiting for the given tablets relay logs to apply, unless the supplied
+// context is cancelled, or waitReplicasTimeout is exceeded.
+func (wr *Wrangler) WaitForRelayLogsToApply(ctx context.Context, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
+	var err error
+	if status.After.RelayLogPosition != "" {
+		err = wr.tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
+	} else {
+		err = wr.tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.FileRelayLogPosition)
+	}
+	return err
 }
 
 // TabletExternallyReparented changes the type of new master for this shard to MASTER

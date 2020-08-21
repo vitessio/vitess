@@ -1,0 +1,22 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "region_vdx": {
+      "type": "region_json",
+      "params": {
+        "region_map": "/home/user/my-vitess/examples/region_sharding/countries.json",
+        "region_bytes": "1"
+      }
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [
+        {
+          "columns": ["id", "country"],
+	      "name": "region_vdx"
+        }
+      ]
+    }
+  }
+}

@@ -95,13 +95,13 @@ func TestVExec(t *testing.T) {
 	var result *sqltypes.Result
 	var testCases []*TestCase
 	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message",
-		"int64|varchar|varchar"),
-		"1|keyspace:\"source\" shard:\"0\" filter:<rules:<match:\"t1\" > >|",
+		"id|source|message|cell|tablet_types",
+		"int64|varchar|varchar|varchar|varchar"),
+		"1|keyspace:\"source\" shard:\"0\" filter:<rules:<match:\"t1\" > >|||",
 	)
 	testCases = append(testCases, &TestCase{
 		name:   "select",
-		query:  "select id, source, message from _vt.vreplication",
+		query:  "select id, source, message, cell, tablet_types from _vt.vreplication",
 		result: result,
 	})
 	result = &sqltypes.Result{
