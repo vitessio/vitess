@@ -151,6 +151,10 @@ PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).
 # This rule rebuilds all the go files from the proto definitions for gRPC.
 proto: $(PROTO_GO_OUTS)
 
+docker-proto:
+	docker build -t proto-builder -f docker/proto/Dockerfile .
+	docker run --rm -v $(shell pwd)/go/vt/proto/:/go/vt/proto/ proto-builder
+
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif

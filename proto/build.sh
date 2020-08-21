@@ -6,7 +6,7 @@ do
 
   echo "Building $name.proto ..."
   dir="vt/proto/$name"
-  mkdir -p "./$dir"
+  mkdir -p "./$dir" && chmod 755 "./$dir"
 
   protoc --go_out=plugins=grpc:. -Iproto "proto/$name.proto"
   mv "vitess.io/vitess/go/$dir/$name.pb.go" "./$dir/$name.pb.go"
