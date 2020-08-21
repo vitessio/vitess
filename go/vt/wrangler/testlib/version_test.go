@@ -95,13 +95,13 @@ func TestVersion(t *testing.T) {
 	defer sourceReplica.StopActionLoop(t)
 
 	// test when versions are the same
-	if err := vp.Run([]string{"ValidateVersionKeyspace", sourceMaster.Tablet.Keyspace}); err != nil {
+	if err := vp.Run([]string{"ValidateVersionKeyspace", sourceMaster.Tablet.Keyspace}, nil); err != nil {
 		t.Fatalf("ValidateVersionKeyspace(same) failed: %v", err)
 	}
 
 	// test when versions are different
 	sourceReplicaGitRev = "different fake git rev"
-	if err := vp.Run([]string{"ValidateVersionKeyspace", sourceMaster.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "is different than replica") {
+	if err := vp.Run([]string{"ValidateVersionKeyspace", sourceMaster.Tablet.Keyspace}, nil); err == nil || !strings.Contains(err.Error(), "is different than replica") {
 		t.Fatalf("ValidateVersionKeyspace(different) returned an unexpected error: %v", err)
 	}
 }

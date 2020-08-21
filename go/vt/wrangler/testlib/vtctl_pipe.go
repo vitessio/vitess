@@ -94,10 +94,15 @@ func (vp *VtctlPipe) Close() {
 
 // Run executes the provided command remotely, logs the output in the
 // test logs, and returns the command error.
-func (vp *VtctlPipe) Run(args []string) error {
-	return vp.run(args, func(line string) {
+func (vp *VtctlPipe) Run(args []string, timeout *time.Duration) error {
+	err := vp.run(args, func(line string) {
 		vp.t.Log(line)
 	})
+	if timeout != nil {
+		buffer := time.Second * 2
+		time.Sleep(*timeout + buffer)
+	}
+	return err
 }
 
 // RunAndOutput is similar to Run, but returns the output as a multi-line string
