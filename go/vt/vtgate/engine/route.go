@@ -133,9 +133,7 @@ func (obp OrderbyParams) String() string {
 }
 
 // RouteOpcode is a number representing the opcode
-// for the Route primitve. Adding new opcodes here
-// will require review of the join code and
-// the finalizeOptions code in planbuilder.
+// for the Route primitve.
 type RouteOpcode int
 
 // This is the list of RouteOpcode values.
@@ -166,6 +164,8 @@ const (
 	SelectReference
 	// SelectNone is used for queries that always return empty values
 	SelectNone
+	// NumRouteOpcodes is the number of opcodes
+	NumRouteOpcodes
 )
 
 var routeName = map[RouteOpcode]string{

@@ -65,6 +65,9 @@ type FakeMysqlDaemon struct {
 	// and ReplicationStatus
 	CurrentMasterPosition mysql.Position
 
+	// CurrentMasterFilePosition is used to determine the executed file based positioning of the master.
+	CurrentMasterFilePosition mysql.Position
+
 	// ReplicationStatusError is used by ReplicationStatus
 	ReplicationStatusError error
 
@@ -225,8 +228,10 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 		return mysql.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
 	return mysql.ReplicationStatus{
-		Position:            fmd.CurrentMasterPosition,
-		SecondsBehindMaster: fmd.SecondsBehindMaster,
+		Position:             fmd.CurrentMasterPosition,
+		FilePosition:         fmd.CurrentMasterFilePosition,
+		FileRelayLogPosition: fmd.CurrentMasterFilePosition,
+		SecondsBehindMaster:  fmd.SecondsBehindMaster,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
 		IOThreadRunning:  fmd.Replicating && fmd.IOThreadRunning,
@@ -242,7 +247,8 @@ func (fmd *FakeMysqlDaemon) MasterStatus(ctx context.Context) (mysql.MasterStatu
 		return mysql.MasterStatus{}, fmd.MasterStatusError
 	}
 	return mysql.MasterStatus{
-		Position: fmd.CurrentMasterPosition,
+		Position:     fmd.CurrentMasterPosition,
+		FilePosition: fmd.CurrentMasterFilePosition,
 	}, nil
 }
 

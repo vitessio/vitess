@@ -85,7 +85,7 @@
       {
         "Type": "UserDefinedVariable",
         "Name": "foo",
-        "Expr": "[0]"
+        "Expr": "column 0 from the input"
       }
     ],
     "Inputs": [
@@ -168,3 +168,293 @@
     ]
   }
 }
+
+# autocommit case
+"SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`"
+{
+  "QueryType": "SET",
+  "Original": "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(1)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(1)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(1)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": ":__vtudvmyudv"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(1)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(0)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set ignore plan
+"set @@default_storage_engine = 'DONOTCHANGEME'"
+{
+  "QueryType": "SET",
+  "Original": "set @@default_storage_engine = 'DONOTCHANGEME'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarIgnore",
+        "Name": "default_storage_engine",
+        "Expr": "'DONOTCHANGEME'"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set check and ignore plan
+"set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+{
+  "QueryType": "SET",
+  "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_mode",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set system settings
+"set @@sql_safe_updates = 1"
+{
+  "QueryType": "SET",
+  "Original": "set @@sql_safe_updates = 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarSet",
+        "Name": "sql_safe_updates",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Expr": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set plan building with ON/OFF enum
+"set @@innodb_strict_mode = OFF"
+{
+  "QueryType": "SET",
+  "Original": "set @@innodb_strict_mode = OFF",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarIgnore",
+        "Name": "innodb_strict_mode",
+        "Expr": "0"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set plan building with string literal
+"set @@innodb_strict_mode = 'OFF'"
+{
+  "QueryType": "SET",
+  "Original": "set @@innodb_strict_mode = 'OFF'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarIgnore",
+        "Name": "innodb_strict_mode",
+        "Expr": "0"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set plan building with string literal
+"set @@innodb_tmpdir = 'OFF'"
+{
+  "QueryType": "SET",
+  "Original": "set @@innodb_tmpdir = 'OFF'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarIgnore",
+        "Name": "innodb_tmpdir",
+        "Expr": "'OFF'"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set system settings
+"set @@ndbinfo_max_bytes = 192"
+"ndbinfo_max_bytes: system setting is not supported"
+
+# set autocommit
+"set autocommit = 1"
+{
+  "QueryType": "SET",
+  "Original": "set autocommit = 1",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(1)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set autocommit false
+"set autocommit = 0"
+{
+  "QueryType": "SET",
+  "Original": "set autocommit = 0",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(0)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set autocommit with backticks
+"set @@session.`autocommit` = 0"
+{
+  "QueryType": "SET",
+  "Original": "set @@session.`autocommit` = 0",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(0)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# more vitess aware settings
+"set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20"
+{
+  "QueryType": "SET",
+  "Original": "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "client_found_rows",
+        "Expr": "INT64(0)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "skip_query_plan_cache",
+        "Expr": "INT64(1)"
+      },
+      {
+        "Type": "SysVarAware",
+        "Name": "sql_select_limit",
+        "Expr": "INT64(20)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+                

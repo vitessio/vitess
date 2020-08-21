@@ -65,7 +65,7 @@ type orderedAggregate struct {
 // can handle.
 func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	rb, isRoute := pb.bldr.(*route)
-	if isRoute && rb.removeMultishardOptions() {
+	if isRoute && rb.isSingleShard() {
 		return nil
 	}
 
@@ -101,20 +101,14 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// shards, which will require us to perform the grouping
 	// at the vtgate level.
 	if sel.Distinct {
-		success := rb.removeOptions(func(ro *routeOption) bool {
-			for _, selectExpr := range sel.SelectExprs {
-				switch selectExpr := selectExpr.(type) {
-				case *sqlparser.AliasedExpr:
-					vindex := ro.FindVindex(pb, selectExpr.Expr)
-					if vindex != nil && vindex.IsUnique() {
-						return true
-					}
+		for _, selectExpr := range sel.SelectExprs {
+			switch selectExpr := selectExpr.(type) {
+			case *sqlparser.AliasedExpr:
+				vindex := pb.st.Vindex(selectExpr.Expr, rb)
+				if vindex != nil && vindex.IsUnique() {
+					return nil
 				}
 			}
-			return false
-		})
-		if success {
-			return nil
 		}
 	}
 
@@ -181,42 +175,40 @@ func nodeHasAggregates(node sqlparser.SQLNode) bool {
 // error conditions are treated as no match for simplicity; They will be
 // subsequently caught downstream.
 func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *route) bool {
-	return rb.removeOptions(func(ro *routeOption) bool {
-		for _, expr := range sel.GroupBy {
-			var matchedExpr sqlparser.Expr
-			switch node := expr.(type) {
-			case *sqlparser.ColName:
-				if expr := findAlias(node, sel.SelectExprs); expr != nil {
-					matchedExpr = expr
-				} else {
-					matchedExpr = node
-				}
-			case *sqlparser.SQLVal:
-				if node.Type != sqlparser.IntVal {
-					continue
-				}
-				num, err := strconv.ParseInt(string(node.Val), 0, 64)
-				if err != nil {
-					continue
-				}
-				if num < 1 || num > int64(len(sel.SelectExprs)) {
-					continue
-				}
-				expr, ok := sel.SelectExprs[num-1].(*sqlparser.AliasedExpr)
-				if !ok {
-					continue
-				}
-				matchedExpr = expr.Expr
-			default:
+	for _, expr := range sel.GroupBy {
+		var matchedExpr sqlparser.Expr
+		switch node := expr.(type) {
+		case *sqlparser.ColName:
+			if expr := findAlias(node, sel.SelectExprs); expr != nil {
+				matchedExpr = expr
+			} else {
+				matchedExpr = node
+			}
+		case *sqlparser.SQLVal:
+			if node.Type != sqlparser.IntVal {
 				continue
 			}
-			vindex := ro.FindVindex(pb, matchedExpr)
-			if vindex != nil && vindex.IsUnique() {
-				return true
+			num, err := strconv.ParseInt(string(node.Val), 0, 64)
+			if err != nil {
+				continue
 			}
+			if num < 1 || num > int64(len(sel.SelectExprs)) {
+				continue
+			}
+			expr, ok := sel.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			matchedExpr = expr.Expr
+		default:
+			continue
 		}
-		return false
-	})
+		vindex := pb.st.Vindex(matchedExpr, rb)
+		if vindex != nil && vindex.IsUnique() {
+			return true
+		}
+	}
+	return false
 }
 
 func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlparser.Expr {
@@ -357,14 +349,11 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 		// Unreachable
 		return true, innerAliased, nil
 	}
-	success := rb.removeOptions(func(ro *routeOption) bool {
-		vindex := ro.FindVindex(pb, innerAliased.Expr)
-		if vindex != nil && vindex.IsUnique() {
-			return true
-		}
-		return false
-	})
-	return !success, innerAliased, nil
+	vindex := pb.st.Vindex(innerAliased.Expr, rb)
+	if vindex != nil && vindex.IsUnique() {
+		return false, nil, nil
+	}
+	return true, innerAliased, nil
 }
 
 func (oa *orderedAggregate) MakeDistinct() error {

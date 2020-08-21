@@ -85,7 +85,31 @@ func (t noopVCursor) Session() SessionActions {
 	return t
 }
 
-func (t noopVCursor) SetTarget(target string) error {
+func (t noopVCursor) SetAutocommit(bool) error {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetClientFoundRows(bool) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetSkipQueryPlanCache(bool) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetSQLSelectLimit(int64) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetTarget(string) error {
 	panic("implement me")
 }
 
@@ -192,7 +216,7 @@ func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	return nil
 }
 
-func (f *loggingVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+func (f *loggingVCursor) ExecuteVSchema(string, *sqlparser.DDL) error {
 	panic("implement me")
 }
 
@@ -209,7 +233,7 @@ func (f *loggingVCursor) Context() context.Context {
 	return context.Background()
 }
 
-func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
+func (f *loggingVCursor) SetContextTimeout(time.Duration) context.CancelFunc {
 	return func() {}
 }
 
@@ -221,7 +245,7 @@ func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
 	f.warnings = append(f.warnings, warning)
 }
 
-func (f *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (f *loggingVCursor) Execute(_ string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
 	case vtgatepb.CommitOrder_NORMAL:
@@ -349,6 +373,30 @@ func (f *loggingVCursor) Rewind() {
 	f.curResult = 0
 	f.log = nil
 	f.warnings = nil
+}
+
+func (f *loggingVCursor) SetAutocommit(bool) error {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetClientFoundRows(bool) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetSkipQueryPlanCache(bool) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetSQLSelectLimit(int64) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {

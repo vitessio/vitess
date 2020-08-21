@@ -1061,21 +1061,27 @@
   }
 }
 
-# routing rules for join, merged route wins
-"select route2.col from route2 join user_extra on route2.id = user_extra.user_id"
+
+# reference table can merge with other opcodes left to right and vindex value is in the plan.
+# This tests that route.Merge also copies the condition to the LHS.
+"select ref.col from ref join (select aa from user where user.id=1) user"
 {
   "QueryType": "SELECT",
-  "Original": "select route2.col from route2 join user_extra on route2.id = user_extra.user_id",
+  "Original": "select ref.col from ref join (select aa from user where user.id=1) user",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id where 1 != 1",
-    "Query": "select route2.col from user as route2 join user_extra on route2.id = user_extra.user_id",
-    "Table": "user"
+    "FieldQuery": "select ref.col from ref join (select aa from user where 1 != 1) as user where 1 != 1",
+    "Query": "select ref.col from ref join (select aa from user where user.id = 1) as user",
+    "Table": "user",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
 
@@ -1245,7 +1251,7 @@
   }
 }
 
-# routing rules for subquery where the first route wins
+# routing rules for subquery
 "select id from (select id, col from route1 where id = 5) as t"
 {
   "QueryType": "SELECT",
@@ -1264,28 +1270,6 @@
       5
     ],
     "Vindex": "user_index"
-  }
-}
-
-# routing rules for subquery where the second route wins
-"select id from (select id, col from route1 where email = 'aaa') as t"
-{
-  "QueryType": "SELECT",
-  "Original": "select id from (select id, col from route1 where email = 'aaa') as t",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from (select id, col from user_metadata as route1 where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id, col from user_metadata as route1 where email = 'aaa') as t",
-    "Table": "user_metadata",
-    "Values": [
-      "aaa"
-    ],
-    "Vindex": "email_user_map"
   }
 }
 

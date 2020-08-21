@@ -28,7 +28,7 @@ import (
 )
 
 type (
-	evalResult struct {
+	EvalResult struct {
 		typ   querypb.Type
 		ival  int64
 		uval  uint64
@@ -41,9 +41,6 @@ type (
 		BindVars map[string]*querypb.BindVariable
 		Row      []sqltypes.Value
 	}
-
-	// EvalResult is used so we don't have to expose all parts of the private struct
-	EvalResult = evalResult
 
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
@@ -80,13 +77,18 @@ func (e EvalResult) Value() sqltypes.Value {
 	return castFromNumeric(e, e.typ)
 }
 
-//NewLiteralInt returns a literal expression
-func NewLiteralInt(val []byte) (Expr, error) {
+//NewLiteralIntFromBytes returns a literal expression
+func NewLiteralIntFromBytes(val []byte) (Expr, error) {
 	ival, err := strconv.ParseInt(string(val), 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{evalResult{typ: sqltypes.Int64, ival: ival}}, nil
+	return NewLiteralInt(ival), nil
+}
+
+//NewLiteralInt returns a literal expression
+func NewLiteralInt(i int64) Expr {
+	return &Literal{EvalResult{typ: sqltypes.Int64, ival: i}}
 }
 
 //NewLiteralFloat returns a literal expression
@@ -95,12 +97,24 @@ func NewLiteralFloat(val []byte) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{evalResult{typ: sqltypes.Float64, fval: fval}}, nil
+	return &Literal{EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
 }
 
 //NewLiteralFloat returns a literal expression
-func NewLiteralString(val []byte) (Expr, error) {
-	return &Literal{evalResult{typ: sqltypes.VarBinary, bytes: val}}, nil
+func NewLiteralString(val []byte) Expr {
+	return &Literal{EvalResult{typ: sqltypes.VarBinary, bytes: val}}
+}
+
+//NewBindVar returns a bind variable
+func NewBindVar(key string) Expr {
+	return &BindVariable{Key: key}
+}
+
+//NewColumn returns a bind variable
+func NewColumn(offset int) Expr {
+	return &Column{
+		Offset: offset,
+	}
 }
 
 var _ Expr = (*Literal)(nil)
@@ -248,7 +262,7 @@ func (l *Literal) String() string {
 
 //String implements the Expr interface
 func (c *Column) String() string {
-	return fmt.Sprintf("[%d]", c.Offset)
+	return fmt.Sprintf("column %d from the input", c.Offset)
 }
 
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
@@ -272,23 +286,28 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 		if err != nil {
 			ival = 0
 		}
-		return evalResult{typ: sqltypes.Int64, ival: ival}, nil
+		return EvalResult{typ: sqltypes.Int64, ival: ival}, nil
 	case sqltypes.Uint64:
 		uval, err := strconv.ParseUint(string(val.Value), 10, 64)
 		if err != nil {
 			uval = 0
 		}
-		return evalResult{typ: sqltypes.Uint64, uval: uval}, nil
+		return EvalResult{typ: sqltypes.Uint64, uval: uval}, nil
 	case sqltypes.Float64:
 		fval, err := strconv.ParseFloat(string(val.Value), 64)
 		if err != nil {
 			fval = 0
 		}
-		return evalResult{typ: sqltypes.Float64, fval: fval}, nil
+		return EvalResult{typ: sqltypes.Float64, fval: fval}, nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
-		return evalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
+		return EvalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
 	case sqltypes.Null:
-		return evalResult{typ: sqltypes.Null}, nil
+		return EvalResult{typ: sqltypes.Null}, nil
 	}
-	return evalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
+	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
+}
+
+// debugString is
+func (e *EvalResult) debugString() string {
+	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
 }

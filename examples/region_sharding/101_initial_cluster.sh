@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script brings up zookeeper and all the vitess components
+# this script brings up topo server and all the vitess components
 # required for a single shard deployment.
 
 source ./env.sh
@@ -31,27 +31,17 @@ fi
 # start vtctld
 CELL=zone1 ./scripts/vtctld-up.sh
 
-# start vttablets for main keyspace. we start only one tablet each (master)
+# start unsharded keyspace and tablet
 CELL=zone1 TABLET_UID=100 ./scripts/mysqlctl-up.sh
-SHARD=-40 CELL=zone1 KEYSPACE=main TABLET_UID=100 ./scripts/vttablet-up.sh
-CELL=zone1 TABLET_UID=200 ./scripts/mysqlctl-up.sh
-SHARD=40-80 CELL=zone1 KEYSPACE=main TABLET_UID=200 ./scripts/vttablet-up.sh
-CELL=zone1 TABLET_UID=300 ./scripts/mysqlctl-up.sh
-SHARD=80-c0 CELL=zone1 KEYSPACE=main TABLET_UID=300 ./scripts/vttablet-up.sh
-CELL=zone1 TABLET_UID=400 ./scripts/mysqlctl-up.sh
-SHARD=c0- CELL=zone1 KEYSPACE=main TABLET_UID=400 ./scripts/vttablet-up.sh
+SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID=100 ./scripts/vttablet-up.sh
 
-# set master
-vtctlclient InitShardMaster -force main/-40 zone1-100
-vtctlclient InitShardMaster -force main/40-80 zone1-200
-vtctlclient InitShardMaster -force main/80-c0 zone1-300
-vtctlclient InitShardMaster -force main/c0- zone1-400
+vtctlclient InitShardMaster -force main/0 zone1-100
 
 # create the schema
 vtctlclient ApplySchema -sql-file create_main_schema.sql main
 
 # create the vschema
-vtctlclient ApplyVSchema -vschema_file main_vschema.json main
+vtctlclient ApplyVSchema -vschema_file main_vschema_initial.json main
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh
