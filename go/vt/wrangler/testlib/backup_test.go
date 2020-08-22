@@ -150,7 +150,7 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// run the backup
-	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}, nil); err != nil {
+	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
 
@@ -327,7 +327,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	}
 
 	// run the backup
-	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}, nil); err != nil {
+	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
 

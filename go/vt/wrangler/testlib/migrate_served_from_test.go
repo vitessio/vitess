@@ -60,7 +60,7 @@ func TestMigrateServedFrom(t *testing.T) {
 
 	// create the destination keyspace, served form source
 	// double check it has all entries in map
-	if err := vp.Run([]string{"CreateKeyspace", "-served_from", "master:source,replica:source,rdonly:source", "dest"}, nil); err != nil {
+	if err := vp.Run([]string{"CreateKeyspace", "-served_from", "master:source,replica:source,rdonly:source", "dest"}); err != nil {
 		t.Fatalf("CreateKeyspace(dest) failed: %v", err)
 	}
 	ki, err := ts.GetKeyspace(ctx, "dest")
@@ -127,12 +127,12 @@ func TestMigrateServedFrom(t *testing.T) {
 	expectDeleteVRepl(dbClient)
 
 	// simulate the clone, by fixing the dest shard record
-	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "1", "source/0"}, nil); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "1", "source/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 
 	// migrate rdonly over in a cell
-	if err := vp.Run([]string{"MigrateServedFrom", "--cells", "cell1", "dest/0", "rdonly"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedFrom", "--cells", "cell1", "dest/0", "rdonly"}); err != nil {
 		t.Fatalf("MigrateServedFrom(rdonly) cell2 failed: %v", err)
 	}
 
@@ -162,7 +162,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// migrate rdonly reverse cell
-	if err := vp.Run([]string{"MigrateServedFrom", "--cells", "cell1", "--reverse", "dest/0", "rdonly"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedFrom", "--cells", "cell1", "--reverse", "dest/0", "rdonly"}); err != nil {
 		t.Fatalf("MigrateServedFrom(rdonly) cell2 failed: %v", err)
 	}
 
@@ -186,7 +186,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// Now migrate rdonly over
-	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "rdonly"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "rdonly"}); err != nil {
 		t.Fatalf("MigrateServedFrom(rdonly) failed: %v", err)
 	}
 
@@ -215,7 +215,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// migrate replica over
-	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "replica"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "replica"}); err != nil {
 		t.Fatalf("MigrateServedFrom(replica) failed: %v", err)
 	}
 
@@ -247,7 +247,7 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// migrate master over
-	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "master"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedFrom", "dest/0", "master"}); err != nil {
 		t.Fatalf("MigrateServedFrom(master) failed: %v", err)
 	}
 

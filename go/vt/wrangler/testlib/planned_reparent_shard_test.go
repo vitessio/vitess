@@ -121,7 +121,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 
 	// run PlannedReparentShard
 	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard}, nil)
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard})
 	require.NoError(t, err)
 
 	// check what was run
@@ -241,7 +241,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master",
-		topoproto.TabletAliasString(newMaster.Tablet.Alias)}, nil)
+		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	require.NoError(t, err)
 
 	// check what was run
@@ -288,7 +288,7 @@ func TestPlannedReparentNoMaster(t *testing.T) {
 	NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)}, nil)
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "the shard has no master")
 }
@@ -384,7 +384,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)}, nil)
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
 
@@ -484,7 +484,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)}, nil)
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
 
@@ -547,7 +547,7 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
-		topoproto.TabletAliasString(master.Tablet.Alias)}, nil)
+		topoproto.TabletAliasString(master.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
 	err = master.FakeMysqlDaemon.CheckSuperQueryList()
@@ -625,7 +625,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", master.Tablet.Keyspace + "/" + master.Tablet.Shard, "-new_master",
-		topoproto.TabletAliasString(master.Tablet.Alias)}, nil)
+		topoproto.TabletAliasString(master.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
 	err = master.FakeMysqlDaemon.CheckSuperQueryList()
@@ -735,7 +735,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)}, nil)
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "some error")
@@ -767,7 +767,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 
 	// run PlannedReparentShard
-	err = vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)}, nil)
+	err = vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	require.NoError(t, err)
 
 	// check that mastership changed correctly
@@ -840,7 +840,7 @@ func TestPlannedReparentShardSameMaster(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", oldMaster.Tablet.Keyspace + "/" + oldMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(oldMaster.Tablet.Alias)}, nil)
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", oldMaster.Tablet.Keyspace + "/" + oldMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(oldMaster.Tablet.Alias)})
 	require.NoError(t, err)
 	assert.False(t, oldMaster.FakeMysqlDaemon.ReadOnly, "oldMaster.FakeMysqlDaemon.ReadOnly")
 }
