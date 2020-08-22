@@ -571,7 +571,7 @@ func TestPermissions(t *testing.T) {
 	}
 
 	// run ValidatePermissionsKeyspace, this should work
-	if err := vp.Run([]string{"ValidatePermissionsKeyspace", master.Tablet.Keyspace}, nil); err != nil {
+	if err := vp.Run([]string{"ValidatePermissionsKeyspace", master.Tablet.Keyspace}); err != nil {
 		t.Fatalf("ValidatePermissionsKeyspace failed: %v", err)
 	}
 
@@ -582,7 +582,7 @@ func TestPermissions(t *testing.T) {
 	}
 
 	// run ValidatePermissionsKeyspace again, this should now fail
-	if err := vp.Run([]string{"ValidatePermissionsKeyspace", master.Tablet.Keyspace}, nil); err == nil || !strings.Contains(err.Error(), "has an extra user") {
+	if err := vp.Run([]string{"ValidatePermissionsKeyspace", master.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "has an extra user") {
 		t.Fatalf("ValidatePermissionsKeyspace has unexpected err: %v", err)
 	}
 

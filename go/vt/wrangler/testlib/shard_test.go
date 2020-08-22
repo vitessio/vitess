@@ -60,7 +60,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 	if err := vp.Run([]string{
 		"DeleteShard",
 		master.Tablet.Keyspace + "/" + master.Tablet.Shard,
-	}, nil); err == nil || !strings.Contains(err.Error(), "is still serving, cannot delete it") {
+	}); err == nil || !strings.Contains(err.Error(), "is still serving, cannot delete it") {
 		t.Fatalf("DeleteShard() returned wrong error: %v", err)
 	}
 
@@ -70,7 +70,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 		"DeleteShard",
 		"-even_if_serving",
 		master.Tablet.Keyspace + "/" + master.Tablet.Shard,
-	}, nil); err == nil || !strings.Contains(err.Error(), "use -recursive or remove them manually") {
+	}); err == nil || !strings.Contains(err.Error(), "use -recursive or remove them manually") {
 		t.Fatalf("DeleteShard(evenIfServing=true) returned wrong error: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 		"-recursive",
 		"-even_if_serving",
 		master.Tablet.Keyspace + "/" + master.Tablet.Shard,
-	}, nil); err != nil {
+	}); err != nil {
 		t.Fatalf("DeleteShard(recursive=true, evenIfServing=true) should have worked but returned: %v", err)
 	}
 

@@ -196,24 +196,24 @@ func TestMigrateServedTypes(t *testing.T) {
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry
 	// and we cannot decide which shard is the source or the destination.
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "rdonly"}, nil); err == nil || !strings.Contains(err.Error(), "' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?") {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "rdonly"}); err == nil || !strings.Contains(err.Error(), "' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?") {
 		t.Fatalf("MigrateServedType(rdonly) should fail if no 'SourceShards' entry is present: %v", err)
 	}
 
 	// simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "-80", 0)
 	checkShardSourceShards(t, ts, "80-", 0)
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-80", "1", "ks/0"}, nil); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-80", "1", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-", "1", "ks/0"}, nil); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-", "1", "ks/0"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 	checkShardSourceShards(t, ts, "-80", 1)
 	checkShardSourceShards(t, ts, "80-", 1)
 
 	// migrate rdonly over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "rdonly"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "rdonly"}); err != nil {
 		t.Fatalf("MigrateServedType(rdonly) failed: %v", err)
 	}
 
@@ -224,7 +224,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "80-", 1)
 
 	// migrate replica over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "replica"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "replica"}); err != nil {
 		t.Fatalf("MigrateServedType(replica) failed: %v", err)
 	}
 
@@ -235,7 +235,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "80-", 1)
 
 	// migrate master over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "master"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/0", "master"}); err != nil {
 		t.Fatalf("MigrateServedType(master) failed: %v", err)
 	}
 
@@ -452,24 +452,24 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry
 	// and we cannot decide which shard is the source or the destination.
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "rdonly"}, nil); err == nil || !strings.Contains(err.Error(), "' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?") {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "rdonly"}); err == nil || !strings.Contains(err.Error(), "' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?") {
 		t.Fatalf("MigrateServedType(rdonly) should fail if no 'SourceShards' entry is present: %v", err)
 	}
 
 	// simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "-40", 0)
 	checkShardSourceShards(t, ts, "40-80", 0)
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-40", "1", "ks/-80"}, nil); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/-40", "1", "ks/-80"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/40-80", "1", "ks/-80"}, nil); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/40-80", "1", "ks/-80"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 	checkShardSourceShards(t, ts, "-40", 1)
 	checkShardSourceShards(t, ts, "40-80", 1)
 
 	// migrate rdonly over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "rdonly"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "rdonly"}); err != nil {
 		t.Fatalf("MigrateServedType(rdonly) failed: %v", err)
 	}
 
@@ -480,7 +480,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "40-80", 1)
 
 	// migrate replica over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "replica"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "replica"}); err != nil {
 		t.Fatalf("MigrateServedType(replica) failed: %v", err)
 	}
 
@@ -491,7 +491,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "40-80", 1)
 
 	// migrate master over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "master"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/-80", "master"}); err != nil {
 		t.Fatalf("MigrateServedType(master) failed: %v", err)
 	}
 
@@ -537,17 +537,17 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// // simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "80-c0", 0)
 	checkShardSourceShards(t, ts, "c0-", 0)
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-c0", "1", "ks/80-"}, nil); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/80-c0", "1", "ks/80-"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
-	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/c0-", "1", "ks/80-"}, nil); err != nil {
+	if err := vp.Run([]string{"SourceShardAdd", "--key_range=-", "ks/c0-", "1", "ks/80-"}); err != nil {
 		t.Fatalf("SourceShardAdd failed: %v", err)
 	}
 	checkShardSourceShards(t, ts, "80-c0", 1)
 	checkShardSourceShards(t, ts, "c0-", 1)
 
 	// // migrate rdonly over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "rdonly"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "rdonly"}); err != nil {
 		t.Fatalf("MigrateServedType(rdonly) failed: %v", err)
 	}
 
@@ -558,7 +558,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "c0-", 1)
 
 	// // migrate replica over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "replica"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "replica"}); err != nil {
 		t.Fatalf("MigrateServedType(replica) failed: %v", err)
 	}
 
@@ -569,7 +569,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	checkShardSourceShards(t, ts, "c0-", 1)
 
 	// // migrate master over
-	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "master"}, nil); err != nil {
+	if err := vp.Run([]string{"MigrateServedTypes", "ks/80-", "master"}); err != nil {
 		t.Fatalf("MigrateServedType(master) failed: %v", err)
 	}
 
