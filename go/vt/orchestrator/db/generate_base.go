@@ -855,10 +855,14 @@ var generateSQLBase = []string{
 		CREATE TABLE IF NOT EXISTS vitess_tablet (
 			hostname varchar(128) CHARACTER SET ascii NOT NULL,
 			port smallint(5) unsigned NOT NULL,
+			cell varchar(128) CHARACTER SET ascii NOT NULL,
 			tablet_type smallint(5) NOT NULL,
 			master_timestamp bigint(20) NOT NULL,
 			info varchar(512) CHARACTER SET ascii NOT NULL,
 			PRIMARY KEY (hostname, port)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
+	`,
+	`
+		CREATE INDEX cell_idx_vitess_tablet ON vitess_tablet (cell)
 	`,
 }
