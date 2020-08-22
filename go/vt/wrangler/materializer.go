@@ -589,43 +589,46 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	}, nil
 }
 
+func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]string, error) {
+	sourceDDLs := make(map[string]string)
+	allTables := []string{"/.*/"}
+
+	sourceMaster := mz.sourceShards[0].MasterAlias
+	if sourceMaster == nil {
+		return nil, fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
+	}
+
+	log.Infof("getting table schemas from source master %v...", sourceMaster)
+	var err error
+	sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("got table schemas from source master %v.", sourceMaster)
+
+	for _, td := range sourceSchema.TableDefinitions {
+		sourceDDLs[td.Name] = td.Schema
+	}
+	return sourceDDLs, nil
+}
+
 func (mz *materializer) deploySchema(ctx context.Context) error {
+	var sourceDDLs map[string]string
+	var mu sync.Mutex
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		{
-			log.Infof("getting table schemas from target master %v...", target.MasterAlias)
-			targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
-			if err != nil {
-				return err
-			}
-			log.Infof("got table schemas from target master %v.", target.MasterAlias)
-
-			for _, td := range targetSchema.TableDefinitions {
-				hasTargetTable[td.Name] = true
-			}
+		log.Infof("getting table schemas from target master %v...", target.MasterAlias)
+		targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
+		if err != nil {
+			return err
 		}
+		log.Infof("got table schemas from target master %v.", target.MasterAlias)
 
-		sourceDDL := map[string]string{}
-		{
-			sourceMaster := mz.sourceShards[0].MasterAlias
-			if sourceMaster == nil {
-				return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
-			}
-
-			log.Infof("getting table schemas from source master %v...", sourceMaster)
-			var err error
-			sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
-			if err != nil {
-				return err
-			}
-			log.Infof("got table schemas from source master %v.", sourceMaster)
-
-			for _, td := range sourceSchema.TableDefinitions {
-				sourceDDL[td.Name] = td.Schema
-			}
+		for _, td := range targetSchema.TableDefinitions {
+			hasTargetTable[td.Name] = true
 		}
 
 		targetTablet, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
@@ -633,7 +636,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			return err
 		}
 
-		applyDDLs := []string{}
+		var applyDDLs []string
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -642,6 +645,21 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			if ts.CreateDdl == "" {
 				return fmt.Errorf("target table %v does not exist and there is no create ddl defined", ts.TargetTable)
 			}
+
+			var err error
+			mu.Lock()
+			if len(sourceDDLs) == 0 {
+				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
+				//we copy schemas from masters on the source keyspace
+				//and we have found use cases where user just has a replica (no master) in the source keyspace
+				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
+			}
+			mu.Unlock()
+			if err != nil {
+				log.Errorf("Error getting DDLs of source tables: %s", err.Error())
+				return err
+			}
+
 			createDDL := ts.CreateDdl
 			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint {
 				if ts.SourceExpression != "" {
@@ -656,7 +674,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					}
 				}
 
-				ddl, ok := sourceDDL[ts.TargetTable]
+				ddl, ok := sourceDDLs[ts.TargetTable]
 				if !ok {
 					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
 				}
