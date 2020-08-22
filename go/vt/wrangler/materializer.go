@@ -50,7 +50,6 @@ type materializer struct {
 	targetVSchema *vindexes.KeyspaceSchema
 	sourceShards  []*topo.ShardInfo
 	targetShards  []*topo.ShardInfo
-	mu            sync.Mutex
 }
 
 const (
@@ -590,8 +589,8 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	}, nil
 }
 
-func (mz *materializer) getTableDDLs(ctx context.Context) (map[string]string, error) {
-	tableDDLs := make(map[string]string)
+func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]string, error) {
+	sourceDDLs := make(map[string]string)
 	allTables := []string{"/.*/"}
 
 	sourceMaster := mz.sourceShards[0].MasterAlias
@@ -608,13 +607,14 @@ func (mz *materializer) getTableDDLs(ctx context.Context) (map[string]string, er
 	log.Infof("got table schemas from source master %v.", sourceMaster)
 
 	for _, td := range sourceSchema.TableDefinitions {
-		tableDDLs[td.Name] = td.Schema
+		sourceDDLs[td.Name] = td.Schema
 	}
-	return tableDDLs, nil
+	return sourceDDLs, nil
 }
 
 func (mz *materializer) deploySchema(ctx context.Context) error {
-	var tableDDLs map[string]string
+	var sourceDDLs map[string]string
+	var mu sync.Mutex
 
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		allTables := []string{"/.*/"}
@@ -637,8 +637,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		}
 
 		var applyDDLs []string
-		{
-		}
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -649,14 +647,14 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 
 			var err error
-			mz.mu.Lock()
-			if len(tableDDLs) == 0 {
+			mu.Lock()
+			if len(sourceDDLs) == 0 {
 				//only get ddls for tables, once and lazily: if we need to copy the schema from source to target
 				//we copy schemas from masters on the source keyspace
 				//and we have found use cases where user just has a replica (no master) in the source keyspace
-				tableDDLs, err = mz.getTableDDLs(ctx)
+				sourceDDLs, err = mz.getSourceTableDDLs(ctx)
 			}
-			mz.mu.Unlock()
+			mu.Unlock()
 			if err != nil {
 				log.Errorf("Error getting DDLs of source tables: %s", err.Error())
 				return err
@@ -676,7 +674,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 					}
 				}
 
-				ddl, ok := tableDDLs[ts.TargetTable]
+				ddl, ok := sourceDDLs[ts.TargetTable]
 				if !ok {
 					return fmt.Errorf("source table %v does not exist", ts.TargetTable)
 				}
