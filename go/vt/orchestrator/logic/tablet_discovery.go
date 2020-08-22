@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -58,11 +59,28 @@ func RefreshTablets() {
 	if !IsLeaderOrActive() {
 		return
 	}
-
-	latestInstances := make(map[inst.InstanceKey]bool)
-	tablets, err := topotools.GetAllTabletsAcrossCells(context.TODO(), ts)
+	cells, err := ts.GetKnownCells(context.TODO())
 	if err != nil {
-		log.Errorf("Error fetching topo info: %v", err)
+		log.Errore(err)
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, cell := range cells {
+		wg.Add(1)
+		go func(cell string) {
+			defer wg.Done()
+			refreshTabletsInCell(cell)
+		}(cell)
+	}
+	wg.Wait()
+}
+
+func refreshTabletsInCell(cell string) {
+	latestInstances := make(map[inst.InstanceKey]bool)
+	tablets, err := topotools.GetAllTablets(context.TODO(), ts, cell)
+	if err != nil {
+		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
 		return
 	}
 
@@ -100,8 +118,8 @@ func RefreshTablets() {
 
 	// Forget tablets that were removed.
 	toForget := make(map[inst.InstanceKey]*topodatapb.Tablet)
-	query := "select hostname, port, info from vitess_tablet"
-	err = db.QueryOrchestrator(query, nil, func(row sqlutils.RowMap) error {
+	query := "select hostname, port, info from vitess_tablet where cell = ?"
+	err = db.QueryOrchestrator(query, sqlutils.Args(cell), func(row sqlutils.RowMap) error {
 		curKey := inst.InstanceKey{
 			Hostname: row.GetString("hostname"),
 			Port:     row.GetInt("port"),
@@ -120,10 +138,7 @@ func RefreshTablets() {
 		log.Errore(err)
 	}
 	for instanceKey, tablet := range toForget {
-		log.Infof("Forgotten: %v", tablet)
-		if err := inst.ForgetInstance(&instanceKey); err != nil {
-			log.Errore(err)
-		}
+		log.Infof("Forgeting: %v", tablet)
 		_, err := db.ExecOrchestrator(`
 					delete
 						from vitess_tablet
@@ -133,6 +148,9 @@ func RefreshTablets() {
 			instanceKey.Port,
 		)
 		if err != nil {
+			log.Errore(err)
+		}
+		if err := inst.ForgetInstance(&instanceKey); err != nil {
 			log.Errore(err)
 		}
 	}
