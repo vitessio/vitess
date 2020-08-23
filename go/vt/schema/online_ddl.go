@@ -82,6 +82,7 @@ const (
 type OnlineDDL struct {
 	Keyspace    string                `json:"keyspace,omitempty"`
 	Table       string                `json:"table,omitempty"`
+	Schema      string                `json:"schema,omitempty"`
 	SQL         string                `json:"sql,omitempty"`
 	UUID        string                `json:"uuid,omitempty"`
 	Strategy    sqlparser.DDLStrategy `json:"strategy,omitempty"`

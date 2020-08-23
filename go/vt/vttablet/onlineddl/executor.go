@@ -612,6 +612,7 @@ export MYSQL_PWD
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
+			_ = e.dropPTOSCMigrationTriggers(ctx, onlineDDL)
 			failedMigrations.Add(1)
 			log.Errorf("Error running pt-online-schema-change: %+v", err)
 			return err
@@ -647,6 +648,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	onlineDDL = &schema.OnlineDDL{
 		Keyspace: row["keyspace"].ToString(),
 		Table:    row["mysql_table"].ToString(),
+		Schema:   row["mysql_schema"].ToString(),
 		SQL:      row["migration_statement"].ToString(),
 		UUID:     row["migration_uuid"].ToString(),
 		Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
@@ -663,6 +665,21 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 
 	var rowsAffected uint64
 
+	onlineDDL, err := e.readMigration(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+	if onlineDDL == nil {
+		return nil, fmt.Errorf("Migration not found: %s", uuid)
+	}
+	switch onlineDDL.Status {
+	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
+		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
+			return nil, err
+		}
+		rowsAffected = 1
+	}
+
 	if terminateRunningMigrations {
 		if atomic.LoadInt64(&e.migrationRunning) > 0 {
 			// double check: is the running migration the very same one we wish to cancel?
@@ -677,6 +694,7 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 			rowsAffected = 1
 			_ = syscall.Kill(pid, syscall.SIGTERM)
 			_ = syscall.Kill(pid, syscall.SIGKILL)
+			_ = e.dropPTOSCMigrationTriggers(ctx, onlineDDL)
 			if err := e.dropOnlineDDLUser(ctx); err != nil {
 				return nil, fmt.Errorf("Error cancelling migration, drop account error: %+v", err)
 			}
@@ -685,18 +703,6 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 		if err := e.createGhostPanicFlagFile(uuid); err != nil {
 			return nil, fmt.Errorf("Error cancelling migration, flag file error: %+v", err)
 		}
-	}
-
-	onlineDDL, err := e.readMigration(ctx, uuid)
-	if err != nil {
-		return nil, err
-	}
-	switch onlineDDL.Status {
-	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
-		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
-			return nil, err
-		}
-		rowsAffected = 1
 	}
 
 	result = &sqltypes.Result{
@@ -834,6 +840,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		onlineDDL := &schema.OnlineDDL{
 			Keyspace: row["keyspace"].ToString(),
 			Table:    row["mysql_table"].ToString(),
+			Schema:   row["mysql_schema"].ToString(),
 			SQL:      row["migration_statement"].ToString(),
 			UUID:     row["migration_uuid"].ToString(),
 			Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
@@ -897,6 +904,41 @@ func (e *Executor) isPTOSCMigrationRunning(ctx context.Context, uuid string) (is
 	}
 	// AHA! We are able to confirm this pt-osc migration is actually running!
 	return true, pid, nil
+}
+
+// dropOnlineDDLUser drops the given ddl user account at the end of migration
+func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	parsed := sqlparser.BuildParsedQuery(sqlSelectPTOSCMigrationTriggers, ":mysql_schema", ":mysql_table")
+	bindVars := map[string]*querypb.BindVariable{
+		"mysql_schema": sqltypes.StringBindVariable(onlineDDL.Schema),
+		"mysql_table":  sqltypes.StringBindVariable(onlineDDL.Table),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	r, err := e.execQuery(ctx, bound)
+	if err != nil {
+		return err
+	}
+	for _, row := range r.Named().Rows {
+		// iterate pt-osc triggers and drop them
+		triggerSchema := row.AsString("trigger_schema", "")
+		triggerName := row.AsString("trigger_name", "")
+
+		dropParsed := sqlparser.BuildParsedQuery(sqlDropTrigger, triggerSchema, triggerName)
+		if _, err := conn.ExecuteFetch(dropParsed.Query, 0, false); err != nil {
+			return err
+		}
+	}
+
+	return err
 }
 
 func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
