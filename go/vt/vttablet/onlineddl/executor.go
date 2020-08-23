@@ -19,6 +19,7 @@ package onlineddl
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -55,6 +56,9 @@ var (
 	ErrExecutorMigrationAlreadyRunning = errors.New("Cannot run gh-ost migration since a migration is already running")
 )
 
+var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
+var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
+
 const (
 	maxPasswordLength     = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationMinutes = 10
@@ -89,13 +93,19 @@ var (
 )
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
-func GhostBinaryFileName() string {
-	return path.Join(os.TempDir(), "vt-gh-ost")
+func GhostBinaryFileName() (fileName string, isOverride bool) {
+	if *ghostOverridePath != "" {
+		return *ghostOverridePath, true
+	}
+	return path.Join(os.TempDir(), "vt-gh-ost"), false
 }
 
 // PTOSCFileName returns the full path+name of the pt-online-schema-change binary
-func PTOSCFileName() string {
-	return path.Join(os.TempDir(), "vt-pt-online-schema-change")
+func PTOSCFileName() (fileName string, isOverride bool) {
+	if *ptOSCOverridePath != "" {
+		return *ptOSCOverridePath, true
+	}
+	return path.Join(os.TempDir(), "vt-pt-online-schema-change"), false
 }
 
 // NewExecutor creates a new gh-ost executor.
@@ -282,6 +292,7 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 		log.Errorf("Error creating temporary directory: %+v", err)
 		return err
 	}
+	binaryFileName, _ := GhostBinaryFileName()
 	credentialsConfigFileContent := fmt.Sprintf(`[client]
 user=%s
 password=${ONLINE_DDL_PASSWORD}
@@ -299,7 +310,7 @@ mkdir -p "$ghost_log_path"
 
 export ONLINE_DDL_PASSWORD
 %s "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
-	`, tempDir, GhostBinaryFileName(),
+	`, tempDir, binaryFileName,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "gh-ost-wrapper.sh", wrapperScriptContent)
 	if err != nil {
@@ -460,6 +471,7 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 		return err
 	}
 
+	binaryFileName, _ := PTOSCFileName()
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
 pt_log_path="%s"
 pt_log_file=pt-online-schema-change.log
@@ -468,7 +480,7 @@ mkdir -p "$pt_log_path"
 
 export MYSQL_PWD
 %s "$@" > "$pt_log_path/$pt_log_file" 2>&1
-	`, tempDir, PTOSCFileName(),
+	`, tempDir, binaryFileName,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "pt-online-schema-change-wrapper.sh", wrapperScriptContent)
 	if err != nil {
