@@ -80,9 +80,10 @@ type Executor struct {
 	shard    string
 	dbName   string
 
-	initMutex        sync.Mutex
-	migrationMutex   sync.Mutex
-	migrationRunning int64
+	initMutex         sync.Mutex
+	migrationMutex    sync.Mutex
+	migrationRunning  int64
+	lastMigrationUUID string
 
 	ticks  *timer.Timer
 	isOpen bool
@@ -338,6 +339,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
+	serveSocketFile := path.Join(tempDir, "serve.sock")
 
 	if err := e.deleteGhostPanicFlagFile(onlineDDL.UUID); err != nil {
 		log.Errorf("Error removing gh-ost panic filag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
@@ -390,6 +392,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			`--timestamp-old-table`,
 			`--initially-drop-ghost-table`,
 			`--default-retries=120`,
+			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
@@ -404,6 +407,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	}
 
 	atomic.StoreInt64(&e.migrationRunning, 1)
+	e.lastMigrationUUID = onlineDDL.UUID
+
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
@@ -585,6 +590,8 @@ export MYSQL_PWD
 	}
 
 	atomic.StoreInt64(&e.migrationRunning, 1)
+	e.lastMigrationUUID = onlineDDL.UUID
+
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
@@ -650,27 +657,34 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 }
 
 // cancelMigration attempts to abort a running migration by touching the panic flag file
-func (e *Executor) cancelMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRunningMigrations bool) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
 	var rowsAffected uint64
 
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
-		// assuming all goes well in next steps, we can already report that there has indeed been a migration
-		rowsAffected = 1
-	}
-
-	// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
-	if running, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
-		rowsAffected = 1
-		if err := e.dropOnlineDDLUser(ctx); err != nil {
-			return nil, fmt.Errorf("Error cancelling migration, drop account error: %+v", err)
+	if terminateRunningMigrations {
+		if atomic.LoadInt64(&e.migrationRunning) > 0 {
+			// double check: is the running migration the very same one we wish to cancel?
+			if uuid == e.lastMigrationUUID {
+				// assuming all goes well in next steps, we can already report that there has indeed been a migration
+				rowsAffected = 1
+			}
 		}
-	}
-	// gh-ost migrations are easy to kill: just touch their specific panic flag files
-	if err := e.createGhostPanicFlagFile(uuid); err != nil {
-		return nil, fmt.Errorf("Error cancelling migration, flag file error: %+v", err)
+
+		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
+		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
+			rowsAffected = 1
+			_ = syscall.Kill(pid, syscall.SIGTERM)
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+			if err := e.dropOnlineDDLUser(ctx); err != nil {
+				return nil, fmt.Errorf("Error cancelling migration, drop account error: %+v", err)
+			}
+		}
+		// gh-ost migrations are easy to kill: just touch their specific panic flag files
+		if err := e.createGhostPanicFlagFile(uuid); err != nil {
+			return nil, fmt.Errorf("Error cancelling migration, flag file error: %+v", err)
+		}
 	}
 
 	onlineDDL, err := e.readMigration(ctx, uuid)
@@ -856,32 +870,33 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 
 // isPTOSCMigrationRunning sees if pt-online-schema-change is running a specific migration,
 // by examining its PID file
-func (e *Executor) isPTOSCMigrationRunning(ctx context.Context, uuid string) (bool, error) {
+func (e *Executor) isPTOSCMigrationRunning(ctx context.Context, uuid string) (isRunning bool, pid int, err error) {
 	// Try and read its PID file:
 	content, err := ioutil.ReadFile(e.ptPidFileName(uuid))
 	if err != nil {
 		// file probably does not exist (migration not running)
 		// or any other issue --> we can't confirm that the migration is actually running
-		return false, err
+		return false, pid, err
 	}
+	contentString := strings.TrimSpace(string(content))
 	//
-	pid, err := strconv.Atoi(string(content))
+	pid, err = strconv.Atoi(contentString)
 	if err != nil {
 		// can't get the PID right. Can't confirm migration is running.
-		return false, err
+		return false, pid, err
 	}
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		// can't find the process. Can't confirm migration is running.
-		return false, err
+		return false, pid, err
 	}
 	err = p.Signal(syscall.Signal(0))
 	if err != nil {
 		// can't verify process is running. Can't confirm migration is running.
-		return false, err
+		return false, pid, err
 	}
 	// AHA! We are able to confirm this pt-osc migration is actually running!
-	return true, nil
+	return true, pid, nil
 }
 
 func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
@@ -899,9 +914,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
 	}
 	for _, row := range r.Named().Rows {
 		// A pt-osc UUID is found which claims to be 'running'. Is it?
-		uuid := row["uuid"].ToString()
+		uuid := row["migration_uuid"].ToString()
 
-		if running, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
+		if running, _, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
 			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 		}
 	}
@@ -1090,7 +1105,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		case retryMigrationHint:
 			r, err = e.retryMigration(ctx, uuid, whereExpr)
 		case cancelMigrationHint:
-			r, err = e.cancelMigration(ctx, uuid)
+			r, err = e.cancelMigration(ctx, uuid, true)
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				string(statusVal.Val), retryMigrationHint, cancelMigrationHint)
