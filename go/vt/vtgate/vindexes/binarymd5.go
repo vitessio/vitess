@@ -62,7 +62,7 @@ func (vind *BinaryMD5) NeedsVCursor() bool {
 func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		out[i] = bytes.Equal(binHash(ids[i].ToBytes()), ksids[i])
+		out[i] = bytes.Equal(vMD5Hash(ids[i].ToBytes()), ksids[i])
 	}
 	return out, nil
 }
@@ -71,12 +71,12 @@ func (vind *BinaryMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) (
 func (vind *BinaryMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		out[i] = key.DestinationKeyspaceID(binHash(id.ToBytes()))
+		out[i] = key.DestinationKeyspaceID(vMD5Hash(id.ToBytes()))
 	}
 	return out, nil
 }
 
-func binHash(source []byte) []byte {
+func vMD5Hash(source []byte) []byte {
 	sum := md5.Sum(source)
 	return sum[:]
 }

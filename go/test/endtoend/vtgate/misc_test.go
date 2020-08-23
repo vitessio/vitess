@@ -257,6 +257,25 @@ func TestExplainPassthrough(t *testing.T) {
 	// but we are trying to make the test less fragile
 }
 
+func TestXXHash(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into t7_xxhash(uid, phone, msg) values('u-1', 1, 'message')")
+	assertMatches(t, conn, "select uid, phone, msg from t7_xxhash where phone = 1", `[[VARCHAR("u-1") INT64(1) VARCHAR("message")]]`)
+	assertMatches(t, conn, "select phone, keyspace_id from t7_xxhash_idx", `[[INT64(1) VARBINARY("\x1cU^f\xbfyE^")]]`)
+	exec(t, conn, "update t7_xxhash set phone = 2 where uid = 'u-1'")
+	assertMatches(t, conn, "select uid, phone, msg from t7_xxhash where phone = 1", `[]`)
+	assertMatches(t, conn, "select uid, phone, msg from t7_xxhash where phone = 2", `[[VARCHAR("u-1") INT64(2) VARCHAR("message")]]`)
+	assertMatches(t, conn, "select phone, keyspace_id from t7_xxhash_idx", `[[INT64(2) VARBINARY("\x1cU^f\xbfyE^")]]`)
+	exec(t, conn, "delete from t7_xxhash where uid = 'u-1'")
+	assertMatches(t, conn, "select uid, phone, msg from t7_xxhash where uid = 'u-1'", `[]`)
+	assertMatches(t, conn, "select phone, keyspace_id from t7_xxhash_idx", `[]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

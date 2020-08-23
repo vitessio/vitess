@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,56 +25,56 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var charVindexMD5 SingleColumn
+var charVindexXXHash SingleColumn
 
 func init() {
-	vindex, _ := CreateVindex("unicode_loose_md5", "utf8ch", nil)
-	charVindexMD5 = vindex.(SingleColumn)
+	vindex, _ := CreateVindex("unicode_loose_xxhash", "utf8ch", nil)
+	charVindexXXHash = vindex.(SingleColumn)
 }
 
-func TestUnicodeLooseMD5Info(t *testing.T) {
-	assert.Equal(t, 1, charVindexMD5.Cost())
-	assert.Equal(t, "utf8ch", charVindexMD5.String())
-	assert.True(t, charVindexMD5.IsUnique())
-	assert.False(t, charVindexMD5.NeedsVCursor())
+func TestUnicodeLooseXXHashInfo(t *testing.T) {
+	assert.Equal(t, 1, charVindexXXHash.Cost())
+	assert.Equal(t, "utf8ch", charVindexXXHash.String())
+	assert.True(t, charVindexXXHash.IsUnique())
+	assert.False(t, charVindexXXHash.NeedsVCursor())
 }
 
-func TestUnicodeLooseMD5Map(t *testing.T) {
+func TestUnicodeLooseXXHashMap(t *testing.T) {
 	tcases := []struct {
 		in, out string
 	}{{
 		in:  "Test",
-		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+		out: "B\xd2\x13a\bzL\a",
 	}, {
-		in:  "TEST",
-		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+		in:  "TEst",
+		out: "B\xd2\x13a\bzL\a",
 	}, {
 		in:  "Te\u0301st",
-		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+		out: "B\xd2\x13a\bzL\a",
 	}, {
 		in:  "Tést",
-		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+		out: "B\xd2\x13a\bzL\a",
 	}, {
 		in:  "Bést",
-		out: "²3.Os\xd0\aA\x02bIpo/\xb6",
+		out: "\x92iu\xb9\xce.\xc3\x16",
 	}, {
 		in:  "Test ",
-		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
+		out: "B\xd2\x13a\bzL\a",
 	}, {
 		in:  " Test",
-		out: "\xa2\xe3Q\\~\x8d\xf1\xff\xd2\xcc\xfc\x11Ʊ\x9d\xd1",
+		out: "Oˋ\xe3N\xc0Wu",
 	}, {
 		in:  "Test\t",
-		out: "\x82Em\xd8z\x9cz\x02\xb1\xc2\x05kZ\xba\xa2r",
+		out: " \xaf\x87\xfc6\xe3\xfdQ",
 	}, {
 		in:  "TéstLooong",
-		out: "\x96\x83\xe1+\x80C\f\xd4S\xf5\xdfߺ\x81ɥ",
+		out: "\xd3\xea\x879B\xb4\x84\xa7",
 	}, {
 		in:  "T",
-		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
+		out: "\xf8\x1c;\xe2\xd5\x01\xfe\x18",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindexMD5.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := charVindexXXHash.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -85,15 +85,15 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 	}
 }
 
-func TestUnicodeLooseMD5Verify(t *testing.T) {
+func TestUnicodeLooseXXHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
-	ksids := [][]byte{[]byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5")}
-	got, err := charVindexMD5.Verify(nil, ids, ksids)
+	ksids := [][]byte{[]byte("B\xd2\x13a\bzL\a"), []byte("B\xd2\x13a\bzL\a"), []byte(" \xaf\x87\xfc6\xe3\xfdQ")}
+	got, err := charVindexXXHash.Verify(nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []bool{true, true, false}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("UnicodeLooseMD5.Verify: %v, want %v", got, want)
+		t.Errorf("UnicodeLooseXXHash.Verify: %v, want %v", got, want)
 	}
 }
