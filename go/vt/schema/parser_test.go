@@ -38,6 +38,8 @@ func TestParseAlterTableOptions(t *testing.T) {
 		"  alter   with    'gh-ost'   table   scm.`t` add column i int, drop column d":                             {schema: "scm", table: "t", options: "add column i int, drop column d"},
 		"alter with 'pt-osc' table scm.t add column i int, drop column d":                                          {schema: "scm", table: "t", options: "add column i int, drop column d"},
 		"alter with 'gh-ost' '--some-option=5 --another-option=false' table scm.t add column i int, drop column d": {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter with 'gh-ost' '--initially-drop-old-table' table scm.t add column i int, drop column d":             {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter with 'gh-ost' '--initially-drop-old-table --execute' table scm.t add column i int, drop column d":   {schema: "scm", table: "t", options: "add column i int, drop column d"},
 	}
 	for query, expect := range tests {
 		schema, table, options := ParseAlterTableOptions(query)
