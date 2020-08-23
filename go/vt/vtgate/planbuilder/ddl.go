@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -36,6 +37,13 @@ func buildOnlineDDLPlan(query string, stmt *sqlparser.DDL, vschema ContextVSchem
 	}
 	if stmt.OnlineHint == nil {
 		return nil, fmt.Errorf("Not an online DDL: %s", query)
+	}
+	switch stmt.OnlineHint.Strategy {
+	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC: // OK, do nothing
+	case schema.DDLStrategyNormal:
+		return nil, fmt.Errorf("Not an online DDL strategy")
+	default:
+		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", stmt.OnlineHint.Strategy)
 	}
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
