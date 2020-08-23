@@ -26,8 +26,12 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
+
+// TopoServ is the connection to the topo server.
+var TopoServ *topo.Server
 
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
@@ -45,9 +49,11 @@ func TabletSetMaster(instanceKey InstanceKey) error {
 	if err := tmc.ChangeType(context.TODO(), tablet, topodatapb.TabletType_MASTER); err != nil {
 		return err
 	}
-	// Proactively change the tablet type locally so we don't spam this until we get the refresh.
-	tablet.Type = topodatapb.TabletType_MASTER
-	if err := SaveTablet(tablet); err != nil {
+	ti, err := TopoServ.GetTablet(context.TODO(), tablet.Alias)
+	if err != nil {
+		return log.Errore(err)
+	}
+	if err := SaveTablet(ti.Tablet); err != nil {
 		log.Errore(err)
 	}
 	return nil

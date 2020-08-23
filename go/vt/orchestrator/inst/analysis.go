@@ -134,6 +134,7 @@ type ReplicationAnalysis struct {
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsMaster                                  bool
+	IsClusterMaster                           bool
 	IsCoMaster                                bool
 	LastCheckValid                            bool
 	LastCheckPartialSuccess                   bool
