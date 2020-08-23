@@ -447,6 +447,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		if clusters[a.SuggestedClusterAlias] == nil {
 			clusters[a.SuggestedClusterAlias] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_MASTER {
+				a.IsClusterMaster = true
 				clusters[a.SuggestedClusterAlias].masterKey = &a.AnalyzedInstanceKey
 			}
 		}
@@ -456,33 +457,32 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			// We can only take one cluster level action at a time.
 			return nil
 		}
-		if a.IsMaster && !a.LastCheckValid && a.CountReplicas == 0 {
+		if a.IsClusterMaster && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadMasterWithoutReplicas
 			a.Description = "Master cannot be reached by orchestrator and has no replica"
 			ca.hasClusterwideAction = true
 			//
-		} else if a.IsMaster && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		} else if a.IsClusterMaster && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadMaster
 			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
-		} else if a.IsMaster && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
+		} else if a.IsClusterMaster && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadMasterAndReplicas
 			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
-		} else if a.IsMaster && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
+		} else if a.IsClusterMaster && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadMasterAndSomeReplicas
 			a.Description = "Master cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
-		} else if a.TabletType == topodatapb.TabletType_MASTER && !a.IsMaster {
-			// Topo issues are lower priority than dead master.
+		} else if a.IsClusterMaster && !a.IsMaster {
 			a.Analysis = MasterHasMaster
 			a.Description = "Master is replicating from somewhere else"
 			ca.hasClusterwideAction = true
 			//
-		} else if a.TabletType == topodatapb.TabletType_MASTER && a.IsReadOnly {
+		} else if a.IsClusterMaster && a.IsReadOnly {
 			a.Analysis = MasterIsReadOnly
 			a.Description = "Master is read-only"
 			//

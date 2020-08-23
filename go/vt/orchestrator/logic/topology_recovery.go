@@ -819,7 +819,6 @@ func replacePromotedReplicaWithCandidate(topologyRecovery *TopologyRecovery, dea
 // checkAndRecoverDeadMaster checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
 func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	log.Infof("IN RECOV")
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedMasterRecovery) {
 		return false, nil, nil
 	}
@@ -828,6 +827,7 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadMaster.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
+	log.Infof("Analysis: %v, deadmaster %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
 	// That's it! We must do recovery!
 	// TODO(sougou): This function gets called by GracefulMasterTakeover which may
@@ -2031,25 +2031,30 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 
 // electNewMaster elects a new master while none were present before.
 func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	log.Infof("will elect a new master: %v", analysisEntry.SuggestedClusterAlias)
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+	if topologyRecovery == nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewMaster.", analysisEntry.AnalyzedInstanceKey))
+		return false, nil, err
+	}
+	log.Infof("Analysis: %v, will elect a new master: %v", analysisEntry.Analysis, analysisEntry.SuggestedClusterAlias)
 
 	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
 			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
 	defer unlock(&err)
 
 	replicas, err := inst.ReadClusterAliasInstances(analysisEntry.SuggestedClusterAlias)
 	if err != nil {
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
 	// TODO(sougou): this is not reliable, because of the timeout.
 	replicas = inst.StopReplicasNicely(replicas, time.Duration(config.Config.InstanceBulkOperationsWaitTimeoutSeconds)*time.Second)
 	if len(replicas) == 0 {
-		return false, nil, fmt.Errorf("no instances in cluster %v", analysisEntry.SuggestedClusterAlias)
+		return false, topologyRecovery, fmt.Errorf("no instances in cluster %v", analysisEntry.SuggestedClusterAlias)
 	}
 
 	var candidate *inst.Instance
@@ -2063,7 +2068,7 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 		}
 		if err := inst.CheckMoveViaGTID(replica, candidate); err != nil {
 			if err := inst.CheckMoveViaGTID(candidate, replica); err != nil {
-				return false, nil, fmt.Errorf("instances are not compatible: %+v %+v: %v", candidate, replica, err)
+				return false, topologyRecovery, fmt.Errorf("instances are not compatible: %+v %+v: %v", candidate, replica, err)
 			} else {
 				if !inst.IsBannedFromBeingCandidateReplica(replica) {
 					candidate = replica
@@ -2073,7 +2078,7 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 	}
 
 	if err := inst.TabletSetMaster(candidate.Key); err != nil {
-		return true, nil, err
+		return true, topologyRecovery, err
 	}
 	// TODO(sougou): parallelize
 	for _, replica := range replicas {
@@ -2081,29 +2086,34 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 			continue
 		}
 		if _, err := inst.MoveBelowGTID(&replica.Key, &candidate.Key); err != nil {
-			return false, nil, err
+			return false, topologyRecovery, err
 		}
 	}
 	if _, err := inst.SetReadOnly(&candidate.Key, false); err != nil {
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
-	return true, nil, nil
+	return true, topologyRecovery, nil
 }
 
 // fixClusterAndMaster performs a traditional vitess PlannedReparentShard.
 func fixClusterAndMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	log.Infof("will fix incorrect mastership %+v", analysisEntry.AnalyzedInstanceKey)
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+	if topologyRecovery == nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixClusterAndMaster.", analysisEntry.AnalyzedInstanceKey))
+		return false, nil, err
+	}
+	log.Infof("Analysis: %v, will fix incorrect mastership %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
 	// Reset replication on current master. This will prevent the comaster code-path.
 	// TODO(sougou): this should probably done while holding a lock.
 	_, err = inst.ResetReplicationOperation(&analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
 
 	altAnalysis, err := forceAnalysisEntry(analysisEntry.ClusterDetails.ClusterName, inst.DeadMaster, "", &analysisEntry.AnalyzedInstanceMasterKey)
 	if err != nil {
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
 	recoveryAttempted, topologyRecovery, err = ForceExecuteRecovery(altAnalysis, &analysisEntry.AnalyzedInstanceKey, false)
 	if err != nil {
@@ -2117,36 +2127,47 @@ func fixClusterAndMaster(analysisEntry inst.ReplicationAnalysis, candidateInstan
 
 // fixMaster sets the master as read-write.
 func fixMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	log.Infof("will fix master to read-write %+v", analysisEntry.AnalyzedInstanceKey)
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+	if topologyRecovery == nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixMaster.", analysisEntry.AnalyzedInstanceKey))
+		return false, nil, err
+	}
+	log.Infof("Analysis: %v, will fix master to read-write %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
 	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
 			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
 			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
 	defer unlock(&err)
 
 	if err := TabletUndoDemoteMaster(analysisEntry.AnalyzedInstanceKey); err != nil {
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
-	return true, nil, nil
+	return true, topologyRecovery, nil
 }
 
 // fixReplica sets the replica as read-only and points it at the current master.
 func fixReplica(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	log.Infof("will fix replica %+v", analysisEntry.AnalyzedInstanceKey)
-	if _, err := inst.SetReadOnly(&analysisEntry.AnalyzedInstanceKey, true); err != nil {
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
+	if topologyRecovery == nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixReplica.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
+	log.Infof("Analysis: %v, will fix replica %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+	if _, err := inst.SetReadOnly(&analysisEntry.AnalyzedInstanceKey, true); err != nil {
+		return false, topologyRecovery, err
+	}
+
 	masterKey, err := ShardMaster(&analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Info("Could not compute master for %+v", analysisEntry.AnalyzedInstanceKey)
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
 	if _, err := inst.MoveBelowGTID(&analysisEntry.AnalyzedInstanceKey, masterKey); err != nil {
-		return false, nil, err
+		return false, topologyRecovery, err
 	}
-	return true, nil, nil
+	return true, topologyRecovery, nil
 }

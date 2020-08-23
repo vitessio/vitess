@@ -43,6 +43,8 @@ var (
 func OpenTabletDiscovery() <-chan time.Time {
 	// TODO(sougou): If there's a shutdown signal, we have to close the topo.
 	ts = topo.Open()
+	// TODO(sougou): remove ts and push some functions into inst.
+	inst.TopoServ = ts
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecOrchestrator("delete from vitess_tablet"); err != nil {
 		log.Errore(err)
