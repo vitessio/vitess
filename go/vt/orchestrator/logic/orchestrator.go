@@ -509,6 +509,7 @@ func ContinuousDiscovery() {
 	go ometrics.InitGraphiteMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
+	inst.SetDurabilityPolicy(config.Config.Durability)
 	if config.Config.RaftEnabled {
 		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
 			log.Fatale(err)

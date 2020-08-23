@@ -585,11 +585,12 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 		message := "Failure: no replica promoted."
 		AuditTopologyRecovery(topologyRecovery, message)
 		inst.AuditOperation("recover-dead-master", failedInstanceKey, message)
-	} else {
-		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
-		AuditTopologyRecovery(topologyRecovery, message)
-		inst.AuditOperation("recover-dead-master", failedInstanceKey, message)
+		return true, promotedReplica, lostReplicas, err
 	}
+
+	message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
+	AuditTopologyRecovery(topologyRecovery, message)
+	inst.AuditOperation("recover-dead-master", failedInstanceKey, message)
 	return true, promotedReplica, lostReplicas, err
 }
 
@@ -904,8 +905,15 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 			}
 		}
 		{
-			_, err := inst.SetReadOnly(&promotedReplica.Key, false)
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=0 on promoted master: success=%t", (err == nil)))
+			count := inst.MasterSemiSync(promotedReplica.Key)
+			err := inst.SetSemiSyncMaster(&promotedReplica.Key, count > 0)
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
+
+			// Dont' allow writes if semi-sync settings fail.
+			if err == nil {
+				_, err := inst.SetReadOnly(&promotedReplica.Key, false)
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=0 on promoted master: success=%t", (err == nil)))
+			}
 		}
 		// Let's attempt, though we won't necessarily succeed, to set old master as read-only
 		go func() {
@@ -2030,6 +2038,7 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 }
 
 // electNewMaster elects a new master while none were present before.
+// TODO(sougou): this should be mreged with recoverDeadMaster
 func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, forceInstanceRecovery bool, skipProcesses bool) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false, true)
 	if topologyRecovery == nil {
@@ -2102,7 +2111,15 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 			return false, topologyRecovery, err
 		}
 	}
-	if _, err := inst.SetReadOnly(&candidate.Key, false); err != nil {
+	count := inst.MasterSemiSync(candidate.Key)
+	err = inst.SetSemiSyncMaster(&candidate.Key, count > 0)
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
+	if err != nil {
+		return false, topologyRecovery, err
+	}
+	_, err = inst.SetReadOnly(&candidate.Key, false)
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewMaster: set read-only false: success=%t", (err == nil)))
+	if err != nil {
 		return false, topologyRecovery, err
 	}
 	return true, topologyRecovery, nil
