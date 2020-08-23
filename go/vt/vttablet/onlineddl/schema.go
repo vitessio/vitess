@@ -167,6 +167,17 @@ const (
 			migration_status='ready'
 		LIMIT 1
 	`
+	sqlSelectPTOSCMigrationTriggers = `SELECT
+			TRIGGER_SCHEMA as trigger_schema,
+			TRIGGER_NAME as trigger_name
+		FROM INFORMATION_SCHEMA.TRIGGERS
+		WHERE
+			EVENT_OBJECT_SCHEMA=%a
+			AND EVENT_OBJECT_TABLE=%a
+			AND ACTION_TIMING='AFTER'
+			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
+		`
+	sqlDropTrigger = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 )
 
 const (
