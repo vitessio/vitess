@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -86,5 +87,39 @@ func TestSQLValue(t *testing.T) {
 	want := "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["
 	if out != want {
 		t.Errorf("Map(%#v): %#v, want %#v", val, out, want)
+	}
+}
+
+func BenchmarkMD5Hash(b *testing.B) {
+	for _, benchSize := range []struct {
+		name string
+		n    int
+	}{
+		{"8B", 8},
+		{"32B", 32},
+		{"64B", 64},
+		{"512B", 512},
+		{"1KB", 1e3},
+		{"4KB", 4e3},
+	} {
+		input := make([]byte, benchSize.n)
+		for i := range input {
+			input[i] = byte(i)
+		}
+
+		name := fmt.Sprintf("md5Hash,direct,bytes,n=%s", benchSize.name)
+		b.Run(name, func(b *testing.B) {
+			benchmarkMD5HashBytes(b, input)
+		})
+
+	}
+}
+
+var sinkMD5 []byte
+
+func benchmarkMD5HashBytes(b *testing.B, input []byte) {
+	b.SetBytes(int64(len(input)))
+	for i := 0; i < b.N; i++ {
+		sinkMD5 = vMD5Hash(input)
 	}
 }
