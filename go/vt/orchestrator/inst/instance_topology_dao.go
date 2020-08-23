@@ -209,36 +209,25 @@ func purgeBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, err
 	return ReadTopologyInstance(instanceKey)
 }
 
-func SetSemiSyncMaster(instanceKey *InstanceKey, enableMaster bool) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, err
+// TODO(sougou): implement count
+func SetSemiSyncMaster(instanceKey *InstanceKey, enableMaster bool) error {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, enableMaster, false); err != nil {
+		return log.Errore(err)
 	}
-	if _, err := ExecInstance(instanceKey, "set @@global.rpl_semi_sync_master_enabled=?", enableMaster); err != nil {
-		return instance, log.Errore(err)
-	}
-	return ReadTopologyInstance(instanceKey)
+	return nil
 }
 
-func SetSemiSyncReplica(instanceKey *InstanceKey, enableReplica bool) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, err
+// TODO(sougou): This function may be used later for fixing semi-sync
+func SetSemiSyncReplica(instanceKey *InstanceKey, enableReplica bool) error {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, enableReplica); err != nil {
+		return log.Errore(err)
 	}
-	if instance.SemiSyncReplicaEnabled == enableReplica {
-		return instance, nil
+	// Need to apply change by stopping starting IO thread
+	ExecInstance(instanceKey, "stop slave io_thread")
+	if _, err := ExecInstance(instanceKey, "start slave io_thread"); err != nil {
+		return log.Errore(err)
 	}
-	if _, err := ExecInstance(instanceKey, "set @@global.rpl_semi_sync_slave_enabled=?", enableReplica); err != nil {
-		return instance, log.Errore(err)
-	}
-	if instance.ReplicationIOThreadRuning {
-		// Need to apply change by stopping starting IO thread
-		ExecInstance(instanceKey, "stop slave io_thread")
-		if _, err := ExecInstance(instanceKey, "start slave io_thread"); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
-	return ReadTopologyInstance(instanceKey)
+	return nil
 }
 
 func RestartReplicationQuick(instanceKey *InstanceKey) error {
@@ -439,20 +428,6 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, fmt.Errorf("instance is not a replica: %+v", instanceKey)
 	}
 
-	// If async fallback is disallowed, we'd better make sure to enable replicas to
-	// send ACKs before START SLAVE. Replica ACKing is off at mysqld startup because
-	// some replicas (those that must never be promoted) should never ACK.
-	// Note: We assume that replicas use 'skip-slave-start' so they won't
-	//       START SLAVE on their own upon restart.
-	if instance.SemiSyncEnforced {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		// Always disable master setting, in case we're converting a former master.
-		if err := EnableSemiSync(instanceKey, false, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
-
 	_, err = ExecInstance(instanceKey, `start slave`)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -538,15 +513,6 @@ func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoor
 
 	log.Infof("Will start replication on %+v until coordinates: %+v", instanceKey, masterCoordinates)
 
-	if instance.SemiSyncEnforced {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		// Always disable master setting, in case we're converting a former master.
-		if err := EnableSemiSync(instanceKey, false, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
-
 	// MariaDB has a bug: a CHANGE MASTER TO statement does not work properly with prepared statement... :P
 	// See https://mariadb.atlassian.net/browse/MDEV-7640
 	// This is the reason for ExecInstance
@@ -570,16 +536,6 @@ func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoor
 	}
 
 	return instance, err
-}
-
-// EnableSemiSync sets the rpl_semi_sync_(master|replica)_enabled variables
-// on a given instance.
-func EnableSemiSync(instanceKey *InstanceKey, master, replica bool) error {
-	log.Infof("instance %+v rpl_semi_sync_master_enabled: %t, rpl_semi_sync_slave_enabled: %t", instanceKey, master, replica)
-	_, err := ExecInstance(instanceKey,
-		`set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`,
-		master, replica)
-	return err
 }
 
 // EnableMasterSSL issues CHANGE MASTER TO MASTER_SSL=1
@@ -732,6 +688,15 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 	if err != nil {
 		return instance, log.Errore(err)
 	}
+
+	semiSync, err := ReplicaSemiSync(*masterKey, *instanceKey)
+	if err != nil {
+		return instance, log.Errore(err)
+	}
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
+		return instance, log.Errore(err)
+	}
+
 	WriteMasterPositionEquivalence(&originalMasterKey, &originalExecBinlogCoordinates, changeToMasterKey, masterBinlogCoordinates)
 	ResetInstanceRelaylogCoordinatesHistory(instanceKey)
 
@@ -958,16 +923,6 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 		return instance, fmt.Errorf("noop: aborting set-read-only operation on %+v; signalling error but nothing went wrong.", *instanceKey)
 	}
 
-	// If async fallback is disallowed, we're responsible for flipping the master
-	// semi-sync switch ON before accepting writes. The setting is off by default.
-	if instance.SemiSyncEnforced && !readOnly {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		if err := EnableSemiSync(instanceKey, true, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
-
 	if _, err := ExecInstance(instanceKey, "set global read_only = ?", readOnly); err != nil {
 		return instance, log.Errore(err)
 	}
@@ -981,16 +936,6 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 		}
 	}
 	instance, err = ReadTopologyInstance(instanceKey)
-
-	// If we just went read-only, it's safe to flip the master semi-sync switch
-	// OFF, which is the default value so that replicas can make progress.
-	if instance.SemiSyncEnforced && readOnly {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		if err := EnableSemiSync(instanceKey, false, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
 
 	log.Infof("instance %+v read_only: %t", instanceKey, readOnly)
 	AuditOperation("read-only", instanceKey, fmt.Sprintf("set as %t", readOnly))
