@@ -1,0 +1,88 @@
+<div id="cluster_sidebar">
+	<div class="navbar" role="navigation">
+		<ul class="nav">
+			<li data-bullet="info">
+				<div>
+					<a data-command="info"><span class="glyphicon glyphicon-time"></span></a>
+				</div>
+			</li>
+			<li data-bullet="colorize-dc">
+				<div>
+					<a data-command="colorize-dc"><span class="glyphicon glyphicon-adjust"></span></a>
+				</div>
+			</li>
+			<li data-bullet="compact-display">
+				<div>
+					<a data-command="compact-display"><span class="glyphicon glyphicon-compressed"></span></a>
+				</div>
+			</li>
+			<li data-bullet="pool-indicator">
+				<div>
+					<a data-command="pool-indicator"><span class="glyphicon glyphicon-tint"></span></a>
+				</div>
+			</li>
+			<li data-bullet="anonymize">
+				<div>
+					<a data-command="anonymize"><span class="glyphicon glyphicon-user"></span></a>
+				</div>
+			</li>
+			<li data-bullet="alias">
+				<div>
+					<a data-command="alias"><span class="glyphicon glyphicon-tag"></span></a>
+				</div>
+			</li>
+			<li data-bullet="silent-ui">
+				<div>
+					<a data-command="silent-ui"><span class="glyphicon glyphicon-volume-off"></span></a>
+				</div>
+			</li>
+		</ul>
+	</div>
+</div>
+
+<div id="cluster_name_info">
+	<div id="cluster_name" class="text-muted"></div>
+	<div id="cluster_subtitle"></div>
+	<div id="cluster_info"></div>
+</div>
+
+<div id="cluster_wrapper">
+	<div id="cluster_container" class="cluster-graph">
+	</div>
+	<div id="cluster_legend"></div>
+</div>
+
+<li id="li-move-instance-method" data-nav-page="relocate method" style="display:none">
+	<div id="move-instance-method" class="dropdown">
+		<button class="btn btn-xs dropdown-toggle" type="button" id="move-instance-method-button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+			Move
+			<span class="caret"></span>
+		</button>
+		<ul class="dropdown-menu" aria-labelledby="move-instance-method">
+			<li><a href="#" data-method="smart" title="Let orchestrator choose replica relocating method">Smart mode</a></li>
+			<li><a href="#" data-method="classic" title="Move replicas using classic binlog file name and position">Classic mode</a></li>
+			<li><a href="#" data-method="gtid" title="Move replicas via GTID">GTID mode</a></li>
+			<li><a href="#" data-method="pseudo-gtid" title="Move replicas via Pseudo-GTID match of binary logs">Pseudo GTID mode</a></li>
+		</ul>
+	</div>
+</li>
+
+<script>
+	function currentClusterName() {
+		return "{{.clusterName}}";
+	}
+
+	function isPseudoGTIDModeEnabled() {
+		return "{{.pseudoGTIDModeEnabled}}" == "true";
+	}
+
+	function removeTextFromHostnameDisplay() {
+		return "{{.removeTextFromHostnameDisplay}}";
+	}
+</script>
+
+<script src="{{.prefix}}/js/jquery-ui.min.js"></script>
+<script src="{{.prefix}}/js/d3.v3.min.js"></script>
+<script src="{{.prefix}}/js/cluster-analysis-shared.js"></script>
+<script src="{{.prefix}}/js/cluster.js"></script>
+<script src="{{.prefix}}/js/cluster-tree.js"></script>
