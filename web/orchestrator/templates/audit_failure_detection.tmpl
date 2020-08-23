@@ -1,0 +1,44 @@
+<div class="container" id="audit">
+  <div class="panel panel-default">
+    <div class="panel-body">
+      <ul class="pager">
+        <li class="previous small"><a href="#"><span class="glyphicon glyphicon-chevron-left"></span></a></li>
+        <li class="next small"><a href="#"><span class="glyphicon glyphicon-chevron-right"></span></a></li>
+      </ul>
+      <table class="table table-striped table-bordered table-condensed">
+        <thead>
+          <tr>
+            <th>Analysis</th>
+            <th>Failed instance</th>
+            <th>Affected</th>
+            <th>Cluster name</th>
+            <th>Cluster alias</th>
+            <th>Detect time</th>
+          </tr>
+        </thead>
+        <tbody>
+        </tbody>
+      </table>
+      <ul class="pager">
+        <li class="previous small"><a href="#"><span class="glyphicon glyphicon-chevron-left"></span></a></li>
+        <li class="next small"><a href="#"><span class="glyphicon glyphicon-chevron-right"></span></a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  function currentPage() {
+    return parseInt("{{.page}}");
+  }
+
+  function detectionId() {
+    return parseInt("{{.detectionId}}");
+  }
+
+  function clusterAlias() {
+    return "{{.clusterAlias}}";
+  }
+</script>
+<script src="{{.prefix}}/js/audit-failure-detection.js"></script>

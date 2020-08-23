@@ -1,0 +1,66 @@
+<div class="container">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      About
+    </div>
+    <div class="panel-body">
+      <p>
+        <strong>Orchestrator</strong> is a MySQL replication topology management and visualization tool, allowing for:
+        <ul>
+          <li>Detection and investigation of replication clusters</li>
+          <li>Safe topology refactoring: moving replicas around the topology</li>
+          <li>Sleek topology visualization</li>
+          <li>Replication problems visualization</li>
+          <li>Topology changes via intuitive drag & drop</li>
+          <li>Maintenance mode declaration and enforcement</li>
+          <li>Auditing of operations</li>
+          <li>More...</li>
+        </ul>
+      </p>
+      <p>
+        Refactoring the topology is a matter of a simple drag & drop. <i>Orchestrator</i> will keep you safe by disallowing invalid replication topologies (e.g. replicating from ROW based to STATEMENT based, from 5.5 to 5.1 etc.)
+      </p>
+      <p>
+        <i>Orchestrator</i> can serve in different modes:
+        <ul>
+          <li>
+            Command line interface
+          </li>
+          <li>
+            Web API
+          </li>
+          <li>
+            Web interface
+          </li>
+        </ul>
+
+      </p>
+      <p>
+        <i>Orchestrator</i> is developed at <a href="http://www.github.com">GitHub</a> to answer for the difficulty in managing and recovering replication topologies.
+      </p>
+      <p>
+        <i>Orchestrator</i> is released as open source under the
+        <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache 2.0 license</a> and is available at:
+        <a href="https://github.com/openark/orchestrator">https://github.com/openark/orchestrator</a>
+      </p>
+      <p>
+        Developed by Shlomi Noach.
+      </p>
+      <p>
+        <span id='customized' style='display: none'>This version has customizations and is unsupported.</span>
+        <script type="text/javascript">
+          $.get('../css/custom.css', function( content ) {
+            if (content.length > 0) {
+              $('#customized').css('display', 'block');
+            }
+          });
+          $.get('../js/custom.js', function( content ) {
+            if (content.length > 0) {
+              $('#customized').css('display', 'block');
+            }
+          });
+        </script>
+      </p>
+    </div>
+  </div>
+</div>

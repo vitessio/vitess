@@ -1,0 +1,26 @@
+<div class="container clusters" id="clusters">
+</div>
+
+
+<script>
+	function removeTextFromHostnameDisplay() {
+		return "{{.removeTextFromHostnameDisplay}}";
+	}
+</script>
+<script src="{{.prefix}}/js/cluster-analysis-shared.js"></script>
+<script src="{{.prefix}}/js/clusters.js"></script>
+
+
+<li id="li-dashboard-sort" data-nav-page="relocate method" style="display:none">
+	<div id="dashboard-sort" class="dropdown">
+		<button class="btn btn-xs dropdown-toggle" type="button" id="dashboard-sort-button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+			Sort
+			<span class="caret"></span>
+		</button>
+		<ul class="dropdown-menu" aria-labelledby="dashboard-sort">
+			<li><a href="#" dashboard-sort="count" title="Sort by instance count, most to least">Instance count</a></li>
+			<li><a href="#" dashboard-sort="name" title="Sort by cluster name">Name</a></li>
+			<li><a href="#" dashboard-sort="alias" title="Sort by cluster alias">Alias</a></li>
+		</ul>
+	</div>
+</li>
