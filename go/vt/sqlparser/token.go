@@ -408,8 +408,6 @@ var keywords = map[string]int{
 	"where":               WHERE,
 	"while":               UNUSED,
 	"with":                WITH,
-	"with_ghost":          WITH_GHOST,
-	"with_pt":             WITH_PT,
 	"work":                WORK,
 	"write":               WRITE,
 	"xor":                 XOR,

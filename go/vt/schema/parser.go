@@ -27,7 +27,7 @@ var (
 	// ALTER WITH_GHOST TABLE
 	// ALTER WITH_GHOST LAG_'--max-lag-millis=2.5 --throttle-http=...' TABLE
 	// ALTER WITH_PT TABLE
-	alterTableBasicPattern               = `(?i)\balter\s+(with_ghost\s+|with_pt\s+|).*?table\s+`
+	alterTableBasicPattern               = `(?i)\balter\s+(with\s+|\s+|).*?table\s+`
 	alterTableExplicitSchemaTableRegexps = []*regexp.Regexp{
 		// ALTER TABLE `scm`.`tbl` something
 		// ALTER WITH_GHOST TABLE `scm`.`tbl` something

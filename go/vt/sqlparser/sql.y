@@ -171,7 +171,6 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
-%token <bytes> WITH_GHOST WITH_PT
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -3413,32 +3412,19 @@ non_add_drop_or_rename_operation:
 
 online_hint_opt:
   {
-    $$ = &OnlineDDLHint{Strategy: "", Options: "",}
+    $$ = &OnlineDDLHint{}
   }
-| WITH_GHOST
+| WITH STRING
   {
     $$ = &OnlineDDLHint{
-        Strategy: "gh-ost",
+        Strategy: DDLStrategy($2),
     }
   }
-| WITH_GHOST STRING
+| WITH STRING STRING
   {
     $$ = &OnlineDDLHint{
-        Strategy: "gh-ost",
-        Options: string($2),
-    }
-  }
-| WITH_PT
-  {
-    $$ = &OnlineDDLHint{
-        Strategy: "pt-osc",
-    }
-  }
-| WITH_PT STRING
-  {
-    $$ = &OnlineDDLHint{
-        Strategy: "pt-osc",
-        Options: string($2),
+        Strategy: DDLStrategy($2),
+        Options: string($3),
     }
   }
 
