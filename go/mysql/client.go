@@ -504,10 +504,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 			// 5.6.2 that don't have a null terminated string.
 			authPluginName = string(data[pos : len(data)-1])
 		}
-
-		if authPluginName != MysqlNativePassword {
-			return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: only support %v auth plugin name, but got %v", MysqlNativePassword, authPluginName)
-		}
+		c.DefaultAuthPluginName = authPluginName
 	}
 
 	return capabilities, authPluginData, nil

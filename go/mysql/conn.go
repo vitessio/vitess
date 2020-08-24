@@ -105,6 +105,10 @@ type Conn struct {
 	// and CapabilityClientFoundRows.
 	Capabilities uint32
 
+	// DefaultAuthPluginName is the name of server's default authentication plugin.
+	// It is set during the initial handshake.
+	DefaultAuthPluginName string
+
 	// CharacterSet is the character set used by the other side of the
 	// connection.
 	// It is set during the initial handshake.
