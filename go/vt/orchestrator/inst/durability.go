@@ -23,6 +23,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+//=======================================================================
+
 var (
 	durabilityPolicies  = make(map[string]durabler)
 	curDurabilityPolicy durabler
@@ -31,6 +33,7 @@ var (
 func init() {
 	registerDurability("none", &durabilityNone{})
 	registerDurability("semi_sync", &durabilitySemiSync{})
+	registerDurability("cross_cell", &durabilityCrossCell{})
 }
 
 type durabler interface {
@@ -45,6 +48,8 @@ func registerDurability(name string, d durabler) {
 	}
 	durabilityPolicies[name] = d
 }
+
+//=======================================================================
 
 func SetDurabilityPolicy(name string) error {
 	curDurabilityPolicy = durabilityPolicies[name]
@@ -85,6 +90,8 @@ func ReplicaSemiSyncFromTablet(master, replica *topodatapb.Tablet) bool {
 	return curDurabilityPolicy.replicaSemiSync(master, replica)
 }
 
+//=======================================================================
+
 type durabilityNone struct{}
 
 func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
@@ -102,6 +109,8 @@ func (d *durabilityNone) masterSemiSync(instanceKey InstanceKey) int {
 func (d *durabilityNone) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
 	return false
 }
+
+//=======================================================================
 
 type durabilitySemiSync struct{}
 
@@ -121,6 +130,34 @@ func (d *durabilitySemiSync) replicaSemiSync(master, replica *topodatapb.Tablet)
 	switch replica.Type {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
 		return true
+	}
+	return false
+}
+
+//=======================================================================
+
+type durabilityCrossCell struct{}
+
+func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
+	switch tablet.Type {
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+		return NeutralPromoteRule
+	}
+	return MustNotPromoteRule
+}
+
+func (d *durabilityCrossCell) masterSemiSync(instanceKey InstanceKey) int {
+	return 1
+}
+
+func (d *durabilityCrossCell) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+	// Prevent panics.
+	if master.Alias == nil || replica.Alias == nil {
+		return false
+	}
+	switch replica.Type {
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
+		return master.Alias.Cell != replica.Alias.Cell
 	}
 	return false
 }
