@@ -441,8 +441,8 @@ func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string)
 	if err != nil {
 		return nil, err
 	}
-	if len(replStatus.Statuses) == 0 {
-		return fmt.Errorf("no streams found for workflow %s in keyspace %s", workflow, keyspace)
+	if len(replStatus.ShardStatuses) == 0 {
+		return nil, fmt.Errorf("no streams found for workflow %s in keyspace %s", workflow, keyspace)
 	}
 
 	if err := dumpStreamListAsJSON(replStatus, wr); err != nil {
