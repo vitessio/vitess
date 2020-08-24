@@ -79,12 +79,6 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlFailStaleMigrations = `UPDATE %s.schema_migrations
-			SET migration_status='failed'
-		WHERE
-			migration_status='running'
-			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
-	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE %s.schema_migrations
 			SET started_timestamp=IFNULL(started_timestamp, NOW())
 		WHERE
@@ -124,6 +118,13 @@ const (
 		FROM %s.schema_migrations
 		WHERE
 			migration_status='ready'
+	`
+	sqlSelectStaleMigrations = `SELECT
+			migration_uuid
+		FROM %s.schema_migrations
+		WHERE
+			migration_status='running'
+			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
 	sqlSelectMigration = `SELECT
 			id,

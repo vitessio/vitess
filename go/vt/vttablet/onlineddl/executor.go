@@ -54,6 +54,8 @@ var (
 	ErrExecutorNotWritableTablet = errors.New("Cannot run gh-ost migration on non-writable tablet")
 	// ErrExecutorMigrationAlreadyRunning is generated when an attempt is made to run an operation that conflicts with a running migration
 	ErrExecutorMigrationAlreadyRunning = errors.New("Cannot run gh-ost migration since a migration is already running")
+	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
+	ErrMigrationNotFound = errors.New("Migration not found")
 )
 
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
@@ -643,7 +645,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	row := r.Named().Row()
 	if row == nil {
 		// No results
-		return nil, nil
+		return nil, ErrMigrationNotFound
 	}
 	onlineDDL = &schema.OnlineDDL{
 		Keyspace: row["keyspace"].ToString(),
@@ -658,8 +660,47 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	return onlineDDL, nil
 }
 
-// cancelMigration attempts to abort a running migration by touching the panic flag file
-func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRunningMigrations bool) (result *sqltypes.Result, err error) {
+// terminateMigration attempts to interrupt and hard-stop a running migration
+func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, lastMigrationUUID string) (foundRunning bool, err error) {
+	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+		// double check: is the running migration the very same one we wish to cancel?
+		if onlineDDL.UUID == lastMigrationUUID {
+			// assuming all goes well in next steps, we can already report that there has indeed been a migration
+			foundRunning = true
+		}
+	}
+	switch onlineDDL.Strategy {
+	case schema.DDLStrategyPTOSC:
+		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
+		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, onlineDDL.UUID); running {
+			foundRunning = true
+			// Because pt-osc doesn't offer much control, we take a brute force approach to killing it,
+			// revoking its privileges, and cleaning up its triggers.
+			if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+				return foundRunning, nil
+			}
+			if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+				return foundRunning, nil
+			}
+			if err := e.dropOnlineDDLUser(ctx); err != nil {
+				return foundRunning, nil
+			}
+			if err := e.dropPTOSCMigrationTriggers(ctx, onlineDDL); err != nil {
+				return foundRunning, nil
+			}
+		}
+	case schema.DDLStrategyGhost:
+		// gh-ost migrations are easy to kill: just touch their specific panic flag files. We trust
+		// gh-ost to terminate. No need to KILL it. And there's no trigger cleanup.
+		if err := e.createGhostPanicFlagFile(onlineDDL.UUID); err != nil {
+			return foundRunning, fmt.Errorf("Error cancelling migration, flag file error: %+v", err)
+		}
+	}
+	return foundRunning, nil
+}
+
+// cancelMigration attempts to abort a scheduled or a running migration
+func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRunningMigration bool) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -669,9 +710,6 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 	if err != nil {
 		return nil, err
 	}
-	if onlineDDL == nil {
-		return nil, fmt.Errorf("Migration not found: %s", uuid)
-	}
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
@@ -680,28 +718,13 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 		rowsAffected = 1
 	}
 
-	if terminateRunningMigrations {
-		if atomic.LoadInt64(&e.migrationRunning) > 0 {
-			// double check: is the running migration the very same one we wish to cancel?
-			if uuid == e.lastMigrationUUID {
-				// assuming all goes well in next steps, we can already report that there has indeed been a migration
-				rowsAffected = 1
-			}
-		}
-
-		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
-		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
+	if terminateRunningMigration {
+		migrationFound, err := e.terminateMigration(ctx, onlineDDL, e.lastMigrationUUID)
+		if migrationFound {
 			rowsAffected = 1
-			_ = syscall.Kill(pid, syscall.SIGTERM)
-			_ = syscall.Kill(pid, syscall.SIGKILL)
-			_ = e.dropPTOSCMigrationTriggers(ctx, onlineDDL)
-			if err := e.dropOnlineDDLUser(ctx); err != nil {
-				return nil, fmt.Errorf("Error cancelling migration, drop account error: %+v", err)
-			}
 		}
-		// gh-ost migrations are easy to kill: just touch their specific panic flag files
-		if err := e.createGhostPanicFlagFile(uuid); err != nil {
-			return nil, fmt.Errorf("Error cancelling migration, flag file error: %+v", err)
+		if err != nil {
+			return result, err
 		}
 	}
 
@@ -941,6 +964,8 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 	return err
 }
 
+// reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
+// actually running).
 func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
 	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, "_vt", ":strategy")
 	bindVars := map[string]*querypb.BindVariable{
@@ -957,7 +982,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
 	for _, row := range r.Named().Rows {
 		// A pt-osc UUID is found which claims to be 'running'. Is it?
 		uuid := row["migration_uuid"].ToString()
-
+		// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
+		// if the process is alive, we update the `liveness_timestamp` for this migration.
 		if running, _, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
 			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 		}
@@ -968,7 +994,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
 // shown no liveness in past X minutes
 func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
-	parsed := sqlparser.BuildParsedQuery(sqlFailStaleMigrations, "_vt", ":minutes")
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	parsed := sqlparser.BuildParsedQuery(sqlSelectStaleMigrations, "_vt", ":minutes")
 	bindVars := map[string]*querypb.BindVariable{
 		"minutes": sqltypes.Int64BindVariable(staleMigrationMinutes),
 	}
@@ -976,8 +1005,30 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = e.execQuery(ctx, bound)
-	return err
+	r, err := e.execQuery(ctx, bound)
+	if err != nil {
+		return err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+
+		onlineDDL, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		// If this is pt-osc migration, then it may have crashed without having its triggers cleaned up.
+		// make sure to drop them.
+		if onlineDDL.Strategy == schema.DDLStrategyPTOSC {
+			if err := e.dropPTOSCMigrationTriggers(ctx, onlineDDL); err != nil {
+				return err
+			}
+		}
+		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // onMigrationCheckTick runs all migrations life cycle
