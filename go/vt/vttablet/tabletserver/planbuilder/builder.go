@@ -130,17 +130,19 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 func analyzeShowTables(show *sqlparser.Show, dbName string) {
 	// rewrite WHERE clause if it exists
 	// `where Tables_in_Keyspace` => `where Tables_in_DbName`
-	filter := show.ShowTablesOpt.Filter.Filter
-	if filter != nil {
-		sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
-			switch n := cursor.Node().(type) {
-			case *sqlparser.ColName:
-				if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
-					cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
+	if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
+		filter := show.ShowTablesOpt.Filter.Filter
+		if filter != nil {
+			sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+				switch n := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
+						cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
+					}
 				}
-			}
-			return true
-		}, nil)
+				return true
+			}, nil)
+		}
 	}
 }
 
