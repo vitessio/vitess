@@ -2950,6 +2950,10 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
+	// Note: List is deprecated and replaced by show.
+	if action == "list" {
+		action = "show"
+	}
 	var workflow string
 	var err error
 	if action != "listall" {
