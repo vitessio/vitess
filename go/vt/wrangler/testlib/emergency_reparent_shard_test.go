@@ -168,8 +168,11 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 	// run EmergencyReparentShard
 	// using deprecated flag until it is removed completely. at that time this should be replaced with -wait_replicas_timeout
-	err := vp.Run([]string{"EmergencyReparentShard", "-wait_slave_timeout", "10s", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard,
+	waitReplicaTimeout := time.Second * 2
+	err := vp.Run([]string{"EmergencyReparentShard", "-wait_replicas_timeout", waitReplicaTimeout.String(), newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard,
 		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
+	buffer := 100 * time.Millisecond
+	time.Sleep(waitReplicaTimeout + buffer)
 	require.NoError(t, err)
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
