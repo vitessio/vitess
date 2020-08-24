@@ -1,6 +1,6 @@
 {
   "Debug": true,
-  "Durability": "cross_cell",
+  "Durability": "semi_sync",
   "MySQLTopologyUser": "orc_client_user",
   "MySQLTopologyPassword": "orc_client_user_password",
   "MySQLReplicaUser": "vt_repl",
