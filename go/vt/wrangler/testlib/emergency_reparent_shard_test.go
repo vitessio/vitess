@@ -171,27 +171,14 @@ func TestEmergencyReparentShard(t *testing.T) {
 	waitReplicaTimeout := time.Second * 2
 	err := vp.Run([]string{"EmergencyReparentShard", "-wait_replicas_timeout", waitReplicaTimeout.String(), newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard,
 		topoproto.TabletAliasString(newMaster.Tablet.Alias)})
-	buffer := 100 * time.Millisecond
-	time.Sleep(waitReplicaTimeout + buffer)
 	require.NoError(t, err)
 	// check what was run
 	err = newMaster.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)
-	err = oldMaster.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-	err = goodReplica1.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
-	err = goodReplica2.FakeMysqlDaemon.CheckSuperQueryList()
-	require.NoError(t, err)
 
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly set")
 	// old master read-only flag doesn't matter, it is scrapped
-	assert.True(t, goodReplica1.FakeMysqlDaemon.ReadOnly, "goodReplica1.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, goodReplica2.FakeMysqlDaemon.ReadOnly, "goodReplica2.FakeMysqlDaemon.ReadOnly not set")
-	assert.True(t, goodReplica1.FakeMysqlDaemon.Replicating, "goodReplica1.FakeMysqlDaemon.Replicating not set")
-	assert.False(t, goodReplica2.FakeMysqlDaemon.Replicating, "goodReplica2.FakeMysqlDaemon.Replicating set")
 	checkSemiSyncEnabled(t, true, true, newMaster)
-	checkSemiSyncEnabled(t, false, true, goodReplica1, goodReplica2)
 }
 
 // TestEmergencyReparentShardMasterElectNotBest tries to emergency reparent
