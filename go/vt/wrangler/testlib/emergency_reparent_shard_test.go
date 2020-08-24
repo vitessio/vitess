@@ -177,7 +177,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly set")
-	// old master read-only flag doesn't matter, it is scrapped
 	checkSemiSyncEnabled(t, true, true, newMaster)
 }
 
