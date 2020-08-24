@@ -36,7 +36,7 @@ func init() {
 type durabler interface {
 	promotionRule(*topodatapb.Tablet) CandidatePromotionRule
 	masterSemiSync(InstanceKey) int
-	replicaSemiSync(master, replica InstanceKey) (bool, error)
+	replicaSemiSync(master, replica *topodatapb.Tablet) bool
 }
 
 func registerDurability(name string, d durabler) {
@@ -67,8 +67,22 @@ func MasterSemiSync(instanceKey InstanceKey) int {
 }
 
 // ReplicaSemiSync returns the replica semi-sync setting for the instance.
-func ReplicaSemiSync(masterKey, replicaKey InstanceKey) (bool, error) {
-	return curDurabilityPolicy.replicaSemiSync(masterKey, replicaKey)
+func ReplicaSemiSync(masterKey, replicaKey InstanceKey) bool {
+	master, err := ReadTablet(masterKey)
+	if err != nil {
+		return false
+	}
+	replica, err := ReadTablet(replicaKey)
+	if err != nil {
+		return false
+	}
+	return curDurabilityPolicy.replicaSemiSync(master, replica)
+}
+
+// ReplicaSemiSyncFromTablet returns the replica semi-sync setting from the tablet record.
+// Prefer using this function if tablet record is available.
+func ReplicaSemiSyncFromTablet(master, replica *topodatapb.Tablet) bool {
+	return curDurabilityPolicy.replicaSemiSync(master, replica)
 }
 
 type durabilityNone struct{}
@@ -85,8 +99,8 @@ func (d *durabilityNone) masterSemiSync(instanceKey InstanceKey) int {
 	return 0
 }
 
-func (d *durabilityNone) replicaSemiSync(masterKey, replicaKey InstanceKey) (bool, error) {
-	return false, nil
+func (d *durabilityNone) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+	return false
 }
 
 type durabilitySemiSync struct{}
@@ -103,14 +117,10 @@ func (d *durabilitySemiSync) masterSemiSync(instanceKey InstanceKey) int {
 	return 1
 }
 
-func (d *durabilitySemiSync) replicaSemiSync(masterKey, replicaKey InstanceKey) (bool, error) {
-	tablet, err := ReadTablet(replicaKey)
-	if err != nil {
-		return false, err
-	}
-	switch tablet.Type {
+func (d *durabilitySemiSync) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
+	switch replica.Type {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }

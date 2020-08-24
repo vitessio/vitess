@@ -1543,9 +1543,10 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 		return electNewMaster, true
 	case inst.MasterHasMaster:
 		return fixClusterAndMaster, true
-	case inst.MasterIsReadOnly:
+	case inst.MasterIsReadOnly, inst.MasterSemiSyncMustBeSet, inst.MasterSemiSyncMustNotBeSet:
 		return fixMaster, true
-	case inst.NotConnectedToMaster, inst.ConnectedToWrongMaster, inst.ReplicationStopped, inst.ReplicaIsWritable:
+	case inst.NotConnectedToMaster, inst.ConnectedToWrongMaster, inst.ReplicationStopped, inst.ReplicaIsWritable,
+		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet:
 		return fixReplica, false
 	// intermediate master
 	case inst.DeadIntermediateMaster:
@@ -2172,6 +2173,14 @@ func fixMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *ins
 		return false, topologyRecovery, err
 	}
 	defer unlock(&err)
+
+	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
+	count := inst.MasterSemiSync(analysisEntry.AnalyzedInstanceKey)
+	err = inst.SetSemiSyncMaster(&analysisEntry.AnalyzedInstanceKey, count > 0)
+	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
+	if err != nil {
+		return false, topologyRecovery, err
+	}
 
 	if err := TabletUndoDemoteMaster(analysisEntry.AnalyzedInstanceKey); err != nil {
 		return false, topologyRecovery, err

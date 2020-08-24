@@ -689,10 +689,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		return instance, log.Errore(err)
 	}
 
-	semiSync, err := ReplicaSemiSync(*masterKey, *instanceKey)
-	if err != nil {
-		return instance, log.Errore(err)
-	}
+	semiSync := ReplicaSemiSync(*masterKey, *instanceKey)
 	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
 		return instance, log.Errore(err)
 	}
