@@ -283,7 +283,9 @@ func TestShowTablesWithWhereClause(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t5'", `[[VARCHAR("t5")]]`)
+	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`)
+	exec(t, conn, "begin")
+	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

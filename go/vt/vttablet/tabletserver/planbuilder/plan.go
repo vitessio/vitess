@@ -64,11 +64,12 @@ const (
 	PlanSavepoint
 	PlanRelease
 	PlanSRollback
+	PlanShowTables
 	NumPlans
 )
 
 // Must exactly match order of plan constants.
-var planName = [NumPlans]string{
+var planName = []string{
 	"Select",
 	"SelectLock",
 	"Nextval",
@@ -88,6 +89,7 @@ var planName = [NumPlans]string{
 	"Savepoint",
 	"Release",
 	"RollbackSavepoint",
+	"ShowTables",
 }
 
 func (pt PlanType) String() string {
@@ -151,7 +153,7 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 }
 
 // Build builds a plan based on the schema.
-func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isReservedConn bool) (plan *Plan, err error) {
+func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isReservedConn bool, dbName string) (plan *Plan, err error) {
 	if !isReservedConn {
 		err = checkForPoolingUnsafeConstructs(statement)
 		if err != nil {
@@ -180,7 +182,17 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		// DDLs and other statements below don't get fully parsed.
 		// We have to use the original query at the time of execution.
 		plan = &Plan{PlanID: PlanDDL}
-	case *sqlparser.Show, *sqlparser.OtherRead, *sqlparser.Explain:
+	case *sqlparser.Show:
+		if stmt.Type == sqlparser.KeywordString(sqlparser.TABLES) {
+			analyzeShowTables(stmt, dbName)
+			plan = &Plan{
+				PlanID:    PlanShowTables,
+				FullQuery: GenerateFullQuery(stmt),
+			}
+		} else {
+			plan, err = &Plan{PlanID: PlanOtherRead}, nil
+		}
+	case *sqlparser.OtherRead, *sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
