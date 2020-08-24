@@ -36,8 +36,8 @@ var TopoServ *topo.Server
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
 
-// TabletSetMaster designates the tablet that owns an instance as the master.
-func TabletSetMaster(instanceKey InstanceKey) error {
+// ChangeTabletType designates the tablet that owns an instance as the master.
+func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType) error {
 	if instanceKey.Hostname == "" {
 		return errors.New("can't set tablet to master: instance is unspecified")
 	}
@@ -46,7 +46,7 @@ func TabletSetMaster(instanceKey InstanceKey) error {
 		return err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	if err := tmc.ChangeType(context.TODO(), tablet, topodatapb.TabletType_MASTER); err != nil {
+	if err := tmc.ChangeType(context.TODO(), tablet, tabletType); err != nil {
 		return err
 	}
 	ti, err := TopoServ.GetTablet(context.TODO(), tablet.Alias)

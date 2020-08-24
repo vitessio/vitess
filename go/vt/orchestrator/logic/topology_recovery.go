@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var countPendingRecoveries int64
@@ -506,6 +507,9 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: will recover %+v", *failedInstanceKey))
 
+	err = TabletDemoteMaster(*failedInstanceKey)
+	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletDemoteMaster: %v", err))
+
 	topologyRecovery.RecoveryType = GetMasterRecoveryType(analysisEntry)
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: masterRecoveryType=%+v", topologyRecovery.RecoveryType))
 
@@ -582,6 +586,8 @@ func recoverDeadMaster(topologyRecovery *TopologyRecovery, candidateInstanceKey 
 	}
 
 	if promotedReplica == nil {
+		err := TabletUndoDemoteMaster(*failedInstanceKey)
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletUndoDemoteMaster: %v", err))
 		message := "Failure: no replica promoted."
 		AuditTopologyRecovery(topologyRecovery, message)
 		inst.AuditOperation("recover-dead-master", failedInstanceKey, message)
@@ -841,6 +847,16 @@ func checkAndRecoverDeadMaster(analysisEntry inst.ReplicationAnalysis, candidate
 		return false, nil, err
 	}
 	defer unlock(&err)
+
+	// Check if someone else fixed the problem.
+	tablet, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey)
+	if err == nil && tablet.Type != topodatapb.TabletType_MASTER {
+		// TODO(sougou); use a version that only refreshes the current shard.
+		RefreshTablets()
+		AuditTopologyRecovery(topologyRecovery, "another agent seems to have fixed the problem")
+		// TODO(sougou): see if we have to reset the cluster as healthy.
+		return false, topologyRecovery, nil
+	}
 
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("will handle DeadMaster event on %+v", analysisEntry.ClusterDetails.ClusterName))
 	recoverDeadMasterCounter.Inc(1)
@@ -1984,11 +2000,6 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	if err := executeProcesses(config.Config.PreGracefulTakeoverProcesses, "PreGracefulTakeoverProcesses", preGracefulTakeoverTopologyRecovery, true); err != nil {
 		return nil, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
 	}
-
-	log.Infof("GracefulMasterTakeover: invoking TabletDemoteMaster on %+v", clusterMaster.Key)
-	if err := TabletDemoteMaster(clusterMaster.Key); err != nil {
-		return nil, nil, err
-	}
 	demotedMasterSelfBinlogCoordinates := &clusterMaster.SelfBinlogCoordinates
 	log.Infof("GracefulMasterTakeover: Will wait for %+v to reach master coordinates %+v", designatedInstance.Key, *demotedMasterSelfBinlogCoordinates)
 	if designatedInstance, _, err = inst.WaitForExecBinlogCoordinatesToReach(&designatedInstance.Key, demotedMasterSelfBinlogCoordinates, time.Duration(config.Config.ReasonableMaintenanceReplicationLagSeconds)*time.Second); err != nil {
@@ -2006,13 +2017,6 @@ func GracefulMasterTakeover(clusterName string, designatedKey *inst.InstanceKey,
 	}
 	if topologyRecovery == nil {
 		return nil, nil, fmt.Errorf("GracefulMasterTakeover: recovery attempted but with no results. This should not happen")
-	}
-	if topologyRecovery.SuccessorKey == nil {
-		// Promotion failed. Undo.
-		log.Infof("GracefulMasterTakeover: Invoking tabletUndoDemoteMaster on %+v", clusterMaster.Key)
-		if err := TabletUndoDemoteMaster(clusterMaster.Key); err != nil {
-			log.Errore(err)
-		}
 	}
 	var gtidHint inst.OperationGTIDHint = inst.GTIDHintNeutral
 	if topologyRecovery.RecoveryType == MasterRecoveryGTID {
@@ -2057,6 +2061,8 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 	}
 	defer unlock(&err)
 
+	// TODO(sougou): check if another Orc succeeded before fixing anything.
+
 	replicas, err := inst.ReadClusterAliasInstances(analysisEntry.SuggestedClusterAlias)
 	if err != nil {
 		return false, topologyRecovery, err
@@ -2100,7 +2106,7 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 		}
 	}
 
-	if err := inst.TabletSetMaster(candidate.Key); err != nil {
+	if err := inst.ChangeTabletType(candidate.Key, topodatapb.TabletType_MASTER); err != nil {
 		return true, topologyRecovery, err
 	}
 	// TODO(sougou): parallelize
@@ -2150,7 +2156,7 @@ func fixClusterAndMaster(analysisEntry inst.ReplicationAnalysis, candidateInstan
 	if err != nil {
 		return recoveryAttempted, topologyRecovery, err
 	}
-	if err := TabletRefresh(analysisEntry.AnalyzedInstanceKey); err != nil {
+	if _, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey); err != nil {
 		log.Errore(err)
 	}
 	return recoveryAttempted, topologyRecovery, err
@@ -2196,6 +2202,16 @@ func fixReplica(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *in
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, will fix replica %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+
+	unlock, err := LockShard(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
+			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
+			analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
+		return false, topologyRecovery, err
+	}
+	defer unlock(&err)
+
 	if _, err := inst.SetReadOnly(&analysisEntry.AnalyzedInstanceKey, true); err != nil {
 		return false, topologyRecovery, err
 	}
