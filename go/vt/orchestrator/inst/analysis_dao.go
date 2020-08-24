@@ -345,8 +345,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		database_instance_maintenance.database_instance_maintenance_id IS NULL
 		AND ? IN ('', master_instance.cluster_name)
 	GROUP BY
-		master_instance.hostname,
-		master_instance.port
+		vitess_tablet.hostname,
+		vitess_tablet.port
 	ORDER BY
 		tablet_type ASC,
 		master_timestamp DESC
@@ -367,7 +367,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		a.TabletType = tablet.Type
-		a.MasterTimeStamp = time.Unix(0, m.GetInt64("master_timestamp"))
+		a.MasterTimeStamp = m.GetTime("master_timestamp")
 
 		a.IsMaster = m.GetBool("is_master")
 		countCoMasterReplicas := m.GetUint("count_co_master_replicas")
@@ -491,8 +491,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Description = "Cluster has no master"
 			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
-			a.Analysis = ReplicaIsReadWrite
-			a.Description = "Master is read-write"
+			a.Analysis = ReplicaIsWritable
+			a.Description = "Replica is writable"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && a.IsMaster {
 			a.Analysis = NotConnectedToMaster

@@ -628,7 +628,7 @@ func workaroundBug83713(instanceKey *InstanceKey) {
 // ChangeMasterTo changes the given instance's master according to given input.
 // TODO(sougou): deprecate ReplicationCredentialsQuery, and all other credential discovery.
 func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinlogCoordinates *BinlogCoordinates, skipUnresolve bool, gtidHint OperationGTIDHint) (*Instance, error) {
-	user, passwprd := config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword
+	user, password := config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -664,7 +664,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Keep on using GTID
 		changeMasterFunc = func() error {
 			_, err := ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
-				user, passwprd, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
@@ -672,7 +672,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Make sure to not use GTID
 		changeMasterFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_use_gtid=no",
-				user, passwprd, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.IsMariaDB() && gtidHint == GTIDHintForce {
@@ -688,7 +688,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		}
 		changeMasterFunc = func() error {
 			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_user=?, master_password=?, master_host=?, master_port=?, master_use_gtid=%s", mariadbGTIDHint),
-				user, passwprd, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
@@ -696,7 +696,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Is Oracle; already uses GTID; keep using it.
 		changeMasterFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
-				user, passwprd, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
@@ -704,14 +704,14 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Is Oracle; already uses GTID
 		changeMasterFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_auto_position=0",
-				user, passwprd, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.SupportsOracleGTID && gtidHint == GTIDHintForce {
 		// Is Oracle; not using GTID right now; turn into GTID
 		changeMasterFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_auto_position=1",
-				user, passwprd, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
@@ -719,7 +719,7 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 		// Normal binlog file:pos
 		changeMasterFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?",
-				user, passwprd, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	}

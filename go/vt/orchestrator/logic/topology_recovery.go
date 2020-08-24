@@ -1537,7 +1537,7 @@ func getCheckAndRecoverFunction(analysisCode inst.AnalysisCode, analyzedInstance
 		return fixClusterAndMaster, true
 	case inst.MasterIsReadOnly:
 		return fixMaster, true
-	case inst.NotConnectedToMaster, inst.ConnectedToWrongMaster, inst.ReplicationStopped, inst.ReplicaIsReadWrite:
+	case inst.NotConnectedToMaster, inst.ConnectedToWrongMaster, inst.ReplicationStopped, inst.ReplicaIsWritable:
 		return fixReplica, false
 	// intermediate master
 	case inst.DeadIntermediateMaster:
@@ -2057,19 +2057,32 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 		return false, topologyRecovery, fmt.Errorf("no instances in cluster %v", analysisEntry.SuggestedClusterAlias)
 	}
 
+	// Find an initial candidate
 	var candidate *inst.Instance
 	for _, replica := range replicas {
-		if candidate == nil {
-			// TODO(sougou): this needs to do more. see inst.chooseCandidateReplica
-			if !inst.IsBannedFromBeingCandidateReplica(replica) {
-				candidate = replica
-			}
+		// TODO(sougou): this needs to do more. see inst.chooseCandidateReplica
+		if !inst.IsBannedFromBeingCandidateReplica(replica) {
+			candidate = replica
+			break
+		}
+	}
+	if candidate == nil {
+		err := fmt.Errorf("no candidate qualifies to be a master")
+		AuditTopologyRecovery(topologyRecovery, err.Error())
+		return true, topologyRecovery, err
+	}
+
+	// Compare the current candidate with the rest to see if other instances can be
+	// moved under. If not, see if the other intance can become a candidate instead.
+	for _, replica := range replicas {
+		if replica == candidate {
 			continue
 		}
 		if err := inst.CheckMoveViaGTID(replica, candidate); err != nil {
 			if err := inst.CheckMoveViaGTID(candidate, replica); err != nil {
 				return false, topologyRecovery, fmt.Errorf("instances are not compatible: %+v %+v: %v", candidate, replica, err)
 			} else {
+				// Make sure the new candidate meets the requirements.
 				if !inst.IsBannedFromBeingCandidateReplica(replica) {
 					candidate = replica
 				}

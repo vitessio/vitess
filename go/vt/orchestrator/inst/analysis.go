@@ -38,7 +38,7 @@ const (
 	DeadMasterAndSomeReplicas                               AnalysisCode = "DeadMasterAndSomeReplicas"
 	MasterHasMaster                                         AnalysisCode = "MasterHasMaster"
 	MasterIsReadOnly                                        AnalysisCode = "MasterIsReadOnly"
-	ReplicaIsReadWrite                                      AnalysisCode = "ReplicaIsReadWrite"
+	ReplicaIsWritable                                       AnalysisCode = "ReplicaIsWritable"
 	NotConnectedToMaster                                    AnalysisCode = "NotConnectedToMaster"
 	ConnectedToWrongMaster                                  AnalysisCode = "ConnectedToWrongMaster"
 	ReplicationStopped                                      AnalysisCode = "ReplicationStopped"
