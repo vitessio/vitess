@@ -84,11 +84,6 @@ func ReadTablet(instanceKey InstanceKey) (*topodatapb.Tablet, error) {
 
 // SaveTablet saves the tablet record against the instanceKey.
 func SaveTablet(tablet *topodatapb.Tablet) error {
-	tabletType := int(tablet.Type)
-	var timestamp int64
-	if tablet.Type == topodatapb.TabletType_MASTER {
-		timestamp = logutil.ProtoToTime(tablet.MasterTermStartTime).UnixNano()
-	}
 	_, err := db.ExecOrchestrator(`
 		replace
 			into vitess_tablet (
@@ -100,8 +95,8 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 		tablet.MysqlHostname,
 		int(tablet.MysqlPort),
 		tablet.Alias.Cell,
-		tabletType,
-		timestamp,
+		int(tablet.Type),
+		logutil.ProtoToTime(tablet.MasterTermStartTime),
 		proto.CompactTextString(tablet),
 	)
 	return err

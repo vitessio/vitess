@@ -146,8 +146,8 @@ func logDepth(logLevel LogLevel, depth int, message string, args ...interface{})
 	}
 
 	msgArgs := fmt.Sprintf(message, args...)
-	file, pos := callerPos(depth)
-	entryString := fmt.Sprintf("%s %8s %s:%d] %s", localizedTime.Format(TimeFormat), logLevel, file, pos, msgArgs)
+	sourceFile, pos := callerPos(depth)
+	entryString := fmt.Sprintf("%s %8s %s:%d] %s", localizedTime.Format(TimeFormat), logLevel, sourceFile, pos, msgArgs)
 	fmt.Fprintln(os.Stderr, entryString)
 
 	if syslogWriter != nil {

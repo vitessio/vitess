@@ -835,21 +835,16 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 	}
 
-	// TODO(sougou): need to find out why this is async.
-	waitGroup.Add(1)
-	go func() {
-		defer waitGroup.Done()
-		// We need to update candidate_database_instance.
-		// We register the rule even if it hasn't changed,
-		// to bump the last_suggested time.
-		if tablet.Type == topodatapb.TabletType_MASTER || tablet.Type == topodatapb.TabletType_REPLICA {
-			instance.PromotionRule = NeutralPromoteRule
-		} else {
-			instance.PromotionRule = MustNotPromoteRule
-		}
-		err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
-		logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
-	}()
+	// We need to update candidate_database_instance.
+	// We register the rule even if it hasn't changed,
+	// to bump the last_suggested time.
+	if tablet.Type == topodatapb.TabletType_MASTER || tablet.Type == topodatapb.TabletType_REPLICA {
+		instance.PromotionRule = NeutralPromoteRule
+	} else {
+		instance.PromotionRule = MustNotPromoteRule
+	}
+	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
+	logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 
 	// TODO(sougou): delete cluster_alias_override metadata
 	instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
