@@ -18,4 +18,4 @@ jobs:
 
     - name: Run tests which requires docker 1
       run: |
-        go run test.go -docker=true --follow -shard 10
+        go run test.go -docker=true --flavor mariadb103 --follow -shard 10
