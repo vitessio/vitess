@@ -2106,7 +2106,7 @@ func electNewMaster(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey
 		}
 	}
 
-	if err := inst.ChangeTabletType(candidate.Key, topodatapb.TabletType_MASTER); err != nil {
+	if _, err := inst.ChangeTabletType(candidate.Key, topodatapb.TabletType_MASTER); err != nil {
 		return true, topologyRecovery, err
 	}
 	// TODO(sougou): parallelize

@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 	"vitess.io/vitess/go/vt/orchestrator/os"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type StopReplicationMethod string
@@ -2525,13 +2524,8 @@ func RegroupReplicasGTID(
 		}
 	}
 
-	if err := ChangeTabletType(candidateReplica.Key, topodatapb.TabletType_MASTER); err != nil {
+	if err := SwitchMaster(candidateReplica.Key, *masterKey); err != nil {
 		return emptyReplicas, emptyReplicas, emptyReplicas, candidateReplica, err
-	}
-	// Proactively tell the old master.
-	if err := ChangeTabletType(*masterKey, topodatapb.TabletType_REPLICA); err != nil {
-		// This is best effort.
-		log.Errore(err)
 	}
 
 	moveGTIDFunc := func() error {
