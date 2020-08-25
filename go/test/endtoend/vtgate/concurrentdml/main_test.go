@@ -34,7 +34,6 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
 	cell            = "zone1"
 	hostname        = "localhost"
 	unsKs           = "commerce"
