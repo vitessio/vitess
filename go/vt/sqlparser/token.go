@@ -149,6 +149,7 @@ var keywords = map[string]int{
 	"decimal":             DECIMAL,
 	"declare":             UNUSED,
 	"default":             DEFAULT,
+	"definer":						 DEFINER,
 	"delayed":             UNUSED,
 	"delete":              DELETE,
 	"desc":                DESC,

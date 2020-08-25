@@ -176,7 +176,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
-%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES
+%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -290,7 +290,7 @@ func skipToEnd(yylex interface{}) {
 %type <byt> exists_opt not_exists_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
-%type <empty> to_opt to_or_as as_opt column_opt describe
+%type <empty> to_opt to_or_as as_opt column_opt describe definer_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -642,9 +642,18 @@ create_statement:
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
-| CREATE TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt trigger_body
+| CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt trigger_body
   {
-    $$ = &DDL{Action: CreateStr, Table: $7, TriggerSpec: &TriggerSpec{Name: string($3), Time: $4, Event: $5, Order: $11, Body: $12}}
+    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $13}}
+  }
+
+definer_opt:
+  {
+    $$ = struct{}{}
+  }
+| DEFINER '=' ID
+  {
+    $$ = struct{}{}
   }
 
 trigger_time:

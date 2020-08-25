@@ -1108,6 +1108,12 @@ var (
 	}, {
 		input:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 	}, {
+		input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		output:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+	}, {
+		input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		output:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+	}, {
 		input:  "alter view a",
 		output: "alter table a",
 	}, {
