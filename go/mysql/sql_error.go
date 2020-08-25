@@ -19,6 +19,7 @@ package mysql
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 
@@ -120,7 +121,7 @@ func NewSQLErrorFromError(err error) error {
 		case vtrpcpb.Code_UNAUTHENTICATED:
 			num = ERAccessDeniedError
 		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-			num = ERTooManyUserConnections
+			num = demuxResourceExhaustedErrors(err.Error())
 		case vtrpcpb.Code_FAILED_PRECONDITION:
 			num = ERUnknownError
 		case vtrpcpb.Code_ABORTED:
@@ -160,4 +161,17 @@ func NewSQLErrorFromError(err error) error {
 		Message: msg,
 	}
 	return serr
+}
+
+var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max (\d+ vs. \d+)`)
+
+func demuxResourceExhaustedErrors(msg string) int {
+	log.Printf("demuxResourceExhaustedError: %s\n", msg)
+	if isGRPCOverflowRE.Match([]byte(msg)) {
+		log.Printf("returning NETPacketTooLarge\n")
+		// https://vitess.slack.com/archives/CMDJ2KFEZ/p1588031472083800
+		return ERNetPacketTooLarge
+	}
+	log.Printf("return TooManyUserConnections\n")
+	return ERTooManyUserConnections
 }
