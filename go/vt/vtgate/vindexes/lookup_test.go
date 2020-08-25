@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -163,14 +165,12 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc",
+		Sql: "select fromc, toc from t where fromc in ::fromc for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromc": vars,
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Map queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries, "lookup.Map")
 
 	// Test query fail.
 	vc.mustFail = true
@@ -214,7 +214,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc",
+		Sql: "select fromc, toc from t where fromc in ::fromc for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromc": vars,
 		},
