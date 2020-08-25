@@ -1097,6 +1097,17 @@ var (
 		input:  "create or replace view a as select current_timestamp()",
 		output: "create or replace view a as select current_timestamp() from dual",
 	}, {
+		input:  "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
+	}, {
+		input:  "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
+	}, {
+		// TODO: support SET statements
+	// 	input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
+	// }, {
+		input:  "create trigger t1 after insert on foo for each row update xxy set y = new.x",
+	}, {
+		input:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+	}, {
 		input:  "alter view a",
 		output: "alter table a",
 	}, {

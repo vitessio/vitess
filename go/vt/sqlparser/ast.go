@@ -550,9 +550,7 @@ type Insert struct {
 	OnDup      OnDup
 }
 
-// DDL strings.
 const (
-	InsertStr  = "insert"
 	ReplaceStr = "replace"
 )
 
@@ -722,31 +720,17 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 	return nil
 }
 
-type TriggerTime string
-const (
-	BeforeStr TriggerTime = "before"
-	AfterStr TriggerTime = "after"
-)
-
-type TriggerEvent string
-const (
-	TriggerInsertStr TriggerEvent = "insert"
-	TriggerUpdateStr TriggerEvent = "update"
-	TriggerDeleteStr TriggerEvent = "delete"
-)
-
-type TriggerOrder string
-const (
-	FollowsStr TriggerOrder = "follows"
-	PrecedesStr TriggerOrder = "precedes"
-)
-
 type TriggerSpec struct {
 	Name  string
-	Time  TriggerTime
-	Event TriggerEvent
-	Order TriggerOrder // empty for unset
+	Time  string // BeforeStr, AfterStr
+	Event string // UpdateStr, InsertStr, DeleteStr
+	Order *TriggerOrder
 	Body  Statement
+}
+
+type TriggerOrder struct {
+	PrecedesOrFollows string // PrecedesStr, FollowsStr
+	OtherTriggerName string
 }
 
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
@@ -835,6 +819,13 @@ const (
 	TruncateStr         = "truncate"
 	FlushStr            = "flush"
 	IndexStr            = "index"
+	BeforeStr           = "before"
+	AfterStr            = "after"
+	InsertStr           = "insert"
+	UpdateStr           = "update"
+	DeleteStr           = "delete"
+	FollowsStr          = "follows"
+	PrecedesStr         = "precedes"
 	CreateVindexStr     = "create vindex"
 	DropVindexStr       = "drop vindex"
 	AddVschemaTableStr  = "add vschema table"
@@ -862,6 +853,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				orReplace = "or replace "
 			}
 			buf.Myprintf("%s %sview %v as %v", node.Action, orReplace, node.View, node.ViewExpr)
+		} else if node.TriggerSpec != nil {
+			trigger := node.TriggerSpec
+			triggerOrder := ""
+			if trigger.Order != nil {
+				triggerOrder = fmt.Sprintf("%s %s ", trigger.Order.PrecedesOrFollows, trigger.Order.OtherTriggerName)
+			}
+			buf.Myprintf("%s trigger %s %s %s on %v for each row %s%v",
+				node.Action, trigger.Name, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
 		} else {
 			notExists := ""
 			if node.IfNotExists {

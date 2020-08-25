@@ -102,6 +102,7 @@ func skipToEnd(yylex interface{}) {
   TableSpec  *TableSpec
   columnType    ColumnType
   columnOrder   *ColumnOrder
+  triggerOrder  *TriggerOrder
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
@@ -224,7 +225,7 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
-%type <str> trigger_time trigger_event trigger_order_opt
+%type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -267,6 +268,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <columnOrder> column_order_opt
+%type <triggerOrder> trigger_order_opt
 %type <order> order
 %type <int> lexer_position
 %type <str> asc_desc_opt
@@ -640,9 +642,9 @@ create_statement:
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
-| CREATE TRIGGER ID trigger_time trigger_event ON sql_id FOR EACH ROW trigger_order_opt trigger_body
+| CREATE TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt trigger_body
   {
-    $$ = &DDL{Action: CreateStr, TableName: $7, TriggerSpec: &TriggerSpec{Name: $3, Time: $4, Event: $5, Order: $11, Body: $12}}
+    $$ = &DDL{Action: CreateStr, Table: $7, TriggerSpec: &TriggerSpec{Name: string($3), Time: $4, Event: $5, Order: $11, Body: $12}}
   }
 
 trigger_time:
@@ -658,28 +660,28 @@ trigger_time:
 trigger_event:
   INSERT
   {
-    $$ = TriggerInsertStr
+    $$ = InsertStr
   }
 | UPDATE
   {
-    $$ = TriggerUpdateStr
+    $$ = UpdateStr
   }
 | DELETE
   {
-    $$ = TriggerDeleteStr
+    $$ = DeleteStr
   }
 
 trigger_order_opt:
   {
-    $$ = ""
+    $$ = nil
   }
-| FOLLOWS
+| FOLLOWS ID
   {
-    $$ = FollowsStr
+    $$ = &TriggerOrder{PrecedesOrFollows: FollowsStr, OtherTriggerName: string($2)}
   }
-| PRECEDES
+| PRECEDES ID
   {
-    $$ = PrecedesStr
+    $$ = &TriggerOrder{PrecedesOrFollows: PrecedesStr, OtherTriggerName: string($2)}
   }
 
 trigger_body:
