@@ -497,11 +497,17 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 	return l.(SingleColumn)
 }
 
+var _ VCursor = (*loggingVCursor)(nil)
+
 type loggingVCursor struct {
 	results []*sqltypes.Result
 	errors  []error
 	index   int
 	log     []string
+}
+
+func (vc *loggingVCursor) IsDML() bool {
+	panic("implement me")
 }
 
 type bv struct {

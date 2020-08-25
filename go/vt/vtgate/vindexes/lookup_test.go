@@ -38,6 +38,8 @@ import (
 // LookupNonUnique tests are more comprehensive than others.
 // They also test lookupInternal functionality.
 
+var _ VCursor = (*vcursor)(nil)
+
 type vcursor struct {
 	mustFail    bool
 	numRows     int
@@ -46,6 +48,10 @@ type vcursor struct {
 	autocommits int
 	pre, post   int
 	keys        []sqltypes.Value
+}
+
+func (vc *vcursor) IsDML() bool {
+	panic("implement me")
 }
 
 func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {

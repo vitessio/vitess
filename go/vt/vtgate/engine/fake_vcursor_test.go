@@ -53,6 +53,10 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t noopVCursor) IsDML() bool {
+	panic("implement me")
+}
+
 func (t noopVCursor) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
 	panic("implement me")
 }
@@ -169,6 +173,10 @@ type loggingVCursor struct {
 	log []string
 
 	resolvedTargetTabletType topodatapb.TabletType
+}
+
+func (f *loggingVCursor) IsDML() bool {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
