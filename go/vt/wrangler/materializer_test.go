@@ -1699,6 +1699,8 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
+	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
+	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
 }
 
 func TestMaterializerCopySchema(t *testing.T) {
@@ -1734,6 +1736,9 @@ func TestMaterializerCopySchema(t *testing.T) {
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
+	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
+	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+
 }
 
 func TestMaterializerExplicitColumns(t *testing.T) {
@@ -1922,6 +1927,9 @@ func TestMaterializerNoDDL(t *testing.T) {
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
+	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
+	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+
 }
 
 func TestMaterializerNoSourceMaster(t *testing.T) {
