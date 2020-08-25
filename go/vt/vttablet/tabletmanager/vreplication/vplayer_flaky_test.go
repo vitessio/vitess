@@ -1212,6 +1212,8 @@ func TestPlayerRowMove(t *testing.T) {
 }
 
 func TestPlayerTypes(t *testing.T) {
+	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
+
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -1244,6 +1246,17 @@ func TestPlayerTypes(t *testing.T) {
 		"drop table binary_pk",
 		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
 	})
+	if strings.Contains(env.Flavor, "mysql57") {
+		execStatements(t, []string{
+			"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))",
+			fmt.Sprintf("create table %s.vitess_json(id int, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))", vrepldb),
+		})
+		defer execStatements(t, []string{
+			"drop table vitess_json",
+			fmt.Sprintf("drop table %s.vitess_json", vrepldb),
+		})
+
+	}
 	env.SchemaEngine.Reload(context.Background())
 
 	filter := &binlogdatapb.Filter{
@@ -1259,12 +1272,13 @@ func TestPlayerTypes(t *testing.T) {
 	}
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
-	testcases := []struct {
+	type testcase struct {
 		input  string
 		output string
 		table  string
 		data   [][]string
-	}{{
+	}
+	testcases := []testcase{{
 		input:  "insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
 		output: "insert into vitess_ints(tiny,tinyu,small,smallu,medium,mediumu,normal,normalu,big,bigu,y) values (-128,255,-32768,65535,-8388608,16777215,-2147483648,4294967295,-9223372036854775808,18446744073709551615,2012)",
 		table:  "vitess_ints",
@@ -1315,6 +1329,19 @@ func TestPlayerTypes(t *testing.T) {
 			{"a\x00\x00\x00", "bbb"},
 		},
 	}}
+
+	if strings.Contains(env.Flavor, "mysql57") {
+		testcases = append(testcases, testcase{
+			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}', '{\"foo\":\"bar\"}')",
+			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1," +
+				"convert(null using utf8mb4)," + "convert('{}' using utf8mb4)," + "convert('123' using utf8mb4)," +
+				"convert('{\\\"a\\\":[42,100]}' using utf8mb4)," + "convert('{\\\"foo\\\":\\\"bar\\\"}' using utf8mb4))",
+			table: "vitess_json",
+			data: [][]string{
+				{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			},
+		})
+	}
 
 	for _, tcases := range testcases {
 		execStatements(t, []string{tcases.input})

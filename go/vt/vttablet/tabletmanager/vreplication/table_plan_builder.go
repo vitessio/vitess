@@ -22,6 +22,9 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -55,6 +58,7 @@ type tablePlanBuilder struct {
 // compute the value of one column of the target table.
 type colExpr struct {
 	colName sqlparser.ColIdent
+	colType querypb.Type
 	// operation==opExpr: full expression is set
 	// operation==opCount: nothing is set.
 	// operation==opSum: for 'sum(a)', expr is set to 'a'.
@@ -398,6 +402,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
+
 			if !node.Qualifier.IsEmpty() {
 				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}
@@ -536,7 +541,12 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		separator = ","
 		switch cexpr.operation {
 		case opExpr:
-			buf.Myprintf("%v", cexpr.expr)
+			if cexpr.colType == querypb.Type_JSON {
+				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+			} else {
+				buf.Myprintf("%v", cexpr.expr)
+			}
+			log.Infof("generateValuesPart:%s, expr:%v", buf.String(), cexpr.expr)
 		case opCount:
 			buf.WriteString("1")
 		case opSum:
