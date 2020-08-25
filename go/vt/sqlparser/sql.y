@@ -175,6 +175,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
+%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -221,8 +222,9 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
+%type <str> trigger_time trigger_event trigger_order_opt
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -638,6 +640,55 @@ create_statement:
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
+| CREATE TRIGGER ID trigger_time trigger_event ON sql_id FOR EACH ROW trigger_order_opt trigger_body
+  {
+    $$ = &DDL{Action: CreateStr, TableName: $7, TriggerSpec: &TriggerSpec{Name: $3, Time: $4, Event: $5, Order: $11, Body: $12}}
+  }
+
+trigger_time:
+  BEFORE
+  {
+    $$ = BeforeStr
+  }
+| AFTER
+  {
+    $$ = AfterStr
+  }
+
+trigger_event:
+  INSERT
+  {
+    $$ = TriggerInsertStr
+  }
+| UPDATE
+  {
+    $$ = TriggerUpdateStr
+  }
+| DELETE
+  {
+    $$ = TriggerDeleteStr
+  }
+
+trigger_order_opt:
+  {
+    $$ = ""
+  }
+| FOLLOWS
+  {
+    $$ = FollowsStr
+  }
+| PRECEDES
+  {
+    $$ = PrecedesStr
+  }
+
+trigger_body:
+  select_statement
+  {
+    $$ = $1
+  }
+| update_statement
+| delete_statement
 
 vindex_type_opt:
   {

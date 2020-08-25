@@ -722,6 +722,33 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 	return nil
 }
 
+type TriggerTime string
+const (
+	BeforeStr TriggerTime = "before"
+	AfterStr TriggerTime = "after"
+)
+
+type TriggerEvent string
+const (
+	TriggerInsertStr TriggerEvent = "insert"
+	TriggerUpdateStr TriggerEvent = "update"
+	TriggerDeleteStr TriggerEvent = "delete"
+)
+
+type TriggerOrder string
+const (
+	FollowsStr TriggerOrder = "follows"
+	PrecedesStr TriggerOrder = "precedes"
+)
+
+type TriggerSpec struct {
+	Name  string
+	Time  TriggerTime
+	Event TriggerEvent
+	Order TriggerOrder // empty for unset
+	Body  Statement
+}
+
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 type DDL struct {
 	Action string
@@ -783,6 +810,9 @@ type DDL struct {
 
 	// IndexSpec is set for all ALTER operations on an index
 	IndexSpec *IndexSpec
+
+	// TriggerSpec is set for CREATE / ALTER / DROP trigger operations
+	TriggerSpec *TriggerSpec
 }
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
