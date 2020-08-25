@@ -218,9 +218,13 @@ func TestCheckMastership(t *testing.T) {
 	// 2. Update shard's master to our alias, then try to init again.
 	// (This simulates the case where the MasterAlias in the shard record says
 	// that we are the master but the tablet record says otherwise. In that case,
-	// we assume we are not the MASTER.)
+	// we become master by inheriting the shard record's timestamp.)
+	now := time.Now()
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.MasterAlias = alias
+		si.MasterTermStartTime = logutil.TimeToProto(now)
+		// Reassign to now for easier comparison.
+		now = si.GetMasterTermStartTime()
 		return nil
 	})
 	require.NoError(t, err)
@@ -228,9 +232,9 @@ func TestCheckMastership(t *testing.T) {
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	ter0 := ti.GetMasterTermStartTime()
-	assert.True(t, ter0.IsZero())
+	assert.Equal(t, now, ter0)
 	tm.Stop()
 
 	// 3. Delete the tablet record. The shard record still says that we are the
@@ -290,6 +294,25 @@ func TestCheckMastership(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	ter4 := ti.GetMasterTermStartTime()
 	assert.Equal(t, ter1, ter4)
+	tm.Stop()
+
+	// 7. If the shard record shows a different master with a newer
+	// timestamp, we remain replica.
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = otherAlias
+		si.MasterTermStartTime = logutil.TimeToProto(ter4.Add(10 * time.Second))
+		return nil
+	})
+	require.NoError(t, err)
+	tablet.Type = topodatapb.TabletType_REPLICA
+	tablet.MasterTermStartTime = nil
+	err = tm.Start(tablet, 0)
+	require.NoError(t, err)
+	ti, err = ts.GetTablet(ctx, alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
+	ter5 := ti.GetMasterTermStartTime()
+	assert.True(t, ter5.IsZero())
 	tm.Stop()
 }
 
