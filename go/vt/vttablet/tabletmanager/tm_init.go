@@ -476,6 +476,12 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 					tablet.Type = topodatapb.TabletType_MASTER
 					tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 				})
+			} else {
+				log.Warningf("Shard master alias matches, but existing tablet is not master. Switching to master with the shard's master term start time: %v", oldTablet.MasterTermStartTime)
+				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
+					tablet.Type = topodatapb.TabletType_MASTER
+					tablet.MasterTermStartTime = si.MasterTermStartTime
+				})
 			}
 		default:
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
@@ -497,6 +503,8 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 						tablet.Type = topodatapb.TabletType_MASTER
 						tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 					})
+				} else {
+					log.Infof("Existing tablet type is master, but the shard record has a different master with a newer timestamp. Remaining a replica")
 				}
 			}
 		default:
