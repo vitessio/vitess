@@ -455,6 +455,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
+			log.Infof("Shard master alias matches, but there is no existing tablet record. Switching to master with 'Now' as time")
 			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 				tablet.Type = topodatapb.TabletType_MASTER
 				// Update the master term start time (current value is 0) because we
@@ -464,6 +465,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 			})
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
+				log.Infof("Shard master alias matches, and existing tablet agrees. Switching to master with tablet's master term start time: %v", oldTablet.MasterTermStartTime)
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
@@ -492,6 +494,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 				oldMasterTermStartTime := oldTablet.GetMasterTermStartTime()
 				currentShardTime := si.GetMasterTermStartTime()
 				if oldMasterTermStartTime.After(currentShardTime) {
+					log.Infof("Shard master alias does not match, but the tablet's master term start time is newer. Switching to master with tablet's master term start time: %v", oldTablet.MasterTermStartTime)
 					tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 						tablet.Type = topodatapb.TabletType_MASTER
 						tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
