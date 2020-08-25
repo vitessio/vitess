@@ -37,7 +37,7 @@ const (
 		strategy varchar(128) NOT NULL,
 		options varchar(8192) NOT NULL,
 		added_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		requested_timestamp timestamp NOT NULL,
+		requested_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		ready_timestamp timestamp NULL DEFAULT NULL,
 		started_timestamp timestamp NULL DEFAULT NULL,
 		liveness_timestamp timestamp NULL DEFAULT NULL,
