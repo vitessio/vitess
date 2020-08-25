@@ -66,7 +66,7 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
@@ -155,7 +155,7 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 	require.NoError(t, err)
 
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
-		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id",
+		Sql: "select music_id, user_id from music_user_map where music_id in ::music_id for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"music_id": vars,
 		},
