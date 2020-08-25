@@ -176,7 +176,7 @@ type loggingVCursor struct {
 }
 
 func (f *loggingVCursor) IsDML() bool {
-	panic("implement me")
+	return false
 }
 
 func (f *loggingVCursor) SetUDV(key string, value interface{}) error {

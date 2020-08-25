@@ -51,7 +51,7 @@ type vcursor struct {
 }
 
 func (vc *vcursor) IsDML() bool {
-	panic("implement me")
+	return false
 }
 
 func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
@@ -171,7 +171,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc for update",
+		Sql: "select fromc, toc from t where fromc in ::fromc",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromc": vars,
 		},
@@ -220,7 +220,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc for update",
+		Sql: "select fromc, toc from t where fromc in ::fromc",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromc": vars,
 		},
