@@ -58,7 +58,7 @@ func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc",
+		Sql: "select fromc, toc from t where fromc in ::fromc for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromc": vars,
 		},
@@ -110,7 +110,7 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewUint64(hashed10), sqltypes.NewUint64(hashed20)})
 	require.NoError(t, err)
 	wantqueries := []*querypb.BoundQuery{{
-		Sql: "select fromc, toc from t where fromc in ::fromc",
+		Sql: "select fromc, toc from t where fromc in ::fromc for update",
 		BindVariables: map[string]*querypb.BindVariable{
 			"fromc": vars,
 		},
