@@ -5,6 +5,7 @@ In addition, the experimental feature to set system variables is now behind a fl
 * Vtgate: added flag enable_system_settings to enable passthrough system settings, defaults to false #6562
 
 ## Bugs Fixed
+* Vreplication: Materialize should only get schema from source tablets if target is missing tables #6623
 * Vtctld UI: mysql port is not displayed in tablet list #6597 #6600
 * Vtgate: transaction killer was closing reserved connection after the specified time. Only idle connections should be closed. Idle transactions should be rolled back. #6583
 * Vtcompose: docker-compose example was broken by tabletmanager changes #6587
