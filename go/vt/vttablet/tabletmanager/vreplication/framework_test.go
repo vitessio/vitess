@@ -27,8 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/require"
+
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -145,6 +148,7 @@ func masterPosition(t *testing.T) string {
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+		log.Errorf("Error executing query: %s", err.Error())
 		t.Error(err)
 	}
 }
@@ -565,12 +569,13 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 		t.Error(err)
 		return
 	}
+	log.Infof("%v!!!%v", values, qr.Rows)
 	if len(values) != len(qr.Rows) {
 		t.Fatalf("row counts don't match: %v, want %v", qr.Rows, values)
 	}
 	for i, row := range values {
 		if len(row) != len(qr.Rows[i]) {
-			t.Fatalf("Too few columns, result: %v, row: %d, want: %v", qr.Rows[i], i, row)
+			t.Fatalf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
 		}
 		for j, val := range row {
 			if got := qr.Rows[i][j].ToString(); got != val {
