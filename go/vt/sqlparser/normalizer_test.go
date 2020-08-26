@@ -212,6 +212,15 @@ func TestNormalize(t *testing.T) {
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
 		},
+	}, {
+		// insert syntax
+		in:      "insert into a (v1, v2, v3) values (1, '2', 3)",
+		outstmt: "insert into a(v1, v2, v3) values (:bv1, :bv2, :bv3)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.StringBindVariable("2"),
+			"bv3": sqltypes.Int64BindVariable(3),
+		},
 	}}
 	for _, tc := range testcases {
 		stmt, err := Parse(tc.in)
