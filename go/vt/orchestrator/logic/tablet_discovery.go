@@ -59,7 +59,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 // RefreshTablets reloads the tablets from topo.
 func RefreshTablets() {
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
-		_, _ = inst.ReadTopologyInstance(instanceKey)
+		DiscoverInstance(*instanceKey)
 	})
 }
 
