@@ -101,7 +101,7 @@ var (
 // - insert some data using vtgate (e.g. we will insert 7 8 9 10) and verify we get required number of rows in -80, 80- shard
 // - take backup of both shards
 // - insert some more data using vtgate (e.g. we will insert 11 12 13 14 15), while inserting row-13, note down the time (restoreTime2)
-// - note dows the current time (restoreTime3)
+// - note down the current time (restoreTime3)
 
 // - Till now we did all the presetup for assertions
 
