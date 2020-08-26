@@ -163,7 +163,7 @@ func NewSQLErrorFromError(err error) error {
 	return serr
 }
 
-var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max (\d+ vs. \d+)`)
+var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
 
 func demuxResourceExhaustedErrors(msg string) int {
 	log.Printf("demuxResourceExhaustedError: %s\n", msg)
