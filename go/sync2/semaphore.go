@@ -65,8 +65,6 @@ func (sem *Semaphore) Acquire() bool {
 // AcquireContext returns true on successful acquisition, and
 // false on context expiry. Timeout is ignored.
 func (sem *Semaphore) AcquireContext(ctx context.Context) bool {
-	tm := time.NewTimer(sem.timeout)
-	defer tm.Stop()
 	select {
 	case <-sem.slots:
 		return true
