@@ -46,19 +46,6 @@ func (e *TabletVExec) ColumnStringVal(columns ValColumns, colName string) (strin
 	return string(val.Val), nil
 }
 
-// splitAndExpression assumes expression is of the form "expr AND expr [AND ...]" and returns AND tokens
-func (e *TabletVExec) splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		filters = e.splitAndExpression(filters, node.Left)
-		return e.splitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
-
 // analyzeWhereColumns identifies column names in a WHERE clause that have a comparison expression
 // e.g. will return `keyspace` in a "WHERE keyspace='abc'"
 // will not return `keyspace` in a "WHERE keyspace LIKE '%'"
@@ -67,7 +54,7 @@ func (e *TabletVExec) analyzeWhereEqualsColumns(where *sqlparser.Where) ValColum
 	if where == nil {
 		return cols
 	}
-	exprs := e.splitAndExpression(nil, where.Expr)
+	exprs := sqlparser.SplitAndExpression(nil, where.Expr)
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:

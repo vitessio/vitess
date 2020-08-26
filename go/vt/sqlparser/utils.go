@@ -14,13 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vexecplan
+package sqlparser
 
 import (
 	"fmt"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // QueryMatchesTemplates sees if the given query has the same fingerprint as one of the given templates
@@ -32,12 +31,12 @@ func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, e
 	bv := make(map[string]*querypb.BindVariable)
 
 	normalize := func(q string) (string, error) {
-		stmt, err := sqlparser.Parse(q)
+		stmt, err := Parse(q)
 		if err != nil {
 			return "", err
 		}
-		sqlparser.Normalize(stmt, bv, "")
-		normalized := sqlparser.String(stmt)
+		Normalize(stmt, bv, "")
+		normalized := String(stmt)
 		return normalized, nil
 	}
 
