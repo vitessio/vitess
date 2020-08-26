@@ -18,6 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
+	"sort"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -31,6 +32,10 @@ func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, e
 	bv := make(map[string]*querypb.BindVariable)
 
 	normalize := func(q string) (string, error) {
+		q, err := NormalizeAlphabetically(q)
+		if err != nil {
+			return "", err
+		}
 		stmt, err := Parse(q)
 		if err != nil {
 			return "", err
@@ -57,4 +62,51 @@ func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, e
 		}
 	}
 	return false, nil
+}
+
+// NormalizeAlphabetically rewrites given query such that:
+// - WHERE 'AND' expressions are reordered alphabetically
+func NormalizeAlphabetically(query string) (normalized string, err error) {
+	stmt, err := Parse(query)
+	if err != nil {
+		return normalized, err
+	}
+	var where *Where
+	switch stmt := stmt.(type) {
+	case *Update:
+		where = stmt.Where
+	case *Delete:
+		where = stmt.Where
+	case *Select:
+		where = stmt.Where
+	}
+	if where != nil {
+		andExprs := SplitAndExpression(nil, where.Expr)
+		sort.SliceStable(andExprs, func(i, j int) bool {
+			return String(andExprs[i]) < String(andExprs[j])
+		})
+		var newWhere *Where
+		for _, expr := range andExprs {
+			if newWhere == nil {
+				newWhere = &Where{
+					Type: WhereStr,
+					Expr: expr,
+				}
+			} else {
+				newWhere.Expr = &AndExpr{
+					Left:  newWhere.Expr,
+					Right: expr,
+				}
+			}
+		}
+		switch stmt := stmt.(type) {
+		case *Update:
+			stmt.Where = newWhere
+		case *Delete:
+			stmt.Where = newWhere
+		case *Select:
+			stmt.Where = newWhere
+		}
+	}
+	return String(stmt), nil
 }
