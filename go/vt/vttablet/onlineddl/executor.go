@@ -377,6 +377,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		// we resort to regexp-based parsing of the query.
 		// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
 		_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, ReadableTimestamp())
 
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		args := []string{
@@ -391,12 +392,11 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			`--approve-renamed-columns`,
 			`--debug`,
 			`--exact-rowcount`,
-			`--timestamp-old-table`,
-			`--initially-drop-ghost-table`,
 			`--default-retries=120`,
+			fmt.Sprintf("--force-table-names=%s", forceTableNames),
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
-			fmt.Sprintf(`--hooks-hint=%s`, onlineDDL.UUID),
+			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -565,6 +565,7 @@ export MYSQL_PWD
 
 	runPTOSC := func(execute bool) error {
 		os.Setenv("MYSQL_PWD", onlineDDLPassword)
+		newTableName := fmt.Sprintf("_%s_%s_new", onlineDDL.UUID, ReadableTimestamp())
 		executeFlag := "--dry-run"
 		if execute {
 			executeFlag = "--execute"
@@ -581,10 +582,18 @@ export MYSQL_PWD
 			e.ptPidFileName(onlineDDL.UUID),
 			`--plugin`,
 			pluginFile,
+			`--new-table-name`,
+			newTableName,
 			`--alter`,
 			alterOptions,
 			executeFlag,
 			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
+		}
+		if execute {
+			args = append(args,
+				`--no-drop-new-table`,
+				`--no-drop-old-table`,
+			)
 		}
 		args = append(args, strings.Fields(onlineDDL.Options)...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
@@ -966,18 +975,18 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 
 // reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
 // actually running).
-func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
+func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, err error) {
 	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, "_vt", ":strategy")
 	bindVars := map[string]*querypb.BindVariable{
 		"strategy": sqltypes.StringBindVariable(string(schema.DDLStrategyPTOSC)),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
-		return err
+		return countRunnning, err
 	}
 	r, err := e.execQuery(ctx, bound)
 	if err != nil {
-		return err
+		return countRunnning, err
 	}
 	for _, row := range r.Named().Rows {
 		// A pt-osc UUID is found which claims to be 'running'. Is it?
@@ -987,8 +996,9 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) error {
 		if running, _, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
 			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 		}
+		countRunnning++
 	}
-	return err
+	return countRunnning, err
 }
 
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have

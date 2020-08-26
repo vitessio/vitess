@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -161,10 +162,13 @@ func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, baseP
 }
 
 // CreateUUID creates a globally unique ID, returned as string
+// example result: 55d00cdc_e6ab_11ea_bfe6_0242ac1c000d
 func CreateUUID() (string, error) {
 	u, err := uuid.NewUUID()
 	if err != nil {
 		return "", err
 	}
-	return u.String(), nil
+	uuid := u.String()
+	uuid = strings.Replace(uuid, "-", "_", -1)
+	return uuid, nil
 }

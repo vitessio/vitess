@@ -25,8 +25,13 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
+)
+
+const (
+	readableTimeFormat = "20060102150405"
 )
 
 // execCmd searches the PATH for a command and runs it, logging the output.
@@ -87,4 +92,11 @@ func RandomHash() string {
 // ShortRandomHash returns a 8 hex character random string
 func ShortRandomHash() string {
 	return RandomHash()[0:8]
+}
+
+// ReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
+// (as opposed to unix timestamp which is just a number)
+// Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
+func ReadableTimestamp() string {
+	return time.Now().Format(readableTimeFormat)
 }
