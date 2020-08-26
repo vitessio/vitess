@@ -21,14 +21,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -206,7 +206,33 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestConcurrentUpdateInsertLookupVindex(t *testing.T) {
+func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `delete from t1 where c1 = 300`)
+	exec(t, conn, `insert into t1 values (300,100,300)`)
+	qr1 := exec(t, conn, `select c2.keyspace_id, c3.keyspace_id from lookup_t1 c2, lookup_t2 c3`)
+
+	qr := exec(t, conn, `insert ignore into t1 values (200,100,200)`)
+	assert.Zero(t, qr.RowsAffected)
+
+	qr = exec(t, conn, `select * from t1 order by c1`)
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(300) INT64(100) INT64(300)]]`)
+
+	qr2 := exec(t, conn, `select c2.keyspace_id, c3.keyspace_id from lookup_t1 c2, lookup_t2 c3`)
+	// To ensure lookup vindex is not updated.
+	assert.Equal(t, qr1.Rows, qr2.Rows, "")
+}
+
+func TestOpenTxBlocksInSerial(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
@@ -221,50 +247,58 @@ func TestConcurrentUpdateInsertLookupVindex(t *testing.T) {
 	require.Nil(t, err)
 	defer conn2.Close()
 
-	conn3, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn3.Close()
-
-	/*
-		t1
-		300 100 300
-		300 100 400 - in flight
-
-		lookup_c2
-		100 300
-
-		lookup_c3
-		300 300
-		400 300 - in flight
-
-		conn1
-			- pre - insert lookup_c3, update lock lookup_c2, insert lookup_c2 (handDup)
-			- normal - update_t1, share lock lookup_c2
-			- post - delete lookup_c3
-
-		conn2
-			- pre - insert lookup_c2 (handDup)
-		, lookup_c3
-			- normal - lock share lookup_c2
-			- post
-
-	*/
+	exec(t, conn1, `delete from t1 where c1 = 300`)
 	exec(t, conn1, `insert into t1 values (300,100,300)`)
-	exec(t, conn1, `start transaction`)
+	exec(t, conn1, `begin`)
 	exec(t, conn1, `UPDATE t1 SET c3 = 400 WHERE c2 = 100`)
 
-	go func() {
-		execAssertError(t, conn2, `insert into t1 values (400,100,400);`, `Duplicate entry '100' for key`)
-	}()
+	// This will wait for innodb_lock_wait_timeout timeout pf 20 seconds to kick in.
+	execAssertError(t, conn2, `insert into t1 values (400,100,400)`, `Lock wait timeout exceeded`)
 
-	time.Sleep(2 * time.Second)
 	qr := exec(t, conn1, `insert ignore into t1 values (200,100,200)`)
-	require.Zero(t, qr.RowsAffected)
-
+	assert.Zero(t, qr.RowsAffected)
 	exec(t, conn1, `commit`)
 
-	qr = exec(t, conn3, `select * from t1 order by c1`)
+	qr = exec(t, conn1, `select * from t1 order by c1`)
 	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(300) INT64(100) INT64(400)]]`)
+}
+
+func TestOpenTxBlocksInConcurrent(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn1, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn1.Close()
+
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn2.Close()
+
+	exec(t, conn1, `delete from t1 where c1 = 300`)
+	exec(t, conn1, `insert into t1 values (300,100,300)`)
+	exec(t, conn1, `begin`)
+	exec(t, conn1, `UPDATE t1 SET c3 = 400 WHERE c2 = 100`)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		// This will wait for other transaction to complete to through the duplicate key error.
+		execAssertError(t, conn2, `insert into t1 values (400,100,400)`, `Duplicate entry '100' for key`)
+		wg.Done()
+	}()
+
+	time.Sleep(3 * time.Second)
+	qr := exec(t, conn1, `insert ignore into t1 values (200,100,200)`)
+	assert.Zero(t, qr.RowsAffected)
+	exec(t, conn1, `commit`)
+
+	qr = exec(t, conn1, `select * from t1 order by c1`)
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(300) INT64(100) INT64(400)]]`)
+	wg.Wait()
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
@@ -278,5 +312,5 @@ func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString s
 	t.Helper()
 	_, err := conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), errorString)
+	assert.Contains(t, err.Error(), errorString)
 }
