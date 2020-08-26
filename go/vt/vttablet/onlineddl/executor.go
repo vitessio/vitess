@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vexecplan"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -57,6 +58,17 @@ var (
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
 	ErrMigrationNotFound = errors.New("Migration not found")
 )
+
+var vexecUpdateTemplates = []string{
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
+	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2' and migration_uuid='val3'`,
+	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2' and migration_uuid='val3' and shard='val4'`,
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and shard='val3' and mysql_schema='val4'`,
+}
+
+var emptyResult = &sqltypes.Result{
+	RowsAffected: 0,
+}
 
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
@@ -158,6 +170,12 @@ func (e *Executor) Open() error {
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 	e.ticks.Start(e.onMigrationCheckTick)
+
+	if _, err := vexecplan.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
+		// this validates vexecUpdateTemplates
+		return err
+	}
+
 	e.isOpen = true
 
 	return nil
@@ -258,6 +276,26 @@ func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 	parsed := sqlparser.BuildParsedQuery(sqlDropOnlineDDLUser, onlineDDLGrant)
 	_, err = conn.ExecuteFetch(parsed.Query, 0, false)
 	return err
+}
+
+// getThrottleReplicas evaluates which tablets should be used to throttle the migration
+func (e *Executor) getThrottleReplicas(ctx context.Context) ([]string, error) {
+	throttleReplicas := []string{}
+
+	tabletAliases, err := e.ts.FindAllTabletAliasesInShard(ctx, e.keyspace, e.shard)
+	if err != nil {
+		return throttleReplicas, err
+	}
+	for _, tabletAlias := range tabletAliases {
+		tablet, err := e.ts.GetTablet(ctx, tabletAlias)
+		if err != nil {
+			return throttleReplicas, err
+		}
+		if tablet.Type == topodatapb.TabletType_REPLICA {
+			throttleReplicas = append(throttleReplicas, tablet.MysqlAddr())
+		}
+	}
+	return throttleReplicas, nil
 }
 
 // ExecuteWithGhost validates and runs a gh-ost process.
@@ -370,6 +408,11 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		return err
 	}
 
+	throttleReplicas, err := e.getThrottleReplicas(ctx)
+	if err != nil {
+		return err
+	}
+
 	runGhost := func(execute bool) error {
 		// Temporary hack (2020-08-11)
 		// Because sqlparser does not do full blown ALTER TABLE parsing,
@@ -402,6 +445,11 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf(`--alter=%s`, alterOptions),
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
+		}
+		if len(throttleReplicas) > 0 {
+			args = append(args,
+				fmt.Sprintf("--throttle-control-replicas=%s", strings.Join(throttleReplicas, ",")),
+			)
 		}
 		args = append(args, strings.Fields(onlineDDL.Options)...)
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
@@ -555,6 +603,10 @@ export MYSQL_PWD
 	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
 		return err
 	}
+	throttleReplicas, err := e.getThrottleReplicas(ctx)
+	if err != nil {
+		return err
+	}
 
 	// Temporary hack (2020-08-11)
 	// Because sqlparser does not do full blown ALTER TABLE parsing,
@@ -594,6 +646,16 @@ export MYSQL_PWD
 				`--no-drop-new-table`,
 				`--no-drop-old-table`,
 			)
+			if len(throttleReplicas) > 0 {
+				// For pt-osc we only use a single replica (because --check-slave-lag only supports a single entry).
+				// In the future this will all be replaced by freno throttling
+				// tokenize host:port
+				tokens := strings.Split(throttleReplicas[0], ":")
+				args = append(args,
+					`--check-slave-lag`,
+					fmt.Sprintf(`h=%s,P=%s,D=%s,t=%s,u=%s`, tokens[0], tokens[1], e.dbName, onlineDDL.Table, onlineDDLUser),
+				)
+			}
 		}
 		args = append(args, strings.Fields(onlineDDL.Options)...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
@@ -719,6 +781,7 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 	if err != nil {
 		return nil, err
 	}
+
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
@@ -1125,7 +1188,7 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 	return err
 }
 
-func (e *Executor) retryMigration(ctx context.Context, uuid string, whereExpr string) (result *sqltypes.Result, err error) {
+func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, "_vt", whereExpr)
@@ -1175,50 +1238,51 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 
 // VExec is called by a VExec invocation
 func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *querypb.QueryResult, err error) {
-	var r *sqltypes.Result
+	response := func(result *sqltypes.Result, err error) (*querypb.QueryResult, error) {
+		if err != nil {
+			return nil, err
+		}
+		return sqltypes.ResultToProto3(result), nil
+	}
+
 	switch stmt := vx.Stmt.(type) {
-	case *sqlparser.Select:
-		r, err = e.execQuery(ctx, vx.Query)
-	case *sqlparser.Update:
-		expectColumn := "migration_uuid"
-		val, ok := vx.WhereCols[expectColumn]
-		if !ok {
-			return nil, fmt.Errorf("UPDATE query must include column %s in query: %s", expectColumn, vx.Query)
-		}
-		uuid := string(val.Val)
-		if uuid != vx.Workflow {
-			return nil, fmt.Errorf("UPDATE query must use same %s value as workflow %s", expectColumn, vx.Workflow)
-		}
-
-		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("%v", stmt.Where.Expr)
-		whereExpr := buf.ParsedQuery().Query
-
-		statusColumn := "migration_status"
-		for colName := range vx.UpdateCols {
-			if colName != statusColumn {
-				return nil, fmt.Errorf("column %s cannot be changed", colName)
-			}
-		}
-		statusVal, ok := vx.UpdateCols[statusColumn]
-		if !ok {
-			return nil, fmt.Errorf("expecting literal value for column %s", statusColumn)
-		}
-		switch string(statusVal.Val) {
-		case retryMigrationHint:
-			r, err = e.retryMigration(ctx, uuid, whereExpr)
-		case cancelMigrationHint:
-			r, err = e.cancelMigration(ctx, uuid, true)
-		default:
-			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
-				string(statusVal.Val), retryMigrationHint, cancelMigrationHint)
-		}
 	case *sqlparser.Delete:
 		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", vx.Query)
+	case *sqlparser.Select:
+		return response(e.execQuery(ctx, vx.Query))
+	case *sqlparser.Update:
+		match, err := vexecplan.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
+		if err != nil {
+			return nil, err
+		}
+		if !match {
+			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(vexecUpdateTemplates, "; "))
+		}
+		if shard, _ := vx.ColumnStringVal(vx.WhereCols, "shard"); shard != "" {
+			// shard is specified.
+			if shard != e.shard {
+				// not _this_ shard
+				return sqltypes.ResultToProto3(emptyResult), nil
+			}
+		}
+		statusVal, err := vx.ColumnStringVal(vx.UpdateCols, "migration_status")
+		if err != nil {
+			return nil, err
+		}
+		switch statusVal {
+		case retryMigrationHint:
+			return response(e.retryMigration(ctx, sqlparser.String(stmt.Where.Expr)))
+		case cancelMigrationHint:
+			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
+			if err != nil {
+				return nil, err
+			}
+			return response(e.cancelMigration(ctx, uuid, true))
+		default:
+			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
+				statusVal, retryMigrationHint, cancelMigrationHint)
+		}
+	default:
+		return nil, fmt.Errorf("No handler for this query: %s", vx.Query)
 	}
-
-	if err != nil {
-		return nil, err
-	}
-	return sqltypes.ResultToProto3(r), nil
 }
