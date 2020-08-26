@@ -486,7 +486,10 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
 	_, err := qre.Execute()
-	assert.NoError(t, err)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
+		assert.NoError(t, err)
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)
+	}
 }
 
 func TestQueryExecutorPlanNextval(t *testing.T) {
