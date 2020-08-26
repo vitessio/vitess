@@ -531,10 +531,6 @@ func CreateVReplicationTable() []string {
 // AlterVReplicationTable adds new columns to vreplication table
 var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
-}
-
-// AlterVReplicationTableSourceToBlob changes source column of vreplication table to BLOB
-var AlterVReplicationTableSourceToBlob = []string{
 	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
 }
 

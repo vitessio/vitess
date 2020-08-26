@@ -68,7 +68,6 @@ func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
-	allddls = append(allddls, binlogplayer.AlterVReplicationTableSourceToBlob...)
 	withDDL = withddl.New(allddls)
 }
 
