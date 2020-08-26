@@ -49,7 +49,7 @@ type tmState struct {
 	// while changing the state of the system to match these values.
 	// This can be held for many seconds while tmState connects to
 	// external components to change their state.
-	// Obtaining tm.actionMutex before calling a tmState function is
+	// Obtaining tm.actionSema before calling a tmState function is
 	// not required.
 	// Because mu can be held for long, we publish the current state
 	// of these variables into displayState, which can be accessed
