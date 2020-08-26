@@ -17,8 +17,11 @@ limitations under the License.
 package sync2
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSemaNoTimeout(t *testing.T) {
@@ -26,42 +29,51 @@ func TestSemaNoTimeout(t *testing.T) {
 	s.Acquire()
 	released := false
 	go func() {
-		time.Sleep(10 * time.Millisecond)
 		released = true
 		s.Release()
 	}()
 	s.Acquire()
-	if !released {
-		t.Errorf("release: false, want true")
-	}
+	assert.True(t, released)
 }
 
 func TestSemaTimeout(t *testing.T) {
-	s := NewSemaphore(1, 5*time.Millisecond)
+	s := NewSemaphore(1, 1*time.Millisecond)
 	s.Acquire()
+	release := make(chan struct{})
+	released := make(chan struct{})
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		<-release
 		s.Release()
+		released <- struct{}{}
 	}()
-	if s.Acquire() {
-		t.Errorf("Acquire: true, want false")
-	}
-	time.Sleep(10 * time.Millisecond)
-	if !s.Acquire() {
-		t.Errorf("Acquire: false, want true")
-	}
+	assert.False(t, s.Acquire())
+	release <- struct{}{}
+	<-released
+	assert.True(t, s.Acquire())
+}
+
+func TestSemaAcquireContext(t *testing.T) {
+	s := NewSemaphore(1, 0)
+	s.Acquire()
+	release := make(chan struct{})
+	released := make(chan struct{})
+	go func() {
+		<-release
+		s.Release()
+		released <- struct{}{}
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assert.False(t, s.AcquireContext(ctx))
+	release <- struct{}{}
+	<-released
+	assert.True(t, s.AcquireContext(context.Background()))
 }
 
 func TestSemaTryAcquire(t *testing.T) {
 	s := NewSemaphore(1, 0)
-	if !s.TryAcquire() {
-		t.Errorf("TryAcquire: false, want true")
-	}
-	if s.TryAcquire() {
-		t.Errorf("TryAcquire: true, want false")
-	}
+	assert.True(t, s.TryAcquire())
+	assert.False(t, s.TryAcquire())
 	s.Release()
-	if !s.TryAcquire() {
-		t.Errorf("TryAcquire: false, want true")
-	}
+	assert.True(t, s.TryAcquire())
 }
