@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -123,6 +125,25 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 	tableName := sqlparser.GetTableName(ins.Table)
 	plan.Table = tables[tableName.String()]
 	return plan, nil
+}
+
+func analyzeShowTables(show *sqlparser.Show, dbName string) {
+	// rewrite WHERE clause if it exists
+	// `where Tables_in_Keyspace` => `where Tables_in_DbName`
+	if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
+		filter := show.ShowTablesOpt.Filter.Filter
+		if filter != nil {
+			sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+				switch n := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
+						cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
+					}
+				}
+				return true
+			}, nil)
+		}
+	}
 }
 
 func analyzeSet(set *sqlparser.Set) (plan *Plan) {

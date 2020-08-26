@@ -787,3 +787,19 @@ options:PassthroughDMLs
 # syntax error
 "syntax error"
 "syntax error at position 7 near 'syntax'"
+
+# show tables #1
+"show tables like 'key%'"
+{
+  "PlanID": "ShowTables",
+  "TableName":"",
+  "FullQuery": "show tables like 'key%'"
+}
+
+# show tables #2
+"show tables where Tables_in_keyspace='apa'"
+{
+  "PlanID": "ShowTables",
+  "TableName":"",
+  "FullQuery": "show tables where Tables_in_dbName = 'apa'"
+}

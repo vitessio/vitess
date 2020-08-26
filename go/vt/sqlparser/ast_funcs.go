@@ -508,6 +508,13 @@ func NewColIdent(str string) ColIdent {
 	}
 }
 
+// NewColName makes a new ColName
+func NewColName(str string) *ColName {
+	return &ColName{
+		Name: NewColIdent(str),
+	}
+}
+
 //NewSelect is used to create a select statement
 func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
 	var cache *bool

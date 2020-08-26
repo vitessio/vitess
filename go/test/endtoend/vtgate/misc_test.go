@@ -276,6 +276,18 @@ func TestXXHash(t *testing.T) {
 	assertMatches(t, conn, "select phone, keyspace_id from t7_xxhash_idx", `[]`)
 }
 
+func TestShowTablesWithWhereClause(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`)
+	exec(t, conn, "begin")
+	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

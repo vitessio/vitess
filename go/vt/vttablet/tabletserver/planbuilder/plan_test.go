@@ -72,7 +72,7 @@ func TestPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, false)
+				plan, err = Build(statement, testSchema, false, "dbName")
 			}
 			PassthroughDMLs = false
 
@@ -109,7 +109,7 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			statement, err := sqlparser.Parse(tcase.input)
 			require.NoError(t, err)
 			// In Pooled Connection, plan building will fail.
-			plan, err = Build(statement, testSchema, false /* isReservedConn */)
+			plan, err = Build(statement, testSchema, false /* isReservedConn */, "dbName")
 			require.Error(t, err)
 			out := err.Error()
 			if out != tcase.output {
@@ -123,7 +123,7 @@ func TestPlanPoolUnsafe(t *testing.T) {
 				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
 			}
 			// In Reserved Connection, plan will be built.
-			plan, err = Build(statement, testSchema, true /* isReservedConn */)
+			plan, err = Build(statement, testSchema, true /* isReservedConn */, "dbName")
 			require.NoError(t, err)
 			require.NotEmpty(t, plan)
 		})
@@ -141,7 +141,7 @@ func TestPlanInReservedConn(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, true)
+				plan, err = Build(statement, testSchema, true, "dbName")
 			}
 			PassthroughDMLs = false
 
@@ -192,7 +192,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem, false)
+				plan, err := Build(statement, schem, false, "dbName")
 				var out string
 				if err != nil {
 					out = err.Error()
