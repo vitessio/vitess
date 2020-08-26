@@ -25,6 +25,9 @@ FROM vitess/bootstrap:mysql57
 # Allows some docker builds to disable CGO
 ARG CGO_ENABLED=0
 
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
+
 # Re-copy sources from working tree
 USER root
 COPY . /vt/src/vitess.io/vitess
