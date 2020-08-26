@@ -34,8 +34,8 @@ import (
 // Utility functions for RPC service
 //
 
-// lock is used at the beginning of an RPC call, to lock the
-// action mutex. It returns ctx.Err() if the context expires.
+// lock is used at the beginning of an RPC call, to acquire the
+// action semaphore. It returns ctx.Err() if the context expires.
 func (tm *TabletManager) lock(ctx context.Context) error {
 	if tm.actionSema.AcquireContext(ctx) {
 		return nil
