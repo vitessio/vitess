@@ -49,15 +49,21 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecOrchestrator("delete from vitess_tablet"); err != nil {
 		log.Errore(err)
 	}
-	if IsLeaderOrActive() {
-		RefreshTablets()
-	}
+	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
+		_ = inst.InjectSeed(instanceKey)
+	})
 	// TODO(sougou): parameterize poll interval.
 	return time.Tick(15 * time.Second) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
 // RefreshTablets reloads the tablets from topo.
 func RefreshTablets() {
+	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
+		_, _ = inst.ReadTopologyInstance(instanceKey)
+	})
+}
+
+func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 	if !IsLeaderOrActive() {
 		return
 	}
@@ -72,13 +78,13 @@ func RefreshTablets() {
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			refreshTabletsInCell(cell)
+			refreshTabletsInCell(cell, loader)
 		}(cell)
 	}
 	wg.Wait()
 }
 
-func refreshTabletsInCell(cell string) {
+func refreshTabletsInCell(cell string, loader func(instanceKey *inst.InstanceKey)) {
 	latestInstances := make(map[inst.InstanceKey]bool)
 	tablets, err := topotools.GetAllTablets(context.TODO(), ts, cell)
 	if err != nil {
@@ -114,7 +120,7 @@ func refreshTabletsInCell(cell string) {
 			log.Errore(err)
 			continue
 		}
-		discoveryQueue.Push(instanceKey)
+		loader(&instanceKey)
 		log.Infof("Discovered: %v", tablet)
 	}
 
