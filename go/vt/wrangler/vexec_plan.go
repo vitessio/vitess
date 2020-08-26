@@ -41,6 +41,7 @@ type vexecPlannerParams struct {
 	workflowColumn       string
 	immutableColumnNames []string
 	updatableColumnNames []string
+	updateTemplates      []string
 }
 
 // vexecPlanner generates and executes a plan
@@ -116,10 +117,13 @@ func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 	return &schemaMigrationsPlanner{
 		vx: vx,
 		d: &vexecPlannerParams{
-			dbNameColumn:         "mysql_schema",
-			workflowColumn:       "migration_uuid",
-			immutableColumnNames: []string{},
-			updatableColumnNames: []string{"migration_status"},
+			dbNameColumn:   "mysql_schema",
+			workflowColumn: "migration_uuid",
+			updateTemplates: []string{
+				`update _vt.schema_migrations set migration_status='val1'`,
+				`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2'`,
+				`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and shard='val3'`,
+			},
 		},
 	}
 }
@@ -276,10 +280,13 @@ func (vx *vexec) buildUpdatePlan(planner vexecPlanner, upd *sqlparser.Update) (*
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(upd))
 	}
 	plannerParams := planner.params()
-	for _, expr := range upd.Exprs {
-		for _, immutableColName := range plannerParams.immutableColumnNames {
-			if expr.Name.Name.EqualString(immutableColName) {
-				return nil, fmt.Errorf("%s cannot be changed: %v", immutableColName, sqlparser.String(expr))
+	if immutableColumnNames := plannerParams.immutableColumnNames; len(immutableColumnNames) > 0 {
+		// we must never allow changing an immutable column
+		for _, expr := range upd.Exprs {
+			for _, immutableColName := range plannerParams.immutableColumnNames {
+				if expr.Name.Name.EqualString(immutableColName) {
+					return nil, fmt.Errorf("%s cannot be changed: %v", immutableColName, sqlparser.String(expr))
+				}
 			}
 		}
 	}
@@ -297,7 +304,33 @@ func (vx *vexec) buildUpdatePlan(planner vexecPlanner, upd *sqlparser.Update) (*
 			}
 		}
 	}
+	if updateTemplates := plannerParams.updateTemplates; len(updateTemplates) > 0 {
+		// if updateTemplates is defined, then the query must match one of the defined templates
+		templateMatch := false
+		// normalize the query
+		stmt, _ := sqlparser.Parse(vx.query)
+		bv := make(map[string]*querypb.BindVariable)
+		sqlparser.Normalize(stmt, bv, "")
+		normalizedQuery := sqlparser.String(stmt)
 
+		for _, template := range updateTemplates {
+			// normalize th etemplate
+			templateStmt, err := sqlparser.Parse(template)
+			if err != nil {
+				return nil, err
+			}
+			sqlparser.Normalize(templateStmt, bv, "")
+
+			normalizedTemplate := sqlparser.String(templateStmt)
+			if normalizedTemplate == normalizedQuery {
+				templateMatch = true
+				break
+			}
+		}
+		if !templateMatch {
+			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(updateTemplates, ";"))
+		}
+	}
 	upd.Where = vx.addDefaultWheres(planner, upd.Where)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
