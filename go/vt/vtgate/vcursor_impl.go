@@ -320,7 +320,7 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 	return qr, errs
 }
 
-func (vc *vcursorImpl) IsDML() bool {
+func (vc *vcursorImpl) InTransactionAndIsDML() bool {
 	if !vc.safeSession.InTransaction() {
 		return false
 	}

@@ -50,7 +50,7 @@ type vcursor struct {
 	keys        []sqltypes.Value
 }
 
-func (vc *vcursor) IsDML() bool {
+func (vc *vcursor) InTransactionAndIsDML() bool {
 	return false
 }
 
