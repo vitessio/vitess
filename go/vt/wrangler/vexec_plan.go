@@ -57,7 +57,7 @@ type vreplicationPlanner struct {
 	d  *vexecPlannerParams
 }
 
-func newVreplicationPlanner(vx *vexec) vexecPlanner {
+func newVReplicationPlanner(vx *vexec) vexecPlanner {
 	return &vreplicationPlanner{
 		vx: vx,
 		d: &vexecPlannerParams{
@@ -107,7 +107,7 @@ func (p vreplicationPlanner) dryRun() error {
 	return nil
 }
 
-// vreplicationPlanner is a vexecPlanner implementation, specific to _vt.schema_migrations table
+// schemaMigrationsPlanner is a vexecPlanner implementation, specific to _vt.schema_migrations table
 type schemaMigrationsPlanner struct {
 	vx *vexec
 	d  *vexecPlannerParams
@@ -174,7 +174,7 @@ func (vx *vexec) getPlanner() error {
 	case qualifiedTableName(schemaMigrationsTableName):
 		vx.planner = newSchemaMigrationsPlanner(vx)
 	case qualifiedTableName(vreplicationTableName):
-		vx.planner = newVreplicationPlanner(vx)
+		vx.planner = newVReplicationPlanner(vx)
 	default:
 		return fmt.Errorf("table not supported by vexec: %v", vx.tableName)
 	}
