@@ -328,7 +328,7 @@ var commands = []commandGroup{
 				`Externalize a backfilled vindex.`},
 			{"Materialize", commandMaterialize,
 				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
-				"Performs materialization based on the json spec."},
+				"Performs materialization based on the json spec. Is used directly to form VReplication rules, with an optional step to copy table structure/DDL."},
 			{"SplitClone", commandSplitClone,
 				"<keyspace> <from_shards> <to_shards>",
 				"Start the SplitClone process to perform horizontal resharding. Example: SplitClone ks '0' '-80,80-'"},
