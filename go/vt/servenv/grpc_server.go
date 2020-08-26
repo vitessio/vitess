@@ -86,7 +86,7 @@ var (
 
 	// EnforcementPolicy MinTime that sets the keepalive enforcement policy on the server.
 	// This is the minimum amount of time a client should wait before sending a keepalive ping.
-	GRPCKeepAliveEnforcementPolicyMinTime = flag.Duration("grpc_server_keepalive_enforcement_policy_min_time", 5*time.Minute, "gRPC server minimum keepalive time")
+	GRPCKeepAliveEnforcementPolicyMinTime = flag.Duration("grpc_server_keepalive_enforcement_policy_min_time", 10*time.Second, "gRPC server minimum keepalive time")
 
 	// EnforcementPolicy PermitWithoutStream - If true, server allows keepalive pings
 	// even when there are no active streams (RPCs). If false, and client sends ping when
