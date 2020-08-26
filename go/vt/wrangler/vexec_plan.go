@@ -25,6 +25,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vexecplan"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -305,30 +306,12 @@ func (vx *vexec) buildUpdatePlan(planner vexecPlanner, upd *sqlparser.Update) (*
 		}
 	}
 	if updateTemplates := plannerParams.updateTemplates; len(updateTemplates) > 0 {
-		// if updateTemplates is defined, then the query must match one of the defined templates
-		templateMatch := false
-		// normalize the query
-		stmt, _ := sqlparser.Parse(vx.query)
-		bv := make(map[string]*querypb.BindVariable)
-		sqlparser.Normalize(stmt, bv, "")
-		normalizedQuery := sqlparser.String(stmt)
-
-		for _, template := range updateTemplates {
-			// normalize th etemplate
-			templateStmt, err := sqlparser.Parse(template)
-			if err != nil {
-				return nil, err
-			}
-			sqlparser.Normalize(templateStmt, bv, "")
-
-			normalizedTemplate := sqlparser.String(templateStmt)
-			if normalizedTemplate == normalizedQuery {
-				templateMatch = true
-				break
-			}
+		match, err := vexecplan.QueryMatchesTemplates(vx.query, updateTemplates)
+		if err != nil {
+			return nil, err
 		}
-		if !templateMatch {
-			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(updateTemplates, ";"))
+		if !match {
+			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(updateTemplates, "; "))
 		}
 	}
 	upd.Where = vx.addDefaultWheres(planner, upd.Where)

@@ -37,6 +37,15 @@ func NewTabletVExec(workflow, keyspace string) *TabletVExec {
 	}
 }
 
+// ColumnStringVal returns a string value from a given column, or error if the column is not found
+func (e *TabletVExec) ColumnStringVal(columns ValColumns, colName string) (string, error) {
+	val, ok := columns[colName]
+	if !ok {
+		return "", fmt.Errorf("Could not find value for column %s", colName)
+	}
+	return string(val.Val), nil
+}
+
 // splitAndExpression assumes expression is of the form "expr AND expr [AND ...]" and returns AND tokens
 func (e *TabletVExec) splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
 	if node == nil {
