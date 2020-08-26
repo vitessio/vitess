@@ -254,6 +254,8 @@ type ReplicationStatusResult struct {
 	SourceLocation ReplicationLocation
 	// TargetLocation represents the keyspace and shards that we are vreplicating into.
 	TargetLocation ReplicationLocation
+	// MaxVReplicationLag represents the maximum vreplication lag seen across all shards.
+	MaxVReplicationLag int64
 
 	// Statuses is a map of <shard>/<master tablet alias> : ShardReplicationStatus (for the given shard).
 	ShardStatuses map[string]*ShardReplicationStatus
@@ -391,8 +393,14 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			}
 			sourceKeyspace = sk
 			sourceShards.Insert(status.Bls.Shard)
-
 			rsrStatus = append(rsrStatus, status)
+
+			transactionTimestamp := time.Unix(status.TransactionTimestamp, 0)
+			timeUpdated := time.Unix(status.TimeUpdated, 0)
+			replicationLag := timeUpdated.Sub(transactionTimestamp)
+			if replicationLag.Seconds() > float64(rsr.MaxVReplicationLag) {
+				rsr.MaxVReplicationLag = int64(replicationLag.Seconds())
+			}
 		}
 		si, err := wr.ts.GetShard(ctx, keyspace, master.Shard)
 		if err != nil {
