@@ -228,6 +228,7 @@ func TestWorkflowListStreams(t *testing.T) {
 					"State": "Copying",
 					"MaxReplicationLag": 0,
 					"DBName": "vt_target",
+					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
 					"Message": "",
 					"CopyState": [
@@ -263,6 +264,7 @@ func TestWorkflowListStreams(t *testing.T) {
 					"State": "Copying",
 					"MaxReplicationLag": 0,
 					"DBName": "vt_target",
+					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
 					"Message": "",
 					"CopyState": [

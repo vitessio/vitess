@@ -300,6 +300,8 @@ type ReplicationStatus struct {
 	MaxReplicationLag int64
 	// DbName represents the db_name column from the _vt.vreplication table.
 	DBName string
+	// TransactionTimestamp represents the transaction_timestamp column from the _vt.vreplication table.
+	TransactionTimestamp int64
 	// TimeUpdated represents the time_updated column from the _vt.vreplication table.
 	TimeUpdated int64
 	// Message represents the message column from the _vt.vreplication table.
@@ -311,7 +313,7 @@ type ReplicationStatus struct {
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, master *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, maxReplicationLag, timeUpdated int64
+	var id, maxReplicationLag, timeUpdated, transactionTimestamp int64
 	var state, dbName, pos, stopPos, message string
 	var bls binlogdatapb.BinlogSource
 	id, err = evalengine.ToInt64(row[0])
@@ -333,19 +335,24 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 	if err != nil {
 		return nil, "", err
 	}
-	message = row[8].ToString()
+	transactionTimestamp, err = evalengine.ToInt64(row[8])
+	if err != nil {
+		return nil, "", err
+	}
+	message = row[9].ToString()
 	status := &ReplicationStatus{
-		Shard:             master.Shard,
-		Tablet:            master.AliasString(),
-		ID:                id,
-		Bls:               bls,
-		Pos:               pos,
-		StopPos:           stopPos,
-		State:             state,
-		DBName:            dbName,
-		MaxReplicationLag: maxReplicationLag,
-		TimeUpdated:       timeUpdated,
-		Message:           message,
+		Shard:                master.Shard,
+		Tablet:               master.AliasString(),
+		ID:                   id,
+		Bls:                  bls,
+		Pos:                  pos,
+		StopPos:              stopPos,
+		State:                state,
+		DBName:               dbName,
+		MaxReplicationLag:    maxReplicationLag,
+		TransactionTimestamp: transactionTimestamp,
+		TimeUpdated:          timeUpdated,
+		Message:              message,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, master, id)
 	if err != nil {
@@ -361,7 +368,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
 	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication"
+	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message from _vt.vreplication"
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err
