@@ -34,28 +34,23 @@ import (
 // Utility functions for RPC service
 //
 
-// lock is used at the beginning of an RPC call, to lock the
-// action mutex. It returns ctx.Err() if <-ctx.Done() after the lock.
+// lock is used at the beginning of an RPC call, to acquire the
+// action semaphore. It returns ctx.Err() if the context expires.
 func (tm *TabletManager) lock(ctx context.Context) error {
-	tm.actionMutex.Lock()
-	tm.actionMutexLocked = true
-
-	// After we take the lock (which could take a long time), we
-	// check the client is still here.
-	select {
-	case <-ctx.Done():
-		tm.actionMutexLocked = false
-		tm.actionMutex.Unlock()
-		return ctx.Err()
-	default:
+	if tm.actionSema.AcquireContext(ctx) {
 		return nil
 	}
+	return ctx.Err()
+}
+
+// tryLock will return immediately, true on success and false on failure.
+func (tm *TabletManager) tryLock() bool {
+	return tm.actionSema.TryAcquire()
 }
 
 // unlock is the symmetrical action to lock.
 func (tm *TabletManager) unlock() {
-	tm.actionMutexLocked = false
-	tm.actionMutex.Unlock()
+	tm.actionSema.Release()
 }
 
 // HandleRPCPanic is part of the RPCTM interface.
