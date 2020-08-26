@@ -25,10 +25,10 @@ topology server. Only 'vtctl DeleteTablet'
 should be run by other processes, everything else should ask
 the tablet server to make the change.
 
-Most RPC calls lock the actionMutex, except the easy read-only ones.
+Most RPC calls obtain the actionSema, except the easy read-only ones.
 RPC calls that change the tablet record will also call updateState.
 
-See rpc_server.go for all cases, and which actions take the actionMutex,
+See rpc_server.go for all cases, and which actions take the actionSema,
 and which run changeCallback.
 */
 package tabletmanager
@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -140,17 +141,11 @@ type TabletManager struct {
 	// when we transition back from something like MASTER.
 	baseTabletType topodatapb.TabletType
 
-	// actionMutex is there to run only one action at a time.
-	// This mutex can be held for long periods of time (hours),
-	// like in the case of a restore. This mutex must be obtained
+	// actionSema is there to run only one action at a time.
+	// This semaphore can be held for long periods of time (hours),
+	// like in the case of a restore. This semaphore must be obtained
 	// first before other mutexes.
-	actionMutex sync.Mutex
-
-	// actionMutexLocked is set to true after we acquire actionMutex,
-	// and reset to false when we release it.
-	// It is meant as a sanity check to make sure the methods that need
-	// to have the actionMutex have it.
-	actionMutexLocked bool
+	actionSema *sync2.Semaphore
 
 	// orc is an optional client for Orchestrator HTTP API calls.
 	// If this is nil, those calls will be skipped.
@@ -238,6 +233,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
+	tm.actionSema = sync2.NewSemaphore(1, 0)
 
 	demoteType, err := topoproto.ParseTabletType(*demoteMasterType)
 	if err != nil {
