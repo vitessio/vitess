@@ -628,11 +628,11 @@ create_statement:
   }
 | CREATE VIEW table_name AS lexer_position select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $6, ViewSelectPositionStart: $5, ViewSelectPositionEnd: $7 - 1}
+    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $6, SubStatementPositionStart: $5, SubStatementPositionEnd: $7 - 1}
   }
 | CREATE OR REPLACE VIEW table_name AS lexer_position select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, ViewSelectPositionStart: $7, ViewSelectPositionEnd: $9 - 1, OrReplace: true}
+    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $9 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -642,9 +642,9 @@ create_statement:
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
-| CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt trigger_body
+| CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
-    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $13}}
+    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}}
   }
 
 definer_opt:
@@ -694,7 +694,7 @@ trigger_order_opt:
   }
 
 trigger_body:
-  select_statement
+  insert_statement
   {
     $$ = $1
   }

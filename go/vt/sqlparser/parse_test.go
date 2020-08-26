@@ -717,6 +717,12 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
+		input: "insert into A(A, B) values (';', '''')",
+		output: "insert into A(A, B) values (';', '\\'')",
+	}, {
+		input:  "CREATE TABLE A (\n\t`A` int\n)",
+		output: "create table A (\n\tA int\n)",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
@@ -1678,7 +1684,7 @@ func TestCreateViewSelectPosition(t *testing.T) {
 		if !ok {
 			t.Errorf("Expected DDL when parsing (%q)", tcase.query)
 		}
-		sel := tcase.query[ddl.ViewSelectPositionStart:ddl.ViewSelectPositionEnd]
+		sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
 		if sel != tcase.sel {
 			t.Errorf("expected select to be %q, got %q", tcase.sel, sel)
 		}
@@ -1867,9 +1873,6 @@ func TestCaseSensitivity(t *testing.T) {
 		input: "select * from b use index (A)",
 	}, {
 		input: "insert into A(A, B) values (1, 2)",
-	}, {
-		input:  "CREATE TABLE A (\n\t`A` int\n)",
-		output: "create table A (\n\tA int\n)",
 	}, {
 		input:  "create view A as select current_timestamp()",
 		output: "create view a as select current_timestamp() from dual",
