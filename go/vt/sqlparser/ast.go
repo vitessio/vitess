@@ -282,6 +282,8 @@ type Statement interface {
 	SQLNode
 }
 
+type Statements []Statement
+
 func (*Union) iStatement()      {}
 func (*Select) iStatement()     {}
 func (*Stream) iStatement()     {}
@@ -299,6 +301,7 @@ func (*Commit) iStatement()     {}
 func (*Rollback) iStatement()   {}
 func (*OtherRead) iStatement()  {}
 func (*OtherAdmin) iStatement() {}
+func (*BeginEndBlock) iStatement() {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -504,6 +507,27 @@ func (node *Union) walkSubtree(visit Visit) error {
 		node.Left,
 		node.Right,
 	)
+}
+
+// BeginEndBlock represents a BEGIN .. END block with one or more statements nested within
+type BeginEndBlock struct {
+	Statements Statements
+}
+
+func (b *BeginEndBlock) Format(buf *TrackedBuffer) {
+	// TODO
+}
+
+func (b *BeginEndBlock) walkSubtree(visit Visit) error {
+	if b == nil {
+		return nil
+	}
+	for _, s := range b.Statements {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Stream represents a SELECT statement.

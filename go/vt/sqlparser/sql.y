@@ -69,6 +69,7 @@ func skipToEnd(yylex interface{}) {
   selectExprs   SelectExprs
   selectExpr    SelectExpr
   columns       Columns
+  statements    Statements
   partitions    Partitions
   colName       *ColName
   tableExprs    TableExprs
@@ -225,6 +226,8 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
+%type <statement> begin_end_block statement_list_statement
+%type <statements> statement_list
 %type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
@@ -694,12 +697,41 @@ trigger_order_opt:
   }
 
 trigger_body:
-  insert_statement
+  begin_end_block
   {
     $$ = $1
   }
+| set_statement
+| insert_statement
 | update_statement
 | delete_statement
+
+begin_end_block:
+  BEGIN statement_list END
+  {
+    $$ = &BeginEndBlock{Statements: $2}
+  }
+
+statement_list:
+  statement_list_statement
+  {
+    $$ = Statements{$1}
+  }
+| statement_list ';' statement_list_statement
+  {
+    $$ = append($$, $3)
+  }
+
+statement_list_statement:
+  select_statement
+  {
+    $$ = $1
+  }
+| insert_statement
+| update_statement
+| delete_statement
+| set_statement
+| begin_end_block
 
 vindex_type_opt:
   {
