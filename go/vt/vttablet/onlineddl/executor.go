@@ -59,10 +59,8 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
-	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2' and migration_uuid='val3'`,
-	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2' and migration_uuid='val3' and shard='val4'`,
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and shard='val3' and mysql_schema='val4'`,
+	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val'`,
+	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val' and shard='val'`,
 }
 
 var emptyResult = &sqltypes.Result{
