@@ -91,8 +91,8 @@ func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 
 func (rm *replManager) check() {
 	// We need to obtain the action lock if we're going to fix
-	// replication
-	if err := rm.tm.lock(rm.ctx); err != nil {
+	// replication, but only if the lock is available to take.
+	if !rm.tm.tryLock() {
 		return
 	}
 	defer rm.tm.unlock()
