@@ -506,7 +506,7 @@ type loggingVCursor struct {
 	log     []string
 }
 
-func (vc *loggingVCursor) IsDML() bool {
+func (vc *loggingVCursor) InTransactionAndIsDML() bool {
 	return false
 }
 

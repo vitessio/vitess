@@ -53,7 +53,7 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
-func (t noopVCursor) IsDML() bool {
+func (t noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
 
@@ -175,7 +175,7 @@ type loggingVCursor struct {
 	resolvedTargetTabletType topodatapb.TabletType
 }
 
-func (f *loggingVCursor) IsDML() bool {
+func (f *loggingVCursor) InTransactionAndIsDML() bool {
 	return false
 }
 

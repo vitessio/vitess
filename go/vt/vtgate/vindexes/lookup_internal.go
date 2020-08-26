@@ -77,7 +77,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 		co = vtgatepb.CommitOrder_AUTOCOMMIT
 	}
 	sel := lkp.sel
-	if vcursor.IsDML() {
+	if vcursor.InTransactionAndIsDML() {
 		sel = sel + " for update"
 	}
 	if !ids[0].IsIntegral() && !ids[0].IsBinary() {
