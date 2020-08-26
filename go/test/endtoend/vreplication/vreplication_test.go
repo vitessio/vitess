@@ -47,46 +47,6 @@ func init() {
 	defaultReplicas = 1
 }
 
-func TestVreplicationWorkflow(t *testing.T) {
-	defaultCellName := "zone1"
-	allCellNames = "zone1"
-	vc = InitCluster(t, []string{defaultCellName})
-	assert.NotNil(t, vc)
-
-	defer vc.TearDown()
-
-	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
-	vtgate = defaultCell.Vtgates[0]
-	assert.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
-
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
-	verifyClusterHealth(t)
-	insertInitialData(t)
-	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
-	shardOrders(t)
-	shardMerchant(t)
-
-	materializeProduct(t)
-
-	materializeMerchantOrders(t)
-	materializeSales(t)
-	materializeMerchantSales(t)
-
-	reshardMerchant2to3SplitMerge(t)
-	reshardMerchant3to1Merge(t)
-
-	insertMoreCustomers(t, 16)
-	reshardCustomer2to4Split(t, nil, "")
-	expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
-	reshardCustomer3to2SplitMerge(t)
-	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
-	reshardCustomer3to1Merge(t)
-	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
-}
-
 func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	allCellNames = "zone1,zone2"
@@ -157,6 +117,45 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	validateCount(t, vtgateConn, "customer:40-80", "customer", 5)
 	validateCount(t, vtgateConn, "customer:80-c0", "customer", 6)
 	validateCount(t, vtgateConn, "customer:c0-", "customer", 5)
+}
+
+func TestBasicVreplicationWorkflow(t *testing.T) {
+	defaultCellName := "zone1"
+	allCellNames = "zone1"
+	vc = InitCluster(t, []string{defaultCellName})
+	assert.NotNil(t, vc)
+
+	defer vc.TearDown()
+
+	defaultCell = vc.Cells[defaultCellName]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
+	vtgate = defaultCell.Vtgates[0]
+	assert.NotNil(t, vtgate)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+
+	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t)
+	insertInitialData(t)
+	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
+	shardOrders(t)
+	shardMerchant(t)
+
+	materializeProduct(t)
+	materializeMerchantOrders(t)
+	materializeSales(t)
+	materializeMerchantSales(t)
+
+	reshardMerchant2to3SplitMerge(t)
+	reshardMerchant3to1Merge(t)
+
+	insertMoreCustomers(t, 16)
+	reshardCustomer2to4Split(t, nil, "")
+	expectNumberOfStreams(t, vtgateConn, "Customer2to4", "sales", "product:0", 4)
+	reshardCustomer3to2SplitMerge(t)
+	expectNumberOfStreams(t, vtgateConn, "Customer3to2", "sales", "product:0", 3)
+	reshardCustomer3to1Merge(t)
+	expectNumberOfStreams(t, vtgateConn, "Customer3to1", "sales", "product:0", 1)
 }
 
 func insertInitialData(t *testing.T) {
