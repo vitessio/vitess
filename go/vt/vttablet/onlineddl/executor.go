@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vexecplan"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -171,7 +170,7 @@ func (e *Executor) Open() error {
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 	e.ticks.Start(e.onMigrationCheckTick)
 
-	if _, err := vexecplan.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
+	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
 		// this validates vexecUpdateTemplates
 		return err
 	}
@@ -1251,7 +1250,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 	case *sqlparser.Select:
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
-		match, err := vexecplan.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
+		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
 		if err != nil {
 			return nil, err
 		}
@@ -1261,7 +1260,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		if shard, _ := vx.ColumnStringVal(vx.WhereCols, "shard"); shard != "" {
 			// shard is specified.
 			if shard != e.shard {
-				// not _this_ shard
+				// specified shard is not _this_ shard. So we're skipping this UPDATE
 				return sqltypes.ResultToProto3(emptyResult), nil
 			}
 		}

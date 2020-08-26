@@ -25,7 +25,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vexecplan"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -198,26 +197,13 @@ func (vx *vexec) buildPlan() (plan *vexecPlan, err error) {
 	return plan, err
 }
 
-// splitAndExpression assumes expression is of the form "expr AND expr [AND ...]" and returns AND tokens
-func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		filters = splitAndExpression(filters, node.Left)
-		return splitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
-
 // analyzeWhereEqualsColumns identifies column names in a WHERE clause that have a comparison expression
 func (vx *vexec) analyzeWhereEqualsColumns(where *sqlparser.Where) []string {
 	var cols []string
 	if where == nil {
 		return cols
 	}
-	exprs := splitAndExpression(nil, where.Expr)
+	exprs := sqlparser.SplitAndExpression(nil, where.Expr)
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:
@@ -306,7 +292,7 @@ func (vx *vexec) buildUpdatePlan(planner vexecPlanner, upd *sqlparser.Update) (*
 		}
 	}
 	if updateTemplates := plannerParams.updateTemplates; len(updateTemplates) > 0 {
-		match, err := vexecplan.QueryMatchesTemplates(vx.query, updateTemplates)
+		match, err := sqlparser.QueryMatchesTemplates(vx.query, updateTemplates)
 		if err != nil {
 			return nil, err
 		}
