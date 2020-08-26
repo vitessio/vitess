@@ -580,7 +580,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
-		// No-op: heartbeat timings are calculated in outer loop.
+		if !vp.vr.dbClient.InTransaction {
+			_, err := vp.updatePos(event.Timestamp)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
