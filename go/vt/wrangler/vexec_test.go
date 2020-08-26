@@ -205,6 +205,7 @@ func TestWorkflowListStreams(t *testing.T) {
 			"80-"
 		]
 	},
+	"MaxVReplicationLag": 1234,
 	"ShardStatuses": {
 		"-80/zone1-0000000200": {
 			"MasterReplicationStatuses": [
