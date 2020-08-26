@@ -396,8 +396,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			rsrStatus = append(rsrStatus, status)
 
 			transactionTimestamp := time.Unix(status.TransactionTimestamp, 0)
-			timeUpdated := time.Unix(status.TimeUpdated, 0)
-			replicationLag := timeUpdated.Sub(transactionTimestamp)
+			replicationLag := time.Since(transactionTimestamp)
 			if replicationLag.Seconds() > float64(rsr.MaxVReplicationLag) {
 				rsr.MaxVReplicationLag = int64(replicationLag.Seconds())
 			}
