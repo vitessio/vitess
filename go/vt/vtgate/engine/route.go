@@ -90,6 +90,9 @@ type Route struct {
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
 
+	// xyz contains the expressions that will tell us which keyspace to route INFORMATION_SCHEMA queries to
+	SysTableKeyspaceExpr []evalengine.Expr
+
 	// Route does not take inputs
 	noInputs
 
@@ -228,7 +231,9 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	var bvs []map[string]*querypb.BindVariable
 	var err error
 	switch route.Opcode {
-	case SelectUnsharded, SelectNext, SelectDBA, SelectReference:
+	case SelectDBA:
+		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
+	case SelectUnsharded, SelectNext, SelectReference:
 		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
 	case SelectScatter:
 		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
@@ -289,7 +294,9 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		defer cancel()
 	}
 	switch route.Opcode {
-	case SelectUnsharded, SelectNext, SelectDBA, SelectReference:
+	case SelectDBA:
+		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
+	case SelectUnsharded, SelectNext, SelectReference:
 		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
 	case SelectScatter:
 		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
@@ -367,6 +374,36 @@ func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*queryp
 		multiBindVars[i] = bindVars
 	}
 	return rss, multiBindVars, nil
+}
+
+func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	env := evalengine.ExpressionEnv{
+		BindVars: bindVars,
+		Row:      []sqltypes.Value{},
+	}
+
+	var keyspace string
+	for _, expr := range route.SysTableKeyspaceExpr {
+		result, err := expr.Evaluate(env)
+		if err != nil {
+			return nil, nil, err
+		}
+		if keyspace == "" {
+			keyspace = result.Value().String()
+		} else if keyspace != result.Value().String() {
+			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't use more than one keyspace per INFORMATION_SCHEMA query")
+		}
+	}
+
+	if keyspace == "" {
+		keyspace = route.Keyspace.Name
+	}
+
+	destinations, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationAnyShard{}})
+	if err != nil {
+		return nil, nil, err
+	}
+	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }
 
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -576,6 +613,13 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if len(route.Values) > 0 {
 		other["Values"] = route.Values
+	}
+	if len(route.SysTableKeyspaceExpr) > 0 {
+		var exprs []string
+		for _, expr := range route.SysTableKeyspaceExpr {
+			exprs = append(exprs, expr.String())
+		}
+		other["SysTableKeyspaceExpr"] = exprs
 	}
 
 	return PrimitiveDescription{

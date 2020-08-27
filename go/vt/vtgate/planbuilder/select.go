@@ -215,6 +215,15 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		if err != nil {
 			return err
 		}
+		rut, isRoute := origin.(*route)
+		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
+			r := &rewriter{}
+			sqlparser.Rewrite(expr, r.rewriteTableSchema, nil)
+			if r.err != nil {
+				return r.err
+			}
+			rut.eroute.SysTableKeyspaceExpr = append(rut.eroute.SysTableKeyspaceExpr, r.tableNameExpressions...)
+		}
 		// The returned expression may be complex. Resplit before pushing.
 		for _, subexpr := range splitAndExpression(nil, expr) {
 			if err := pb.bldr.PushFilter(pb, subexpr, whereType, origin); err != nil {
@@ -224,6 +233,32 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		pb.addPullouts(pullouts)
 	}
 	return nil
+}
+
+type rewriter struct {
+	tableNameExpressions []evalengine.Expr
+	err                  error
+}
+
+func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.ColName:
+		if node.Name.EqualString("table_schema") {
+			switch parent := cursor.Parent().(type) {
+			case *sqlparser.ComparisonExpr:
+				if parent.Operator == sqlparser.EqualStr {
+					evalExpr, err := sqlparser.Convert(parent.Right)
+					if err != nil {
+						r.err = err
+						return false
+					}
+					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
+					parent.Right = sqlparser.NewValArg([]byte(":__vtschemaname"))
+				}
+			}
+		}
+	}
+	return true
 }
 
 // reorderBySubquery reorders the filters by pushing subqueries
