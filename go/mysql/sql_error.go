@@ -165,8 +165,12 @@ func NewSQLErrorFromError(err error) error {
 var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
 
 func demuxResourceExhaustedErrors(msg string) int {
-	if isGRPCOverflowRE.Match([]byte(msg)) {
+	switch {
+	case isGRPCOverflowRE.Match([]byte(msg)) ||
+		msg == vterrors.ResourceExhaustedQueryPayloadThresholdErrMsg ||
+		vterrors.IsResourceExhaustedInMemoryLimitExceededMsg(msg):
 		return ERNetPacketTooLarge
+	default:
+		return ERTooManyUserConnections
 	}
-	return ERTooManyUserConnections
 }
