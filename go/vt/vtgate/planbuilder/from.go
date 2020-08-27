@@ -182,7 +182,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		pb.bldr, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
-			alias:  tableName,
+			alias:  alias,
 			origin: rb,
 		})
 	}
