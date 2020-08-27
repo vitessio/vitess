@@ -106,6 +106,7 @@ import (
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -406,6 +407,17 @@ var commands = []commandGroup{
 			{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] [-skip-verify] [-wait_replicas_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
 				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
+			{"OnlineDDL", commandOnlineDDL,
+				"<keyspace> <command> [<migration_uuid>]",
+				"Operates on online DDL (migrations). Examples:" +
+					" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace show all" +
+					" \nvtctl OnlineDDL test_keyspace show running" +
+					" \nvtctl OnlineDDL test_keyspace show complete" +
+					" \nvtctl OnlineDDL test_keyspace show failed" +
+					" \nvtctl OnlineDDL test_keyspace retry 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+			},
 
 			{"ValidateVersionShard", commandValidateVersionShard,
 				"<keyspace/shard>",
@@ -2422,6 +2434,77 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		schemamanager.NewPlainController(change, keyspace),
 		executor,
 	)
+}
+
+func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() < 1 {
+		return fmt.Errorf("the <keyspace> argument is required for the OnlineDDL command")
+	}
+	keyspace := subFlags.Args()[0]
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("the <command> argument is required for the OnlineDDL command")
+	}
+	command := subFlags.Args()[1]
+	arg := ""
+	if subFlags.NArg() >= 3 {
+		arg = subFlags.Args()[2]
+	}
+	query := ""
+	uuid := ""
+	switch command {
+	case "show":
+		{
+			condition := ""
+			switch arg {
+			case "", "all":
+				condition = "migration_uuid like '%'"
+			case "recent":
+				condition = "requested_timestamp > now() - interval 1 week"
+			case
+				string(schema.OnlineDDLStatusCancelled),
+				string(schema.OnlineDDLStatusQueued),
+				string(schema.OnlineDDLStatusReady),
+				string(schema.OnlineDDLStatusRunning),
+				string(schema.OnlineDDLStatusComplete),
+				string(schema.OnlineDDLStatusFailed):
+				condition = fmt.Sprintf("migration_status='%s'", arg)
+			default:
+				uuid = arg
+				condition = fmt.Sprintf("migration_uuid='%s'", uuid)
+			}
+			query = fmt.Sprintf(`select
+				shard, mysql_schema, mysql_table, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status 
+				from _vt.schema_migrations where %s`, condition)
+		}
+	case "retry":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='retry' where migration_uuid='%s'`, uuid)
+		}
+	case "cancel":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid='%s'`, uuid)
+		}
+	default:
+		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
+	}
+
+	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
+	if err != nil {
+		return err
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
