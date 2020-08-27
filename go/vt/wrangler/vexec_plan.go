@@ -133,9 +133,6 @@ func (p schemaMigrationsPlanner) exec(ctx context.Context, masterAlias *topodata
 	if err != nil {
 		return nil, err
 	}
-	if qr.RowsAffected == 0 {
-		return nil, fmt.Errorf("\nno matching migrations found for workflow %s, tablet %s, query %s", p.vx.workflow, masterAlias, query)
-	}
 	return qr, nil
 }
 func (p schemaMigrationsPlanner) dryRun() error { return nil }

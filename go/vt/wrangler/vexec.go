@@ -78,7 +78,7 @@ func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangle
 	}
 }
 
-// called for workflow stop/start/delete. Only rows affected are reported per tablet
+// QueryResultForRowsAffected aggregates results into row-type results (fields + values)
 func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(len(results))
@@ -99,19 +99,21 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 	return qr
 }
 
+// QueryResultForTabletResults aggregates given results into a "rows-affected" type result (no row data)
 func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
 	qr.RowsAffected = uint64(len(results))
-	qr.Fields = []*querypb.Field{{
+	defaultFields := []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
 	}}
 	var row2 []sqltypes.Value
 	for tablet, result := range results {
+		if qr.Fields == nil {
+			qr.Fields = append(qr.Fields, defaultFields...)
+			qr.Fields = append(qr.Fields, result.Fields...)
+		}
 		for _, row := range result.Rows {
-			if len(qr.Fields) == 1 {
-				qr.Fields = append(qr.Fields, result.Fields...)
-			}
 			row2 = nil
 			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
 			row2 = append(row2, row...)
@@ -131,9 +133,6 @@ func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query s
 	if dryRun {
 		return nil, nil
 	}
-	if len(results) == 0 {
-		return nil, nil
-	}
 	var numFields int
 	for _, result := range results {
 		numFields = len(result.Fields)
@@ -143,9 +142,6 @@ func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query s
 		qr = wr.QueryResultForTabletResults(results)
 	} else {
 		qr = wr.QueryResultForRowsAffected(results)
-	}
-	if len(qr.Rows) == 0 {
-		return nil, nil
 	}
 	return qr, nil
 }
