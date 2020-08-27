@@ -99,6 +99,7 @@ import (
 // embedded stack trace in the output.
 var LogErrStacks bool
 var resourceExhaustedInMemoryLimitExceededRegexp = regexp.MustCompile(`in-memory row count exceeded allowed limit of \d+`)
+var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
 
 const (
 	// ResourceExhaustedQueryPayloadThresholdErrMsg is a message used to indicate that an a vitess query has exceeded the payload threshold
@@ -107,11 +108,6 @@ const (
 	// ResourceExhaustedInMemoryLimitExceededFmt is a thing
 	ResourceExhaustedInMemoryLimitExceededFmt = "in-memory row count exceeded allowed limit of %d"
 )
-
-// IsResourceExhaustedInMemoryLimitExceededMsg is a thing
-func IsResourceExhaustedInMemoryLimitExceededMsg(msg string) bool {
-	return resourceExhaustedInMemoryLimitExceededRegexp.Match([]byte(msg))
-}
 
 func init() {
 	flag.BoolVar(&LogErrStacks, "log_err_stacks", false, "log stack traces for errors")
@@ -321,4 +317,14 @@ func Equals(a, b error) bool {
 // For comparing two vterrors, use Equals() instead.
 func Print(err error) string {
 	return fmt.Sprintf("%v: %v\n", Code(err), err.Error())
+}
+
+// IsResourceExhaustedInMemoryLimitExceededMsg returns true if the error message indicates a query exceeded the row limit on in-memory query processing
+func IsResourceExhaustedInMemoryLimitExceededMsg(msg string) bool {
+	return resourceExhaustedInMemoryLimitExceededRegexp.Match([]byte(msg))
+}
+
+// IsGRPCMessageOverflowMsg returns true if the error message indicates a GRPC message was overflowed the max message size
+func IsGRPCMessageOverflowMsg(msg string) bool {
+	return isGRPCOverflowRE.Match([]byte(msg))
 }
