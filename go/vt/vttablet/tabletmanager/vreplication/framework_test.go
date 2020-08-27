@@ -459,34 +459,34 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 		}
 		var got string
 		heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
-		for {
-			select {
-			case got = <-globalDBQueries:
-				// We rule out heartbeat time update queries because otherwise our query list
-				// is indeterminable and varies with each test execution.
-				if heartbeatRe.MatchString(got) {
-					continue
-				}
-
-				var match bool
-				if query[0] == '/' {
-					result, err := regexp.MatchString(query[1:], got)
-					if err != nil {
-						panic(err)
-					}
-					match = result
-				} else {
-					match = (got == query)
-				}
-				if !match {
-					t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
-				}
-			case <-time.After(5 * time.Second):
-				t.Errorf("no query received, expecting %s", query)
-				failed = true
+	retry:
+		select {
+		case got = <-globalDBQueries:
+			// We rule out heartbeat time update queries because otherwise our query list
+			// is indeterminable and varies with each test execution.
+			if heartbeatRe.MatchString(got) {
+				goto retry
 			}
-			break
+
+			var match bool
+			if query[0] == '/' {
+				result, err := regexp.MatchString(query[1:], got)
+				if err != nil {
+					panic(err)
+				}
+				match = result
+			} else {
+				match = (got == query)
+			}
+			if !match {
+				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
+			}
+		case <-time.After(5 * time.Second):
+			t.Errorf("no query received, expecting %s", query)
+			failed = true
 		}
+	}
+	for {
 		select {
 		case got := <-globalDBQueries:
 			t.Errorf("unexpected query: %s", got)
@@ -501,6 +501,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 func expectNontxQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
+	heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
@@ -511,7 +512,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		select {
 		case got = <-globalDBQueries:
 
-			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") {
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || heartbeatRe.MatchString(got) {
 				goto retry
 			}
 
