@@ -389,8 +389,8 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 			return nil, nil, err
 		}
 		if keyspace == "" {
-			keyspace = result.Value().String()
-		} else if keyspace != result.Value().String() {
+			keyspace = result.Value().ToString()
+		} else if keyspace != result.Value().ToString() {
 			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't use more than one keyspace per INFORMATION_SCHEMA query")
 		}
 	}
