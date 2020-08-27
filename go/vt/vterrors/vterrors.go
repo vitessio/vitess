@@ -105,7 +105,7 @@ const (
 	// ResourceExhaustedQueryPayloadThresholdErrMsg is a message used to indicate that an a vitess query has exceeded the payload threshold
 	ResourceExhaustedQueryPayloadThresholdErrMsg = "query payload size above threshold"
 
-	// ResourceExhaustedInMemoryLimitExceededFmt is a thing
+	// ResourceExhaustedInMemoryLimitExceededFmt is an error format used to indicate that the query was attempting to process too many rows
 	ResourceExhaustedInMemoryLimitExceededFmt = "in-memory row count exceeded allowed limit of %d"
 )
 
