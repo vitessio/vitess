@@ -63,6 +63,23 @@ var vexecUpdateTemplates = []string{
 	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val' and shard='val'`,
 }
 
+var vexecInsertTemplates = []string{
+	`INSERT IGNORE INTO _vt.schema_migrations (
+		migration_uuid,
+		keyspace,
+		shard,
+		mysql_schema,
+		mysql_table,
+		migration_statement,
+		strategy,
+		options,
+		requested_timestamp,
+		migration_status
+	) VALUES (
+		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
+	)`,
+}
+
 var emptyResult = &sqltypes.Result{
 	RowsAffected: 0,
 }
@@ -226,11 +243,13 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port in
 		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL variables: %+v", tm.Rows)
 	}
 	host = row["hostname"].ToString()
-	if p, err := row.ToInt64("port"); err != nil {
+
+	p, err := row.ToInt64("port")
+	if err != nil {
 		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
-	} else {
-		port = int(p)
 	}
+	port = int(p)
+
 	if readOnly, err = row.ToBool("read_only"); err != nil {
 		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.read_only %v: %v", tm, err)
 	}
@@ -804,82 +823,6 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 	return result, nil
 }
 
-func (e *Executor) writeMigrationJob(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	parsed := sqlparser.BuildParsedQuery(sqlInsertSchemaMigration, "_vt",
-		":migration_uuid",
-		":keyspace",
-		":shard",
-		":mysql_schema",
-		":mysql_table",
-		":migration_statement",
-		":strategy",
-		":options",
-		":requested_timestamp",
-		":migration_status",
-	)
-	bindVars := map[string]*querypb.BindVariable{
-		"migration_uuid":      sqltypes.StringBindVariable(onlineDDL.UUID),
-		"keyspace":            sqltypes.StringBindVariable(onlineDDL.Keyspace),
-		"shard":               sqltypes.StringBindVariable(e.shard),
-		"mysql_schema":        sqltypes.StringBindVariable(e.dbName),
-		"mysql_table":         sqltypes.StringBindVariable(onlineDDL.Table),
-		"migration_statement": sqltypes.StringBindVariable(onlineDDL.SQL),
-		"strategy":            sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
-		"options":             sqltypes.StringBindVariable(onlineDDL.Options),
-		"requested_timestamp": sqltypes.Int64BindVariable(onlineDDL.RequestTimeSeconds()),
-		"migration_status":    sqltypes.StringBindVariable(string(onlineDDL.Status)),
-	}
-
-	bound, err := parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return err
-	}
-	_, err = e.execQuery(ctx, bound)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// reviewMigrationJobs reads Topo's listing of migrations for this keyspace/shard,
-// and persists them in _vt.schema_migrations. Some of those jobs may be new, some
-// perhaps already known, it doesn't matter.
-func (e *Executor) reviewMigrationJobs(ctx context.Context) error {
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
-		// Just to save some cycles here. If there's a running migration, skip reading global topo:
-		// even if global topo has new jobs for us, we wouldn't be able to run them, anyway.
-		return nil
-	}
-
-	conn, err := e.ts.ConnForCell(ctx, topo.GlobalCell)
-	if err != nil {
-		log.Errorf("Executor.reviewMigrationRequests ConnForCell error: %s", err.Error())
-		return err
-	}
-
-	dirPath := schema.MigrationJobsKeyspaceShardPath(e.keyspace, e.shard)
-	entries, err := conn.ListDir(ctx, dirPath, false)
-	if err != nil {
-		log.Errorf("Executor.reviewMigrationRequests listDir error: %s", err.Error())
-		return err
-	}
-	for _, entry := range entries {
-		entryPath := fmt.Sprintf("%s/%s", dirPath, entry.Name)
-		onlineDDL, err := schema.ReadTopo(ctx, conn, entryPath)
-		if err != nil {
-			log.Errorf("reviewMigrationRequests.ReadTopo error: %+v", err)
-			continue
-		}
-		if err := e.writeMigrationJob(ctx, onlineDDL); err != nil {
-			log.Errorf("reviewMigrationRequests.writeMigrationJob error: %+v", err)
-			continue
-		}
-		log.Infof("Found schema migration job: %+v", onlineDDL)
-	}
-	return nil
-}
-
 // scheduleNextMigration attemps to schedule a single migration to run next.
 // possibly there's no migrations to run. Possibly there's a migration running right now,
 // in which cases nothing happens.
@@ -1113,7 +1056,6 @@ func (e *Executor) onMigrationCheckTick() {
 	ctx := context.Background()
 	e.initSchema(ctx)
 
-	e.reviewMigrationJobs(ctx)
 	e.scheduleNextMigration(ctx)
 	e.runNextMigration(ctx)
 	e.reviewRunningMigrations(ctx)
@@ -1246,6 +1188,21 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 	case *sqlparser.Delete:
 		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", vx.Query)
 	case *sqlparser.Select:
+		return response(e.execQuery(ctx, vx.Query))
+	case *sqlparser.Insert:
+		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecInsertTemplates)
+		if err != nil {
+			return nil, err
+		}
+		if !match {
+			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(vexecInsertTemplates, "; "))
+		}
+		// Vexec naturally runs outside shard/schema context. It does not supply values for those columns.
+		// We can fill them in.
+		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
+		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
+
+		fmt.Printf("======= will run this insert: %s \n", vx.Query)
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
