@@ -458,27 +458,35 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			continue
 		}
 		var got string
-		select {
-		case got = <-globalDBQueries:
-			var match bool
-			if query[0] == '/' {
-				result, err := regexp.MatchString(query[1:], got)
-				if err != nil {
-					panic(err)
+		heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
+		for {
+			select {
+			case got = <-globalDBQueries:
+				// We rule out heartbeat time update queries because otherwise our query list
+				// is indeterminable and varies with each test execution.
+				if heartbeatRe.MatchString(got) {
+					continue
 				}
-				match = result
-			} else {
-				match = (got == query)
+
+				var match bool
+				if query[0] == '/' {
+					result, err := regexp.MatchString(query[1:], got)
+					if err != nil {
+						panic(err)
+					}
+					match = result
+				} else {
+					match = (got == query)
+				}
+				if !match {
+					t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
+				}
+			case <-time.After(5 * time.Second):
+				t.Errorf("no query received, expecting %s", query)
+				failed = true
 			}
-			if !match {
-				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
-			}
-		case <-time.After(5 * time.Second):
-			t.Errorf("no query received, expecting %s", query)
-			failed = true
+			break
 		}
-	}
-	for {
 		select {
 		case got := <-globalDBQueries:
 			t.Errorf("unexpected query: %s", got)
