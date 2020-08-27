@@ -18,6 +18,8 @@ package mysql
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDumuxResourceExhaustedErrors(t *testing.T) {
@@ -28,7 +30,7 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 
 	cases := []testCase{
 		testCase{"misc", ERTooManyUserConnections},
-		testCase{"grpc: received message larger than max (99282+ vs. 1234): trailer", ERTooManyUserConnections},
+		testCase{"grpc: received message larger than max (99282 vs. 1234): trailer", ERTooManyUserConnections},
 		testCase{"grpc: received message larger than max (1234 vs. 1234)", ERNetPacketTooLarge},
 		testCase{"header: grpc: received message larger than max (1234 vs. 1234)", ERNetPacketTooLarge},
 		testCase{"query payload size above threshold", ERNetPacketTooLarge},
@@ -37,8 +39,6 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 
 	for _, c := range cases {
 		got := demuxResourceExhaustedErrors(c.msg)
-		if got != c.want {
-			t.Errorf("For error %s - got %v, wanted %v", c.msg, got, c.want)
-		}
+		assert.Equalf(t, c.want, got, c.msg)
 	}
 }

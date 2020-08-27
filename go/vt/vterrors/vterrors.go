@@ -99,7 +99,7 @@ import (
 // embedded stack trace in the output.
 var LogErrStacks bool
 var resourceExhaustedInMemoryLimitExceededRegexp = regexp.MustCompile(`in-memory row count exceeded allowed limit of \d+`)
-var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
+var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)$`)
 
 const (
 	// ResourceExhaustedQueryPayloadThresholdErrMsg is a message used to indicate that an a vitess query has exceeded the payload threshold
