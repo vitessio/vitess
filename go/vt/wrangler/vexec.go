@@ -163,34 +163,34 @@ func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query stri
 	if err := vx.getMasters(); err != nil {
 		return nil, err
 	}
-	plan, err := vx.parseAndPlan()
+	plan, err := vx.parseAndPlan(ctx)
 	if err != nil {
 		return nil, err
 	}
 	vx.plannedQuery = plan.parsedQuery.Query
 	if dryRun {
-		return nil, vx.outputDryRunInfo()
+		return nil, vx.outputDryRunInfo(ctx)
 	}
 	return vx.exec()
 }
 
 // parseAndPlan parses and analyses the query, then generates a plan
-func (vx *vexec) parseAndPlan() (plan *vexecPlan, err error) {
+func (vx *vexec) parseAndPlan(ctx context.Context) (plan *vexecPlan, err error) {
 	if err := vx.parseQuery(); err != nil {
 		return nil, err
 	}
-	if err := vx.getPlanner(); err != nil {
+	if err := vx.getPlanner(ctx); err != nil {
 		return nil, err
 	}
-	plan, err = vx.buildPlan()
+	plan, err = vx.buildPlan(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return plan, nil
 }
 
-func (vx *vexec) outputDryRunInfo() error {
-	return vx.planner.dryRun()
+func (vx *vexec) outputDryRunInfo(ctx context.Context) error {
+	return vx.planner.dryRun(ctx)
 }
 
 // exec runs our planned query on backend shard masters. It collects query results from all

@@ -69,7 +69,7 @@ func TestVExec(t *testing.T) {
 	sort.Strings(shards)
 	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
 
-	plan, err := vx.parseAndPlan()
+	plan, err := vx.parseAndPlan(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 
@@ -372,7 +372,7 @@ func TestVExecValidations(t *testing.T) {
 	for _, bq := range badQueries {
 		t.Run(bq.name, func(t *testing.T) {
 			vx.query = bq.query
-			plan, err := vx.parseAndPlan()
+			plan, err := vx.parseAndPlan(ctx)
 			require.EqualError(t, err, bq.errorString)
 			require.Nil(t, plan)
 		})
