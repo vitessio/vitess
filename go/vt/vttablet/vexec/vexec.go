@@ -27,6 +27,7 @@ type TabletVExec struct {
 	TableName  string
 	WhereCols  ValColumns
 	UpdateCols ValColumns
+	InsertCols ValColumns
 }
 
 // NewTabletVExec creates a new instance of TabletVExec
@@ -37,6 +38,14 @@ func NewTabletVExec(workflow, keyspace string) *TabletVExec {
 	}
 }
 
+// ToStringVal converts a string to a string -typed SQLVal
+func (e *TabletVExec) ToStringVal(val string) *sqlparser.SQLVal {
+	return &sqlparser.SQLVal{
+		Type: sqlparser.StrVal,
+		Val:  []byte(val),
+	}
+}
+
 // ColumnStringVal returns a string value from a given column, or error if the column is not found
 func (e *TabletVExec) ColumnStringVal(columns ValColumns, colName string) (string, error) {
 	val, ok := columns[colName]
@@ -44,6 +53,11 @@ func (e *TabletVExec) ColumnStringVal(columns ValColumns, colName string) (strin
 		return "", fmt.Errorf("Could not find value for column %s", colName)
 	}
 	return string(val.Val), nil
+}
+
+// SetColumnStringVal modifies a column value into a given string
+func (e *TabletVExec) SetColumnStringVal(columns ValColumns, colName string, val string) {
+	columns[colName] = e.ToStringVal(val)
 }
 
 // analyzeWhereColumns identifies column names in a WHERE clause that have a comparison expression
@@ -87,6 +101,52 @@ func (e *TabletVExec) analyzeUpdateColumns(update *sqlparser.Update) ValColumns 
 	return cols
 }
 
+// analyzeInsertColumns analyses the columns and values given in an INSERT statement
+func (e *TabletVExec) analyzeInsertColumns(insert *sqlparser.Insert) ValColumns {
+	cols := ValColumns{}
+
+	rows, ok := insert.Rows.(sqlparser.Values)
+	if !ok {
+		return cols
+	}
+
+	if len(rows) != 1 {
+		return cols
+	}
+	for i, col := range insert.Columns {
+		expr := rows[0][i]
+		if val, ok := expr.(*sqlparser.SQLVal); ok {
+			cols[col.Lowered()] = val
+		}
+	}
+	return cols
+}
+
+// ReplaceInsertColumnVal manipulated the existing INSERT statement to replace a column value
+// into a given value
+func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.SQLVal) error {
+	insert, ok := e.Stmt.(*sqlparser.Insert)
+	if !ok {
+		return fmt.Errorf("Not an INSERT statement")
+	}
+	rows, ok := insert.Rows.(sqlparser.Values)
+	if !ok {
+		return fmt.Errorf("Not a Values type INSERT")
+	}
+	if len(rows) != 1 {
+		return fmt.Errorf("Not a single row INSERT")
+	}
+	for i, col := range insert.Columns {
+		if col.Lowered() == colName {
+			rows[0][i] = val
+			e.InsertCols[colName] = val
+			e.Query = sqlparser.String(e.Stmt)
+			return nil
+		}
+	}
+	return fmt.Errorf("INSERT column not found: %s", colName)
+}
+
 // analyzeStatement analyzes a given statement and produces the following ingredients, useful for
 // VExec interceptors:
 // - table name
@@ -106,6 +166,9 @@ func (e *TabletVExec) analyzeStatement() error {
 	case *sqlparser.Delete:
 		e.TableName = sqlparser.String(stmt.TableExprs)
 		e.WhereCols = e.analyzeWhereEqualsColumns(stmt.Where)
+	case *sqlparser.Insert:
+		e.TableName = sqlparser.String(stmt.Table)
+		e.InsertCols = e.analyzeInsertColumns(stmt)
 	case *sqlparser.Select:
 		e.TableName = sqlparser.String(stmt.From)
 		e.WhereCols = e.analyzeWhereEqualsColumns(stmt.Where)

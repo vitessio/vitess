@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +37,7 @@ func TestNewTabletVExec(t *testing.T) {
 	assert.Equal(t, vx.Keyspace, tKeyspace)
 }
 
-func TestAnalyzeQuery1(t *testing.T) {
+func TestAnalyzeQuerySelect1(t *testing.T) {
 	query := `select migration_status, strategy from _vt.schema_migrations where migration_uuid='123'`
 	vx := NewTabletVExec(tWorkflow, tKeyspace)
 	err := vx.AnalyzeQuery(context.Background(), query)
@@ -52,7 +54,7 @@ func TestAnalyzeQuery1(t *testing.T) {
 	_, ok = vx.UpdateCols["strategy"]
 	assert.False(t, ok)
 }
-func TestAnalyzeQuery2(t *testing.T) {
+func TestAnalyzeQuerySelect2(t *testing.T) {
 	query := `select migration_status, strategy from _vt.schema_migrations where migration_uuid='123' or requested_timestamp<now()`
 	vx := NewTabletVExec(tWorkflow, tKeyspace)
 	err := vx.AnalyzeQuery(context.Background(), query)
@@ -72,7 +74,7 @@ func TestAnalyzeQuery2(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestAnalyzeQuery3(t *testing.T) {
+func TestAnalyzeQueryUpdate1(t *testing.T) {
 	query := `update _vt.schema_migrations set migration_status='running', liveness_timestamp=now() where migration_uuid='123' and requested_timestamp<now() and strategy='pt-osc'`
 	vx := NewTabletVExec(tWorkflow, tKeyspace)
 	err := vx.AnalyzeQuery(context.Background(), query)
@@ -94,4 +96,107 @@ func TestAnalyzeQuery3(t *testing.T) {
 	assert.False(t, ok)
 	_, ok = vx.UpdateCols["liveness_timestamp"]
 	assert.False(t, ok)
+}
+
+func TestAnalyzeQueryInsert1(t *testing.T) {
+	query := `insert into _vt.schema_migrations
+		(migration_uuid, migration_status, count, liveness_timestamp) values
+		('abc123', 'running', 5, now())
+		`
+	vx := NewTabletVExec(tWorkflow, tKeyspace)
+	err := vx.AnalyzeQuery(context.Background(), query)
+	assert.NoError(t, err)
+
+	assert.Equal(t, vx.Query, query)
+	assert.Equal(t, vx.TableName, "_vt.schema_migrations")
+
+	_, ok := vx.InsertCols["migration_uuid"]
+	assert.True(t, ok)
+	_, ok = vx.InsertCols["count"]
+	assert.True(t, ok)
+	_, ok = vx.InsertCols["requested_timestamp"]
+	assert.False(t, ok) // column does not exist
+	_, ok = vx.InsertCols["liveness_timestamp"]
+	assert.False(t, ok) // because it's not a literal
+
+	var val string
+	val, err = vx.ColumnStringVal(vx.InsertCols, "migration_uuid")
+	assert.NoError(t, err)
+	assert.Equal(t, "abc123", val)
+
+	val, err = vx.ColumnStringVal(vx.InsertCols, "count")
+	assert.NoError(t, err)
+	assert.Equal(t, "5", val)
+
+	_, err = vx.ColumnStringVal(vx.InsertCols, "liveness_timestamp")
+	assert.Error(t, err)
+
+	vx.SetColumnStringVal(vx.InsertCols, "migration_uuid", "other")
+	val, err = vx.ColumnStringVal(vx.InsertCols, "migration_uuid")
+	assert.NoError(t, err)
+	assert.Equal(t, "other", val)
+
+	vx.SetColumnStringVal(vx.InsertCols, "liveness_timestamp", "another")
+	val, err = vx.ColumnStringVal(vx.InsertCols, "liveness_timestamp")
+	assert.NoError(t, err)
+	assert.Equal(t, "another", val)
+}
+
+func TestAnalyzeQueryInsert2(t *testing.T) {
+	query := `insert into _vt.schema_migrations
+		(migration_uuid, migration_status, count, liveness_timestamp) values
+		('abc123', 'running', 5, now())
+		`
+	vx := NewTabletVExec(tWorkflow, tKeyspace)
+	err := vx.AnalyzeQuery(context.Background(), query)
+	assert.NoError(t, err)
+
+	assert.Equal(t, vx.Query, query)
+
+	newVal := vx.ToStringVal("newval")
+	err = vx.ReplaceInsertColumnVal("no_such_column", newVal)
+	assert.Error(t, err)
+	assert.Equal(t, vx.Query, query)
+
+	err = vx.ReplaceInsertColumnVal("migration_uuid", newVal)
+	assert.NoError(t, err)
+	assert.NotEqual(t, vx.Query, query)
+
+	err = vx.ReplaceInsertColumnVal("liveness_timestamp", newVal)
+	assert.NoError(t, err)
+	assert.NotEqual(t, vx.Query, query)
+
+	assert.Equal(t, vx.TableName, "_vt.schema_migrations")
+
+	testVals := func() {
+		_, ok := vx.InsertCols["migration_uuid"]
+		assert.True(t, ok)
+		_, ok = vx.InsertCols["count"]
+		assert.True(t, ok)
+		_, ok = vx.InsertCols["requested_timestamp"]
+		assert.False(t, ok) // column does not exist
+		_, ok = vx.InsertCols["liveness_timestamp"]
+		assert.True(t, ok) // because it's not a literal
+
+		var val string
+		val, err = vx.ColumnStringVal(vx.InsertCols, "migration_uuid")
+		assert.NoError(t, err)
+		assert.Equal(t, "newval", val)
+
+		val, err = vx.ColumnStringVal(vx.InsertCols, "count")
+		assert.NoError(t, err)
+		assert.Equal(t, "5", val)
+
+		val, err = vx.ColumnStringVal(vx.InsertCols, "liveness_timestamp")
+		assert.NoError(t, err)
+		assert.Equal(t, "newval", val)
+	}
+	testVals()
+	rewrittenQuery := sqlparser.String(vx.Stmt)
+
+	vx = NewTabletVExec(tWorkflow, tKeyspace)
+	err = vx.AnalyzeQuery(context.Background(), rewrittenQuery)
+	assert.NoError(t, err)
+	assert.Equal(t, vx.Query, rewrittenQuery)
+	testVals()
 }
