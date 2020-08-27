@@ -358,7 +358,6 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 	var orderby sqlparser.OrderBy
 	for _, pk := range table.PrimaryKeyColumns {
-		log.Infof("vdiff: pk %s", pk)
 		found := false
 		for i, selExpr := range targetSelect.SelectExprs {
 			expr := selExpr.(*sqlparser.AliasedExpr).Expr
