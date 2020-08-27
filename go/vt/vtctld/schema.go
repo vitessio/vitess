@@ -22,11 +22,17 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/wrangler"
 )
 
 var (
@@ -38,14 +44,15 @@ var (
 )
 
 func initSchemaManager(ts *topo.Server) {
+	tmClient := tmclient.NewTabletManagerClient()
 	migrationCheckTicks = timer.NewTimer(migrationCheckInterval)
 
-	runMigrationRequestChecks(ts)
+	runMigrationRequestChecks(ts, tmClient)
 }
 
-func runMigrationRequestChecks(ts *topo.Server) {
+func runMigrationRequestChecks(ts *topo.Server, tmClient tmclient.TabletManagerClient) {
 	ctx, cancel := context.WithCancel(context.Background())
-	migrationCheckTicks.Start(func() { onMigrationCheckTick(ctx, ts) })
+	migrationCheckTicks.Start(func() { onMigrationCheckTick(ctx, ts, tmClient) })
 
 	go func() {
 		<-ctx.Done()
@@ -58,7 +65,7 @@ func runMigrationRequestChecks(ts *topo.Server) {
 	servenv.OnTermSync(cancel)
 }
 
-func reviewMigrationRequest(ctx context.Context, ts *topo.Server, conn topo.Conn, uuid string) error {
+func reviewMigrationRequest(ctx context.Context, ts *topo.Server, tmClient tmclient.TabletManagerClient, conn topo.Conn, uuid string) error {
 	entryPath := fmt.Sprintf("%s/%s", schema.MigrationRequestsPath(), uuid)
 	onlineDDL, err := schema.ReadTopo(ctx, conn, entryPath)
 	if err != nil {
@@ -68,14 +75,56 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, conn topo.Conn
 
 	onlineDDL.Status = schema.OnlineDDLStatusQueued
 
-	shardNames, err := ts.GetShardNames(ctx, onlineDDL.Keyspace)
-	if err != nil {
-		return fmt.Errorf("unable to get shard names for keyspace: %s, error: %v", onlineDDL.Keyspace, err)
+	logstream := logutil.NewMemoryLogger()
+	wr := wrangler.New(logstream, ts, tmClient)
+
+	sqlInsertSchemaMigration := `INSERT IGNORE INTO %s.schema_migrations (
+		migration_uuid,
+		keyspace,
+		shard,
+		mysql_schema,
+		mysql_table,
+		migration_statement,
+		strategy,
+		options,
+		requested_timestamp,
+		migration_status
+	) VALUES (
+		%a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
+	)`
+	parsed := sqlparser.BuildParsedQuery(sqlInsertSchemaMigration, "_vt",
+		":migration_uuid",
+		":keyspace",
+		":shard",
+		":mysql_schema",
+		":mysql_table",
+		":migration_statement",
+		":strategy",
+		":options",
+		":requested_timestamp",
+		":migration_status",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_uuid":      sqltypes.StringBindVariable(onlineDDL.UUID),
+		"keyspace":            sqltypes.StringBindVariable(onlineDDL.Keyspace),
+		"shard":               sqltypes.StringBindVariable(""),
+		"mysql_schema":        sqltypes.StringBindVariable(""),
+		"mysql_table":         sqltypes.StringBindVariable(onlineDDL.Table),
+		"migration_statement": sqltypes.StringBindVariable(onlineDDL.SQL),
+		"strategy":            sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
+		"options":             sqltypes.StringBindVariable(onlineDDL.Options),
+		"requested_timestamp": sqltypes.Int64BindVariable(onlineDDL.RequestTimeSeconds()),
+		"migration_status":    sqltypes.StringBindVariable(string(onlineDDL.Status)),
 	}
-	for _, shardName := range shardNames {
-		if err := onlineDDL.WriteTopo(ctx, conn, onlineDDL.JobsKeyspaceShardPath(shardName)); err != nil {
-			return fmt.Errorf("unable to write shard job %+v error: %s", onlineDDL, err.Error())
-		}
+
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = wr.VExecResult(ctx, onlineDDL.UUID, onlineDDL.Keyspace, bound, false)
+	if err != nil {
+		return err
 	}
 
 	if err := onlineDDL.WriteTopo(ctx, conn, schema.MigrationQueuedPath()); err != nil {
@@ -87,7 +136,7 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, conn topo.Conn
 	return nil
 }
 
-func reviewMigrationRequests(ctx context.Context, ts *topo.Server, conn topo.Conn) error {
+func reviewMigrationRequests(ctx context.Context, ts *topo.Server, tmClient tmclient.TabletManagerClient, conn topo.Conn) error {
 	entries, err := conn.ListDir(ctx, schema.MigrationRequestsPath(), true)
 	if err != nil {
 		log.Errorf("vtctld.reviewMigrationRequests listDir error: %s", err.Error())
@@ -95,7 +144,7 @@ func reviewMigrationRequests(ctx context.Context, ts *topo.Server, conn topo.Con
 	}
 
 	for _, entry := range entries {
-		if err := reviewMigrationRequest(ctx, ts, conn, entry.Name); err != nil {
+		if err := reviewMigrationRequest(ctx, ts, tmClient, conn, entry.Name); err != nil {
 			log.Errorf("vtctld.reviewMigrationRequest %s error: %s", entry.Name, err.Error())
 			continue
 		}
@@ -103,7 +152,7 @@ func reviewMigrationRequests(ctx context.Context, ts *topo.Server, conn topo.Con
 	return nil
 }
 
-func onMigrationCheckTick(ctx context.Context, ts *topo.Server) {
+func onMigrationCheckTick(ctx context.Context, ts *topo.Server, tmClient tmclient.TabletManagerClient) {
 	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 	if err != nil {
 		log.Errorf("Executor.checkMigrations ConnForCell error: %s", err.Error())
@@ -117,5 +166,5 @@ func onMigrationCheckTick(ctx context.Context, ts *topo.Server) {
 	}
 	defer lockDescriptor.Unlock(ctx)
 
-	reviewMigrationRequests(ctx, ts, conn)
+	reviewMigrationRequests(ctx, ts, tmClient, conn)
 }
