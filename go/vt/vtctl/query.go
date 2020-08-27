@@ -445,6 +445,10 @@ func (lw loggerWriter) Write(p []byte) (int, error) {
 
 // printQueryResult will pretty-print a QueryResult to the logger.
 func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
+	if len(qr.Rows) == 0 {
+		return
+	}
+
 	table := tablewriter.NewWriter(writer)
 	table.SetAutoFormatHeaders(false)
 
