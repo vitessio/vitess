@@ -515,7 +515,11 @@ type BeginEndBlock struct {
 }
 
 func (b *BeginEndBlock) Format(buf *TrackedBuffer) {
-	// TODO
+	buf.Myprintf("begin\n")
+	for _, s := range b.Statements {
+		buf.Myprintf("%v;\n", s)
+	}
+	buf.Myprintf("end")
 }
 
 func (b *BeginEndBlock) walkSubtree(visit Visit) error {

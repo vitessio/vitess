@@ -22,16 +22,20 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 )
 
+type parseTest struct {
+	input  string
+	output string
+}
+
 var (
-	validSQL = []struct {
-		input  string
-		output string
-	}{{
+	validSQL = []parseTest{
+	   {
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
@@ -1651,6 +1655,58 @@ func TestValid(t *testing.T) {
 			out := String(tree)
 			if out != tcase.output {
 				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
+			}
+			// This test just exercises the tree walking functionality.
+			// There's no way automated way to verify that a node calls
+			// all its children. But we can examine code coverage and
+			// ensure that all walkSubtree functions were called.
+			Walk(func(node SQLNode) (bool, error) {
+				return true, nil
+			}, tree)
+		})
+	}
+}
+
+var ignoreWhitespaceTests = []parseTest{
+	{
+		input:  `create trigger t1 before delete on foo for each row follows baz 
+							begin
+								set @@foo = old.x;
+                set @@bar = new.y;
+                update baz.t set a = @@foo + @@bar where z = old.x;
+              end`,
+	},
+	{
+		input:  `create trigger t1 before delete on foo for each row follows baz 
+							begin
+								set @@foo = old.x;
+								begin
+									set @@boo = new.z;
+                end;
+                set @@bar = new.y;
+                update baz.t set a = @@foo + @@bar where z = old.x;
+              end`,
+	},
+}
+
+func TestValidIgnoreWhitespace(t *testing.T) {
+	for _, tcase := range ignoreWhitespaceTests {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			if err != nil {
+				t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
+				return
+			}
+			out := String(tree)
+			normalize := regexp.MustCompile("\\s+")
+			normalizedOut := normalize.ReplaceAllLiteralString(out, " ")
+			expectedOut := normalize.ReplaceAllLiteralString(tcase.output, " ")
+
+			if normalizedOut != expectedOut {
+				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, normalizedOut, expectedOut)
 			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls

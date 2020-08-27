@@ -707,7 +707,7 @@ trigger_body:
 | delete_statement
 
 begin_end_block:
-  BEGIN statement_list END
+  BEGIN statement_list ';' END
   {
     $$ = &BeginEndBlock{Statements: $2}
   }
