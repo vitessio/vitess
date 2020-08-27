@@ -62,7 +62,7 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	if err == planbuilder.ErrPlanNotSupported {
 		return 0, nil, err
 	}
-	execStart := e.logPlanningFinished(logStats, sql)
+	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {
 		safeSession.ClearWarnings()
@@ -205,9 +205,11 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 	return errCount
 }
 
-func (e *Executor) logPlanningFinished(logStats *LogStats, sql string) time.Time {
+func (e *Executor) logPlanningFinished(logStats *LogStats, plan *engine.Plan) time.Time {
 	execStart := time.Now()
-	logStats.StmtType = sqlparser.Preview(sql).String()
+	if plan != nil {
+		logStats.StmtType = plan.Type.String()
+	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart
 }

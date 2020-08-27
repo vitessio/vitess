@@ -1216,10 +1216,11 @@ func TestExecutorDDL(t *testing.T) {
 			sbc1.ExecCount.Set(0)
 			sbc2.ExecCount.Set(0)
 			sbclookup.ExecCount.Set(0)
-
+			stmtType := "DDL"
 			_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
 				require.EqualError(t, err, "keyspace not specified", "expect query to fail")
+				stmtType = "" // For error case, plan is not generated to query log will not contain any stmtType.
 			} else {
 				require.NoError(t, err)
 			}
@@ -1233,7 +1234,7 @@ func TestExecutorDDL(t *testing.T) {
 				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
 			}
 
-			testQueryLog(t, logChan, "TestExecute", "DDL", stmt, tc.shardQueryCnt)
+			testQueryLog(t, logChan, "TestExecute", stmtType, stmt, tc.shardQueryCnt)
 		}
 	}
 }
