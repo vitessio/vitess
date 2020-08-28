@@ -157,9 +157,11 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 			// non-blocking read so that this is fast
 			shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 			defer cancel()
-			_, err := tp.ts.GetCellInfo(ctx, cell, false)
+			_, err := tp.ts.GetCellInfo(shortCtx, cell, false)
 			if err != nil {
 				// not a valid cell, check whether it is a cell alias
+				shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				defer cancel()
 				alias, err := tp.ts.GetCellsAlias(shortCtx, cell, false)
 				// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
 				if err == nil {
