@@ -76,12 +76,9 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+
 	tablet := tm.Tablet()
 	originalType := tablet.Type
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
-		return err
-	}
-
 	// Try to restore. Depending on the reason for failure, we may be ok.
 	// If we're not ok, return an error and the tm will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
@@ -117,74 +114,84 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
 	}
 
-	// Loop until a backup exists, unless we were told to give up immediately.
-	var backupManifest *mysqlctl.BackupManifest
-	for {
-		backupManifest, err = mysqlctl.Restore(ctx, params)
-		if waitForBackupInterval == 0 {
-			break
+	if mysqlctl.ShouldRestore(ctx, params) {
+		// should not become master after restore
+		if originalType == topodatapb.TabletType_MASTER {
+			originalType = tm.baseTabletType
 		}
-		// We only retry a specific set of errors. The rest we return immediately.
-		if err != mysqlctl.ErrNoBackup && err != mysqlctl.ErrNoCompleteBackup {
-			break
+		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
+			return err
 		}
+		// Loop until a backup exists, unless we were told to give up immediately.
+		var backupManifest *mysqlctl.BackupManifest
+		for {
+			backupManifest, err = mysqlctl.Restore(ctx, params)
+			if waitForBackupInterval == 0 {
+				break
+			}
+			// We only retry a specific set of errors. The rest we return immediately.
+			if err != mysqlctl.ErrNoBackup && err != mysqlctl.ErrNoCompleteBackup {
+				break
+			}
 
-		log.Infof("No backup found. Waiting %v (from -wait_for_backup_interval flag) to check again.", waitForBackupInterval)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(waitForBackupInterval):
-		}
-	}
-
-	var pos mysql.Position
-	if backupManifest != nil {
-		pos = backupManifest.Position
-	}
-	// If SnapshotTime is set , then apply the incremental change
-	if keyspaceInfo.SnapshotTime != nil {
-		err = tm.restoreToTimeFromBinlog(ctx, pos, keyspaceInfo.SnapshotTime)
-		if err != nil {
-			log.Errorf("unable to restore to the specified time %s, error : %v", keyspaceInfo.SnapshotTime.String(), err)
-			return nil
-		}
-	}
-	switch err {
-	case nil:
-		// Starting from here we won't be able to recover if we get stopped by a cancelled
-		// context. Thus we use the background context to get through to the finish.
-		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
-			// Reconnect to master only for "NORMAL" keyspaces
-			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
-				return err
+			log.Infof("No backup found. Waiting %v (from -wait_for_backup_interval flag) to check again.", waitForBackupInterval)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(waitForBackupInterval):
 			}
 		}
-	case mysqlctl.ErrNoBackup:
-		// No-op, starting with empty database.
-	case mysqlctl.ErrExistingDB:
-		// No-op, assuming we've just restarted.  Note the
-		// replication reporter may restart replication at the
-		// next health check if it thinks it should. We do not
-		// alter replication here.
-	default:
-		// If anything failed, we should reset the original tablet type
-		if err := tm.tmState.ChangeTabletType(ctx, originalType); err != nil {
-			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
-		}
-		return vterrors.Wrap(err, "Can't restore backup")
-	}
 
-	// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore
-	// similar to completely clean start from scratch.
-	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && *initTabletType != "" {
-		initType, err := topoproto.ParseTabletType(*initTabletType)
-		if err == nil {
-			originalType = initType
+		var pos mysql.Position
+		if backupManifest != nil {
+			pos = backupManifest.Position
 		}
-	}
+		// If SnapshotTime is set , then apply the incremental change
+		if keyspaceInfo.SnapshotTime != nil {
+			err = tm.restoreToTimeFromBinlog(ctx, pos, keyspaceInfo.SnapshotTime)
+			if err != nil {
+				log.Errorf("unable to restore to the specified time %s, error : %v", keyspaceInfo.SnapshotTime.String(), err)
+				return nil
+			}
+		}
+		switch err {
+		case nil:
+			// Starting from here we won't be able to recover if we get stopped by a cancelled
+			// context. Thus we use the background context to get through to the finish.
+			if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+				// Reconnect to master only for "NORMAL" keyspaces
+				if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
+					return err
+				}
+			}
+		case mysqlctl.ErrNoBackup:
+			// No-op, starting with empty database.
+		case mysqlctl.ErrExistingDB:
+			// No-op, assuming we've just restarted.  Note the
+			// replication reporter may restart replication at the
+			// next health check if it thinks it should. We do not
+			// alter replication here.
+		default:
+			// If anything failed, we should reset the original tablet type
+			if err := tm.tmState.ChangeTabletType(ctx, originalType); err != nil {
+				log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
+			}
+			return vterrors.Wrap(err, "Can't restore backup")
+		}
 
-	// Change type back to original type if we're ok to serve.
-	return tm.tmState.ChangeTabletType(ctx, originalType)
+		// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore
+		// similar to completely clean start from scratch.
+		if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && *initTabletType != "" {
+			initType, err := topoproto.ParseTabletType(*initTabletType)
+			if err == nil {
+				originalType = initType
+			}
+		}
+
+		// Change type back to original type if we're ok to serve.
+		return tm.tmState.ChangeTabletType(ctx, originalType)
+	}
+	return nil
 }
 
 // restoreToTimeFromBinlog restores to the snapshot time of the keyspace

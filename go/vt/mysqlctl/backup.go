@@ -218,6 +218,28 @@ func removeExistingFiles(cnf *Mycnf) error {
 	return nil
 }
 
+// ShouldRestore checks whether a database with tables already exists
+// and returns whether a restore action should be performed
+func ShouldRestore(ctx context.Context, params RestoreParams) bool {
+	if !params.DeleteBeforeRestore {
+		if !RestoreWasInterrupted(params.Cnf) {
+			params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
+			// Wait for mysqld to be ready, in case it was launched in parallel with us.
+			// If this doesn't succeed, assume we should attempt a restore
+			if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
+				return true
+			}
+			ok, _ := checkNoDB(ctx, params.Mysqld, params.DbName)
+			if !ok {
+				params.Logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+				_ = PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+			}
+			return ok
+		}
+	}
+	return true
+}
+
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
