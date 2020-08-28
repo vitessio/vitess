@@ -119,3 +119,16 @@ func TestDbNameOverride(t *testing.T) {
 	require.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
 	require.Equal(t, dbName, qr.Rows[0][0].ToString())
 }
+
+func TestInformationSchemaQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = 'ks'", 1000, true)
+
+	require.Nil(t, err)
+	require.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	require.Equal(t, "t1", qr.Rows[0][0].ToString())
+}
