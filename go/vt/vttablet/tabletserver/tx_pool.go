@@ -99,6 +99,19 @@ func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector)
 	tp.ticks.Start(func() { tp.transactionKiller() })
 }
 
+// Close all connections in the pool, even if they have open
+// transactions
+func (tp *TxPool) CloseAllConnections() {
+	for _, conn := range tp.scp.GetAll() {
+		thing := "connection"
+		if conn.IsInTransaction() {
+			thing = "transaction"
+		}
+		log.Warningf("killing %s: %s", thing, conn.String())
+		conn.Releasef("closing all connections")
+	}
+}
+
 // Close closes the TxPool. A closed pool can be reopened.
 func (tp *TxPool) Close() {
 	tp.ticks.Stop()

@@ -101,6 +101,10 @@ func (sf *StatefulConnectionPool) AdjustLastID(id int64) {
 	}
 }
 
+func (sf *StatefulConnectionPool) GetAll() []*StatefulConnection {
+	return mapToTxConn(sf.active.GetAll())
+}
+
 // GetOutdated returns a list of connections that are older than age.
 // It does not return any connections that are in use.
 func (sf *StatefulConnectionPool) GetOutdated(age time.Duration, purpose string) []*StatefulConnection {

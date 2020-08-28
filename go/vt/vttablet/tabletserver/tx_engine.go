@@ -394,9 +394,9 @@ func (te *TxEngine) shutdown(immediate bool) {
 			close(rollbackDone)
 		}()
 		if immediate {
-			// Immediately rollback everything and return.
-			log.Info("Immediate shutdown: rolling back now.")
-			te.rollbackTransactions()
+			// Immediately close everything and return.
+			log.Info("Immediate shutdown: hard closing all connections now.")
+			te.txPool.CloseAllConnections()
 			return
 		}
 		if te.shutdownGracePeriod <= 0 {
@@ -409,8 +409,9 @@ func (te *TxEngine) shutdown(immediate bool) {
 		defer tmr.Stop()
 		select {
 		case <-tmr.C:
-			log.Info("Grace period exceeded: rolling back now.")
-			te.rollbackTransactions()
+			log.Info("Grace period exceeded: ending all transactions now.")
+			te.txPool.CloseAllConnections()
+			return
 		case <-poolEmpty:
 			// The pool cleared before the timer kicked in. Just return.
 			log.Info("Transactions completed before grace period: shutting down.")
