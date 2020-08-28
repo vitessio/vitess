@@ -477,7 +477,7 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 		Rows:   [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from test_table limit 10001 for update", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
@@ -487,6 +487,7 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	assert.Equal(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
+		assert.NoError(t, err)
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)
 	}
 }
