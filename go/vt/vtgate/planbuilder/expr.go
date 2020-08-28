@@ -168,7 +168,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 					Left: &sqlparser.ComparisonExpr{
 						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
 						Operator: sqlparser.EqualStr,
-						Right:    sqlparser.NewIntVal([]byte("1")),
+						Right:    sqlparser.NewIntLiteral([]byte("1")),
 					},
 					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}
@@ -180,7 +180,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 					Left: &sqlparser.ComparisonExpr{
 						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
 						Operator: sqlparser.EqualStr,
-						Right:    sqlparser.NewIntVal([]byte("0")),
+						Right:    sqlparser.NewIntLiteral([]byte("0")),
 					},
 					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}

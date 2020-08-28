@@ -524,8 +524,8 @@ func (sm *streamMigrater) templatizeKeyRange(ctx context.Context, rule *binlogda
 		Name: sqlparser.NewColIdent("in_keyrange"),
 		Exprs: sqlparser.SelectExprs{
 			&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]}},
-			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vtable.ColumnVindexes[0].Type))},
-			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.}}"))},
+			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte(vtable.ColumnVindexes[0].Type))},
+			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte("{{.}}"))},
 		},
 	}
 	sel.AddWhere(inkr)

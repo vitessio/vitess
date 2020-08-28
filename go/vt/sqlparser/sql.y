@@ -990,7 +990,7 @@ length_opt:
   }
 | '(' INTEGRAL ')'
   {
-    $$ = NewIntVal($2)
+    $$ = NewIntLiteral($2)
   }
 
 float_length_opt:
@@ -1000,8 +1000,8 @@ float_length_opt:
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntVal($2),
-        Scale: NewIntVal($4),
+        Length: NewIntLiteral($2),
+        Scale: NewIntLiteral($4),
     }
   }
 
@@ -1012,14 +1012,14 @@ decimal_length_opt:
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntVal($2),
+        Length: NewIntLiteral($2),
     }
   }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
-        Length: NewIntVal($2),
-        Scale: NewIntVal($4),
+        Length: NewIntLiteral($2),
+        Scale: NewIntLiteral($4),
     }
   }
 
@@ -1135,7 +1135,7 @@ column_comment_opt:
   }
 | COMMENT_KEYWORD STRING
   {
-    $$ = NewStrVal($2)
+    $$ = NewStrLiteral($2)
   }
 
 index_definition:
@@ -1166,11 +1166,11 @@ index_option:
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
     // should not be string
-    $$ = &IndexOption{Name: string($1), Value: NewIntVal($3)}
+    $$ = &IndexOption{Name: string($1), Value: NewIntLiteral($3)}
   }
 | COMMENT_KEYWORD STRING
   {
-    $$ = &IndexOption{Name: string($1), Value: NewStrVal($2)}
+    $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
   }
 
 equal_opt:
@@ -2692,7 +2692,7 @@ value_expression:
         num.Val = num.Val[1:]
         $$ = num
       } else {
-        $$ = NewIntVal(append([]byte("-"), num.Val...))
+        $$ = NewIntLiteral(append([]byte("-"), num.Val...))
       }
     } else {
       $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
@@ -2776,11 +2776,11 @@ function_call_keyword:
   }
 | SUBSTR openb STRING FROM value_expression FOR value_expression closeb
   {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
+    $$ = &SubstrExpr{StrVal: NewStrLiteral($3), From: $5, To: $7}
   }
 | SUBSTRING openb STRING FROM value_expression FOR value_expression closeb
   {
-    $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
+    $$ = &SubstrExpr{StrVal: NewStrLiteral($3), From: $5, To: $7}
   }
 | MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {
@@ -3071,27 +3071,27 @@ column_name:
 value:
   STRING
   {
-    $$ = NewStrVal($1)
+    $$ = NewStrLiteral($1)
   }
 | HEX
   {
-    $$ = NewHexVal($1)
+    $$ = NewHexLiteral($1)
   }
 | BIT_LITERAL
   {
-    $$ = NewBitVal($1)
+    $$ = NewBitLiteral($1)
   }
 | INTEGRAL
   {
-    $$ = NewIntVal($1)
+    $$ = NewIntLiteral($1)
   }
 | FLOAT
   {
-    $$ = NewFloatVal($1)
+    $$ = NewFloatLiteral($1)
   }
 | HEXNUM
   {
-    $$ = NewHexNum($1)
+    $$ = NewHexNumLiteral($1)
   }
 | VALUE_ARG
   {
@@ -3110,11 +3110,11 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NewIntVal([]byte("1"))
+    $$ = NewIntLiteral([]byte("1"))
   }
 | INTEGRAL VALUES
   {
-    $$ = NewIntVal($1)
+    $$ = NewIntLiteral($1)
   }
 | VALUE_ARG VALUES
   {
@@ -3324,11 +3324,11 @@ set_list:
 set_expression:
   reserved_sql_id '=' ON
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
+    $$ = &SetExpr{Name: $1, Expr: NewStrLiteral([]byte("on"))}
   }
 | reserved_sql_id '=' OFF
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("off"))}
+    $$ = &SetExpr{Name: $1, Expr: NewStrLiteral([]byte("off"))}
   }
 | reserved_sql_id '=' expression
   {
@@ -3355,11 +3355,11 @@ charset_or_character_set:
 charset_value:
   sql_id
   {
-    $$ = NewStrVal([]byte($1.String()))
+    $$ = NewStrLiteral([]byte($1.String()))
   }
 | STRING
   {
-    $$ = NewStrVal($1)
+    $$ = NewStrLiteral($1)
   }
 | DEFAULT
   {

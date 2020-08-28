@@ -480,15 +480,15 @@ var mustMatch = utils.MustMatchFn(
 )
 
 func newStrVal(in string) *Literal {
-	return NewStrVal([]byte(in))
+	return NewStrLiteral([]byte(in))
 }
 
 func newIntVal(in string) *Literal {
-	return NewIntVal([]byte(in))
+	return NewIntLiteral([]byte(in))
 }
 
 func newHexVal(in string) *Literal {
-	return NewHexVal([]byte(in))
+	return NewHexLiteral([]byte(in))
 }
 
 func newValArg(in string) Expr {

@@ -421,33 +421,33 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	return false
 }
 
-// NewStrVal builds a new StrVal.
-func NewStrVal(in []byte) *Literal {
+// NewStrLiteral builds a new StrVal.
+func NewStrLiteral(in []byte) *Literal {
 	return &Literal{Type: StrVal, Val: in}
 }
 
-// NewIntVal builds a new IntVal.
-func NewIntVal(in []byte) *Literal {
+// NewIntLiteral builds a new IntVal.
+func NewIntLiteral(in []byte) *Literal {
 	return &Literal{Type: IntVal, Val: in}
 }
 
-// NewFloatVal builds a new FloatVal.
-func NewFloatVal(in []byte) *Literal {
+// NewFloatLiteral builds a new FloatVal.
+func NewFloatLiteral(in []byte) *Literal {
 	return &Literal{Type: FloatVal, Val: in}
 }
 
-// NewHexNum builds a new HexNum.
-func NewHexNum(in []byte) *Literal {
+// NewHexNumLiteral builds a new HexNum.
+func NewHexNumLiteral(in []byte) *Literal {
 	return &Literal{Type: HexNum, Val: in}
 }
 
-// NewHexVal builds a new HexVal.
-func NewHexVal(in []byte) *Literal {
+// NewHexLiteral builds a new HexVal.
+func NewHexLiteral(in []byte) *Literal {
 	return &Literal{Type: HexVal, Val: in}
 }
 
-// NewBitVal builds a new BitVal containing a bit literal.
-func NewBitVal(in []byte) *Literal {
+// NewBitLiteral builds a new BitVal containing a bit literal.
+func NewBitLiteral(in []byte) *Literal {
 	return &Literal{Type: BitVal, Val: in}
 }
 

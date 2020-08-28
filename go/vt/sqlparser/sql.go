@@ -4570,7 +4570,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:992
 		{
-			yyVAL.literal = NewIntVal(yyDollar[2].bytes)
+			yyVAL.literal = NewIntLiteral(yyDollar[2].bytes)
 		}
 	case 150:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -4583,8 +4583,8 @@ yydefault:
 //line sql.y:1001
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
-				Length: NewIntVal(yyDollar[2].bytes),
-				Scale:  NewIntVal(yyDollar[4].bytes),
+				Length: NewIntLiteral(yyDollar[2].bytes),
+				Scale:  NewIntLiteral(yyDollar[4].bytes),
 			}
 		}
 	case 152:
@@ -4598,7 +4598,7 @@ yydefault:
 //line sql.y:1013
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
-				Length: NewIntVal(yyDollar[2].bytes),
+				Length: NewIntLiteral(yyDollar[2].bytes),
 			}
 		}
 	case 154:
@@ -4606,8 +4606,8 @@ yydefault:
 //line sql.y:1019
 		{
 			yyVAL.LengthScaleOption = LengthScaleOption{
-				Length: NewIntVal(yyDollar[2].bytes),
-				Scale:  NewIntVal(yyDollar[4].bytes),
+				Length: NewIntLiteral(yyDollar[2].bytes),
+				Scale:  NewIntLiteral(yyDollar[4].bytes),
 			}
 		}
 	case 155:
@@ -4764,7 +4764,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1137
 		{
-			yyVAL.literal = NewStrVal(yyDollar[2].bytes)
+			yyVAL.literal = NewStrLiteral(yyDollar[2].bytes)
 		}
 	case 181:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -4801,13 +4801,13 @@ yydefault:
 //line sql.y:1167
 		{
 			// should not be string
-			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].bytes), Value: NewIntVal(yyDollar[3].bytes)}
+			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].bytes), Value: NewIntLiteral(yyDollar[3].bytes)}
 		}
 	case 187:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1172
 		{
-			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].bytes), Value: NewStrVal(yyDollar[2].bytes)}
+			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].bytes), Value: NewStrLiteral(yyDollar[2].bytes)}
 		}
 	case 188:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6766,7 +6766,7 @@ yydefault:
 					num.Val = num.Val[1:]
 					yyVAL.expr = num
 				} else {
-					yyVAL.expr = NewIntVal(append([]byte("-"), num.Val...))
+					yyVAL.expr = NewIntLiteral(append([]byte("-"), num.Val...))
 				}
 			} else {
 				yyVAL.expr = &UnaryExpr{Operator: UMinusStr, Expr: yyDollar[2].expr}
@@ -6864,13 +6864,13 @@ yydefault:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:2778
 		{
-			yyVAL.expr = &SubstrExpr{StrVal: NewStrVal(yyDollar[3].bytes), From: yyDollar[5].expr, To: yyDollar[7].expr}
+			yyVAL.expr = &SubstrExpr{StrVal: NewStrLiteral(yyDollar[3].bytes), From: yyDollar[5].expr, To: yyDollar[7].expr}
 		}
 	case 539:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:2782
 		{
-			yyVAL.expr = &SubstrExpr{StrVal: NewStrVal(yyDollar[3].bytes), From: yyDollar[5].expr, To: yyDollar[7].expr}
+			yyVAL.expr = &SubstrExpr{StrVal: NewStrLiteral(yyDollar[3].bytes), From: yyDollar[5].expr, To: yyDollar[7].expr}
 		}
 	case 540:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -7238,37 +7238,37 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3073
 		{
-			yyVAL.expr = NewStrVal(yyDollar[1].bytes)
+			yyVAL.expr = NewStrLiteral(yyDollar[1].bytes)
 		}
 	case 603:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3077
 		{
-			yyVAL.expr = NewHexVal(yyDollar[1].bytes)
+			yyVAL.expr = NewHexLiteral(yyDollar[1].bytes)
 		}
 	case 604:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3081
 		{
-			yyVAL.expr = NewBitVal(yyDollar[1].bytes)
+			yyVAL.expr = NewBitLiteral(yyDollar[1].bytes)
 		}
 	case 605:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3085
 		{
-			yyVAL.expr = NewIntVal(yyDollar[1].bytes)
+			yyVAL.expr = NewIntLiteral(yyDollar[1].bytes)
 		}
 	case 606:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3089
 		{
-			yyVAL.expr = NewFloatVal(yyDollar[1].bytes)
+			yyVAL.expr = NewFloatLiteral(yyDollar[1].bytes)
 		}
 	case 607:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3093
 		{
-			yyVAL.expr = NewHexNum(yyDollar[1].bytes)
+			yyVAL.expr = NewHexNumLiteral(yyDollar[1].bytes)
 		}
 	case 608:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7291,13 +7291,13 @@ yydefault:
 				yylex.Error("expecting value after next")
 				return 1
 			}
-			yyVAL.expr = NewIntVal([]byte("1"))
+			yyVAL.expr = NewIntLiteral([]byte("1"))
 		}
 	case 611:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3116
 		{
-			yyVAL.expr = NewIntVal(yyDollar[1].bytes)
+			yyVAL.expr = NewIntLiteral(yyDollar[1].bytes)
 		}
 	case 612:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -7553,13 +7553,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3326
 		{
-			yyVAL.setExpr = &SetExpr{Name: yyDollar[1].colIdent, Expr: NewStrVal([]byte("on"))}
+			yyVAL.setExpr = &SetExpr{Name: yyDollar[1].colIdent, Expr: NewStrLiteral([]byte("on"))}
 		}
 	case 654:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3330
 		{
-			yyVAL.setExpr = &SetExpr{Name: yyDollar[1].colIdent, Expr: NewStrVal([]byte("off"))}
+			yyVAL.setExpr = &SetExpr{Name: yyDollar[1].colIdent, Expr: NewStrLiteral([]byte("off"))}
 		}
 	case 655:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -7590,13 +7590,13 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3357
 		{
-			yyVAL.expr = NewStrVal([]byte(yyDollar[1].colIdent.String()))
+			yyVAL.expr = NewStrLiteral([]byte(yyDollar[1].colIdent.String()))
 		}
 	case 662:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:3361
 		{
-			yyVAL.expr = NewStrVal(yyDollar[1].bytes)
+			yyVAL.expr = NewStrLiteral(yyDollar[1].bytes)
 		}
 	case 663:
 		yyDollar = yyS[yypt-1 : yypt+1]

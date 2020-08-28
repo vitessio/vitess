@@ -614,7 +614,7 @@ type (
 		Subquery *Subquery
 	}
 
-	// Literal represents a single value.
+	// Literal represents a fixed value.
 	Literal struct {
 		Type ValType
 		Val  []byte
