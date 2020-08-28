@@ -390,8 +390,8 @@ func TestIsAggregate(t *testing.T) {
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
 		Operator: NotEqualStr,
-		Left:     newIntVal("1"),
-		Right:    newIntVal("1"),
+		Left:     newIntLiteral("1"),
+		Right:    newIntLiteral("1"),
 	}
 	if !f.IsImpossible() {
 		t.Error("IsImpossible: false, want true")
@@ -399,8 +399,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: EqualStr,
-		Left:     newIntVal("1"),
-		Right:    newIntVal("1"),
+		Left:     newIntLiteral("1"),
+		Right:    newIntLiteral("1"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -408,8 +408,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: NotEqualStr,
-		Left:     newIntVal("1"),
-		Right:    newIntVal("2"),
+		Left:     newIntLiteral("1"),
+		Right:    newIntLiteral("2"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -668,7 +668,7 @@ func TestHexDecode(t *testing.T) {
 		out: "encoding/hex: odd length hex string",
 	}}
 	for _, tc := range testcase {
-		out, err := newHexVal(tc.in).HexDecode()
+		out, err := newHexLiteral(tc.in).HexDecode()
 		if err != nil {
 			if err.Error() != tc.out {
 				t.Errorf("Decode(%q): %v, want %s", tc.in, err, tc.out)
