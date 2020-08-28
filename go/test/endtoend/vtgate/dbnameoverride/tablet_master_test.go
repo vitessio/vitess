@@ -108,7 +108,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestDbNameOverride(t *testing.T) {
-	t.Skip("database() function are not replaced in comparison expr so evalengine will not be able to evaluate result")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)

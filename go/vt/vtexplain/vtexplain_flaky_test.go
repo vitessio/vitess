@@ -216,6 +216,7 @@ func TestJSONOutput(t *testing.T) {
             {
                 "BindVars": {
                     "#maxLimit": "10001",
+                    "__vtschemaname": "''",
                     "vtg1": "1"
                 },
                 "SQL": "select :vtg1 from user where id = :vtg1",
@@ -224,5 +225,8 @@ func TestJSONOutput(t *testing.T) {
         ]
     }
 }`
-	require.Equal(t, wantJSON, string(actionsJSON))
+	diff := cmp.Diff(wantJSON, string(actionsJSON))
+	if diff != "" {
+		t.Errorf(diff)
+	}
 }

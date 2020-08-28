@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/key"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -92,11 +92,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
 		}
 	}
 	if sel.SQLCalcFoundRows && sel.Limit != nil {
-		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
 	}
 
 	if err := pb.processTableExprs(sel.From); err != nil {
@@ -219,6 +219,9 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
 			r := &rewriter{}
 			sqlparser.Rewrite(expr, r.rewriteTableSchema, nil)
+			if r.err == sqlparser.ErrExprNotSupported {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparison with `table_schema` column not supported")
+			}
 			if r.err != nil {
 				return r.err
 			}
@@ -246,7 +249,8 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 		if node.Name.EqualString("table_schema") {
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
-				if parent.Operator == sqlparser.EqualStr {
+				if parent.Operator == sqlparser.EqualStr && shouldRewrite(parent.Right) {
+
 					evalExpr, err := sqlparser.Convert(parent.Right)
 					if err != nil {
 						r.err = err
@@ -257,6 +261,15 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 				}
 			}
 		}
+	}
+	return true
+}
+
+func shouldRewrite(e sqlparser.Expr) bool {
+	switch node := e.(type) {
+	case *sqlparser.FuncExpr:
+		// we should not rewrite database() calls against information_schema
+		return !(node.Name.EqualString("database") || node.Name.EqualString("schema"))
 	}
 	return true
 }
