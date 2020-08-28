@@ -104,15 +104,15 @@ func TestValEqual(t *testing.T) {
 }
 
 func newStrVal(in string) *sqlparser.Literal {
-	return sqlparser.NewStrVal([]byte(in))
+	return sqlparser.NewStrLiteral([]byte(in))
 }
 
 func newIntVal(in string) *sqlparser.Literal {
-	return sqlparser.NewIntVal([]byte(in))
+	return sqlparser.NewIntLiteral([]byte(in))
 }
 
 func newHexVal(in string) *sqlparser.Literal {
-	return sqlparser.NewHexVal([]byte(in))
+	return sqlparser.NewHexLiteral([]byte(in))
 }
 
 func newValArg(in string) sqlparser.Expr {
