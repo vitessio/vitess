@@ -390,8 +390,8 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 		}
 		if keyspace == "" {
 			keyspace = result.Value().ToString()
-		} else if keyspace != result.Value().ToString() {
-			vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't use more than one keyspace per INFORMATION_SCHEMA query")
+		} else if other := result.Value().ToString(); keyspace != other {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't use more than one keyspace per system table query - found both '%s' and '%s'", keyspace, other)
 		}
 	}
 
@@ -401,7 +401,7 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 
 	destinations, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", keyspace)
 	}
 	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }

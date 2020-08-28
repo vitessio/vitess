@@ -173,7 +173,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	sel := &sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})}
 
 	if systemTable(tableName.Qualifier.String()) {
-		ks, err := pb.vschema.DefaultKeyspace()
+		ks, err := pb.vschema.AnyKeyspace()
 		if err != nil {
 			return err
 		}
