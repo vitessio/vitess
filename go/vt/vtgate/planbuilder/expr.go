@@ -287,8 +287,8 @@ func valEqual(a, b sqlparser.Expr) bool {
 			return false
 		}
 		return bytes.Equal(a, b)
-	case *sqlparser.SQLVal:
-		b, ok := b.(*sqlparser.SQLVal)
+	case *sqlparser.Literal:
+		b, ok := b.(*sqlparser.Literal)
 		if !ok {
 			return false
 		}
@@ -311,7 +311,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 	return false
 }
 
-func hexEqual(a, b *sqlparser.SQLVal) bool {
+func hexEqual(a, b *sqlparser.Literal) bool {
 	v, err := a.HexDecode()
 	if err != nil {
 		return false

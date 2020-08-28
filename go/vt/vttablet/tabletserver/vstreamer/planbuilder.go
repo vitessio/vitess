@@ -360,7 +360,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err != nil {
 				return err
 			}
-			val, ok := expr.Right.(*sqlparser.SQLVal)
+			val, ok := expr.Right.(*sqlparser.Literal)
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
@@ -558,7 +558,7 @@ func selString(expr sqlparser.SelectExpr) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 	}
-	val, ok := aexpr.Expr.(*sqlparser.SQLVal)
+	val, ok := aexpr.Expr.(*sqlparser.Literal)
 	if !ok {
 		return "", fmt.Errorf("unsupported: %v", sqlparser.String(expr))
 	}

@@ -264,7 +264,7 @@ func TestSetAutocommitON(t *testing.T) {
 
 	e := s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -273,7 +273,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=ON")
@@ -289,7 +289,7 @@ func TestSetAutocommitON(t *testing.T) {
 
 	e = s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -298,7 +298,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 }
 
@@ -316,7 +316,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 
 	e := s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -325,7 +325,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=OFF")
@@ -341,7 +341,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 
 	e = s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -350,7 +350,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
 }

@@ -321,7 +321,7 @@ func IsValue(node Expr) bool {
 	switch v := node.(type) {
 	case Argument:
 		return true
-	case *SQLVal:
+	case *Literal:
 		switch v.Type {
 		case StrVal, HexVal, IntVal:
 			return true
@@ -362,7 +362,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	switch node := node.(type) {
 	case Argument:
 		return sqltypes.PlanValue{Key: string(node[1:])}, nil
-	case *SQLVal:
+	case *Literal:
 		switch node.Type {
 		case IntVal:
 			n, err := sqltypes.NewIntegral(string(node.Val))

@@ -376,7 +376,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 
 // ResultFromNumber returns the result column index based on the column
 // order expression.
-func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
+func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal) (int, error) {
 	if val.Type != sqlparser.IntVal {
 		return 0, errors.New("column number is not an int")
 	}

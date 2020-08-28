@@ -94,7 +94,7 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 	l.elimit.Count = pv
 
 	switch offset := limit.Offset.(type) {
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		pv, err = sqlparser.NewPlanValue(offset)
 		if err != nil {
 			return err

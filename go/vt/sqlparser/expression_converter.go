@@ -30,7 +30,7 @@ func Convert(e Expr) (evalengine.Expr, error) {
 	switch node := e.(type) {
 	case Argument:
 		return evalengine.NewBindVar(string(node[1:])), nil
-	case *SQLVal:
+	case *Literal:
 		switch node.Type {
 		case IntVal:
 			return evalengine.NewLiteralIntFromBytes(node.Val)

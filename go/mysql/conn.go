@@ -908,7 +908,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		paramsCount := uint16(0)
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 			switch node := node.(type) {
-			case *sqlparser.SQLVal:
+			case *sqlparser.Literal:
 				if strings.HasPrefix(string(node.Val), ":v") {
 					paramsCount++
 				}

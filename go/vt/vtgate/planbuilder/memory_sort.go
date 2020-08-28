@@ -47,7 +47,7 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 	for _, order := range orderBy {
 		colNumber := -1
 		switch expr := order.Expr.(type) {
-		case *sqlparser.SQLVal:
+		case *sqlparser.Literal:
 			var err error
 			if colNumber, err = ResultFromNumber(ms.ResultColumns(), expr); err != nil {
 				return nil, err
