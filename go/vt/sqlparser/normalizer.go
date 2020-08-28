@@ -33,11 +33,10 @@ import (
 // treated as distinct.
 func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
 	nz := newNormalizer(stmt, bindVars, prefix)
-	_ = Walk(nz.WalkStatement, stmt)
+	Rewrite(stmt, nz.WalkStatement, nil)
 }
 
 type normalizer struct {
-	stmt     Statement
 	bindVars map[string]*querypb.BindVariable
 	prefix   string
 	reserved map[string]struct{}
@@ -47,7 +46,6 @@ type normalizer struct {
 
 func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
 	return &normalizer{
-		stmt:     stmt,
 		bindVars: bindVars,
 		prefix:   prefix,
 		reserved: GetBindvars(stmt),
@@ -59,15 +57,15 @@ func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, pr
 // WalkStatement is the top level walk function.
 // If it encounters a Select, it switches to a mode
 // where variables are deduped.
-func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
-	switch node := node.(type) {
+func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
+	switch node := cursor.Node().(type) {
 	// no need to normalize the statement types
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, *DDL, *SRollback, *Release, *OtherAdmin, *OtherRead:
-		return false, nil
+		return false
 	case *Select:
-		_ = Walk(nz.WalkSelect, node)
+		Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
-		return false, nil
+		return false
 	case *SQLVal:
 		nz.convertSQLVal(node)
 	case *ComparisonExpr:
@@ -75,16 +73,16 @@ func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
 	case *ColName, TableName:
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
-		return false, nil
+		return false
 	case *ConvertType: // we should not rewrite the type description
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // WalkSelect normalizes the AST in Select mode.
-func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
-	switch node := node.(type) {
+func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
+	switch node := cursor.Node().(type) {
 	case *SQLVal:
 		nz.convertSQLValDedup(node)
 	case *ComparisonExpr:
@@ -92,15 +90,15 @@ func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
 	case *ColName, TableName:
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
-		return false, nil
+		return false
 	case OrderBy, GroupBy:
 		// do not make a bind var for order by column_position
-		return false, nil
+		return false
 	case *ConvertType:
 		// we should not rewrite the type description
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 func (nz *normalizer) convertSQLValDedup(node *SQLVal) {
