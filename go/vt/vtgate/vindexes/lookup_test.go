@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -36,6 +38,8 @@ import (
 // LookupNonUnique tests are more comprehensive than others.
 // They also test lookupInternal functionality.
 
+var _ VCursor = (*vcursor)(nil)
+
 type vcursor struct {
 	mustFail    bool
 	numRows     int
@@ -44,6 +48,10 @@ type vcursor struct {
 	autocommits int
 	pre, post   int
 	keys        []sqltypes.Value
+}
+
+func (vc *vcursor) InTransactionAndIsDML() bool {
+	return false
 }
 
 func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
@@ -168,9 +176,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 			"fromc": vars,
 		},
 	}}
-	if !reflect.DeepEqual(vc.queries, wantqueries) {
-		t.Errorf("lookup.Map queries:\n%v, want\n%v", vc.queries, wantqueries)
-	}
+	utils.MustMatch(t, wantqueries, vc.queries, "lookup.Map")
 
 	// Test query fail.
 	vc.mustFail = true

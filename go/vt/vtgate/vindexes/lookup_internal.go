@@ -76,6 +76,10 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 	if lkp.Autocommit {
 		co = vtgatepb.CommitOrder_AUTOCOMMIT
 	}
+	sel := lkp.sel
+	if vcursor.InTransactionAndIsDML() {
+		sel = sel + " for update"
+	}
 	if !ids[0].IsIntegral() && !ids[0].IsBinary() {
 		// for non integral and binary type, fallback to send query per id
 		for _, id := range ids {
@@ -87,7 +91,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 				lkp.FromColumns[0]: vars,
 			}
 			var result *sqltypes.Result
-			result, err = vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
+			result, err = vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
@@ -108,7 +112,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: vars,
 		}
-		result, err := vcursor.Execute("VindexLookup", lkp.sel, bindVars, false /* rollbackOnError */, co)
+		result, err := vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
