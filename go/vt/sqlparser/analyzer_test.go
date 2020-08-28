@@ -272,16 +272,19 @@ func TestIsValue(t *testing.T) {
 		out: false,
 	}}
 	for _, tc := range testcases {
-		out := IsValue(tc.in)
-		if out != tc.out {
-			t.Errorf("IsValue(%T): %v, want %v", tc.in, out, tc.out)
-		}
-		if tc.out {
-			// NewPlanValue should not fail for valid values.
-			if _, err := NewPlanValue(tc.in); err != nil {
-				t.Error(err)
+		t.Run(String(tc.in), func(t *testing.T) {
+			out := IsValue(tc.in)
+			if out != tc.out {
+				t.Errorf("IsValue(%T): %v, want %v", tc.in, out, tc.out)
 			}
-		}
+			if tc.out {
+				// NewPlanValue should not fail for valid values.
+				if _, err := NewPlanValue(tc.in); err != nil {
+					t.Error(err)
+				}
+			}
+
+		})
 	}
 }
 
@@ -338,10 +341,7 @@ func TestNewPlanValue(t *testing.T) {
 		out sqltypes.PlanValue
 		err string
 	}{{
-		in: &SQLVal{
-			Type: ValArg,
-			Val:  []byte(":valarg"),
-		},
+		in:  Argument(":valarg"),
 		out: sqltypes.PlanValue{Key: "valarg"},
 	}, {
 		in: &SQLVal{
@@ -384,10 +384,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{ListKey: "list"},
 	}, {
 		in: ValTuple{
-			&SQLVal{
-				Type: ValArg,
-				Val:  []byte(":valarg"),
-			},
+			Argument(":valarg"),
 			&SQLVal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -494,6 +491,6 @@ func newHexVal(in string) *SQLVal {
 	return NewHexVal([]byte(in))
 }
 
-func newValArg(in string) *SQLVal {
-	return NewValArg([]byte(in))
+func newValArg(in string) Expr {
+	return NewArgument([]byte(in))
 }

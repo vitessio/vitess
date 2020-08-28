@@ -282,7 +282,7 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 // The call is ignored because results get multiplied
 // as they join with others. So, it's hard to reliably
 // predict if a limit push down will work correctly.
-func (jb *join) SetUpperLimit(_ *sqlparser.SQLVal) {
+func (jb *join) SetUpperLimit(_ sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.

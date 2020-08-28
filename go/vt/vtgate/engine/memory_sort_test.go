@@ -68,7 +68,7 @@ func TestMemorySortExecute(t *testing.T) {
 	}
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewValArg([]byte(":__upper_limit")))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument([]byte(":__upper_limit")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewValArg([]byte(":__upper_limit")))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument([]byte(":__upper_limit")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +317,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	}
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewValArg([]byte(":__upper_limit")))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument([]byte(":__upper_limit")))
 	if err != nil {
 		t.Fatal(err)
 	}

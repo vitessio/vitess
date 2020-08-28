@@ -115,6 +115,6 @@ func newHexVal(in string) *sqlparser.SQLVal {
 	return sqlparser.NewHexVal([]byte(in))
 }
 
-func newValArg(in string) *sqlparser.SQLVal {
-	return sqlparser.NewValArg([]byte(in))
+func newValArg(in string) sqlparser.Expr {
+	return sqlparser.NewArgument([]byte(in))
 }

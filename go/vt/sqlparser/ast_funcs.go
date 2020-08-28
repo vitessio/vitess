@@ -143,7 +143,6 @@ const (
 	FloatVal
 	HexNum
 	HexVal
-	ValArg
 	BitVal
 )
 
@@ -452,9 +451,9 @@ func NewBitVal(in []byte) *SQLVal {
 	return &SQLVal{Type: BitVal, Val: in}
 }
 
-// NewValArg builds a new ValArg.
-func NewValArg(in []byte) *SQLVal {
-	return &SQLVal{Type: ValArg, Val: in}
+// NewArgument builds a new ValArg.
+func NewArgument(in []byte) Argument {
+	return in
 }
 
 // HexDecode decodes the hexval into bytes.

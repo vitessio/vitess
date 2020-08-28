@@ -501,7 +501,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 }
 
 // SetUpperLimit satisfies the builder interface.
-func (oa *orderedAggregate) SetUpperLimit(count *sqlparser.SQLVal) {
+func (oa *orderedAggregate) SetUpperLimit(count sqlparser.Expr) {
 	oa.input.SetUpperLimit(count)
 }
 
