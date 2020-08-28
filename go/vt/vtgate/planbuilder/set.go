@@ -214,7 +214,7 @@ func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destina
 
 func extractValue(expr *sqlparser.SetExpr, boolean bool) string {
 	switch node := expr.Expr.(type) {
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		if node.Type == sqlparser.StrVal && boolean {
 			switch strings.ToLower(string(node.Val)) {
 			case "on":

@@ -75,7 +75,7 @@ func skipToEnd(yylex interface{}) {
   expr          Expr
   exprs         Exprs
   boolVal       BoolVal
-  sqlVal        *SQLVal
+  literal        *Literal
   colTuple      ColTuple
   values        Values
   valTuple      ValTuple
@@ -296,7 +296,7 @@ func skipToEnd(yylex interface{}) {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <sqlVal> length_opt column_comment_opt
+%type <literal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
@@ -2678,7 +2678,7 @@ value_expression:
   }
 | '+'  value_expression %prec UNARY
   {
-    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
+    if num, ok := $2.(*Literal); ok && num.Type == IntVal {
       $$ = num
     } else {
       $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
@@ -2686,7 +2686,7 @@ value_expression:
   }
 | '-'  value_expression %prec UNARY
   {
-    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
+    if num, ok := $2.(*Literal); ok && num.Type == IntVal {
       // Handle double negative
       if num.Val[0] == '-' {
         num.Val = num.Val[1:]
@@ -3095,7 +3095,7 @@ value:
   }
 | VALUE_ARG
   {
-    $$ = NewValArg($1)
+    $$ = NewArgument($1)
   }
 | NULL
   {
@@ -3118,7 +3118,7 @@ num_val:
   }
 | VALUE_ARG VALUES
   {
-    $$ = NewValArg($1)
+    $$ = NewArgument($1)
   }
 
 group_by_opt:

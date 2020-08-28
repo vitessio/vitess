@@ -66,12 +66,12 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 		Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
 		return false
-	case *SQLVal:
-		nz.convertSQLVal(node, cursor)
+	case *Literal:
+		nz.convertLiteral(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *ColName, TableName:
-		// Common node types that never contain SQLVals or ListArgs but create a lot of object
+		// Common node types that never contain Literal or ListArgs but create a lot of object
 		// allocations.
 		return false
 	case *ConvertType: // we should not rewrite the type description
@@ -83,12 +83,12 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 // WalkSelect normalizes the AST in Select mode.
 func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
-	case *SQLVal:
-		nz.convertSQLValDedup(node, cursor)
+	case *Literal:
+		nz.convertLiteralDedup(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *ColName, TableName:
-		// Common node types that never contain SQLVals or ListArgs but create a lot of object
+		// Common node types that never contain Literals or ListArgs but create a lot of object
 		// allocations.
 		return false
 	case OrderBy, GroupBy:
@@ -101,13 +101,13 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	return true
 }
 
-func (nz *normalizer) convertSQLValDedup(node *SQLVal, cursor *Cursor) {
+func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	// If value is too long, don't dedup.
 	// Such values are most likely not for vindexes.
 	// We save a lot of CPU because we avoid building
 	// the key for them.
 	if len(node.Val) > 256 {
-		nz.convertSQLVal(node, cursor)
+		nz.convertLiteral(node, cursor)
 		return
 	}
 
@@ -139,8 +139,8 @@ func (nz *normalizer) convertSQLValDedup(node *SQLVal, cursor *Cursor) {
 	cursor.Replace(NewArgument([]byte(":" + bvname)))
 }
 
-// convertSQLVal converts an SQLVal without the dedup.
-func (nz *normalizer) convertSQLVal(node *SQLVal, cursor *Cursor) {
+// convertLiteral converts an Literal without the dedup.
+func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 	bval := nz.sqlToBindvar(node)
 	if bval == nil {
 		return
@@ -187,7 +187,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 }
 
 func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
-	if node, ok := node.(*SQLVal); ok {
+	if node, ok := node.(*Literal); ok {
 		var v sqltypes.Value
 		var err error
 		switch node.Type {
@@ -227,7 +227,7 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *ColName, TableName:
-			// Common node types that never contain SQLVals or ListArgs but create a lot of object
+			// Common node types that never contain expressions but create a lot of object
 			// allocations.
 			return false, nil
 		case Argument:

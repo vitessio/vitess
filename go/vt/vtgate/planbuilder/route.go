@@ -201,7 +201,7 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	for _, order := range orderBy {
 		colNumber := -1
 		switch expr := order.Expr.(type) {
-		case *sqlparser.SQLVal:
+		case *sqlparser.Literal:
 			var err error
 			if colNumber, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
 				return nil, err

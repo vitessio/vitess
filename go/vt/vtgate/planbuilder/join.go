@@ -232,7 +232,7 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	}
 
 	for _, order := range orderBy {
-		if node, ok := order.Expr.(*sqlparser.SQLVal); ok {
+		if node, ok := order.Expr.(*sqlparser.Literal); ok {
 			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
 			// SELECT a, b, c FROM t1, t2 ORDER BY 1, 2, 3.
 			num, err := ResultFromNumber(jb.ResultColumns(), node)

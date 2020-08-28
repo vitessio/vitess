@@ -103,15 +103,15 @@ func TestValEqual(t *testing.T) {
 	}
 }
 
-func newStrVal(in string) *sqlparser.SQLVal {
+func newStrVal(in string) *sqlparser.Literal {
 	return sqlparser.NewStrVal([]byte(in))
 }
 
-func newIntVal(in string) *sqlparser.SQLVal {
+func newIntVal(in string) *sqlparser.Literal {
 	return sqlparser.NewIntVal([]byte(in))
 }
 
-func newHexVal(in string) *sqlparser.SQLVal {
+func newHexVal(in string) *sqlparser.Literal {
 	return sqlparser.NewHexVal([]byte(in))
 }
 

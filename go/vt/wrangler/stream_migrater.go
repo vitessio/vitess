@@ -507,7 +507,7 @@ func (sm *streamMigrater) templatizeKeyRange(ctx context.Context, rule *binlogda
 		if !ok {
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
-		val, ok := aliased.Expr.(*sqlparser.SQLVal)
+		val, ok := aliased.Expr.(*sqlparser.Literal)
 		if !ok {
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
