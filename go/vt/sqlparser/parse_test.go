@@ -22,16 +22,20 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 )
 
+type parseTest struct {
+	input  string
+	output string
+}
+
 var (
-	validSQL = []struct {
-		input  string
-		output string
-	}{{
+	validSQL = []parseTest{
+	   {
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
@@ -717,6 +721,12 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
+		input: "insert into A(A, B) values (';', '''')",
+		output: "insert into A(A, B) values (';', '\\'')",
+	}, {
+		input:  "CREATE TABLE A (\n\t`A` int\n)",
+		output: "create table A (\n\tA int\n)",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
@@ -1096,6 +1106,22 @@ var (
 	}, {
 		input:  "create or replace view a as select current_timestamp()",
 		output: "create or replace view a as select current_timestamp() from dual",
+	}, {
+		input:  "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
+	}, {
+		input:  "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
+	}, {
+		input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
+	}, {
+		input:  "create trigger t1 after insert on foo for each row update xxy set y = new.x",
+	}, {
+		input:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+	}, {
+		input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		output:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+	}, {
+		input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		output:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 	}, {
 		input:  "alter view a",
 		output: "alter table a",
@@ -1641,6 +1667,58 @@ func TestValid(t *testing.T) {
 	}
 }
 
+var ignoreWhitespaceTests = []parseTest{
+	{
+		input:  `create trigger t1 before delete on foo for each row follows baz 
+							begin
+								set @@foo = old.x;
+                set @@bar = new.y;
+                update baz.t set a = @@foo + @@bar where z = old.x;
+              end`,
+	},
+	{
+		input:  `create trigger t1 before delete on foo for each row follows baz 
+							begin
+								set @@foo = old.x;
+								begin
+									set @@boo = new.z;
+                end;
+                set @@bar = new.y;
+                update baz.t set a = @@foo + @@bar where z = old.x;
+              end`,
+	},
+}
+
+func TestValidIgnoreWhitespace(t *testing.T) {
+	for _, tcase := range ignoreWhitespaceTests {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			if err != nil {
+				t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
+				return
+			}
+			out := String(tree)
+			normalize := regexp.MustCompile("\\s+")
+			normalizedOut := normalize.ReplaceAllLiteralString(out, " ")
+			expectedOut := normalize.ReplaceAllLiteralString(tcase.output, " ")
+
+			if normalizedOut != expectedOut {
+				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, normalizedOut, expectedOut)
+			}
+			// This test just exercises the tree walking functionality.
+			// There's no way automated way to verify that a node calls
+			// all its children. But we can examine code coverage and
+			// ensure that all walkSubtree functions were called.
+			Walk(func(node SQLNode) (bool, error) {
+				return true, nil
+			}, tree)
+		})
+	}
+}
+
 func TestCreateViewSelectPosition(t *testing.T) {
 	cases := []struct {
 		query string
@@ -1661,7 +1739,7 @@ func TestCreateViewSelectPosition(t *testing.T) {
 		if !ok {
 			t.Errorf("Expected DDL when parsing (%q)", tcase.query)
 		}
-		sel := tcase.query[ddl.ViewSelectPositionStart:ddl.ViewSelectPositionEnd]
+		sel := tcase.query[ddl.SubStatementPositionStart:ddl.SubStatementPositionEnd]
 		if sel != tcase.sel {
 			t.Errorf("expected select to be %q, got %q", tcase.sel, sel)
 		}
@@ -1850,9 +1928,6 @@ func TestCaseSensitivity(t *testing.T) {
 		input: "select * from b use index (A)",
 	}, {
 		input: "insert into A(A, B) values (1, 2)",
-	}, {
-		input:  "CREATE TABLE A (\n\t`A` int\n)",
-		output: "create table A (\n\tA int\n)",
 	}, {
 		input:  "create view A as select current_timestamp()",
 		output: "create view a as select current_timestamp() from dual",

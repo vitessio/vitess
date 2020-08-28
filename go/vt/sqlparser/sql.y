@@ -69,6 +69,7 @@ func skipToEnd(yylex interface{}) {
   selectExprs   SelectExprs
   selectExpr    SelectExpr
   columns       Columns
+  statements    Statements
   partitions    Partitions
   colName       *ColName
   tableExprs    TableExprs
@@ -102,6 +103,7 @@ func skipToEnd(yylex interface{}) {
   TableSpec  *TableSpec
   columnType    ColumnType
   columnOrder   *ColumnOrder
+  triggerOrder  *TriggerOrder
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
@@ -175,6 +177,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
+%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -221,8 +224,11 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
+%type <statement> begin_end_block statement_list_statement
+%type <statements> statement_list
+%type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -265,6 +271,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <columnOrder> column_order_opt
+%type <triggerOrder> trigger_order_opt
 %type <order> order
 %type <int> lexer_position
 %type <str> asc_desc_opt
@@ -286,7 +293,7 @@ func skipToEnd(yylex interface{}) {
 %type <byt> exists_opt not_exists_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
-%type <empty> to_opt to_or_as as_opt column_opt describe
+%type <empty> to_opt to_or_as as_opt column_opt describe definer_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -624,11 +631,11 @@ create_statement:
   }
 | CREATE VIEW table_name AS lexer_position select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $6, ViewSelectPositionStart: $5, ViewSelectPositionEnd: $7 - 1}
+    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $6, SubStatementPositionStart: $5, SubStatementPositionEnd: $7 - 1}
   }
 | CREATE OR REPLACE VIEW table_name AS lexer_position select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, ViewSelectPositionStart: $7, ViewSelectPositionEnd: $9 - 1, OrReplace: true}
+    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, SubStatementPositionStart: $7, SubStatementPositionEnd: $9 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -638,6 +645,93 @@ create_statement:
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
   }
+| CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
+  {
+    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}}
+  }
+
+definer_opt:
+  {
+    $$ = struct{}{}
+  }
+| DEFINER '=' ID
+  {
+    $$ = struct{}{}
+  }
+
+trigger_time:
+  BEFORE
+  {
+    $$ = BeforeStr
+  }
+| AFTER
+  {
+    $$ = AfterStr
+  }
+
+trigger_event:
+  INSERT
+  {
+    $$ = InsertStr
+  }
+| UPDATE
+  {
+    $$ = UpdateStr
+  }
+| DELETE
+  {
+    $$ = DeleteStr
+  }
+
+trigger_order_opt:
+  {
+    $$ = nil
+  }
+| FOLLOWS ID
+  {
+    $$ = &TriggerOrder{PrecedesOrFollows: FollowsStr, OtherTriggerName: string($2)}
+  }
+| PRECEDES ID
+  {
+    $$ = &TriggerOrder{PrecedesOrFollows: PrecedesStr, OtherTriggerName: string($2)}
+  }
+
+trigger_body:
+  begin_end_block
+  {
+    $$ = $1
+  }
+| set_statement
+| insert_statement
+| update_statement
+| delete_statement
+
+begin_end_block:
+  BEGIN statement_list ';' END
+  {
+    $$ = &BeginEndBlock{Statements: $2}
+  }
+
+statement_list:
+  statement_list_statement
+  {
+    $$ = Statements{$1}
+  }
+| statement_list ';' statement_list_statement
+  {
+    $$ = append($$, $3)
+  }
+
+statement_list_statement:
+  select_statement
+  {
+    $$ = $1
+  }
+| insert_statement
+| update_statement
+| delete_statement
+| set_statement
+| begin_end_block
 
 vindex_type_opt:
   {

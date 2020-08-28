@@ -282,6 +282,8 @@ type Statement interface {
 	SQLNode
 }
 
+type Statements []Statement
+
 func (*Union) iStatement()      {}
 func (*Select) iStatement()     {}
 func (*Stream) iStatement()     {}
@@ -299,6 +301,7 @@ func (*Commit) iStatement()     {}
 func (*Rollback) iStatement()   {}
 func (*OtherRead) iStatement()  {}
 func (*OtherAdmin) iStatement() {}
+func (*BeginEndBlock) iStatement() {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -506,6 +509,31 @@ func (node *Union) walkSubtree(visit Visit) error {
 	)
 }
 
+// BeginEndBlock represents a BEGIN .. END block with one or more statements nested within
+type BeginEndBlock struct {
+	Statements Statements
+}
+
+func (b *BeginEndBlock) Format(buf *TrackedBuffer) {
+	buf.Myprintf("begin\n")
+	for _, s := range b.Statements {
+		buf.Myprintf("%v;\n", s)
+	}
+	buf.Myprintf("end")
+}
+
+func (b *BeginEndBlock) walkSubtree(visit Visit) error {
+	if b == nil {
+		return nil
+	}
+	for _, s := range b.Statements {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Stream represents a SELECT statement.
 type Stream struct {
 	Comments   Comments
@@ -550,9 +578,7 @@ type Insert struct {
 	OnDup      OnDup
 }
 
-// DDL strings.
 const (
-	InsertStr  = "insert"
 	ReplaceStr = "replace"
 )
 
@@ -722,6 +748,19 @@ func (node *DBDDL) walkSubtree(visit Visit) error {
 	return nil
 }
 
+type TriggerSpec struct {
+	Name  string
+	Time  string // BeforeStr, AfterStr
+	Event string // UpdateStr, InsertStr, DeleteStr
+	Order *TriggerOrder
+	Body  Statement
+}
+
+type TriggerOrder struct {
+	PrecedesOrFollows string // PrecedesStr, FollowsStr
+	OtherTriggerName string
+}
+
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 type DDL struct {
 	Action string
@@ -753,11 +792,11 @@ type DDL struct {
 	// View name.
 	View                    TableName
 	ViewExpr                SelectStatement
-	// This exposes the start and end index or the string that makes up the
-	// ViewExpr in the parsed input. These are byte offsets in the parsed
-	// string or input reader.
-	ViewSelectPositionStart int
-	ViewSelectPositionEnd   int
+
+	// This exposes the start and end index of the string that makes up the sub statement of the query given.
+	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
+	SubStatementPositionStart int
+	SubStatementPositionEnd   int
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames
@@ -783,6 +822,9 @@ type DDL struct {
 
 	// IndexSpec is set for all ALTER operations on an index
 	IndexSpec *IndexSpec
+
+	// TriggerSpec is set for CREATE / ALTER / DROP trigger operations
+	TriggerSpec *TriggerSpec
 }
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
@@ -805,6 +847,13 @@ const (
 	TruncateStr         = "truncate"
 	FlushStr            = "flush"
 	IndexStr            = "index"
+	BeforeStr           = "before"
+	AfterStr            = "after"
+	InsertStr           = "insert"
+	UpdateStr           = "update"
+	DeleteStr           = "delete"
+	FollowsStr          = "follows"
+	PrecedesStr         = "precedes"
 	CreateVindexStr     = "create vindex"
 	DropVindexStr       = "drop vindex"
 	AddVschemaTableStr  = "add vschema table"
@@ -832,6 +881,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				orReplace = "or replace "
 			}
 			buf.Myprintf("%s %sview %v as %v", node.Action, orReplace, node.View, node.ViewExpr)
+		} else if node.TriggerSpec != nil {
+			trigger := node.TriggerSpec
+			triggerOrder := ""
+			if trigger.Order != nil {
+				triggerOrder = fmt.Sprintf("%s %s ", trigger.Order.PrecedesOrFollows, trigger.Order.OtherTriggerName)
+			}
+			buf.Myprintf("%s trigger %s %s %s on %v for each row %s%v",
+				node.Action, trigger.Name, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
 		} else {
 			notExists := ""
 			if node.IfNotExists {
