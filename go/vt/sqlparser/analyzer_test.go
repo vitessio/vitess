@@ -241,7 +241,7 @@ func TestIsColName(t *testing.T) {
 		in:  &ColName{},
 		out: true,
 	}, {
-		in: newHexVal(""),
+		in: newHexLiteral(""),
 	}}
 	for _, tc := range testcases {
 		out := IsColName(tc.in)
@@ -256,16 +256,16 @@ func TestIsValue(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  newStrVal("aa"),
+		in:  newStrLiteral("aa"),
 		out: true,
 	}, {
-		in:  newHexVal("3131"),
+		in:  newHexLiteral("3131"),
 		out: true,
 	}, {
-		in:  newIntVal("1"),
+		in:  newIntLiteral("1"),
 		out: true,
 	}, {
-		in:  newValArg(":a"),
+		in:  newArgument(":a"),
 		out: true,
 	}, {
 		in:  &NullVal{},
@@ -296,7 +296,7 @@ func TestIsNull(t *testing.T) {
 		in:  &NullVal{},
 		out: true,
 	}, {
-		in: newStrVal(""),
+		in: newStrLiteral(""),
 	}}
 	for _, tc := range testcases {
 		out := IsNull(tc.in)
@@ -311,7 +311,7 @@ func TestIsSimpleTuple(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  ValTuple{newStrVal("aa")},
+		in:  ValTuple{newStrLiteral("aa")},
 		out: true,
 	}, {
 		in: ValTuple{&ColName{}},
@@ -479,18 +479,18 @@ var mustMatch = utils.MustMatchFn(
 	[]string{".Conn"}, // ignored fields
 )
 
-func newStrVal(in string) *Literal {
+func newStrLiteral(in string) *Literal {
 	return NewStrLiteral([]byte(in))
 }
 
-func newIntVal(in string) *Literal {
+func newIntLiteral(in string) *Literal {
 	return NewIntLiteral([]byte(in))
 }
 
-func newHexVal(in string) *Literal {
+func newHexLiteral(in string) *Literal {
 	return NewHexLiteral([]byte(in))
 }
 
-func newValArg(in string) Expr {
+func newArgument(in string) Expr {
 	return NewArgument([]byte(in))
 }
