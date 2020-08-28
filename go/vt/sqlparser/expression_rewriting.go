@@ -215,6 +215,6 @@ func (er *expressionRewriter) didAnythingChange() bool {
 	return len(er.bindVars) > 0
 }
 
-func bindVarExpression(name string) *SQLVal {
-	return NewValArg([]byte(":" + name))
+func bindVarExpression(name string) Expr {
+	return NewArgument([]byte(":" + name))
 }

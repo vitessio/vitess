@@ -1060,4 +1060,4 @@
 
 # invalid limit expression
 "select id from user limit 1+1"
-"unexpected expression in LIMIT:  limit 1 + 1"
+"unexpected expression in LIMIT: expression is too complex '1 + 1'"

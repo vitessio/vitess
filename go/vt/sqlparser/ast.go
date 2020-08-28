@@ -620,6 +620,9 @@ type (
 		Val  []byte
 	}
 
+	// Argument represents bindvariable expression
+	Argument []byte
+
 	// NullVal represents a NULL value.
 	NullVal struct{}
 
@@ -772,6 +775,7 @@ func (*RangeCond) iExpr()         {}
 func (*IsExpr) iExpr()            {}
 func (*ExistsExpr) iExpr()        {}
 func (*SQLVal) iExpr()            {}
+func (Argument) iExpr()           {}
 func (*NullVal) iExpr()           {}
 func (BoolVal) iExpr()            {}
 func (*ColName) iExpr()           {}
@@ -1589,11 +1593,14 @@ func (node *SQLVal) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "X'%s'", node.Val)
 	case BitVal:
 		buf.astPrintf(node, "B'%s'", node.Val)
-	case ValArg:
-		buf.WriteArg(string(node.Val))
 	default:
 		panic("unexpected")
 	}
+}
+
+// Format formats the node.
+func (node Argument) Format(buf *TrackedBuffer) {
+	buf.WriteArg(string(node))
 }
 
 // Format formats the node.

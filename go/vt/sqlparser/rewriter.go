@@ -910,6 +910,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Left, replaceAndExprLeft)
 		a.apply(node, n.Right, replaceAndExprRight)
 
+	case Argument:
+
 	case *AutoIncSpec:
 		a.apply(node, n.Column, replaceAutoIncSpecColumn)
 		a.apply(node, n.Sequence, replaceAutoIncSpecSequence)

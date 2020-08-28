@@ -184,7 +184,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
 				name := ":" + engine.InsertVarName(col, rowNum)
-				row[colNum] = sqlparser.NewValArg([]byte(name))
+				row[colNum] = sqlparser.NewArgument([]byte(name))
 			}
 		}
 	}
@@ -236,7 +236,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}
 		autoIncValues.Values = append(autoIncValues.Values, pv)
-		row[colNum] = sqlparser.NewValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
+		row[colNum] = sqlparser.NewArgument([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
 	}
 
 	eins.Generate = &engine.Generate{

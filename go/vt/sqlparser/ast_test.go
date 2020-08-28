@@ -538,7 +538,7 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where case a when b then c when d then c else (select a from b) end",
 		out: "case a when b then c when d then c else :a end",
 	}}
-	to := NewValArg([]byte(":a"))
+	to := NewArgument([]byte(":a"))
 	for _, tcase := range tcases {
 		tree, err := Parse(tcase.in)
 		if err != nil {

@@ -136,7 +136,7 @@ func (nz *normalizer) convertSQLValDedup(node *SQLVal, cursor *Cursor) {
 	}
 
 	// Modify the AST node to a bindvar.
-	cursor.Replace(NewValArg([]byte(":" + bvname)))
+	cursor.Replace(NewArgument([]byte(":" + bvname)))
 }
 
 // convertSQLVal converts an SQLVal without the dedup.
@@ -149,7 +149,7 @@ func (nz *normalizer) convertSQLVal(node *SQLVal, cursor *Cursor) {
 	bvname := nz.newName()
 	nz.bindVars[bvname] = bval
 
-	cursor.Replace(NewValArg([]byte(":" + bvname)))
+	cursor.Replace(NewArgument([]byte(":" + bvname)))
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -230,10 +230,8 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 			// Common node types that never contain SQLVals or ListArgs but create a lot of object
 			// allocations.
 			return false, nil
-		case *SQLVal:
-			if node.Type == ValArg {
-				bindvars[string(node.Val[1:])] = struct{}{}
-			}
+		case Argument:
+			bindvars[string(node[1:])] = struct{}{}
 		case ListArg:
 			bindvars[string(node[2:])] = struct{}{}
 		}
