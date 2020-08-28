@@ -90,7 +90,8 @@ type Route struct {
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
 
-	// xyz contains the expressions that will tell us which keyspace to route INFORMATION_SCHEMA queries to
+	// SysTableKeyspaceExpr contains the schema expressions
+	// It will be used to route the system table queries to a keyspace.
 	SysTableKeyspaceExpr []evalengine.Expr
 
 	// Route does not take inputs
