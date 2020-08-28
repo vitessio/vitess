@@ -2281,3 +2281,26 @@ func TestSelectLock(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
 }
+
+func TestSelectFromInformationSchema(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	session := NewSafeSession(nil)
+
+	// check failure when trying to query two keyspaces
+	_, err := exec(executor, session, "SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'TestExecutor' AND A.TABLE_SCHEMA = 'TestXBadSharding'")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "can't use more than one keyspace per system table query - found both 'TestExecutor' and 'TestXBadSharding")
+
+	// we pick a keyspace and query for table_schema = database(). should be routed to the picked keyspace
+	session.TargetString = "TestExecutor"
+	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()")
+	require.NoError(t, err)
+	assert.Equal(t, sbc1.StringQueries(), []string{"select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"})
+
+	// `USE TestXBadSharding` and then query info_schema about TestExecutor - should target TestExecutor and not use the default keyspace
+	sbc1.Queries = nil
+	session.TargetString = "TestXBadSharding"
+	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'TestExecutor'")
+	require.NoError(t, err)
+	assert.Equal(t, sbc1.StringQueries(), []string{"select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname"})
+}
