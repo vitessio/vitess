@@ -67,7 +67,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 		// Don't continue
 		return false
 	case *SQLVal:
-		nz.convertSQLVal(node)
+		nz.convertSQLVal(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *ColName, TableName:
@@ -84,7 +84,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *SQLVal:
-		nz.convertSQLValDedup(node)
+		nz.convertSQLValDedup(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *ColName, TableName:
@@ -101,13 +101,13 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	return true
 }
 
-func (nz *normalizer) convertSQLValDedup(node *SQLVal) {
+func (nz *normalizer) convertSQLValDedup(node *SQLVal, cursor *Cursor) {
 	// If value is too long, don't dedup.
 	// Such values are most likely not for vindexes.
 	// We save a lot of CPU because we avoid building
 	// the key for them.
 	if len(node.Val) > 256 {
-		nz.convertSQLVal(node)
+		nz.convertSQLVal(node, cursor)
 		return
 	}
 
@@ -136,12 +136,11 @@ func (nz *normalizer) convertSQLValDedup(node *SQLVal) {
 	}
 
 	// Modify the AST node to a bindvar.
-	node.Type = ValArg
-	node.Val = append([]byte(":"), bvname...)
+	cursor.Replace(NewValArg([]byte(":" + bvname)))
 }
 
 // convertSQLVal converts an SQLVal without the dedup.
-func (nz *normalizer) convertSQLVal(node *SQLVal) {
+func (nz *normalizer) convertSQLVal(node *SQLVal, cursor *Cursor) {
 	bval := nz.sqlToBindvar(node)
 	if bval == nil {
 		return
@@ -150,8 +149,7 @@ func (nz *normalizer) convertSQLVal(node *SQLVal) {
 	bvname := nz.newName()
 	nz.bindVars[bvname] = bval
 
-	node.Type = ValArg
-	node.Val = append([]byte(":"), bvname...)
+	cursor.Replace(NewValArg([]byte(":" + bvname)))
 }
 
 // convertComparison attempts to convert IN clauses to
