@@ -68,26 +68,28 @@ type tmState struct {
 }
 
 func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
+	ctx, cancel := context.WithCancel(tm.BatchCtx)
 	return &tmState{
 		tm: tm,
 		displayState: displayState{
 			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
 		},
 		tablet: tablet,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
-func (ts *tmState) Open(ctx context.Context) {
+func (ts *tmState) Open() {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.isOpen {
 		return
 	}
 
-	ts.ctx, ts.cancel = context.WithCancel(ctx)
 	ts.isOpen = true
 	ts.updateLocked(ts.ctx)
-	ts.publishStateLocked(ctx)
+	ts.publishStateLocked(ts.ctx)
 }
 
 func (ts *tmState) Close() {
@@ -192,18 +194,19 @@ func (ts *tmState) UpdateTablet(update func(tablet *topodatapb.Tablet)) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	update(ts.tablet)
+	ts.publishForDisplay()
 }
 
 func (ts *tmState) updateLocked(ctx context.Context) {
 	span, ctx := trace.NewSpan(ctx, "tmState.update")
 	defer span.Finish()
+	ts.publishForDisplay()
 
 	if !ts.isOpen {
 		return
 	}
 
 	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
-	ts.publishForDisplay()
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
