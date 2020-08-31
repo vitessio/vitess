@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -242,5 +243,80 @@ func TestQueryReponses(t *testing.T) {
 	reverse := Proto3ToQueryReponses(p3ResultWithError)
 	if !QueryResponsesEqual(reverse, queryResponses) {
 		t.Errorf("reverse:\n%#v, want\n%#v", reverse, queryResponses)
+	}
+}
+
+func TestProto3ValuesEqual(t *testing.T) {
+	for _, tc := range []struct {
+		v1, v2   []*querypb.Value
+		expected bool
+	}{
+		{
+			v1: []*querypb.Value{
+				{
+					Type:  0,
+					Value: []byte{0, 1},
+				},
+			},
+			v2: []*querypb.Value{
+				{
+					Type:  0,
+					Value: []byte{0, 1},
+				},
+				{
+					Type:  1,
+					Value: []byte{0, 1, 2},
+				},
+			},
+			expected: false,
+		},
+		{
+			v1: []*querypb.Value{
+				{
+					Type:  0,
+					Value: []byte{0, 1},
+				},
+				{
+					Type:  1,
+					Value: []byte{0, 1, 2},
+				},
+			},
+			v2: []*querypb.Value{
+				{
+					Type:  0,
+					Value: []byte{0, 1},
+				},
+				{
+					Type:  1,
+					Value: []byte{0, 1, 2},
+				},
+			},
+			expected: true,
+		},
+		{
+			v1: []*querypb.Value{
+				{
+					Type:  0,
+					Value: []byte{0, 1},
+				},
+				{
+					Type:  1,
+					Value: []byte{0, 1},
+				},
+			},
+			v2: []*querypb.Value{
+				{
+					Type:  0,
+					Value: []byte{0, 1},
+				},
+				{
+					Type:  1,
+					Value: []byte{0, 1, 2},
+				},
+			},
+			expected: false,
+		},
+	} {
+		require.Equal(t, tc.expected, Proto3ValuesEqual(tc.v1, tc.v2))
 	}
 }
