@@ -157,12 +157,19 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 			// non-blocking read so that this is fast
 			shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 			defer cancel()
-			alias, err := tp.ts.GetCellsAlias(shortCtx, cell, false)
+			_, err := tp.ts.GetCellInfo(shortCtx, cell, false)
 			if err != nil {
-				// either cellAlias doesn't exist or it isn't a cell alias at all. In that case assume it is a cell
-				actualCells = append(actualCells, cell)
+				// not a valid cell, check whether it is a cell alias
+				shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				defer cancel()
+				alias, err := tp.ts.GetCellsAlias(shortCtx, cell, false)
+				// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
+				if err == nil {
+					actualCells = append(actualCells, alias.Cells...)
+				}
 			} else {
-				actualCells = append(actualCells, alias.Cells...)
+				// valid cell, add it to our list
+				actualCells = append(actualCells, cell)
 			}
 		}
 		for _, cell := range actualCells {
@@ -171,9 +178,6 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 			// match cell, keyspace and shard
 			sri, err := tp.ts.GetShardReplication(shortCtx, cell, tp.keyspace, tp.shard)
 			if err != nil {
-				//log.Errorf("missing shard in topo %s", debug.Stack()) //FIXME: remove after all tests run
-
-				//log.Warningf("error %v from GetShardReplication for %v %v %v", err, cell, tp.keyspace, tp.shard)
 				continue
 			}
 
@@ -191,14 +195,17 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases)
 	if err != nil {
 		log.Warningf("error fetching tablets from topo: %v", err)
-		return nil
+		// If we get a partial result we can still use it, otherwise return
+		if len(tabletMap) == 0 {
+			return nil
+		}
 	}
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
 		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
-			// tablet disappeared on us (GetTabletMap ignores
-			// topo.ErrNoNode), just echo a warning
+			// Either tablet disappeared on us, or we got a partial result (GetTabletMap ignores
+			// topo.ErrNoNode). Just log a warning
 			log.Warningf("failed to load tablet %v", tabletAlias)
 		} else if topoproto.IsTypeInList(tabletInfo.Type, tp.tabletTypes) {
 			tablets = append(tablets, tabletInfo)
