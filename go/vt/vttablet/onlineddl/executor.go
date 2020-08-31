@@ -429,6 +429,14 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		return err
 	}
 
+	// The following sleep() is temporary and artificial. Because we create a new user for this
+	// migration, and because we throttle by replicas, we need to wait for the replicas to be
+	// caught up with the new user creation. Otherwise, the OSC tools will fail connecting to the replicas...
+	// Once we have a built in throttling service , we will no longe rneed to have the OSC tools probe the
+	// replicas. Instead, they will consult with our throttling service.
+	// TODO(shlomi): replace/remove this when we have a proper throttling solution
+	time.Sleep(time.Second)
+
 	runGhost := func(execute bool) error {
 		// Temporary hack (2020-08-11)
 		// Because sqlparser does not do full blown ALTER TABLE parsing,
@@ -630,6 +638,14 @@ export MYSQL_PWD
 	// we resort to regexp-based parsing of the query.
 	// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
 	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+
+	// The following sleep() is temporary and artificial. Because we create a new user for this
+	// migration, and because we throttle by replicas, we need to wait for the replicas to be
+	// caught up with the new user creation. Otherwise, the OSC tools will fail connecting to the replicas...
+	// Once we have a built in throttling service , we will no longe rneed to have the OSC tools probe the
+	// replicas. Instead, they will consult with our throttling service.
+	// TODO(shlomi): replace/remove this when we have a proper throttling solution
+	time.Sleep(time.Second)
 
 	runPTOSC := func(execute bool) error {
 		os.Setenv("MYSQL_PWD", onlineDDLPassword)
