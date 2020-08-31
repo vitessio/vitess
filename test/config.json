@@ -437,6 +437,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vtgate_onlineddl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/onlineddl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vtgate_schema": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schema"],
