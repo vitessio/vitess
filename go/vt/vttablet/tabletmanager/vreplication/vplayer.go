@@ -243,6 +243,21 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
+func (vp *vplayer) updateTime(ts int64) (err error) {
+	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, time.Now().Unix(), ts)
+	if err != nil {
+		return err
+	}
+	if _, err := vp.vr.dbClient.Execute(update); err != nil {
+		return fmt.Errorf("error %v updating time", err)
+	}
+	vp.unsavedEvent = nil
+	vp.timeLastSaved = time.Now()
+	return nil
+}
+
+// applyEvents is the main thread that applies the events. It has the following use
+
 // applyEvents is the main thread that applies the events. It has the following use
 // cases to take into account:
 // * Normal transaction that has row mutations. In this case, the transaction
@@ -580,7 +595,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
-		// No-op: heartbeat timings are calculated in outer loop.
+		if !vp.vr.dbClient.InTransaction {
+			err := vp.updateTime(event.Timestamp)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

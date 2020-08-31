@@ -458,8 +458,16 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			continue
 		}
 		var got string
+		heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
+	retry:
 		select {
 		case got = <-globalDBQueries:
+			// We rule out heartbeat time update queries because otherwise our query list
+			// is indeterminable and varies with each test execution.
+			if heartbeatRe.MatchString(got) {
+				goto retry
+			}
+
 			var match bool
 			if query[0] == '/' {
 				result, err := regexp.MatchString(query[1:], got)
@@ -493,6 +501,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 func expectNontxQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
+	heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
@@ -503,7 +512,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		select {
 		case got = <-globalDBQueries:
 
-			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") {
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || heartbeatRe.MatchString(got) {
 				goto retry
 			}
 
