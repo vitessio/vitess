@@ -106,7 +106,7 @@ func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
 	var sqlQuery = "" //nolint
 	for i := 0; i < totalTableCount; i++ {
-		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
+		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
 	}
@@ -121,7 +121,7 @@ func testWithInitialSchema(t *testing.T) {
 
 // testWithAlterSchema if we alter schema and then apply, the resultant schema should match across shards
 func testWithAlterSchema(t *testing.T) {
-	tableName := fmt.Sprintf("vt_select_test_%02d", 3)
+	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterTable, tableName, "msg")
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 	require.Nil(t, err)
