@@ -71,6 +71,9 @@ type vdiff struct {
 	// The source and target keyspaces are pulled from ts.
 	sources map[string]*shardStreamer
 	targets map[string]*shardStreamer
+
+	workflow       string
+	targetKeyspace string
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -153,6 +156,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		tabletTypesStr: tabletTypesStr,
 		sources:        make(map[string]*shardStreamer),
 		targets:        make(map[string]*shardStreamer),
+		workflow:       workflow,
+		targetKeyspace: targetKeyspace,
 	}
 	for shard, source := range ts.sources {
 		df.sources[shard] = &shardStreamer{
@@ -545,6 +550,9 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 	defer cancel()
 	return df.forAll(participants, func(shard string, participant *shardStreamer) error {
 		// Iteration for each participant.
+		if participant.position.IsZero() {
+			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.master.Alias.String())
+		}
 		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
