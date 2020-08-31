@@ -17,6 +17,7 @@ limitations under the License.
 package vtctld
 
 import (
+	"flag"
 	"fmt"
 	"time"
 
@@ -40,12 +41,12 @@ var (
 )
 
 var (
-	migrationCheckInterval = time.Second * 10
+	migrationCheckInterval = flag.Duration("online_ddl_check_interval", time.Minute, "interval polling for new online DDL requests")
 )
 
 func initSchemaManager(ts *topo.Server) {
 	tmClient := tmclient.NewTabletManagerClient()
-	migrationCheckTicks = timer.NewTimer(migrationCheckInterval)
+	migrationCheckTicks = timer.NewTimer(*migrationCheckInterval)
 
 	runMigrationRequestChecks(ts, tmClient)
 }
