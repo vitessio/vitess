@@ -885,9 +885,6 @@ var (
 	}, {
 		input: "set @period.variable = 42",
 	}, {
-		input:  "alter ignore table a add foo",
-		output: "alter table a",
-	}, {
 		input:  "alter table a add foo",
 		output: "alter table a",
 	}, {
