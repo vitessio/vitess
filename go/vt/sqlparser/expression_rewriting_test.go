@@ -29,98 +29,79 @@ type myTestCase struct {
 }
 
 func TestRewrites(in *testing.T) {
-	tests := []myTestCase{
-		{
-			in:       "SELECT 42",
-			expected: "SELECT 42",
-			// no bindvar needs
-		},
-		{
-			in:       "SELECT last_insert_id()",
-			expected: "SELECT :__lastInsertId as `last_insert_id()`",
-			liid:     true,
-		},
-		{
-			in:       "SELECT database()",
-			expected: "SELECT :__vtdbname as `database()`",
-			db:       true,
-		},
-		{
-			in:       "SELECT database() from test",
-			expected: "SELECT database() from test",
-			// no bindvar needs
-		},
-		{
-			in:       "SELECT last_insert_id() as test",
-			expected: "SELECT :__lastInsertId as test",
-			liid:     true,
-		},
-		{
-			in:       "SELECT last_insert_id() + database()",
-			expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
-			db:       true, liid: true,
-		},
-		{
-			in:       "select (select database()) from test",
-			expected: "select (select database() from dual) from test",
-			// no bindvar needs
-		},
-		{
-			in:       "select (select database() from dual) from test",
-			expected: "select (select database() from dual) from test",
-			// no bindvar needs
-		},
-		{
-			in:       "select (select database() from dual) from dual",
-			expected: "select (select :__vtdbname as `database()` from dual) as `(select database() from dual)` from dual",
-			db:       true,
-		},
-		{
-			in:       "select id from user where database()",
-			expected: "select id from user where database()",
-			// no bindvar needs
-		},
-		{
-			in:       "select table_name from information_schema.tables where table_schema = database()",
-			expected: "select table_name from information_schema.tables where table_schema = database()",
-			// no bindvar needs
-		},
-		{
-			in:       "select schema()",
-			expected: "select :__vtdbname as `schema()`",
-			db:       true,
-		},
-		{
-			in:        "select found_rows()",
-			expected:  "select :__vtfrows as `found_rows()`",
-			foundRows: true,
-		},
-		{
-			in:       "select @`x y`",
-			expected: "select :__vtudvx_y as `@``x y``` from dual",
-			udv:      1,
-		},
-		{
-			in:       "select id from t where id = @x and val = @y",
-			expected: "select id from t where id = :__vtudvx and val = :__vtudvy",
-			db:       false, udv: 2,
-		},
-		{
-			in:       "insert into t(id) values(@xyx)",
-			expected: "insert into t(id) values(:__vtudvxyx)",
-			db:       false, udv: 1,
-		},
-		{
-			in:       "select row_count()",
-			expected: "select :__vtrcount as `row_count()`",
-			rowCount: true,
-		},
-		{
-			in:       "SELECT lower(database())",
-			expected: "SELECT lower(:__vtdbname) as `lower(database())`",
-			db:       true,
-		},
-	}
+	tests := []myTestCase{{
+		in:       "SELECT 42",
+		expected: "SELECT 42",
+		// no bindvar needs
+	}, {
+		in:       "SELECT last_insert_id()",
+		expected: "SELECT :__lastInsertId as `last_insert_id()`",
+		liid:     true,
+	}, {
+		in:       "SELECT database()",
+		expected: "SELECT :__vtdbname as `database()`",
+		db:       true,
+	}, {
+		in:       "SELECT database() from test",
+		expected: "SELECT database() from test",
+		// no bindvar needs
+	}, {
+		in:       "SELECT last_insert_id() as test",
+		expected: "SELECT :__lastInsertId as test",
+		liid:     true,
+	}, {
+		in:       "SELECT last_insert_id() + database()",
+		expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
+		db:       true, liid: true,
+	}, {
+		in:       "select (select database()) from test",
+		expected: "select (select database() from dual) from test",
+		// no bindvar needs
+	}, {
+		in:       "select (select database() from dual) from test",
+		expected: "select (select database() from dual) from test",
+		// no bindvar needs
+	}, {
+		in:       "select (select database() from dual) from dual",
+		expected: "select (select :__vtdbname as `database()` from dual) as `(select database() from dual)` from dual",
+		db:       true,
+	}, {
+		in:       "select id from user where database()",
+		expected: "select id from user where database()",
+		// no bindvar needs
+	}, {
+		in:       "select table_name from information_schema.tables where table_schema = database()",
+		expected: "select table_name from information_schema.tables where table_schema = database()",
+		// no bindvar needs
+	}, {
+		in:       "select schema()",
+		expected: "select :__vtdbname as `schema()`",
+		db:       true,
+	}, {
+		in:        "select found_rows()",
+		expected:  "select :__vtfrows as `found_rows()`",
+		foundRows: true,
+	}, {
+		in:       "select @`x y`",
+		expected: "select :__vtudvx_y as `@``x y``` from dual",
+		udv:      1,
+	}, {
+		in:       "select id from t where id = @x and val = @y",
+		expected: "select id from t where id = :__vtudvx and val = :__vtudvy",
+		db:       false, udv: 2,
+	}, {
+		in:       "insert into t(id) values(@xyx)",
+		expected: "insert into t(id) values(:__vtudvxyx)",
+		db:       false, udv: 1,
+	}, {
+		in:       "select row_count()",
+		expected: "select :__vtrcount as `row_count()`",
+		rowCount: true,
+	}, {
+		in:       "SELECT lower(database())",
+		expected: "SELECT lower(:__vtdbname) as `lower(database())`",
+		db:       true,
+	}}
 
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
