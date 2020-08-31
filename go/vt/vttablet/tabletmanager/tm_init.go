@@ -305,7 +305,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return nil
 	}
 
-	tm.tmState.Open(tm.BatchCtx)
+	tm.tmState.Open()
 	return nil
 }
 
@@ -473,7 +473,7 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 					tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 				})
 			} else {
-				log.Warningf("Shard master alias matches, but existing tablet is not master. Switching to master with the shard's master term start time: %v", oldTablet.MasterTermStartTime)
+				log.Warningf("Shard master alias matches, but existing tablet is not master. Switching from %v to master with the shard's master term start time: %v", oldTablet.Type, si.MasterTermStartTime)
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 					tablet.Type = topodatapb.TabletType_MASTER
 					tablet.MasterTermStartTime = si.MasterTermStartTime
@@ -599,7 +599,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	if *restoreFromBackup {
 		go func() {
 			// Open the state manager after restore is done.
-			defer tm.tmState.Open(ctx)
+			defer tm.tmState.Open()
 
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)

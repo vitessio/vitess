@@ -41,7 +41,7 @@ func TestStateOpenClose(t *testing.T) {
 	savedCtx := tm.tmState.ctx
 	tm.tmState.mu.Unlock()
 
-	tm.tmState.Open(context.Background())
+	tm.tmState.Open()
 
 	tm.tmState.mu.Lock()
 	assert.Equal(t, savedCtx, tm.tmState.ctx)
