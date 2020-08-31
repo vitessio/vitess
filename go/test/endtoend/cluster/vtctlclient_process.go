@@ -64,16 +64,6 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 	)
 }
 
-// OnlineDDLShowRecent responds wit hrecent schema migration list
-func (vtctlclient *VtctlClientProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
-	return vtctlclient.ExecuteCommandWithOutput(
-		"OnlineDDL",
-		Keyspace,
-		"show",
-		"recent",
-	)
-}
-
 // ExecuteCommand executes any vtctlclient command
 func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
 	pArgs := []string{"-server", vtctlclient.Server}
