@@ -142,21 +142,3 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 	}
 	return vtctl
 }
-
-// ApplySchema applies SQL schema to the keyspace
-func (vtctl *VtctlProcess) ApplySchema(Keyspace string, SQL string) (result string, err error) {
-	return vtctl.ExecuteCommandWithOutput(
-		"ApplySchema",
-		"-sql", SQL,
-		Keyspace)
-}
-
-// OnlineDDLShowRecent responds wit hrecent schema migration list
-func (vtctl *VtctlProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
-	return vtctl.ExecuteCommandWithOutput(
-		"OnlineDDL",
-		Keyspace,
-		"show",
-		"recent",
-	)
-}

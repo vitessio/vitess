@@ -107,7 +107,7 @@ func testWithInitialSchema(t *testing.T) {
 	var sqlQuery = "" //nolint
 	for i := 0; i < totalTableCount; i++ {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
-		_, err := clusterInstance.VtctlProcess.ApplySchema(keyspaceName, sqlQuery)
+		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
 	}
 
@@ -123,9 +123,8 @@ func testWithInitialSchema(t *testing.T) {
 func testWithAlterSchema(t *testing.T) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterTable, tableName, "msg")
-	uuid, err := clusterInstance.VtctlProcess.ApplySchema(keyspaceName, sqlQuery)
+	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 	require.Nil(t, err)
-	require.NotEqual(t, "", uuid)
 	// Migration is asynchronous. Give it some time.
 	time.Sleep(time.Second * 30)
 	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
