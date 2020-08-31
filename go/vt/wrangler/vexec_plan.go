@@ -356,8 +356,13 @@ func (vx *vexec) buildDeletePlan(ctx context.Context, planner vexecPlanner, del 
 // buildInsertPlan builds a plan for a INSERT query
 func (vx *vexec) buildInsertPlan(ctx context.Context, planner vexecPlanner, ins *sqlparser.Insert) (*vexecPlan, error) {
 	plannerParams := planner.params()
-	// at this time INSERT is only supported if an insert template exists
-	if templates := plannerParams.insertTemplates; len(templates) > 0 {
+	templates := plannerParams.insertTemplates
+	if len(templates) == 0 {
+		// at this time INSERT is only supported if an insert template exists
+		// Remove this conditional if there's any new case for INSERT
+		return nil, fmt.Errorf("query not supported by vexec: %s", sqlparser.String(ins))
+	}
+	if len(templates) > 0 {
 		match, err := sqlparser.QueryMatchesTemplates(vx.query, templates)
 		if err != nil {
 			return nil, err
