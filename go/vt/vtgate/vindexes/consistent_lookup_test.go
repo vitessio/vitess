@@ -461,10 +461,10 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 		t.Run(val.typ.String(), func(t *testing.T) {
 			vc.AddResult(&sqltypes.Result{}, nil)
 			vc.AddResult(&sqltypes.Result{}, nil)
-			sqlVal, err := sqltypes.NewValue(val.typ, []byte(val.val))
+			literal, err := sqltypes.NewValue(val.typ, []byte(val.val))
 			require.NoError(t, err)
 
-			err = lookup.(Lookup).Update(vc, []sqltypes.Value{sqlVal, sqlVal}, []byte("test"), []sqltypes.Value{sqlVal, sqlVal})
+			err = lookup.(Lookup).Update(vc, []sqltypes.Value{literal, literal}, []byte("test"), []sqltypes.Value{literal, literal})
 			require.NoError(t, err)
 			require.NotEmpty(t, vc.log)
 			vc.log = nil

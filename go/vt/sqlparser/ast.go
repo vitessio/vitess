@@ -353,13 +353,13 @@ type ColumnType struct {
 	Autoincrement BoolVal
 	Default       Expr
 	OnUpdate      Expr
-	Comment       *SQLVal
+	Comment       *Literal
 
 	// Numeric field options
-	Length   *SQLVal
+	Length   *Literal
 	Unsigned BoolVal
 	Zerofill BoolVal
-	Scale    *SQLVal
+	Scale    *Literal
 
 	// Text field options
 	Charset string
@@ -614,11 +614,14 @@ type (
 		Subquery *Subquery
 	}
 
-	// SQLVal represents a single value.
-	SQLVal struct {
+	// Literal represents a fixed value.
+	Literal struct {
 		Type ValType
 		Val  []byte
 	}
+
+	// Argument represents bindvariable expression
+	Argument []byte
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
@@ -711,7 +714,7 @@ type (
 	// In this case StrVal will be set instead of Name.
 	SubstrExpr struct {
 		Name   *ColName
-		StrVal *SQLVal
+		StrVal *Literal
 		From   Expr
 		To     Expr
 	}
@@ -771,7 +774,8 @@ func (*ComparisonExpr) iExpr()    {}
 func (*RangeCond) iExpr()         {}
 func (*IsExpr) iExpr()            {}
 func (*ExistsExpr) iExpr()        {}
-func (*SQLVal) iExpr()            {}
+func (*Literal) iExpr()           {}
+func (Argument) iExpr()           {}
 func (*NullVal) iExpr()           {}
 func (BoolVal) iExpr()            {}
 func (*ColName) iExpr()           {}
@@ -805,8 +809,8 @@ func (ListArg) iColTuple()   {}
 // ConvertType represents the type in call to CONVERT(expr, type)
 type ConvertType struct {
 	Type     string
-	Length   *SQLVal
-	Scale    *SQLVal
+	Length   *Literal
+	Scale    *Literal
 	Operator string
 	Charset  string
 }
@@ -1579,7 +1583,7 @@ func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *SQLVal) Format(buf *TrackedBuffer) {
+func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
 		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
@@ -1589,11 +1593,14 @@ func (node *SQLVal) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "X'%s'", node.Val)
 	case BitVal:
 		buf.astPrintf(node, "B'%s'", node.Val)
-	case ValArg:
-		buf.WriteArg(string(node.Val))
 	default:
 		panic("unexpected")
 	}
+}
+
+// Format formats the node.
+func (node Argument) Format(buf *TrackedBuffer) {
+	buf.WriteArg(string(node))
 }
 
 // Format formats the node.
@@ -1864,8 +1871,8 @@ func (node *SetExpr) Format(buf *TrackedBuffer) {
 	case node.Name.EqualString("charset") || node.Name.EqualString("names"):
 		buf.astPrintf(node, "%s %v", node.Name.String(), node.Expr)
 	case node.Name.EqualString(TransactionStr):
-		sqlVal := node.Expr.(*SQLVal)
-		buf.astPrintf(node, "%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
+		literal := node.Expr.(*Literal)
+		buf.astPrintf(node, "%s %s", node.Name.String(), strings.ToLower(string(literal.Val)))
 	default:
 		buf.astPrintf(node, "%v = %v", node.Name, node.Expr)
 	}

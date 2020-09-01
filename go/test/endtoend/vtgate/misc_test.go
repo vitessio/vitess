@@ -288,6 +288,37 @@ func TestShowTablesWithWhereClause(t *testing.T) {
 	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`)
 }
 
+func TestDbNameOverride(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
+
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+}
+
+func TestInformationSchemaQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'ks'", 1000, true)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+
+	qr, err = conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'vt_ks'", 1000, true)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

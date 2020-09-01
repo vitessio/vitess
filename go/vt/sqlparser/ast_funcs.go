@@ -76,20 +76,20 @@ func Append(buf *strings.Builder, node SQLNode) {
 // IndexColumn describes a column in an index definition with optional length
 type IndexColumn struct {
 	Column ColIdent
-	Length *SQLVal
+	Length *Literal
 }
 
 // LengthScaleOption is used for types that have an optional length
 // and scale
 type LengthScaleOption struct {
-	Length *SQLVal
-	Scale  *SQLVal
+	Length *Literal
+	Scale  *Literal
 }
 
 // IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING
 type IndexOption struct {
 	Name  string
-	Value *SQLVal
+	Value *Literal
 	Using string
 }
 
@@ -129,7 +129,7 @@ type ShowTablesOpt struct {
 	Filter *ShowFilter
 }
 
-// ValType specifies the type for SQLVal.
+// ValType specifies the type for Literal.
 type ValType int
 
 // These are the possible Valtype values.
@@ -143,7 +143,6 @@ const (
 	FloatVal
 	HexNum
 	HexVal
-	ValArg
 	BitVal
 )
 
@@ -388,7 +387,7 @@ func replaceExpr(from, to Expr) func(cursor *Cursor) bool {
 			cursor.Replace(to)
 		}
 		switch cursor.Node().(type) {
-		case *ExistsExpr, *SQLVal, *Subquery, *ValuesFuncExpr, *Default:
+		case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
 			return false
 		}
 
@@ -399,12 +398,12 @@ func replaceExpr(from, to Expr) func(cursor *Cursor) bool {
 // IsImpossible returns true if the comparison in the expression can never evaluate to true.
 // Note that this is not currently exhaustive to ALL impossible comparisons.
 func (node *ComparisonExpr) IsImpossible() bool {
-	var left, right *SQLVal
+	var left, right *Literal
 	var ok bool
-	if left, ok = node.Left.(*SQLVal); !ok {
+	if left, ok = node.Left.(*Literal); !ok {
 		return false
 	}
-	if right, ok = node.Right.(*SQLVal); !ok {
+	if right, ok = node.Right.(*Literal); !ok {
 		return false
 	}
 	if node.Operator == NotEqualStr && left.Type == right.Type {
@@ -422,43 +421,43 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	return false
 }
 
-// NewStrVal builds a new StrVal.
-func NewStrVal(in []byte) *SQLVal {
-	return &SQLVal{Type: StrVal, Val: in}
+// NewStrLiteral builds a new StrVal.
+func NewStrLiteral(in []byte) *Literal {
+	return &Literal{Type: StrVal, Val: in}
 }
 
-// NewIntVal builds a new IntVal.
-func NewIntVal(in []byte) *SQLVal {
-	return &SQLVal{Type: IntVal, Val: in}
+// NewIntLiteral builds a new IntVal.
+func NewIntLiteral(in []byte) *Literal {
+	return &Literal{Type: IntVal, Val: in}
 }
 
-// NewFloatVal builds a new FloatVal.
-func NewFloatVal(in []byte) *SQLVal {
-	return &SQLVal{Type: FloatVal, Val: in}
+// NewFloatLiteral builds a new FloatVal.
+func NewFloatLiteral(in []byte) *Literal {
+	return &Literal{Type: FloatVal, Val: in}
 }
 
-// NewHexNum builds a new HexNum.
-func NewHexNum(in []byte) *SQLVal {
-	return &SQLVal{Type: HexNum, Val: in}
+// NewHexNumLiteral builds a new HexNum.
+func NewHexNumLiteral(in []byte) *Literal {
+	return &Literal{Type: HexNum, Val: in}
 }
 
-// NewHexVal builds a new HexVal.
-func NewHexVal(in []byte) *SQLVal {
-	return &SQLVal{Type: HexVal, Val: in}
+// NewHexLiteral builds a new HexVal.
+func NewHexLiteral(in []byte) *Literal {
+	return &Literal{Type: HexVal, Val: in}
 }
 
-// NewBitVal builds a new BitVal containing a bit literal.
-func NewBitVal(in []byte) *SQLVal {
-	return &SQLVal{Type: BitVal, Val: in}
+// NewBitLiteral builds a new BitVal containing a bit literal.
+func NewBitLiteral(in []byte) *Literal {
+	return &Literal{Type: BitVal, Val: in}
 }
 
-// NewValArg builds a new ValArg.
-func NewValArg(in []byte) *SQLVal {
-	return &SQLVal{Type: ValArg, Val: in}
+// NewArgument builds a new ValArg.
+func NewArgument(in []byte) Argument {
+	return in
 }
 
 // HexDecode decodes the hexval into bytes.
-func (node *SQLVal) HexDecode() ([]byte, error) {
+func (node *Literal) HexDecode() ([]byte, error) {
 	dst := make([]byte, hex.DecodedLen(len([]byte(node.Val))))
 	_, err := hex.Decode(dst, []byte(node.Val))
 	if err != nil {
