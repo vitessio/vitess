@@ -410,6 +410,15 @@
 				"worker_test"
 			]
 		},
+		"vtctl_onlineddl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/onlineddl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 26,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vtgate": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate"],
