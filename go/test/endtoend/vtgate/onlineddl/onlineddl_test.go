@@ -44,11 +44,16 @@ var (
 		msg varchar(64),
 		PRIMARY KEY (id)
 		) ENGINE=InnoDB;`
-	alterTableStatament = `
+	// The following statement is valid
+	alterTableSuccessfulStatament = `
 		ALTER WITH 'gh-ost' TABLE %s
 		MODIFY id BIGINT UNSIGNED NOT NULL,
 		ADD COLUMN ghost_col INT NOT NULL,
 		ADD INDEX idx_msg(msg)`
+	// The following statement will fail because gh-ost requires some shared unique key
+	alterTableFailedStatament = `
+		ALTER WITH 'gh-ost' TABLE %s
+		DROP PRIMARY KEY`
 	statusCompleteRegexp = regexp.MustCompile(`\bcomplete\b`)
 	statusFailedRegexp   = regexp.MustCompile(`\bfailed\b`)
 )
@@ -103,9 +108,9 @@ func TestSchemaChange(t *testing.T) {
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
 	// Expect first migration to complete
-	testWithValidAlterSchema(t, true)
+	testWithAlterSchema(t, alterTableSuccessfulStatament, true)
 	// Expect 2nd invocation of same migration to fail
-	testWithValidAlterSchema(t, false)
+	testWithAlterSchema(t, alterTableFailedStatament, false)
 }
 
 func testWithInitialSchema(t *testing.T) {
@@ -122,9 +127,9 @@ func testWithInitialSchema(t *testing.T) {
 }
 
 // testWithAlterSchema if we alter schema and then apply, the resultant schema should match across shards
-func testWithValidAlterSchema(t *testing.T, expectSuccess bool) {
+func testWithAlterSchema(t *testing.T, alterStatement string, expectSuccess bool) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
-	sqlQuery := fmt.Sprintf(alterTableStatament, tableName)
+	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	uuid, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery)
 	require.Nil(t, err)
 	uuid = strings.TrimSpace(uuid)
