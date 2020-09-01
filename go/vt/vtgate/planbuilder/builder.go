@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"errors"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
@@ -269,7 +271,7 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt)
+	result, err := sqlparser.PrepareAST(stmt, make(map[string]*querypb.BindVariable), "", false)
 	if err != nil {
 		return nil, err
 	}

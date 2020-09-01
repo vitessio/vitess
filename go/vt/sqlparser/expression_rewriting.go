@@ -21,7 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -49,7 +49,7 @@ func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	setRewriter := &setNormalizer{}
 	out, ok := Rewrite(in, er.goingDown, setRewriter.rewriteSetComingUp).(Statement)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
 	}
 	if setRewriter.err != nil {
 		return nil, setRewriter.err
@@ -161,6 +161,46 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
 			er.needBindVarFor(udv)
 		}
+	case *ComparisonExpr:
+		if node.Operator == EqualStr && node.Escape == nil {
+			_, rightIsColumn := node.Right.(*ColName)
+			_, leftIsColumn := node.Left.(*ColName)
+			if rightIsColumn && !leftIsColumn {
+				// WHERE 42 = col1 => WHERE col1 = 42
+				node.Left, node.Right = node.Right, node.Left
+			}
+
+			rhs, rightIsTuple := node.Right.(ValTuple)
+			lhs, leftIsTuple := node.Left.(ValTuple)
+			if leftIsTuple && rightIsTuple {
+				// WHERE (col1,col2) = (23,43) => WHERE col1 = 23 AND col2 = 43
+				size := len(rhs)
+				if size != len(lhs) {
+					er.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "comparing tuples with different sizes")
+					return false
+				}
+
+				var result Expr
+
+				for i := range rhs {
+					comparison := &ComparisonExpr{
+						Operator: EqualStr,
+						Left:     lhs[i],
+						Right:    rhs[i],
+					}
+					if result == nil {
+						result = comparison
+					} else {
+						result = &AndExpr{
+							Left:  result,
+							Right: comparison,
+						}
+					}
+				}
+				cursor.Replace(result)
+			}
+
+		}
 	}
 	return true
 }
@@ -170,7 +210,7 @@ func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 	// last_insert_id() -> :__lastInsertId
 	case node.Name.EqualString("last_insert_id"):
 		if len(node.Exprs) > 0 { //last_insert_id(x)
-			er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
+			er.err = vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
 		} else {
 			cursor.Replace(bindVarExpression(LastInsertIDName))
 			er.needBindVarFor(LastInsertIDName)
@@ -180,7 +220,7 @@ func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 		(node.Name.EqualString("database") ||
 			node.Name.EqualString("schema")):
 		if len(node.Exprs) > 0 {
-			er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
+			er.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
 		} else {
 			cursor.Replace(bindVarExpression(DBVarName))
 			er.needBindVarFor(DBVarName)
@@ -188,7 +228,7 @@ func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 	// found_rows() -> :__vtfrows
 	case node.Name.EqualString("found_rows"):
 		if len(node.Exprs) > 0 {
-			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to FOUND_ROWS() not supported")
+			er.err = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Arguments to FOUND_ROWS() not supported")
 		} else {
 			cursor.Replace(bindVarExpression(FoundRowsName))
 			er.needBindVarFor(FoundRowsName)
@@ -196,7 +236,7 @@ func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 	// row_count() -> :__vtrcount
 	case node.Name.EqualString("row_count"):
 		if len(node.Exprs) > 0 {
-			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to ROW_COUNT() not supported")
+			er.err = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Arguments to ROW_COUNT() not supported")
 		} else {
 			cursor.Replace(bindVarExpression(RowCountName))
 			er.needBindVarFor(RowCountName)

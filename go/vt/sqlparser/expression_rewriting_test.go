@@ -101,6 +101,12 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT lower(database())",
 		expected: "SELECT lower(:__vtdbname) as `lower(database())`",
 		db:       true,
+	}, {
+		in:       "SELECT * FROM t WHERE 42 = col",
+		expected: "SELECT * FROM t WHERE col = 42",
+	}, {
+		in:       "SELECT * FROM t WHERE (col1,col2) = ('apa', 42)",
+		expected: "SELECT * FROM t WHERE col1 = 'apa' and col2 = 42",
 	}}
 
 	for _, tc := range tests {

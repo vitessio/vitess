@@ -282,11 +282,11 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.Select:
 			if len(node.SelectExprs) == 0 {
-				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+				node.SelectExprs = []sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
 						Expr: sqlparser.NewIntVal([]byte{'1'}),
 					},
-				})
+				}
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.EqualStr {
@@ -660,11 +660,7 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 
 	vindex = pb.st.Vindex(left, rb)
 	if vindex == nil {
-		left, right = right, left
-		vindex = pb.st.Vindex(left, rb)
-		if vindex == nil {
-			return engine.SelectScatter, nil, nil
-		}
+		return engine.SelectScatter, nil, nil
 	}
 	if !rb.exprIsValue(right) {
 		return engine.SelectScatter, nil, nil
