@@ -554,6 +554,9 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.master.Alias.String())
 		}
 		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
+			if err.Error() == "context deadline exceeded" {
+				return fmt.Errorf("VDiff timed out for tablet %v: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>", topoproto.TabletAliasString(participant.tablet.Alias))
+			}
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
