@@ -47,12 +47,18 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 	return err
 }
 
-// ApplySchema applies SQL schema to the keyspace
-func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	return vtctlclient.ExecuteCommand(
+// ApplySchemaWithOutput applies SQL schema to the keyspace
+func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
 		"ApplySchema",
 		"-sql", SQL,
 		Keyspace)
+}
+
+// ApplySchema applies SQL schema to the keyspace
+func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
+	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL)
+	return err
 }
 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
