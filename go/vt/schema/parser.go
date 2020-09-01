@@ -73,7 +73,7 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 
 // RemoveOnlineDDLHints removes a WITH_GHOST or WITH_PT hint, which is vitess-specific,
 // from an ALTER TABLE statement
-// e.g "ALTER WITH_GHOST TABLE my_table DROP COLUMN i" -> "ALTER TABLE `my_table` DROP COLUMN i"
+// e.g "ALTER WITH 'gh-ost' TABLE my_table DROP COLUMN i" -> "ALTER TABLE `my_table` DROP COLUMN i"
 func RemoveOnlineDDLHints(alterStatement string) (normalizedAlterStatement string) {
 	explicitSchema, explicitTable, alterOptions := ParseAlterTableOptions(alterStatement)
 
