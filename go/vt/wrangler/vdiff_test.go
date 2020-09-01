@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -890,4 +892,73 @@ func TestVDiffReplicationWait(t *testing.T) {
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "")
 	require.EqualError(t, err, "startQueryStreams(sources): WaitForPosition for tablet cell-0000000101: context deadline exceeded")
+}
+
+func TestVDiffFindPKs(t *testing.T) {
+
+	testcases := []struct {
+		name         string
+		table        *tabletmanagerdatapb.TableDefinition
+		targetSelect *sqlparser.Select
+		tdIn         *tableDiffer
+		tdOut        *tableDiffer
+		errorString  string
+	}{
+		{
+			name: "",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			},
+			targetSelect: &sqlparser.Select{
+				SelectExprs: sqlparser.SelectExprs{
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c2")}},
+				},
+			},
+			tdIn: &tableDiffer{
+				compareCols: []int{0, 1},
+				comparePKs:  []int{},
+			},
+			tdOut: &tableDiffer{
+				compareCols: []int{-1, 1},
+				comparePKs:  []int{0},
+			},
+		}, {
+			name: "",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2", "c3", "c4"},
+				PrimaryKeyColumns: []string{"c1", "c4"},
+				Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|varchar|int64"),
+			},
+			targetSelect: &sqlparser.Select{
+				SelectExprs: sqlparser.SelectExprs{
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c2")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("c3")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c4")}},
+				},
+			},
+			tdIn: &tableDiffer{
+				compareCols: []int{0, 1, 2, 3},
+				comparePKs:  []int{},
+			},
+			tdOut: &tableDiffer{
+				compareCols: []int{-1, 1, 2, -1},
+				comparePKs:  []int{0, 3},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := findPKs(tc.table, tc.targetSelect, tc.tdIn)
+			require.NoError(t, err)
+			require.EqualValues(t, tc.tdOut, tc.tdIn)
+		})
+	}
+
 }

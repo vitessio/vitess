@@ -4,7 +4,7 @@ var (
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), primary key(pid));
 create table customer(cid int, name varbinary(128),	primary key(cid));
-create table merchant(mname varchar(128), category varchar(128), primary key(mname));
+create table merchant(mname varchar(128), category varchar(128), primary key(mname)) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 create table orders(oid int, cid int, pid int, mname varchar(128), price int, primary key(oid));
 create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
 create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
