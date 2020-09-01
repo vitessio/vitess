@@ -618,7 +618,7 @@ func TestBindVariablesFormat(t *testing.T) {
 		t.Fatalf("bind variable 'key_3' is not formatted")
 	}
 
-	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"TUPLE\", \"value\": \"\"}") {
+	if !strings.Contains(formattedStr, "\"key_4\": {\"type\": \"TUPLE\", \"values\": [1, 2]}") {
 		t.Fatalf("bind variable 'key_4' is not formatted")
 	}
 

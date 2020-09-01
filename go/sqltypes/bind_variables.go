@@ -349,6 +349,19 @@ func FormatBindVariables(bindVariables map[string]*querypb.BindVariable, full, a
 			}
 			if IsIntegral(v.Type) || IsFloat(v.Type) {
 				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %v}", k, v.Type, string(v.Value))
+			} else if v.Type == querypb.Type_TUPLE {
+				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"values\": [", k, v.Type)
+				for i, el := range v.Values {
+					if IsIntegral(el.Type) || IsFloat(el.Type) {
+						fmt.Fprintf(&buf, "%v", string(el.Value))
+					} else {
+						fmt.Fprintf(&buf, "%q", string(el.Value))
+					}
+					if i != len(v.Values)-1 {
+						fmt.Fprint(&buf, ", ")
+					}
+				}
+				fmt.Fprint(&buf, "]}")
 			} else {
 				fmt.Fprintf(&buf, "%q: {\"type\": %q, \"value\": %q}", k, v.Type, string(v.Value))
 			}
