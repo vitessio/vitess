@@ -164,6 +164,8 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 func checkRecentMigrations(t *testing.T, uuid string, expectStatusRegexp *regexp.Regexp) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
 	assert.NoError(t, err)
+	fmt.Println("# 'vtctlclient OnlineDDL show recent' output (for debug purposes):")
+	fmt.Println(result)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
 	// The word "complete" appears in the column `completed_timestamp`. So we use a regexp to
 	// ensure we match exact full word
