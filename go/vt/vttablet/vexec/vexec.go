@@ -12,8 +12,8 @@ const (
 	TableQualifier = "_vt"
 )
 
-// ValColumns map column name to SQLVal, for col=Val expressions in a WHERE clause
-type ValColumns map[string](*sqlparser.SQLVal)
+// ValColumns map column name to Literal, for col=Val expressions in a WHERE clause
+type ValColumns map[string](*sqlparser.Literal)
 
 // TabletVExec is a utility structure, created when a VExec command is intercepted on the tablet.
 // This structure will parse and analyze the query, and make available some useful data.
@@ -38,9 +38,9 @@ func NewTabletVExec(workflow, keyspace string) *TabletVExec {
 	}
 }
 
-// ToStringVal converts a string to a string -typed SQLVal
-func (e *TabletVExec) ToStringVal(val string) *sqlparser.SQLVal {
-	return &sqlparser.SQLVal{
+// ToStringVal converts a string to a string -typed Literal
+func (e *TabletVExec) ToStringVal(val string) *sqlparser.Literal {
+	return &sqlparser.Literal{
 		Type: sqlparser.StrVal,
 		Val:  []byte(val),
 	}
@@ -79,7 +79,7 @@ func (e *TabletVExec) analyzeWhereEqualsColumns(where *sqlparser.Where) ValColum
 			if !ok {
 				continue
 			}
-			if val, ok := expr.Right.(*sqlparser.SQLVal); ok {
+			if val, ok := expr.Right.(*sqlparser.Literal); ok {
 				cols[qualifiedName.Name.String()] = val
 			}
 		}
@@ -94,7 +94,7 @@ func (e *TabletVExec) analyzeWhereEqualsColumns(where *sqlparser.Where) ValColum
 func (e *TabletVExec) analyzeUpdateColumns(update *sqlparser.Update) ValColumns {
 	cols := ValColumns{}
 	for _, col := range update.Exprs {
-		if val, ok := col.Expr.(*sqlparser.SQLVal); ok {
+		if val, ok := col.Expr.(*sqlparser.Literal); ok {
 			cols[col.Name.Name.Lowered()] = val
 		}
 	}
@@ -115,7 +115,7 @@ func (e *TabletVExec) analyzeInsertColumns(insert *sqlparser.Insert) ValColumns 
 	}
 	for i, col := range insert.Columns {
 		expr := rows[0][i]
-		if val, ok := expr.(*sqlparser.SQLVal); ok {
+		if val, ok := expr.(*sqlparser.Literal); ok {
 			cols[col.Lowered()] = val
 		}
 	}
@@ -124,7 +124,7 @@ func (e *TabletVExec) analyzeInsertColumns(insert *sqlparser.Insert) ValColumns 
 
 // ReplaceInsertColumnVal manipulated the existing INSERT statement to replace a column value
 // into a given value
-func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.SQLVal) error {
+func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.Literal) error {
 	insert, ok := e.Stmt.(*sqlparser.Insert)
 	if !ok {
 		return fmt.Errorf("Not an INSERT statement")
