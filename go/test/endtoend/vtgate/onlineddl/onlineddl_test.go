@@ -102,7 +102,9 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
+	// Expect first migration to complete
 	testWithValidAlterSchema(t, true)
+	// Expect 2nd invocation of same migration to fail
 	testWithValidAlterSchema(t, false)
 }
 
@@ -135,6 +137,9 @@ func testWithValidAlterSchema(t *testing.T, expectSuccess bool) {
 		checkRecentMigrations(t, uuid, statusFailedRegexp)
 	}
 	checkMigratedTable(t, tableName)
+	checkCancelMigration(t, uuid)
+	// retry request should fail for successful migrations, and should succeed for failed migrations
+	checkRetryMigration(t, uuid, !expectSuccess)
 }
 
 // checkTables checks the number of tables in the first two shards.
@@ -158,6 +163,30 @@ func checkRecentMigrations(t *testing.T, uuid string, expectStatusRegexp *regexp
 	// The word "complete" appears in the column `completed_timestamp`. So we use a regexp to
 	// ensure we match exact full word
 	m := expectStatusRegexp.FindAllString(result, -1)
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
+}
+
+// checkCancelMigration attempts to cancel a migration, and expects rejection
+func checkCancelMigration(t *testing.T, uuid string) {
+	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
+	assert.NoError(t, err)
+	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
+	m := regexp.MustCompile("\b0\b").FindAllString(result, -1)
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
+}
+
+// checkRetryMigration attempts to retry a migration, and expects rejection
+func checkRetryMigration(t *testing.T, uuid string, expectSuccess bool) {
+	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
+	assert.NoError(t, err)
+	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
+	var r *regexp.Regexp
+	if expectSuccess {
+		r = regexp.MustCompile("\b1\b")
+	} else {
+		r = regexp.MustCompile("\b0\b")
+	}
+	m := r.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 

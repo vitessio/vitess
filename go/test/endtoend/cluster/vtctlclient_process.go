@@ -70,13 +70,33 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 	)
 }
 
-// OnlineDDLShowRecent responds wit hrecent schema migration list
+// OnlineDDLShowRecent responds with recent schema migration list
 func (vtctlclient *VtctlClientProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
 	return vtctlclient.ExecuteCommandWithOutput(
 		"OnlineDDL",
 		Keyspace,
 		"show",
 		"recent",
+	)
+}
+
+// OnlineDDLCancelMigration cancels a given migration uuid
+func (vtctlclient *VtctlClientProcess) OnlineDDLCancelMigration(Keyspace, uuid string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"cancel",
+		uuid,
+	)
+}
+
+// OnlineDDLRetryMigration retries a given migration uuid
+func (vtctlclient *VtctlClientProcess) OnlineDDLRetryMigration(Keyspace, uuid string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"retry",
+		uuid,
 	)
 }
 
