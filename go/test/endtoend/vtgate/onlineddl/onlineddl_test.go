@@ -161,6 +161,14 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	assert.Equal(t, len(queryResult.Rows), count)
 }
 
+// checkRecentMigrations checks 'OnlineDDL <keyspace> show recent' output. Example to such output:
+// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
+// |      Tablet      | shard | mysql_schema |     mysql_table      |            migration_uuid            | strategy |  started_timestamp  | completed_timestamp | migration_status |
+// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
+// | zone1-0000003880 |     0 | vt_ks        | vt_onlineddl_test_03 | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | gh-ost   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
+// | zone1-0000003884 |     1 | vt_ks        | vt_onlineddl_test_03 | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | gh-ost   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
+// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
+
 func checkRecentMigrations(t *testing.T, uuid string, expectStatusRegexp *regexp.Regexp) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
 	assert.NoError(t, err)
@@ -185,6 +193,8 @@ func checkCancelMigration(t *testing.T, uuid string) {
 // checkRetryMigration attempts to retry a migration, and expects rejection
 func checkRetryMigration(t *testing.T, uuid string, expectSuccess bool) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLRetryMigration(keyspaceName, uuid)
+	fmt.Println("# 'vtctlclient OnlineDDL retry <uuid>' output (for debug purposes):")
+	fmt.Println(result)
 	assert.NoError(t, err)
 	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
 	var r *regexp.Regexp
