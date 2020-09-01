@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,7 @@ var (
 		MODIFY id BIGINT UNSIGNED NOT NULL,
 		ADD COLUMN ghost_col INT NOT NULL,
 		ADD INDEX idx_msg(msg)`
+	statusCompleteRegexp = regexp.MustCompile(`\bcomplete\b`)
 )
 
 func TestMain(m *testing.M) {
@@ -147,7 +149,10 @@ func checkRecentMigrations(t *testing.T, tableName, uuid string) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, tableName))
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, "complete"))
+	// The word "complete" appears in the column `completed_timestamp`. So we use a regexp to
+	// ensure we match exact full word
+	m := statusCompleteRegexp.FindAllString(result, -1)
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
