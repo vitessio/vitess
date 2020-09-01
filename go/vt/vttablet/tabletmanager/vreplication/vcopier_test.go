@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -31,6 +30,215 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
+// TestPlayerCopyVarcharPKCaseInsensitive tests the copy/catchup phase for a table with a varchar primary key
+// which is case insensitive.
+func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	savedPacketSize := *vstreamer.PacketSize
+	// PacketSize of 1 byte will send at most one row at a time.
+	*vstreamer.PacketSize = 1
+	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+
+	savedCopyTimeout := copyTimeout
+	// copyTimeout should be low enough to have time to send one row.
+	copyTimeout = 500 * time.Millisecond
+	defer func() { copyTimeout = savedCopyTimeout }()
+
+	savedWaitRetryTime := waitRetryTime
+	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	waitRetryTime = 10 * time.Millisecond
+	defer func() { waitRetryTime = savedWaitRetryTime }()
+
+	execStatements(t, []string{
+		"create table src(idc varchar(20), val int, primary key(idc))",
+		"insert into src values('a', 1), ('c', 2)",
+		fmt.Sprintf("create table %s.dst(idc varchar(20), val int, primary key(idc))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	count := 0
+	vstreamRowsSendHook = func(ctx context.Context) {
+		defer func() { count++ }()
+		// Allow the first two calls to go through: field info and one row.
+		if count <= 1 {
+			return
+		}
+		// Insert a row with PK which is < the lastPK till now because of the utf8mb4 collation
+		execStatements(t, []string{
+			"insert into src values('B', 3)",
+		})
+		// Wait for context to expire and then send the row.
+		// This will cause the copier to abort and go back to catchup mode.
+		<-ctx.Done()
+		// Do this no more than once.
+		vstreamRowsSendHook = nil
+	}
+
+	vstreamHook = func(context.Context) {
+		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
+		// This is because waitRetryTime is set to 10ms.
+		time.Sleep(50 * time.Millisecond)
+		// Do this no more than once.
+		vstreamHook = nil
+	}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		"/insert into _vt.vreplication",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"insert into dst(idc,val) values ('a',1)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"a\\" > ' where vrepl_id=.*`,
+		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
+		"insert into dst(idc,val) values ('B',3)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"B\\" > ' where vrepl_id=.*`,
+		"insert into dst(idc,val) values ('c',2)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:VARCHAR > rows:<lengths:1 values:\\"c\\" > ' where vrepl_id=.*`,
+		"/delete from _vt.copy_state.*dst",
+		"/update _vt.vreplication set state='Running'",
+	})
+	expectData(t, "dst", [][]string{
+		{"a", "1"},
+		{"B", "3"},
+		{"c", "2"},
+	})
+}
+
+// TestPlayerCopyVarcharPKCaseSensitiveCollation tests the copy/catchup phase for a table with varbinary columns
+// (which has a case sensitive collation with upper case alphabets below lower case in sort order)
+func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	savedPacketSize := *vstreamer.PacketSize
+	// PacketSize of 1 byte will send at most one row at a time.
+	*vstreamer.PacketSize = 1
+	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+
+	savedCopyTimeout := copyTimeout
+	// copyTimeout should be low enough to have time to send one row.
+	copyTimeout = 500 * time.Millisecond
+	defer func() { copyTimeout = savedCopyTimeout }()
+
+	savedWaitRetryTime := waitRetryTime
+	// waitRetry time should be very low to cause the wait loop to execute multipel times.
+	waitRetryTime = 10 * time.Millisecond
+	defer func() { waitRetryTime = savedWaitRetryTime }()
+
+	execStatements(t, []string{
+		"create table src(id int, idc varbinary(20), idc2 varbinary(20), val int, primary key(id,idc,idc2))",
+		"insert into src values(1, 'a', 'a', 1), (1, 'c', 'c', 2)",
+		fmt.Sprintf("create table %s.dst(id int, idc varbinary(20), idc2 varbinary(20), val int, primary key(id,idc,idc2))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	count := 0
+	vstreamRowsSendHook = func(ctx context.Context) {
+		defer func() { count++ }()
+		// Allow the first two calls to go through: field info and one row.
+		if count <= 1 {
+			return
+		}
+		// Insert a row with PK which is < the lastPK till now because of the utf8mb4 collation
+		execStatements(t, []string{
+			"insert into src values(1, 'B', 'B', 3)",
+		})
+		// Wait for context to expire and then send the row.
+		// This will cause the copier to abort and go back to catchup mode.
+		<-ctx.Done()
+		// Do this no more than once.
+		vstreamRowsSendHook = nil
+	}
+
+	vstreamHook = func(context.Context) {
+		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
+		// This is because waitRetryTime is set to 10ms.
+		time.Sleep(50 * time.Millisecond)
+		// Do this no more than once.
+		vstreamHook = nil
+	}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		"/insert into _vt.vreplication",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"insert into dst(id,idc,idc2,val) values (1,'a','a',1)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > fields:<name:\\"idc\\" type:VARBINARY > fields:<name:\\"idc2\\" type:VARBINARY > rows:<lengths:1 lengths:1 lengths:1 values:\\"1aa\\" > ' where vrepl_id=.*`,
+		`insert into dst(id,idc,idc2,val) select 1, 'B', 'B', 3 from dual where (1,'B','B') <= (1,'a','a')`,
+		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > fields:<name:\\"idc\\" type:VARBINARY > fields:<name:\\"idc2\\" type:VARBINARY > rows:<lengths:1 lengths:1 lengths:1 values:\\"1cc\\" > ' where vrepl_id=.*`,
+		"/delete from _vt.copy_state.*dst",
+		"/update _vt.vreplication set state='Running'",
+	})
+	expectData(t, "dst", [][]string{
+		{"1", "B", "B", "3"},
+		{"1", "a", "a", "1"},
+		{"1", "c", "c", "2"},
+	})
+}
+
+// TestPlayerCopyTablesWithFK validates that vreplication disables foreign keys during the copy phase
 func TestPlayerCopyTablesWithFK(t *testing.T) {
 	testForeignKeyQueries = true
 	defer func() {
