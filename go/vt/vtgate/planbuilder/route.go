@@ -201,7 +201,7 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	for _, order := range orderBy {
 		colNumber := -1
 		switch expr := order.Expr.(type) {
-		case *sqlparser.SQLVal:
+		case *sqlparser.Literal:
 			var err error
 			if colNumber, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
 				return nil, err
@@ -243,7 +243,7 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 // If it's a scatter query, the rows returned will be
 // more than the upper limit, but enough for the limit
 // primitive to chop off where needed.
-func (rb *route) SetUpperLimit(count *sqlparser.SQLVal) {
+func (rb *route) SetUpperLimit(count sqlparser.Expr) {
 	rb.Select.SetLimit(&sqlparser.Limit{Rowcount: count})
 }
 
@@ -284,7 +284,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
-						Expr: sqlparser.NewIntVal([]byte{'1'}),
+						Expr: sqlparser.NewIntLiteral([]byte{'1'}),
 					},
 				})
 			}

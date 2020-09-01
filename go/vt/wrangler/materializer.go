@@ -783,8 +783,8 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.keyrange}}"))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte(vindexName))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte("{{.keyrange}}"))})
 				sel.Where = &sqlparser.Where{
 					Type: sqlparser.WhereStr,
 					Expr: &sqlparser.FuncExpr{

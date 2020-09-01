@@ -51,48 +51,48 @@ func TestValEqual(t *testing.T) {
 		in1: newValArg(":aa"),
 		in2: newValArg(":bb"),
 	}, {
-		in1: newStrVal("aa"),
-		in2: newStrVal("aa"),
+		in1: newStrLiteral("aa"),
+		in2: newStrLiteral("aa"),
 		out: true,
 	}, {
-		in1: newStrVal("11"),
-		in2: newHexVal("3131"),
+		in1: newStrLiteral("11"),
+		in2: newHexLiteral("3131"),
 		out: true,
 	}, {
-		in1: newHexVal("3131"),
-		in2: newStrVal("11"),
+		in1: newHexLiteral("3131"),
+		in2: newStrLiteral("11"),
 		out: true,
 	}, {
-		in1: newHexVal("3131"),
-		in2: newHexVal("3131"),
+		in1: newHexLiteral("3131"),
+		in2: newHexLiteral("3131"),
 		out: true,
 	}, {
-		in1: newHexVal("3131"),
-		in2: newHexVal("3132"),
+		in1: newHexLiteral("3131"),
+		in2: newHexLiteral("3132"),
 		out: false,
 	}, {
-		in1: newHexVal("313"),
-		in2: newHexVal("3132"),
+		in1: newHexLiteral("313"),
+		in2: newHexLiteral("3132"),
 		out: false,
 	}, {
-		in1: newHexVal("3132"),
-		in2: newHexVal("313"),
+		in1: newHexLiteral("3132"),
+		in2: newHexLiteral("313"),
 		out: false,
 	}, {
-		in1: newIntVal("313"),
-		in2: newHexVal("3132"),
+		in1: newIntLiteral("313"),
+		in2: newHexLiteral("3132"),
 		out: false,
 	}, {
-		in1: newHexVal("3132"),
-		in2: newIntVal("313"),
+		in1: newHexLiteral("3132"),
+		in2: newIntLiteral("313"),
 		out: false,
 	}, {
-		in1: newIntVal("313"),
-		in2: newIntVal("313"),
+		in1: newIntLiteral("313"),
+		in2: newIntLiteral("313"),
 		out: true,
 	}, {
-		in1: newIntVal("313"),
-		in2: newIntVal("314"),
+		in1: newIntLiteral("313"),
+		in2: newIntLiteral("314"),
 		out: false,
 	}}
 	for _, tc := range testcases {
@@ -103,18 +103,18 @@ func TestValEqual(t *testing.T) {
 	}
 }
 
-func newStrVal(in string) *sqlparser.SQLVal {
-	return sqlparser.NewStrVal([]byte(in))
+func newStrLiteral(in string) *sqlparser.Literal {
+	return sqlparser.NewStrLiteral([]byte(in))
 }
 
-func newIntVal(in string) *sqlparser.SQLVal {
-	return sqlparser.NewIntVal([]byte(in))
+func newIntLiteral(in string) *sqlparser.Literal {
+	return sqlparser.NewIntLiteral([]byte(in))
 }
 
-func newHexVal(in string) *sqlparser.SQLVal {
-	return sqlparser.NewHexVal([]byte(in))
+func newHexLiteral(in string) *sqlparser.Literal {
+	return sqlparser.NewHexLiteral([]byte(in))
 }
 
-func newValArg(in string) *sqlparser.SQLVal {
-	return sqlparser.NewValArg([]byte(in))
+func newValArg(in string) sqlparser.Expr {
+	return sqlparser.NewArgument([]byte(in))
 }
