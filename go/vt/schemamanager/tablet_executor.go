@@ -284,6 +284,7 @@ func (exec *TabletExecutor) executeOnAllTablets(
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 		}
+		exec.wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
 		fmt.Println(onlineDDL.UUID)
 		return
 	}
