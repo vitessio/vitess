@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -85,18 +87,14 @@ func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 // the underlying primitive that it doesn't need to return more rows than
 // specified.
 func (l *limit) SetLimit(limit *sqlparser.Limit) error {
-	count, ok := limit.Rowcount.(*sqlparser.SQLVal)
-	if !ok {
-		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
-	}
-	pv, err := sqlparser.NewPlanValue(count)
+	pv, err := sqlparser.NewPlanValue(limit.Rowcount)
 	if err != nil {
-		return err
+		return vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
 	l.elimit.Count = pv
 
 	switch offset := limit.Offset.(type) {
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		pv, err = sqlparser.NewPlanValue(offset)
 		if err != nil {
 			return err
@@ -108,12 +106,12 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
 	}
 
-	l.input.SetUpperLimit(sqlparser.NewValArg([]byte(":__upper_limit")))
+	l.input.SetUpperLimit(sqlparser.NewArgument([]byte(":__upper_limit")))
 	return nil
 }
 
 // SetUpperLimit satisfies the builder interface.
 // This is a no-op because we actually call SetLimit for this primitive.
 // In the future, we may have to honor this call for subqueries.
-func (l *limit) SetUpperLimit(count *sqlparser.SQLVal) {
+func (l *limit) SetUpperLimit(count sqlparser.Expr) {
 }

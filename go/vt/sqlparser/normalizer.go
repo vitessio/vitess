@@ -33,11 +33,10 @@ import (
 // treated as distinct.
 func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
 	nz := newNormalizer(stmt, bindVars, prefix)
-	_ = Walk(nz.WalkStatement, stmt)
+	Rewrite(stmt, nz.WalkStatement, nil)
 }
 
 type normalizer struct {
-	stmt     Statement
 	bindVars map[string]*querypb.BindVariable
 	prefix   string
 	reserved map[string]struct{}
@@ -47,7 +46,6 @@ type normalizer struct {
 
 func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
 	return &normalizer{
-		stmt:     stmt,
 		bindVars: bindVars,
 		prefix:   prefix,
 		reserved: GetBindvars(stmt),
@@ -59,57 +57,57 @@ func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, pr
 // WalkStatement is the top level walk function.
 // If it encounters a Select, it switches to a mode
 // where variables are deduped.
-func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
-	switch node := node.(type) {
+func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
+	switch node := cursor.Node().(type) {
 	// no need to normalize the statement types
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, *DDL, *SRollback, *Release, *OtherAdmin, *OtherRead:
-		return false, nil
+		return false
 	case *Select:
-		_ = Walk(nz.WalkSelect, node)
+		Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
-		return false, nil
-	case *SQLVal:
-		nz.convertSQLVal(node)
+		return false
+	case *Literal:
+		nz.convertLiteral(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *ColName, TableName:
-		// Common node types that never contain SQLVals or ListArgs but create a lot of object
+		// Common node types that never contain Literal or ListArgs but create a lot of object
 		// allocations.
-		return false, nil
+		return false
 	case *ConvertType: // we should not rewrite the type description
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // WalkSelect normalizes the AST in Select mode.
-func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
-	switch node := node.(type) {
-	case *SQLVal:
-		nz.convertSQLValDedup(node)
+func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *Literal:
+		nz.convertLiteralDedup(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *ColName, TableName:
-		// Common node types that never contain SQLVals or ListArgs but create a lot of object
+		// Common node types that never contain Literals or ListArgs but create a lot of object
 		// allocations.
-		return false, nil
+		return false
 	case OrderBy, GroupBy:
 		// do not make a bind var for order by column_position
-		return false, nil
+		return false
 	case *ConvertType:
 		// we should not rewrite the type description
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
-func (nz *normalizer) convertSQLValDedup(node *SQLVal) {
+func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	// If value is too long, don't dedup.
 	// Such values are most likely not for vindexes.
 	// We save a lot of CPU because we avoid building
 	// the key for them.
 	if len(node.Val) > 256 {
-		nz.convertSQLVal(node)
+		nz.convertLiteral(node, cursor)
 		return
 	}
 
@@ -138,12 +136,11 @@ func (nz *normalizer) convertSQLValDedup(node *SQLVal) {
 	}
 
 	// Modify the AST node to a bindvar.
-	node.Type = ValArg
-	node.Val = append([]byte(":"), bvname...)
+	cursor.Replace(NewArgument([]byte(":" + bvname)))
 }
 
-// convertSQLVal converts an SQLVal without the dedup.
-func (nz *normalizer) convertSQLVal(node *SQLVal) {
+// convertLiteral converts an Literal without the dedup.
+func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 	bval := nz.sqlToBindvar(node)
 	if bval == nil {
 		return
@@ -152,8 +149,7 @@ func (nz *normalizer) convertSQLVal(node *SQLVal) {
 	bvname := nz.newName()
 	nz.bindVars[bvname] = bval
 
-	node.Type = ValArg
-	node.Val = append([]byte(":"), bvname...)
+	cursor.Replace(NewArgument([]byte(":" + bvname)))
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -191,7 +187,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 }
 
 func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
-	if node, ok := node.(*SQLVal); ok {
+	if node, ok := node.(*Literal); ok {
 		var v sqltypes.Value
 		var err error
 		switch node.Type {
@@ -231,13 +227,11 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *ColName, TableName:
-			// Common node types that never contain SQLVals or ListArgs but create a lot of object
+			// Common node types that never contain expressions but create a lot of object
 			// allocations.
 			return false, nil
-		case *SQLVal:
-			if node.Type == ValArg {
-				bindvars[string(node.Val[1:])] = struct{}{}
-			}
+		case Argument:
+			bindvars[string(node[1:])] = struct{}{}
 		case ListArg:
 			bindvars[string(node[2:])] = struct{}{}
 		}

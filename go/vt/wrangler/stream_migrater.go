@@ -507,7 +507,7 @@ func (sm *streamMigrater) templatizeKeyRange(ctx context.Context, rule *binlogda
 		if !ok {
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
-		val, ok := aliased.Expr.(*sqlparser.SQLVal)
+		val, ok := aliased.Expr.(*sqlparser.Literal)
 		if !ok {
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
@@ -524,8 +524,8 @@ func (sm *streamMigrater) templatizeKeyRange(ctx context.Context, rule *binlogda
 		Name: sqlparser.NewColIdent("in_keyrange"),
 		Exprs: sqlparser.SelectExprs{
 			&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]}},
-			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vtable.ColumnVindexes[0].Type))},
-			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.}}"))},
+			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte(vtable.ColumnVindexes[0].Type))},
+			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte("{{.}}"))},
 		},
 	}
 	sel.AddWhere(inkr)
