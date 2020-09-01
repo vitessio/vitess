@@ -182,7 +182,7 @@ func checkCancelMigration(t *testing.T, uuid string) {
 
 // checkRetryMigration attempts to retry a migration, and expects rejection
 func checkRetryMigration(t *testing.T, uuid string, expectSuccess bool) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
+	result, err := clusterInstance.VtctlclientProcess.OnlineDDLRetryMigration(keyspaceName, uuid)
 	assert.NoError(t, err)
 	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
 	var r *regexp.Regexp
