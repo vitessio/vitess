@@ -297,8 +297,8 @@ func TestDbNameOverride(t *testing.T) {
 	qr, err := conn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
 	require.Nil(t, err)
-	require.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
-	require.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 }
 
 func TestInformationSchemaQuery(t *testing.T) {
@@ -310,13 +310,13 @@ func TestInformationSchemaQuery(t *testing.T) {
 
 	qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'ks'", 1000, true)
 	require.Nil(t, err)
-	require.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
-	require.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 
 	qr, err = conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'vt_ks'", 1000, true)
 	require.Nil(t, err)
-	require.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
-	require.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
