@@ -184,9 +184,11 @@ func checkRecentMigrations(t *testing.T, uuid string, expectStatusRegexp *regexp
 // checkCancelMigration attempts to cancel a migration, and expects rejection
 func checkCancelMigration(t *testing.T, uuid string) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
+	fmt.Println("# 'vtctlclient OnlineDDL cancel <uuid>' output (for debug purposes):")
+	fmt.Println(result)
 	assert.NoError(t, err)
 	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
-	m := regexp.MustCompile("\b0\b").FindAllString(result, -1)
+	m := regexp.MustCompile(`\b0\b`).FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
@@ -199,9 +201,9 @@ func checkRetryMigration(t *testing.T, uuid string, expectSuccess bool) {
 	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
 	var r *regexp.Regexp
 	if expectSuccess {
-		r = regexp.MustCompile("\b1\b")
+		r = regexp.MustCompile(`\b1\b`)
 	} else {
-		r = regexp.MustCompile("\b0\b")
+		r = regexp.MustCompile(`\b0\b`)
 	}
 	m := r.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
