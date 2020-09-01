@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"golang.org/x/net/context"
@@ -58,7 +60,7 @@ type vreplicator struct {
 	stats *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
-	tableKeys map[string][]string
+	pkInfoMap map[string][]*PrimaryKeyInfo
 
 	originalFKCheckSetting int64
 }
@@ -127,11 +129,11 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 }
 
 func (vr *vreplicator) replicate(ctx context.Context) error {
-	tableKeys, err := vr.buildTableKeys(ctx)
+	pkInfo, err := vr.buildPkInfoMap(ctx)
 	if err != nil {
 		return err
 	}
-	vr.tableKeys = tableKeys
+	vr.pkInfoMap = pkInfo
 	if err := vr.getSettingFKCheck(); err != nil {
 		return err
 	}
@@ -185,20 +187,67 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 }
 
-func (vr *vreplicator) buildTableKeys(ctx context.Context) (map[string][]string, error) {
+// PrimaryKeyInfo is used to store charset and collation for primary keys where applicable
+type PrimaryKeyInfo struct {
+	Name      string
+	CharSet   string
+	Collation string
+}
+
+func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*PrimaryKeyInfo, error) {
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
 		return nil, err
 	}
-	tableKeys := make(map[string][]string)
+	queryTemplate := "select character_set_name, collation_name,column_name,data_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	pkInfoMap := make(map[string][]*PrimaryKeyInfo)
 	for _, td := range schema.TableDefinitions {
-		if len(td.PrimaryKeyColumns) != 0 {
-			tableKeys[td.Name] = td.PrimaryKeyColumns
-		} else {
-			tableKeys[td.Name] = td.Columns
+
+		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
+		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
+		if err != nil {
+			return nil, err
 		}
+		if len(qr.Rows) > 0 && len(qr.Fields) != 4 {
+			return nil, fmt.Errorf("incorrect result returned for collation query")
+		}
+
+		var pks []string
+		if len(td.PrimaryKeyColumns) != 0 {
+			pks = td.PrimaryKeyColumns
+		} else {
+			pks = td.Columns
+		}
+		var pkInfos []*PrimaryKeyInfo
+		for _, pk := range pks {
+			charSet := ""
+			collation := ""
+			for _, row := range qr.Rows {
+				columnName := row[2].ToString()
+				if strings.EqualFold(columnName, pk) {
+					var currentField *querypb.Field
+					for _, field := range td.Fields {
+						if field.Name == pk {
+							currentField = field
+							break
+						}
+					}
+					if currentField != nil && sqltypes.IsText(currentField.Type) {
+						charSet = row[0].ToString()
+						collation = row[1].ToString()
+					}
+					break
+				}
+			}
+			pkInfos = append(pkInfos, &PrimaryKeyInfo{
+				Name:      pk,
+				CharSet:   charSet,
+				Collation: collation,
+			})
+		}
+		pkInfoMap[td.Name] = pkInfos
 	}
-	return tableKeys, nil
+	return pkInfoMap, nil
 }
 
 func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
