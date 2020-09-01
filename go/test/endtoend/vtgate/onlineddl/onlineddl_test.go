@@ -44,12 +44,13 @@ var (
 		msg varchar(64),
 		PRIMARY KEY (id)
 		) ENGINE=InnoDB;`
-	alterTable = `
+	alterTableStatament = `
 		ALTER WITH 'gh-ost' TABLE %s
 		MODIFY id BIGINT UNSIGNED NOT NULL,
 		ADD COLUMN ghost_col INT NOT NULL,
 		ADD INDEX idx_msg(msg)`
 	statusCompleteRegexp = regexp.MustCompile(`\bcomplete\b`)
+	statusFailedRegexp   = regexp.MustCompile(`\bfailed\b`)
 )
 
 func TestMain(m *testing.M) {
@@ -99,8 +100,10 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
-	testWithAlterSchema(t)
+	testWithValidAlterSchema(t, true)
+	testWithValidAlterSchema(t, false)
 }
 
 func testWithInitialSchema(t *testing.T) {
@@ -114,27 +117,31 @@ func testWithInitialSchema(t *testing.T) {
 
 	// Check if 4 tables are created
 	checkTables(t, totalTableCount)
-	checkTables(t, totalTableCount)
 }
 
 // testWithAlterSchema if we alter schema and then apply, the resultant schema should match across shards
-func testWithAlterSchema(t *testing.T) {
+func testWithValidAlterSchema(t *testing.T, expectSuccess bool) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
-	sqlQuery := fmt.Sprintf(alterTable, tableName)
+	sqlQuery := fmt.Sprintf(alterTableStatament, tableName)
 	uuid, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery)
 	require.Nil(t, err)
 	uuid = strings.TrimSpace(uuid)
 	require.NotEmpty(t, uuid)
 	// Migration is asynchronous. Give it some time.
 	time.Sleep(time.Second * 30)
-	checkRecentMigrations(t, tableName, uuid)
+	if expectSuccess {
+		checkRecentMigrations(t, uuid, statusCompleteRegexp)
+	} else {
+		checkRecentMigrations(t, uuid, statusFailedRegexp)
+	}
 	checkMigratedTable(t, tableName)
 }
 
 // checkTables checks the number of tables in the first two shards.
 func checkTables(t *testing.T, count int) {
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0], count)
-	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0], count)
+	for i := range clusterInstance.Keyspaces[0].Shards {
+		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], count)
+	}
 }
 
 // checkTablesCount checks the number of tables in the given tablet
@@ -144,30 +151,32 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	assert.Equal(t, len(queryResult.Rows), count)
 }
 
-func checkRecentMigrations(t *testing.T, tableName, uuid string) {
+func checkRecentMigrations(t *testing.T, uuid string, expectStatusRegexp *regexp.Regexp) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
 	assert.NoError(t, err)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, tableName))
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
 	// The word "complete" appears in the column `completed_timestamp`. So we use a regexp to
 	// ensure we match exact full word
-	m := statusCompleteRegexp.FindAllString(result, -1)
+	m := expectStatusRegexp.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
 func checkMigratedTable(t *testing.T, tableName string) {
 	expect := "ghost_col"
-	checkTableCreateContains(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0], tableName, expect)
+	for i := range clusterInstance.Keyspaces[0].Shards {
+		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
+		assert.True(t, strings.Contains(createStatement, expect))
+	}
 }
 
-// checkTableCreateContains checks if table's CREATE TABLE statement contains a given test
-func checkTableCreateContains(t *testing.T, tablet *cluster.Vttablet, tableName string, expect string) {
+// getCreateTableStatement returns the CREATE TABLE statement for a given table
+func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 	require.Nil(t, err)
 
 	assert.Equal(t, len(queryResult.Rows), 1)
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
-	createStatement := queryResult.Rows[0][1].ToString()
-	assert.True(t, strings.Contains(createStatement, expect))
+	statement = queryResult.Rows[0][1].ToString()
+	return statement
 }
