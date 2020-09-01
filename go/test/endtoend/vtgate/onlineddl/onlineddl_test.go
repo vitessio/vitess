@@ -45,10 +45,9 @@ var (
 		) ENGINE=InnoDB;`
 	alterTable = `
 		ALTER WITH 'gh-ost' TABLE %s
-		ADD COLUMN new_id bigint(20) NOT NULL AUTO_INCREMENT FIRST,
-		DROP PRIMARY KEY,
-		ADD PRIMARY KEY (new_id),
-		ADD INDEX idx_column(%s)`
+		MODIFY id BIGINT UNSIGNED NOT NULL,
+		ADD COLUMN ghost_col INT NOT NULL,
+		ADD INDEX idx_msg(msg)`
 )
 
 func TestMain(m *testing.M) {
@@ -119,12 +118,14 @@ func testWithInitialSchema(t *testing.T) {
 // testWithAlterSchema if we alter schema and then apply, the resultant schema should match across shards
 func testWithAlterSchema(t *testing.T) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
-	sqlQuery := fmt.Sprintf(alterTable, tableName, "msg")
-	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
+	sqlQuery := fmt.Sprintf(alterTable, tableName)
+	uuid, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery)
 	require.Nil(t, err)
+	uuid = strings.TrimSpace(uuid)
+	require.NotEmpty(t, uuid)
 	// Migration is asynchronous. Give it some time.
 	time.Sleep(time.Second * 30)
-	checkRecentMigrations(t, tableName)
+	checkRecentMigrations(t, tableName, uuid)
 	checkMigratedTable(t, tableName)
 }
 
@@ -141,15 +142,16 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	assert.Equal(t, len(queryResult.Rows), count)
 }
 
-func checkRecentMigrations(t *testing.T, tableName string) {
+func checkRecentMigrations(t *testing.T, tableName, uuid string) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
+	fmt.Printf("====uuid=%s\n", uuid)
 	fmt.Println(result)
 	assert.NoError(t, err)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
 func checkMigratedTable(t *testing.T, tableName string) {
-	expect := "new_id"
+	expect := "ghost_col"
 	checkTableCreateContains(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0], tableName, expect)
 }
 
@@ -161,7 +163,7 @@ func checkTableCreateContains(t *testing.T, tablet *cluster.Vttablet, tableName 
 	assert.Equal(t, len(queryResult.Rows), 1)
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	createStatement := queryResult.Rows[0][1].ToString()
-	fmt.Println(createStatement)
-	assert.Equal(t, expect, createStatement)
+	fmt.Println(createStatement)             // ~~~
+	assert.Equal(t, expect, createStatement) // ~~~
 	assert.True(t, strings.Contains(createStatement, expect))
 }
