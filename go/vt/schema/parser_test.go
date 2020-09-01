@@ -40,6 +40,7 @@ func TestParseAlterTableOptions(t *testing.T) {
 		"alter with 'gh-ost' '--some-option=5 --another-option=false' table scm.t add column i int, drop column d": {schema: "scm", table: "t", options: "add column i int, drop column d"},
 		"alter with 'gh-ost' '--initially-drop-old-table' table scm.t add column i int, drop column d":             {schema: "scm", table: "t", options: "add column i int, drop column d"},
 		"alter with 'gh-ost' '--initially-drop-old-table --execute' table scm.t add column i int, drop column d":   {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"ALTER WITH 'gh-ost' TABLE scm.t ADD COLUMN i int, DROP COLUMN d":                                          {schema: "scm", table: "t", options: "ADD COLUMN i int, DROP COLUMN d"},
 	}
 	for query, expect := range tests {
 		schema, table, options := ParseAlterTableOptions(query)
@@ -57,13 +58,13 @@ func TestParseAlterTableOptions(t *testing.T) {
 
 func TestRemoveOnlineDDLHints(t *testing.T) {
 	tests := map[string]string{
-		"ALTER TABLE my_table DROP COLUMN i":                              "ALTER TABLE `my_table` DROP COLUMN i",
-		"   ALTER     TABLE    my_table     DROP COLUMN i":                "ALTER TABLE `my_table` DROP COLUMN i",
-		"ALTER WITH_GHOST TABLE my_table DROP COLUMN i":                   "ALTER TABLE `my_table` DROP COLUMN i",
-		"ALTER WITH_PT TABLE `my_table` DROP COLUMN i":                    "ALTER TABLE `my_table` DROP COLUMN i",
-		"ALTER WITH_PT TABLE scm.`my_table` DROP COLUMN i":                "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
-		"ALTER WITH_PT TABLE `scm`.`my_table` DROP COLUMN i":              "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
-		"ALTER    WITH_GHOST   TABLE   `scm`.`my_table`    DROP COLUMN i": "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+		"ALTER TABLE my_table DROP COLUMN i":                                      "ALTER TABLE `my_table` DROP COLUMN i",
+		"   ALTER     TABLE    my_table     DROP COLUMN i":                        "ALTER TABLE `my_table` DROP COLUMN i",
+		"ALTER WITH 'gh-ost' TABLE my_table DROP COLUMN i":                        "ALTER TABLE `my_table` DROP COLUMN i",
+		"ALTER WITH 'pt-osc' TABLE `my_table` DROP COLUMN i":                      "ALTER TABLE `my_table` DROP COLUMN i",
+		"ALTER WITH 'pt-osc' TABLE scm.`my_table` DROP COLUMN i":                  "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+		"ALTER WITH 'pt-osc' TABLE `scm`.`my_table` DROP COLUMN i":                "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+		"ALTER    WITH      'gh-ost'   TABLE   `scm`.`my_table`    DROP COLUMN i": "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
 	}
 	for query, expect := range tests {
 		normalizedQuery := RemoveOnlineDDLHints(query)
