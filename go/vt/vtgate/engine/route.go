@@ -400,9 +400,14 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 		keyspace = route.Keyspace.Name
 	}
 
+	bindVars[":__vtdbschema"] = sqltypes.StringBindVariable(keyspace)
 	destinations, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
-		return nil, nil, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", keyspace)
+		// Check with assigned route keyspace.
+		destinations, _, err = vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		if err != nil {
+			return nil, nil, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", keyspace)
+		}
 	}
 	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }
