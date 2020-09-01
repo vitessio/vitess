@@ -124,6 +124,7 @@ func testWithAlterSchema(t *testing.T) {
 	require.Nil(t, err)
 	// Migration is asynchronous. Give it some time.
 	time.Sleep(time.Second * 30)
+	checkRecentMigrations(t, tableName)
 	checkMigratedTable(t, tableName)
 }
 
@@ -138,6 +139,12 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, len(queryResult.Rows), count)
+}
+
+func checkRecentMigrations(t *testing.T, tableName string) {
+	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
+	fmt.Println(result)
+	assert.NoError(t, err)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
