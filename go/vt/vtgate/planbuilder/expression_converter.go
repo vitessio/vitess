@@ -33,7 +33,7 @@ type expressionConverter struct {
 
 func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 	switch node := astExpr.(type) {
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		//set autocommit = 'on'
 		if node.Type == sqlparser.StrVal {
 			switch strings.ToLower(string(node.Val)) {

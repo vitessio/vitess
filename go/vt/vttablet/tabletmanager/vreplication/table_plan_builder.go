@@ -183,7 +183,7 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral([]byte(filter)))
 		query = buf.String()
 	case filter == ExcludeStr:
 		return nil, nil

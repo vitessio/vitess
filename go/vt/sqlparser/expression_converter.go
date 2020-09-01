@@ -28,14 +28,14 @@ var ErrExprNotSupported = fmt.Errorf("Expr Not Supported")
 //Convert converts between AST expressions and executable expressions
 func Convert(e Expr) (evalengine.Expr, error) {
 	switch node := e.(type) {
-	case *SQLVal:
+	case Argument:
+		return evalengine.NewBindVar(string(node[1:])), nil
+	case *Literal:
 		switch node.Type {
 		case IntVal:
 			return evalengine.NewLiteralIntFromBytes(node.Val)
 		case FloatVal:
 			return evalengine.NewLiteralFloat(node.Val)
-		case ValArg:
-			return evalengine.NewBindVar(string(node.Val[1:])), nil
 		case StrVal:
 			return evalengine.NewLiteralString(node.Val), nil
 		}

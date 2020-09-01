@@ -184,7 +184,7 @@ func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *ro
 			} else {
 				matchedExpr = node
 			}
-		case *sqlparser.SQLVal:
+		case *sqlparser.Literal:
 			if node.Type != sqlparser.IntVal {
 				continue
 			}
@@ -389,7 +389,7 @@ func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
 			if colNumber == -1 {
 				return errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
 			}
-		case *sqlparser.SQLVal:
+		case *sqlparser.Literal:
 			num, err := ResultFromNumber(oa.resultColumns, node)
 			if err != nil {
 				return err
@@ -438,7 +438,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 		// Identify the order by column.
 		var orderByCol *column
 		switch expr := order.Expr.(type) {
-		case *sqlparser.SQLVal:
+		case *sqlparser.Literal:
 			num, err := ResultFromNumber(oa.resultColumns, expr)
 			if err != nil {
 				return nil, err
@@ -501,7 +501,7 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 }
 
 // SetUpperLimit satisfies the builder interface.
-func (oa *orderedAggregate) SetUpperLimit(count *sqlparser.SQLVal) {
+func (oa *orderedAggregate) SetUpperLimit(count sqlparser.Expr) {
 	oa.input.SetUpperLimit(count)
 }
 

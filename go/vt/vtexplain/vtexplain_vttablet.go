@@ -513,7 +513,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 						case sqlparser.ValTuple:
 							for _, val := range values {
 								switch v := val.(type) {
-								case *sqlparser.SQLVal:
+								case *sqlparser.Literal:
 									inVal = append(inVal, v.Val)
 								}
 							}
@@ -591,7 +591,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Typ
 		// As a shortcut, functions are integral types
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT32)
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		colNames = append(colNames, sqlparser.String(node))
 		switch node.Type {
 		case sqlparser.IntVal:

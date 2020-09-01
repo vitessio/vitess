@@ -48,7 +48,7 @@ func (c *concatenate) First() builder {
 	panic("implement me")
 }
 
-func (c *concatenate) SetUpperLimit(count *sqlparser.SQLVal) {
+func (c *concatenate) SetUpperLimit(count sqlparser.Expr) {
 	// not doing anything by design
 }
 
