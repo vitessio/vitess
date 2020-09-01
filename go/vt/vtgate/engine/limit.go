@@ -94,8 +94,9 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	if err != nil {
 		return err
 	}
-	if !l.Offset.IsNull() {
-		return fmt.Errorf("offset not supported for stream execute queries")
+	offset, err := l.fetchOffset(bindVars)
+	if err != nil {
+		return err
 	}
 
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count))
@@ -106,19 +107,31 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 				return err
 			}
 		}
-		if len(qr.Rows) == 0 {
+		inputSize := len(qr.Rows)
+		if inputSize == 0 {
 			return nil
 		}
 
+		// we've still not seen all rows we need to see before we can return anything to the client
+		if offset > 0 {
+			if inputSize <= offset {
+				// not enough to return anything yet
+				offset -= inputSize
+				return nil
+			}
+			qr.Rows = qr.Rows[offset:]
+			offset = 0
+		}
+
 		if count == 0 {
-			// Unreachable: this is just a failsafe.
 			return io.EOF
 		}
 
 		// reduce count till 0.
 		result := &sqltypes.Result{Rows: qr.Rows}
-		if count > len(result.Rows) {
-			count -= len(result.Rows)
+		resultSize := len(result.Rows)
+		if count > resultSize {
+			count -= resultSize
 			return callback(result)
 		}
 		result.Rows = result.Rows[:count]
@@ -140,7 +153,7 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return nil
 }
 
-// GetFields satisfies the Primtive interface.
+// GetFields implements the Primitive interface.
 func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return l.Input.GetFields(vcursor, bindVars)
 }
@@ -150,11 +163,16 @@ func (l *Limit) Inputs() []Primitive {
 	return []Primitive{l.Input}
 }
 
+//NeedsTransaction implements the Primitive interface.
 func (l *Limit) NeedsTransaction() bool {
 	return l.Input.NeedsTransaction()
 }
 
 func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
+	if l.Count.IsNull() {
+		return 0, nil
+	}
+
 	resolved, err := l.Count.ResolveValue(bindVars)
 	if err != nil {
 		return 0, err
