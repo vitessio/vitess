@@ -177,7 +177,7 @@ func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 }
 
 // SetUpperLimit satisfies the builder interface.
-func (vf *vindexFunc) SetUpperLimit(_ *sqlparser.SQLVal) {
+func (vf *vindexFunc) SetUpperLimit(_ sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.
