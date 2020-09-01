@@ -186,6 +186,8 @@ var routeName = map[RouteOpcode]string{
 
 var (
 	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
+	// BvSchemaName is bind variable to be sent down to vttablet for schema name.
+	BvSchemaName = "__vtschemaname"
 )
 
 // MarshalJSON serializes the RouteOpcode as a JSON string.
@@ -391,6 +393,7 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 		}
 		if keyspace == "" {
 			keyspace = result.Value().ToString()
+			bindVars[BvSchemaName] = sqltypes.StringBindVariable(keyspace)
 		} else if other := result.Value().ToString(); keyspace != other {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't use more than one keyspace per system table query - found both '%s' and '%s'", keyspace, other)
 		}
@@ -402,7 +405,11 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 
 	destinations, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
-		return nil, nil, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", keyspace)
+		// Check with assigned route keyspace.
+		destinations, _, err = vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		if err != nil {
+			return nil, nil, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", keyspace)
+		}
 	}
 	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }
