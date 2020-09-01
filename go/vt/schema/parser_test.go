@@ -65,6 +65,19 @@ func TestRemoveOnlineDDLHints(t *testing.T) {
 		"ALTER WITH 'pt-osc' TABLE scm.`my_table` DROP COLUMN i":                  "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
 		"ALTER WITH 'pt-osc' TABLE `scm`.`my_table` DROP COLUMN i":                "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
 		"ALTER    WITH      'gh-ost'   TABLE   `scm`.`my_table`    DROP COLUMN i": "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+		`
+		ALTER WITH 'gh-ost'
+		TABLE scm.my_table
+		DROP COLUMN i
+		`: "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
+		`
+		ALTER
+		WITH
+		'gh-ost'
+		TABLE scm.my_table DROP COLUMN i,
+		ADD j INT
+		`: "ALTER TABLE `scm`.`my_table` DROP COLUMN i," + `
+		ADD j INT`,
 	}
 	for query, expect := range tests {
 		normalizedQuery := RemoveOnlineDDLHints(query)
