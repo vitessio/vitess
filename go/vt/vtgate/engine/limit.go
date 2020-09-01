@@ -99,7 +99,9 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return err
 	}
 
-	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count))
+	// When offset is present, we hijack the limit value so we can calculate
+	// the offset in memory from the result of the scatter query with count + offset.
+	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
 	err = l.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
