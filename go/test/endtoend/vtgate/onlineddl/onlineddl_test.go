@@ -145,9 +145,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 func checkRecentMigrations(t *testing.T, tableName, uuid string) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
 	assert.NoError(t, err)
-	assert.Equal(t, clusterInstance.Keyspaces[0].Shards, strings.Count(result, tableName))
-	assert.Equal(t, clusterInstance.Keyspaces[0].Shards, strings.Count(result, uuid))
-	assert.Equal(t, clusterInstance.Keyspaces[0].Shards, strings.Count(result, "complete"))
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, tableName))
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, "complete"))
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
