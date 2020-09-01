@@ -320,7 +320,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		return vterrors.Wrap(err, "could not decode position")
 	}
 	if !curPos.AtLeast(pos) {
-		return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+		return fmt.Errorf("GTIDSet Mismatch: requested source position:%v, current target vrep position: %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 	}
 	uvs.pos = pos
 	return nil
