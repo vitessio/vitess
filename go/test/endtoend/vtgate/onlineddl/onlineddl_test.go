@@ -154,5 +154,6 @@ func checkTableCreateContains(t *testing.T, tablet *cluster.Vttablet, tableName 
 	assert.Equal(t, len(queryResult.Rows), 1)
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	createStatement := queryResult.Rows[0][1].ToString()
+	fmt.Println(createStatement)
 	assert.True(t, strings.Contains(createStatement, expect))
 }
