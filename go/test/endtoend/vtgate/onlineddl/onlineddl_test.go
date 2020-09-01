@@ -114,9 +114,6 @@ func testWithInitialSchema(t *testing.T) {
 	// Check if 4 tables are created
 	checkTables(t, totalTableCount)
 	checkTables(t, totalTableCount)
-
-	// Also match the vschema for those tablets
-	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
 }
 
 // testWithAlterSchema if we alter schema and then apply, the resultant schema should match across shards
@@ -127,19 +124,7 @@ func testWithAlterSchema(t *testing.T) {
 	require.Nil(t, err)
 	// Migration is asynchronous. Give it some time.
 	time.Sleep(time.Second * 30)
-	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
 	checkMigratedTable(t, tableName)
-}
-
-// matchSchema schema for supplied tablets should match
-func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
-	firstShardSchema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", firstTablet)
-	require.Nil(t, err)
-
-	secondShardSchema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", secondTablet)
-	require.Nil(t, err)
-
-	assert.Equal(t, firstShardSchema, secondShardSchema)
 }
 
 // checkTables checks the number of tables in the first two shards.
