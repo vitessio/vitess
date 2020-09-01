@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/golang/protobuf/proto"
@@ -265,6 +267,42 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 	return nil
 }
 
+// findPKs identifies PKs and removes them from the columns to do data comparison
+func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
+	var orderby sqlparser.OrderBy
+	for _, pk := range table.PrimaryKeyColumns {
+		found := false
+		for i, selExpr := range targetSelect.SelectExprs {
+			expr := selExpr.(*sqlparser.AliasedExpr).Expr
+			colname := ""
+			switch ct := expr.(type) {
+			case *sqlparser.ColName:
+				colname = ct.Name.String()
+			case *sqlparser.FuncExpr: //eg. weight_string()
+				//no-op
+			default:
+				log.Warningf("Not considering column %v for PK, type %v not handled", selExpr, ct)
+			}
+			if strings.EqualFold(pk, colname) {
+				td.comparePKs = append(td.comparePKs, td.compareCols[i])
+				// We'll be comparing pks separately. So, remove them from compareCols.
+				td.compareCols[i] = -1
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Unreachable.
+			return nil, fmt.Errorf("column %v not found in table %v", pk, table.Name)
+		}
+		orderby = append(orderby, &sqlparser.Order{
+			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
+			Direction: sqlparser.AscScr,
+		})
+	}
+	return orderby, nil
+}
+
 // buildTablePlan builds one tableDiffer.
 func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
 	statement, err := sqlparser.Parse(query)
@@ -354,27 +392,9 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		},
 	}
 
-	var orderby sqlparser.OrderBy
-	for _, pk := range table.PrimaryKeyColumns {
-		found := false
-		for i, selExpr := range targetSelect.SelectExprs {
-			colname := selExpr.(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
-			if pk == colname {
-				td.comparePKs = append(td.comparePKs, td.compareCols[i])
-				// We'll be comparing pks seperately. So, remove them from compareCols.
-				td.compareCols[i] = -1
-				found = true
-				break
-			}
-		}
-		if !found {
-			// Unreachable.
-			return nil, fmt.Errorf("column %v not found in table %v", pk, table.Name)
-		}
-		orderby = append(orderby, &sqlparser.Order{
-			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
-			Direction: sqlparser.AscScr,
-		})
+	orderby, err := findPKs(table, targetSelect, td)
+	if err != nil {
+		return nil, err
 	}
 	// Remove in_keyrange. It's not understood by mysql.
 	sourceSelect.Where = removeKeyrange(sel.Where)
