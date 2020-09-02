@@ -29,7 +29,7 @@ import (
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func TestVStreamZZZ(t *testing.T) {
+func TestVStreamFrom(t *testing.T) {
 	send1 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
 		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{
@@ -72,7 +72,7 @@ func TestVStreamZZZ(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "vstream * from t1 where pos > 'current' limit 2" //TODO pos > ""/"c, LIMIT
+	sql := "vstream * from t1"
 	result, err := vstreamEvents(executor, sql)
 	require.NoError(t, err)
 	want := &sqltypes.Result{

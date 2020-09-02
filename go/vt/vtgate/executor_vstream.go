@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -65,15 +64,12 @@ func (e *Executor) handleVStream(ctx context.Context, sql string, target querypb
 
 func getVStreamStartPos(stmt *sqlparser.VStream) (string, error) {
 	var colName, pos string
-	log.Infof("in getVStreamStartPos with where %v", stmt.Where)
 	if stmt.Where != nil {
 		switch v := stmt.Where.Expr.(type) {
 		case *sqlparser.ComparisonExpr:
 			if v.Operator == sqlparser.GreaterThanStr {
-				log.Infof("Found EqualStr")
 				switch c := v.Left.(type) {
 				case *sqlparser.ColName:
-					log.Infof("Found ColName %v: %v", c, reflect.TypeOf(v.Right))
 					switch val := v.Right.(type) {
 					case *sqlparser.SQLVal:
 						pos = string(val.Val)
@@ -97,6 +93,10 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 	tableName := stmt.Table.Name.CompliantName()
 	var pos string
 	var err error
+	gw := NewTabletGateway(ctx, vtgateHealthCheck /*discovery.Healthcheck*/, e.serv, e.cell)
+
+	srvResolver := srvtopo.NewResolver(e.serv, gw, e.cell)
+
 	limit := 10000
 	if stmt.Where != nil {
 		pos, err = getVStreamStartPos(stmt)
@@ -111,14 +111,31 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 		}
 	}
 	log.Infof("startVStream for %s.%s.%s, position %s, limit %d", keyspace, shard, tableName, pos, limit)
-	vgtid := &binlogdata.VGtid{
-		ShardGtids: []*binlogdata.ShardGtid{{
+	var shardGtids []*binlogdata.ShardGtid
+	if shard != "" {
+		shardGtid := &binlogdata.ShardGtid{
 			Keyspace: keyspace,
 			Shard:    shard,
 			Gtid:     pos,
-		}},
+		}
+		shardGtids = append(shardGtids, shardGtid)
+	} else {
+		_, _, shards, err := srvResolver.GetKeyspaceShards(ctx, keyspace, topodatapb.TabletType_MASTER)
+		if err != nil {
+			return err
+		}
+		for _, shard := range shards {
+			shardGtid := &binlogdata.ShardGtid{
+				Keyspace: keyspace,
+				Shard:    shard.Name,
+				Gtid:     pos,
+			}
+			shardGtids = append(shardGtids, shardGtid)
+		}
 	}
-	log.Infof("VGTID is %v", vgtid)
+	vgtid := &binlogdata.VGtid{
+		ShardGtids: shardGtids,
+	}
 	filter := &binlogdata.Filter{
 		Rules: []*binlogdata.Rule{{
 			Match:  tableName,
@@ -136,8 +153,6 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 			RowsAffected: 0,
 			Rows:         [][]sqltypes.Value{},
 		}
-		log.Infof("Events got: %v", evs)
-
 		for _, ev := range evs {
 			if numRows >= limit {
 				break
@@ -163,7 +178,6 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 			}
 		}
 		if numRows > 0 {
-			log.Infof("VStream Sending result to callback:%v", result)
 			err := callback(result)
 			numRows = 0
 			if err != nil {
@@ -173,9 +187,6 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 		}
 		return nil
 	}
-	gw := NewTabletGateway(ctx, vtgateHealthCheck /*discovery.Healthcheck*/, e.serv, e.cell)
-
-	srvResolver := srvtopo.NewResolver(e.serv, gw, e.cell)
 
 	vs := &vstream{
 		vgtid:      vgtid,
