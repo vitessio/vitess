@@ -221,6 +221,78 @@ func TestStreamBuffering(t *testing.T) {
 	}
 }
 
+func TestStreamLimitOffset(t *testing.T) {
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+
+	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
+	// such that the splitting of the Result into multiple Result responses gets tested.
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("1234"),
+		}, {
+			sqltypes.NewInt32(4),
+			sqltypes.NewVarChar("4567"),
+		}},
+	}})
+
+	sbc2.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(2),
+			sqltypes.NewVarChar("2345"),
+		}},
+	}})
+
+	results := make(chan *sqltypes.Result, 10)
+	err := executor.StreamExecute(
+		context.Background(),
+		"TestStreamLimitOffset",
+		NewSafeSession(masterSession),
+		"select id, textcol from user order by id limit 2 offset 2",
+		nil,
+		querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+		},
+		func(qr *sqltypes.Result) error {
+			results <- qr
+			return nil
+		},
+	)
+	close(results)
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("1234"),
+		}, {
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("foo"),
+		}},
+	}
+	var gotResults []*sqltypes.Result
+	for r := range results {
+		gotResults = append(gotResults, r)
+	}
+	res := gotResults[0]
+	for i := 1; i < len(gotResults); i++ {
+		res.Rows = append(res.Rows, gotResults[i].Rows...)
+	}
+	utils.MustMatch(t, wantResult, res, "")
+}
+
 func TestSelectLastInsertId(t *testing.T) {
 	masterSession.LastInsertId = 52
 	executor, _, _, _ := createLegacyExecutorEnv()
