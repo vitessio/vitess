@@ -45,6 +45,7 @@ const (
 		cleanup_timestamp timestamp NULL DEFAULT NULL,
 		migration_status varchar(128) NOT NULL,
 		log_path varchar(1024) NOT NULL,
+		artifacts varchar(1024) NOT NULL,
 		PRIMARY KEY (id),
 		UNIQUE KEY uuid_idx (migration_uuid),
 		KEY keyspace_shard_idx (keyspace,shard),
@@ -78,6 +79,11 @@ const (
 	`
 	sqlUpdateMigrationLogPath = `UPDATE %s.schema_migrations
 			SET log_path=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateArtifacts = `UPDATE %s.schema_migrations
+			SET artifacts=%a
 		WHERE
 			migration_uuid=%a
 	`

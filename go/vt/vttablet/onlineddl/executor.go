@@ -447,6 +447,14 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
 		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, ReadableTimestamp())
 
+		if err := e.updateArtifacts(ctx, onlineDDL.UUID,
+			fmt.Sprintf("_%s_gho", forceTableNames),
+			fmt.Sprintf("_%s_ghc", forceTableNames),
+			fmt.Sprintf("_%s_del", forceTableNames),
+		); err != nil {
+			return err
+		}
+
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		args := []string{
 			wrapperScriptFileName,
@@ -651,6 +659,13 @@ export MYSQL_PWD
 	runPTOSC := func(execute bool) error {
 		os.Setenv("MYSQL_PWD", onlineDDLPassword)
 		newTableName := fmt.Sprintf("_%s_%s_new", onlineDDL.UUID, ReadableTimestamp())
+
+		if err := e.updateArtifacts(ctx, onlineDDL.UUID,
+			fmt.Sprintf("_%s_del", newTableName),
+		); err != nil {
+			return err
+		}
+
 		executeFlag := "--dry-run"
 		if execute {
 			executeFlag = "--execute"
@@ -1117,6 +1132,24 @@ func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, host
 	)
 	bindVars := map[string]*querypb.BindVariable{
 		"log_path":       sqltypes.StringBindVariable(logPath),
+		"migration_uuid": sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts ...string) error {
+	bindArtifacts := strings.Join(artifacts, ",")
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateArtifacts, "_vt",
+		":artifacts",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"artifacts":      sqltypes.StringBindVariable(bindArtifacts),
 		"migration_uuid": sqltypes.StringBindVariable(uuid),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)
