@@ -806,7 +806,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, err
 		if targetRow == nil {
 			// no more rows from the target
 			// we know we have rows from source, drain, update count
-			wr.Logger().Errorf("Draining extra row(s) found on the source starting with: %v", sourceRow)
+			wr.Logger().Warningf("Draining extra row(s) found on the source starting with: %v", sourceRow)
 			count, err := sourceExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
