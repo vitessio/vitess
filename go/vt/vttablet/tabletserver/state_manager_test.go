@@ -80,6 +80,7 @@ func TestStateManagerServeMaster(t *testing.T) {
 	verifySubcomponent(t, 7, sm.tracker, testStateOpen)
 	verifySubcomponent(t, 8, sm.te, testStateMaster)
 	verifySubcomponent(t, 9, sm.messager, testStateOpen)
+	verifySubcomponent(t, 10, sm.ddle, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
@@ -106,6 +107,7 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 	verifySubcomponent(t, 7, sm.te, testStateNonMaster)
 	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
 	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 10, sm.ddle, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -130,6 +132,7 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
 
 	verifySubcomponent(t, 9, sm.rt, testStateMaster)
+	verifySubcomponent(t, 10, sm.ddle, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -155,6 +158,7 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 
 	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
 	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 10, sm.ddle, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -177,6 +181,7 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 7, sm.vstreamer, testStateClosed)
 	verifySubcomponent(t, 8, sm.rt, testStateClosed)
 	verifySubcomponent(t, 9, sm.se, testStateClosed)
+	verifySubcomponent(t, 10, sm.ddle, testStateClosed)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
@@ -289,6 +294,7 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	verifySubcomponent(t, 7, sm.te, testStateNonMaster)
 	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
 	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 10, sm.ddle, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
