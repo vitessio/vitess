@@ -236,8 +236,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Message": "",
 					"CopyState": [
 						{
-							"Table": "t",
-							"LastPK": "1"
+							"Table": "t1",
+							"LastPK": "pk1"
 						}
 					]
 				}
@@ -272,8 +272,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Message": "",
 					"CopyState": [
 						{
-							"Table": "t",
-							"LastPK": "1"
+							"Table": "t1",
+							"LastPK": "pk1"
 						}
 					]
 				}
