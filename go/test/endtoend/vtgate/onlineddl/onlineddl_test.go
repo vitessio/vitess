@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/schema"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -53,10 +55,16 @@ var (
 	// The following statement will fail because gh-ost requires some shared unique key
 	alterTableFailedStatament = `
 		ALTER WITH 'gh-ost' TABLE %s
-		DROP PRIMARY KEY`
-	statusCompleteRegexp = regexp.MustCompile(`\bcomplete\b`)
-	statusFailedRegexp   = regexp.MustCompile(`\bfailed\b`)
+		DROP PRIMARY KEY,
+		DROP COLUMN ghost_col`
+	alterTableThrottlingStatament = `
+		ALTER WITH 'gh-ost' '--max-load=Threads_running=1' TABLE %s
+		DROP COLUMN ghost_col`
 )
+
+func fullWordRegexp(searchWord string) *regexp.Regexp {
+	return regexp.MustCompile(`\b` + searchWord + `\b`)
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -107,10 +115,25 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
-	// Expect first migration to complete
-	testWithAlterSchema(t, alterTableSuccessfulStatament, true)
-	// Expect 2nd invocation of same migration to fail
-	testWithAlterSchema(t, alterTableFailedStatament, false)
+	{
+		uuid := testAlterTable(t, alterTableSuccessfulStatament)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
+	}
+	{
+		uuid := testAlterTable(t, alterTableThrottlingStatament)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
+		checkCancelMigration(t, uuid, true)
+		time.Sleep(2 * time.Second)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
+	}
+	{
+		uuid := testAlterTable(t, alterTableFailedStatament)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, true)
+	}
 }
 
 func testWithInitialSchema(t *testing.T) {
@@ -126,8 +149,8 @@ func testWithInitialSchema(t *testing.T) {
 	checkTables(t, totalTableCount)
 }
 
-// testWithAlterSchema if we alter schema and then apply, the resultant schema should match across shards
-func testWithAlterSchema(t *testing.T, alterStatement string, expectSuccess bool) {
+// testAlterTable runs an online DDL, ALTER statement
+func testAlterTable(t *testing.T, alterStatement string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	uuid, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery)
@@ -135,16 +158,9 @@ func testWithAlterSchema(t *testing.T, alterStatement string, expectSuccess bool
 	uuid = strings.TrimSpace(uuid)
 	require.NotEmpty(t, uuid)
 	// Migration is asynchronous. Give it some time.
-	time.Sleep(time.Second * 30)
-	if expectSuccess {
-		checkRecentMigrations(t, uuid, statusCompleteRegexp)
-	} else {
-		checkRecentMigrations(t, uuid, statusFailedRegexp)
-	}
+	time.Sleep(time.Second * 20)
 	checkMigratedTable(t, tableName)
-	checkCancelMigration(t, uuid)
-	// retry request should fail for successful migrations, and should succeed for failed migrations
-	checkRetryMigration(t, uuid, !expectSuccess)
+	return uuid
 }
 
 // checkTables checks the number of tables in the first two shards.
@@ -169,41 +185,47 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 // | zone1-0000003884 |     1 | vt_ks        | vt_onlineddl_test_03 | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | gh-ost   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
 // +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
 
-func checkRecentMigrations(t *testing.T, uuid string, expectStatusRegexp *regexp.Regexp) {
+func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
 	assert.NoError(t, err)
 	fmt.Println("# 'vtctlclient OnlineDDL show recent' output (for debug purposes):")
 	fmt.Println(result)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
-	// The word "complete" appears in the column `completed_timestamp`. So we use a regexp to
-	// ensure we match exact full word
+	// We ensure "full word" regexp becuase some column names may conflict
+	expectStatusRegexp := fullWordRegexp(string(expectStatus))
 	m := expectStatusRegexp.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
 // checkCancelMigration attempts to cancel a migration, and expects rejection
-func checkCancelMigration(t *testing.T, uuid string) {
+func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
 	fmt.Println("# 'vtctlclient OnlineDDL cancel <uuid>' output (for debug purposes):")
 	fmt.Println(result)
 	assert.NoError(t, err)
-	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
-	m := regexp.MustCompile(`\b0\b`).FindAllString(result, -1)
+
+	var r *regexp.Regexp
+	if expectCancelPossible {
+		r = fullWordRegexp("1")
+	} else {
+		r = fullWordRegexp("0")
+	}
+	m := r.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
 // checkRetryMigration attempts to retry a migration, and expects rejection
-func checkRetryMigration(t *testing.T, uuid string, expectSuccess bool) {
+func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLRetryMigration(keyspaceName, uuid)
 	fmt.Println("# 'vtctlclient OnlineDDL retry <uuid>' output (for debug purposes):")
 	fmt.Println(result)
 	assert.NoError(t, err)
-	// The migration has either been complete or failed. We can't cancel it. Expect "zero" response from all tablets
+
 	var r *regexp.Regexp
-	if expectSuccess {
-		r = regexp.MustCompile(`\b1\b`)
+	if expectRetryPossible {
+		r = fullWordRegexp("1")
 	} else {
-		r = regexp.MustCompile(`\b0\b`)
+		r = fullWordRegexp("0")
 	}
 	m := r.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
