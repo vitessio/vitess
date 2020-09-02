@@ -453,8 +453,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf(`--port=%d`, mysqlPort),
 			fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
 			`--allow-on-master`,
-			`--max-load=Threads_running=100`,
-			`--critical-load=Threads_running=200`,
+			`--max-load=Threads_running=900`,
+			`--critical-load=Threads_running=1000`,
 			`--critical-load-hibernate-seconds=60`,
 			`--approve-renamed-columns`,
 			`--debug`,
