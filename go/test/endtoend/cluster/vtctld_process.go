@@ -68,7 +68,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"-wait_for_drain_sleep_rdonly", "1s",
 		"-wait_for_drain_sleep_replica", "1s",
 		// short online-ddl check interval to hasten tests
-		"-online_ddl_check_interval", "5s",
+		"-online_ddl_check_interval", "2s",
 		"-log_dir", vtctld.LogDir,
 		"-port", fmt.Sprintf("%d", vtctld.Port),
 		"-grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
