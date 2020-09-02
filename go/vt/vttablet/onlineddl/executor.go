@@ -130,11 +130,12 @@ func GhostBinaryFileName() (fileName string, isOverride bool) {
 }
 
 // PTOSCFileName returns the full path+name of the pt-online-schema-change binary
+// Note that vttablet does not include pt-online-schema-change
 func PTOSCFileName() (fileName string, isOverride bool) {
 	if *ptOSCOverridePath != "" {
 		return *ptOSCOverridePath, true
 	}
-	return path.Join(os.TempDir(), "vt-pt-online-schema-change"), false
+	return "/usr/bin/pt-online-schema-change", false
 }
 
 // NewExecutor creates a new gh-ost executor.
