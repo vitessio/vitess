@@ -263,8 +263,7 @@ var unshardedVSchema = `
 				"sequence": "user_seq"
 			}
 		},
-		"simple": {},
-		"t1": {}
+		"simple": {}
 	}
 }
 `
