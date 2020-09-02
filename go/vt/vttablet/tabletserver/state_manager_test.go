@@ -591,6 +591,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		txThrottler: &testTxThrottler{},
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
+		ddle:        &testOnlineDDLExecutor{},
 	}
 	sm.Init(env, querypb.Target{})
 	sm.hs.InitDBConfig(querypb.Target{})
@@ -769,6 +770,21 @@ func (te *testTxThrottler) Open() error {
 }
 
 func (te *testTxThrottler) Close() {
+	te.order = order.Add(1)
+	te.state = testStateClosed
+}
+
+type testOnlineDDLExecutor struct {
+	testOrderState
+}
+
+func (te *testOnlineDDLExecutor) Open() error {
+	te.order = order.Add(1)
+	te.state = testStateOpen
+	return nil
+}
+
+func (te *testOnlineDDLExecutor) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }
