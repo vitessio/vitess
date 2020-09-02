@@ -33,7 +33,7 @@ func TestVStreamFrom(t *testing.T) {
 	send1 := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
 		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{
-			TableName: "t1",
+			TableName: "simple",
 			Fields: []*querypb.Field{
 				{
 					Name: "id",
@@ -72,7 +72,7 @@ func TestVStreamFrom(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "vstream * from t1"
+	sql := "vstream * from simple"
 	result, err := vstreamEvents(executor, sql)
 	require.NoError(t, err)
 	want := &sqltypes.Result{
