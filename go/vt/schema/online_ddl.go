@@ -50,6 +50,11 @@ func MigrationQueuedPath() string {
 	return fmt.Sprintf("%s/queued", MigrationBasePath())
 }
 
+// MigrationCompletePath is the base path for schema migrations that have been rcompleted on all shards
+func MigrationCompletePath() string {
+	return fmt.Sprintf("%s/complete", MigrationBasePath())
+}
+
 // MigrationJobsKeyspacePath is the base path for a tablet job, by keyspace
 func MigrationJobsKeyspacePath(keyspace string) string {
 	return fmt.Sprintf("%s/jobs/%s", MigrationBasePath(), keyspace)
