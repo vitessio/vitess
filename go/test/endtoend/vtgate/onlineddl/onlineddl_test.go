@@ -62,8 +62,11 @@ var (
 		DROP COLUMN ghost_col`
 )
 
-func fullWordRegexp(uuid, searchWord string) *regexp.Regexp {
+func fullWordUUIDRegexp(uuid, searchWord string) *regexp.Regexp {
 	return regexp.MustCompile(uuid + `.*?\b` + searchWord + `\b`)
+}
+func fullWordRegexp(searchWord string) *regexp.Regexp {
+	return regexp.MustCompile(`.*?\b` + searchWord + `\b`)
 }
 
 func TestMain(m *testing.M) {
@@ -192,7 +195,7 @@ func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.Online
 	fmt.Println(result)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
 	// We ensure "full word" regexp becuase some column names may conflict
-	expectStatusRegexp := fullWordRegexp(uuid, string(expectStatus))
+	expectStatusRegexp := fullWordUUIDRegexp(uuid, string(expectStatus))
 	m := expectStatusRegexp.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
@@ -206,9 +209,9 @@ func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) 
 
 	var r *regexp.Regexp
 	if expectCancelPossible {
-		r = fullWordRegexp(uuid, "1")
+		r = fullWordRegexp("1")
 	} else {
-		r = fullWordRegexp(uuid, "0")
+		r = fullWordRegexp("0")
 	}
 	m := r.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
@@ -223,9 +226,9 @@ func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
 
 	var r *regexp.Regexp
 	if expectRetryPossible {
-		r = fullWordRegexp(uuid, "1")
+		r = fullWordRegexp("1")
 	} else {
-		r = fullWordRegexp(uuid, "0")
+		r = fullWordRegexp("0")
 	}
 	m := r.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
