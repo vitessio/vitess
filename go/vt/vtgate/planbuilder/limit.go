@@ -18,11 +18,9 @@ package planbuilder
 
 import (
 	"errors"
-	"fmt"
-
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -93,17 +91,12 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 	}
 	l.elimit.Count = pv
 
-	switch offset := limit.Offset.(type) {
-	case *sqlparser.Literal:
-		pv, err = sqlparser.NewPlanValue(offset)
+	if limit.Offset != nil {
+		pv, err = sqlparser.NewPlanValue(limit.Offset)
 		if err != nil {
-			return err
+			return vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}
 		l.elimit.Offset = pv
-	case nil:
-		// NOOP
-	default:
-		return fmt.Errorf("unexpected expression in LIMIT: %v", sqlparser.String(limit))
 	}
 
 	l.input.SetUpperLimit(sqlparser.NewArgument([]byte(":__upper_limit")))
