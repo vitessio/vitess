@@ -161,6 +161,48 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
 			er.needBindVarFor(udv)
 		}
+
+	case JoinCondition:
+		if node.Using != nil {
+			joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
+			if !ok {
+				// this is not possible with the current AST
+				break
+			}
+			leftTable, leftOk := joinTableExpr.LeftExpr.(*AliasedTableExpr)
+			rightTable, rightOk := joinTableExpr.RightExpr.(*AliasedTableExpr)
+			if !(leftOk && rightOk) {
+				// we only deal with simple FROM A JOIN B USING queries at the moment
+				break
+			}
+			lft, err := leftTable.TableName()
+			if err != nil {
+				er.err = err
+				break
+			}
+			rgt, err := rightTable.TableName()
+			if err != nil {
+				er.err = err
+				break
+			}
+			newCondition := JoinCondition{}
+			for _, colIdent := range node.Using {
+				lftCol := NewColNameWithQualifier(colIdent.String(), lft)
+				rgtCol := NewColNameWithQualifier(colIdent.String(), rgt)
+				cmp := &ComparisonExpr{
+					Operator: EqualStr,
+					Left:     lftCol,
+					Right:    rgtCol,
+				}
+				if newCondition.On == nil {
+					newCondition.On = cmp
+				} else {
+					newCondition.On = &AndExpr{Left: newCondition.On, Right: cmp}
+				}
+			}
+			cursor.Replace(newCondition)
+		}
+
 	}
 	return true
 }

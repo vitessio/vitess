@@ -54,10 +54,6 @@
 "select * from user natural right join user_extra"
 "unsupported: natural right join"
 
-# join with USING construct
-"select * from user join user_extra using(id)"
-"unsupported: join with USING(column_list) clause"
-
 # left join with expressions
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
 "unsupported: cross-shard left join and column expressions"
