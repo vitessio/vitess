@@ -168,26 +168,16 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 // to vttablet executable by `make build` and via ricebox
 func extractOnlineDDL() error {
 	riceBox, err := rice.FindBox("../../../resources/bin")
+	if err != nil {
+		return err
+	}
 
 	if binaryFileName, isOverride := onlineddl.GhostBinaryFileName(); !isOverride {
-		if err != nil {
-			return err
-		}
 		ghostBinary, err := riceBox.Bytes("gh-ost")
 		if err != nil {
 			return err
 		}
 		if err := ioutil.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
-			return err
-		}
-	}
-
-	if binaryFileName, isOverride := onlineddl.PTOSCFileName(); !isOverride {
-		ptoscBinary, err := riceBox.Bytes("pt-online-schema-change")
-		if err != nil {
-			return err
-		}
-		if err := ioutil.WriteFile(binaryFileName, ptoscBinary, 0755); err != nil {
 			return err
 		}
 	}
