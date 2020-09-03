@@ -171,7 +171,7 @@ func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult ba
 
 // AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
 func (check *ThrottlerCheck) AggregatedMetrics(ctx context.Context) map[string]base.MetricResult {
-	return check.throttler.aggregatedMetricsSnapshot(ctx)
+	return check.throttler.aggregatedMetricsSnapshot()
 }
 
 // MetricsHealth is a convenience acces method into throttler's `metricsHealthSnapshot`

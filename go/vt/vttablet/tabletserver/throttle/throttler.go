@@ -82,6 +82,18 @@ type Throttler struct {
 	httpClient                         *http.Client
 }
 
+// ThrottlerStatus published some status valus from the throttler
+type ThrottlerStatus struct {
+	Keyspace string
+	Shard    string
+
+	IsLeader bool
+	IsOpen   bool
+
+	AggregatedMetrics map[string]base.MetricResult
+	MetricsHealth     base.MetricHealthMap
+}
+
 // NewThrottler creates a Throttler
 func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
@@ -192,7 +204,15 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		case <-leaderCheckTicker.C:
 			{
 				// sparse
+				previouslyOpenAndLeader := throttler.isOpenAndLeader()
 				atomic.StoreInt64(&throttler.isLeader, boolToInt64(throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER))
+				isNowOpenAndLeader := throttler.isOpenAndLeader()
+				if isNowOpenAndLeader && !previouslyOpenAndLeader {
+					log.Infof("Throttler: transition into leadership")
+				}
+				if previouslyOpenAndLeader && !isNowOpenAndLeader {
+					log.Infof("Throttler: transition out of leadership")
+				}
 			}
 		case <-mysqlCollectTicker.C:
 			{
@@ -224,6 +244,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			}
 		}
 		if !throttler.isOpenAndLeader() {
+			log.Infof("Throttler: not leader")
 			time.Sleep(1 * time.Second)
 		}
 	}
@@ -269,15 +290,15 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	addInstanceKey := func(key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
 			if strings.Contains(key.StringCode(), ignore) {
-				log.Infof("instance key ignored: %+v", key)
+				log.Infof("Throttler: instance key ignored: %+v", key)
 				return
 			}
 		}
 		if !key.IsValid() {
-			log.Infof("read invalid instance key: [%+v] for cluster %+v", key, clusterName)
+			log.Infof("Throttler: read invalid instance key: [%+v] for cluster %+v", key, clusterName)
 			return
 		}
-		log.Infof("read instance key: %+v", key)
+		log.Infof("Throttler: read instance key: %+v", key)
 
 		probe := &mysql.Probe{
 			Key:         *key,
@@ -325,7 +346,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 // synchronous update of inventory
 func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, clusterProbes *mysql.ClusterProbes) error {
-	log.Infof("updating MySQLClusterProbes: %s", clusterProbes.ClusterName)
+	log.Infof("Throttler: updating MySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.InstanceProbes
 	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	throttler.mysqlInventory.IgnoreHostsThreshold[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsThreshold
@@ -364,7 +385,7 @@ func (throttler *Throttler) getMySQLClusterMetrics(ctx context.Context, clusterN
 	return base.NoSuchMetric, 0
 }
 
-func (throttler *Throttler) aggregatedMetricsSnapshot(ctx context.Context) map[string]base.MetricResult {
+func (throttler *Throttler) aggregatedMetricsSnapshot() map[string]base.MetricResult {
 	snapshot := make(map[string]base.MetricResult)
 	for key, value := range throttler.aggregatedMetrics.Items() {
 		metricResult, _ := value.Object.(base.MetricResult)
@@ -501,4 +522,18 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 // Check is the main serving function of the throttler, and returns a check result for this cluster's lag
 func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.check.Check(ctx, appName, "mysql", localStoreName, remoteAddr, flags)
+}
+
+// Status exports a status breakdown
+func (throttler *Throttler) Status() *ThrottlerStatus {
+	return &ThrottlerStatus{
+		Keyspace: throttler.keyspace,
+		Shard:    throttler.shard,
+
+		IsLeader: (atomic.LoadInt64(&throttler.isLeader) > 0),
+		IsOpen:   (atomic.LoadInt64(&throttler.isOpen) > 0),
+
+		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
+		MetricsHealth:     throttler.metricsHealthSnapshot(),
+	}
 }
