@@ -585,7 +585,7 @@ func canReplicateAssumingOracleGTID(instance, masterInstance *Instance) (canRepl
 }
 
 func instancesAreGTIDAndCompatible(instance, otherInstance *Instance) (isOracleGTID bool, isMariaDBGTID, compatible bool) {
-	isOracleGTID = (instance.UsingOracleGTID && otherInstance.SupportsOracleGTID)
+	isOracleGTID = (instance.SupportsOracleGTID && otherInstance.SupportsOracleGTID)
 	isMariaDBGTID = (instance.UsingMariaDBGTID && otherInstance.IsMariaDB())
 	compatible = isOracleGTID || isMariaDBGTID
 	return isOracleGTID, isMariaDBGTID, compatible
@@ -1005,16 +1005,6 @@ func MakeCoMaster(instanceKey *InstanceKey) (*Instance, error) {
 		master, err = StopReplication(&master.Key)
 		if err != nil {
 			goto Cleanup
-		}
-	}
-	if !master.HasReplicationCredentials {
-		// Let's try , if possible, to get credentials from replica. Best effort.
-		if replicationUser, replicationPassword, credentialsErr := ReadReplicationCredentials(&instance.Key); credentialsErr == nil {
-			log.Debugf("Got credentials from a replica. will now apply")
-			_, err = ChangeMasterCredentials(&master.Key, replicationUser, replicationPassword)
-			if err != nil {
-				goto Cleanup
-			}
 		}
 	}
 
@@ -2533,6 +2523,11 @@ func RegroupReplicasGTID(
 			}
 		}
 	}
+
+	if err := TabletSetMaster(candidateReplica.Key); err != nil {
+		return emptyReplicas, emptyReplicas, emptyReplicas, candidateReplica, err
+	}
+
 	moveGTIDFunc := func() error {
 		log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
 

@@ -389,10 +389,6 @@ func StopReplication(instanceKey *InstanceKey) (*Instance, error) {
 	if err != nil {
 		return instance, log.Errore(err)
 	}
-
-	if !instance.IsReplica() {
-		return instance, fmt.Errorf("instance is not a replica: %+v", instanceKey)
-	}
 	_, err = ExecInstance(instanceKey, `stop slave`)
 	if err != nil {
 		// Patch; current MaxScale behavior for STOP SLAVE is to throw an error if replica already stopped.
@@ -586,37 +582,6 @@ func EnableSemiSync(instanceKey *InstanceKey, master, replica bool) error {
 	return err
 }
 
-// ChangeMasterCredentials issues a CHANGE MASTER TO... MASTER_USER=, MASTER_PASSWORD=...
-func ChangeMasterCredentials(instanceKey *InstanceKey, masterUser string, masterPassword string) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-	if masterUser == "" {
-		return instance, log.Errorf("Empty user in ChangeMasterCredentials() for %+v", *instanceKey)
-	}
-
-	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("ChangeMasterTo: Cannot change master on: %+v because replication is running", *instanceKey)
-	}
-	log.Debugf("ChangeMasterTo: will attempt changing master credentials on %+v", *instanceKey)
-
-	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong.", *instanceKey)
-	}
-	_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?",
-		masterUser, masterPassword)
-
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-
-	log.Infof("ChangeMasterTo: Changed master credentials on %+v", *instanceKey)
-
-	instance, err = ReadTopologyInstance(instanceKey)
-	return instance, err
-}
-
 // EnableMasterSSL issues CHANGE MASTER TO MASTER_SSL=1
 func EnableMasterSSL(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
@@ -661,7 +626,9 @@ func workaroundBug83713(instanceKey *InstanceKey) {
 }
 
 // ChangeMasterTo changes the given instance's master according to given input.
+// TODO(sougou): deprecate ReplicationCredentialsQuery, and all other credential discovery.
 func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinlogCoordinates *BinlogCoordinates, skipUnresolve bool, gtidHint OperationGTIDHint) (*Instance, error) {
+	user, password := config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -696,16 +663,16 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 	if instance.UsingMariaDBGTID && gtidHint != GTIDHintDeny {
 		// Keep on using GTID
 		changeMasterFunc = func() error {
-			_, err := ExecInstance(instanceKey, "change master to master_host=?, master_port=?",
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err := ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingMariaDBGTID && gtidHint == GTIDHintDeny {
 		// Make sure to not use GTID
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_use_gtid=no",
-				changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_use_gtid=no",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.IsMariaDB() && gtidHint == GTIDHintForce {
@@ -720,39 +687,39 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 			mariadbGTIDHint = "current_pos"
 		}
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_host=?, master_port=?, master_use_gtid=%s", mariadbGTIDHint),
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_user=?, master_password=?, master_host=?, master_port=?, master_use_gtid=%s", mariadbGTIDHint),
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingOracleGTID && gtidHint != GTIDHintDeny {
 		// Is Oracle; already uses GTID; keep using it.
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?",
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingOracleGTID && gtidHint == GTIDHintDeny {
 		// Is Oracle; already uses GTID
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_auto_position=0",
-				changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_auto_position=0",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.SupportsOracleGTID && gtidHint == GTIDHintForce {
 		// Is Oracle; not using GTID right now; turn into GTID
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_auto_position=1",
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_auto_position=1",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else {
 		// Normal binlog file:pos
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_log_file=?, master_log_pos=?",
-				changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	}
@@ -978,36 +945,6 @@ func MasterPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinate
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	return instance, err
-}
-
-// Attempt to read and return replication credentials from the mysql.slave_master_info system table
-func ReadReplicationCredentials(instanceKey *InstanceKey) (replicationUser string, replicationPassword string, err error) {
-	if config.Config.ReplicationCredentialsQuery != "" {
-		err = ScanInstanceRow(instanceKey, config.Config.ReplicationCredentialsQuery, &replicationUser, &replicationPassword)
-		if err == nil && replicationUser == "" {
-			err = fmt.Errorf("Empty username retrieved by ReplicationCredentialsQuery")
-		}
-		if err == nil {
-			return replicationUser, replicationPassword, nil
-		}
-		log.Errore(err)
-	}
-	// Didn't get credentials from ReplicationCredentialsQuery, or ReplicationCredentialsQuery doesn't exist in the first place?
-	// We brute force our way through mysql.slave_master_info
-	{
-		query := `
-			select
-				ifnull(max(User_name), '') as user,
-				ifnull(max(User_password), '') as password
-			from
-				mysql.slave_master_info
-		`
-		err = ScanInstanceRow(instanceKey, query, &replicationUser, &replicationPassword)
-		if err == nil && replicationUser == "" {
-			err = fmt.Errorf("Empty username found in mysql.slave_master_info")
-		}
-	}
-	return replicationUser, replicationPassword, log.Errore(err)
 }
 
 // SetReadOnly sets or clears the instance's global read_only variable
