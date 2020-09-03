@@ -13,6 +13,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
@@ -36,6 +38,11 @@ const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
 const defaultThrottleTTLMinutes = 60
 const defaultThrottleRatio = 1.0
 
+const (
+	localStoreName = "local"
+	// replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) from _vt.heartbeat`
+)
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -46,8 +53,11 @@ type Throttler struct {
 	keyspace string
 	shard    string
 
+	check    *ThrottlerCheck
 	isLeader bool
 
+	env            tabletenv.Env
+	pool           *connpool.Pool
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
 
@@ -63,16 +73,27 @@ type Throttler struct {
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
 
+	initMutex          sync.Mutex
 	throttledAppsMutex sync.Mutex
+
+	isOpen bool
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler() *Throttler {
+func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
 		isLeader: false,
+
+		env:            env,
+		tabletTypeFunc: tabletTypeFunc,
+		ts:             ts,
+		pool: connpool.NewPool(env, "ThrottlerPool", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		}),
 
 		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
 
@@ -91,8 +112,41 @@ func NewThrottler() *Throttler {
 		httpClient: base.SetupHTTPClient(0),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+	throttler.check = NewThrottlerCheck(throttler)
 
 	return throttler
+}
+
+// InitDBConfig initializes keyspace and shard
+func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
+	throttler.keyspace = keyspace
+	throttler.shard = shard
+}
+
+// Open opens database pool and initializes the schema
+func (throttler *Throttler) Open() error {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+	if throttler.isOpen {
+		return nil
+	}
+	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
+
+	throttler.isOpen = true
+
+	return nil
+}
+
+// Close frees resources
+func (throttler *Throttler) Close() {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+	if !throttler.isOpen {
+		return
+	}
+
+	throttler.pool.Close()
+	throttler.isOpen = false
 }
 
 // ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
@@ -103,6 +157,7 @@ func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
 // Operate is the main entry point for the throttler operation and logic. It will
 // run the probes, colelct metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context) {
+
 	leaderCheckTicker := time.NewTicker(leaderCheckInterval)
 	mysqlCollectTicker := time.NewTicker(mysqlCollectInterval)
 	mysqlRefreshTicker := time.NewTicker(mysqlRefreshInterval)
@@ -279,7 +334,7 @@ func (throttler *Throttler) getNamedMetric(metricName string) base.MetricResult 
 	return base.NoSuchMetric
 }
 
-func (throttler *Throttler) getMySQLClusterMetrics(clusterName string) (base.MetricResult, float64) {
+func (throttler *Throttler) getMySQLClusterMetrics(ctx context.Context, clusterName string) (base.MetricResult, float64) {
 	if thresholdVal, found := throttler.mysqlClusterThresholds.Get(clusterName); found {
 		threshold, _ := thresholdVal.(float64)
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
@@ -413,7 +468,7 @@ func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
 }
 
 // AppRequestMetricResult gets a metric result in the context of a specific app
-func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64) {
+func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64) {
 	if denyApp {
 		return base.AppDeniedMetric, 0
 	}
@@ -421,4 +476,9 @@ func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultF
 		return base.AppDeniedMetric, 0
 	}
 	return metricResultFunc()
+}
+
+// Check is the main serving function of the throttler, and returns a check result for this cluster's lag
+func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.check.Check(ctx, appName, "mysql", localStoreName, remoteAddr, flags)
 }
