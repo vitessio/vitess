@@ -35,7 +35,7 @@ func prettyPrint(qr sqltypes.Result) string {
 	return string(out)
 }
 
-func prettyPrintArr(qr []sqltypes.Result) string {
+func prettyPrintArr(qr []*sqltypes.Result) string {
 	out, err := json.Marshal(qr)
 	if err != nil {
 		log.Errorf("Could not marshal result to json for %#v", qr)

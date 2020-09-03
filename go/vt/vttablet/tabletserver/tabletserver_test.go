@@ -672,129 +672,130 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 		t.Fatal("stats are empty")
 	}
 }
-func TestTabletServerExecuteBatch(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
 
-	sql := "insert into test_table values (1, 2, 'addr', 'name')"
-	sqlResult := &sqltypes.Result{}
-	expandedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
+//func TestTabletServerExecuteBatch(t *testing.T) {
+//	db, tsv := setupTabletServerTest(t)
+//	defer tsv.StopService()
+//	defer db.Close()
+//
+//	sql := "insert into test_table values (1, 2, 'addr', 'name')"
+//	sqlResult := &sqltypes.Result{}
+//	expandedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
+//
+//	db.AddQuery(sql, sqlResult)
+//	db.AddQuery(expandedSQL, sqlResult)
+//	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+//	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
+//		{
+//			Sql:           sql,
+//			BindVariables: nil,
+//		},
+//	}, 0, nil); err != nil {
+//		t.Fatal(err)
+//	}
+//}
 
-	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expandedSQL, sqlResult)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
-		{
-			Sql:           sql,
-			BindVariables: nil,
-		},
-	}, 0, nil); err != nil {
-		t.Fatal(err)
-	}
-}
+//func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
+//	db, tsv := setupTabletServerTest(t)
+//	defer tsv.StopService()
+//	defer db.Close()
+//
+//	_, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, 0, nil)
+//	want := "Empty query list"
+//	require.Error(t, err)
+//	assert.Contains(t, err.Error(), want)
+//}
 
-func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	_, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, 0, nil)
-	want := "Empty query list"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), want)
-}
-
-func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	// make "begin" query fail
-	db.AddRejectedQuery("begin", errRejected)
-	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
-		{
-			Sql:           "begin",
-			BindVariables: nil,
-		},
-	}, 0, nil); err == nil {
-		t.Fatalf("TabletServer.ExecuteBatch should fail")
-	}
-}
-
-func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	// make "commit" query fail
-	db.AddRejectedQuery("commit", errRejected)
-	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
-		{
-			Sql:           "begin",
-			BindVariables: nil,
-		},
-		{
-			Sql:           "commit",
-			BindVariables: nil,
-		},
-	}, 0, nil); err == nil {
-		t.Fatalf("TabletServer.ExecuteBatch should fail")
-	}
-}
-
-func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
-		{
-			Sql:           "commit",
-			BindVariables: nil,
-		},
-	}, 0, nil); err == nil {
-		t.Fatalf("TabletServer.ExecuteBatch should fail")
-	}
-}
-
-func TestExecuteBatchNestedTransaction(t *testing.T) {
-	db, tsv := setupTabletServerTest(t)
-	defer tsv.StopService()
-	defer db.Close()
-
-	sql := "insert into test_table values (1, 2)"
-	sqlResult := &sqltypes.Result{}
-	expandedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
-
-	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expandedSQL, sqlResult)
-	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
-		{
-			Sql:           "begin",
-			BindVariables: nil,
-		},
-		{
-			Sql:           "begin",
-			BindVariables: nil,
-		},
-		{
-			Sql:           sql,
-			BindVariables: nil,
-		},
-		{
-			Sql:           "commit",
-			BindVariables: nil,
-		},
-		{
-			Sql:           "commit",
-			BindVariables: nil,
-		},
-	}, 0, nil); err == nil {
-		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
-	}
-	tsv.te.txPool.SetTimeout(10)
-}
+//func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
+//	db, tsv := setupTabletServerTest(t)
+//	defer tsv.StopService()
+//	defer db.Close()
+//
+//	// make "begin" query fail
+//	db.AddRejectedQuery("begin", errRejected)
+//	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
+//		{
+//			Sql:           "begin",
+//			BindVariables: nil,
+//		},
+//	}, 0, nil); err == nil {
+//		t.Fatalf("TabletServer.ExecuteBatch should fail")
+//	}
+//}
+//
+//func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
+//	db, tsv := setupTabletServerTest(t)
+//	defer tsv.StopService()
+//	defer db.Close()
+//
+//	// make "commit" query fail
+//	db.AddRejectedQuery("commit", errRejected)
+//	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
+//		{
+//			Sql:           "begin",
+//			BindVariables: nil,
+//		},
+//		{
+//			Sql:           "commit",
+//			BindVariables: nil,
+//		},
+//	}, 0, nil); err == nil {
+//		t.Fatalf("TabletServer.ExecuteBatch should fail")
+//	}
+//}
+//
+//func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
+//	db, tsv := setupTabletServerTest(t)
+//	defer tsv.StopService()
+//	defer db.Close()
+//
+//	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
+//		{
+//			Sql:           "commit",
+//			BindVariables: nil,
+//		},
+//	}, 0, nil); err == nil {
+//		t.Fatalf("TabletServer.ExecuteBatch should fail")
+//	}
+//}
+//
+//func TestExecuteBatchNestedTransaction(t *testing.T) {
+//	db, tsv := setupTabletServerTest(t)
+//	defer tsv.StopService()
+//	defer db.Close()
+//
+//	sql := "insert into test_table values (1, 2)"
+//	sqlResult := &sqltypes.Result{}
+//	expandedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+//
+//	db.AddQuery(sql, sqlResult)
+//	db.AddQuery(expandedSQL, sqlResult)
+//	if _, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{
+//		{
+//			Sql:           "begin",
+//			BindVariables: nil,
+//		},
+//		{
+//			Sql:           "begin",
+//			BindVariables: nil,
+//		},
+//		{
+//			Sql:           sql,
+//			BindVariables: nil,
+//		},
+//		{
+//			Sql:           "commit",
+//			BindVariables: nil,
+//		},
+//		{
+//			Sql:           "commit",
+//			BindVariables: nil,
+//		},
+//	}, 0, nil); err == nil {
+//		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
+//	}
+//	tsv.te.txPool.SetTimeout(10)
+//}
 
 func TestSerializeTransactionsSameRow(t *testing.T) {
 	// This test runs three transaction in parallel:

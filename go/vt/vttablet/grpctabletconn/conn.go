@@ -60,6 +60,22 @@ type gRPCQueryClient struct {
 	c  queryservicepb.QueryClient
 }
 
+func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID, reservedID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, error) {
+	panic("implement me")
+}
+
+func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, reservedID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
+func (conn *gRPCQueryClient) ReserveExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
+func (conn *gRPCQueryClient) BeginReserveExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
 var _ queryservice.QueryService = (*gRPCQueryClient)(nil)
 
 // DialTablet creates and initializes gRPCQueryClient.
@@ -117,28 +133,28 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	return sqltypes.Proto3ToResult(er.Result), nil
 }
 
-// ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, tabletconn.ConnClosed
-	}
-
-	req := &querypb.ExecuteBatchRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Queries:           queries,
-		TransactionId:     transactionID,
-		Options:           options,
-	}
-	ebr, err := conn.c.ExecuteBatch(ctx, req)
-	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(err)
-	}
-	return sqltypes.Proto3ToResults(ebr.Results), nil
-}
+//// ExecuteBatch sends a batch query to VTTablet.
+//func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+//	conn.mu.RLock()
+//	defer conn.mu.RUnlock()
+//	if conn.cc == nil {
+//		return nil, tabletconn.ConnClosed
+//	}
+//
+//	req := &querypb.ExecuteBatchRequest{
+//		Target:            target,
+//		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+//		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+//		Queries:           queries,
+//		TransactionId:     transactionID,
+//		Options:           options,
+//	}
+//	ebr, err := conn.c.ExecuteBatch(ctx, req)
+//	if err != nil {
+//		return nil, tabletconn.ErrorFromGRPC(err)
+//	}
+//	return sqltypes.Proto3ToResults(ebr.Results), nil
+//}
 
 // StreamExecute executes the query and streams results back through callback.
 func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {

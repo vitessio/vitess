@@ -249,12 +249,13 @@ func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.Bin
 }
 
 // ExecuteBatch executes a batch of queries.
-func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery) ([]sqltypes.Result, error) {
+func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery) ([]*sqltypes.Result, error) {
 	return client.server.ExecuteBatch(
 		client.ctx,
 		&client.target,
 		queries,
 		client.transactionID,
+		client.reservedID,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 }

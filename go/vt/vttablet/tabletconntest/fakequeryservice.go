@@ -60,6 +60,26 @@ type FakeQueryService struct {
 	StreamHealthResponse *querypb.StreamHealthResponse
 }
 
+//ExecuteBatch is part of the queryservice.QueryService interface
+func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID, reservedID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, error) {
+	panic("implement me")
+}
+
+//BeginExecuteBatch is part of the queryservice.QueryService interface
+func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, reservedID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
+//ReserveExecuteBatch is part of the queryservice.QueryService interface
+func (f *FakeQueryService) ReserveExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
+//BeginReserveExecuteBatch is part of the queryservice.QueryService interface
+func (f *FakeQueryService) BeginReserveExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
 var _ queryservice.QueryService = (*FakeQueryService)(nil)
 
 // Close is a no-op.
@@ -549,29 +569,29 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 	},
 }
 
-// ExecuteBatch is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	if f.HasError {
-		return nil, f.TabletError
-	}
-	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	if !proto.Equal(
-		&querypb.ExecuteBatchRequest{Queries: queries},
-		&querypb.ExecuteBatchRequest{Queries: ExecuteBatchQueries},
-	) {
-		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, ExecuteBatchQueries)
-	}
-	if !proto.Equal(options, TestExecuteOptions) {
-		f.t.Errorf("invalid ExecuteBatch.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
-	}
-	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
-	if transactionID != f.ExpectedTransactionID {
-		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, f.ExpectedTransactionID)
-	}
-	return ExecuteBatchQueryResultList, nil
-}
+//// ExecuteBatch is part of the queryservice.QueryService interface
+//func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+//	if f.HasError {
+//		return nil, f.TabletError
+//	}
+//	if f.Panics {
+//		panic(fmt.Errorf("test-triggered panic"))
+//	}
+//	if !proto.Equal(
+//		&querypb.ExecuteBatchRequest{Queries: queries},
+//		&querypb.ExecuteBatchRequest{Queries: ExecuteBatchQueries},
+//	) {
+//		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, ExecuteBatchQueries)
+//	}
+//	if !proto.Equal(options, TestExecuteOptions) {
+//		f.t.Errorf("invalid ExecuteBatch.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
+//	}
+//	f.checkTargetCallerID(ctx, "ExecuteBatch", target)
+//	if transactionID != f.ExpectedTransactionID {
+//		f.t.Errorf("invalid ExecuteBatch.TransactionId: got %v expected %v", transactionID, f.ExpectedTransactionID)
+//	}
+//	return ExecuteBatchQueryResultList, nil
+//}
 
 // BeginExecute combines Begin and Execute.
 func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, _ []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {

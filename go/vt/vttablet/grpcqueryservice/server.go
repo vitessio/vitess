@@ -63,12 +63,17 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	results, err := q.server.ExecuteBatch(ctx, request.Target, request.Queries, request.TransactionId, request.Options)
+	//TODO (harshit): fix this.
+	results, err := q.server.ExecuteBatch(ctx, request.Target, request.Queries, request.TransactionId, 0, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
+	var nonRefResults []sqltypes.Result
+	for _, res := range results {
+		nonRefResults = append(nonRefResults, *res)
+	}
 	return &querypb.ExecuteBatchResponse{
-		Results: sqltypes.ResultsToProto3(results),
+		Results: sqltypes.ResultsToProto3(nonRefResults),
 	}, nil
 }
 

@@ -331,6 +331,22 @@ type internalTabletConn struct {
 	topoTablet *topodatapb.Tablet
 }
 
+func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID, reservedID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, error) {
+	panic("implement me")
+}
+
+func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, reservedID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
+func (itc *internalTabletConn) ReserveExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
+func (itc *internalTabletConn) BeginReserveExecuteBatch(ctx context.Context, target *querypb.Target, preQueries []string, queries []*querypb.BoundQuery, options *querypb.ExecuteOptions) ([]*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
 var _ queryservice.QueryService = (*internalTabletConn)(nil)
 
 // Execute is part of queryservice.QueryService
@@ -346,20 +362,20 @@ func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Targ
 
 // ExecuteBatch is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	q := make([]*querypb.BoundQuery, len(queries))
-	for i, query := range queries {
-		q[i] = &querypb.BoundQuery{
-			Sql:           query.Sql,
-			BindVariables: sqltypes.CopyBindVariables(query.BindVariables),
-		}
-	}
-	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, target, q, transactionID, options)
-	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
-	}
-	return results, nil
-}
+//func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
+//	q := make([]*querypb.BoundQuery, len(queries))
+//	for i, query := range queries {
+//		q[i] = &querypb.BoundQuery{
+//			Sql:           query.Sql,
+//			BindVariables: sqltypes.CopyBindVariables(query.BindVariables),
+//		}
+//	}
+//	results, err := itc.tablet.qsc.QueryService().ExecuteBatch(ctx, target, q, transactionID, options)
+//	if err != nil {
+//		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+//	}
+//	return results, nil
+//}
 
 // StreamExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
