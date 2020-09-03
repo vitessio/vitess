@@ -54,7 +54,8 @@ type Throttler struct {
 	shard    string
 
 	check    *ThrottlerCheck
-	isLeader bool
+	isLeader int64
+	isOpen   int64
 
 	env            tabletenv.Env
 	pool           *connpool.Pool
@@ -73,10 +74,9 @@ type Throttler struct {
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
 
+	initOnce           sync.Once
 	initMutex          sync.Mutex
 	throttledAppsMutex sync.Mutex
-
-	isOpen bool
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -85,7 +85,8 @@ type Throttler struct {
 // NewThrottler creates a Throttler
 func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
-		isLeader: false,
+		isLeader: 0,
+		isOpen:   0,
 
 		env:            env,
 		tabletTypeFunc: tabletTypeFunc,
@@ -117,6 +118,23 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 	return throttler
 }
 
+func boolToInt64(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func (throttler *Throttler) isOpenAndLeader() bool {
+	if atomic.LoadInt64(&throttler.isOpen) == 0 {
+		return false
+	}
+	if atomic.LoadInt64(&throttler.isLeader) == 0 {
+		return false
+	}
+	return true
+}
+
 // InitDBConfig initializes keyspace and shard
 func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
@@ -127,12 +145,13 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 func (throttler *Throttler) Open() error {
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
-	if throttler.isOpen {
+	if atomic.LoadInt64(&throttler.isOpen) > 0 {
+		// already open
 		return nil
 	}
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
-
-	throttler.isOpen = true
+	throttler.initOnce.Do(func() { go throttler.Operate(context.Background()) })
+	atomic.StoreInt64(&throttler.isOpen, 1)
 
 	return nil
 }
@@ -141,12 +160,13 @@ func (throttler *Throttler) Open() error {
 func (throttler *Throttler) Close() {
 	throttler.initMutex.Lock()
 	defer throttler.initMutex.Unlock()
-	if !throttler.isOpen {
+	if atomic.LoadInt64(&throttler.isOpen) == 0 {
+		// not open
 		return
 	}
 
 	throttler.pool.Close()
-	throttler.isOpen = false
+	atomic.StoreInt64(&throttler.isOpen, 0)
 }
 
 // ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
@@ -172,7 +192,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		case <-leaderCheckTicker.C:
 			{
 				// sparse
-				throttler.isLeader = (throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER)
+				atomic.StoreInt64(&throttler.isLeader, boolToInt64(throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER))
 			}
 		case <-mysqlCollectTicker.C:
 			{
@@ -203,14 +223,14 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				go throttler.expireThrottledApps()
 			}
 		}
-		if !throttler.isLeader {
+		if !throttler.isOpenAndLeader() {
 			time.Sleep(1 * time.Second)
 		}
 	}
 }
 
 func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
-	if !throttler.isLeader {
+	if !throttler.isOpenAndLeader() {
 		return nil
 	}
 	// synchronously, get lists of probes
@@ -241,7 +261,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 // refreshMySQLInventory will re-structure the inventory based on reading config settings, and potentially
 // re-querying dynamic data such as HAProxy list of hosts
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
-	if !throttler.isLeader {
+	if !throttler.isOpenAndLeader() {
 		return nil
 	}
 	log.Infof("refreshing MySQL inventory")
@@ -314,7 +334,7 @@ func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, cluste
 
 // synchronous aggregation of collected data
 func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
-	if !throttler.isLeader {
+	if !throttler.isOpenAndLeader() {
 		return nil
 	}
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
