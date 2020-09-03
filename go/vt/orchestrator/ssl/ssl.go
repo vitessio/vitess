@@ -75,7 +75,7 @@ func ReadCAFile(caFile string) (*x509.CertPool, error) {
 		if !caCertPool.AppendCertsFromPEM(data) {
 			return nil, errors.New("No certificates parsed")
 		}
-		log.Info("Read in CA file:", caFile)
+		log.Infof("Read in CA file: %v", caFile)
 	}
 	return caCertPool, nil
 }
@@ -166,7 +166,7 @@ func ReadPEMData(pemFile string, pemPass []byte) ([]byte, error) {
 		if err != nil {
 			return pemData, err
 		} else {
-			log.Info("Decrypted", pemFile, "successfully")
+			log.Infof("Decrypted %v successfully", pemFile)
 		}
 		// Shove the decrypted DER bytes into a new pem Block with blank headers
 		var newBlock pem.Block

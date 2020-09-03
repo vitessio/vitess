@@ -492,6 +492,7 @@ func ContinuousDiscovery() {
 	raftCaretakingTick := time.Tick(10 * time.Minute)
 	recoveryTick := time.Tick(time.Duration(config.RecoveryPollSeconds) * time.Second)
 	autoPseudoGTIDTick := time.Tick(time.Duration(config.PseudoGTIDIntervalSeconds) * time.Second)
+	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.Config.SnapshotTopologiesIntervalHours > 0 {
@@ -615,6 +616,8 @@ func ContinuousDiscovery() {
 					go inst.SnapshotTopologies()
 				}
 			}()
+		case <-tabletTopoTick:
+			go RefreshTablets()
 		}
 	}
 }

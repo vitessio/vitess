@@ -20,8 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type AnalysisCode string
@@ -29,10 +31,17 @@ type StructureAnalysisCode string
 
 const (
 	NoProblem                                               AnalysisCode = "NoProblem"
+	ClusterHasNoMaster                                      AnalysisCode = "ClusterHasNoMaster"
 	DeadMasterWithoutReplicas                               AnalysisCode = "DeadMasterWithoutReplicas"
 	DeadMaster                                              AnalysisCode = "DeadMaster"
 	DeadMasterAndReplicas                                   AnalysisCode = "DeadMasterAndReplicas"
 	DeadMasterAndSomeReplicas                               AnalysisCode = "DeadMasterAndSomeReplicas"
+	MasterHasMaster                                         AnalysisCode = "MasterHasMaster"
+	MasterIsReadOnly                                        AnalysisCode = "MasterIsReadOnly"
+	ReplicaIsWritable                                       AnalysisCode = "ReplicaIsWritable"
+	NotConnectedToMaster                                    AnalysisCode = "NotConnectedToMaster"
+	ConnectedToWrongMaster                                  AnalysisCode = "ConnectedToWrongMaster"
+	ReplicationStopped                                      AnalysisCode = "ReplicationStopped"
 	UnreachableMasterWithLaggingReplicas                    AnalysisCode = "UnreachableMasterWithLaggingReplicas"
 	UnreachableMaster                                       AnalysisCode = "UnreachableMaster"
 	MasterSingleReplicaNotReplicating                       AnalysisCode = "MasterSingleReplicaNotReplicating"
@@ -116,12 +125,16 @@ const (
 type ReplicationAnalysis struct {
 	AnalyzedInstanceKey                       InstanceKey
 	AnalyzedInstanceMasterKey                 InstanceKey
+	TabletType                                topodatapb.TabletType
+	MasterTimeStamp                           time.Time
+	SuggestedClusterAlias                     string
 	ClusterDetails                            ClusterInfo
 	AnalyzedInstanceDataCenter                string
 	AnalyzedInstanceRegion                    string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsMaster                                  bool
+	IsClusterMaster                           bool
 	IsCoMaster                                bool
 	LastCheckValid                            bool
 	LastCheckPartialSuccess                   bool
@@ -134,6 +147,7 @@ type ReplicationAnalysis struct {
 	Replicas                                  InstanceKeyMap
 	SlaveHosts                                InstanceKeyMap // for backwards compatibility. Equals `Replicas`
 	IsFailingToConnectToMaster                bool
+	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode

@@ -31,6 +31,7 @@ var AppVersion, GitCommit string
 
 // main is the application's entry point. It will either spawn a CLI or HTTP itnerfaces.
 func main() {
+	// TODO(sougou): change this to use vitess servenv framework
 	configFile := flag.String("config", "", "config file name")
 	command := flag.String("c", "", "command, required. See full list of commands via 'orchestrator -c help'")
 	strict := flag.Bool("strict", false, "strict mode (more checks, slower)")
@@ -57,7 +58,6 @@ func main() {
 	config.RuntimeCLIFlags.Statement = flag.String("statement", "", "Statement/hint")
 	config.RuntimeCLIFlags.GrabElection = flag.Bool("grab-election", false, "Grab leadership (only applies to continuous mode)")
 	config.RuntimeCLIFlags.PromotionRule = flag.String("promotion-rule", "prefer", "Promotion rule for register-andidate (prefer|neutral|prefer_not|must_not)")
-	config.RuntimeCLIFlags.Version = flag.Bool("version", false, "Print version and exit")
 	config.RuntimeCLIFlags.SkipContinuousRegistration = flag.Bool("skip-continuous-registration", false, "Skip cli commands performaing continuous registration (to reduce orchestratrator backend db load")
 	config.RuntimeCLIFlags.EnableDatabaseUpdate = flag.Bool("enable-database-update", false, "Enable database update, overrides SkipOrchestratorDatabaseUpdate")
 	config.RuntimeCLIFlags.IgnoreRaftSetup = flag.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
@@ -90,11 +90,6 @@ func main() {
 	}
 	if *stack {
 		log.SetPrintStackTrace(*stack)
-	}
-	if *config.RuntimeCLIFlags.Version {
-		fmt.Println(AppVersion)
-		fmt.Println(GitCommit)
-		return
 	}
 
 	startText := "starting orchestrator"

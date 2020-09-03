@@ -109,11 +109,11 @@ func standardHttp(continuousDiscovery bool) {
 	m.Use(gzip.All())
 	// Render html templates from templates directory
 	m.Use(render.Renderer(render.Options{
-		Directory:       "resources",
+		Directory:       "web/orchestrator",
 		Layout:          "templates/layout",
 		HTMLContentType: "text/html",
 	}))
-	m.Use(martini.Static("resources/public", martini.StaticOptions{Prefix: config.Config.URLPrefix}))
+	m.Use(martini.Static("web/orchestrator/public", martini.StaticOptions{Prefix: config.Config.URLPrefix}))
 	if config.Config.UseMutualTLS {
 		m.Use(ssl.VerifyOUs(config.Config.SSLValidOUs))
 	}
