@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/key"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -262,7 +264,7 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 						return false
 					}
 					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
-					parent.Right = sqlparser.NewArgument([]byte(":" + engine.BvSchemaName))
+					parent.Right = sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName))
 				}
 			}
 		}
