@@ -317,6 +317,10 @@ func TestInformationSchemaQuery(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
 	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+
+	qr, err = conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'NONE'", 1000, true)
+	require.Nil(t, err)
+	assert.Empty(t, qr.Rows)
 }
 
 func TestOffsetAndLimitWithOLAP(t *testing.T) {
