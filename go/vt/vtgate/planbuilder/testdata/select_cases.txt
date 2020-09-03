@@ -1349,6 +1349,24 @@
   }
 }
 
+# don't filter on the vtgate
+"select 42 from dual where false"
+{
+  "QueryType": "SELECT",
+  "Original": "select 42 from dual where false",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 42 from dual where 1 != 1",
+    "Query": "select 42 from dual where false",
+    "Table": "dual"
+  }
+}
+
 # testing SingleRow Projection with arithmetics
 "select 42+2"
 {
