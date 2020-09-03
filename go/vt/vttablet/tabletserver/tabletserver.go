@@ -195,7 +195,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
-	tsv.registerThrottlerCheckHandler()
+	tsv.registerThrottlerHandlers()
 
 	return tsv
 }
@@ -1504,6 +1504,22 @@ func (tsv *TabletServer) registerThrottlerCheckHandler() {
 			json.NewEncoder(w).Encode(checkResult)
 		}
 	})
+}
+
+// registerThrottlerStatusHandler registers a throttler "status" request
+func (tsv *TabletServer) registerThrottlerStatusHandler() {
+	tsv.exporter.HandleFunc("/throttler/status", func(w http.ResponseWriter, r *http.Request) {
+		status := tsv.lagThrottler.Status()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+	})
+}
+
+// registerThrottlerHandlers registers all throttler handlers
+func (tsv *TabletServer) registerThrottlerHandlers() {
+	tsv.registerThrottlerCheckHandler()
+	tsv.registerThrottlerStatusHandler()
 }
 
 // SetTracking forces tracking to be on or off.
