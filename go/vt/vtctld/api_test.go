@@ -184,22 +184,23 @@ func TestAPI(t *testing.T) {
 	// Test cases.
 	table := []struct {
 		method, path, body, want string
+		statusCode               int
 	}{
 		// Create snapshot keyspace using API
 		{"POST", "vtctl/", `["CreateKeyspace", "-keyspace_type=SNAPSHOT", "-base_keyspace=ks1", "-snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`, `{
 		   "Error": "",
 		   "Output": ""
-		}`},
+		}`, http.StatusOK},
 
 		// Cells
-		{"GET", "cells", "", `["cell1","cell2"]`},
+		{"GET", "cells", "", `["cell1","cell2"]`, http.StatusOK},
 
 		// Keyspace
-		{"GET", "keyspace/doesnt-exist/tablets/", "", ``},
-		{"GET", "keyspace/ks1/tablets/", "", keyspaceKs1AllTablets},
-		{"GET", "keyspace/ks1/tablets/-80", "", keyspaceKs1AllTablets},
-		{"GET", "keyspace/ks1/tablets/80-", "", `[]`},
-		{"GET", "keyspace/ks1/tablets/?cells=cell1,cell2", "", keyspaceKs1AllTablets},
+		{"GET", "keyspace/doesnt-exist/tablets/", "", ``, http.StatusNotFound},
+		{"GET", "keyspace/ks1/tablets/", "", keyspaceKs1AllTablets, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/-80", "", keyspaceKs1AllTablets, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/80-", "", `[]`, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cells=cell1,cell2", "", keyspaceKs1AllTablets, http.StatusOK},
 		{"GET", "keyspace/ks1/tablets/?cells=cell1", "", `[
 			{
 				"alias": {
@@ -227,8 +228,8 @@ func TestAPI(t *testing.T) {
 				},
 				"url": "http://mysql1-cell1.test.net:100"
 			}
-		]`},
-		{"GET", "keyspace/ks1/tablets/?cells=cell3", "", `[]`},
+		]`, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cells=cell3", "", `[]`, http.StatusOK},
 		{"GET", "keyspace/ks1/tablets/?cell=cell2", "", `[
 			{
 				"alias": {
@@ -249,11 +250,11 @@ func TestAPI(t *testing.T) {
 				"mysql_port": 3306,
 				"url": "http://mysql2-cell2.test.net:200"
 			}
-		]`},
-		{"GET", "keyspace/ks1/tablets/?cell=cell3", "", `[]`},
+		]`, http.StatusOK},
+		{"GET", "keyspace/ks1/tablets/?cell=cell3", "", `[]`, http.StatusOK},
 
 		// Keyspaces
-		{"GET", "keyspaces", "", `["ks1", "ks3"]`},
+		{"GET", "keyspaces", "", `["ks1", "ks3"]`, http.StatusOK},
 		{"GET", "keyspaces/ks1", "", `{
 				"sharding_column_name": "shardcol",
 				"sharding_column_type": 0,
@@ -261,17 +262,17 @@ func TestAPI(t *testing.T) {
                                 "keyspace_type":0,
                                 "base_keyspace":"",
                                 "snapshot_time":null
-			}`},
-		{"GET", "keyspaces/nonexistent", "", "404 page not found"},
+			}`, http.StatusOK},
+		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
 				"Name": "TestKeyspaceAction",
 				"Parameters": "ks1",
 				"Output": "TestKeyspaceAction Result",
 				"Error": false
-			}`},
+			}`, http.StatusOK},
 
 		// Shards
-		{"GET", "shards/ks1/", "", `["-80","80-"]`},
+		{"GET", "shards/ks1/", "", `["-80","80-"]`, http.StatusOK},
 		{"GET", "shards/ks1/-80", "", `{
 				"master_alias": null,
 				"master_term_start_time":null,
@@ -283,27 +284,27 @@ func TestAPI(t *testing.T) {
 				"source_shards": [],
 				"tablet_controls": [],
 				"is_master_serving": true
-			}`},
-		{"GET", "shards/ks1/-DEAD", "", "404 page not found"},
+			}`, http.StatusOK},
+		{"GET", "shards/ks1/-DEAD", "", "404 page not found", http.StatusNotFound},
 		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
 				"Name": "TestShardAction",
 				"Parameters": "ks1/-80",
 				"Output": "TestShardAction Result",
 				"Error": false
-			}`},
+			}`, http.StatusOK},
 
 		// Tablets
 		{"GET", "tablets/?shard=ks1%2F-80", "", `[
 				{"cell":"cell1","uid":100},
 				{"cell":"cell2","uid":200}
-			]`},
+			]`, http.StatusOK},
 		{"GET", "tablets/?cell=cell1", "", `[
 				{"cell":"cell1","uid":100}
-			]`},
+			]`, http.StatusOK},
 		{"GET", "tablets/?shard=ks1%2F-80&cell=cell2", "", `[
 				{"cell":"cell2","uid":200}
-			]`},
-		{"GET", "tablets/?shard=ks1%2F80-&cell=cell1", "", `[]`},
+			]`, http.StatusOK},
+		{"GET", "tablets/?shard=ks1%2F80-&cell=cell1", "", `[]`, http.StatusOK},
 		{"GET", "tablets/cell1-100", "", `{
 				"alias": {"cell": "cell1", "uid": 100},
 				"hostname": "mysql1-cell1.test.net",
@@ -317,14 +318,14 @@ func TestAPI(t *testing.T) {
 				"mysql_hostname": "mysql1-cell1.test.net",
 				"mysql_port": 3306,
 				"url":"http://mysql1-cell1.test.net:100"
-			}`},
-		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
+			}`, http.StatusOK},
+		{"GET", "tablets/nonexistent-999", "", "404 page not found", http.StatusNotFound},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{
 				"Name": "TestTabletAction",
 				"Parameters": "cell1-0000000100",
 				"Output": "TestTabletAction Result",
 				"Error": false
-			}`},
+			}`, http.StatusOK},
 
 		// Tablet Updates
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", "", `[
@@ -336,7 +337,7 @@ func TestAPI(t *testing.T) {
 		    "ShardLabels": ["-80", "80-"],
 		    "YGridLines": [0.5]
 		  }
-		]`},
+		]`, http.StatusOK},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", "", `[
 		{
 		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],
@@ -348,7 +349,7 @@ func TestAPI(t *testing.T) {
 		  "ShardLabels":["-80","80-"],
 		  "YGridLines":[0.5,1.5,2.5,3.5]
 		}
-		]`},
+		]`, http.StatusOK},
 		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", "", `[
 		  {
 		   "Data":[[-1,300],[200,-1]],
@@ -370,47 +371,47 @@ func TestAPI(t *testing.T) {
 		  "ShardLabels":["0"],
 		  "YGridLines":[0.5, 1.5]
 		  }
-		]`},
-		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>"},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello"},
+		]`, http.StatusOK},
+		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", http.StatusInternalServerError},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello", http.StatusInternalServerError},
 
 		// Tablet Health
 		{"GET", "tablet_health/cell1/100", "", `{ "Key": "", "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
 		  "Name": "", "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Up": true, "Serving": true, "TabletExternallyReparentedTimestamp": 0,
-		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`},
-		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>"},
-		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid"},
+		  "Stats": { "seconds_behind_master": 100 }, "LastError": null }`, http.StatusOK},
+		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>", http.StatusInternalServerError},
+		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid", http.StatusInternalServerError},
 
 		// Topology Info
 		{"GET", "topology_info/?keyspace=all&cell=all", "", `{
 		   "Keyspaces": ["ks1", "ks2"],
 		   "Cells": ["cell1","cell2"],
 		   "TabletTypes": ["REPLICA","RDONLY"]
-		}`},
+		}`, http.StatusOK},
 		{"GET", "topology_info/?keyspace=ks1&cell=cell1", "", `{
 		   "Keyspaces": ["ks1", "ks2"],
 		   "Cells": ["cell1","cell2"],
 		   "TabletTypes": ["REPLICA", "RDONLY"]
-		}`},
+		}`, http.StatusOK},
 
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
 		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null\n}\n\n"
-		}`},
+		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
 		   "Output": "{\n  \"sharding_column_name\": \"\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
-		}`},
+		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",
 		   "Output": "{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"name1\": {\n      \"type\": \"hash\"\n    }\n  },\n  \"tables\": {\n    \"table1\": {\n      \"columnVindexes\": [\n        {\n          \"column\": \"column1\",\n          \"name\": \"name1\"\n        }\n      ]\n    }\n  },\n  \"requireExplicitRouting\": true\n}\n\n"
-		}`},
+		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
 			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",
 		   "Output": ""
-		}`},
-		{"POST", "vtctl/", `["Panic"]`, `uncaught panic: this command panics on purpose`},
+		}`, http.StatusOK},
+		{"POST", "vtctl/", `["Panic"]`, `uncaught panic: this command panics on purpose`, http.StatusInternalServerError},
 	}
 	for _, in := range table {
 		t.Run(in.method+in.path, func(t *testing.T) {
@@ -438,6 +439,10 @@ func TestAPI(t *testing.T) {
 			if err != nil {
 				t.Fatalf("[%v] ioutil.ReadAll(resp.Body) error: %v", in.path, err)
 				return
+			}
+
+			if resp.StatusCode != in.statusCode {
+				t.Fatalf("[%v] got unexpected status code %d, want %d", in.path, resp.StatusCode, in.statusCode)
 			}
 
 			got := compactJSON(body)
