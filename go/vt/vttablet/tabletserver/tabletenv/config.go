@@ -42,6 +42,10 @@ const (
 )
 
 var (
+	defaultHeartbeatInterval = 500 * time.Millisecond
+)
+
+var (
 	currentConfig = TabletConfig{
 		DB: &dbconfigs.GlobalDBConfigs,
 	}
@@ -72,7 +76,6 @@ var (
 	enableHotRowProtectionDryRun bool
 	enableConsolidator           bool
 	enableConsolidatorReplicas   bool
-	enableHeartbeat              bool
 	heartbeatInterval            time.Duration
 	healthCheckInterval          time.Duration
 	degradedThreshold            time.Duration
@@ -140,8 +143,9 @@ func init() {
 	flag.BoolVar(&currentConfig.TransactionLimitByComponent, "transaction_limit_by_component", defaultConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
 	flag.BoolVar(&currentConfig.TransactionLimitBySubcomponent, "transaction_limit_by_subcomponent", defaultConfig.TransactionLimitBySubcomponent, "Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.")
 
-	flag.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
-	flag.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
+	var dummyEnableHeartbeat bool
+	flag.BoolVar(&dummyEnableHeartbeat, "heartbeat_enable", true, "Always enabled, flag to be deprecated. vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
+	flag.DurationVar(&heartbeatInterval, "heartbeat_interval", defaultHeartbeatInterval, "How frequently to read and write replication heartbeat. Maximum value: 1sec")
 
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
@@ -182,17 +186,15 @@ func Init() {
 		currentConfig.Consolidator = Disable
 	}
 
-	switch {
-	case enableHeartbeat:
-		currentConfig.ReplicationTracker.Mode = Heartbeat
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
-	case enableReplicationReporter:
-		currentConfig.ReplicationTracker.Mode = Polling
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
-	default:
-		currentConfig.ReplicationTracker.Mode = Disable
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
+	// We hard-code enable heartbeat, and force heartbeat interval onto a reasonable value
+	if heartbeatInterval == 0 {
+		heartbeatInterval = defaultHeartbeatInterval
 	}
+	if heartbeatInterval > time.Second {
+		heartbeatInterval = time.Second
+	}
+	currentConfig.ReplicationTracker.Mode = Heartbeat
+	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
 
 	currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval)
 	currentConfig.Healthcheck.DegradedThresholdSeconds.Set(degradedThreshold)
@@ -418,7 +420,8 @@ var defaultConfig = TabletConfig{
 		UnhealthyThresholdSeconds: 7200,
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
-		Mode: Disable,
+		Mode:                     Heartbeat,
+		HeartbeatIntervalSeconds: 0.5,
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,
