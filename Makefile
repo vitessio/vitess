@@ -37,6 +37,12 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+# We now have CGO code in the build which throws warnings with newer gcc builds.
+# See: https://github.com/mattn/go-sqlite3/issues/803
+# Work around by dropping optimization level from default -O2.
+# Safe, since this code isn't performance critical.
+export CGO_CFLAGS := -O1
+
 embed_config:
 	cd go/vt/mysqlctl
 	go run github.com/GeertJohan/go.rice/rice embed-go
