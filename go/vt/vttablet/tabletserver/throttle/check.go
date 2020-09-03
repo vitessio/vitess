@@ -12,8 +12,13 @@ import (
 	metrics "github.com/rcrowley/go-metrics"
 )
 
-const frenoAppName = "freno"
-const selfCheckInterval = 250 * time.Millisecond
+const (
+	// DefaultAppName is the app name used by vitess when app doesn't indicate its name
+	DefaultAppName = "default"
+	frenoAppName   = "freno"
+
+	selfCheckInterval = 250 * time.Millisecond
+)
 
 // CheckFlags provide hints for a check
 type CheckFlags struct {
@@ -39,7 +44,7 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
 	// Handle deprioritized app logic
 	denyApp := false
 	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
@@ -51,7 +56,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		}
 	}
 	//
-	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc, denyApp)
+	metricResult, threshold := check.throttler.AppRequestMetricResult(ctx, appName, metricResultFunc, denyApp)
 	if flags.OverrideThreshold > 0 {
 		threshold = flags.OverrideThreshold
 	}
@@ -88,13 +93,13 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 }
 
 // Check is the core function that runs when a user wants to check a metric
-func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(ctx context.Context, appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
 	case "mysql":
 		{
 			metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-				return check.throttler.getMySQLClusterMetrics(storeName)
+				return check.throttler.getMySQLClusterMetrics(ctx, storeName)
 			}
 		}
 	}
@@ -102,7 +107,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
+	checkResult = check.checkAppMetricResult(ctx, appName, storeType, storeName, metricResultFunc, flags)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
@@ -137,12 +142,12 @@ func (check *ThrottlerCheck) splitMetricTokens(metricName string) (storeType str
 }
 
 // localCheck
-func (check *ThrottlerCheck) localCheck(metricName string) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) localCheck(ctx context.Context, metricName string) (checkResult *CheckResult) {
 	storeType, storeName, err := check.splitMetricTokens(metricName)
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(frenoAppName, storeType, storeName, "local", StandardCheckFlags)
+	checkResult = check.Check(ctx, frenoAppName, storeType, storeName, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)
@@ -183,7 +188,7 @@ func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 			for metricName, metricResult := range check.AggregatedMetrics(ctx) {
 				metricName := metricName
 				metricResult := metricResult
-				go check.localCheck(metricName)
+				go check.localCheck(ctx, metricName)
 				go check.reportAggregated(metricName, metricResult)
 			}
 		}

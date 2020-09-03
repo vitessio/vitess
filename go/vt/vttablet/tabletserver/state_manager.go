@@ -105,6 +105,7 @@ type stateManager struct {
 	txThrottler txThrottler
 	te          txEngine
 	messager    subComponent
+	throttler   lagThrottler
 
 	// hcticks starts on initialiazation and runs forever.
 	hcticks *timer.Timer
@@ -152,6 +153,11 @@ type (
 	}
 
 	txThrottler interface {
+		Open() error
+		Close()
+	}
+
+	lagThrottler interface {
 		Open() error
 		Close()
 	}
@@ -465,6 +471,9 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 	if err := sm.qe.Open(); err != nil {
 		return err
 	}
+	if err := sm.throttler.Open(); err != nil {
+		return err
+	}
 	return sm.txThrottler.Open()
 }
 
@@ -473,6 +482,7 @@ func (sm *stateManager) unserveCommon() {
 	sm.te.Close()
 	sm.qe.StopServing()
 	sm.tracker.Close()
+	sm.throttler.Close()
 	sm.requests.Wait()
 }
 
@@ -486,6 +496,7 @@ func (sm *stateManager) closeAll() {
 	sm.vstreamer.Close()
 	sm.rt.Close()
 	sm.se.Close()
+	sm.throttler.Close()
 	sm.setState(topodatapb.TabletType_UNKNOWN, StateNotConnected)
 }
 
