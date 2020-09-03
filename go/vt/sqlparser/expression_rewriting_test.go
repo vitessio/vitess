@@ -102,11 +102,15 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT lower(:__vtdbname) as `lower(database())`",
 		db:       true,
 	}, {
-		in:       "SELECT * FROM A JOIN B USING (id)",
-		expected: "SELECT * FROM A JOIN B ON A.id = B.id",
+		in:       "SELECT a.col, b.col FROM A JOIN B USING (id)",
+		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id = B.id",
 	}, {
+		in:       "SELECT a.col, b.col FROM A JOIN B USING (id1,id2,id3)",
+		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id1 = B.id1 AND A.id2 = B.id2 AND A.id3 = B.id3",
+	}, {
+		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
 		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
-		expected: "SELECT * FROM A JOIN B ON A.id1 = B.id1 AND A.id2 = B.id2 AND A.id3 = B.id3",
+		expected: "SELECT * FROM A JOIN B USING (id1,id2,id3)",
 	}}
 
 	for _, tc := range tests {

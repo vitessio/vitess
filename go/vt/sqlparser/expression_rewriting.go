@@ -104,6 +104,9 @@ type expressionRewriter struct {
 	bindVars                  map[string]struct{}
 	shouldRewriteDatabaseFunc bool
 	err                       error
+
+	// we need to know this to make a decision if we can safely rewrite JOIN USING => JOIN ON
+	hasStarInSelect bool
 }
 
 func newExpressionRewriter() *expressionRewriter {
@@ -132,6 +135,11 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *Select:
 		for _, col := range node.SelectExprs {
+			_, hasStar := col.(*StarExpr)
+			if hasStar {
+				er.hasStarInSelect = true
+			}
+
 			aliasedExpr, ok := col.(*AliasedExpr)
 			if ok && aliasedExpr.As.IsEmpty() {
 				buf := NewTrackedBuffer(nil)
@@ -163,7 +171,7 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 		}
 
 	case JoinCondition:
-		if node.Using != nil {
+		if node.Using != nil && !er.hasStarInSelect {
 			joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
 			if !ok {
 				// this is not possible with the current AST

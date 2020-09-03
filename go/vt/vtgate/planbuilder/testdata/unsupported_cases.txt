@@ -46,6 +46,10 @@
 "select * from user natural join user_extra"
 "unsupported: natural join"
 
+# join with USING construct
+"select * from user join user_extra using(id)"
+"unsupported: join with USING(column_list) clause"
+
 # natural left join
 "select * from user natural left join user_extra"
 "unsupported: natural left join"
