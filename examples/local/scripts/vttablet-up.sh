@@ -47,6 +47,8 @@ vttablet \
  -health_check_interval 5s \
  -enable_semi_sync \
  -enable_replication_reporter \
+ -enable_heartbeat \
+ -heartbeat_interval 500ms \
  -backup_storage_implementation file \
  -file_backup_storage_root $VTDATAROOT/backups \
  -restore_from_backup \

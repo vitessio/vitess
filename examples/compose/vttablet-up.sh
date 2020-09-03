@@ -164,6 +164,8 @@ exec $VTROOT/bin/vttablet \
   -health_check_interval 5s \
   -enable_semi_sync \
   -enable_replication_reporter \
+  -enable_heartbeat \
+  -heartbeat_interval 500ms \
   -port $web_port \
   -grpc_port $grpc_port \
   -binlog_use_v3_resharding_mode=true \
