@@ -384,6 +384,7 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 	}
 
 	var keyspace string
+	schemaExists := false
 	for _, expr := range route.SysTableKeyspaceExpr {
 		result, err := expr.Evaluate(env)
 		if err != nil {
@@ -392,6 +393,7 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 		if keyspace == "" {
 			keyspace = result.Value().ToString()
 			bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(keyspace)
+			schemaExists = true
 		} else if other := result.Value().ToString(); keyspace != other {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't use more than one keyspace per system table query - found both '%s' and '%s'", keyspace, other)
 		}
@@ -404,7 +406,9 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 	destinations, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err == nil {
 		// This is to indicate vttablet to replace the schema name.
-		bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+		if schemaExists {
+			bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+		}
 	} else {
 		// Check with assigned route keyspace.
 		destinations, _, err = vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
