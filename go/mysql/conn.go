@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -446,6 +447,8 @@ func (c *Conn) recycleReadPacket() {
 	c.currentEphemeralPolicy = ephemeralUnused
 }
 
+var mbytescount = stats.NewCountersWithSingleLabel("MBytesCount", "mysql bytes counts", "all")
+
 // readOnePacket reads a single packet into a newly allocated buffer.
 func (c *Conn) readOnePacket() ([]byte, error) {
 	r := c.getReader()
@@ -453,12 +456,14 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	mbytescount.Add("all", 4)
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
 		return nil, nil
 	}
 
+	mbytescount.Add("all", int64(length))
 	data := make([]byte, length)
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)

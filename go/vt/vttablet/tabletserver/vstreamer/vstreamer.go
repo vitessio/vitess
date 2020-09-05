@@ -26,6 +26,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -52,6 +53,8 @@ var HeartbeatTime = 900 * time.Millisecond
 // counter, which will let the tests poll for it to change.
 // TODO(sougou): find a better way for this.
 var vschemaUpdateCount sync2.AtomicInt64
+
+var eventCount = stats.NewCountersWithSingleLabel("VEventCount", "event counts", "all")
 
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
@@ -299,6 +302,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-ctx.Done():
 			return nil
 		case <-timer.C:
+			log.Infof("Heartbeat")
 			now := time.Now().UnixNano()
 			if err := bufferAndTransmit(&binlogdatapb.VEvent{
 				Type:        binlogdatapb.VEventType_HEARTBEAT,
@@ -316,6 +320,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
+	eventCount.Add("all", 1)
 
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
