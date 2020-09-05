@@ -160,15 +160,29 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 			}
 			switch ev.Type {
 			case binlogdata.VEventType_FIELD:
-				result.Fields = ev.FieldEvent.Fields
-				lastFields = result.Fields
+				lastFields = []*querypb.Field{{
+					Name: "op",
+					Type: querypb.Type_VARCHAR,
+				}}
+				lastFields = append(lastFields, ev.FieldEvent.Fields...)
 			case binlogdata.VEventType_ROW:
-				if result.Fields == nil {
-					result.Fields = lastFields
-				}
+				result.Fields = lastFields
+				eventFields := lastFields[1:]
 				for _, change := range ev.RowEvent.RowChanges {
-					vals := sqltypes.MakeRowTrusted(result.Fields, change.After)
-					result.Rows = append(result.Rows, vals)
+					op := ""
+					var vals []sqltypes.Value
+					if change.After != nil && change.Before == nil {
+						op = "+"
+						vals = sqltypes.MakeRowTrusted(eventFields, change.After)
+					} else if change.After != nil && change.Before != nil {
+						op = "*"
+						vals = sqltypes.MakeRowTrusted(eventFields, change.After)
+					} else {
+						op = "-"
+						vals = sqltypes.MakeRowTrusted(eventFields, change.Before)
+					}
+					newVals := append([]sqltypes.Value{sqltypes.NewVarChar(op)}, vals...)
+					result.Rows = append(result.Rows, newVals)
 					numRows++
 					if totalRows+numRows >= limit {
 						break

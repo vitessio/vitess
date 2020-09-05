@@ -60,6 +60,16 @@ func TestVStreamFrom(t *testing.T) {
 						Lengths: []int64{1, 5},
 						Values:  []byte("2defgh"),
 					},
+					Before: &querypb.Row{
+						Lengths: []int64{1, 5},
+						Values:  []byte("1xefgh"),
+					},
+				},
+				{
+					Before: &querypb.Row{
+						Lengths: []int64{1, 3},
+						Values:  []byte("0xyz"),
+					},
 				},
 			},
 		},
@@ -77,17 +87,24 @@ func TestVStreamFrom(t *testing.T) {
 	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
+			{Name: "op", Type: sqltypes.VarChar},
 			{Name: "id", Type: sqltypes.Int64},
 			{Name: "val", Type: sqltypes.VarChar},
 		},
-		RowsAffected: 2,
+		RowsAffected: 3,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarChar("+"),
 			sqltypes.NewInt64(1),
 			sqltypes.NewVarChar("abc"),
 		}, {
+			sqltypes.NewVarChar("*"),
 			sqltypes.NewInt64(2),
 			sqltypes.NewVarChar("defgh"),
+		}, {
+			sqltypes.NewVarChar("-"),
+			sqltypes.NewInt64(0),
+			sqltypes.NewVarChar("xyz"),
 		}},
 	}
 	if !result.Equal(want) {
