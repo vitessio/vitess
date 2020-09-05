@@ -71,7 +71,7 @@ func getVStreamStartPos(stmt *sqlparser.VStream) (string, error) {
 				switch c := v.Left.(type) {
 				case *sqlparser.ColName:
 					switch val := v.Right.(type) {
-					case *sqlparser.SQLVal:
+					case *sqlparser.Literal:
 						pos = string(val.Val)
 					}
 					colName = strings.ToLower(c.Name.String())
@@ -105,7 +105,7 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 		}
 	}
 	if stmt.Limit != nil {
-		count, ok := stmt.Limit.Rowcount.(*sqlparser.SQLVal)
+		count, ok := stmt.Limit.Rowcount.(*sqlparser.Literal)
 		if ok {
 			limit, _ = strconv.Atoi(string(count.Val))
 		}
