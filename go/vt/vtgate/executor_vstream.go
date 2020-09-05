@@ -97,7 +97,7 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 
 	srvResolver := srvtopo.NewResolver(e.serv, gw, e.cell)
 
-	limit := 10000
+	limit := 100
 	if stmt.Where != nil {
 		pos, err = getVStreamStartPos(stmt)
 		if err != nil {
@@ -144,6 +144,7 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 	}
 	var lastFields []*querypb.Field
 	numRows := 0
+	totalRows := 0
 	if limit == 0 {
 		return io.EOF
 	}
@@ -154,7 +155,7 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 			Rows:         [][]sqltypes.Value{},
 		}
 		for _, ev := range evs {
-			if numRows >= limit {
+			if totalRows+numRows >= limit {
 				break
 			}
 			switch ev.Type {
@@ -169,7 +170,7 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 					vals := sqltypes.MakeRowTrusted(result.Fields, change.After)
 					result.Rows = append(result.Rows, vals)
 					numRows++
-					if numRows >= limit {
+					if totalRows+numRows >= limit {
 						break
 					}
 				}
@@ -179,11 +180,14 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 		}
 		if numRows > 0 {
 			err := callback(result)
+			totalRows += numRows
 			numRows = 0
 			if err != nil {
 				return err
 			}
-			return io.EOF
+			if totalRows >= limit {
+				return io.EOF
+			}
 		}
 		return nil
 	}
