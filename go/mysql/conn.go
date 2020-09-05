@@ -448,6 +448,7 @@ func (c *Conn) recycleReadPacket() {
 }
 
 var mbytescount = stats.NewCountersWithSingleLabel("MBytesCount", "mysql bytes counts", "all")
+var Lmbytescount int
 
 // readOnePacket reads a single packet into a newly allocated buffer.
 func (c *Conn) readOnePacket() ([]byte, error) {
@@ -457,6 +458,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 		return nil, err
 	}
 	mbytescount.Add("all", 4)
+	Lmbytescount += 4
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
@@ -464,6 +466,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	}
 
 	mbytescount.Add("all", int64(length))
+	Lmbytescount += length
 	data := make([]byte, length)
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)

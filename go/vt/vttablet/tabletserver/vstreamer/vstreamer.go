@@ -55,6 +55,7 @@ var HeartbeatTime = 900 * time.Millisecond
 var vschemaUpdateCount sync2.AtomicInt64
 
 var eventCount = stats.NewCountersWithSingleLabel("VEventCount", "event counts", "all")
+var LeventCount int
 
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
@@ -156,7 +157,9 @@ func (vs *vstreamer) Stream() error {
 		return err
 	}
 	vs.pos = pos
-	return vs.replicate(ctx)
+	err = vs.replicate(ctx)
+	log.Errorf("event count: %v, byte count: %v, err: %v", LeventCount, mysql.Lmbytescount, err)
+	return err
 }
 
 // Stream streams binlog events.
@@ -321,6 +324,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
 	eventCount.Add("all", 1)
+	LeventCount += 1
 
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
