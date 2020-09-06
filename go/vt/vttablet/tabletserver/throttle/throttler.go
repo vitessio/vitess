@@ -10,8 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -22,25 +24,42 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-const leaderCheckInterval = 1 * time.Second
-const mysqlCollectInterval = 50 * time.Millisecond
-const mysqlRefreshInterval = 10 * time.Second
-const mysqlAggreateInterval = 25 * time.Millisecond
-
-const aggregatedMetricsExpiration = 5 * time.Second
-const aggregatedMetricsCleanup = 1 * time.Second
-const throttledAppsSnapshotInterval = 5 * time.Second
-const recentAppsExpiration = time.Hour * 24
-
-const nonDeprioritizedAppMapExpiration = time.Second
-const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
-
-const defaultThrottleTTLMinutes = 60
-const defaultThrottleRatio = 1.0
-
 const (
+	leaderCheckInterval         = 5 * time.Second
+	mysqlCollectInterval        = 100 * time.Millisecond
+	mysqlDormantCollectInterval = 5 * time.Second
+	mysqlRefreshInterval        = 10 * time.Second
+	mysqlAggreateInterval       = 100 * time.Millisecond
+
+	aggregatedMetricsExpiration   = 5 * time.Second
+	aggregatedMetricsCleanup      = 1 * time.Second
+	throttledAppsSnapshotInterval = 5 * time.Second
+	recentAppsExpiration          = time.Hour * 24
+
+	nonDeprioritizedAppMapExpiration = time.Second
+	nonDeprioritizedAppMapInterval   = 100 * time.Millisecond
+
+	dormantPeriod             = time.Minute
+	defaultThrottleTTLMinutes = 60
+	defaultThrottleRatio      = 1.0
+
+	maxPasswordLength = 32
+
 	localStoreName = "local"
-	// replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) from _vt.heartbeat`
+)
+
+var (
+	throttlerUser  = "vt_tablet_throttler"
+	throttlerGrant = fmt.Sprintf("'%s'@'%s'", throttlerUser, "%")
+
+	sqlCreatethrottlerUser = []string{
+		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
+		`ALTER USER %s IDENTIFIED BY '%s'`,
+	}
+	sqlGrantThrottlerUser = []string{
+		`GRANT SELECT ON _vt.heartbeat TO %s`,
+	}
+	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) from _vt.heartbeat`
 )
 
 func init() {
@@ -54,7 +73,7 @@ type Throttler struct {
 	shard    string
 
 	check    *ThrottlerCheck
-	isLeader int64
+	isLeader bool
 	isOpen   int64
 
 	env            tabletenv.Env
@@ -74,6 +93,8 @@ type Throttler struct {
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
 
+	lastCheckTimeNano int64
+
 	initOnce           sync.Once
 	initMutex          sync.Mutex
 	throttledAppsMutex sync.Mutex
@@ -87,8 +108,9 @@ type ThrottlerStatus struct {
 	Keyspace string
 	Shard    string
 
-	IsLeader bool
-	IsOpen   bool
+	IsLeader  bool
+	IsOpen    bool
+	IsDormant bool
 
 	AggregatedMetrics map[string]base.MetricResult
 	MetricsHealth     base.MetricHealthMap
@@ -97,7 +119,7 @@ type ThrottlerStatus struct {
 // NewThrottler creates a Throttler
 func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Throttler {
 	throttler := &Throttler{
-		isLeader: 0,
+		isLeader: false,
 		isOpen:   0,
 
 		env:            env,
@@ -137,20 +159,31 @@ func boolToInt64(b bool) int64 {
 	return 0
 }
 
-func (throttler *Throttler) isOpenAndLeader() bool {
-	if atomic.LoadInt64(&throttler.isOpen) == 0 {
-		return false
-	}
-	if atomic.LoadInt64(&throttler.isLeader) == 0 {
-		return false
-	}
-	return true
-}
-
 // InitDBConfig initializes keyspace and shard
 func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
 	throttler.shard = shard
+}
+
+// initThrottler initializes config
+func (throttler *Throttler) initConfig(password string) {
+	log.Infof("Throttler: initializing config")
+	config.Instance = &config.ConfigurationSettings{
+		Stores: config.StoresSettings{
+			MySQL: config.MySQLConfigurationSettings{
+				IgnoreDialTCPErrors: true,
+				Clusters: map[string](*config.MySQLClusterConfigurationSettings){
+					localStoreName: &config.MySQLClusterConfigurationSettings{
+						User:              throttlerUser,
+						Password:          password,
+						ThrottleThreshold: 1.0,
+						MetricQuery:       replicationLagQuery,
+						IgnoreHostsCount:  0,
+					},
+				},
+			},
+		},
+	}
 }
 
 // Open opens database pool and initializes the schema
@@ -161,8 +194,12 @@ func (throttler *Throttler) Open() error {
 		// already open
 		return nil
 	}
+
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
-	throttler.initOnce.Do(func() { go throttler.Operate(context.Background()) })
+	throttler.initOnce.Do(func() {
+		// Operate() will be mindful of Open/Close state changes, so we only need to start it once.
+		go throttler.Operate(context.Background())
+	})
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
 	return nil
@@ -181,9 +218,41 @@ func (throttler *Throttler) Close() {
 	atomic.StoreInt64(&throttler.isOpen, 0)
 }
 
+// createThrottlerUser creates or updates the throttler account and assigns it a random password
+func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password string, err error) {
+	conn, err := dbconnpool.NewDBConnection(ctx, throttler.env.Config().DB.DbaConnector())
+	if err != nil {
+		return password, err
+	}
+	defer conn.Close()
+
+	password = base.RandomHash()[0:maxPasswordLength]
+
+	for _, query := range sqlCreatethrottlerUser {
+		parsed := sqlparser.BuildParsedQuery(query, throttlerGrant, password)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return password, err
+		}
+	}
+	for _, query := range sqlGrantThrottlerUser {
+		parsed := sqlparser.BuildParsedQuery(query, throttlerGrant)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return password, err
+		}
+	}
+	log.Infof("Throttler: user created/updated")
+	return password, nil
+}
+
 // ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
 func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
 	return throttler.throttledApps.Items()
+}
+
+// isDormant returns true when the last check was more than dormantPeriod ago
+func (throttler *Throttler) isDormant() bool {
+	lastCheckTime := time.Unix(0, atomic.LoadInt64(&throttler.lastCheckTimeNano))
+	return time.Since(lastCheckTime) > dormantPeriod
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -192,6 +261,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 
 	leaderCheckTicker := time.NewTicker(leaderCheckInterval)
 	mysqlCollectTicker := time.NewTicker(mysqlCollectInterval)
+	mysqlDormantCollectTicker := time.NewTicker(mysqlDormantCollectInterval)
 	mysqlRefreshTicker := time.NewTicker(mysqlRefreshInterval)
 	mysqlAggregateTicker := time.NewTicker(mysqlAggreateInterval)
 	throttledAppsTicker := time.NewTicker(throttledAppsSnapshotInterval)
@@ -199,25 +269,52 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	// initial read of inventory:
 	go throttler.refreshMySQLInventory(ctx)
 
+	shouldCreateThrottlerUser := false
 	for {
 		select {
 		case <-leaderCheckTicker.C:
 			{
 				// sparse
-				previouslyOpenAndLeader := throttler.isOpenAndLeader()
-				atomic.StoreInt64(&throttler.isLeader, boolToInt64(throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER))
-				isNowOpenAndLeader := throttler.isOpenAndLeader()
-				if isNowOpenAndLeader && !previouslyOpenAndLeader {
-					log.Infof("Throttler: transition into leadership")
+				wasPreviouslyLeader := throttler.isLeader
+				shouldBeLeader := false
+				if atomic.LoadInt64(&throttler.isOpen) > 0 {
+					if throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER {
+						shouldBeLeader = true
+					}
 				}
-				if previouslyOpenAndLeader && !isNowOpenAndLeader {
+				throttler.isLeader = shouldBeLeader
+
+				if throttler.isLeader && !wasPreviouslyLeader {
+					log.Infof("Throttler: transition into leadership")
+					shouldCreateThrottlerUser = true
+				}
+				if wasPreviouslyLeader && !throttler.isLeader {
 					log.Infof("Throttler: transition out of leadership")
+				}
+
+				if throttler.isLeader && shouldCreateThrottlerUser {
+					password, err := throttler.createThrottlerUser(ctx)
+					if err == nil {
+						throttler.initConfig(password)
+						shouldCreateThrottlerUser = false
+					} else {
+						log.Errorf("Error creating throttler account: %+v", err)
+					}
 				}
 			}
 		case <-mysqlCollectTicker.C:
 			{
 				// frequent
-				throttler.collectMySQLMetrics(ctx)
+				if !throttler.isDormant() {
+					throttler.collectMySQLMetrics(ctx)
+				}
+			}
+		case <-mysqlDormantCollectTicker.C:
+			{
+				// infrequent
+				if throttler.isDormant() {
+					throttler.collectMySQLMetrics(ctx)
+				}
 			}
 		case metric := <-throttler.mysqlThrottleMetricChan:
 			{
@@ -243,7 +340,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 				go throttler.expireThrottledApps()
 			}
 		}
-		if !throttler.isOpenAndLeader() {
+		if !throttler.isLeader {
 			log.Infof("Throttler: not leader")
 			time.Sleep(1 * time.Second)
 		}
@@ -251,7 +348,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 }
 
 func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
-	if !throttler.isOpenAndLeader() {
+	if !throttler.isLeader {
 		return nil
 	}
 	// synchronously, get lists of probes
@@ -282,7 +379,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 // refreshMySQLInventory will re-structure the inventory based on reading config settings, and potentially
 // re-querying dynamic data such as HAProxy list of hosts
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
-	if !throttler.isOpenAndLeader() {
+	if !throttler.isLeader {
 		return nil
 	}
 	log.Infof("refreshing MySQL inventory")
@@ -355,7 +452,7 @@ func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, cluste
 
 // synchronous aggregation of collected data
 func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
-	if !throttler.isOpenAndLeader() {
+	if !throttler.isLeader {
 		return nil
 	}
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
@@ -530,8 +627,9 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		Keyspace: throttler.keyspace,
 		Shard:    throttler.shard,
 
-		IsLeader: (atomic.LoadInt64(&throttler.isLeader) > 0),
-		IsOpen:   (atomic.LoadInt64(&throttler.isOpen) > 0),
+		IsLeader:  throttler.isLeader,
+		IsOpen:    (atomic.LoadInt64(&throttler.isOpen) > 0),
+		IsDormant: throttler.isDormant(),
 
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
 		MetricsHealth:     throttler.metricsHealthSnapshot(),
