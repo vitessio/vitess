@@ -88,6 +88,8 @@ func TestMain(m *testing.M) {
 			"-lock_tables_timeout", "5s",
 			"-watch_replication_stream",
 			"-enable_replication_reporter",
+			"-heartbeat_enable",
+			"-heartbeat_interval", "250ms",
 		}
 		// We do not need semiSync for this test case.
 		clusterInstance.EnableSemiSync = false
@@ -143,25 +145,53 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func TestNoReplicas(t *testing.T) {
+func TestLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
-	assert.NoError(t, err)
+	{
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
+		assert.NoError(t, err)
 
-	time.Sleep(10 * time.Second)
-	// This makes no REPLICA servers available. We expect something like:
-	// {"StatusCode":500,"Value":0,"Threshold":1,"Message":"No hosts found"}
-	resp, err := throttleCheck()
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		time.Sleep(2 * time.Second)
+		// Lag will have accumulated
+		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
+		resp, err := throttleCheck()
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+	}
+	{
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
+		assert.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
-	assert.NoError(t, err)
+		time.Sleep(5 * time.Second)
+		// Restore
+		resp, err := throttleCheck()
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	}
+}
 
-	time.Sleep(10 * time.Second)
-	// Restore valid replica
-	resp, err = throttleCheck()
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+func TestNoReplicas(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	{
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
+		assert.NoError(t, err)
+
+		time.Sleep(10 * time.Second)
+		// This makes no REPLICA servers available. We expect something like:
+		// {"StatusCode":500,"Value":0,"Threshold":1,"Message":"No hosts found"}
+		resp, err := throttleCheck()
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	}
+	{
+		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
+		assert.NoError(t, err)
+
+		time.Sleep(10 * time.Second)
+		// Restore valid replica
+		resp, err := throttleCheck()
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	}
 }
