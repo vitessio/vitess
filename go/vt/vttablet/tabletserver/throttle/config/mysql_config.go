@@ -42,7 +42,6 @@ type MySQLConfigurationSettings struct {
 	HTTPCheckPort        int      // port for HTTP check. -1 to disable.
 	HTTPCheckPath        string   // If non-empty, requires HTTPCheckPort
 	IgnoreHosts          []string // If non empty, substrings to indicate hosts to be ignored/skipped
-	VitessCells          []string // Name of the Vitess cells for polling tablet hosts
 
 	Clusters map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
 }
