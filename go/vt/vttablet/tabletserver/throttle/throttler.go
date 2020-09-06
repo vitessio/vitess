@@ -219,6 +219,23 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 	}
 	defer conn.Close()
 
+	// Double check this server is writable
+	tm, err := conn.ExecuteFetch("select @@global.read_only as read_only from dual", 1, true)
+	if err != nil {
+		return password, err
+	}
+	row := tm.Named().Row()
+	if row == nil {
+		return password, fmt.Errorf("unexpected result for MySQL variables: %+v", tm.Rows)
+	}
+	readOnly, err := row.ToBool("read_only")
+	if err != nil {
+		return password, err
+	}
+	if readOnly {
+		return password, fmt.Errorf("createThrottlerUser(): server is read_only")
+	}
+
 	password = base.RandomHash()[0:maxPasswordLength]
 
 	for _, query := range sqlCreatethrottlerUser {
