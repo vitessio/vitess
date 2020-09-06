@@ -131,7 +131,7 @@ oltpReadPool:
   size: 16
 queryCacheSize: 5000
 replicationTracker:
-  heartbeatIntervalSeconds: 0.5
+  heartbeatIntervalSeconds: 0.25
   mode: heartbeat
 schemaReloadIntervalSeconds: 1800
 streamBufferSize: 32768
@@ -217,7 +217,7 @@ func TestFlags(t *testing.T) {
 	want.Healthcheck.DegradedThresholdSeconds = 30
 	want.Healthcheck.UnhealthyThresholdSeconds = 7200
 	want.ReplicationTracker.Mode = Heartbeat
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 0.5
+	want.ReplicationTracker.HeartbeatIntervalSeconds = 0.25
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
 
@@ -291,7 +291,7 @@ func TestFlags(t *testing.T) {
 	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	Init()
 	want.ReplicationTracker.Mode = Heartbeat
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 0.5
+	want.ReplicationTracker.HeartbeatIntervalSeconds = 0.25
 	assert.Equal(t, want, currentConfig)
 
 	healthCheckInterval = 1 * time.Second

@@ -417,7 +417,7 @@ var defaultConfig = TabletConfig{
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
 		Mode:                     Heartbeat,
-		HeartbeatIntervalSeconds: 0.5,
+		HeartbeatIntervalSeconds: 0.25,
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,
