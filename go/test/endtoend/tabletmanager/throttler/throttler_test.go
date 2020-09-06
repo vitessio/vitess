@@ -118,12 +118,16 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func throttleCheck() (*http.Response, error) {
+	return httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", masterTablet.HTTPPort, checkAPIPath))
+}
+
 func TestThrottlerBeforeMetricsCollected(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	// Immediately after startup, we expect this response:
 	// {"StatusCode":404,"Value":0,"Threshold":0,"Message":"No such metric"}
-	resp, err := httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", masterTablet.HTTPPort, checkAPIPath))
+	resp, err := throttleCheck()
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -134,7 +138,30 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	time.Sleep(10 * time.Second)
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
-	resp, err := httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", masterTablet.HTTPPort, checkAPIPath))
+	resp, err := throttleCheck()
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestNoReplicas(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
+	assert.NoError(t, err)
+
+	time.Sleep(10 * time.Second)
+	// This makes no REPLICA servers available. We expect something like:
+	// {"StatusCode":500,"Value":0,"Threshold":1,"Message":"No hosts found"}
+	resp, err := throttleCheck()
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
+	assert.NoError(t, err)
+
+	time.Sleep(10 * time.Second)
+	// Restore valid replica
+	resp, err = throttleCheck()
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
