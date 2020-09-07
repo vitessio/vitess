@@ -178,7 +178,8 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 
 	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
 	checkedExec(t, conn, "set sql_safe_updates = 1")
-	qr := checkedExec(t, conn, "select connection_id() from test where id = 80")
+	qr := checkedExec(t, conn, "select @@sql_safe_updates, connection_id() from test where id = 80")
+	require.Equal(t, "1", qr.Rows[0][0].ToString())
 
 	// Connection timeout.
 	time.Sleep(10 * time.Second)
@@ -187,9 +188,10 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 	_, err = exec(t, conn, `select @@sql_safe_updates from test where id = 80`)
 	require.Error(t, err)
 
-	// we still want to have our system setting applied
-	newQR := checkedExec(t, conn, `select connection_id() from test where id = 80`)
-	require.NotEqual(t, qr.Rows[0][0], newQR.Rows[0][0])
+	// this query is able to succeed.
+	newQR := checkedExec(t, conn, `select @@sql_safe_updates, connection_id() from test where id = 80`)
+	require.Equal(t, qr.Rows[0][0], newQR.Rows[0][0])
+	require.NotEqual(t, qr.Rows[0][1], newQR.Rows[0][1])
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
