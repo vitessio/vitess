@@ -286,7 +286,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	case 1:
 		existingksid := qr.Rows[0][0].ToBytes()
 		// Lock the target row using normal transaction priority.
-		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
+		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */, vtgatepb.CommitOrder_PRE)
 		if err != nil {
 			return err
 		}
@@ -347,10 +347,6 @@ func (lu *clCommon) generateLockOwner() string {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "select %s from %s", lu.ownerColumns[0], lu.ownerTable)
 	lu.addWhere(&buf, lu.ownerColumns)
-	// We can lock in share mode because we only want to check
-	// if the row exists. We still need to lock to make us wait
-	// in case a previous transaction is creating it.
-	fmt.Fprintf(&buf, " lock in share mode")
 	return buf.String()
 }
 
