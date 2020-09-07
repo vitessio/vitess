@@ -46,11 +46,8 @@ func TestConsistentLookup(t *testing.T) {
 	// check that the lookup query happens in the right connection
 	assertMatches(t, conn, "select * from t1 where id2 = 4", "[[INT64(1) INT64(4)]]")
 	exec(t, conn, "commit")
-	assertMatches(t, conn, "select * from t1", "[[INT64(1) INT64(4)]]")
-	qr := exec(t, conn, "select * from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1`, `[[INT64(1) INT64(4)]]`)
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(4) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 
 	// Inserting again should fail.
 	exec(t, conn, "begin")
@@ -67,25 +64,14 @@ func TestConsistentLookup(t *testing.T) {
 	exec(t, conn, "delete from t1 where id1=1")
 	assertMatches(t, conn, "select * from t1 where id2 = 4", "[]")
 	exec(t, conn, "commit")
-	qr = exec(t, conn, "select * from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select * from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, "select * from t1", `[]`)
+	assertMatches(t, conn, "select * from t1_id2_idx", `[]`)
 
 	// Autocommit insert.
 	exec(t, conn, "insert into t1(id1, id2) values(1, 4)")
-	qr = exec(t, conn, "select * from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select id2 from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, "select * from t1", "[[INT64(1) INT64(4)]]")
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(4) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+
 	// Autocommit delete.
 	exec(t, conn, "delete from t1 where id1=1")
 
@@ -94,73 +80,48 @@ func TestConsistentLookup(t *testing.T) {
 	// Delete the main row only.
 	exec(t, conn2, "use `ks:-80`")
 	exec(t, conn2, "delete from t1 where id1=1")
+	exec(t, conn2, "use `ks`")
 	// Verify the lookup row is still there.
-	qr = exec(t, conn, "select id2 from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(4) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 	// Insert should still succeed.
 	exec(t, conn, "begin")
 	exec(t, conn, "insert into t1(id1, id2) values(1, 4)")
 	exec(t, conn, "commit")
-	qr = exec(t, conn, "select * from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1`, `[[INT64(1) INT64(4)]]`)
+
 	// Lookup row should be unchanged.
-	qr = exec(t, conn, "select * from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(4) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 
 	// Dangling row not pointing to existing keyspace id.
 	exec(t, conn2, "use `ks:-80`")
 	exec(t, conn2, "delete from t1 where id1=1")
+	exec(t, conn2, "use `ks`")
 	// Update the lookup row with bogus keyspace id.
 	exec(t, conn, "update t1_id2_idx set keyspace_id='aaa' where id2=4")
-	qr = exec(t, conn, "select * from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"aaa\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(4) VARBINARY("aaa")]]`)
 	// Insert should still succeed.
 	exec(t, conn, "begin")
 	exec(t, conn, "insert into t1(id1, id2) values(1, 4)")
 	exec(t, conn, "commit")
-	qr = exec(t, conn, "select * from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1`, `[[INT64(1) INT64(4)]]`)
 	// lookup row must be updated.
-	qr = exec(t, conn, "select * from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(4) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 
 	// Update, but don't change anything. This should not deadlock.
 	exec(t, conn, "begin")
 	exec(t, conn, "update t1 set id2=4 where id1=1")
 	exec(t, conn, "commit")
-	qr = exec(t, conn, "select * from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select * from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1`, `[[INT64(1) INT64(4)]]`)
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(4) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 
 	// Update, and change the lookup value. This should change main and lookup rows.
 	exec(t, conn, "begin")
 	exec(t, conn, "update t1 set id2=5 where id1=1")
 	exec(t, conn, "commit")
-	qr = exec(t, conn, "select * from t1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(5)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select * from t1_id2_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(5) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, `select * from t1`, `[[INT64(1) INT64(5)]]`)
+	assertMatches(t, conn, `select * from t1_id2_idx`, `[[INT64(5) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+
+	// clear the table.
 	exec(t, conn, "delete from t1 where id1=1")
 }
 
@@ -524,4 +485,57 @@ func TestSelectNullLookup(t *testing.T) {
 	assertMatches(t, conn, "select id1, id2 from t6 where id1 NOT IN (1,3)", "[[INT64(2) VARCHAR(\"b\")]]")
 
 	exec(t, conn, "delete from t6")
+}
+
+func TestConsistentLookupError(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete from txn_unique_constraints")
+
+	exec(t, conn, "set transaction_mode = 'single'")
+	exec(t, conn, "begin")
+	exec(t, conn, "INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint, created_on) VALUES (UUID(), 'txn1', 'txn_info_txn_id_txn1', '2020-03-25 23:59:59.000')")
+	exec(t, conn, "INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint, created_on) VALUES (UUID(), 'txn1', 'txn_info_mti_mc___mti1_mc1', '2020-03-25 23:59:59.000')")
+	exec(t, conn, "commit")
+	assertMatches(t, conn, "select txn_id, unique_constraint from txn_unique_constraints order by txn_id", `[[VARCHAR("txn1") VARCHAR("txn_info_mti_mc___mti1_mc1")] [VARCHAR("txn1") VARCHAR("txn_info_txn_id_txn1")]]`)
+
+	// Inserting again should fail.
+	exec(t, conn, "begin")
+
+	exec(t, conn, "INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint, created_on) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn3', '2020-03-25 23:59:59.000')")
+	_, err = conn.ExecuteFetch("INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint, created_on) VALUES (UUID(), 'txn3', 'txn_info_mti_mc___mti1_mc1', '2020-03-25 23:59:59.000')", 1000, true)
+	exec(t, conn, "commit")
+	require.Error(t, err)
+	mysqlErr := err.(*mysql.SQLError)
+	assert.Equal(t, 1062, mysqlErr.Num)
+	assert.Equal(t, "23000", mysqlErr.State)
+	assert.Contains(t, mysqlErr.Message, "Duplicate entry")
+	exec(t, conn, "set transaction_mode = 'multi'")
+}
+
+func TestConsistentLookupInnsertPassonSingleTxn(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete from txn_unique_constraints")
+
+	exec(t, conn, "set transaction_mode = 'single'")
+	// insert only the lookup index to make it look like orphan lookup vindex.
+	exec(t, conn, "INSERT INTO uniqueConstraint_vdx(unique_constraint, keyspace_id) VALUES ('txn_info_txn_id_txn1', 'txn1')")
+	// actual record not present.
+	assertMatches(t, conn, "select txn_id, unique_constraint from txn_unique_constraints where unique_constraint = 'txn_info_txn_id_txn1'", `[]`)
+
+	// Inserting should pass.
+	//exec(t, conn, "begin")
+	exec(t, conn, "INSERT INTO txn_unique_constraints(id, txn_id, unique_constraint, created_on) VALUES (UUID(), 'txn3', 'txn_info_txn_id_txn1', '2020-03-25 23:59:59.000')")
+	//exec(t, conn, "commit")
+	assertMatches(t, conn, "select txn_id, unique_constraint from txn_unique_constraints where unique_constraint = 'txn_info_txn_id_txn1'", `[[VARCHAR("txn3") VARCHAR("txn_info_txn_id_txn1")]]`)
+	exec(t, conn, "set transaction_mode = 'multi'")
 }

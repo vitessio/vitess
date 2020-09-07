@@ -127,7 +127,24 @@ create table t7_xxhash_idx(
 	phone bigint,
 	keyspace_id varbinary(50),
 	primary key(phone, keyspace_id)
-) Engine=InnoDB;`
+) Engine=InnoDB;
+
+CREATE TABLE txn_unique_constraints (
+  id                varchar(100) NOT NULL ,
+  txn_id            varchar(50) NOT NULL,
+  unique_constraint varchar(100) NOT NULL,
+  created_on        timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_txn_unique_constraint (unique_constraint),
+  KEY idx_txn_unique_constraints_txn_id (txn_id),
+  KEY idx_txn_unique_constraints_created_on (created_on)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE uniqueConstraint_vdx(
+  unique_constraint VARCHAR(50) NOT NULL,
+  keyspace_id       VARBINARY(50) NOT NULL,
+ PRIMARY KEY(unique_constraint)
+);`
 
 	VSchema = `
 {
@@ -201,6 +218,16 @@ create table t7_xxhash_idx(
         "ignore_nulls": "true"
       },
       "owner": "t7_xxhash"
+    },
+    "uniqueConstraint_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "uniqueConstraint_vdx",
+        "from": "unique_constraint",
+        "to": "keyspace_id",
+        "autocommit": "true"
+      },
+      "owner": "txn_unique_constraints"
     }
   },
   "tables": {
@@ -351,6 +378,32 @@ create table t7_xxhash_idx(
         {
           "column": "phone",
           "name": "unicode_loose_xxhash"
+        }
+      ]
+    },
+    "txn_unique_constraints": {
+      "column_vindexes": [
+        {
+          "column": "txn_id",
+          "name": "unicode_loose_md5"
+        },
+        {
+          "column": "unique_constraint",
+          "name": "uniqueConstraint_vdx"
+        }
+      ],
+      "columns": [
+        {
+          "name": "txn_id",
+          "type": "VARCHAR"
+        }
+      ]
+    },
+    "uniqueConstraint_vdx": {
+      "column_vindexes": [
+        {
+          "column": "unique_constraint",
+          "name": "unicode_loose_md5"
         }
       ]
     }
