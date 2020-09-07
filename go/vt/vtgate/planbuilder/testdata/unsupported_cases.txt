@@ -2,14 +2,6 @@
 "select * from user union select * from user_extra"
 "unsupported: UNION cannot be executed as a single route"
 
-# SET
-"set a=1"
-"plan building not supported"
-
-# set user defined and system variable
-"set @foo = 42, @bar = @foo, @@wait_timeout = 28800"
-"plan building not supported"
-
 # SHOW
 "show create database"
 "plan building not supported"
@@ -419,3 +411,15 @@
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
 "Incorrect usage of UNION and LIMIT - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
+
+# select get_lock with non-dual table
+"select get_lock('xyz', 10) from user"
+"get_lock('xyz', 10) allowed only with dual"
+
+# select is_free_lock with non-dual table
+"select is_free_lock('xyz') from user"
+"is_free_lock('xyz') allowed only with dual"
+
+# insert using select get_lock from table
+"insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
+"unsupported: insert into select"

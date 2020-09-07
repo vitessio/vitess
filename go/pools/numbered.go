@@ -131,13 +131,15 @@ func (nu *Numbered) Get(id int64, purpose string) (val interface{}, err error) {
 }
 
 // Put unlocks a resource for someone else to use.
-func (nu *Numbered) Put(id int64) {
+func (nu *Numbered) Put(id int64, updateTime bool) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	if nw, ok := nu.resources[id]; ok {
 		nw.inUse = false
 		nw.purpose = ""
-		nw.timeUsed = time.Now()
+		if updateTime {
+			nw.timeUsed = time.Now()
+		}
 	}
 }
 
@@ -162,7 +164,7 @@ func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []inter
 		if nw.inUse || !nw.enforceTimeout {
 			continue
 		}
-		if nw.timeCreated.Add(age).Sub(now) <= 0 {
+		if nw.timeUsed.Add(age).Sub(now) <= 0 {
 			nw.inUse = true
 			nw.purpose = purpose
 			vals = append(vals, nw.val)

@@ -20,6 +20,9 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
 
@@ -156,9 +159,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClient1.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest1Master.TM.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest1Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient1.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -184,9 +185,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClient2.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest2Master.TM.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest2Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient2.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -248,6 +247,12 @@ func TestMigrateServedTypes(t *testing.T) {
 }
 
 func TestMultiShardMigrateServedTypes(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	// TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
 	flag.Set("wait_for_drain_sleep_rdonly", "0s")
 	flag.Set("wait_for_drain_sleep_replica", "0s")
@@ -420,9 +425,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest1Master.TM.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest1Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient1.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -437,9 +440,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest2Master.TM.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest2Master.TM.VREngine.Open(context.Background())
 
 	// select pos, state, message from _vt.vreplication
 	dbClient2.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
@@ -508,9 +509,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	dest3Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest3Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest3Master.TM.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest3Master.TM.VREngine.Open(context.Background())
 	// select pos, state, message from _vt.vreplication
 	dbClient1.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/5-456-892"),
@@ -525,9 +524,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	dest4Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest4Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
-	if err := dest4Master.TM.VREngine.Open(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	dest4Master.TM.VREngine.Open(context.Background())
 
 	// select pos, state, message from _vt.vreplication
 	dbClient2.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{

@@ -123,7 +123,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Map(vcursor VCursor, ids []sqltypes.Value) 
 	if err != nil {
 		return nil, err
 	}
-	results, err := lh.lkp.Lookup(vcursor, ids)
+	results, err := lh.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Map(vcursor VCursor, ids []sqltypes.
 	if err != nil {
 		return nil, err
 	}
-	results, err := lhu.lkp.Lookup(vcursor, ids)
+	results, err := lhu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +382,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) MarshalJSON() ([]byte, error) {
 }
 
 func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {
-	hash, err := unicodeHash(value)
+	hash, err := unicodeHash(vMD5Hash, value)
 	if err != nil {
 		return sqltypes.NULL, err
 	}

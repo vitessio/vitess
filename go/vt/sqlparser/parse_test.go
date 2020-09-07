@@ -728,6 +728,9 @@ var (
 	}, {
 		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
 	}, {
+		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
+		output: "insert into user(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
@@ -829,6 +832,12 @@ var (
 	}, {
 		input:  "set session wait_timeout = 3600",
 		output: "set session wait_timeout = 3600",
+	}, {
+		input:  "set session wait_timeout = 3600, session autocommit = off",
+		output: "set session wait_timeout = 3600, session autocommit = 'off'",
+	}, {
+		input:  "set session wait_timeout = 3600, @@global.autocommit = off",
+		output: "set session wait_timeout = 3600, @@global.autocommit = 'off'",
 	}, {
 		input: "set /* list */ a = 3, b = 4",
 	}, {

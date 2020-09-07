@@ -44,7 +44,7 @@ func TestNumbered(t *testing.T) {
 	if _, err = p.Get(id, "test1"); err.Error() != "in use: test" {
 		t.Errorf("want 'in use: test', got '%v'", err)
 	}
-	p.Put(id)
+	p.Put(id, true)
 	if _, err = p.Get(1, "test2"); err.Error() != "not found" {
 		t.Errorf("want 'not found', got '%v'", err)
 	}
@@ -75,9 +75,9 @@ func TestNumbered(t *testing.T) {
 		t.Errorf("want 'in use: by outdated', got '%v'", err)
 	}
 	for _, v := range vals {
-		p.Put(v.(int64))
+		p.Put(v.(int64), true)
 	}
-	p.Put(2) // put to 2 to ensure it's not idle
+	p.Put(2, true) // put to 2 to ensure it's not idle
 	time.Sleep(100 * time.Millisecond)
 
 	// p has 0, 1, 2 (2 is idle)

@@ -47,7 +47,6 @@ type VttabletProcess struct {
 	Cell                        string
 	Port                        int
 	GrpcPort                    int
-	PidFile                     string
 	Shard                       string
 	CommonArg                   VtctlProcess
 	LogDir                      string
@@ -62,6 +61,7 @@ type VttabletProcess struct {
 	Directory                   string
 	VerifyURL                   string
 	QueryzURL                   string
+	StatusDetailsURL            string
 	EnableSemiSync              bool
 	SupportsBackup              bool
 	ServingStatus               string
@@ -87,7 +87,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-tablet-path", vttablet.TabletPath,
 		"-port", fmt.Sprintf("%d", vttablet.Port),
 		"-grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
-		"-pid_file", vttablet.PidFile,
 		"-init_shard", vttablet.Shard,
 		"-log_dir", vttablet.LogDir,
 		"-tablet_hostname", vttablet.TabletHostname,
@@ -175,6 +174,16 @@ func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	return nil
 }
 
+// GetStatusDetails gets the status details
+func (vttablet *VttabletProcess) GetStatusDetails() string {
+	resp, err := http.Get(vttablet.StatusDetailsURL)
+	if err != nil {
+		return fmt.Sprintf("Status details failed: %v", err.Error())
+	}
+	respByte, _ := ioutil.ReadAll(resp.Body)
+	return string(respByte)
+}
+
 // WaitForStatus waits till desired status of tablet is reached
 func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
 	return vttablet.GetTabletStatus() == status
@@ -215,8 +224,8 @@ func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []st
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Vttablet %s, current status = %s, expected status [%s] not reached ",
-		vttablet.TabletPath, status, strings.Join(expectedTypes, ","))
+	return fmt.Errorf("Vttablet %s, current status = %s, expected status [%s] not reached, details: %v",
+		vttablet.TabletPath, status, strings.Join(expectedTypes, ","), vttablet.GetStatusDetails())
 }
 
 func contains(arr []string, str string) bool {
@@ -361,7 +370,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
-		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/querylog.txt", tabletUID)),
+		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d_querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler",
@@ -374,7 +383,6 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		HealthCheckInterval:         5,
 		Port:                        port,
 		GrpcPort:                    grpcPort,
-		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,
@@ -391,6 +399,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 	}
 	vttablet.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 	vttablet.QueryzURL = fmt.Sprintf("http://%s:%d/queryz", hostname, port)
+	vttablet.StatusDetailsURL = fmt.Sprintf("http://%s:%d/debug/status_details", hostname, port)
 
 	return vttablet
 }

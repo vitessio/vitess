@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -557,7 +559,7 @@ func TestVDiffUnsharded(t *testing.T) {
 		env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
 		env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
 
-		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
 		require.NoError(t, err)
 		assert.Equal(t, tcase.dr, dr["t1"], tcase.id)
 	}
@@ -619,7 +621,7 @@ func TestVDiffSharded(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
@@ -685,7 +687,7 @@ func TestVDiffAggregates(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
@@ -749,7 +751,7 @@ func TestVDiffPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -813,7 +815,7 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -851,11 +853,11 @@ func TestVDiffDefaults(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "")
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "")
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "")
 	require.NoError(t, err)
 }
 
@@ -888,6 +890,75 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
-	require.EqualError(t, err, "startQueryStreams(sources): WaitForPosition for tablet cell-0000000101: context deadline exceeded")
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "")
+	require.EqualError(t, err, "startQueryStreams(sources): VDiff timed out for tablet cell-0000000101: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>")
+}
+
+func TestVDiffFindPKs(t *testing.T) {
+
+	testcases := []struct {
+		name         string
+		table        *tabletmanagerdatapb.TableDefinition
+		targetSelect *sqlparser.Select
+		tdIn         *tableDiffer
+		tdOut        *tableDiffer
+		errorString  string
+	}{
+		{
+			name: "",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			},
+			targetSelect: &sqlparser.Select{
+				SelectExprs: sqlparser.SelectExprs{
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c2")}},
+				},
+			},
+			tdIn: &tableDiffer{
+				compareCols: []int{0, 1},
+				comparePKs:  []int{},
+			},
+			tdOut: &tableDiffer{
+				compareCols: []int{-1, 1},
+				comparePKs:  []int{0},
+			},
+		}, {
+			name: "",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2", "c3", "c4"},
+				PrimaryKeyColumns: []string{"c1", "c4"},
+				Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|varchar|int64"),
+			},
+			targetSelect: &sqlparser.Select{
+				SelectExprs: sqlparser.SelectExprs{
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c2")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("c3")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent("c4")}},
+				},
+			},
+			tdIn: &tableDiffer{
+				compareCols: []int{0, 1, 2, 3},
+				comparePKs:  []int{},
+			},
+			tdOut: &tableDiffer{
+				compareCols: []int{-1, 1, 2, -1},
+				comparePKs:  []int{0, 3},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := findPKs(tc.table, tc.targetSelect, tc.tdIn)
+			require.NoError(t, err)
+			require.EqualValues(t, tc.tdOut, tc.tdIn)
+		})
+	}
+
 }

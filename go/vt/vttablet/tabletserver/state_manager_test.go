@@ -24,57 +24,65 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/history"
+	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+var testNow = time.Now()
+
 func TestStateManagerStateByName(t *testing.T) {
-	states := []servingState{
-		StateNotConnected,
-		StateNotServing,
-		StateServing,
-	}
-	// Don't reuse stateName.
-	names := []string{
-		"NOT_SERVING",
-		"NOT_SERVING",
-		"SERVING",
-	}
 	sm := &stateManager{}
-	for i, state := range states {
-		sm.state = state
-		require.Equal(t, names[i], sm.StateByName(), "StateByName")
-	}
+
+	sm.replHealthy = true
+	sm.wantState = StateServing
+	sm.state = StateNotConnected
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+
+	sm.state = StateNotServing
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+
+	sm.state = StateServing
+	assert.Equal(t, "SERVING", sm.IsServingString())
+
+	sm.wantState = StateNotServing
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+	sm.wantState = StateServing
+
 	sm.EnterLameduck()
-	require.Equal(t, "NOT_SERVING", sm.StateByName(), "StateByName")
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
+	sm.ExitLameduck()
+
+	sm.replHealthy = false
+	assert.Equal(t, "NOT_SERVING", sm.IsServingString())
 }
 
 func TestStateManagerServeMaster(t *testing.T) {
 	sm := newTestStateManager(t)
+	defer sm.StopService()
 	sm.EnterLameduck()
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
-	assert.Equal(t, int32(0), sm.lameduck.Get())
+	assert.Equal(t, false, sm.lameduck)
+	assert.Equal(t, testNow, sm.terTimestamp)
 
 	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
-	verifySubcomponent(t, 2, sm.hr, testStateClosed)
 
-	verifySubcomponent(t, 3, sm.se, testStateOpen)
-	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 5, sm.qe, testStateOpen)
-	verifySubcomponent(t, 6, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 7, sm.hw, testStateOpen)
-	verifySubcomponent(t, 8, sm.tracker, testStateOpen)
-	verifySubcomponent(t, 9, sm.te, testStateAcceptReadWrite)
-	verifySubcomponent(t, 10, sm.messager, testStateOpen)
+	verifySubcomponent(t, 2, sm.se, testStateOpen)
+	verifySubcomponent(t, 3, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 4, sm.qe, testStateOpen)
+	verifySubcomponent(t, 5, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 6, sm.rt, testStateMaster)
+	verifySubcomponent(t, 7, sm.tracker, testStateOpen)
+	verifySubcomponent(t, 8, sm.te, testStateMaster)
+	verifySubcomponent(t, 9, sm.messager, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
-	assert.True(t, sm.qe.(*testQueryEngine).isReachable)
+	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
 	assert.False(t, sm.qe.(*testQueryEngine).stopServing)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
@@ -83,22 +91,21 @@ func TestStateManagerServeMaster(t *testing.T) {
 
 func TestStateManagerServeNonMaster(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_REPLICA, StateServing, nil)
+	defer sm.StopService()
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 3, sm.hw, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 4, sm.se, testStateOpen)
-	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 6, sm.qe, testStateOpen)
-	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 8, sm.te, testStateAcceptReadOnly)
-	verifySubcomponent(t, 9, sm.hr, testStateOpen)
-	verifySubcomponent(t, 10, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 3, sm.se, testStateOpen)
+	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 5, sm.qe, testStateOpen)
+	verifySubcomponent(t, 6, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 7, sm.te, testStateNonMaster)
+	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -106,24 +113,23 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 
 func TestStateManagerUnserveMaster(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateNotServing, nil)
+	defer sm.StopService()
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
+	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
 
-	verifySubcomponent(t, 3, sm.watcher, testStateClosed)
-	verifySubcomponent(t, 4, sm.hr, testStateClosed)
+	verifySubcomponent(t, 4, sm.watcher, testStateClosed)
 
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 7, sm.qe, testStateOpen)
 	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 9, sm.hw, testStateOpen)
-	verifySubcomponent(t, 10, sm.tracker, testStateOpen)
+	verifySubcomponent(t, 9, sm.rt, testStateMaster)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -131,25 +137,24 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 
 func TestStateManagerUnserveNonmaster(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RDONLY, StateNotServing, nil)
+	defer sm.StopService()
+	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 
 	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 4, sm.hw, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 5, sm.se, testStateOpen)
-	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 4, sm.se, testStateOpen)
+	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 6, sm.qe, testStateOpen)
+	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 9, sm.hr, testStateOpen)
-	verifySubcomponent(t, 10, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -157,22 +162,21 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 
 func TestStateManagerClose(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RDONLY, StateNotConnected, nil)
+	defer sm.StopService()
+	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotConnected, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
+	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
 
-	verifySubcomponent(t, 3, sm.txThrottler, testStateClosed)
-	verifySubcomponent(t, 4, sm.qe, testStateClosed)
-	verifySubcomponent(t, 5, sm.watcher, testStateClosed)
-	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 4, sm.txThrottler, testStateClosed)
+	verifySubcomponent(t, 5, sm.qe, testStateClosed)
+	verifySubcomponent(t, 6, sm.watcher, testStateClosed)
 	verifySubcomponent(t, 7, sm.vstreamer, testStateClosed)
-	verifySubcomponent(t, 8, sm.hr, testStateClosed)
-	verifySubcomponent(t, 9, sm.hw, testStateClosed)
-	verifySubcomponent(t, 10, sm.se, testStateClosed)
+	verifySubcomponent(t, 8, sm.rt, testStateClosed)
+	verifySubcomponent(t, 9, sm.se, testStateClosed)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
@@ -180,9 +184,9 @@ func TestStateManagerClose(t *testing.T) {
 
 func TestStateManagerStopService(t *testing.T) {
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_REPLICA, StateServing, nil)
+	defer sm.StopService()
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -190,6 +194,38 @@ func TestStateManagerStopService(t *testing.T) {
 	sm.StopService()
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
+}
+
+func TestStateManagerGracePeriod(t *testing.T) {
+	sm := newTestStateManager(t)
+	defer sm.StopService()
+	sm.transitionGracePeriod = 10 * time.Millisecond
+
+	alsoAllow := func() topodatapb.TabletType {
+		sm.mu.Lock()
+		defer sm.mu.Unlock()
+		if len(sm.alsoAllow) == 0 {
+			return topodatapb.TabletType_UNKNOWN
+		}
+		return sm.alsoAllow[0]
+	}
+
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	require.NoError(t, err)
+
+	assert.Equal(t, topodatapb.TabletType_UNKNOWN, alsoAllow())
+	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
+	assert.Equal(t, StateServing, sm.state)
+
+	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	require.NoError(t, err)
+
+	assert.Equal(t, topodatapb.TabletType_REPLICA, alsoAllow())
+	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
+	assert.Equal(t, StateServing, sm.state)
+
+	time.Sleep(20 * time.Millisecond)
+	assert.Equal(t, topodatapb.TabletType_UNKNOWN, alsoAllow())
 }
 
 // testWatcher is used as a hook to invoke another transition
@@ -207,22 +243,22 @@ func (te *testWatcher) Close() {
 	go func() {
 		defer te.wg.Done()
 
-		stateChanged, err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, StateNotServing, nil)
+		err := te.sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
 		assert.NoError(te.t, err)
-		assert.True(te.t, stateChanged)
 	}()
 }
 
 func TestStateManagerSetServingTypeRace(t *testing.T) {
+	// We don't call StopService because that in turn
+	// will call Close again on testWatcher.
 	sm := newTestStateManager(t)
 	te := &testWatcher{
 		t:  t,
 		sm: sm,
 	}
 	sm.watcher = te
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	// Ensure the next call waits and then succeeds.
 	te.wg.Wait()
@@ -233,27 +269,26 @@ func TestStateManagerSetServingTypeRace(t *testing.T) {
 }
 
 func TestStateManagerSetServingTypeNoChange(t *testing.T) {
+	log.Infof("starting")
 	sm := newTestStateManager(t)
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_REPLICA, StateServing, nil)
+	defer sm.StopService()
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
-	stateChanged, err = sm.SetServingType(topodatapb.TabletType_REPLICA, StateServing, nil)
+	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.False(t, stateChanged)
 
 	verifySubcomponent(t, 1, sm.messager, testStateClosed)
 	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
-	verifySubcomponent(t, 3, sm.hw, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 4, sm.se, testStateOpen)
-	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 6, sm.qe, testStateOpen)
-	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 8, sm.te, testStateAcceptReadOnly)
-	verifySubcomponent(t, 9, sm.hr, testStateOpen)
-	verifySubcomponent(t, 10, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 3, sm.se, testStateOpen)
+	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 5, sm.qe, testStateOpen)
+	verifySubcomponent(t, 6, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 7, sm.te, testStateNonMaster)
+	verifySubcomponent(t, 8, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 9, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -264,11 +299,11 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	transitionRetryInterval = 10 * time.Millisecond
 
 	sm := newTestStateManager(t)
-	sm.qe.(*testQueryEngine).failMySQL = true
+	defer sm.StopService()
+	sm.se.(*testSchemaEngine).failMySQL = true
 
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.Error(t, err)
-	assert.True(t, stateChanged)
 
 	// Calling retryTransition while retrying should be a no-op.
 	sm.retryTransition("")
@@ -294,15 +329,20 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	assert.Equal(t, StateServing, sm.State())
 }
 
-func TestStateManagerRestoreType(t *testing.T) {
+func TestStateManagerNotConnectedType(t *testing.T) {
 	sm := newTestStateManager(t)
+	defer sm.StopService()
 	sm.EnterLameduck()
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_RESTORE, StateNotServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_RESTORE, testNow, StateNotServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	assert.Equal(t, topodatapb.TabletType_RESTORE, sm.target.TabletType)
-	// RESTORE can only be in StateNotConnected.
+	assert.Equal(t, StateNotConnected, sm.state)
+
+	err = sm.SetServingType(topodatapb.TabletType_BACKUP, testNow, StateNotServing, "")
+	require.NoError(t, err)
+
+	assert.Equal(t, topodatapb.TabletType_BACKUP, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
 }
 
@@ -311,10 +351,10 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	transitionRetryInterval = 10 * time.Millisecond
 
 	sm := newTestStateManager(t)
+	defer sm.StopService()
 
-	stateChanged, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, stateChanged)
 
 	sm.qe.(*testQueryEngine).failMySQL = true
 	order.Set(0)
@@ -362,6 +402,13 @@ func TestStateManagerValidations(t *testing.T) {
 	err := sm.StartRequest(ctx, target, false)
 	assert.Contains(t, err.Error(), "operation not allowed")
 
+	sm.replHealthy = false
+	sm.state = StateServing
+	sm.wantState = StateServing
+	err = sm.StartRequest(ctx, target, false)
+	assert.Contains(t, err.Error(), "operation not allowed")
+
+	sm.replHealthy = true
 	sm.state = StateServing
 	sm.wantState = StateNotServing
 	err = sm.StartRequest(ctx, target, false)
@@ -411,11 +458,13 @@ func TestStateManagerValidations(t *testing.T) {
 
 func TestStateManagerWaitForRequests(t *testing.T) {
 	sm := newTestStateManager(t)
+	defer sm.StopService()
 	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	sm.target = *target
 	sm.timebombDuration = 10 * time.Second
 
-	_, err := sm.SetServingType(topodatapb.TabletType_MASTER, StateServing, nil)
+	sm.replHealthy = true
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
 
 	err = sm.StartRequest(ctx, target, false)
@@ -447,6 +496,80 @@ func TestStateManagerWaitForRequests(t *testing.T) {
 	assert.Equal(t, StateNotConnected, sm.State())
 }
 
+func TestStateManagerNotify(t *testing.T) {
+	sm := newTestStateManager(t)
+	defer sm.StopService()
+
+	blpFunc = testBlpFunc
+
+	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	require.NoError(t, err)
+
+	ch := make(chan *querypb.StreamHealthResponse, 5)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+			ch <- shr
+			return nil
+		})
+		assert.Contains(t, err.Error(), "tabletserver is shutdown")
+	}()
+	defer wg.Wait()
+
+	sm.Broadcast()
+
+	gotshr := <-ch
+	// Remove things we don't care about:
+	gotshr.RealtimeStats = nil
+	wantshr := &querypb.StreamHealthResponse{
+		Target: &querypb.Target{
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+		Serving:     true,
+		TabletAlias: &topodatapb.TabletAlias{},
+	}
+	sm.hcticks.Stop()
+	assert.Equal(t, wantshr, gotshr)
+	sm.StopService()
+}
+
+func TestRefreshReplHealthLocked(t *testing.T) {
+	sm := newTestStateManager(t)
+	defer sm.StopService()
+	rt := sm.rt.(*testReplTracker)
+
+	sm.target.TabletType = topodatapb.TabletType_MASTER
+	sm.replHealthy = false
+	lag, err := sm.refreshReplHealthLocked()
+	assert.Equal(t, time.Duration(0), lag)
+	assert.NoError(t, err)
+	assert.True(t, sm.replHealthy)
+
+	sm.target.TabletType = topodatapb.TabletType_REPLICA
+	sm.replHealthy = false
+	lag, err = sm.refreshReplHealthLocked()
+	assert.Equal(t, 1*time.Second, lag)
+	assert.NoError(t, err)
+	assert.True(t, sm.replHealthy)
+
+	rt.err = errors.New("err")
+	sm.replHealthy = true
+	lag, err = sm.refreshReplHealthLocked()
+	assert.Equal(t, 1*time.Second, lag)
+	assert.Error(t, err)
+	assert.False(t, sm.replHealthy)
+
+	rt.err = nil
+	rt.lag = 3 * time.Hour
+	sm.replHealthy = true
+	lag, err = sm.refreshReplHealthLocked()
+	assert.Equal(t, 3*time.Hour, lag)
+	assert.NoError(t, err)
+	assert.False(t, sm.replHealthy)
+}
+
 func verifySubcomponent(t *testing.T, order int64, component interface{}, state testState) {
 	tos := component.(orderState)
 	assert.Equal(t, order, tos.Order())
@@ -455,10 +578,12 @@ func verifySubcomponent(t *testing.T, order int64, component interface{}, state 
 
 func newTestStateManager(t *testing.T) *stateManager {
 	order.Set(0)
-	return &stateManager{
+	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, "StateManagerTest")
+	sm := &stateManager{
+		hs:          newHealthStreamer(env, topodatapb.TabletAlias{}),
 		se:          &testSchemaEngine{},
-		hw:          &testSubcomponent{},
-		hr:          &testSubcomponent{},
+		rt:          &testReplTracker{lag: 1 * time.Second},
 		vstreamer:   &testSubcomponent{},
 		tracker:     &testSubcomponent{},
 		watcher:     &testSubcomponent{},
@@ -466,12 +591,11 @@ func newTestStateManager(t *testing.T) *stateManager {
 		txThrottler: &testTxThrottler{},
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
-
-		transitioning:       sync2.NewSemaphore(1, 0),
-		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
-		history:             history.New(10),
-		timebombDuration:    time.Duration(10 * time.Millisecond),
 	}
+	sm.Init(env, querypb.Target{})
+	sm.hs.InitDBConfig(querypb.Target{})
+	log.Infof("returning sm: %p", sm)
+	return sm
 }
 
 func (sm *stateManager) isTransitioning() bool {
@@ -490,8 +614,8 @@ const (
 	_ = testState(iota)
 	testStateOpen
 	testStateClosed
-	testStateAcceptReadOnly
-	testStateAcceptReadWrite
+	testStateMaster
+	testStateNonMaster
 )
 
 type orderState interface {
@@ -514,7 +638,19 @@ func (tos testOrderState) State() testState {
 
 type testSchemaEngine struct {
 	testOrderState
-	nonMaster bool
+	ensureCalled bool
+	nonMaster    bool
+
+	failMySQL bool
+}
+
+func (te *testSchemaEngine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
+	if te.failMySQL {
+		te.failMySQL = false
+		return errors.New("intentional error")
+	}
+	te.ensureCalled = true
+	return nil
 }
 
 func (te *testSchemaEngine) Open() error {
@@ -532,9 +668,33 @@ func (te *testSchemaEngine) Close() {
 	te.state = testStateClosed
 }
 
+type testReplTracker struct {
+	testOrderState
+	lag time.Duration
+	err error
+}
+
+func (te *testReplTracker) MakeMaster() {
+	te.order = order.Add(1)
+	te.state = testStateMaster
+}
+
+func (te *testReplTracker) MakeNonMaster() {
+	te.order = order.Add(1)
+	te.state = testStateNonMaster
+}
+
+func (te *testReplTracker) Close() {
+	te.order = order.Add(1)
+	te.state = testStateClosed
+}
+
+func (te *testReplTracker) Status() (time.Duration, error) {
+	return te.lag, te.err
+}
+
 type testQueryEngine struct {
 	testOrderState
-	isReachable bool
 	stopServing bool
 
 	failMySQL bool
@@ -551,7 +711,6 @@ func (te *testQueryEngine) IsMySQLReachable() error {
 		te.failMySQL = false
 		return errors.New("intentional error")
 	}
-	te.isReachable = true
 	return nil
 }
 
@@ -570,13 +729,13 @@ type testTxEngine struct {
 
 func (te *testTxEngine) AcceptReadWrite() error {
 	te.order = order.Add(1)
-	te.state = testStateAcceptReadWrite
+	te.state = testStateMaster
 	return nil
 }
 
 func (te *testTxEngine) AcceptReadOnly() error {
 	te.order = order.Add(1)
-	te.state = testStateAcceptReadOnly
+	te.state = testStateNonMaster
 	return nil
 }
 

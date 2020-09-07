@@ -74,6 +74,9 @@ type vstreamer struct {
 	format  mysql.BinlogFormat
 	pos     mysql.Position
 	stopPos string
+
+	phase string
+	vse   *Engine
 }
 
 // CopyState contains the last PK for tables to be copied
@@ -105,9 +108,8 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
-	//init copy state
 	return &vstreamer{
 		ctx:      ctx,
 		cancel:   cancel,
@@ -120,6 +122,8 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		vevents:  make(chan *localVSchema, 1),
 		vschema:  vschema,
 		plans:    make(map[uint64]*streamerPlan),
+		phase:    phase,
+		vse:      vse,
 	}
 }
 
@@ -216,6 +220,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 			newSize := len(vevent.GetDml())
 			if curSize+newSize > *PacketSize {
+				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
 				curSize = newSize
@@ -236,12 +241,15 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				}
 			}
 			if curSize+newSize > *PacketSize {
+				vs.vse.vstreamerNumPackets.Add(1)
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
 				curSize = newSize
 				return vs.send(vevents)
 			}
 			curSize += newSize
+			bufferedEvents = append(bufferedEvents, vevent)
+		case binlogdatapb.VEventType_SAVEPOINT:
 			bufferedEvents = append(bufferedEvents, vevent)
 		default:
 			return fmt.Errorf("unexpected event: %v", vevent)
@@ -308,6 +316,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
+
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
@@ -421,8 +430,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
 				}, &binlogdatapb.VEvent{
-					Type: binlogdatapb.VEventType_DDL,
-					Ddl:  q.SQL,
+					Type:      binlogdatapb.VEventType_DDL,
+					Statement: q.SQL,
 				})
 				// Reload schema only if the DDL change is relevant.
 				// TODO(sougou): move this back to always load after
@@ -435,6 +444,15 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Gtid: mysql.EncodePosition(vs.pos),
 				}, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_OTHER,
+				})
+			}
+			vs.se.ReloadAt(context.Background(), vs.pos)
+		case sqlparser.StmtSavepoint:
+			mustSend := mustSendStmt(q, params.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type:      binlogdatapb.VEventType_SAVEPOINT,
+					Statement: q.SQL,
 				})
 			}
 		case sqlparser.StmtOther, sqlparser.StmtPriv:
@@ -471,7 +489,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if tm.Database == "_vt" && tm.Name == "resharding_journal" {
 			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
-		} else if tm.Database == "_vt" && tm.Name == "schema_version" {
+		} else if tm.Database == "_vt" && tm.Name == "schema_version" && !vs.se.SkipMetaCheck {
 			// Generates a Version event when it detects that a schema is stored in the schema_version table.
 			return nil, vs.buildVersionPlan(id, tm)
 		}

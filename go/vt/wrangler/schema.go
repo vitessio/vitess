@@ -280,7 +280,7 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 
 // CopySchemaShard copies the schema from a source tablet to the
 // specified shard.  The schema is applied directly on the master of
-// the destination shard, and is propogated to the replicas through
+// the destination shard, and is propagated to the replicas through
 // binlogs.
 func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)

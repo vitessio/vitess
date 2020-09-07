@@ -1,0 +1,31 @@
+# get_lock from dual
+"select get_lock('xyz', 10) from dual"
+{
+  "QueryType": "SELECT",
+  "Original": "select get_lock('xyz', 10) from dual",
+  "Instructions": {
+    "OperatorType": "Lock",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "KeyspaceID(00)",
+    "Query": "select get_lock('xyz', 10) from dual"
+  }
+}
+
+# is_free_lock from dual
+"select is_free_lock('xyz') from dual"
+{
+  "QueryType": "SELECT",
+  "Original": "select is_free_lock('xyz') from dual",
+  "Instructions": {
+    "OperatorType": "Lock",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "KeyspaceID(00)",
+    "Query": "select is_free_lock('xyz') from dual"
+  }
+}

@@ -18,6 +18,9 @@ package testlib
 
 import (
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
 
@@ -33,6 +36,12 @@ import (
 )
 
 func TestShardReplicationStatuses(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -103,6 +112,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 }
 
 func TestReparentTablet(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -127,9 +142,16 @@ func TestReparentTablet(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// replica loop
+	// We have to set the settings as replicating. Otherwise,
+	// the replication manager intervenes and tries to fix replication,
+	// which ends up making this test unpredictable.
+	replica.FakeMysqlDaemon.Replicating = true
+	replica.FakeMysqlDaemon.IOThreadRunning = true
 	replica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)

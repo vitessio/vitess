@@ -40,7 +40,7 @@ func TestVStreamEvents(t *testing.T) {
 
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -114,7 +114,7 @@ func TestVStreamChunks(t *testing.T) {
 
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -184,7 +184,7 @@ func TestVStreamMulti(t *testing.T) {
 
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -243,7 +243,7 @@ func TestVStreamRetry(t *testing.T) {
 
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -282,7 +282,7 @@ func TestVStreamHeartbeat(t *testing.T) {
 
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -330,7 +330,7 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "-10", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -435,7 +435,7 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	// Variable names are maintained like in OneToMany, but order is different.
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "-10", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -544,7 +544,7 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -670,7 +670,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	// Variable names are maintained like in OneToMany, but order is different.1
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	_ = hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "-10", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 := hc.AddTestTablet("aa", "1.1.1.1", 1003, name, "10-20", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -748,7 +748,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 func TestResolveVStreamParams(t *testing.T) {
 	name := "TestVStream"
 	_ = createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
+	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	testcases := []struct {
 		input  *binlogdatapb.VGtid
@@ -872,8 +872,8 @@ func TestResolveVStreamParams(t *testing.T) {
 	}
 }
 
-func newTestVStreamManager(hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
-	gw := NewDiscoveryGateway(context.Background(), hc, serv, cell, 3)
+func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
+	gw := NewTabletGateway(context.Background(), hc, serv, cell)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return newVStreamManager(srvResolver, serv, cell)
 }

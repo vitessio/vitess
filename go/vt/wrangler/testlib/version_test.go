@@ -22,6 +22,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -55,6 +58,12 @@ func expvarHandler(gitRev *string) func(http.ResponseWriter, *http.Request) {
 }
 
 func TestVersion(t *testing.T) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	// We need to run this test with the /debug/vars version of the
 	// plugin.
 	wrangler.ResetDebugVarsGetVersion()

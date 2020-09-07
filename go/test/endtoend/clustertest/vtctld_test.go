@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"reflect"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -105,9 +104,6 @@ func testTabletStatus(t *testing.T) {
 	require.Nil(t, err)
 	result := string(respByte)
 	log.Infof("Tablet status response: %v", result)
-	matched, err := regexp.Match(`Polling health information from.+MySQLReplicationLag`, []byte(result))
-	require.Nil(t, err)
-	assert.True(t, matched)
 	assert.True(t, strings.Contains(result, `Alias: <a href="http://localhost:`))
 	assert.True(t, strings.Contains(result, `</html>`))
 }

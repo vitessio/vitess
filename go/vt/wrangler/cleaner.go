@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	// ChangeTabletTypeActionName is the name of the action to change a slave type
+	// ChangeTabletTypeActionName is the name of the action to change a tablet type
 	// (can be used to find such an action by name)
 	ChangeTabletTypeActionName = "ChangeTabletTypeAction"
 

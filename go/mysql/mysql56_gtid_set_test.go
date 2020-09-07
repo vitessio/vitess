@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSortSIDList(t *testing.T) {
@@ -525,5 +527,38 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 	}
 	if !reflect.DeepEqual(set, input) {
 		t.Errorf("NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
+	}
+}
+
+func TestMySQL56GTIDSetLast(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255}
+
+	table := map[string]Mysql56GTIDSet{
+		// Simple case
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:5": {
+			sid1: []interval{{1, 5}},
+		},
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:3": {
+			sid1: []interval{{end: 3}},
+		},
+		// Interval with same start and end
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12": {
+			sid1: []interval{{12, 12}},
+		},
+		// Multiple intervals
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:20": {
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
+		// Multiple SIDs
+		"00010203-0405-0607-0809-0a0b0c0d0eff:50": {
+			sid1: []interval{{1, 5}, {10, 20}},
+			sid2: []interval{{1, 5}, {50, 50}},
+		},
+	}
+
+	for want, input := range table {
+		got := strings.ToLower(input.Last())
+		assert.Equal(t, want, got)
 	}
 }

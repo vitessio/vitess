@@ -62,7 +62,7 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	if err == planbuilder.ErrPlanNotSupported {
 		return 0, nil, err
 	}
-	execStart := e.logPlanningFinished(logStats, sql)
+	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {
 		safeSession.ClearWarnings()
@@ -77,7 +77,7 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	// will fall through and be handled through planning
 	switch plan.Type {
 	case sqlparser.StmtBegin:
-		qr, err := e.handleBegin(ctx, safeSession, vcursor.tabletType, logStats)
+		qr, err := e.handleBegin(ctx, safeSession, logStats)
 		return sqlparser.StmtBegin, qr, err
 	case sqlparser.StmtCommit:
 		qr, err := e.handleCommit(ctx, safeSession, logStats)
@@ -89,19 +89,19 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
 			// Safely to ignore as there is no transaction.
 			return &sqltypes.Result{}, nil
-		})
+		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtSavepoint, qr, err
 	case sqlparser.StmtSRollback:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", query)
-		})
+		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtSRollback, qr, err
 	case sqlparser.StmtRelease:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, "42000", "SAVEPOINT does not exist: %s", query)
-		})
+		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtRelease, qr, err
 	}
 
@@ -205,9 +205,11 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 	return errCount
 }
 
-func (e *Executor) logPlanningFinished(logStats *LogStats, sql string) time.Time {
+func (e *Executor) logPlanningFinished(logStats *LogStats, plan *engine.Plan) time.Time {
 	execStart := time.Now()
-	logStats.StmtType = sqlparser.Preview(sql).String()
+	if plan != nil {
+		logStats.StmtType = plan.Type.String()
+	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart
 }

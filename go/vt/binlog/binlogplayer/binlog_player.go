@@ -83,6 +83,12 @@ type Stats struct {
 	History             *history.History
 
 	State sync2.AtomicString
+
+	PhaseTimings  *stats.Timings
+	QueryTimings  *stats.Timings
+	QueryCount    *stats.CountersWithSingleLabel
+	CopyRowCount  *stats.Counter
+	CopyLoopCount *stats.Counter
 }
 
 // SetLastPosition sets the last replication position.
@@ -118,6 +124,12 @@ func NewStats() *Stats {
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
 	bps.SecondsBehindMaster.Set(math.MaxInt64)
+	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
+	bps.QueryTimings = stats.NewTimings("", "", "Phase")
+	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
+	bps.CopyRowCount = stats.NewCounter("", "")
+	bps.CopyLoopCount = stats.NewCounter("", "")
+
 	return bps
 }
 
@@ -519,6 +531,7 @@ func CreateVReplicationTable() []string {
 // AlterVReplicationTable adds new columns to vreplication table
 var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
+	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
 }
 
 // VRSettings contains the settings of a vreplication table.
@@ -599,6 +612,17 @@ func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTime
 	return fmt.Sprintf(
 		"update _vt.vreplication set pos=%v, time_updated=%v, message='' where id=%v",
 		encodeString(mysql.EncodePosition(pos)), timeUpdated, uid)
+}
+
+// GenerateUpdateTime returns a statement to update time_updated and transaction_timestamp in the
+// _vt.vreplication table.
+func GenerateUpdateTime(uid uint32, timeUpdated int64, txTimestamp int64) (string, error) {
+	if timeUpdated == 0 || txTimestamp == 0 {
+		return "", fmt.Errorf("invalid timeUpdated or txTimestamp supplied")
+	}
+	return fmt.Sprintf(
+		"update _vt.vreplication set time_updated=%v, transaction_timestamp=%v where id=%v",
+		timeUpdated, txTimestamp, uid), nil
 }
 
 // StartVReplication returns a statement to start the replication.

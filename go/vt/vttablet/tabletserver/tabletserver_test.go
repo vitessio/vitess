@@ -62,7 +62,7 @@ func TestBeginOnReplica(t *testing.T) {
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_REPLICA}
-	_, err := tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	err := tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 	require.NoError(t, err)
 
 	options := querypb.ExecuteOptions{
@@ -103,7 +103,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 		ch <- true
 	}()
 
@@ -126,13 +126,13 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer tsv.StopService()
 	defer db.Close()
-	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+	tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 
 	turnOnTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
+		tsv.SetServingType(topodatapb.TabletType_MASTER, time.Time{}, true, "")
 	}
 	turnOffTxEngine := func() {
-		tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
+		tsv.SetServingType(topodatapb.TabletType_REPLICA, time.Time{}, true, "")
 	}
 
 	tpc := tsv.te.twoPC
@@ -484,7 +484,7 @@ func TestTabletServerReserveConnection(t *testing.T) {
 	options := &querypb.ExecuteOptions{}
 
 	// reserve a connection
-	_, rID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, options)
+	_, rID, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, options)
 	require.NoError(t, err)
 
 	// run a query in it
@@ -533,7 +533,7 @@ func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
 	options := &querypb.ExecuteOptions{}
 
 	// run a query with a non-existent reserved id
-	_, _, _, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{}, nil, options)
+	_, _, _, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{}, "select 42", nil, options)
 	require.Error(t, err)
 }
 
@@ -547,7 +547,7 @@ func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	options := &querypb.ExecuteOptions{}
 
 	// reserve a connection and a transaction
-	_, txID, rID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", nil, nil, options)
+	_, txID, rID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, "select 42", nil, options)
 	require.NoError(t, err)
 	defer func() {
 		// fallback so the test finishes quickly
@@ -1970,7 +1970,7 @@ func TestReserveBeginExecute(t *testing.T) {
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	_, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 43"}, nil, &querypb.ExecuteOptions{})
+	_, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{"select 43"}, "select 42", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 
 	assert.Greater(t, transactionID, int64(0), "transactionID")
@@ -1993,7 +1993,7 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, 0, &querypb.ExecuteOptions{})
+	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, []string{"select 43"}, "select 42", nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.NotEqual(t, int64(0), reservedID, "reservedID should not be zero")
 	expected := []string{
@@ -2017,7 +2017,7 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	require.NotEqual(t, int64(0), transactionID)
 	db.ResetQueryLog()
 
-	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", []string{"select 43"}, nil, transactionID, &querypb.ExecuteOptions{})
+	_, reservedID, _, err := tsv.ReserveExecute(ctx, &target, []string{"select 43"}, "select 42", nil, transactionID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	defer tsv.Release(ctx, &target, transactionID, reservedID)
 	assert.Equal(t, transactionID, reservedID, "reservedID should be equal to transactionID")
@@ -2075,14 +2075,14 @@ func TestRelease(t *testing.T) {
 
 			switch {
 			case test.begin && test.reserve:
-				_, transactionID, reservedID, _, err = tsv.ReserveBeginExecute(ctx, &target, "select 42", []string{"select 1212"}, nil, &querypb.ExecuteOptions{})
+				_, transactionID, reservedID, _, err = tsv.ReserveBeginExecute(ctx, &target, []string{"select 1212"}, "select 42", nil, &querypb.ExecuteOptions{})
 				require.NotEqual(t, int64(0), transactionID)
 				require.NotEqual(t, int64(0), reservedID)
 			case test.begin:
 				_, transactionID, _, err = tsv.BeginExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
 				require.NotEqual(t, int64(0), transactionID)
 			case test.reserve:
-				_, reservedID, _, err = tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, &querypb.ExecuteOptions{})
+				_, reservedID, _, err = tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
 				require.NotEqual(t, int64(0), reservedID)
 			}
 			require.NoError(t, err)
@@ -2113,12 +2113,12 @@ func TestReserveStats(t *testing.T) {
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
 	// Starts reserved connection and transaction
-	_, rbeTxID, rbeRID, _, err := tsv.ReserveBeginExecute(ctx, &target, "select 42", nil, nil, &querypb.ExecuteOptions{})
+	_, rbeTxID, rbeRID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, "select 42", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
 	// Starts reserved connection
-	_, reRID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, 0, &querypb.ExecuteOptions{})
+	_, reRID, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
@@ -2133,7 +2133,7 @@ func TestReserveStats(t *testing.T) {
 	assert.EqualValues(t, 2, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
 	// Reserved the connection on previous transaction
-	_, beReRID, _, err := tsv.ReserveExecute(ctx, &target, "select 42", nil, nil, beTxID, &querypb.ExecuteOptions{})
+	_, beReRID, _, err := tsv.ReserveExecute(ctx, &target, nil, "select 42", nil, beTxID, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
@@ -2165,7 +2165,7 @@ func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig) (
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbcfgs)
+	err := tsv.StartService(target, dbcfgs, nil /* mysqld */)
 	require.NoError(t, err)
 	return db, tsv
 }

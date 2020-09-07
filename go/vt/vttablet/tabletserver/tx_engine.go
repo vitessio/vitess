@@ -107,7 +107,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	config := env.Config()
 	te := &TxEngine{
 		env:                 env,
-		shutdownGracePeriod: time.Duration(config.ShutdownGracePeriodSeconds * 1e9),
+		shutdownGracePeriod: config.GracePeriods.TransactionShutdownSeconds.Get(),
 		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
 	}
 	limiter := txlimiter.New(env)
@@ -124,7 +124,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 		}
 	}
 	te.coordinatorAddress = config.TwoPCCoordinatorAddress
-	te.abandonAge = time.Duration(config.TwoPCAbandonAge * 1e9)
+	te.abandonAge = config.TwoPCAbandonAge.Get()
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
@@ -154,6 +154,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 func (te *TxEngine) AcceptReadWrite() error {
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
+	log.Info("TxEngine: AcceptReadWrite")
 
 	switch te.state {
 	case AcceptingReadAndWrite:
@@ -190,6 +191,7 @@ func (te *TxEngine) AcceptReadWrite() error {
 // If the engine is currently accepting full read and write transactions, they need to
 // be rolled back.
 func (te *TxEngine) AcceptReadOnly() error {
+	log.Info("TxEngine: AcceptReadOnly")
 	te.beginRequests.Wait()
 	te.stateLock.Lock()
 	switch te.state {
@@ -245,7 +247,7 @@ func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID i
 	if err != nil {
 		return 0, "", err
 	}
-	defer conn.Unlock()
+	defer conn.UnlockUpdateTime()
 	return conn.ID(), beginSQL, err
 }
 
@@ -366,6 +368,7 @@ func (te *TxEngine) Close() {
 	defer te.stateLock.Unlock()
 	te.shutdown(false)
 	te.state = NotServing
+	log.Info("TxEngine: closed")
 }
 
 // Close closes the TxEngine. If the immediate flag is on,
@@ -567,7 +570,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	if err != nil {
 		return 0, vterrors.Wrap(err, "TxEngine.ReserveBegin")
 	}
-	defer conn.Unlock()
+	defer conn.UnlockUpdateTime()
 	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, nil)
 	if err != nil {
 		conn.Close()

@@ -54,6 +54,11 @@ type (
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
 
+		// ExceedsMaxMemoryRows returns a boolean indicating whether
+		// the maxMemoryRows value has been exceeded. Returns false
+		// if the max memory rows override directive is set to true
+		ExceedsMaxMemoryRows(numRows int) bool
+
 		// SetContextTimeout updates the context and sets a timeout.
 		SetContextTimeout(timeout time.Duration) context.CancelFunc
 
@@ -79,6 +84,10 @@ type (
 		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 
 		Session() SessionActions
+
+		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
+
+		InTransactionAndIsDML() bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -91,6 +100,22 @@ type (
 		SetUDV(key string, value interface{}) error
 
 		SetSysVar(name string, expr string)
+
+		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
+		NeedsReservedConn()
+
+		// InReservedConn provides whether this session is using reserved connection
+		InReservedConn() bool
+
+		// ShardSession returns shard info about open connections
+		ShardSession() []*srvtopo.ResolvedShard
+
+		SetAutocommit(bool) error
+		SetClientFoundRows(bool)
+		SetSkipQueryPlanCache(bool)
+		SetSQLSelectLimit(int64)
+		SetTransactionMode(vtgatepb.TransactionMode)
+		SetWorkload(querypb.ExecuteOptions_Workload)
 	}
 
 	// Plan represents the execution strategy for a given query.
@@ -124,7 +149,7 @@ type (
 		GetKeyspaceName() string
 		GetTableName() string
 		Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 

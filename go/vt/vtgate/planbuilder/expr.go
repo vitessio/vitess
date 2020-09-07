@@ -156,7 +156,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		construct, ok := constructsMap[sqi.ast]
 		if !ok {
 			// (subquery) -> :_sq
-			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewValArg([]byte(":"+sqName)))
+			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument([]byte(":"+sqName)))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.bldr))
 			continue
 		}
@@ -166,9 +166,9 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				// a in (subquery) -> (:__sq_has_values = 1 and (a in ::__sq))
 				newExpr := &sqlparser.AndExpr{
 					Left: &sqlparser.ComparisonExpr{
-						Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
 						Operator: sqlparser.EqualStr,
-						Right:    sqlparser.NewIntVal([]byte("1")),
+						Right:    sqlparser.NewIntLiteral([]byte("1")),
 					},
 					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}
@@ -178,9 +178,9 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
 				newExpr := &sqlparser.OrExpr{
 					Left: &sqlparser.ComparisonExpr{
-						Left:     sqlparser.NewValArg([]byte(":" + hasValues)),
+						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
 						Operator: sqlparser.EqualStr,
-						Right:    sqlparser.NewIntVal([]byte("0")),
+						Right:    sqlparser.NewIntLiteral([]byte("0")),
 					},
 					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
 				}
@@ -189,7 +189,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 		case *sqlparser.ExistsExpr:
 			// exists (subquery) -> :__sq_has_values
-			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewValArg([]byte(":"+hasValues)))
+			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument([]byte(":"+hasValues)))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.bldr))
 		}
 	}
@@ -211,7 +211,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.bldr.(*route); ok {
-		keyspace = rb.routeOptions[0].eroute.Keyspace.Name
+		keyspace = rb.eroute.Keyspace.Name
 	} else {
 		// This code is unreachable because the caller checks.
 		return false
@@ -239,11 +239,11 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
+				if innerRoute.eroute.Keyspace.Name != keyspace {
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				for _, sub := range innerRoute.routeOptions[0].substitutions {
+				for _, sub := range innerRoute.substitutions {
 					*sub.oldExpr = *sub.newExpr
 				}
 			case *sqlparser.Union:
@@ -260,7 +260,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					samePlan = false
 					return false, errors.New("dummy")
 				}
-				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
+				if innerRoute.eroute.Keyspace.Name != keyspace {
 					samePlan = false
 					return false, errors.New("dummy")
 				}
@@ -281,16 +281,18 @@ func valEqual(a, b sqlparser.Expr) bool {
 		if b, ok := b.(*sqlparser.ColName); ok {
 			return a.Metadata == b.Metadata
 		}
-	case *sqlparser.SQLVal:
-		b, ok := b.(*sqlparser.SQLVal)
+	case sqlparser.Argument:
+		b, ok := b.(sqlparser.Argument)
+		if !ok {
+			return false
+		}
+		return bytes.Equal(a, b)
+	case *sqlparser.Literal:
+		b, ok := b.(*sqlparser.Literal)
 		if !ok {
 			return false
 		}
 		switch a.Type {
-		case sqlparser.ValArg:
-			if b.Type == sqlparser.ValArg {
-				return bytes.Equal(a.Val, b.Val)
-			}
 		case sqlparser.StrVal:
 			switch b.Type {
 			case sqlparser.StrVal:
@@ -309,7 +311,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 	return false
 }
 
-func hexEqual(a, b *sqlparser.SQLVal) bool {
+func hexEqual(a, b *sqlparser.Literal) bool {
 	v, err := a.HexDecode()
 	if err != nil {
 		return false

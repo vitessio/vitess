@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -56,6 +55,9 @@ func TestXXHashMap(t *testing.T) {
 	}, {
 		in:  sqltypes.NewVarChar("test2"),
 		out: []byte{0x87, 0xeb, 0x11, 0x71, 0x4c, 0xa, 0xe, 0x89},
+	}, {
+		in:  sqltypes.NewVarChar("testaverylongvaluetomakesurethisworks"),
+		out: []byte{0x81, 0xd8, 0xc3, 0x8e, 0xd, 0x85, 0xe, 0x6a},
 	}, {
 		in:  sqltypes.NewInt64(1),
 		out: []byte{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7},
@@ -110,6 +112,7 @@ func BenchmarkXXHash(b *testing.B) {
 		n    int
 	}{
 		{"8B", 8},
+		{"32B", 32},
 		{"64B", 64},
 		{"512B", 512},
 		{"1KB", 1e3},
@@ -122,17 +125,17 @@ func BenchmarkXXHash(b *testing.B) {
 
 		name := fmt.Sprintf("xxHash,direct,bytes,n=%s", benchSize.name)
 		b.Run(name, func(b *testing.B) {
-			benchmarkHashBytes(b, input)
+			benchmarkXXHashBytes(b, input)
 		})
 
 	}
 }
 
-var sink uint64
+var sinkXXHash []byte
 
-func benchmarkHashBytes(b *testing.B, input []byte) {
+func benchmarkXXHashBytes(b *testing.B, input []byte) {
 	b.SetBytes(int64(len(input)))
 	for i := 0; i < b.N; i++ {
-		sink = xxhash.Sum64(input)
+		sinkXXHash = vXXHash(input)
 	}
 }

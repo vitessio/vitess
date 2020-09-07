@@ -114,12 +114,28 @@ create table t6_id2_idx(
 	keyspace_id varbinary(50),
 	primary key(id1),
 	key(id2)
+) Engine=InnoDB;
+
+create table t7_xxhash(
+	uid varchar(50),
+	phone bigint,
+    msg varchar(100),
+    primary key(uid)
+) Engine=InnoDB;
+
+create table t7_xxhash_idx(
+	phone bigint,
+	keyspace_id varbinary(50),
+	primary key(phone, keyspace_id)
 ) Engine=InnoDB;`
 
 	VSchema = `
 {
   "sharded": true,
   "vindexes": {
+    "unicode_loose_xxhash" : {
+	  "type": "unicode_loose_xxhash"
+    },
     "unicode_loose_md5" : {
 	  "type": "unicode_loose_md5"
     },
@@ -175,6 +191,16 @@ create table t6_id2_idx(
         "ignore_nulls": "true"
       },
       "owner": "t6"
+    },
+    "t7_xxhash_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "t7_xxhash_idx",
+        "from": "phone",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "t7_xxhash"
     }
   },
   "tables": {
@@ -305,6 +331,26 @@ create table t6_id2_idx(
         {
           "name": "val1",
           "type": "VARCHAR"
+        }
+      ]
+    },
+	"t7_xxhash": {
+      "column_vindexes": [
+        {
+          "column": "uid",
+          "name": "unicode_loose_xxhash"
+        },
+        {
+          "column": "phone",
+          "name": "t7_xxhash_vdx"
+        }
+      ]
+    },
+    "t7_xxhash_idx": {
+      "column_vindexes": [
+        {
+          "column": "phone",
+          "name": "unicode_loose_xxhash"
         }
       ]
     }

@@ -77,7 +77,7 @@ type (
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
-	transactionTimeout := time.Duration(config.Oltp.TxTimeoutSeconds * 1e9)
+	transactionTimeout := config.Oltp.TxTimeoutSeconds.Get()
 	axp := &TxPool{
 		env:                env,
 		scp:                NewStatefulConnPool(env),
@@ -125,13 +125,21 @@ func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), "for tx killer rollback") {
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
-		if conn.IsTainted() {
+		switch {
+		case conn.IsTainted():
+			conn.Close()
 			tp.env.Stats().KillCounters.Add("ReservedConnection", 1)
-		}
-		if conn.IsInTransaction() {
+		case conn.IsInTransaction():
+			_, err := conn.Exec(context.Background(), "rollback", 1, false)
+			if err != nil {
+				conn.Close()
+			}
 			tp.env.Stats().KillCounters.Add("Transactions", 1)
 		}
-		conn.Close()
+		// For logging, as transaction is killed as the connection is closed.
+		if conn.IsTainted() && conn.IsInTransaction() {
+			tp.env.Stats().KillCounters.Add("Transactions", 1)
+		}
 		conn.Releasef("exceeded timeout: %v", tp.Timeout())
 	}
 }

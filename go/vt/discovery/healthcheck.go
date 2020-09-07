@@ -71,8 +71,6 @@ var (
 
 	//TODO(deepthi): change these vars back to unexported when discoveryGateway is removed
 
-	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
-	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
 	// AllowedTabletTypes is the list of allowed tablet types. e.g. {MASTER, REPLICA}
 	AllowedTabletTypes []topodata.TabletType
 	// TabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets
@@ -164,6 +162,43 @@ type TabletRecorder interface {
 type keyspaceShardTabletType string
 type tabletAliasString string
 
+//HealthCheck declares what the TabletGateway needs from the HealthCheck
+type HealthCheck interface {
+	// CacheStatus returns a displayable version of the health check cache.
+	CacheStatus() TabletsCacheStatusList
+
+	// Close stops the healthcheck.
+	Close() error
+
+	// WaitForAllServingTablets waits for at least one healthy serving tablet in
+	// each given target before returning.
+	// It will return ctx.Err() if the context is canceled.
+	// It will return an error if it can't read the necessary topology records.
+	WaitForAllServingTablets(ctx context.Context, targets []*query.Target) error
+
+	// TabletConnection returns the TabletConn of the given tablet.
+	TabletConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error)
+
+	// RegisterStats registers the connection counts stats
+	RegisterStats()
+
+	// GetHealthyTabletStats returns only the healthy tablets.
+	// The returned array is owned by the caller.
+	// For TabletType_MASTER, this will only return at most one entry,
+	// the most recent tablet of type master.
+	// This returns a copy of the data so that callers can access without
+	// synchronization
+	GetHealthyTabletStats(target *query.Target) []*TabletHealth
+
+	// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
+	Subscribe() chan *TabletHealth
+
+	// Unsubscribe removes a listener.
+	Unsubscribe(c chan *TabletHealth)
+}
+
+var _ HealthCheck = (*HealthCheckImpl)(nil)
+
 // HealthCheckImpl performs health checking and stores the results.
 // The goal of this object is to maintain a StreamHealth RPC
 // to a lot of tablets. Tablets are added / removed by calling the
@@ -220,8 +255,8 @@ type HealthCheckImpl struct {
 //   The localCell for this healthcheck
 // callback.
 //   A function to call when there is a master change. Used to notify vtgate's buffer to stop buffering.
-func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell string) *HealthCheckImpl {
-	log.Infof("loading tablets for cells: %v", *CellsToWatch)
+func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
+	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
 	hc := &HealthCheckImpl{
 		ts:                 topoServer,
@@ -236,7 +271,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	}
 	var topoWatchers []*TopologyWatcher
 	var filter TabletFilter
-	cells := strings.Split(*CellsToWatch, ",")
+	cells := strings.Split(cellsToWatch, ",")
 	if len(cells) == 0 {
 		cells = append(cells, localCell)
 	}
@@ -278,11 +313,16 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
-	log.Infof("Calling AddTablet for tablet: %v", tablet)
 	// check whether we should really add this tablet
 	if !hc.isIncluded(tablet) {
 		return
 	}
+	// check whether grpc port is present on tablet, if not return
+	if tablet.PortMap["grpc"] == 0 {
+		return
+	}
+
+	log.Infof("Adding tablet to healthcheck: %v", tablet)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	if hc.healthByAlias == nil {
@@ -336,11 +376,12 @@ func (hc *HealthCheckImpl) RemoveTablet(tablet *topodata.Tablet) {
 
 // ReplaceTablet removes the old tablet and adds the new tablet.
 func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodata.Tablet) {
-	hc.deleteTablet(old)
+	hc.RemoveTablet(old)
 	hc.AddTablet(new)
 }
 
 func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
+	log.Infof("Removing tablet from healthcheck: %v", tablet)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
@@ -435,7 +476,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 
 }
 
-// Subscribe adds a listener. Only used for testing right now
+// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
@@ -444,7 +485,7 @@ func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	return c
 }
 
-// Unsubscribe removes a listener. Only used for testing right now
+// Unsubscribe removes a listener.
 func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()

@@ -50,10 +50,10 @@ type VtgateProcess struct {
 	TabletTypesToWait     string
 	GatewayImplementation string
 	ServiceMap            string
-	PidFile               string
 	MySQLAuthServerImpl   string
 	Directory             string
 	VerifyURL             string
+	SysVarSetEnabled      bool
 	//Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
@@ -64,8 +64,7 @@ type VtgateProcess struct {
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
 
-	vtgate.proc = exec.Command(
-		vtgate.Binary,
+	args := []string{
 		"-topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
@@ -81,7 +80,13 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
-		"-pid_file", vtgate.PidFile,
+	}
+	if vtgate.SysVarSetEnabled {
+		args = append(args, "-enable_system_settings")
+	}
+	vtgate.proc = exec.Command(
+		vtgate.Binary,
+		args...,
 	)
 	if *isCoverage {
 		vtgate.proc.Args = append(vtgate.proc.Args, "-test.coverprofile="+getCoveragePath("vtgate.out"))
@@ -191,10 +196,12 @@ func (vtgate *VtgateProcess) TearDown() error {
 	// Attempt graceful shutdown with SIGTERM first
 	vtgate.proc.Process.Signal(syscall.SIGTERM)
 
+	// We are not checking vtgate's exit code because it sometimes
+	// returns exit code 2, even though vtgate terminates cleanly.
 	select {
-	case err := <-vtgate.exit:
+	case <-vtgate.exit:
 		vtgate.proc = nil
-		return err
+		return nil
 
 	case <-time.After(10 * time.Second):
 		vtgate.proc.Process.Kill()
@@ -222,9 +229,8 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		Cell:                  cell,
 		CellsToWatch:          cellsToWatch,
 		TabletTypesToWait:     tabletTypesToWait,
-		GatewayImplementation: "discoverygateway",
+		GatewayImplementation: "tabletgateway",
 		CommonArg:             *vtctl,
-		PidFile:               path.Join(tmpDirectory, "/vtgate.pid"),
 		MySQLAuthServerImpl:   "none",
 		ExtraArgs:             extraArgs,
 	}

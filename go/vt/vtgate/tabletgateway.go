@@ -17,15 +17,17 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"sort"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 
-	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -48,42 +50,17 @@ func init() {
 	RegisterGatewayCreator(tabletGatewayImplementation, createTabletGateway)
 }
 
-//HealthCheck declares what the TabletGateway needs from the HealthCheck
-type HealthCheck interface {
-	// CacheStatus returns a displayable version of the health check cache.
-	CacheStatus() discovery.TabletsCacheStatusList
-
-	// Close stops the healthcheck.
-	Close() error
-
-	// WaitForAllServingTablets waits for at least one healthy serving tablet in
-	// each given target before returning.
-	// It will return ctx.Err() if the context is canceled.
-	// It will return an error if it can't read the necessary topology records.
-	WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error
-
-	// TabletConnection returns the TabletConn of the given tablet.
-	TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error)
-
-	// RegisterStats registers the connection counts stats
-	RegisterStats()
-
-	// GetHealthyTabletStats returns only the healthy tablets.
-	// The returned array is owned by the caller.
-	// For TabletType_MASTER, this will only return at most one entry,
-	// the most recent tablet of type master.
-	// This returns a copy of the data so that callers can access without
-	// synchronization
-	GetHealthyTabletStats(target *querypb.Target) []*discovery.TabletHealth
-}
-
-var _ HealthCheck = (*discovery.HealthCheckImpl)(nil)
+var (
+	_ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
+	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
+	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
+)
 
 // TabletGateway implements the Gateway interface.
 // This implementation uses the new healthcheck module.
 type TabletGateway struct {
 	queryservice.QueryService
-	hc            HealthCheck
+	hc            discovery.HealthCheck
 	srvTopoServer srvtopo.Server
 	localCell     string
 	retryCount    int
@@ -99,21 +76,28 @@ type TabletGateway struct {
 }
 
 func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
-	return NewTabletGateway(ctx, serv, cell)
+	// we ignore the passed in LegacyHealthCheck and let TabletGateway create it's own HealthCheck
+	return NewTabletGateway(ctx, nil /*discovery.Healthcheck*/, serv, cell)
+}
+
+func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
+	return discovery.NewHealthCheck(ctx, retryDelay, timeout, ts, cell, cellsToWatch)
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
-func NewTabletGateway(ctx context.Context, serv srvtopo.Server, localCell string) *TabletGateway {
-	var topoServer *topo.Server
-	if serv != nil {
-		var err error
-		topoServer, err = serv.GetTopoServer()
-		if err != nil {
-			log.Exitf("Unable to create new TabletGateway: %v", err)
+func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
+	// hack to accomodate various users of gateway + tests
+	if hc == nil {
+		var topoServer *topo.Server
+		if serv != nil {
+			var err error
+			topoServer, err = serv.GetTopoServer()
+			if err != nil {
+				log.Exitf("Unable to create new TabletGateway: %v", err)
+			}
 		}
+		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, *CellsToWatch)
 	}
-	hc := discovery.NewHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell)
-
 	gw := &TabletGateway{
 		hc:                hc,
 		srvTopoServer:     serv,
@@ -201,8 +185,8 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
-	if inTransaction {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries")
+	if inTransaction && target.TabletType != topodatapb.TabletType_MASTER {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
@@ -260,15 +244,12 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		var th *discovery.TabletHealth
 		// skip tablets we tried before
 		for _, t := range tablets {
-			tabletLastUsed = t.Tablet
-			if _, ok := invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)]; !ok {
+			if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
 				th = t
 				break
-			} else {
-				tabletLastUsed = nil
 			}
 		}
-		if tabletLastUsed == nil {
+		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
 				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
@@ -276,8 +257,9 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
+		tabletLastUsed = th.Tablet
 		// execute
-		if th == nil || th.Conn == nil {
+		if th.Conn == nil {
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", tabletLastUsed)
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
 			continue
@@ -368,4 +350,18 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 // TabletsCacheStatus returns a displayable version of the health check cache.
 func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 	return gw.hc.CacheStatus()
+}
+
+// NewShardError returns a new error with the shard info amended.
+func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) error {
+	if in == nil {
+		return nil
+	}
+	if tablet != nil {
+		return vterrors.Wrapf(in, "target: %s.%s.%s, used tablet: %s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), topotools.TabletIdent(tablet))
+	}
+	if target != nil {
+		return vterrors.Wrapf(in, "target: %s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType))
+	}
+	return in
 }

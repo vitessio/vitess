@@ -87,7 +87,7 @@ func TestConsistentLookupMap(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
+		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
 
 	// Test query fail.
@@ -132,7 +132,7 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
+		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
 
 	// More than one result is invalid
@@ -177,7 +177,7 @@ func TestConsistentLookupMapAbsent(t *testing.T) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
+		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
 }
 
@@ -461,10 +461,10 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 		t.Run(val.typ.String(), func(t *testing.T) {
 			vc.AddResult(&sqltypes.Result{}, nil)
 			vc.AddResult(&sqltypes.Result{}, nil)
-			sqlVal, err := sqltypes.NewValue(val.typ, []byte(val.val))
+			literal, err := sqltypes.NewValue(val.typ, []byte(val.val))
 			require.NoError(t, err)
 
-			err = lookup.(Lookup).Update(vc, []sqltypes.Value{sqlVal, sqlVal}, []byte("test"), []sqltypes.Value{sqlVal, sqlVal})
+			err = lookup.(Lookup).Update(vc, []sqltypes.Value{literal, literal}, []byte("test"), []sqltypes.Value{literal, literal})
 			require.NoError(t, err)
 			require.NotEmpty(t, vc.log)
 			vc.log = nil
@@ -497,11 +497,17 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 	return l.(SingleColumn)
 }
 
+var _ VCursor = (*loggingVCursor)(nil)
+
 type loggingVCursor struct {
 	results []*sqltypes.Result
 	errors  []error
 	index   int
 	log     []string
+}
+
+func (vc *loggingVCursor) InTransactionAndIsDML() bool {
+	return false
 }
 
 type bv struct {

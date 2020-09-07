@@ -18,27 +18,25 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
-var charVindex SingleColumn
+var charVindexMD5 SingleColumn
 
 func init() {
 	vindex, _ := CreateVindex("unicode_loose_md5", "utf8ch", nil)
-	charVindex = vindex.(SingleColumn)
+	charVindexMD5 = vindex.(SingleColumn)
 }
 
 func TestUnicodeLooseMD5Info(t *testing.T) {
-	assert.Equal(t, 1, charVindex.Cost())
-	assert.Equal(t, "utf8ch", charVindex.String())
-	assert.True(t, charVindex.IsUnique())
-	assert.False(t, charVindex.NeedsVCursor())
+	assert.Equal(t, 1, charVindexMD5.Cost())
+	assert.Equal(t, "utf8ch", charVindexMD5.String())
+	assert.True(t, charVindexMD5.IsUnique())
+	assert.False(t, charVindexMD5.NeedsVCursor())
 }
 
 func TestUnicodeLooseMD5Map(t *testing.T) {
@@ -76,7 +74,7 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindex.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := charVindexMD5.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -90,127 +88,12 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 func TestUnicodeLooseMD5Verify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
 	ksids := [][]byte{[]byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5")}
-	got, err := charVindex.Verify(nil, ids, ksids)
+	got, err := charVindexMD5.Verify(nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []bool{true, true, false}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
-	}
-}
-
-func TestNormalization(t *testing.T) {
-	tcases := []struct {
-		in, out string
-	}{{
-		in:  "Test",
-		out: "\x18\x16\x16L\x17\xf3\x18\x16",
-	}, {
-		in:  "TEST",
-		out: "\x18\x16\x16L\x17\xf3\x18\x16",
-	}, {
-		in:  "Te\u0301st",
-		out: "\x18\x16\x16L\x17\xf3\x18\x16",
-	}, {
-		in:  "Tést",
-		out: "\x18\x16\x16L\x17\xf3\x18\x16",
-	}, {
-		in:  "Bést",
-		out: "\x16\x05\x16L\x17\xf3\x18\x16",
-	}, {
-		in:  "Test ",
-		out: "\x18\x16\x16L\x17\xf3\x18\x16",
-	}, {
-		in:  " Test",
-		out: "\x01\t\x18\x16\x16L\x17\xf3\x18\x16",
-	}, {
-		in:  "Test\t",
-		out: "\x18\x16\x16L\x17\xf3\x18\x16\x01\x00",
-	}, {
-		in:  "TéstLooong",
-		out: "\x18\x16\x16L\x17\xf3\x18\x16\x17\x11\x17q\x17q\x17q\x17O\x16\x91",
-	}, {
-		in:  "T",
-		out: "\x18\x16",
-	}}
-	collator := newPooledCollator().(*pooledCollator)
-	for _, tcase := range tcases {
-		norm, err := normalize(collator.col, collator.buf, []byte(tcase.in))
-		if err != nil {
-			t.Errorf("normalize(%#v) error: %v", tcase.in, err)
-		}
-		out := string(norm)
-		if out != tcase.out {
-			t.Errorf("normalize(%#v): %#v, want %#v", tcase.in, out, tcase.out)
-		}
-	}
-}
-
-func TestInvalidUnicodeNormalization(t *testing.T) {
-	// These strings are known to contain invalid UTF-8.
-	inputs := []string{
-		"\x99\xeb\x9d\x18\xa4G\x84\x04]\x87\xf3\xc6|\xf2'F",
-		"D\x86\x15\xbb\xda\b1?j\x8e\xb6h\xd2\v\xf5\x05",
-		"\x8a[\xdf,\u007fĄE\x92\xd2W+\xcd\x06h\xd2",
-	}
-	wantErr := "invalid UTF-8"
-	collator := newPooledCollator().(*pooledCollator)
-
-	for _, in := range inputs {
-		// We've observed that infinite looping is a possible failure mode for the
-		// collator when given invalid UTF-8, so we detect that with a timer.
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			_, err := normalize(collator.col, collator.buf, []byte(in))
-			if err == nil {
-				t.Errorf("normalize(%q) error = nil, expected error", in)
-			}
-			if !strings.Contains(err.Error(), wantErr) {
-				t.Errorf("normalize(%q) error = %q, want %q", in, err.Error(), wantErr)
-			}
-		}()
-		timer := time.NewTimer(100 * time.Millisecond)
-		select {
-		case <-done:
-			timer.Stop()
-		case <-timer.C:
-			t.Errorf("invalid input caused infinite loop: %q", in)
-		}
-	}
-}
-
-// BenchmarkNormalizeSafe is the naive case where we create a new collator
-// and buffer every time.
-func BenchmarkNormalizeSafe(b *testing.B) {
-	input := []byte("testing")
-
-	for i := 0; i < b.N; i++ {
-		collator := newPooledCollator().(*pooledCollator)
-		normalize(collator.col, collator.buf, input)
-	}
-}
-
-// BenchmarkNormalizeShared is the ideal case where the collator and buffer
-// are shared between iterations, assuming no concurrency.
-func BenchmarkNormalizeShared(b *testing.B) {
-	input := []byte("testing")
-	collator := newPooledCollator().(*pooledCollator)
-
-	for i := 0; i < b.N; i++ {
-		normalize(collator.col, collator.buf, input)
-	}
-}
-
-// BenchmarkNormalizePooled should get us close to the performance of
-// BenchmarkNormalizeShared, except that this way is safe for concurrent use.
-func BenchmarkNormalizePooled(b *testing.B) {
-	input := []byte("testing")
-
-	for i := 0; i < b.N; i++ {
-		collator := collatorPool.Get().(*pooledCollator)
-		normalize(collator.col, collator.buf, input)
-		collatorPool.Put(collator)
+		t.Errorf("UnicodeLooseMD5.Verify: %v, want %v", got, want)
 	}
 }

@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -169,6 +171,12 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
 func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.TabletType) {
+	delay := discovery.GetTabletPickerRetryDelay()
+	defer func() {
+		discovery.SetTabletPickerRetryDelay(delay)
+	}()
+	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+
 	*useV3ReshardingMode = v3
 	ts := memorytopo.NewServer("cell1", "cell2")
 	ctx := context.Background()
@@ -265,7 +273,8 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 		qs := fakes.NewStreamHealthQueryService(sourceRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(sourceRdonly.RPCServer, &sourceTabletServer{
-			t:                        t,
+			t: t,
+
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 			v3:                       v3,
@@ -276,7 +285,8 @@ func testSplitDiff(t *testing.T, v3 bool, destinationTabletType topodatapb.Table
 		qs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		qs.AddDefaultHealthResponse()
 		grpcqueryservice.Register(destRdonly.RPCServer, &destinationTabletServer{
-			t:                        t,
+			t: t,
+
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
 		})

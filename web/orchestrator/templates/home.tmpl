@@ -1,0 +1,54 @@
+<div class="jumbotron">
+  <h1>Orchestrator</h1>
+  <p>
+    Welcome! Orchestrator is your MySQL replication visualization and management tool.
+  </p>
+  <div id="clustersFound" class="hiddenMessage">
+    <p>
+      <i>Orchestrator</i> is familiar with <code id="numClusters"></code> replication cluster(s) at this moment. Click "Clusters" on top navigation bar too see them. If you have more replication clusters you wish to visualize and manage, please let <i>orchestrator</i>      know about them by going to the <a href="{{.prefix}}/web/discover">discovery page</a>.
+    </p>
+    <p>
+      <i>Orchestrator</i> is a multi-tiered application. It executes as a command line tool - you can Move replicas around the topology and do most other stuff. It also serves as Web API. In fact, there is little to the web interface you're using right
+      now - it's mostly client cosmetics; all operations in this web interface are based on web API calls.
+    </p>
+  </div>
+  <div id="noClustersFound" class="hiddenMessage">
+    <p>
+      It seems like this is your initial installation of <i>orchestrator</i>: there are no known clusters at this stage.
+    </p>
+    <p>
+      Your next task is to let <i>orchestrator</i> know about your replication topologies. Pick one server from each topology (this could be either master or replica). <i>Orchestrator</i> will attempt to connect to such a server, and auto-discover the entire
+      replication tree by recursively crawling the server's master and replicas.
+    </p>
+    <p>
+      Once discovered (and allow for a few minutes for complete replication graph detection), you will be able to easily change your topology via drag & drop, start & stop your replicas, start/end maintenance modes and get quick insight into replication problems.
+    </p>
+    <p>
+      Make sure your configuration file has the proper credentials for accessing all those remote MySQL servers. You will need the <code>SUPER</code> and <code>PROCESS</code> privileges on any node you wish to be able to discover. Make sure to run the
+      following on masters of your topologies; fill in your own host name (limit <code>'%'</code> to a specific host), user and password:
+      <pre>
+GRANT SUPER, PROCESS ON *.* TO 'orchestrator'@'%' IDENTIFIED BY 'secret';
+</pre>
+    </p>
+    <p>
+      <a href="{{.prefix}}/web/discover">Start discovery now</a>
+    </p>
+  </div>
+</div>
+
+
+
+<script>
+  onClusters(function(clusters) {
+    $("#numClusters").html(clusters.length);
+    if (clusters.length > 0) {
+      $("#clustersFound").show();
+    } else {
+      $("#noClustersFound").show();
+    }
+  });
+
+  $(document).ready(function() {
+
+  });
+</script>

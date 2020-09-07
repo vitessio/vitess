@@ -146,6 +146,8 @@ func Preview(sql string) StatementType {
 		return StmtUpdate
 	case "delete":
 		return StmtDelete
+	case "savepoint":
+		return StmtSavepoint
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements
@@ -176,8 +178,6 @@ func Preview(sql string) StatementType {
 		return StmtOther
 	case "grant", "revoke":
 		return StmtPriv
-	case "savepoint":
-		return StmtSavepoint
 	case "release":
 		return StmtRelease
 	case "rollback":
@@ -319,9 +319,11 @@ func IsColName(node Expr) bool {
 // NULL is not considered to be a value.
 func IsValue(node Expr) bool {
 	switch v := node.(type) {
-	case *SQLVal:
+	case Argument:
+		return true
+	case *Literal:
 		switch v.Type {
-		case StrVal, HexVal, IntVal, ValArg:
+		case StrVal, HexVal, IntVal:
 			return true
 		}
 	}
@@ -358,10 +360,10 @@ func IsSimpleTuple(node Expr) bool {
 // NewPlanValue builds a sqltypes.PlanValue from an Expr.
 func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	switch node := node.(type) {
-	case *SQLVal:
+	case Argument:
+		return sqltypes.PlanValue{Key: string(node[1:])}, nil
+	case *Literal:
 		switch node.Type {
-		case ValArg:
-			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
 		case IntVal:
 			n, err := sqltypes.NewIntegral(string(node.Val))
 			if err != nil {
@@ -405,4 +407,22 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		}
 	}
 	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
+}
+
+//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
+func IsLockingFunc(node Expr) bool {
+	switch p := node.(type) {
+	case *FuncExpr:
+		_, found := lockingFunctions[p.Name.Lowered()]
+		return found
+	}
+	return false
+}
+
+var lockingFunctions = map[string]interface{}{
+	"get_lock":          nil,
+	"is_free_lock":      nil,
+	"is_used_lock":      nil,
+	"release_all_locks": nil,
+	"release_lock":      nil,
 }

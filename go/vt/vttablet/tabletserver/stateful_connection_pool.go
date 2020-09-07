@@ -185,8 +185,8 @@ func (sf *StatefulConnectionPool) unregister(id tx.ConnID, reason string) {
 }
 
 //markAsNotInUse marks the connection as not in use at the moment
-func (sf *StatefulConnectionPool) markAsNotInUse(id tx.ConnID) {
-	sf.active.Put(id)
+func (sf *StatefulConnectionPool) markAsNotInUse(id tx.ConnID, updateTime bool) {
+	sf.active.Put(id, updateTime)
 }
 
 // Capacity returns the pool capacity.

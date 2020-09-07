@@ -121,9 +121,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShowTables:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
+		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+		}
 		qr, err := qre.execSelect()
 		if err != nil {
 			return nil, err
@@ -203,9 +206,12 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execSQL(conn, qre.query, true)
 	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
 		return qre.execSQL(conn, qre.query, true)
-	case planbuilder.PlanSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
+	case planbuilder.PlanSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible, planbuilder.PlanShowTables:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
+		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+		}
 		qr, err := qre.txFetch(conn, false)
 		if err != nil {
 			return nil, err
@@ -376,9 +382,13 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 	if err != nil {
 		return nil, err
 	}
-	err = qre.BeginAgain(qre.ctx, conn)
-	if err != nil {
-		return nil, err
+	// Only perform this operation when the connection has transaction open.
+	// TODO: This actually does not retain the old transaction. We should see how to provide correct behaviour to client.
+	if conn.txProps != nil {
+		err = qre.BeginAgain(qre.ctx, conn)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }

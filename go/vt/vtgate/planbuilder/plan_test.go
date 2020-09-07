@@ -147,7 +147,8 @@ func init() {
 
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v:             loadSchema(t, "schema_test.json"),
+		sysVarEnabled: true,
 	}
 
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
@@ -172,9 +173,21 @@ func TestPlan(t *testing.T) {
 	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "set_cases.txt", testOutputTempDir, vschemaWrapper)
-	testFile(t, "set_sysvar_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
+}
+
+func TestSysVarSetDisabled(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "schema_test.json"),
+		sysVarEnabled: false,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
+	testFile(t, "set_sysvar_disabled_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -257,10 +270,15 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 var _ ContextVSchema = (*vschemaWrapper)(nil)
 
 type vschemaWrapper struct {
-	v          *vindexes.VSchema
-	keyspace   *vindexes.Keyspace
-	tabletType topodatapb.TabletType
-	dest       key.Destination
+	v             *vindexes.VSchema
+	keyspace      *vindexes.Keyspace
+	tabletType    topodatapb.TabletType
+	dest          key.Destination
+	sysVarEnabled bool
+}
+
+func (vw *vschemaWrapper) SysVarSetEnabled() bool {
+	return vw.sysVarEnabled
 }
 
 func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
@@ -302,16 +320,16 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 	return table, destKeyspace, destTabletType, destTarget, nil
 }
 
-func (vw *vschemaWrapper) FindTablesOrVindex(tab sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
-	tables, vindex, err := vw.v.FindTablesOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
+	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
-	return tables, vindex, destKeyspace, destTabletType, destTarget, nil
+	return table, vindex, destKeyspace, destTabletType, destTarget, nil
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
@@ -320,6 +338,10 @@ func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
 
 func (vw *vschemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return vw.DefaultKeyspace()
+}
+
+func (vw *vschemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
+	return vw.v.Keyspaces["main"].Keyspace, nil
 }
 
 func (vw *vschemaWrapper) TargetString() string {

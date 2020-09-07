@@ -19,14 +19,9 @@ package vindexes
 import (
 	"bytes"
 	"fmt"
-	"sync"
-	"unicode/utf8"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-
-	"golang.org/x/text/collate"
-	"golang.org/x/text/language"
 )
 
 var (
@@ -71,7 +66,7 @@ func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
 func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		data, err := unicodeHash(ids[i])
+		data, err := unicodeHash(vMD5Hash, ids[i])
 		if err != nil {
 			return nil, fmt.Errorf("UnicodeLooseMD5.Verify: %v", err)
 		}
@@ -84,70 +79,13 @@ func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]b
 func (vind *UnicodeLooseMD5) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
-		data, err := unicodeHash(id)
+		data, err := unicodeHash(vMD5Hash, id)
 		if err != nil {
 			return nil, fmt.Errorf("UnicodeLooseMD5.Map: %v", err)
 		}
 		out = append(out, key.DestinationKeyspaceID(data))
 	}
 	return out, nil
-}
-
-func unicodeHash(key sqltypes.Value) ([]byte, error) {
-	collator := collatorPool.Get().(*pooledCollator)
-	defer collatorPool.Put(collator)
-
-	norm, err := normalize(collator.col, collator.buf, key.ToBytes())
-	if err != nil {
-		return nil, err
-	}
-	return binHash(norm), nil
-}
-
-func normalize(col *collate.Collator, buf *collate.Buffer, in []byte) ([]byte, error) {
-	// We cannot pass invalid UTF-8 to the collator.
-	if !utf8.Valid(in) {
-		return nil, fmt.Errorf("cannot normalize string containing invalid UTF-8: %q", string(in))
-	}
-
-	// Ref: http://dev.mysql.com/doc/refman/5.6/en/char.html.
-	// Trailing spaces are ignored by MySQL.
-	in = bytes.TrimRight(in, " ")
-
-	// We use the collation key which can be used to
-	// perform lexical comparisons.
-	return col.Key(buf, in), nil
-}
-
-// pooledCollator pairs a Collator and a Buffer.
-// These pairs are pooled to avoid reallocating for every request,
-// which would otherwise be required because they can't be used concurrently.
-//
-// Note that you must ensure no active references into the buffer remain
-// before you return this pair back to the pool.
-// That is, either do your processing on the result first, or make a copy.
-type pooledCollator struct {
-	col *collate.Collator
-	buf *collate.Buffer
-}
-
-var collatorPool = sync.Pool{New: newPooledCollator}
-
-func newPooledCollator() interface{} {
-	// Ref: http://www.unicode.org/reports/tr10/#Introduction.
-	// Unicode seems to define a universal (or default) order.
-	// But various locales have conflicting order,
-	// which they have the right to override.
-	// Unfortunately, the Go library requires you to specify a locale.
-	// So, I chose English assuming that it won't override
-	// the Unicode universal order. But I couldn't find an easy
-	// way to verify this.
-	// Also, the locale differences are not an issue for level 1,
-	// because the conservative comparison makes them all equal.
-	return &pooledCollator{
-		col: collate.New(language.English, collate.Loose),
-		buf: new(collate.Buffer),
-	}
 }
 
 func init() {

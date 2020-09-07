@@ -54,12 +54,15 @@ import (
 var _ engine.VCursor = (*vcursorImpl)(nil)
 var _ planbuilder.ContextVSchema = (*vcursorImpl)(nil)
 var _ iExecute = (*Executor)(nil)
+var _ vindexes.VCursor = (*vcursorImpl)(nil)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
-	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, notInTransaction bool, autocommit bool) (qr *sqltypes.Result, errs []error)
+	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error
+	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
+	Commit(ctx context.Context, safeSession *SafeSession) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -88,6 +91,7 @@ type vcursorImpl struct {
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
 	rollbackOnPartialExec bool
+	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
 }
@@ -169,6 +173,17 @@ func (vc *vcursorImpl) MaxMemoryRows() int {
 	return *maxMemoryRows
 }
 
+// ExceedsMaxMemoryRows returns a boolean indicating whether the maxMemoryRows value has been exceeded.
+// Returns false if the max memory rows override directive is set to true.
+func (vc *vcursorImpl) ExceedsMaxMemoryRows(numRows int) bool {
+	return !vc.ignoreMaxMemoryRows && numRows > *maxMemoryRows
+}
+
+// SetIgnoreMaxMemoryRows sets the ignoreMaxMemoryRows value.
+func (vc *vcursorImpl) SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows bool) {
+	vc.ignoreMaxMemoryRows = ignoreMaxMemoryRows
+}
+
 // SetContextTimeout updates context and sets a timeout.
 func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	ctx, cancel := context.WithTimeout(vc.ctx, timeout)
@@ -205,8 +220,8 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-// FindTablesOrVindex finds the specified table or vindex.
-func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+// FindTableOrVindex finds the specified table or vindex.
+func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
@@ -214,11 +229,11 @@ func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
-	tables, vindex, err := vc.vschema.FindTablesOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
+	table, vindex, err := vc.vschema.FindTableOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
-	return tables, vindex, destKeyspace, destTabletType, dest, nil
+	return table, vindex, destKeyspace, destTabletType, dest, nil
 }
 
 // DefaultKeyspace returns the default keyspace of the current request
@@ -258,6 +273,20 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return keyspace, nil
 }
 
+func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+	}
+	kss := vc.vschema.Keyspaces
+	keys := make([]string, 0, len(kss))
+	for ks := range kss {
+		keys = append(keys, ks)
+	}
+	sort.Strings(keys)
+
+	return kss[keys[0]].Keyspace, nil
+}
+
 // TargetString returns the current TargetString of the session.
 func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
@@ -284,12 +313,28 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, false, autocommit)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
 	if errs == nil && rollbackOnError {
 		vc.rollbackOnPartialExec = true
 	}
 	return qr, errs
+}
+
+func (vc *vcursorImpl) InTransactionAndIsDML() bool {
+	if !vc.safeSession.InTransaction() {
+		return false
+	}
+	switch vc.logStats.StmtType {
+	case "INSERT", "REPLACE", "UPDATE", "DELETE":
+		return true
+	}
+	return false
+}
+
+func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
+	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
+	return vc.executor.ExecuteLock(vc.ctx, rs, query, vc.safeSession)
 }
 
 // AutocommitApproval is part of the engine.VCursor interface.
@@ -308,7 +353,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
-	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false, false /* autocommit */)
+	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, bqs, NewAutocommitSession(vc.safeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows)
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -377,6 +422,30 @@ func (vc *vcursorImpl) SetSysVar(name string, expr string) {
 	vc.safeSession.SetSystemVariable(name, expr)
 }
 
+//NeedsReservedConn implements the SessionActions interface
+func (vc *vcursorImpl) NeedsReservedConn() {
+	vc.safeSession.SetReservedConn(true)
+}
+
+func (vc *vcursorImpl) InReservedConn() bool {
+	return vc.safeSession.InReservedConn()
+}
+
+func (vc *vcursorImpl) ShardSession() []*srvtopo.ResolvedShard {
+	ss := vc.safeSession.GetShardSessions()
+	if len(ss) == 0 {
+		return nil
+	}
+	rss := make([]*srvtopo.ResolvedShard, len(ss))
+	for i, shardSession := range ss {
+		rss[i] = &srvtopo.ResolvedShard{
+			Target:  shardSession.Target,
+			Gateway: vc.resolver.GetGateway(),
+		}
+	}
+	return rss
+}
+
 // Destination implements the ContextVSchema interface
 func (vc *vcursorImpl) Destination() key.Destination {
 	return vc.destination
@@ -415,6 +484,46 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
 	}
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
+}
+
+//SetAutocommit implementes the SessionActions interface
+func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
+	if autocommit && vc.safeSession.InTransaction() {
+		if err := vc.executor.Commit(vc.ctx, vc.safeSession); err != nil {
+			return err
+		}
+	}
+	vc.safeSession.Autocommit = autocommit
+	return nil
+}
+
+//SetClientFoundRows implementes the SessionActions interface
+func (vc *vcursorImpl) SetClientFoundRows(clientFoundRows bool) {
+	vc.safeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
+}
+
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) {
+	vc.safeSession.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
+}
+
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) {
+	vc.safeSession.GetOrCreateOptions().SqlSelectLimit = limit
+}
+
+//SetSkipQueryPlanCache implementes the SessionActions interface
+func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
+	vc.safeSession.TransactionMode = mode
+}
+
+//SetWorkload implementes the SessionActions interface
+func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
+	vc.safeSession.GetOrCreateOptions().Workload = workload
+}
+
+func (vc *vcursorImpl) SysVarSetEnabled() bool {
+	return *sysVarSetEnabled
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

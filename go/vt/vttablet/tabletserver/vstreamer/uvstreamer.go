@@ -94,11 +94,15 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		MaxReplicationLag: 1 * time.Nanosecond,
 		CatchupRetryTime:  1 * time.Second,
 	}
+	send2 := func(evs []*binlogdatapb.VEvent) error {
+		vse.vstreamerEventsStreamed.Add(int64(len(evs)))
+		return send(evs)
+	}
 	uvs := &uvstreamer{
 		ctx:        ctx,
 		cancel:     cancel,
 		vse:        vse,
-		send:       send,
+		send:       send2,
 		cp:         cp,
 		se:         se,
 		startPos:   startPos,
@@ -207,7 +211,7 @@ func getQuery(tableName string, filter string) string {
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral([]byte(filter)))
 		query = buf.String()
 	}
 	return query
@@ -287,13 +291,13 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 
 func (uvs *uvstreamer) sendEventsForCurrentPos() error {
 	log.Infof("sendEventsForCurrentPos")
-	vevents := []*binlogdatapb.VEvent{{
+	evs := []*binlogdatapb.VEvent{{
 		Type: binlogdatapb.VEventType_GTID,
 		Gtid: mysql.EncodePosition(uvs.pos),
 	}, {
 		Type: binlogdatapb.VEventType_OTHER,
 	}}
-	if err := uvs.send(vevents); err != nil {
+	if err := uvs.send(evs); err != nil {
 		return wrapError(err, uvs.pos)
 	}
 	return nil
@@ -316,7 +320,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		return vterrors.Wrap(err, "could not decode position")
 	}
 	if !curPos.AtLeast(pos) {
-		return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+		return fmt.Errorf("GTIDSet Mismatch: requested source position:%v, current target vrep position: %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 	}
 	uvs.pos = pos
 	return nil
@@ -362,7 +366,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 		uvs.sendTestEvent("Copy Done")
 	}
-	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send)
+	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, mysql.EncodePosition(uvs.pos), mysql.EncodePosition(uvs.stopPos), uvs.filter, uvs.getVSchema(), uvs.send, "replicate", uvs.vse)
 
 	uvs.setVs(vs)
 	return vs.Stream()
@@ -411,6 +415,7 @@ func (uvs *uvstreamer) sendTestEvent(msg string) {
 		Type: binlogdatapb.VEventType_OTHER,
 		Gtid: msg,
 	}
+
 	if err := uvs.send([]*binlogdatapb.VEvent{ev}); err != nil {
 		return
 	}

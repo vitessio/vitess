@@ -232,6 +232,7 @@ enum VEventType {
   JOURNAL = 16;
   VERSION = 17;
   LASTPK = 18;
+  SAVEPOINT = 19;
 }
 
 // RowChange represents one row change.
@@ -327,8 +328,8 @@ message VEvent {
   int64 timestamp = 2;
   // Gtid is set if the event type is GTID.
   string gtid = 3;
-  // Ddl is set if the event type is DDL.
-  string ddl = 4;
+  // Statement is set if the event type is DDL, DML or SAVEPOINT.
+  string statement = 4;
   // RowEvent is set if the event type is ROW.
   RowEvent row_event = 5;
   // FieldEvent is set if the event type is FIELD.

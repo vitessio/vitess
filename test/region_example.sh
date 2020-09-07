@@ -32,6 +32,28 @@ source ./env.sh # Required so that "mysql" works from alias
 sleep 5 # Give vtgate time to really start.
 
 mysql < insert_customers.sql
-mysql --table < show_data.sql
+mysql --table < show_initial_data.sql
 
-./201_teardown.sh
+# create schema and vschema for sharding (+lookup vindex)
+./201_main_sharded.sh
+
+# bring up shards and tablets
+./202_new_tablets.sh
+
+# reshard
+./203_reshard.sh
+
+# SwitchReads
+./204_switch_reads.sh
+
+# SwitchWrites
+./205_switch_writes.sh
+
+# down shard
+./206_down_shard_0.sh
+
+# delete shard 0
+./207_delete_shard_0.sh
+
+# Down cluster
+./301_teardown.sh

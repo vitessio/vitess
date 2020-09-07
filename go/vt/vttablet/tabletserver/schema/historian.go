@@ -22,7 +22,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -84,19 +84,19 @@ func (h *historian) Open() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.enabled {
-		log.Info("Historian is not enabled.")
 		return nil
 	}
 	if h.isOpen {
 		return nil
 	}
+	log.Info("Historian: opening")
 
 	ctx := tabletenv.LocalContext()
 	if err := h.loadFromDB(ctx); err != nil {
+		log.Errorf("Historian failed to open: %v", err)
 		return err
 	}
 
-	log.Info("Historian enabled.")
 	h.isOpen = true
 	return nil
 }
@@ -109,9 +109,9 @@ func (h *historian) Close() {
 		return
 	}
 
-	log.Info("Historian closed.")
 	h.schemas = nil
 	h.isOpen = false
+	log.Info("Historian: closed")
 }
 
 // RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)

@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -90,7 +91,7 @@ func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
 
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
-	tm.setReplicationStopped(true)
+	tm.replManager.setReplicationStopped(true)
 
 	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
 	// Do this in the background, as it's best-effort.
@@ -110,7 +111,7 @@ func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
 
 	// Remember that we were told to stop, so we don't try to
 	// restart ourselves (in replication_reporter).
-	tm.setReplicationStopped(true)
+	tm.replManager.setReplicationStopped(true)
 
 	// Also tell Orchestrator we're stopped on purpose for some Vitess task.
 	// Do this in the background, as it's best-effort.
@@ -162,7 +163,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	tm.setReplicationStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// Tell Orchestrator we're no longer stopped on purpose.
 	// Do this in the background, as it's best-effort.
@@ -213,7 +214,7 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	tm.setReplicationStopped(true)
+	tm.replManager.setReplicationStopped(true)
 	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
@@ -225,7 +226,7 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	defer tm.unlock()
 
 	// Initializing as master implies undoing any previous "do not replicate".
-	tm.setReplicationStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
@@ -240,11 +241,6 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// If using semi-sync, we need to enable it before going read-write.
-	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
@@ -255,6 +251,13 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
+
+	// Enforce semi-sync after changing the type to master. Otherwise, the
+	// master will hang while trying to create the database.
+	if err := tm.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+		return "", err
+	}
+
 	return mysql.EncodePosition(pos), nil
 }
 
@@ -296,7 +299,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
-	tm.setReplicationStopped(false)
+	tm.replManager.setReplicationStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to master.
 	// If we were a master type, we need to switch back to replica settings.
@@ -381,12 +384,12 @@ func (tm *TabletManager) demoteMaster(ctx context.Context, revertPartialFailure 
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Infof("DemoteMaster disabling query service")
-		if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
-				if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+				if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 					log.Warningf("SetServingType(serving=true) failed during revert: %v", err)
 				}
 			}
@@ -460,7 +463,7 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 	// Update serving graph
 	tablet := tm.Tablet()
 	log.Infof("UndoDemoteMaster re-enabling query service")
-	if _ /* state changed */, err := tm.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+	if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
 
@@ -521,9 +524,9 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 	// unintentionally change the type of RDONLY tablets
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_MASTER {
-		tablet.Type = topodatapb.TabletType_REPLICA
-		tablet.MasterTermStartTime = nil
-		tm.updateState(ctx, tablet, "setMasterLocked")
+		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA); err != nil {
+			return err
+		}
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -623,11 +626,7 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	if tablet.Type != topodatapb.TabletType_MASTER {
 		return nil
 	}
-	tablet.Type = topodatapb.TabletType_MASTER
-	tablet.MasterTermStartTime = nil
-	tm.updateState(ctx, tablet, "ReplicaWasRestarted")
-	tm.runHealthCheckLocked()
-	return nil
+	return tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA)
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
@@ -839,6 +838,48 @@ func (tm *TabletManager) handleRelayLogError(err error) error {
 		return nil
 	}
 	return err
+}
+
+// repairReplication tries to connect this server to whoever is
+// the current master of the shard, and start replicating.
+func (tm *TabletManager) repairReplication(ctx context.Context) error {
+	tablet := tm.Tablet()
+
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return err
+	}
+	if !si.HasMaster() {
+		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+		// The shard record says we are master, but we disagree; we wouldn't
+		// reach this point unless we were told to check replication.
+		// Hopefully someone is working on fixing that, but in any case,
+		// we should not try to reparent to ourselves.
+		return fmt.Errorf("shard %v/%v record claims tablet %v is master, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
+	}
+
+	// If Orchestrator is configured and if Orchestrator is actively reparenting, we should not repairReplication
+	if tm.orc != nil {
+		re, err := tm.orc.InActiveShardRecovery(tablet)
+		if err != nil {
+			return err
+		}
+		if re {
+			return fmt.Errorf("orchestrator actively reparenting shard %v, skipping repairReplication", si)
+		}
+
+		// Before repairing replication, tell Orchestrator to enter maintenance mode for this tablet and to
+		// lock any other actions on this tablet by Orchestrator.
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to StopReplication"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+			return vterrors.Wrap(err, "orchestrator BeginMaintenance failed, skipping repairReplication")
+		}
+	}
+
+	return tm.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
 }
 
 // SlaveStatus is deprecated

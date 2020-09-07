@@ -80,7 +80,7 @@ type builder interface {
 	// SetUpperLimit is an optimization hint that tells that primitive
 	// that it does not need to return more than the specified number of rows.
 	// A primitive that cannot perform this can ignore the request.
-	SetUpperLimit(count *sqlparser.SQLVal)
+	SetUpperLimit(count sqlparser.Expr)
 
 	// PushMisc pushes miscelleaneous constructs to all the primitives.
 	PushMisc(sel *sqlparser.Select)
@@ -124,13 +124,15 @@ type builder interface {
 // info about tables.
 type ContextVSchema interface {
 	FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
-	FindTablesOrVindex(tablename sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	DefaultKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
 	Destination() key.Destination
 	TabletType() topodatapb.TabletType
 	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
 	AnyKeyspace() (*vindexes.Keyspace, error)
+	FirstSortedKeyspace() (*vindexes.Keyspace, error)
+	SysVarSetEnabled() bool
 }
 
 //-------------------------------------------------------------------------
@@ -163,7 +165,7 @@ func (bc *builderCommon) ResultColumns() []*resultColumn {
 	return bc.input.ResultColumns()
 }
 
-func (bc *builderCommon) SetUpperLimit(count *sqlparser.SQLVal) {
+func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
 	bc.input.SetUpperLimit(count)
 }
 

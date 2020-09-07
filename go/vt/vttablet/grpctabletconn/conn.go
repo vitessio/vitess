@@ -733,7 +733,7 @@ func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }
 
 //ReserveBeginExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -763,7 +763,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 }
 
 //ReserveBeginExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, sql string, preQueries []string, bindVariables map[string]*querypb.BindVariable, txID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -778,7 +778,7 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 			Sql:           sql,
 			BindVariables: bindVariables,
 		},
-		TransactionId: txID,
+		TransactionId: transactionID,
 		Options:       options,
 		PreQueries:    preQueries,
 	}

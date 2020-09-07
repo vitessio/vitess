@@ -27,11 +27,12 @@
         <span *ngFor="let portName of portNames(tab)">
           <strong>{{portName}}:</strong> {{tab.port_map[portName]}},
         </span>
+        <span *ngIf="tab.mysql_port"><strong>mysqld:</strong> {{tab.mysql_port}}</span>
       </template>
     </p-column>
     <p-column header="Status">
       <template let-tab="rowData">
-        <a href="{{tab.url)}}">
+        <a href="{{tab.url}}">
           <button md-button>Status</button>
         </a>
       </template>

@@ -264,7 +264,7 @@ func TestSetAutocommitON(t *testing.T) {
 
 	e := s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -273,7 +273,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=ON")
@@ -289,7 +289,7 @@ func TestSetAutocommitON(t *testing.T) {
 
 	e = s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -298,7 +298,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 }
 
@@ -316,7 +316,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 
 	e := s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -325,7 +325,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=OFF")
@@ -341,7 +341,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 
 	e = s.Exprs[0]
 	switch v := e.Expr.(type) {
-	case *SQLVal:
+	case *Literal:
 		if v.Type != StrVal {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
@@ -350,7 +350,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
-		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
+		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
 	}
 
 }
@@ -390,8 +390,8 @@ func TestIsAggregate(t *testing.T) {
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
 		Operator: NotEqualStr,
-		Left:     newIntVal("1"),
-		Right:    newIntVal("1"),
+		Left:     newIntLiteral("1"),
+		Right:    newIntLiteral("1"),
 	}
 	if !f.IsImpossible() {
 		t.Error("IsImpossible: false, want true")
@@ -399,8 +399,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: EqualStr,
-		Left:     newIntVal("1"),
-		Right:    newIntVal("1"),
+		Left:     newIntLiteral("1"),
+		Right:    newIntLiteral("1"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -408,8 +408,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: NotEqualStr,
-		Left:     newIntVal("1"),
-		Right:    newIntVal("2"),
+		Left:     newIntLiteral("1"),
+		Right:    newIntLiteral("2"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -538,7 +538,7 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where case a when b then c when d then c else (select a from b) end",
 		out: "case a when b then c when d then c else :a end",
 	}}
-	to := NewValArg([]byte(":a"))
+	to := NewArgument([]byte(":a"))
 	for _, tcase := range tcases {
 		tree, err := Parse(tcase.in)
 		if err != nil {
@@ -668,7 +668,7 @@ func TestHexDecode(t *testing.T) {
 		out: "encoding/hex: odd length hex string",
 	}}
 	for _, tc := range testcase {
-		out, err := newHexVal(tc.in).HexDecode()
+		out, err := newHexLiteral(tc.in).HexDecode()
 		if err != nil {
 			if err.Error() != tc.out {
 				t.Errorf("Decode(%q): %v, want %s", tc.in, err, tc.out)

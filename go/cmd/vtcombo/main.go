@@ -165,7 +165,7 @@ func main() {
 		exit.Return(1)
 	}
 
-	// Now that we have fully initialized the tablets, rebuild the keyspace graph. This is what would normally happen in InitTablet.
+	// Now that we have fully initialized the tablets, rebuild the keyspace graph.
 	for _, ks := range tpb.Keyspaces {
 		err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells)
 		if err != nil {

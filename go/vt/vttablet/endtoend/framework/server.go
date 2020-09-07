@@ -53,10 +53,10 @@ var (
 	TopoServer *topo.Server
 )
 
-// StartServer starts the server and initializes
+// StartCustomServer starts the server and initializes
 // all the global variables. This function should only be called
 // once at the beginning of the test.
-func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
+func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName string, config *tabletenv.TabletConfig) error {
 	// Setup a fake vtgate server.
 	protocol := "resolveTest"
 	*vtgateconn.VtgateProtocol = protocol
@@ -68,14 +68,6 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 
 	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
 
-	config := tabletenv.NewDefaultConfig()
-	config.StrictTableACL = true
-	config.TwoPCEnable = true
-	config.TwoPCAbandonAge = 1
-	config.TwoPCCoordinatorAddress = "fake"
-	config.HotRowProtection.Mode = tabletenv.Enable
-	config.TrackSchemaVersions = true
-
 	Target = querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
@@ -85,7 +77,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 
 	Server = tabletserver.NewTabletServer("", config, TopoServer, topodatapb.TabletAlias{})
 	Server.Register()
-	err := Server.StartService(Target, dbcfgs)
+	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {
 		return vterrors.Wrap(err, "could not start service")
 	}
@@ -106,6 +98,20 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 		}
 	}
 	return nil
+}
+
+// StartServer starts the server and initializes
+// all the global variables. This function should only be called
+// once at the beginning of the test.
+func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string) error {
+	config := tabletenv.NewDefaultConfig()
+	config.StrictTableACL = true
+	config.TwoPCEnable = true
+	config.TwoPCAbandonAge = 1
+	config.TwoPCCoordinatorAddress = "fake"
+	config.HotRowProtection.Mode = tabletenv.Enable
+	config.TrackSchemaVersions = true
+	return StartCustomServer(connParams, connAppDebugParams, dbName, config)
 }
 
 // StopServer must be called once all the tests are done.

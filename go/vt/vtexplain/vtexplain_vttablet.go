@@ -87,7 +87,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	}
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), *t.Alias)
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
@@ -110,7 +110,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		Shard:      t.Shard,
 		TabletType: topodatapb.TabletType_MASTER,
 	}
-	tsv.StartService(target, dbcfgs)
+	tsv.StartService(target, dbcfgs, nil /* mysqld */)
 
 	// clear all the schema initialization queries out of the tablet
 	// to avoid clutttering the output
@@ -513,7 +513,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 						case sqlparser.ValTuple:
 							for _, val := range values {
 								switch v := val.(type) {
-								case *sqlparser.SQLVal:
+								case *sqlparser.Literal:
 									inVal = append(inVal, v.Val)
 								}
 							}
@@ -591,7 +591,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Typ
 		// As a shortcut, functions are integral types
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT32)
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		colNames = append(colNames, sqlparser.String(node))
 		switch node.Type {
 		case sqlparser.IntVal:

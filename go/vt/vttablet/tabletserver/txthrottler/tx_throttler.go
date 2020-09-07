@@ -225,6 +225,7 @@ func (t *TxThrottler) Open() error {
 	if t.state != nil {
 		return nil
 	}
+	log.Info("TxThrottler: opening")
 	var err error
 	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard)
 	return err
@@ -240,9 +241,9 @@ func (t *TxThrottler) Close() {
 	if t.state == nil {
 		return
 	}
-	log.Infof("Shutting down transaction throttler.")
 	t.state.deallocateResources()
 	t.state = nil
+	log.Info("TxThrottler: closed")
 }
 
 // Throttle should be called before a new transaction is started.

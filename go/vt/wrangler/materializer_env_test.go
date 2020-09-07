@@ -19,6 +19,7 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -63,7 +64,6 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 		tmc:      newTestMaterializerTMClient(),
 	}
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
-
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_MASTER)
@@ -161,18 +161,41 @@ type testMaterializerTMClient struct {
 	tmclient.TabletManagerClient
 	schema map[string]*tabletmanagerdatapb.SchemaDefinition
 
-	mu        sync.Mutex
-	vrQueries map[int][]*queryResult
+	mu              sync.Mutex
+	vrQueries       map[int][]*queryResult
+	getSchemaCounts map[string]int
+	muSchemaCount   sync.Mutex
 }
 
 func newTestMaterializerTMClient() *testMaterializerTMClient {
 	return &testMaterializerTMClient{
-		schema:    make(map[string]*tabletmanagerdatapb.SchemaDefinition),
-		vrQueries: make(map[int][]*queryResult),
+		schema:          make(map[string]*tabletmanagerdatapb.SchemaDefinition),
+		vrQueries:       make(map[int][]*queryResult),
+		getSchemaCounts: make(map[string]int),
 	}
 }
 
+func (tmc *testMaterializerTMClient) schemaRequested(uid uint32) {
+	tmc.muSchemaCount.Lock()
+	defer tmc.muSchemaCount.Unlock()
+	key := strconv.Itoa(int(uid))
+	n, ok := tmc.getSchemaCounts[key]
+	if !ok {
+		tmc.getSchemaCounts[key] = 1
+	} else {
+		tmc.getSchemaCounts[key] = n + 1
+	}
+}
+
+func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
+	tmc.muSchemaCount.Lock()
+	defer tmc.muSchemaCount.Unlock()
+	key := strconv.Itoa(int(uid))
+	return tmc.getSchemaCounts[key]
+}
+
 func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range tables {
 		// TODO: Add generalized regexps if needed for test purposes.

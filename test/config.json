@@ -8,7 +8,7 @@
             "java_test"
           ],
           "Manual": false,
-          "Shard": 25,
+          "Shard": 10,
           "RetryMax": 0,
           "Tags": []
         },
@@ -266,6 +266,17 @@
 				"site_test"
 			]
 		},
+		"pitr": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 10,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"recovery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
@@ -411,6 +422,15 @@
 		"vtgate_buffer": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/buffer"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vtgate_concurrentdml": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,

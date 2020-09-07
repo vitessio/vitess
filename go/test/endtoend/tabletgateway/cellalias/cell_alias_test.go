@@ -179,12 +179,6 @@ func TestMain(m *testing.M) {
 		localCluster.Keyspaces[0].Shards = append(localCluster.Keyspaces[0].Shards, shard2)
 
 		for _, tablet := range shard1.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard1.Name); err != nil {
-				return 1, err
-			}
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-				return 1, err
-			}
 			if err := tablet.VttabletProcess.Setup(); err != nil {
 				return 1, err
 			}
@@ -202,12 +196,6 @@ func TestMain(m *testing.M) {
 		}
 
 		for _, tablet := range shard2.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard2.Name); err != nil {
-				return 1, err
-			}
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-				return 1, err
-			}
 			if err := tablet.VttabletProcess.Setup(); err != nil {
 				return 1, err
 			}

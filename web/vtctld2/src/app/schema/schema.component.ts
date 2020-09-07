@@ -106,6 +106,8 @@ export class SchemaComponent implements OnInit {
           let vSchemas = Object.keys(vSchemaResp.vindexes).map(vname => {
             let vtype = vSchemaResp.vindexes[vname].type;
             let vparams = vSchemaResp.vindexes[vname].params ? vSchemaResp.vindexes[vname].params : '';
+            vparams = JSON.stringify(vparams);
+            if (vparams == "\"\"") vparams = "";
             let vowner = vSchemaResp.vindexes[vname].owner ? vSchemaResp.vindexes[vname].owner : '';
             return {name: vname, type: vtype, params: vparams, owner: vowner};
           });
@@ -153,14 +155,14 @@ export class SchemaComponent implements OnInit {
     let vindexes = {};
     for (let tableName of Object.keys(tables)) {
       vindexes[tableName] = {};
-      if (tables[tableName]['column_vindexes']) {
-        for (let vindex of tables[tableName]['column_vindexes']) {
+      if (tables[tableName]['columnVindexes']) {
+        for (let vindex of tables[tableName]['columnVindexes']) {
           vindexes[tableName][vindex.column] = { vindex: vindex.name};
         }
       }
 
-      if (tables[tableName]['auto_increment']) {
-        let sequence = tables[tableName]['auto_increment'];
+      if (tables[tableName]['autoIncrement']) {
+        let sequence = tables[tableName]['autoIncrement'];
         if (vindexes[tableName][sequence.column]) {
           vindexes[tableName][sequence.column]['sequence'] = sequence.sequence;
         } else {

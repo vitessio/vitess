@@ -44,8 +44,8 @@ func parseFilePosGTID(s string) (GTID, error) {
 	}, nil
 }
 
-// parseFilePosGTIDSet is registered as a GTIDSet parser.
-func parseFilePosGTIDSet(s string) (GTIDSet, error) {
+// ParseFilePosGTIDSet is registered as a GTIDSet parser.
+func ParseFilePosGTIDSet(s string) (GTIDSet, error) {
 	gtid, err := parseFilePosGTID(s)
 	if err != nil {
 		return nil, err
@@ -147,8 +147,15 @@ func (gtid filePosGTID) Union(other GTIDSet) GTIDSet {
 	return filePosOther
 }
 
+// Last returns last filePosition
+// For filePos based GTID we have only one position
+// here we will just return the current filePos
+func (gtid filePosGTID) Last() string {
+	return gtid.String()
+}
+
 func init() {
 	gtidParsers[FilePosFlavorID] = parseFilePosGTID
-	gtidSetParsers[FilePosFlavorID] = parseFilePosGTIDSet
+	gtidSetParsers[FilePosFlavorID] = ParseFilePosGTIDSet
 	flavors[FilePosFlavorID] = newFilePosFlavor
 }

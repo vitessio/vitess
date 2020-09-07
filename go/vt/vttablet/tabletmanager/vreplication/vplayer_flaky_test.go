@@ -34,6 +34,66 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestPlayerSavepoint(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table t1(id int, primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	// Issue a dummy change to ensure vreplication is initialized. Otherwise there
+	// is a race between the DDLs and the schema loader of vstreamer.
+	// Root cause seems to be with MySQL where t1 shows up in information_schema before
+	// the actual table is created.
+	execStatements(t, []string{"insert into t1 values(1)"})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"insert into t1(id) values (1)",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+
+	execStatements(t, []string{
+		"begin",
+		"savepoint vrepl_a",
+		"insert into t1(id) values (2)",
+		"savepoint vrepl_b",
+		"insert into t1(id) values (3)",
+		"release savepoint vrepl_b",
+		"savepoint vrepl_a",
+		"insert into t1(id) values (42)",
+		"rollback work to savepoint vrepl_a",
+		"commit",
+	})
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/insert into t1.*2.*",
+		"SAVEPOINT `vrepl_b`",
+		"/insert into t1.*3.*",
+		"SAVEPOINT `vrepl_a`",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	})
+	cancel()
+}
+
 func TestPlayerStatementModeWithFilter(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -883,6 +943,7 @@ func TestPlayerUpdates(t *testing.T) {
 			expectData(t, tcases.table, tcases.data)
 		}
 	}
+	validateQueryCountStat(t, "replicate", 7)
 }
 
 func TestPlayerRowMove(t *testing.T) {
@@ -928,6 +989,7 @@ func TestPlayerRowMove(t *testing.T) {
 		{"1", "1", "1"},
 		{"2", "5", "2"},
 	})
+	validateQueryCountStat(t, "replicate", 3)
 
 	execStatements(t, []string{
 		"update src set val1=1, val2=4 where id=3",
@@ -943,6 +1005,7 @@ func TestPlayerRowMove(t *testing.T) {
 		{"1", "5", "2"},
 		{"2", "2", "1"},
 	})
+	validateQueryCountStat(t, "replicate", 5)
 }
 
 func TestPlayerTypes(t *testing.T) {

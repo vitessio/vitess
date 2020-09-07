@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -55,6 +57,7 @@ var (
 	vrepldb               = "vrepl"
 	globalDBQueries       = make(chan string, 1000)
 	testForeignKeyQueries = false
+	doNotLogDBQueries     = false
 )
 
 type LogExpectation struct {
@@ -109,10 +112,7 @@ func TestMain(m *testing.M) {
 			"extb": env.Dbcfgs,
 		}
 		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb, externalConfig)
-		if err := playerEngine.Open(context.Background()); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
+		playerEngine.Open(context.Background())
 		defer playerEngine.Close()
 
 		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
@@ -393,6 +393,9 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		return nil, nil
 	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
+	if doNotLogDBQueries {
+		return qr, err
+	}
 	if !strings.HasPrefix(query, "select") && !strings.HasPrefix(query, "set") && !dbc.nolog {
 		globalDBQueries <- query
 	} else if testForeignKeyQueries && strings.Contains(query, "foreign_key_checks") { //allow select/set for foreign_key_checks
@@ -459,8 +462,16 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			continue
 		}
 		var got string
+		heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
+	retry:
 		select {
 		case got = <-globalDBQueries:
+			// We rule out heartbeat time update queries because otherwise our query list
+			// is indeterminable and varies with each test execution.
+			if heartbeatRe.MatchString(got) {
+				goto retry
+			}
+
 			var match bool
 			if query[0] == '/' {
 				result, err := regexp.MatchString(query[1:], got)
@@ -494,6 +505,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 func expectNontxQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
+	heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
@@ -504,7 +516,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		select {
 		case got = <-globalDBQueries:
 
-			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") {
+			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || heartbeatRe.MatchString(got) {
 				goto retry
 			}
 
@@ -570,4 +582,24 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 			}
 		}
 	}
+}
+
+func validateQueryCountStat(t *testing.T, phase string, want int64) {
+	var count int64
+	for _, ct := range globalStats.status().Controllers {
+		for ph, cnt := range ct.QueryCounts {
+			if ph == phase {
+				count += cnt
+			}
+		}
+	}
+	require.Equal(t, want, count, "QueryCount stat is incorrect")
+}
+
+func validateCopyRowCountStat(t *testing.T, want int64) {
+	var count int64
+	for _, ct := range globalStats.status().Controllers {
+		count += ct.CopyRowCount
+	}
+	require.Equal(t, want, count, "CopyRowCount stat is incorrect")
 }

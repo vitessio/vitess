@@ -788,6 +788,18 @@ options:PassthroughDMLs
 "syntax error"
 "syntax error at position 7 near 'syntax'"
 
-# named locks are unsafe with server-side connection pooling
-"select get_lock('foo') from dual"
-"get_lock() not allowed"
+# show tables #1
+"show tables like 'key%'"
+{
+  "PlanID": "ShowTables",
+  "TableName":"",
+  "FullQuery": "show tables like 'key%'"
+}
+
+# show tables #2
+"show tables where Tables_in_keyspace='apa'"
+{
+  "PlanID": "ShowTables",
+  "TableName":"",
+  "FullQuery": "show tables where Tables_in_dbName = 'apa'"
+}

@@ -118,11 +118,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard1Master = localCluster.NewVttabletInstance("master", 0, cell1)
 		shard1Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard1Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
-		shard2Master = localCluster.NewVttabletInstance("master", 0, "")
+		shard2Master = localCluster.NewVttabletInstance("master", 0, cell1)
 		shard2Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard2Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
@@ -179,12 +179,6 @@ func TestMain(m *testing.M) {
 		localCluster.Keyspaces[0].Shards = append(localCluster.Keyspaces[0].Shards, shard2)
 
 		for _, tablet := range shard1.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard1.Name); err != nil {
-				return 1, err
-			}
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-				return 1, err
-			}
 			if err := tablet.VttabletProcess.Setup(); err != nil {
 				return 1, err
 			}
@@ -202,12 +196,6 @@ func TestMain(m *testing.M) {
 		}
 
 		for _, tablet := range shard2.Vttablets {
-			if err := localCluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard2.Name); err != nil {
-				return 1, err
-			}
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-				return 1, err
-			}
 			if err := tablet.VttabletProcess.Setup(); err != nil {
 				return 1, err
 			}
@@ -243,7 +231,7 @@ func TestAlias(t *testing.T) {
 	defer deleteInitialValues(t)
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	shard1 := localCluster.Keyspaces[0].Shards[0]
 	shard2 := localCluster.Keyspaces[0].Shards[1]
 	allCells := fmt.Sprintf("%s,%s", cell1, cell2)
@@ -259,17 +247,19 @@ func TestAlias(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias",
 		"-cells", allCells,
 		"region_east_coast")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = localCluster.VtctlclientProcess.ExecuteCommand("UpdateCellsAlias",
 		"-cells", allCells,
 		"region_east_coast")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA"
+	// Use legacy gateway. There's a separate test for tabletgateway in go/test/endtoend/tabletgateway/cellalias/cell_alias_test.go
+	vtgateInstance.GatewayImplementation = "discoverygateway"
 	err = vtgateInstance.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Cluster teardown will not teardown vtgate because we are not
 	// actually setting this on localCluster.VtgateInstance
@@ -284,14 +274,14 @@ func TestAlias(t *testing.T) {
 	// now, delete the alias, so that if we run above assertions again, it will fail for replica,rdonly target type
 	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteCellsAlias",
 		"region_east_coast")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// restarts the vtgate process
 	vtgateInstance.TabletTypesToWait = "MASTER"
 	err = vtgateInstance.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = vtgateInstance.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
 	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
@@ -307,7 +297,7 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	defer deleteInitialValues(t)
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	shard1 := localCluster.Keyspaces[0].Shards[0]
 	shard2 := localCluster.Keyspaces[0].Shards[1]
 	allCells := fmt.Sprintf("%s,%s", cell1, cell2)
@@ -321,12 +311,11 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
-	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA,RDONLY"
+	// only MASTER is in vtgate's "cell", other tablet types are not visible because they are in the other cell
+	vtgateInstance.TabletTypesToWait = "MASTER"
 	err = vtgateInstance.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer vtgateInstance.TearDown()
-
-	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
 	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
@@ -337,7 +326,7 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias",
 		"-cells", allCells,
 		"region_east_coast")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
 	// TODO(deepthi) change the following to shouldFail:false when fixing https://github.com/vitessio/vitess/issues/5911
@@ -349,11 +338,11 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
 	for _, shard := range shards {
 		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard), 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 }
 
@@ -366,11 +355,11 @@ func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int
 		require.Error(t, err)
 		return
 	}
-	require.Nil(t, err)
+	require.NoError(t, err)
 	var result sqltypes.Result
 
 	err = json.Unmarshal([]byte(output), &result)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(result.Rows), 3)
 }
 

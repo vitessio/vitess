@@ -26,8 +26,8 @@ import (
 var (
 	// lowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
 	lowReplicationLag             = flag.Duration("discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
-	highReplicationLagMinServing  = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when selecting the minimum num vttablets for serving")
-	minNumTablets                 = flag.Int("min_number_serving_vttablets", 2, "the minimum number of vttablets that will be continue to be used even with low replication lag")
+	highReplicationLagMinServing  = flag.Duration("discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when applying the min_number_serving_vttablets threshold")
+	minNumTablets                 = flag.Int("min_number_serving_vttablets", 2, "the minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving")
 	legacyReplicationLagAlgorithm = flag.Bool("legacy_replication_lag_algorithm", true, "use the legacy algorithm when selecting the vttablets for serving")
 )
 
