@@ -364,8 +364,11 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
-func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	atomic.AddUint32(&vc.logStats.ShardQueries, 1)
+	vc.safeSession.SetCommitOrder(co)
+	defer vc.safeSession.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
+
 	rss, _, err := vc.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)})
 	if err != nil {
 		return nil, err

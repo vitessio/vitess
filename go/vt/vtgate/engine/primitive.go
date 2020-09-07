@@ -75,7 +75,7 @@ type (
 		StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
 
 		// Keyspace ID level functions.
-		ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
+		ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 
 		// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 		// Will replace all of the Topo functions.

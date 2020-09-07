@@ -66,7 +66,7 @@ func (vc *vcursor) Execute(method string, query string, bindvars map[string]*que
 	return vc.execute(method, query, bindvars, rollbackOnError)
 }
 
-func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
 }
 
