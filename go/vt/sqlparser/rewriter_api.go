@@ -34,6 +34,10 @@ package sqlparser
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 //
+// The visitation order between fields is alphabetical.
+//
+// If all you need is to visit all the nodes of the AST, and you
+// don't need the Parent() or Replace() functions, Walk() is slightly faster
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	parent := &struct{ SQLNode }{node}
 	defer func() {
@@ -89,3 +93,31 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 func (c *Cursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 }
+
+// Walk calls visit on every node.
+// If visit returns true, the underlying nodes
+// are also visited. If it returns an error, walking
+// is interrupted, and the error is returned.
+func Walk(visit Visit, nodes ...SQLNode) (err error) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		switch n := r.(type) {
+		case errorOccured:
+			err = n.err
+		default:
+			panic(r)
+		}
+	}()
+
+	for _, node := range nodes {
+		__walk(visit, node)
+	}
+	return err
+}
+
+// Visit defines the signature of a function that
+// can be used to visit all nodes of a parse tree.
+type Visit func(node SQLNode) (kontinue bool, err error)
