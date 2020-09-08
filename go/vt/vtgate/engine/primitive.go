@@ -86,6 +86,8 @@ type (
 		Session() SessionActions
 
 		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
+
+		InTransactionAndIsDML() bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

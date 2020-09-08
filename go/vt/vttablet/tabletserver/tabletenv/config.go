@@ -149,8 +149,8 @@ func init() {
 	flag.BoolVar(&currentConfig.CacheResultFields, "enable-query-plan-field-caching", defaultConfig.CacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
 
 	flag.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
-	flag.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded (only used in status UI)")
-	flag.DurationVar(&unhealthyThreshold, "unhealthy_threshold", 2*time.Hour, "replication lag  after which a replica is considered unhealthy")
+	flag.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")
+	flag.DurationVar(&unhealthyThreshold, "unhealthy_threshold", 2*time.Hour, "replication lag after which a replica is considered unhealthy")
 	flag.DurationVar(&transitionGracePeriod, "serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
 
 	flag.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")

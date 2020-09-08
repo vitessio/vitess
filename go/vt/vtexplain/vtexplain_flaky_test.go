@@ -224,5 +224,8 @@ func TestJSONOutput(t *testing.T) {
         ]
     }
 }`
-	require.Equal(t, wantJSON, string(actionsJSON))
+	diff := cmp.Diff(wantJSON, string(actionsJSON))
+	if diff != "" {
+		t.Errorf(diff)
+	}
 }

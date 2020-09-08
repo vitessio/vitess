@@ -55,7 +55,7 @@ func newVCopier(vr *vreplicator) *vcopier {
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.tableKeys, nil)
+	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.pkInfoMap, nil)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.tableKeys, nil)
+	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.pkInfoMap, nil)
 	if err != nil {
 		return err
 	}
@@ -259,6 +259,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		_, err = vc.tablePlan.applyBulkInsert(rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
+			if err != nil {
+				return nil, err
+			}
 			vc.vr.stats.QueryTimings.Record("copy", start)
 
 			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))

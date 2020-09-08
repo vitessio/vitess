@@ -1387,3 +1387,42 @@
     "Table": "music"
   }
 }
+
+# query trying to query two different keyspaces at the same time
+"SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'user' AND A.TABLE_SCHEMA = 'main' AND B.TABLE_NAME = A.TABLE_NAME"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'user' AND A.TABLE_SCHEMA = 'main' AND B.TABLE_NAME = A.TABLE_NAME",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select B.TABLE_NAME from INFORMATION_SCHEMA.`TABLES` as A, INFORMATION_SCHEMA.`COLUMNS` as B where 1 != 1",
+    "Query": "select B.TABLE_NAME from INFORMATION_SCHEMA.`TABLES` as A, INFORMATION_SCHEMA.`COLUMNS` as B where A.TABLE_SCHEMA = :__vtschemaname and A.TABLE_SCHEMA = :__vtschemaname and B.TABLE_NAME = A.TABLE_NAME",
+    "SysTableKeyspaceExpr": [
+      "VARBINARY(\"user\")",
+      "VARBINARY(\"main\")"
+    ]
+  }
+}
+
+# information_schema query using database() func
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"
+  }
+}
+                

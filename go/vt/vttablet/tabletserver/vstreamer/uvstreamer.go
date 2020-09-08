@@ -211,7 +211,7 @@ func getQuery(tableName string, filter string) string {
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral([]byte(filter)))
 		query = buf.String()
 	}
 	return query
@@ -320,7 +320,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		return vterrors.Wrap(err, "could not decode position")
 	}
 	if !curPos.AtLeast(pos) {
-		return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+		return fmt.Errorf("GTIDSet Mismatch: requested source position:%v, current target vrep position: %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 	}
 	uvs.pos = pos
 	return nil

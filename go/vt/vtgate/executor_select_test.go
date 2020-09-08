@@ -221,6 +221,78 @@ func TestStreamBuffering(t *testing.T) {
 	}
 }
 
+func TestStreamLimitOffset(t *testing.T) {
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
+
+	// This test is similar to TestStreamUnsharded except that it returns a Result > 10 bytes,
+	// such that the splitting of the Result into multiple Result responses gets tested.
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("1234"),
+		}, {
+			sqltypes.NewInt32(4),
+			sqltypes.NewVarChar("4567"),
+		}},
+	}})
+
+	sbc2.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(2),
+			sqltypes.NewVarChar("2345"),
+		}},
+	}})
+
+	results := make(chan *sqltypes.Result, 10)
+	err := executor.StreamExecute(
+		context.Background(),
+		"TestStreamLimitOffset",
+		NewSafeSession(masterSession),
+		"select id, textcol from user order by id limit 2 offset 2",
+		nil,
+		querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+		},
+		func(qr *sqltypes.Result) error {
+			results <- qr
+			return nil
+		},
+	)
+	close(results)
+	require.NoError(t, err)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "textcol", Type: sqltypes.VarChar},
+		},
+
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("1234"),
+		}, {
+			sqltypes.NewInt32(1),
+			sqltypes.NewVarChar("foo"),
+		}},
+	}
+	var gotResults []*sqltypes.Result
+	for r := range results {
+		gotResults = append(gotResults, r)
+	}
+	res := gotResults[0]
+	for i := 1; i < len(gotResults); i++ {
+		res.Rows = append(res.Rows, gotResults[i].Rows...)
+	}
+	utils.MustMatch(t, wantResult, res, "")
+}
+
 func TestSelectLastInsertId(t *testing.T) {
 	masterSession.LastInsertId = 52
 	executor, _, _, _ := createLegacyExecutorEnv()
@@ -2280,4 +2352,27 @@ func TestSelectLock(t *testing.T) {
 	exec(executor, session, "select release_lock('lock name') from dual")
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
+}
+
+func TestSelectFromInformationSchema(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	session := NewSafeSession(nil)
+
+	// check failure when trying to query two keyspaces
+	_, err := exec(executor, session, "SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'TestExecutor' AND A.TABLE_SCHEMA = 'TestXBadSharding'")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "can't use more than one keyspace per system table query - found both 'TestExecutor' and 'TestXBadSharding")
+
+	// we pick a keyspace and query for table_schema = database(). should be routed to the picked keyspace
+	session.TargetString = "TestExecutor"
+	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()")
+	require.NoError(t, err)
+	assert.Equal(t, sbc1.StringQueries(), []string{"select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"})
+
+	// `USE TestXBadSharding` and then query info_schema about TestExecutor - should target TestExecutor and not use the default keyspace
+	sbc1.Queries = nil
+	session.TargetString = "TestXBadSharding"
+	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'TestExecutor'")
+	require.NoError(t, err)
+	assert.Equal(t, sbc1.StringQueries(), []string{"select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname"})
 }

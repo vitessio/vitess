@@ -34,9 +34,12 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
@@ -308,12 +311,13 @@ func expectReplicationThreadsState(instanceKey *InstanceKey, expectedState Repli
 func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", fmt.Errorf("%+v", r))
+			err = logReadTopologyInstanceError(instanceKey, "Unexpected, aborting", tb.Errorf("%+v", r))
 		}
 	}()
 
 	var waitGroup sync.WaitGroup
 	var serverUuidWaitGroup sync.WaitGroup
+	var tablet *topodatapb.Tablet
 	readingStartTime := time.Now()
 	instance := NewInstance()
 	instanceFound := false
@@ -342,8 +346,16 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 	latency.Start("instance")
 	db, err := db.OpenDiscovery(instanceKey.Hostname, instanceKey.Port)
-	latency.Stop("instance")
 	if err != nil {
+		goto Cleanup
+	}
+
+	tablet, err = ReadTablet(*instanceKey)
+	if err != nil {
+		goto Cleanup
+	}
+	if tablet == nil {
+		log.Errorf("tablet alias is nil")
 		goto Cleanup
 	}
 
@@ -363,7 +375,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 	}
 
-	latency.Start("instance")
 	if isMaxScale {
 		if strings.Contains(instance.Version, "1.1.0") {
 			isMaxScale110 = true
@@ -520,6 +531,8 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		goto Cleanup
 	}
 	go ResolveHostnameIPs(instance.Key.Hostname)
+
+	// TODO(sougou) delete DataCenterPattern
 	if config.Config.DataCenterPattern != "" {
 		if pattern, err := regexp.Compile(config.Config.DataCenterPattern); err == nil {
 			match := pattern.FindStringSubmatch(instance.Key.Hostname)
@@ -737,6 +750,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}()
 	}
 
+	// TODO(sougou): delete DetectDataCenterQuery
 	if config.Config.DetectDataCenterQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -745,7 +759,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			logReadTopologyInstanceError(instanceKey, "DetectDataCenterQuery", err)
 		}()
 	}
+	instance.DataCenter = tablet.Alias.Cell
 
+	// TODO(sougou): use cell alias to identify regions.
 	if config.Config.DetectRegionQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -764,6 +780,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}()
 	}
 
+	// TODO(sougou): delete DetectInstanceAliasQuery
 	if config.Config.DetectInstanceAliasQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -772,7 +789,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			logReadTopologyInstanceError(instanceKey, "DetectInstanceAliasQuery", err)
 		}()
 	}
+	instance.InstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 
+	// TODO(sougou): come up with a strategy for semi-sync
 	if config.Config.DetectSemiSyncEnforcedQuery != "" && !isMaxScale {
 		waitGroup.Add(1)
 		go func() {
@@ -816,57 +835,20 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 	}
 
-	// First read the current PromotionRule from candidate_database_instance.
-	{
-		latency.Start("backend")
-		err = ReadInstancePromotionRule(instance)
-		latency.Stop("backend")
-		logReadTopologyInstanceError(instanceKey, "ReadInstancePromotionRule", err)
+	// We need to update candidate_database_instance.
+	// We register the rule even if it hasn't changed,
+	// to bump the last_suggested time.
+	if tablet.Type == topodatapb.TabletType_MASTER || tablet.Type == topodatapb.TabletType_REPLICA {
+		instance.PromotionRule = NeutralPromoteRule
+	} else {
+		instance.PromotionRule = MustNotPromoteRule
 	}
-	// Then check if the instance wants to set a different PromotionRule.
-	// We'll set it here on their behalf so there's no race between the first
-	// time an instance is discovered, and setting a rule like "must_not".
-	if config.Config.DetectPromotionRuleQuery != "" && !isMaxScale {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-			var value string
-			err := db.QueryRow(config.Config.DetectPromotionRuleQuery).Scan(&value)
-			logReadTopologyInstanceError(instanceKey, "DetectPromotionRuleQuery", err)
-			promotionRule, err := ParseCandidatePromotionRule(value)
-			logReadTopologyInstanceError(instanceKey, "ParseCandidatePromotionRule", err)
-			if err == nil {
-				// We need to update candidate_database_instance.
-				// We register the rule even if it hasn't changed,
-				// to bump the last_suggested time.
-				instance.PromotionRule = promotionRule
-				err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, promotionRule).WithCurrentTime())
-				logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
-			}
-		}()
-	}
+	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
+	logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 
-	ReadClusterAliasOverride(instance)
-	if !isMaxScale {
-		if instance.SuggestedClusterAlias == "" {
-			// Only need to do on masters
-			if config.Config.DetectClusterAliasQuery != "" {
-				clusterAlias := ""
-				if err := db.QueryRow(config.Config.DetectClusterAliasQuery).Scan(&clusterAlias); err != nil {
-					logReadTopologyInstanceError(instanceKey, "DetectClusterAliasQuery", err)
-				} else {
-					instance.SuggestedClusterAlias = clusterAlias
-				}
-			}
-		}
-		if instance.SuggestedClusterAlias == "" {
-			// Not found by DetectClusterAliasQuery...
-			// See if a ClusterNameToAlias configuration applies
-			if clusterAlias := mappedClusterNameToAlias(instance.ClusterName); clusterAlias != "" {
-				instance.SuggestedClusterAlias = clusterAlias
-			}
-		}
-	}
+	// TODO(sougou): delete cluster_alias_override metadata
+	instance.SuggestedClusterAlias = fmt.Sprintf("%v:%v", tablet.Keyspace, tablet.Shard)
+
 	if instance.ReplicationDepth == 0 && config.Config.DetectClusterDomainQuery != "" && !isMaxScale {
 		// Only need to do on masters
 		domainName := ""
@@ -963,28 +945,6 @@ Cleanup:
 	return nil, err
 }
 
-// ReadClusterAliasOverride reads and applies SuggestedClusterAlias based on cluster_alias_override
-func ReadClusterAliasOverride(instance *Instance) (err error) {
-	aliasOverride := ""
-	query := `
-		select
-			alias
-		from
-			cluster_alias_override
-		where
-			cluster_name = ?
-			`
-	err = db.QueryOrchestrator(query, sqlutils.Args(instance.ClusterName), func(m sqlutils.RowMap) error {
-		aliasOverride = m.GetString("alias")
-
-		return nil
-	})
-	if aliasOverride != "" {
-		instance.SuggestedClusterAlias = aliasOverride
-	}
-	return err
-}
-
 func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 	query := `
 	SELECT
@@ -1017,7 +977,6 @@ func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var masterOrGroupPrimaryInstanceKey InstanceKey
 	var masterOrGroupPrimaryClusterName string
-	var masterOrGroupPrimarySuggestedClusterAlias string
 	var masterOrGroupPrimaryReplicationDepth uint
 	var ancestryUUID string
 	var masterOrGroupPrimaryExecutedGtidSet string
@@ -1047,7 +1006,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	args := sqlutils.Args(masterOrGroupPrimaryInstanceKey.Hostname, masterOrGroupPrimaryInstanceKey.Port)
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		masterOrGroupPrimaryClusterName = m.GetString("cluster_name")
-		masterOrGroupPrimarySuggestedClusterAlias = m.GetString("suggested_cluster_alias")
 		masterOrGroupPrimaryReplicationDepth = m.GetUint("replication_depth")
 		masterOrGroupPrimaryInstanceKey.Hostname = m.GetString("master_host")
 		masterOrGroupPrimaryInstanceKey.Port = m.GetInt("master_port")
@@ -1089,7 +1047,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		} // While the other stays "1"
 	}
 	instance.ClusterName = clusterName
-	instance.SuggestedClusterAlias = masterOrGroupPrimarySuggestedClusterAlias
 	instance.ReplicationDepth = replicationDepth
 	instance.IsCoMaster = isCoMaster
 	instance.AncestryUUID = ancestryUUID
@@ -1403,6 +1360,12 @@ func ReadWriteableClustersMasters() (instances [](*Instance), err error) {
 		}
 	}
 	return instances, err
+}
+
+// ReadClusterAliasInstances reads all instances of a cluster alias
+func ReadClusterAliasInstances(clusterAlias string) ([](*Instance), error) {
+	condition := `suggested_cluster_alias = ? `
+	return readInstancesByCondition(condition, sqlutils.Args(clusterAlias), "")
 }
 
 // ReadReplicaInstances reads replicas of a given master

@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/golang/protobuf/proto"
@@ -69,6 +71,9 @@ type vdiff struct {
 	// The source and target keyspaces are pulled from ts.
 	sources map[string]*shardStreamer
 	targets map[string]*shardStreamer
+
+	workflow       string
+	targetKeyspace string
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -151,6 +156,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		tabletTypesStr: tabletTypesStr,
 		sources:        make(map[string]*shardStreamer),
 		targets:        make(map[string]*shardStreamer),
+		workflow:       workflow,
+		targetKeyspace: targetKeyspace,
 	}
 	for shard, source := range ts.sources {
 		df.sources[shard] = &shardStreamer{
@@ -265,6 +272,42 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 	return nil
 }
 
+// findPKs identifies PKs and removes them from the columns to do data comparison
+func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser.Select, td *tableDiffer) (sqlparser.OrderBy, error) {
+	var orderby sqlparser.OrderBy
+	for _, pk := range table.PrimaryKeyColumns {
+		found := false
+		for i, selExpr := range targetSelect.SelectExprs {
+			expr := selExpr.(*sqlparser.AliasedExpr).Expr
+			colname := ""
+			switch ct := expr.(type) {
+			case *sqlparser.ColName:
+				colname = ct.Name.String()
+			case *sqlparser.FuncExpr: //eg. weight_string()
+				//no-op
+			default:
+				log.Warningf("Not considering column %v for PK, type %v not handled", selExpr, ct)
+			}
+			if strings.EqualFold(pk, colname) {
+				td.comparePKs = append(td.comparePKs, td.compareCols[i])
+				// We'll be comparing pks separately. So, remove them from compareCols.
+				td.compareCols[i] = -1
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Unreachable.
+			return nil, fmt.Errorf("column %v not found in table %v", pk, table.Name)
+		}
+		orderby = append(orderby, &sqlparser.Order{
+			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
+			Direction: sqlparser.AscScr,
+		})
+	}
+	return orderby, nil
+}
+
 // buildTablePlan builds one tableDiffer.
 func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
 	statement, err := sqlparser.Parse(query)
@@ -354,27 +397,9 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		},
 	}
 
-	var orderby sqlparser.OrderBy
-	for _, pk := range table.PrimaryKeyColumns {
-		found := false
-		for i, selExpr := range targetSelect.SelectExprs {
-			colname := selExpr.(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
-			if pk == colname {
-				td.comparePKs = append(td.comparePKs, td.compareCols[i])
-				// We'll be comparing pks seperately. So, remove them from compareCols.
-				td.compareCols[i] = -1
-				found = true
-				break
-			}
-		}
-		if !found {
-			// Unreachable.
-			return nil, fmt.Errorf("column %v not found in table %v", pk, table.Name)
-		}
-		orderby = append(orderby, &sqlparser.Order{
-			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
-			Direction: sqlparser.AscScr,
-		})
+	orderby, err := findPKs(table, targetSelect, td)
+	if err != nil {
+		return nil, err
 	}
 	// Remove in_keyrange. It's not understood by mysql.
 	sourceSelect.Where = removeKeyrange(sel.Where)
@@ -525,7 +550,13 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 	defer cancel()
 	return df.forAll(participants, func(shard string, participant *shardStreamer) error {
 		// Iteration for each participant.
+		if participant.position.IsZero() {
+			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.master.Alias.String())
+		}
 		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
+			if err.Error() == "context deadline exceeded" {
+				return fmt.Errorf("VDiff timed out for tablet %v: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>", topoproto.TabletAliasString(participant.tablet.Alias))
+			}
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
@@ -775,7 +806,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, err
 		if targetRow == nil {
 			// no more rows from the target
 			// we know we have rows from source, drain, update count
-			wr.Logger().Errorf("Draining extra row(s) found on the source starting with: %v", sourceRow)
+			wr.Logger().Warningf("Draining extra row(s) found on the source starting with: %v", sourceRow)
 			count, err := sourceExecutor.drain(ctx)
 			if err != nil {
 				return nil, err

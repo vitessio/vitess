@@ -21,6 +21,7 @@ package sync2
 // cases, you just want a familiar API.
 
 import (
+	"context"
 	"time"
 )
 
@@ -57,6 +58,17 @@ func (sem *Semaphore) Acquire() bool {
 	case <-sem.slots:
 		return true
 	case <-tm.C:
+		return false
+	}
+}
+
+// AcquireContext returns true on successful acquisition, and
+// false on context expiry. Timeout is ignored.
+func (sem *Semaphore) AcquireContext(ctx context.Context) bool {
+	select {
+	case <-sem.slots:
+		return true
+	case <-ctx.Done():
 		return false
 	}
 }

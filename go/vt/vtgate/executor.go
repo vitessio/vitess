@@ -409,7 +409,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 
 func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 	switch expr := expr.Expr.(type) {
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		switch expr.Type {
 		case sqlparser.StrVal:
 			return strings.ToLower(string(expr.Val)), nil
@@ -1282,11 +1282,11 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 		leftOk := left.Name.EqualString(charset)
 
 		if leftOk {
-			sqlVal, ok := cmpExp.Right.(*sqlparser.SQLVal)
+			literal, ok := cmpExp.Right.(*sqlparser.Literal)
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "we expect the right side to be a string")
 			}
-			rightString := string(sqlVal.Val)
+			rightString := string(literal.Val)
 
 			switch cmpExp.Operator {
 			case sqlparser.EqualStr:

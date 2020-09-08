@@ -20,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/key"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -92,11 +94,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
 		}
 	}
 	if sel.SQLCalcFoundRows && sel.Limit != nil {
-		return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
 	}
 
 	if err := pb.processTableExprs(sel.From); err != nil {
@@ -146,7 +148,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	if !isOnlyDual(sel.From) {
+	if !isOnlyDual(sel) {
 		return nil, nil
 	}
 
@@ -191,11 +193,16 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engin
 	}, nil
 }
 
-func isOnlyDual(from sqlparser.TableExprs) bool {
-	if len(from) > 1 {
+func isOnlyDual(sel *sqlparser.Select) bool {
+	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.Limit != nil || sel.OrderBy != nil {
+		// we can only deal with queries without any other subclauses - just SELECT and FROM, nothing else is allowed
 		return false
 	}
-	table, ok := from[0].(*sqlparser.AliasedTableExpr)
+
+	if len(sel.From) > 1 {
+		return false
+	}
+	table, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return false
 	}
@@ -215,6 +222,18 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		if err != nil {
 			return err
 		}
+		rut, isRoute := origin.(*route)
+		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
+			r := &rewriter{}
+			sqlparser.Rewrite(expr, r.rewriteTableSchema, nil)
+			if r.err == sqlparser.ErrExprNotSupported {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparison with `table_schema` column not supported")
+			}
+			if r.err != nil {
+				return r.err
+			}
+			rut.eroute.SysTableKeyspaceExpr = append(rut.eroute.SysTableKeyspaceExpr, r.tableNameExpressions...)
+		}
 		// The returned expression may be complex. Resplit before pushing.
 		for _, subexpr := range splitAndExpression(nil, expr) {
 			if err := pb.bldr.PushFilter(pb, subexpr, whereType, origin); err != nil {
@@ -224,6 +243,42 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		pb.addPullouts(pullouts)
 	}
 	return nil
+}
+
+type rewriter struct {
+	tableNameExpressions []evalengine.Expr
+	err                  error
+}
+
+func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.ColName:
+		if node.Name.EqualString("table_schema") {
+			switch parent := cursor.Parent().(type) {
+			case *sqlparser.ComparisonExpr:
+				if parent.Operator == sqlparser.EqualStr && shouldRewrite(parent.Right) {
+
+					evalExpr, err := sqlparser.Convert(parent.Right)
+					if err != nil {
+						r.err = err
+						return false
+					}
+					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
+					parent.Right = sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName))
+				}
+			}
+		}
+	}
+	return true
+}
+
+func shouldRewrite(e sqlparser.Expr) bool {
+	switch node := e.(type) {
+	case *sqlparser.FuncExpr:
+		// we should not rewrite database() calls against information_schema
+		return !(node.Name.EqualString("database") || node.Name.EqualString("schema"))
+	}
+	return true
 }
 
 // reorderBySubquery reorders the filters by pushing subqueries

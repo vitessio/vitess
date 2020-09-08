@@ -54,6 +54,7 @@ import (
 var _ engine.VCursor = (*vcursorImpl)(nil)
 var _ planbuilder.ContextVSchema = (*vcursorImpl)(nil)
 var _ iExecute = (*Executor)(nil)
+var _ vindexes.VCursor = (*vcursorImpl)(nil)
 
 // vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 type iExecute interface {
@@ -318,6 +319,17 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 		vc.rollbackOnPartialExec = true
 	}
 	return qr, errs
+}
+
+func (vc *vcursorImpl) InTransactionAndIsDML() bool {
+	if !vc.safeSession.InTransaction() {
+		return false
+	}
+	switch vc.logStats.StmtType {
+	case "INSERT", "REPLACE", "UPDATE", "DELETE":
+		return true
+	}
+	return false
 }
 
 func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {

@@ -276,6 +276,65 @@ func TestXXHash(t *testing.T) {
 	assertMatches(t, conn, "select phone, keyspace_id from t7_xxhash_idx", `[]`)
 }
 
+func TestShowTablesWithWhereClause(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t6'", `[[VARCHAR("t6")]]`)
+	exec(t, conn, "begin")
+	assertMatches(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARCHAR("t3")]]`)
+}
+
+func TestDbNameOverride(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
+
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+}
+
+func TestInformationSchemaQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'ks'", 1000, true)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+
+	qr, err = conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'vt_ks'", 1000, true)
+	require.Nil(t, err)
+	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
+	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+
+	qr, err = conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'NONE'", 1000, true)
+	require.Nil(t, err)
+	assert.Empty(t, qr.Rows)
+}
+
+func TestOffsetAndLimitWithOLAP(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)")
+	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
+	exec(t, conn, "set workload='olap'")
+	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
