@@ -19,6 +19,7 @@ package wrangler
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -117,6 +118,8 @@ type shardStreamer struct {
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
 	filteredReplicationWaitTime time.Duration,
 	format string) (map[string]*DiffReport, error) {
+	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
+		targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
@@ -553,6 +556,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 		if participant.position.IsZero() {
 			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.master.Alias.String())
 		}
+		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), mysql.EncodePosition(participant.position))
 		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
 			if err.Error() == "context deadline exceeded" {
 				return fmt.Errorf("VDiff timed out for tablet %v: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>", topoproto.TabletAliasString(participant.tablet.Alias))
@@ -666,6 +670,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *shardStreamer) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.ts.workflow))
+		log.Infof("restarting target replication with %s", query)
 		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		return err
 	})
@@ -760,6 +765,14 @@ func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[stri
 	return sm.err
 }
 
+// logSteps prints values of n in steps of log10 units so as to not spam the logs for a large n
+func logSteps(n int) {
+	step := int(math.Floor(math.Pow(10, math.Floor(math.Log10(float64(n))))))
+	if n%step == 0 {
+		log.Infof("VDiff has finished processing %d rows", n)
+	}
+}
+
 //-----------------------------------------------------------------
 // tableDiffer
 
@@ -772,6 +785,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, err
 	advanceSource := true
 	advanceTarget := true
 	for {
+		logSteps(dr.ProcessedRows)
 		if advanceSource {
 			sourceRow, err = sourceExecutor.next()
 			if err != nil {

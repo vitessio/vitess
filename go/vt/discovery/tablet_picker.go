@@ -108,6 +108,9 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		default:
 		}
 		candidates := tp.getMatchingTablets(ctx)
+		log.Infof("getMatchingTablets: shard %s.%s, cells %v, tabletTypes %v, returned candidates %v",
+			tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, candidates)
+
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
 			log.Infof("No tablet found for streaming, sleeping for %d seconds", int(GetTabletPickerRetryDelay()/1e9))
@@ -131,6 +134,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			// OK to use ctx here because it is not actually used by the underlying Close implementation
 			_ = conn.Close(ctx)
+			log.Infof("tablet picker found tablet %s", ti.Tablet.String())
 			return ti.Tablet, nil
 		}
 	}

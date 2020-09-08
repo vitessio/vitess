@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"runtime/debug"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -55,6 +56,8 @@ var HeartbeatTime = 900 * time.Millisecond
 var vschemaUpdateCount sync2.AtomicInt64
 
 var eventCount = stats.NewCountersWithSingleLabel("VEventCount", "event counts", "all")
+
+// LeventCount is only for twitter debugging, keeps track of all events for stats FIXME
 var LeventCount int
 
 // vstreamer is for serving a single vreplication stream on the source side.
@@ -324,7 +327,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
 	eventCount.Add("all", 1)
-	LeventCount += 1
+	LeventCount++
 
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
@@ -810,10 +813,10 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 
 func wrapError(err error, stopPos mysql.Position) error {
 	if err != nil {
-		err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
+		err = fmt.Errorf("stream (at source tablet) error @ %v: %v\n%s", stopPos, err, debug.Stack())
 		log.Error(err)
 		return err
 	}
-	log.Infof("stream ended @ %v", stopPos)
+	log.Infof("stream (at source tablet) has ended @ %v\n%s", stopPos, debug.Stack())
 	return nil
 }

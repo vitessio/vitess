@@ -94,6 +94,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -1995,6 +1997,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	}
 
 	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format)
+	log.Errorf("vdiff returning with error: %v", err)
 	return err
 }
 
