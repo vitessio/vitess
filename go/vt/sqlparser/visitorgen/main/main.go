@@ -64,14 +64,17 @@ func main() {
 	vd := visitorgen.ToVisitorPlan(vp)
 
 	replacementMethods := visitorgen.EmitReplacementMethods(vd)
-	typeSwitch := visitorgen.EmitTypeSwitches(vd)
+	rewriteSwitches := visitorgen.EmitTypeRewriteSwitches(vd)
+	visitSwitches := visitorgen.EmitTypeVisitSwitches(vd)
 
 	b := &bytes.Buffer{}
 	fmt.Fprint(b, fileHeader)
 	fmt.Fprintln(b)
 	fmt.Fprintln(b, replacementMethods)
 	fmt.Fprint(b, applyHeader)
-	fmt.Fprintln(b, typeSwitch)
+	fmt.Fprintln(b, rewriteSwitches)
+	fmt.Fprint(b, rewriteFooter)
+	fmt.Fprintln(b, visitSwitches)
 	fmt.Fprintln(b, fileFooter)
 
 	if *compare {
@@ -144,7 +147,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case nil:
 	`
 
-const fileFooter = `
+const rewriteFooter = `
 	default:
 		panic("unknown ast type " + reflect.TypeOf(node).String())
 	}
@@ -154,6 +157,34 @@ const fileFooter = `
 	}
 
 	a.cursor = saved
+}
+
+type errorOccured struct {
+	err error
+}
+
+func walk(visit Visit, in SQLNode) {
+
+	if in == nil || isNilValue(in) {
+		return
+	}
+
+	visitChildren, err := visit(in)
+	if err != nil {
+		panic(errorOccured{err})
+	}
+
+	if visitChildren {
+		switch n := in.(type) {
+		case nil:
+
+		`
+
+const fileFooter = `
+		default:
+			panic("unknown ast type " + reflect.TypeOf(in).String())
+		}
+	}
 }
 
 func isNilValue(i interface{}) bool {

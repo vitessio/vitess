@@ -31,34 +31,24 @@ import (
 // If visit returns true, the underlying nodes
 // are also visited. If it returns an error, walking
 // is interrupted, and the error is returned.
-func Walk(visit Visit, nodes ...SQLNode) error {
-	for _, node := range nodes {
-		if node == nil {
-			continue
+func Walk(visit Visit, nodes ...SQLNode) (err error) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
 		}
-		var err error
-		var kontinue bool
-		pre := func(cursor *Cursor) bool {
-			// If we already have found an error, don't visit these nodes, just exit early
-			if err != nil {
-				return false
-			}
-			kontinue, err = visit(cursor.Node())
-			if err != nil {
-				return true // we have to return true here so that post gets called
-			}
-			return kontinue
+		switch n := r.(type) {
+		case errorOccured:
+			err = n.err
+		default:
+			panic(r)
 		}
-		post := func(cursor *Cursor) bool {
-			return err == nil // now we can abort the traversal if an error was found
-		}
+	}()
 
-		Rewrite(node, pre, post)
-		if err != nil {
-			return err
-		}
+	for _, node := range nodes {
+		walk(visit, node)
 	}
-	return nil
+	return err
 }
 
 // Visit defines the signature of a function that

@@ -1402,6 +1402,459 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	a.cursor = saved
 }
 
+type errorOccured struct {
+	err error
+}
+
+func walk(visit Visit, in SQLNode) {
+
+	if in == nil || isNilValue(in) {
+		return
+	}
+
+	visitChildren, err := visit(in)
+	if err != nil {
+		panic(errorOccured{err})
+	}
+
+	if visitChildren {
+		switch n := in.(type) {
+		case nil:
+
+		case *AccessMode:
+
+		case *AliasedExpr:
+			walk(visit, n.As)
+			walk(visit, n.Expr)
+
+		case *AliasedTableExpr:
+			walk(visit, n.As)
+			walk(visit, n.Expr)
+			walk(visit, n.Hints)
+			walk(visit, n.Partitions)
+
+		case *AndExpr:
+			walk(visit, n.Left)
+			walk(visit, n.Right)
+
+		case Argument:
+
+		case *AutoIncSpec:
+			walk(visit, n.Column)
+			walk(visit, n.Sequence)
+
+		case *Begin:
+
+		case *BinaryExpr:
+			walk(visit, n.Left)
+			walk(visit, n.Right)
+
+		case BoolVal:
+
+		case *CaseExpr:
+			walk(visit, n.Else)
+			walk(visit, n.Expr)
+			for _, item := range n.Whens {
+				walk(visit, item)
+			}
+
+		case ColIdent:
+
+		case *ColName:
+			walk(visit, n.Name)
+			walk(visit, n.Qualifier)
+
+		case *CollateExpr:
+			walk(visit, n.Expr)
+
+		case *ColumnDefinition:
+			walk(visit, n.Name)
+
+		case *ColumnType:
+			walk(visit, n.Autoincrement)
+			walk(visit, n.Comment)
+			walk(visit, n.Default)
+			walk(visit, n.Length)
+			walk(visit, n.NotNull)
+			walk(visit, n.OnUpdate)
+			walk(visit, n.Scale)
+			walk(visit, n.Unsigned)
+			walk(visit, n.Zerofill)
+
+		case Columns:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case Comments:
+
+		case *Commit:
+
+		case *ComparisonExpr:
+			walk(visit, n.Escape)
+			walk(visit, n.Left)
+			walk(visit, n.Right)
+
+		case *ConstraintDefinition:
+			walk(visit, n.Details)
+
+		case *ConvertExpr:
+			walk(visit, n.Expr)
+			walk(visit, n.Type)
+
+		case *ConvertType:
+			walk(visit, n.Length)
+			walk(visit, n.Scale)
+
+		case *ConvertUsingExpr:
+			walk(visit, n.Expr)
+
+		case *CurTimeFuncExpr:
+			walk(visit, n.Fsp)
+			walk(visit, n.Name)
+
+		case *DBDDL:
+
+		case *DDL:
+			walk(visit, n.AutoIncSpec)
+			walk(visit, n.FromTables)
+			walk(visit, n.OptLike)
+			walk(visit, n.PartitionSpec)
+			walk(visit, n.Table)
+			walk(visit, n.TableSpec)
+			walk(visit, n.ToTables)
+			for _, item := range n.VindexCols {
+				walk(visit, item)
+			}
+			walk(visit, n.VindexSpec)
+
+		case *Default:
+
+		case *Delete:
+			walk(visit, n.Comments)
+			walk(visit, n.Limit)
+			walk(visit, n.OrderBy)
+			walk(visit, n.Partitions)
+			walk(visit, n.TableExprs)
+			walk(visit, n.Targets)
+			walk(visit, n.Where)
+
+		case *ExistsExpr:
+			walk(visit, n.Subquery)
+
+		case *Explain:
+			walk(visit, n.Statement)
+
+		case Exprs:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *ForeignKeyDefinition:
+			walk(visit, n.OnDelete)
+			walk(visit, n.OnUpdate)
+			walk(visit, n.ReferencedColumns)
+			walk(visit, n.ReferencedTable)
+			walk(visit, n.Source)
+
+		case *FuncExpr:
+			walk(visit, n.Exprs)
+			walk(visit, n.Name)
+			walk(visit, n.Qualifier)
+
+		case GroupBy:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *GroupConcatExpr:
+			walk(visit, n.Exprs)
+			walk(visit, n.Limit)
+			walk(visit, n.OrderBy)
+
+		case *IndexDefinition:
+			walk(visit, n.Info)
+
+		case *IndexHints:
+			for _, item := range n.Indexes {
+				walk(visit, item)
+			}
+
+		case *IndexInfo:
+			walk(visit, n.Name)
+
+		case *Insert:
+			walk(visit, n.Columns)
+			walk(visit, n.Comments)
+			walk(visit, n.OnDup)
+			walk(visit, n.Partitions)
+			walk(visit, n.Rows)
+			walk(visit, n.Table)
+
+		case *IntervalExpr:
+			walk(visit, n.Expr)
+
+		case *IsExpr:
+			walk(visit, n.Expr)
+
+		case *IsolationLevel:
+
+		case JoinCondition:
+			walk(visit, n.On)
+			walk(visit, n.Using)
+
+		case *JoinTableExpr:
+			walk(visit, n.Condition)
+			walk(visit, n.LeftExpr)
+			walk(visit, n.RightExpr)
+
+		case *Limit:
+			walk(visit, n.Offset)
+			walk(visit, n.Rowcount)
+
+		case ListArg:
+
+		case *Literal:
+
+		case *MatchExpr:
+			walk(visit, n.Columns)
+			walk(visit, n.Expr)
+
+		case Nextval:
+			walk(visit, n.Expr)
+
+		case *NotExpr:
+			walk(visit, n.Expr)
+
+		case *NullVal:
+
+		case OnDup:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *OptLike:
+			walk(visit, n.LikeTable)
+
+		case *OrExpr:
+			walk(visit, n.Left)
+			walk(visit, n.Right)
+
+		case *Order:
+			walk(visit, n.Expr)
+
+		case OrderBy:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *OtherAdmin:
+
+		case *OtherRead:
+
+		case *ParenSelect:
+			walk(visit, n.Select)
+
+		case *ParenTableExpr:
+			walk(visit, n.Exprs)
+
+		case *PartitionDefinition:
+			walk(visit, n.Limit)
+			walk(visit, n.Name)
+
+		case *PartitionSpec:
+			for _, item := range n.Definitions {
+				walk(visit, item)
+			}
+			walk(visit, n.Name)
+
+		case Partitions:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *RangeCond:
+			walk(visit, n.From)
+			walk(visit, n.Left)
+			walk(visit, n.To)
+
+		case ReferenceAction:
+
+		case *Release:
+			walk(visit, n.Name)
+
+		case *Rollback:
+
+		case *SRollback:
+			walk(visit, n.Name)
+
+		case *Savepoint:
+			walk(visit, n.Name)
+
+		case *Select:
+			walk(visit, n.Comments)
+			walk(visit, n.From)
+			walk(visit, n.GroupBy)
+			walk(visit, n.Having)
+			walk(visit, n.Limit)
+			walk(visit, n.OrderBy)
+			walk(visit, n.SelectExprs)
+			walk(visit, n.Where)
+
+		case SelectExprs:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *Set:
+			walk(visit, n.Comments)
+			walk(visit, n.Exprs)
+
+		case *SetExpr:
+			walk(visit, n.Expr)
+			walk(visit, n.Name)
+
+		case SetExprs:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *SetTransaction:
+			for _, item := range n.Characteristics {
+				walk(visit, item)
+			}
+			walk(visit, n.Comments)
+
+		case *Show:
+			walk(visit, n.OnTable)
+			walk(visit, n.ShowCollationFilterOpt)
+			walk(visit, n.Table)
+
+		case *ShowFilter:
+			walk(visit, n.Filter)
+
+		case *StarExpr:
+			walk(visit, n.TableName)
+
+		case *Stream:
+			walk(visit, n.Comments)
+			walk(visit, n.SelectExpr)
+			walk(visit, n.Table)
+
+		case *Subquery:
+			walk(visit, n.Select)
+
+		case *SubstrExpr:
+			walk(visit, n.From)
+			walk(visit, n.Name)
+			walk(visit, n.StrVal)
+			walk(visit, n.To)
+
+		case TableExprs:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case TableIdent:
+
+		case TableName:
+			walk(visit, n.Name)
+			walk(visit, n.Qualifier)
+
+		case TableNames:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *TableSpec:
+			for _, item := range n.Columns {
+				walk(visit, item)
+			}
+			for _, item := range n.Constraints {
+				walk(visit, item)
+			}
+			for _, item := range n.Indexes {
+				walk(visit, item)
+			}
+
+		case *TimestampFuncExpr:
+			walk(visit, n.Expr1)
+			walk(visit, n.Expr2)
+
+		case *UnaryExpr:
+			walk(visit, n.Expr)
+
+		case *Union:
+			walk(visit, n.FirstStatement)
+			walk(visit, n.Limit)
+			walk(visit, n.OrderBy)
+			for _, item := range n.UnionSelects {
+				walk(visit, item)
+			}
+
+		case *UnionSelect:
+			walk(visit, n.Statement)
+
+		case *Update:
+			walk(visit, n.Comments)
+			walk(visit, n.Exprs)
+			walk(visit, n.Limit)
+			walk(visit, n.OrderBy)
+			walk(visit, n.TableExprs)
+			walk(visit, n.Where)
+
+		case *UpdateExpr:
+			walk(visit, n.Expr)
+			walk(visit, n.Name)
+
+		case UpdateExprs:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *Use:
+			walk(visit, n.DBName)
+
+		case ValTuple:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case Values:
+			for _, item := range n {
+				walk(visit, item)
+			}
+
+		case *ValuesFuncExpr:
+			walk(visit, n.Name)
+
+		case VindexParam:
+			walk(visit, n.Key)
+
+		case *VindexSpec:
+			walk(visit, n.Name)
+			for _, item := range n.Params {
+				walk(visit, item)
+			}
+			walk(visit, n.Type)
+
+		case *When:
+			walk(visit, n.Cond)
+			walk(visit, n.Val)
+
+		case *Where:
+			walk(visit, n.Expr)
+
+		case *XorExpr:
+			walk(visit, n.Left)
+			walk(visit, n.Right)
+
+		default:
+			panic("unknown ast type " + reflect.TypeOf(in).String())
+		}
+	}
+}
+
 func isNilValue(i interface{}) bool {
 	valueOf := reflect.ValueOf(i)
 	kind := valueOf.Kind()

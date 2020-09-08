@@ -17,9 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 type myTestCase struct {
@@ -141,5 +140,56 @@ func TestRewrites(in *testing.T) {
 			require.Equal(t, tc.rowCount, result.NeedRowCount, "should need row count")
 			require.Equal(t, tc.udv, len(result.NeedUserDefinedVariables), "should need row count")
 		})
+	}
+}
+
+// The following two benchmarks allows for comparing the difference between using the general rewriter for just visiting, vs the custom Walk
+func BenchmarkRewriteWalk(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		count := 0
+		Rewrite(slct, func(cursor *Cursor) bool {
+			switch cursor.node.(type) {
+			case *Literal:
+				count++
+			}
+			return true
+		}, nil)
+	}
+}
+
+func BenchmarkCustomWalk(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		count := 0
+		Walk(func(node SQLNode) (bool, error) {
+			switch node.(type) {
+			case *Literal:
+				count++
+			}
+			return true, nil
+		}, slct)
+	}
+}
+
+var slct = stmt()
+
+func stmt() Statement {
+	expr := &AliasedExpr{
+		Expr: e(12),
+	}
+	return &Select{
+		SelectExprs: []SelectExpr{expr},
+	}
+}
+
+func e(left int) Expr {
+	if left == 0 {
+		return &Literal{
+			Type: IntVal,
+			Val:  []byte("1"),
+		}
+	}
+	return &AndExpr{
+		Left:  e(left - 1),
+		Right: e(left - 1),
 	}
 }

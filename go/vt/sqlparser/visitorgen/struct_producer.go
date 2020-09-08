@@ -30,6 +30,7 @@ type (
 		asSwitchCase() string
 		asReplMethod() string
 		getFieldName() string
+		asWalkerVisit() string
 	}
 
 	// SingleFieldItem is a single field in a struct
@@ -134,6 +135,10 @@ func (s *SingleFieldItem) asSwitchCase() string {
 	return fmt.Sprintf(`		a.apply(node, n.%s, %s)`, s.FieldName, s.typeName())
 }
 
+func (s *SingleFieldItem) asWalkerVisit() string {
+	return fmt.Sprintf(`			walk(visit, n.%s)`, s.FieldName)
+}
+
 func (s *SingleFieldItem) asReplMethod() string {
 	_, isRef := s.StructType.(*Ref)
 
@@ -216,6 +221,18 @@ func (afi *ArrayFieldItem) asSwitchCase() string {
 			a.apply(node, item, replacer%sB.replace)
 			replacer%sB.inc()
 		}`, afi.FieldName, afi.typeName(), afi.FieldName, afi.FieldName, afi.FieldName, afi.FieldName, afi.FieldName)
+}
+
+func (ai *ArrayItem) asWalkerVisit() string {
+	return `			for _, item := range n {
+				walk(visit, item)
+			}`
+}
+
+func (afi *ArrayFieldItem) asWalkerVisit() string {
+	return fmt.Sprintf(`			for _, item := range n.%s {
+				walk(visit, item)
+			}`, afi.FieldName)
 }
 
 func (ai *ArrayItem) typeName() string {
