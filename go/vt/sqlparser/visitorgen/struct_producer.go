@@ -136,7 +136,7 @@ func (s *SingleFieldItem) asSwitchCase() string {
 }
 
 func (s *SingleFieldItem) asWalkerVisit() string {
-	return fmt.Sprintf(`			walk(visit, n.%s)`, s.FieldName)
+	return fmt.Sprintf(`			__walk(visit, n.%s)`, s.FieldName)
 }
 
 func (s *SingleFieldItem) asReplMethod() string {
@@ -152,7 +152,6 @@ func (s *SingleFieldItem) asReplMethod() string {
 	tmp := parent.(%s)
 	tmp.%s = newNode.(%s)
 }`, s.typeName(), s.StructType.toTypString(), s.FieldName, s.FieldType.toTypString())
-
 }
 
 func (ai *ArrayItem) asReplMethod() string {
@@ -225,13 +224,13 @@ func (afi *ArrayFieldItem) asSwitchCase() string {
 
 func (ai *ArrayItem) asWalkerVisit() string {
 	return `			for _, item := range n {
-				walk(visit, item)
+				__walk(visit, item)
 			}`
 }
 
 func (afi *ArrayFieldItem) asWalkerVisit() string {
 	return fmt.Sprintf(`			for _, item := range n.%s {
-				walk(visit, item)
+				__walk(visit, item)
 			}`, afi.FieldName)
 }
 

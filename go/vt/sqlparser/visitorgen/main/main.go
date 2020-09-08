@@ -163,7 +163,9 @@ type errorOccured struct {
 	err error
 }
 
-func walk(visit Visit, in SQLNode) {
+// __walk is an internal function and should NOT be called. It can panic
+// You are probably looking for Walk(visit Visit, in SQLNode)
+func __walk(visit Visit, in SQLNode) {
 
 	if in == nil || isNilValue(in) {
 		return

@@ -46,7 +46,7 @@ func Walk(visit Visit, nodes ...SQLNode) (err error) {
 	}()
 
 	for _, node := range nodes {
-		walk(visit, node)
+		__walk(visit, node)
 	}
 	return err
 }
