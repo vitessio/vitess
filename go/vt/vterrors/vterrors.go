@@ -89,7 +89,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"regexp"
 
 	"golang.org/x/net/context"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -98,16 +97,6 @@ import (
 // LogErrStacks controls whether or not printing errors includes the
 // embedded stack trace in the output.
 var LogErrStacks bool
-var resourceExhaustedInMemoryLimitExceededRegexp = regexp.MustCompile(`in-memory row count exceeded allowed limit of \d+`)
-var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)$`)
-
-const (
-	// ResourceExhaustedQueryPayloadThresholdErrMsg is a message used to indicate that an a vitess query has exceeded the payload threshold
-	ResourceExhaustedQueryPayloadThresholdErrMsg = "query payload size above threshold"
-
-	// ResourceExhaustedInMemoryLimitExceededFmt is an error format used to indicate that the query was attempting to process too many rows
-	ResourceExhaustedInMemoryLimitExceededFmt = "in-memory row count exceeded allowed limit of %d"
-)
 
 func init() {
 	flag.BoolVar(&LogErrStacks, "log_err_stacks", false, "log stack traces for errors")
@@ -317,14 +306,4 @@ func Equals(a, b error) bool {
 // For comparing two vterrors, use Equals() instead.
 func Print(err error) string {
 	return fmt.Sprintf("%v: %v\n", Code(err), err.Error())
-}
-
-// IsResourceExhaustedInMemoryLimitExceededMsg returns true if the error message indicates a query exceeded the row limit on in-memory query processing
-func IsResourceExhaustedInMemoryLimitExceededMsg(msg string) bool {
-	return resourceExhaustedInMemoryLimitExceededRegexp.Match([]byte(msg))
-}
-
-// IsGRPCMessageOverflowMsg returns true if the error message indicates a GRPC message was overflowed the max message size
-func IsGRPCMessageOverflowMsg(msg string) bool {
-	return isGRPCOverflowRE.Match([]byte(msg))
 }
