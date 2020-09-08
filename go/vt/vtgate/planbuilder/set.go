@@ -137,21 +137,21 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema ContextVSchema, boole
 
 func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 	valid := true
-	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
-		switch n := cursor.Node().(type) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch n := node.(type) {
 		case *sqlparser.Subquery, *sqlparser.TimestampFuncExpr, *sqlparser.CurTimeFuncExpr:
 			valid = false
-			return false
+			return false, nil
 		case *sqlparser.FuncExpr:
 			_, ok := validFuncs[n.Name.Lowered()]
 			valid = ok
-			return ok
+			return ok, nil
 		case *sqlparser.ColName:
 			valid = n.Name.AtCount() == 2
-			return false
+			return false, nil
 		}
-		return true
-	})
+		return true, nil
+	}, e)
 	return valid
 }
 
