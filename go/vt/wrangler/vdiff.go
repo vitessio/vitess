@@ -767,6 +767,9 @@ func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[stri
 
 // logSteps prints values of n in steps of log10 units so as to not spam the logs for a large n
 func logSteps(n int) {
+	if n == 0 {
+		return
+	}
 	step := int(math.Floor(math.Pow(10, math.Floor(math.Log10(float64(n))))))
 	if n%step == 0 {
 		log.Infof("VDiff has finished processing %d rows", n)
