@@ -81,7 +81,7 @@ func (s *sqlCalcFoundRows) Wireup(builder, *jointab) error {
 }
 
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	s.LimitQuery.SupplyVar(from, to, col, varname)
+	panic("implement me")
 }
 
 func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
