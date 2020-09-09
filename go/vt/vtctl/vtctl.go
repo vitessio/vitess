@@ -1998,7 +1998,9 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	}
 
 	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format)
-	log.Errorf("vdiff returning with error: %v", err)
+	if err != nil {
+		log.Errorf("vdiff returning with error: %v", err)
+	}
 	return err
 }
 
