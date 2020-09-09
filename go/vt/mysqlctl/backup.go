@@ -140,7 +140,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 // Used by Restore, as we do not want to destroy an existing DB.
 // The user's database name must be given since we ignore all others.
 // Returns true if the specified DB either doesn't exist, or has no tables.
-// Returns (false, nil) if the check succeeds but the condition is not
+// Returns (false, ErrExistingDB) if the check succeeds but the condition is not
 // satisfied (there is a DB with tables).
 // Returns non-nil error if one occurs while trying to perform the check.
 func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, error) {
@@ -162,7 +162,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 			}
 			// found active db
 			log.Warningf("checkNoDB failed, found active db %v", dbName)
-			return false, nil
+			return false, ErrExistingDB
 		}
 	}
 
@@ -226,9 +226,9 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 	}
 	params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
-	// If this doesn't succeed, assume we should attempt a restore
+	// If this doesn't succeed, we should not attempt a restore
 	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
-		return true, err
+		return false, err
 	}
 	return checkNoDB(ctx, params.Mysqld, params.DbName)
 }

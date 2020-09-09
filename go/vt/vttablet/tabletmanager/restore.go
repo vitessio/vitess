@@ -114,15 +114,21 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
 	}
 
+	// Check whether we're going to restore before changing to RESTORE type,
+	// so we keep our MasterTermStartTime (if any) if we aren't actually restoring.
 	ok, err := mysqlctl.ShouldRestore(ctx, params)
-	if err != nil {
+	if err != nil && err != mysqlctl.ErrExistingDB {
 		return err
 	}
 	if !ok {
 		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
-		return mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+		if lerr := mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); lerr != nil {
+			return lerr
+		}
+		return err
 	}
-	// should not become master after restore
+	// We should not become master after restore, because that would incorrectly
+	// start a new master term, and it's likely our data dir will be out of date.
 	if originalType == topodatapb.TabletType_MASTER {
 		originalType = tm.baseTabletType
 	}
@@ -173,11 +179,6 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		}
 	case mysqlctl.ErrNoBackup:
 		// No-op, starting with empty database.
-	case mysqlctl.ErrExistingDB:
-		// No-op, assuming we've just restarted.  Note the
-		// replication reporter may restart replication at the
-		// next health check if it thinks it should. We do not
-		// alter replication here.
 	default:
 		// If anything failed, we should reset the original tablet type
 		if err := tm.tmState.ChangeTabletType(ctx, originalType); err != nil {
