@@ -100,24 +100,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	if sel.SQLCalcFoundRows {
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
-			frpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-			err := frpb.processSelect(sel, outer)
+			builder, err := buildSQLCalcFoundRowsPlan(sel, outer, pb.vschema)
 			if err != nil {
 				return err
 			}
-			sel.SelectExprs = []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-				Expr: &sqlparser.FuncExpr{
-					Name:  sqlparser.NewColIdent("count"),
-					Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-				},
-			}}
-			sel.OrderBy = nil
-			sel.Limit = nil
-			err = pb.processSelect(sel, outer)
-			if err != nil {
-				return err
-			}
-			pb.bldr = sqlCalcFoundRows{LimitQuery: frpb.bldr, CountQuery: pb.bldr}
+			pb.bldr = builder
 			return nil
 		}
 	}
@@ -166,6 +153,47 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	}
 	pb.bldr.PushMisc(sel)
 	return nil
+}
+
+func buildSQLCalcFoundRowsPlan(sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {
+	ljt := newJointab(sqlparser.GetBindvars(sel))
+	frpb := newPrimitiveBuilder(vschema, ljt)
+	err := frpb.processSelect(sel, outer)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO systay this is a hack
+	s := sqlparser.String(sel)
+	statement, err := sqlparser.Parse(s)
+	if err != nil {
+		return nil, err
+	}
+	sel2 := statement.(*sqlparser.Select)
+
+	sel2.SelectExprs = []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
+		Expr: &sqlparser.FuncExpr{
+			Name:  sqlparser.NewColIdent("count"),
+			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
+		},
+	}}
+	sel2.OrderBy = nil
+	sel2.Limit = nil
+
+	sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch col := node.(type) {
+		case *sqlparser.ColName:
+			col.Metadata = nil
+		}
+		return true, nil
+	}, sel2)
+	cjt := newJointab(sqlparser.GetBindvars(sel2))
+	countpb := newPrimitiveBuilder(vschema, cjt)
+	err = countpb.processSelect(sel2, outer)
+	if err != nil {
+		return nil, err
+	}
+	return &sqlCalcFoundRows{LimitQuery: frpb.bldr, CountQuery: countpb.bldr, ljt: ljt, cjt: cjt}, nil
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
