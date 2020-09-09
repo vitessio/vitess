@@ -158,7 +158,9 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	if err != nil {
 		return
 	}
-	safeSession.FoundRows = result.RowsAffected
+	if !safeSession.foundRowsHandled {
+		safeSession.FoundRows = result.RowsAffected
+	}
 	if result.InsertID > 0 {
 		safeSession.LastInsertId = result.InsertID
 	}
