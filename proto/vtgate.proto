@@ -131,6 +131,9 @@ message Session {
 
   // lock_session keep tracks of shard on which the lock query is sent.
   ShardSession lock_session = 18;
+
+  // last_lock_heartbeat keep tracks of when last lock heartbeat was sent.
+  int64 last_lock_heartbeat = 19;
 }
 
 // ExecuteRequest is the payload to Execute.
