@@ -113,7 +113,8 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
-			log.Infof("No tablet found for streaming, sleeping for %d seconds", int(GetTabletPickerRetryDelay()/1e9))
+			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %d seconds",
+				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, int(GetTabletPickerRetryDelay()/1e9))
 			time.Sleep(GetTabletPickerRetryDelay())
 			continue
 		}

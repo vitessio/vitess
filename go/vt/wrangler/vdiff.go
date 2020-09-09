@@ -765,15 +765,40 @@ func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[stri
 	return sm.err
 }
 
-// logSteps prints values of n in steps of log10 units so as to not spam the logs for a large n
-func logSteps(n int) {
+// humanInt formats large integers to a value easier to the eye: 100000=100k 1e12=1b 234000000=234m ...
+func humanInt(n int64) string {
+	var val float64
+	var unit string
+	switch true {
+	case n < 1000:
+		val = float64(n)
+	case n < 1e6:
+		val = float64(n) / 1000
+		unit = "k"
+	case n < 1e9:
+		val = float64(n) / 1e6
+		unit = "m"
+	default:
+		val = float64(n) / 1e9
+		unit = "b"
+	}
+	s := fmt.Sprintf("%0.3f", val)
+	s = strings.Replace(s, ".000", "", -1)
+
+	return fmt.Sprintf("%s%s", s, unit)
+}
+
+// logSteps returns a "human" readable value of n, for proportional steps of n (so as not to spam logs)
+// the go-humanize package doesn't support counts atm
+func logSteps(n int64) string {
 	if n == 0 {
-		return
+		return ""
 	}
-	step := int(math.Floor(math.Pow(10, math.Floor(math.Log10(float64(n))))))
-	if n%step == 0 {
-		log.Infof("VDiff has finished processing %d rows", n)
+	step := int64(math.Floor(math.Pow(10, math.Floor(math.Log10(float64(n))))))
+	if (n%step == 0) || (n%1e6 == 0) { // min step is a million
+		return humanInt(n)
 	}
+	return ""
 }
 
 //-----------------------------------------------------------------
@@ -788,7 +813,9 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, err
 	advanceSource := true
 	advanceTarget := true
 	for {
-		logSteps(dr.ProcessedRows)
+		if s := logSteps(int64(dr.ProcessedRows)); s != "" {
+			log.Infof("VDiff processed %s rows", s)
+		}
 		if advanceSource {
 			sourceRow, err = sourceExecutor.next()
 			if err != nil {
