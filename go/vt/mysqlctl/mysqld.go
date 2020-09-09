@@ -185,13 +185,13 @@ func GetVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
 	env := os.Getenv("MYSQL_FLAVOR")
 	switch env {
 	case "MariaDB":
-		return flavorMariaDB, serverVersion{10, 0, 10}, nil
+		return FlavorMariaDB, serverVersion{10, 0, 10}, nil
 	case "MariaDB103":
-		return flavorMariaDB, serverVersion{10, 3, 7}, nil
+		return FlavorMariaDB, serverVersion{10, 3, 7}, nil
 	case "MySQL80":
-		return flavorMySQL, serverVersion{8, 0, 11}, nil
+		return FlavorMySQL, serverVersion{8, 0, 11}, nil
 	case "MySQL56":
-		return flavorMySQL, serverVersion{5, 7, 10}, nil
+		return FlavorMySQL, serverVersion{5, 7, 10}, nil
 	}
 	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
@@ -216,13 +216,13 @@ func GetVersionString() (string, error) {
 // ParseVersionString parses the output of mysqld --version into a flavor and version
 func ParseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
 	if strings.Contains(version, "Percona") {
-		flavor = flavorPercona
+		flavor = FlavorPercona
 	} else if strings.Contains(version, "MariaDB") {
-		flavor = flavorMariaDB
+		flavor = FlavorMariaDB
 	} else {
 		// OS distributed MySQL releases have a version string like:
 		// mysqld  Ver 5.7.27-0ubuntu0.19.04.1 for Linux on x86_64 ((Ubuntu))
-		flavor = flavorMySQL
+		flavor = FlavorMySQL
 	}
 	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
@@ -814,9 +814,9 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 
 	// mysql version specific file.
 	// master_{flavor}{major}{minor}.cnf
-	f := flavorMariaDB
+	f := FlavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
-		f = flavorMySQL
+		f = FlavorMySQL
 	}
 	fn := fmt.Sprintf("mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
 	b, err = riceBox.Bytes(fn)
