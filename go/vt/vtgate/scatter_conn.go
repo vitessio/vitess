@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/golang/protobuf/proto"
@@ -165,6 +167,21 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	// mu protects qr
 	var mu sync.Mutex
 	qr = new(sqltypes.Result)
+
+	if session.InLockSession() && session.TriggerLockHeartBeat() {
+		go func() {
+			_, lockErr := stc.ExecuteLock(ctx, &srvtopo.ResolvedShard{
+				Target:  session.LockSession.Target,
+				Gateway: stc.gateway,
+			}, &querypb.BoundQuery{
+				Sql:           "select 1",
+				BindVariables: nil,
+			}, session)
+			if lockErr != nil {
+				log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
+			}
+		}()
+	}
 
 	allErrors := stc.multiGoTransaction(
 		ctx,
@@ -613,6 +630,7 @@ func (stc *ScatterConn) ExecuteLock(
 			session.ResetLock()
 			err = vterrors.Wrap(err, "held locks released")
 		}
+		session.UpdateLockHeartbeat()
 	case reserve:
 		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
 		if err != nil && reservedID != 0 {
