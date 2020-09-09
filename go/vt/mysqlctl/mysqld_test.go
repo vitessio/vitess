@@ -99,9 +99,9 @@ func TestParseVersionString(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
-		f, v, err := parseVersionString(testcase.versionString)
+		f, v, err := ParseVersionString(testcase.versionString)
 		if v != testcase.version || f != testcase.flavor || err != nil {
-			t.Errorf("parseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
+			t.Errorf("ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
 		}
 	}
 
@@ -137,9 +137,9 @@ func TestAssumeVersionString(t *testing.T) {
 
 	for _, testcase := range testcases {
 		os.Setenv("MYSQL_FLAVOR", testcase.versionString)
-		f, v, err := getVersionFromEnv()
+		f, v, err := GetVersionFromEnv()
 		if v != testcase.version || f != testcase.flavor || err != nil {
-			t.Errorf("getVersionFromEnv() failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
+			t.Errorf("GetVersionFromEnv() failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
 		}
 	}
 
