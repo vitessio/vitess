@@ -93,8 +93,9 @@ const (
 )
 
 var (
-	onlineDDLUser  = "vt-online-ddl-internal"
-	onlineDDLGrant = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
+	migrationLogFileName = "migration.log"
+	onlineDDLUser        = "vt-online-ddl-internal"
+	onlineDDLGrant       = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 )
 
 // Executor wraps and manages the execution of a gh-ost migration.
@@ -362,13 +363,13 @@ password=${ONLINE_DDL_PASSWORD}
 	}
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
 ghost_log_path="%s"
-ghost_log_file=gh-ost.log
+ghost_log_file="%s"
 
 mkdir -p "$ghost_log_path"
 
 export ONLINE_DDL_PASSWORD
 %s "$@" > "$ghost_log_path/$ghost_log_file" 2>&1
-	`, tempDir, binaryFileName,
+	`, tempDir, migrationLogFileName, binaryFileName,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "gh-ost-wrapper.sh", wrapperScriptContent)
 	if err != nil {
@@ -562,13 +563,13 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 	binaryFileName, _ := PTOSCFileName()
 	wrapperScriptContent := fmt.Sprintf(`#!/bin/bash
 pt_log_path="%s"
-pt_log_file=pt-online-schema-change.log
+pt_log_file="%s"
 
 mkdir -p "$pt_log_path"
 
 export MYSQL_PWD
 %s "$@" > "$pt_log_path/$pt_log_file" 2>&1
-	`, tempDir, binaryFileName,
+	`, tempDir, migrationLogFileName, binaryFileName,
 	)
 	wrapperScriptFileName, err := createTempScript(tempDir, "pt-online-schema-change-wrapper.sh", wrapperScriptContent)
 	if err != nil {
