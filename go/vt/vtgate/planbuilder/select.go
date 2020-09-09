@@ -180,13 +180,6 @@ func buildSQLCalcFoundRowsPlan(sel *sqlparser.Select, outer *symtab, vschema Con
 	sel2.OrderBy = nil
 	sel2.Limit = nil
 
-	sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch col := node.(type) {
-		case *sqlparser.ColName:
-			col.Metadata = nil
-		}
-		return true, nil
-	}, sel2)
 	cjt := newJointab(sqlparser.GetBindvars(sel2))
 	countpb := newPrimitiveBuilder(vschema, cjt)
 	err = countpb.processSelect(sel2, outer)
