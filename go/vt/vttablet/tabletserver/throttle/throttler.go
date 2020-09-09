@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -47,6 +48,8 @@ const (
 
 	localStoreName = "local"
 )
+
+var throttleThreshold = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for throttling")
 
 var (
 	throttlerUser  = "vt_tablet_throttler"
@@ -169,7 +172,7 @@ func (throttler *Throttler) initConfig(password string) {
 					localStoreName: &config.MySQLClusterConfigurationSettings{
 						User:              throttlerUser,
 						Password:          password,
-						ThrottleThreshold: 1.0,
+						ThrottleThreshold: throttleThreshold.Seconds(),
 						MetricQuery:       replicationLagQuery,
 						IgnoreHostsCount:  0,
 					},
