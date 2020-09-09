@@ -19,6 +19,7 @@ package vtgate
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -370,6 +371,21 @@ func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSe
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = lockSession
+	session.LastLockHeartbeat = time.Now().Unix()
+}
+
+//UpdateLockHeartbeat updates the LastLockHeartbeat time
+func (session *SafeSession) UpdateLockHeartbeat() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LastLockHeartbeat = time.Now().Unix()
+}
+
+//TriggerLockHeartBeat returns if it time to trigger next lock heartbeat
+func (session *SafeSession) TriggerLockHeartBeat() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return time.Now().Unix()-session.LastLockHeartbeat >= session.lockHeatbeatTime
 }
 
 //InLockSession returns whether locking is used on this session.
