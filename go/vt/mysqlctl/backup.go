@@ -64,9 +64,6 @@ var (
 	// but none of them are complete.
 	ErrNoCompleteBackup = errors.New("backup(s) found but none are complete")
 
-	// ErrExistingDB is returned when there's already an active DB.
-	ErrExistingDB = errors.New("skipping restore due to existing database")
-
 	// backupStorageHook contains the hook name to use to process
 	// backup files. If not set, we will not process the files. It is
 	// only used at backup time. Then it is put in the manifest,
@@ -218,34 +215,25 @@ func removeExistingFiles(cnf *Mycnf) error {
 	return nil
 }
 
+// ShouldRestore checks whether a database with tables already exists
+// and returns whether a restore action should be performed
+func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
+	if params.DeleteBeforeRestore || RestoreWasInterrupted(params.Cnf) {
+		return true, nil
+	}
+	params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
+	// Wait for mysqld to be ready, in case it was launched in parallel with us.
+	// If this doesn't succeed, we should not attempt a restore
+	if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
+		return false, err
+	}
+	return checkNoDB(ctx, params.Mysqld, params.DbName)
+}
+
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
-
-	if !params.DeleteBeforeRestore {
-		params.Logger.Infof("Restore: Checking if a restore is in progress")
-		if !RestoreWasInterrupted(params.Cnf) {
-			params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
-			// Wait for mysqld to be ready, in case it was launched in parallel with us.
-			if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
-				return nil, err
-			}
-
-			ok, err := checkNoDB(ctx, params.Mysqld, params.DbName)
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				params.Logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
-				if err = PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err == nil {
-					err = ErrExistingDB
-				}
-				return nil, err
-			}
-		}
-	}
-
 	// find the right backup handle: most recent one, with a MANIFEST
 	params.Logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
