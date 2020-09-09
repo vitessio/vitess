@@ -64,9 +64,6 @@ var (
 	// but none of them are complete.
 	ErrNoCompleteBackup = errors.New("backup(s) found but none are complete")
 
-	// ErrExistingDB is returned when there's already an active DB.
-	ErrExistingDB = errors.New("skipping restore due to existing database")
-
 	// backupStorageHook contains the hook name to use to process
 	// backup files. If not set, we will not process the files. It is
 	// only used at backup time. Then it is put in the manifest,
@@ -140,7 +137,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 // Used by Restore, as we do not want to destroy an existing DB.
 // The user's database name must be given since we ignore all others.
 // Returns true if the specified DB either doesn't exist, or has no tables.
-// Returns (false, ErrExistingDB) if the check succeeds but the condition is not
+// Returns (false, nil) if the check succeeds but the condition is not
 // satisfied (there is a DB with tables).
 // Returns non-nil error if one occurs while trying to perform the check.
 func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, error) {
@@ -162,7 +159,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 			}
 			// found active db
 			log.Warningf("checkNoDB failed, found active db %v", dbName)
-			return false, ErrExistingDB
+			return false, nil
 		}
 	}
 

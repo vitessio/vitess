@@ -117,15 +117,12 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	// Check whether we're going to restore before changing to RESTORE type,
 	// so we keep our MasterTermStartTime (if any) if we aren't actually restoring.
 	ok, err := mysqlctl.ShouldRestore(ctx, params)
-	if err != nil && err != mysqlctl.ErrExistingDB {
+	if err != nil {
 		return err
 	}
 	if !ok {
 		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
-		if lerr := mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); lerr != nil {
-			return lerr
-		}
-		return err
+		return mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	}
 	// We should not become master after restore, because that would incorrectly
 	// start a new master term, and it's likely our data dir will be out of date.

@@ -238,9 +238,7 @@ func TestBackupRestore(t *testing.T) {
 		"SHOW TABLES FROM `vt_test_keyspace`": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}},
 	}
 
-	err = master.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */)
-	require.Error(t, err)
-	assert.EqualError(t, err, "skipping restore due to existing database")
+	require.NoError(t, master.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
 	// Tablet type should not change
 	assert.Equal(t, topodatapb.TabletType_MASTER, master.Tablet.Type)
 	assert.False(t, master.FakeMysqlDaemon.Replicating)
