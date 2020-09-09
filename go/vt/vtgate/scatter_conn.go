@@ -245,11 +245,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) ended")
 
 func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) {
-	if info.reservedID != 0 && info.transactionID == 0 {
-		sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost || (sqlErr.Number() == mysql.ERQueryInterrupted && errRegx.Match([]byte(sqlErr.Error()))) {
-			session.ResetShard(info.alias)
-		}
+	if info.reservedID != 0 && info.transactionID == 0 && !isConnectionAlive(err) {
+		session.ResetShard(info.alias)
 	}
 }
 
@@ -612,6 +609,10 @@ func (stc *ScatterConn) ExecuteLock(
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
 		}
 		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
+		if err != nil && !isConnectionAlive(err) {
+			session.ResetLock()
+			err = vterrors.Wrap(err, "held locks released")
+		}
 	case reserve:
 		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
 		if err != nil && reservedID != 0 {
@@ -633,6 +634,14 @@ func (stc *ScatterConn) ExecuteLock(
 		return nil, err
 	}
 	return qr, err
+}
+
+func isConnectionAlive(err error) bool {
+	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+	if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost || (sqlErr.Number() == mysql.ERQueryInterrupted && errRegx.Match([]byte(sqlErr.Error()))) {
+		return false
+	}
+	return true
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
