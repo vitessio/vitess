@@ -76,12 +76,9 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+
 	tablet := tm.Tablet()
 	originalType := tablet.Type
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
-		return err
-	}
-
 	// Try to restore. Depending on the reason for failure, we may be ok.
 	// If we're not ok, return an error and the tm will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
@@ -117,6 +114,21 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
 	}
 
+	ok, err := mysqlctl.ShouldRestore(ctx, params)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
+		return mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+	}
+	// should not become master after restore
+	if originalType == topodatapb.TabletType_MASTER {
+		originalType = tm.baseTabletType
+	}
+	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
+		return err
+	}
 	// Loop until a backup exists, unless we were told to give up immediately.
 	var backupManifest *mysqlctl.BackupManifest
 	for {
