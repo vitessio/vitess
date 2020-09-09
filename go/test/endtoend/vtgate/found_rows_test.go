@@ -28,7 +28,6 @@ import (
 )
 
 func TestFoundRows(t *testing.T) {
-	t.Skip("failing at the moment")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
