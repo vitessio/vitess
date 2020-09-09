@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"runtime/debug"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -813,10 +812,10 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 
 func wrapError(err error, stopPos mysql.Position) error {
 	if err != nil {
-		err = fmt.Errorf("stream (at source tablet) error @ %v: %v\n%s", stopPos, err, debug.Stack())
+		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
 		log.Error(err)
 		return err
 	}
-	log.Infof("stream (at source tablet) has ended @ %v\n%s", stopPos, debug.Stack())
+	log.Infof("stream (at source tablet) has ended @ %v", stopPos)
 	return nil
 }
