@@ -97,8 +97,29 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
 		}
 	}
-	if sel.SQLCalcFoundRows && sel.Limit != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
+	if sel.SQLCalcFoundRows {
+		sel.SQLCalcFoundRows = false
+		if sel.Limit != nil {
+			frpb := newPrimitiveBuilder(pb.vschema, pb.jt)
+			err := frpb.processSelect(sel, outer)
+			if err != nil {
+				return err
+			}
+			sel.SelectExprs = []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
+				Expr: &sqlparser.FuncExpr{
+					Name:  sqlparser.NewColIdent("count"),
+					Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
+				},
+			}}
+			sel.OrderBy = nil
+			sel.Limit = nil
+			err = pb.processSelect(sel, outer)
+			if err != nil {
+				return err
+			}
+			pb.bldr = sqlCalcFoundRows{LimitQuery: frpb.bldr, CountQuery: pb.bldr}
+			return nil
+		}
 	}
 
 	if err := pb.processTableExprs(sel.From); err != nil {
