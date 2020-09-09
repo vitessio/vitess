@@ -40,6 +40,8 @@ func TestFoundRows(t *testing.T) {
 	assertFoundRowsValue(t, conn, "select * from t2", 5)
 	assertFoundRowsValue(t, conn, "select * from t2 limit 2", 2)
 	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 limit 2", 5)
+	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 limit 2", 1)
+	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 4 limit 2", 1)
 }
 
 func assertFoundRowsValue(t *testing.T, conn *mysql.Conn, query string, count int) {

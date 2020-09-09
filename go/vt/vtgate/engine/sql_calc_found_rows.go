@@ -1,3 +1,19 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package engine
 
 import (
@@ -8,31 +24,31 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var _ Primitive = (*SQLCalFoundRows)(nil)
+var _ Primitive = (*SQLCalcFoundRows)(nil)
 
-//SQLCalFoundRows is a primitive to execute limit and count query as per their individual plan.
-type SQLCalFoundRows struct {
+//SQLCalcFoundRows is a primitive to execute limit and count query as per their individual plan.
+type SQLCalcFoundRows struct {
 	LimitPrimitive Primitive
 	CountPrimitive Primitive
 }
 
 //RouteType implements the Primitive interface
-func (s SQLCalFoundRows) RouteType() string {
+func (s SQLCalcFoundRows) RouteType() string {
 	return "SQLCalcFoundRows"
 }
 
 //GetKeyspaceName implements the Primitive interface
-func (s SQLCalFoundRows) GetKeyspaceName() string {
+func (s SQLCalcFoundRows) GetKeyspaceName() string {
 	return s.LimitPrimitive.GetKeyspaceName()
 }
 
 //GetTableName implements the Primitive interface
-func (s SQLCalFoundRows) GetTableName() string {
+func (s SQLCalcFoundRows) GetTableName() string {
 	return s.LimitPrimitive.GetTableName()
 }
 
 //Execute implements the Primitive interface
-func (s SQLCalFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s SQLCalcFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	limitQr, err := s.LimitPrimitive.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -53,26 +69,26 @@ func (s SQLCalFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 //StreamExecute implements the Primitive interface
-func (s SQLCalFoundRows) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s SQLCalcFoundRows) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	panic("implement me")
 }
 
 //GetFields implements the Primitive interface
-func (s SQLCalFoundRows) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (s SQLCalcFoundRows) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return s.LimitPrimitive.GetFields(vcursor, bindVars)
 }
 
 //NeedsTransaction implements the Primitive interface
-func (s SQLCalFoundRows) NeedsTransaction() bool {
+func (s SQLCalcFoundRows) NeedsTransaction() bool {
 	return s.LimitPrimitive.NeedsTransaction()
 }
 
 //Inputs implements the Primitive interface
-func (s SQLCalFoundRows) Inputs() []Primitive {
+func (s SQLCalcFoundRows) Inputs() []Primitive {
 	return []Primitive{s.LimitPrimitive, s.CountPrimitive}
 }
 
-func (s SQLCalFoundRows) description() PrimitiveDescription {
+func (s SQLCalcFoundRows) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "SQL_CALC_FOUND_ROWS",
 	}
