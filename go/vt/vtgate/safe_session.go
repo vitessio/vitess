@@ -34,10 +34,11 @@ import (
 // (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
 // for a single shard)
 type SafeSession struct {
-	mu              sync.Mutex
-	mustRollback    bool
-	autocommitState autocommitState
-	commitOrder     vtgatepb.CommitOrder
+	mu               sync.Mutex
+	mustRollback     bool
+	autocommitState  autocommitState
+	commitOrder      vtgatepb.CommitOrder
+	foundRowsHandled bool
 	*vtgatepb.Session
 }
 
