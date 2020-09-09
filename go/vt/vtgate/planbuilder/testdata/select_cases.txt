@@ -1387,3 +1387,73 @@
     ]
   }
 }
+
+# sql_calc_found_rows without limit
+"select sql_calc_found_rows * from music where user_id = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from music where 1 != 1",
+    "Query": "select * from music where user_id = 1",
+    "Table": "music",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# sql_calc_found_rows with limit
+"select sql_calc_found_rows * from music limit 100"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music limit 100",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 100,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from music where 1 != 1",
+            "Query": "select * from music limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Distinct": "false",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from music where 1 != 1",
+            "Query": "select count(*) from music",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
