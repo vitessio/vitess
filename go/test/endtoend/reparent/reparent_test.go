@@ -40,30 +40,35 @@ import (
 func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	args := []string{"InitTablet", "-hostname", hostname,
-		"-port", fmt.Sprintf("%d", tablet62344.HTTPPort), "-allow_update", "-parent",
-		"-keyspace", keyspaceName,
-		"-shard", shardName,
-		"-mysql_port", fmt.Sprintf("%d", tablet62344.MySQLPort),
-		"-grpc_port", fmt.Sprintf("%d", tablet62344.GrpcPort)}
-	args = append(args, fmt.Sprintf("%s-%010d", tablet62344.Cell, tablet62344.TabletUID), "master")
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand(args...)
-	require.NoError(t, err)
+	// need at least one replica because of semi-sync
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044} {
 
-	// Start the tablet
-	err = tablet62344.VttabletProcess.Setup()
-	require.NoError(t, err)
+		// Start the tablet
+		err := tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
 
-	// Create Database
-	err = tablet62344.VttabletProcess.CreateDB(keyspaceName)
-	require.NoError(t, err)
+		// Create Database
+		err = tablet.VttabletProcess.CreateDB(keyspaceName)
+		require.NoError(t, err)
+	}
+	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044} {
+		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
+		require.NoError(t, err)
+	}
 
+	// Init Shard Master
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
+	require.NoError(t, err, out)
 	// We cannot change a master to spare
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeReplicaType", tablet62344.Alias, "spare")
-	require.Error(t, err)
+	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tablet62344.Alias, "spare")
+	require.Error(t, err, out)
+	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
 
-	//kill Tablet
+	//kill Tablets
 	err = tablet62344.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = tablet62044.VttabletProcess.TearDown()
 	require.NoError(t, err)
 }
 
@@ -90,9 +95,9 @@ func TestReparentDownMaster(t *testing.T) {
 	}
 
 	// Init Shard Master
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
@@ -171,20 +176,20 @@ func TestReparentCrossCell(t *testing.T) {
 	}
 
 	// Force the replica to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
 	checkMasterTablet(t, tablet62344)
 
 	// Perform a graceful reparent operation to another cell.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
+	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet31981.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, false)
 
@@ -215,9 +220,9 @@ func TestReparentGraceful(t *testing.T) {
 	}
 
 	// Force the replica to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
@@ -292,9 +297,9 @@ func TestReparentReplicaOffline(t *testing.T) {
 	}
 
 	// Force the replica to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", keyspaceShard, tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
@@ -305,7 +310,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	require.NoError(t, err)
 
 	// Perform a graceful reparent operation.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias,
@@ -321,9 +326,11 @@ func TestReparentReplicaOffline(t *testing.T) {
 
 func TestReparentAvoid(t *testing.T) {
 	defer cluster.PanicHandler(t)
+
 	// Remove tablet41983 from topology as that tablet is not required for this test
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet41983.Alias)
-	require.NoError(t, err)
+	// Ignore error. Depending on previous tests this topo entry may or may not exist
+	// TODO: fix inter-test dependencies
+	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet41983.Alias)
 
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet31981} {
 		// create database
@@ -341,9 +348,9 @@ func TestReparentAvoid(t *testing.T) {
 	}
 
 	// Force the replica to reparent assuming that all the dataset's are identical.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", keyspaceShard, tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
@@ -438,9 +445,9 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 	}
 
 	// Reparent as a starting point
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
@@ -526,9 +533,9 @@ func TestReparentWithDownReplica(t *testing.T) {
 	}
 
 	// Init Shard Master
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
@@ -600,9 +607,9 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	}
 
 	// Init Shard Master
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), master.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	// Updated rdonly tablet and set tablet type to rdonly
 	// TODO: replace with ChangeTabletType once ChangeSlaveType is removed
@@ -679,9 +686,9 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	}
 
 	// Init Shard Master
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err)
+	require.NoError(t, err, out)
 
 	validateTopology(t, true)
 
@@ -693,7 +700,7 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 
 	// Perform a planned reparent operation, the master will fail the
 	// insert.  The replicas should then abort right away.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias)

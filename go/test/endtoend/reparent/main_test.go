@@ -111,6 +111,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-lock_tables_timeout", "5s",
 			"-enable_semi_sync",
+			"-track_schema_versions=false", // remove this line once https://github.com/vitessio/vitess/issues/6474 is fixed
 		}
 
 		// Initialize Cluster
@@ -124,12 +125,11 @@ func TestMain(m *testing.M) {
 		for _, shard := range clusterInstance.Keyspaces[0].Shards {
 			for _, tablet := range shard.Vttablets {
 				log.Infof("Starting MySql for tablet %v", tablet.Alias)
-				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+				proc, err := tablet.MysqlctlProcess.StartProcess()
+				if err != nil {
 					return 1
-				} else {
-					// ignore golint warning, we need the else block to use proc
-					mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 				}
+				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
 		}
 
