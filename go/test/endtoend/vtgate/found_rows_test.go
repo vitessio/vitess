@@ -34,14 +34,15 @@ func TestFoundRows(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "insert into t2(id3,id4) values(1,1), (2,2), (3,3), (4,4), (5,5)")
+	exec(t, conn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
 	defer exec(t, conn, "delete from t2")
 
 	assertFoundRowsValue(t, conn, "select * from t2", 5)
 	assertFoundRowsValue(t, conn, "select * from t2 limit 2", 2)
 	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 limit 2", 5)
 	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 limit 2", 1)
-	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 4 limit 2", 1)
+	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 limit 2", 3)
+	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", 1)
 }
 
 func assertFoundRowsValue(t *testing.T, conn *mysql.Conn, query string, count int) {
