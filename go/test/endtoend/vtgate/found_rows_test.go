@@ -35,7 +35,6 @@ func TestFoundRows(t *testing.T) {
 	defer conn.Close()
 
 	exec(t, conn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
-	assertMatches(t, conn, "select * from t2_id4_idx", "")
 
 	assertFoundRowsValue(t, conn, "select * from t2", 5)
 	assertFoundRowsValue(t, conn, "select * from t2 limit 2", 2)
