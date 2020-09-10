@@ -808,6 +808,9 @@ var (
 		input:  "set autocommit = off",
 		output: "set autocommit = 'off'",
 	}, {
+		input:  "set autocommit = off, foo = 1",
+		output: "set autocommit = 'off', foo = 1",
+	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
 	}, {
@@ -1913,6 +1916,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input: "update A set b = 1",
 	}, {
 		input: "update A.B set b = 1",
+	}, {
+		input: "update A.B set foo.b = 1, c = 2, baz.foo.c = baz.b",
 	}, {
 		input: "select A() from b",
 	}, {
