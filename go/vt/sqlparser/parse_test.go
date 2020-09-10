@@ -2141,13 +2141,13 @@ func TestConvert(t *testing.T) {
 		output: "syntax error at position 20 near 'from'",
 	}, {
 		input:  "select cast('foo', decimal) from t",
-		output: "syntax error at position 19",
+		output: "syntax error at position 19 near 'foo'",
 	}, {
 		input:  "select convert('abc', datetime(4+9)) from t",
-		output: "syntax error at position 34",
+		output: "syntax error at position 34 near '4'",
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
-		output: "syntax error at position 33",
+		output: "syntax error at position 33 near '4'",
 	}, {
 		input:  "/* a comment */",
 		output: "empty statement",
@@ -2765,7 +2765,7 @@ var (
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "max nesting level reached at position 406",
+		output: "max nesting level reached at position 406 near 'F'",
 	}, {
 		input: "select(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
@@ -2775,14 +2775,14 @@ var (
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(",
-		output: "syntax error at position 404",
+		output: "syntax error at position 404 near 'F'",
 	}, {
 		// This construct is considered invalid due to a grammar conflict.
 		input:  "insert into a select * from b join c on duplicate key update d=e",
 		output: "syntax error at position 54 near 'key'",
 	}, {
 		input:  "select * from a left join b",
-		output: "syntax error at position 28",
+		output: "syntax error at position 28 near 'b'",
 	}, {
 		input:  "select * from a natural join b on c = d",
 		output: "syntax error at position 34 near 'on'",
@@ -2794,13 +2794,13 @@ var (
 		output: "expecting value after next at position 15 near 'id'",
 	}, {
 		input:  "select next 1+1 values from a",
-		output: "syntax error at position 15",
+		output: "syntax error at position 15 near '1'",
 	}, {
 		input:  "insert into a values (select * from b)",
 		output: "syntax error at position 29 near 'select'",
 	}, {
 		input:  "select database",
-		output: "syntax error at position 16",
+		output: "syntax error at position 16 near 'database'",
 	}, {
 		input:  "select mod from t",
 		output: "syntax error at position 16 near 'from'",
@@ -2809,7 +2809,7 @@ var (
 		output: "syntax error at position 26 near 'div'",
 	}, {
 		input:  "select 1 from t where binary",
-		output: "syntax error at position 29",
+		output: "syntax error at position 29 near 'binary'",
 	}, {
 		input:  "select match(a1, a2) against ('foo' in boolean mode with query expansion) from t",
 		output: "syntax error at position 57 near 'with'",
@@ -2821,7 +2821,7 @@ var (
 		output: "syntax error at position 81 near 'escape'",
 	}, {
 		input:  "(select /* parenthesized select */ * from t)",
-		output: "syntax error at position 45",
+		output: "syntax error at position 45 near 't'",
 	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
@@ -2863,7 +2863,7 @@ func TestSkipToEnd(t *testing.T) {
 		// This is the case where the partial ddl will be reset
 		// because of a premature ';'.
 		input:  "create table a(id; select * from t",
-		output: "syntax error at position 19",
+		output: "syntax error at position 19 near 'id'",
 	}, {
 		// Partial DDL should get reset for valid DDLs also.
 		input:  "create table a(id int); select * from t",
