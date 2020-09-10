@@ -335,6 +335,16 @@ func TestOffsetAndLimitWithOLAP(t *testing.T) {
 	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
 }
 
+func TestSwitchBetweenOlapAndOltp(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "set workload='olap'")
+	exec(t, conn, "set workload='oltp'")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
