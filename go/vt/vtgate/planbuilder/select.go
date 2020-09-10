@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/key"
@@ -99,6 +101,9 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 		}
 	}
 	if sel.SQLCalcFoundRows {
+		if outer != nil || query == "" {
+			return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
 			builder, err := buildSQLCalcFoundRowsPlan(query, sel, outer, pb.vschema)
@@ -170,14 +175,30 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symta
 	}
 	sel2 := statement.(*sqlparser.Select)
 
-	sel2.SelectExprs = []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
+	sel2.SQLCalcFoundRows = false
+	sel2.OrderBy = nil
+	sel2.Limit = nil
+
+	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
 			Name:  sqlparser.NewColIdent("count"),
 			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
 		},
 	}}
-	sel2.OrderBy = nil
-	sel2.Limit = nil
+	if sel2.GroupBy == nil && sel2.Having == nil {
+		sel2.SelectExprs = countStartExpr
+	} else {
+		sel3 := &sqlparser.Select{
+			SelectExprs: countStartExpr,
+			From: []sqlparser.TableExpr{
+				&sqlparser.AliasedTableExpr{
+					Expr: &sqlparser.Subquery{Select: sel2},
+					As:   sqlparser.NewTableIdent("t"),
+				},
+			},
+		}
+		sel2 = sel3
+	}
 
 	cjt := newJointab(sqlparser.GetBindvars(sel2))
 	countpb := newPrimitiveBuilder(vschema, cjt)
