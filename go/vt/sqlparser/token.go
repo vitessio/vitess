@@ -39,6 +39,7 @@ type Tokenizer struct {
 	lastChar            uint16
 	Position            int
 	lastToken           []byte
+	lastNonNilToken     []byte
 	LastError           error
 	posVarIndex         int
 	ParseTree           Statement
@@ -461,14 +462,17 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	}
 	lval.bytes = val
 	tkn.lastToken = val
+	if val != nil {
+		tkn.lastNonNilToken = val
+	}
 	return typ
 }
 
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
 	buf := &bytes2.Buffer{}
-	if tkn.lastToken != nil {
-		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
+	if tkn.lastNonNilToken != nil {
+		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastNonNilToken)
 	} else {
 		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
 	}
