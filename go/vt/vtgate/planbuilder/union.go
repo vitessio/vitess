@@ -20,6 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -86,6 +89,9 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 	case *sqlparser.Union:
 		return pb.processUnion(part, outer)
 	case *sqlparser.Select:
+		if part.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+		}
 		if !hasParens {
 			err := checkOrderByAndLimit(part)
 			if err != nil {
