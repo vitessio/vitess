@@ -56,7 +56,7 @@ func TestUpdateTargetTable(t *testing.T) {
 			vc.ExpectLog(t, tc.expectedQueryLog)
 
 			vc = &loggingVCursor{}
-			err = updateTarget.StreamExecute(vc, map[string]*querypb.BindVariable{}, false, nil)
+			_, err = wrapStreamExecute(updateTarget, vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
 			vc.ExpectLog(t, tc.expectedQueryLog)
 		})
