@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -28,50 +30,7 @@ type sqlCalcFoundRows struct {
 	ljt, cjt               *jointab
 }
 
-func (s *sqlCalcFoundRows) Order() int {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) ResultColumns() []*resultColumn {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) Reorder(i int) {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) First() builder {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) MakeDistinct() error {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) PushGroupBy(by sqlparser.GroupBy) error {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) SetUpperLimit(count sqlparser.Expr) {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) PushMisc(sel *sqlparser.Select) {
-	panic("implement me")
-}
-
+//Wireup implements the builder interface
 func (s *sqlCalcFoundRows) Wireup(builder, *jointab) error {
 	err := s.LimitQuery.Wireup(s.LimitQuery, s.ljt)
 	if err != nil {
@@ -80,25 +39,87 @@ func (s *sqlCalcFoundRows) Wireup(builder, *jointab) error {
 	return s.CountQuery.Wireup(s.CountQuery, s.cjt)
 }
 
-func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	panic("implement me")
-}
-
-func (s *sqlCalcFoundRows) PushLock(lock string) error {
-	panic("implement me")
-}
-
+//Primitive implements the builder interface
 func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 	return engine.SQLCalcFoundRows{
 		LimitPrimitive: s.LimitQuery.Primitive(),
 		CountPrimitive: s.CountQuery.Primitive(),
 	}
+}
+
+// All the methods below are not implemented. They should not be called on a sqlCalcFoundRows builder
+
+//Order implements the builder interface
+func (s *sqlCalcFoundRows) Order() int {
+	panic("unreachable")
+}
+
+//ResultColumns implements the builder interface
+func (s *sqlCalcFoundRows) ResultColumns() []*resultColumn {
+	return s.LimitQuery.ResultColumns()
+}
+
+//Reorder implements the builder interface
+func (s *sqlCalcFoundRows) Reorder(int) {
+	panic("unreachable")
+}
+
+//First implements the builder interface
+func (s *sqlCalcFoundRows) First() builder {
+	panic("unreachable")
+}
+
+//PushFilter implements the builder interface
+func (s *sqlCalcFoundRows) PushFilter(*primitiveBuilder, sqlparser.Expr, string, builder) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushFilter")
+}
+
+//PushSelect implements the builder interface
+func (s *sqlCalcFoundRows) PushSelect(*primitiveBuilder, *sqlparser.AliasedExpr, builder) (rc *resultColumn, colNumber int, err error) {
+	return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushSelect")
+}
+
+//MakeDistinct implements the builder interface
+func (s *sqlCalcFoundRows) MakeDistinct() error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.MakeDistinct")
+}
+
+//PushGroupBy implements the builder interface
+func (s *sqlCalcFoundRows) PushGroupBy(sqlparser.GroupBy) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushGroupBy")
+}
+
+//PushOrderBy implements the builder interface
+func (s *sqlCalcFoundRows) PushOrderBy(sqlparser.OrderBy) (builder, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushOrderBy")
+}
+
+//SetUpperLimit implements the builder interface
+func (s *sqlCalcFoundRows) SetUpperLimit(sqlparser.Expr) {
+	panic("unreachable")
+}
+
+//PushMisc implements the builder interface
+func (s *sqlCalcFoundRows) PushMisc(*sqlparser.Select) {
+	panic("unreachable")
+}
+
+//SupplyVar implements the builder interface
+func (s *sqlCalcFoundRows) SupplyVar(int, int, *sqlparser.ColName, string) {
+	panic("unreachable")
+}
+
+//SupplyCol implements the builder interface
+func (s *sqlCalcFoundRows) SupplyCol(*sqlparser.ColName) (rc *resultColumn, colNumber int) {
+	panic("unreachable")
+}
+
+//SupplyWeightString implements the builder interface
+func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.SupplyWeightString")
+}
+
+//PushLock implements the builder interface
+func (s *sqlCalcFoundRows) PushLock(string) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushLock")
 }

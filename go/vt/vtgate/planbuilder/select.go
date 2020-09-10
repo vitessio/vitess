@@ -186,8 +186,13 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symta
 		},
 	}}
 	if sel2.GroupBy == nil && sel2.Having == nil {
+		// if there is no grouping, we can use the same query and
+		// just replace the SELECT sub-clause to have a single count(*)
 		sel2.SelectExprs = countStartExpr
 	} else {
+		// when there is grouping, we have to move the original query into a derived table.
+		//                       select id, sum(12) from user group by id =>
+		// select count(*) from (select id, sum(12) from user group by id) t
 		sel3 := &sqlparser.Select{
 			SelectExprs: countStartExpr,
 			From: []sqlparser.TableExpr{

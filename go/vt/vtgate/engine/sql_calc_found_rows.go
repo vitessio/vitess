@@ -70,7 +70,22 @@ func (s SQLCalcFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.
 
 //StreamExecute implements the Primitive interface
 func (s SQLCalcFoundRows) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	err := s.LimitPrimitive.StreamExecute(vcursor, bindVars, wantfields, callback)
+	if err != nil {
+		return err
+	}
+
+	return s.CountPrimitive.StreamExecute(vcursor, bindVars, wantfields, func(countQr *sqltypes.Result) error {
+		if len(countQr.Rows) != 1 || len(countQr.Rows[0]) != 1 {
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "count query is not a scalar")
+		}
+		fr, err := evalengine.ToUint64(countQr.Rows[0][0])
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetFoundRows(fr)
+		return nil
+	})
 }
 
 //GetFields implements the Primitive interface
