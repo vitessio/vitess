@@ -212,11 +212,9 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
-				if qr.RowsAffected > 0 {
-					mu.Lock()
-					results[master] = qr
-					mu.Unlock()
-				}
+				mu.Lock()
+				results[master] = qr
+				mu.Unlock()
 			}
 		}(ctx, master)
 	}
