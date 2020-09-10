@@ -302,7 +302,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			now := time.Now().UnixNano()
 			if err := bufferAndTransmit(&binlogdatapb.VEvent{
 				Type:        binlogdatapb.VEventType_HEARTBEAT,
-				Timestamp:   now / 1e9,
+				Timestamp:   now,
 				CurrentTime: now,
 			}); err != nil {
 				if err == io.EOF {
