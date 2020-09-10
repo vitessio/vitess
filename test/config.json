@@ -442,7 +442,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/onlineddl"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 17,
+			"Shard": 26,
 			"RetryMax": 0,
 			"Tags": []
 		},
