@@ -33,26 +33,27 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
-	sel := stmt.(*sqlparser.Select)
+func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+		sel := stmt.(*sqlparser.Select)
 
-	p, err := handleDualSelects(sel, vschema)
-	if err != nil {
-		return nil, err
-	}
-	if p != nil {
-		return p, nil
-	}
+		p, err := handleDualSelects(sel, vschema)
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
+			return p, nil
+		}
 
-	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
-	if err := pb.processSelect(sel, nil); err != nil {
-		return nil, err
+		pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
+		if err := pb.processSelect(sel, nil, query); err != nil {
+			return nil, err
+		}
+		if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
+			return nil, err
+		}
+		return pb.bldr.Primitive(), nil
 	}
-	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
-		return nil, err
-	}
-	return pb.bldr.Primitive(), nil
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
@@ -90,7 +91,7 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
-func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, query string) error {
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
@@ -100,7 +101,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	if sel.SQLCalcFoundRows {
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
-			builder, err := buildSQLCalcFoundRowsPlan(sel, outer, pb.vschema)
+			builder, err := buildSQLCalcFoundRowsPlan(query, sel, outer, pb.vschema)
 			if err != nil {
 				return err
 			}
@@ -155,17 +156,15 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	return nil
 }
 
-func buildSQLCalcFoundRowsPlan(sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {
+func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {
 	ljt := newJointab(sqlparser.GetBindvars(sel))
 	frpb := newPrimitiveBuilder(vschema, ljt)
-	err := frpb.processSelect(sel, outer)
+	err := frpb.processSelect(sel, outer, "")
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO systay this is a hack
-	s := sqlparser.String(sel)
-	statement, err := sqlparser.Parse(s)
+	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +181,7 @@ func buildSQLCalcFoundRowsPlan(sel *sqlparser.Select, outer *symtab, vschema Con
 
 	cjt := newJointab(sqlparser.GetBindvars(sel2))
 	countpb := newPrimitiveBuilder(vschema, cjt)
-	err = countpb.processSelect(sel2, outer)
+	err = countpb.processSelect(sel2, outer, "")
 	if err != nil {
 		return nil, err
 	}
