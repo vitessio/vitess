@@ -801,10 +801,10 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 
 func wrapError(err error, stopPos mysql.Position) error {
 	if err != nil {
-		err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
+		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
 		log.Error(err)
 		return err
 	}
-	log.Infof("stream ended @ %v", stopPos)
+	log.Infof("stream (at source tablet) ended @ %v", stopPos)
 	return nil
 }

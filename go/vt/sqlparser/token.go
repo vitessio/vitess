@@ -356,6 +356,7 @@ var keywords = map[string]int{
 	"stored":              UNUSED,
 	"straight_join":       STRAIGHT_JOIN,
 	"stream":              STREAM,
+	"vstream":             VSTREAM,
 	"table":               TABLE,
 	"tables":              TABLES,
 	"terminated":          UNUSED,
