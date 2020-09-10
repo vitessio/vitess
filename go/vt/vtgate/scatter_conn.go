@@ -19,6 +19,7 @@ package vtgate
 import (
 	"flag"
 	"io"
+	"regexp"
 	"sync"
 	"time"
 
@@ -241,10 +242,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
+var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) ended")
+
 func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) {
 	if info.reservedID != 0 && info.transactionID == 0 {
 		sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost {
+		if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost || (sqlErr.Number() == mysql.ERQueryInterrupted && errRegx.Match([]byte(sqlErr.Error()))) {
 			session.ResetShard(info.alias)
 		}
 	}

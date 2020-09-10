@@ -122,7 +122,7 @@ func skipToEnd(yylex interface{}) {
 
 %token LEX_ERROR
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
@@ -221,7 +221,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
 %type <statement> explain_statement explainable_statement
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
+%type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -350,6 +350,7 @@ command:
     $$ = $1
   }
 | stream_statement
+| vstream_statement
 | insert_statement
 | update_statement
 | delete_statement
@@ -454,6 +455,12 @@ stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
+  }
+
+vstream_statement:
+  VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
+  {
+    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereStr, $6), Limit: $7}
   }
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
