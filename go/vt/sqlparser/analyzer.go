@@ -298,7 +298,7 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 	result := make(map[SetKey]interface{})
 	for _, expr := range setStmt.Exprs {
 		scope := ImplicitStr
-		key := expr.Name.Lowered()
+		key := expr.Name.Name.Lowered()
 		switch {
 		case strings.HasPrefix(key, "@@global."):
 			scope = GlobalStr
@@ -313,7 +313,7 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 			key = strings.TrimPrefix(key, "@@")
 		}
 
-		if strings.HasPrefix(expr.Name.Lowered(), "@@") {
+		if strings.HasPrefix(expr.Name.Name.Lowered(), "@@") {
 			if setStmt.Scope != "" && scope != "" {
 				return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
 			}
