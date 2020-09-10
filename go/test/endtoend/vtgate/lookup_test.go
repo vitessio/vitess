@@ -410,14 +410,8 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	defer conn2.Close()
 
 	// DB should start out clean
-	qr := exec(t, conn, "select count(*) from t2_id4_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select count(*) from t2")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, "select count(*) from t2_id4_idx", "[[INT64(0)]]")
+	assertMatches(t, conn, "select count(*) from t2", "[[INT64(0)]]")
 
 	// Try inserting a bunch of ids at once
 	exec(t, conn, "begin")
@@ -425,14 +419,8 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	exec(t, conn, "commit")
 
 	// Verify
-	qr = exec(t, conn, "select id3, id4 from t2 order by id3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select id3, id4 from t2_id4_idx order by id3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, "select id3, id4 from t2 order by id3", "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]")
+	assertMatches(t, conn, "select id3, id4 from t2_id4_idx order by id3", "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]")
 }
 
 func TestConsistentLookupUpdate(t *testing.T) {
