@@ -92,7 +92,7 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 				return err
 			}
 		}
-		return pb.processSelect(part, outer)
+		return pb.processSelect(part, outer, "")
 	case *sqlparser.ParenSelect:
 		err := pb.processPart(part.Select, outer, true)
 		if err != nil {
