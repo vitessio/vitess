@@ -160,7 +160,7 @@ func parseAndRun() error {
 		return err
 	}
 
-	_, err = getFileParam(*ksShardMapFlag, *ksShardMapFileFlag, "ks-shard-map", false)
+	ksShardMap, err := getFileParam(*ksShardMapFlag, *ksShardMapFileFlag, "ks-shard-map", false)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func parseAndRun() error {
 	log.V(100).Infof("schema %s\n", schema)
 	log.V(100).Infof("vschema %s\n", vschema)
 
-	err = vtexplain.Init(vschema, schema, opts)
+	err = vtexplain.Init(vschema, schema, ksShardMap, opts)
 	if err != nil {
 		return err
 	}
