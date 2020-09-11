@@ -96,9 +96,6 @@ var executorVSchema = `
 		"krcol_vdx": {
 			"type": "keyrange_lookuper"
 		},
-		"xxhash": {
-			"type": "xxhash"
-		},
     	"t1_lkp_vdx": {
       		"type": "consistent_lookup_unique",
       		"params": {
