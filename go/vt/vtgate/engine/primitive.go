@@ -88,6 +88,8 @@ type (
 		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
+
+		LookupRowLockShardSession() vtgatepb.CommitOrder
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

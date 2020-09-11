@@ -332,6 +332,14 @@ func (vc *vcursorImpl) InTransactionAndIsDML() bool {
 	return false
 }
 
+func (vc *vcursorImpl) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	switch vc.logStats.StmtType {
+	case "DELETE":
+		return vtgatepb.CommitOrder_POST
+	}
+	return vtgatepb.CommitOrder_PRE
+}
+
 func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
 	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
 	return vc.executor.ExecuteLock(vc.ctx, rs, query, vc.safeSession)
