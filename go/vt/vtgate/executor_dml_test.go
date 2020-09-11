@@ -21,8 +21,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/discovery"
-
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/utils"
 
@@ -1715,7 +1713,6 @@ func TestUpdateLastInsertID(t *testing.T) {
 func TestDeleteLookupOwnedEqual(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
-	executor.scatterConn.gateway.(*DiscoveryGateway).hc.(*discovery.FakeLegacyHealthCheck).GetAllTablets()
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("uniq_col|keyspace_id", "int64|varbinary"), "1|N±\u0090ɢú\u0016\u009C"),
 	})
@@ -1736,10 +1733,6 @@ func TestDeleteLookupOwnedEqual(t *testing.T) {
 		Sql:           "delete from t1 where unq_col = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, sbc1wantQueries) {
-		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, sbc1wantQueries)
-	}
-	if !reflect.DeepEqual(sbc2.Queries, sbc2wantQueries) {
-		t.Errorf("sbc2.Queries:\n%+v, want\n%+v\n", sbc2.Queries, sbc2wantQueries)
-	}
+	utils.MustMatch(t, sbc1.Queries, sbc1wantQueries, "")
+	utils.MustMatch(t, sbc2.Queries, sbc2wantQueries, "")
 }
