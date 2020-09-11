@@ -51,7 +51,7 @@ func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 
 //Order implements the builder interface
 func (s *sqlCalcFoundRows) Order() int {
-	panic("unreachable")
+	return s.LimitQuery.Order()
 }
 
 //ResultColumns implements the builder interface
@@ -60,13 +60,13 @@ func (s *sqlCalcFoundRows) ResultColumns() []*resultColumn {
 }
 
 //Reorder implements the builder interface
-func (s *sqlCalcFoundRows) Reorder(int) {
-	panic("unreachable")
+func (s *sqlCalcFoundRows) Reorder(order int) {
+	s.LimitQuery.Reorder(order)
 }
 
 //First implements the builder interface
 func (s *sqlCalcFoundRows) First() builder {
-	panic("unreachable")
+	return s.LimitQuery.First()
 }
 
 //PushFilter implements the builder interface
@@ -95,23 +95,23 @@ func (s *sqlCalcFoundRows) PushOrderBy(sqlparser.OrderBy) (builder, error) {
 }
 
 //SetUpperLimit implements the builder interface
-func (s *sqlCalcFoundRows) SetUpperLimit(sqlparser.Expr) {
-	panic("unreachable")
+func (s *sqlCalcFoundRows) SetUpperLimit(count sqlparser.Expr) {
+	s.LimitQuery.SetUpperLimit(count)
 }
 
 //PushMisc implements the builder interface
-func (s *sqlCalcFoundRows) PushMisc(*sqlparser.Select) {
-	panic("unreachable")
+func (s *sqlCalcFoundRows) PushMisc(sel *sqlparser.Select) {
+	s.LimitQuery.PushMisc(sel)
 }
 
 //SupplyVar implements the builder interface
-func (s *sqlCalcFoundRows) SupplyVar(int, int, *sqlparser.ColName, string) {
-	panic("unreachable")
+func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+	s.LimitQuery.SupplyVar(from, to, col, varname)
 }
 
 //SupplyCol implements the builder interface
-func (s *sqlCalcFoundRows) SupplyCol(*sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("unreachable")
+func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (*resultColumn, int) {
+	return s.LimitQuery.SupplyCol(col)
 }
 
 //SupplyWeightString implements the builder interface

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -36,22 +38,28 @@ func TestFoundRows(t *testing.T) {
 
 	exec(t, conn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
 
-	assertFoundRowsValue(t, conn, "select * from t2", 5)
-	assertFoundRowsValue(t, conn, "select * from t2 limit 2", 2)
-	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 limit 2", 5)
-	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 limit 2", 1)
-	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 limit 2", 3)
-	assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", 1)
+	runTests := func(workload string) {
+		assertFoundRowsValue(t, conn, "select * from t2", workload, 5)
+		assertFoundRowsValue(t, conn, "select * from t2 limit 2", workload, 2)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 limit 2", workload, 5)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 limit 2", workload, 1)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 limit 2", workload, 3)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", workload, 1)
+	}
+
+	runTests("oltp")
+	exec(t, conn, "set workload = olap")
+	runTests("olap")
 
 	// cleanup test data
 	exec(t, conn, "delete from t2")
-	exec(t, conn, "delete from t2_id4_idx") // TODO systay do we really need to do this manually?
+	exec(t, conn, "delete from t2_id4_idx")
 }
 
-func assertFoundRowsValue(t *testing.T, conn *mysql.Conn, query string, count int) {
+func assertFoundRowsValue(t *testing.T, conn *mysql.Conn, query, workload string, count int) {
 	exec(t, conn, query)
 	qr := exec(t, conn, "select found_rows()")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := fmt.Sprintf(`[[UINT64(%d)]]`, count)
-	require.Equal(t, want, got)
+	assert.Equalf(t, want, got, "Workload: %s\nQuery:%s\n", workload, query)
 }
