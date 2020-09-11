@@ -161,7 +161,7 @@ func TestConsistentLookup(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(5) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
-	exec(t, conn, "delete from t1 where id1=1")
+	exec(t, conn, "delete from t1 where id2=5")
 }
 
 func TestDMLScatter(t *testing.T) {
