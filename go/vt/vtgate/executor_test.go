@@ -809,8 +809,9 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "music_user_map", "lookup_hash_unique", "from=music_id; table=music_user_map; to=user_id", "music"),
 			buildVarCharRow("TestExecutor", "name_lastname_keyspace_id_map", "lookup", "from=name,lastname; table=name_lastname_keyspace_id_map; to=keyspace_id", "user2"),
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
+			buildVarCharRow("TestExecutor", "t1_lkp_vdx", "consistent_lookup_unique", "from=unq_col; table=t1_lkp_idx; to=keyspace_id", "t1"),
 		},
-		RowsAffected: 10,
+		RowsAffected: 11,
 	}
 	if !reflect.DeepEqual(qr, wantqr) {
 		t.Errorf("show vschema vindexes:\n%+v, want\n%+v", qr, wantqr)
