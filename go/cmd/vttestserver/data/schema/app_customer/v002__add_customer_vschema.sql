@@ -1,1 +1,0 @@
-alter vschema on customers add vindex hash (id);

@@ -808,6 +808,9 @@ var (
 		input:  "set autocommit = off",
 		output: "set autocommit = 'off'",
 	}, {
+		input:  "set autocommit = off, foo = 1",
+		output: "set autocommit = 'off', foo = 1",
+	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
 	}, {
@@ -1112,6 +1115,8 @@ var (
 		input:  "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
 	}, {
 		input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
+	}, {
+		input:  "create trigger t1 before insert on foo for each row set new.x = new.x + 1",
 	}, {
 		input:  "create trigger t1 after insert on foo for each row update xxy set y = new.x",
 	}, {
@@ -1911,6 +1916,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input: "update A set b = 1",
 	}, {
 		input: "update A.B set b = 1",
+	}, {
+		input: "update A.B set foo.b = 1, c = 2, baz.foo.c = baz.b",
 	}, {
 		input: "select A() from b",
 	}, {

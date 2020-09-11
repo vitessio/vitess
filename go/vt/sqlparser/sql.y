@@ -92,9 +92,7 @@ func skipToEnd(yylex interface{}) {
   orderBy       OrderBy
   order         *Order
   limit         *Limit
-  updateExprs   UpdateExprs
   setExprs      SetExprs
-  updateExpr    *UpdateExpr
   setExpr       *SetExpr
   colIdent      ColIdent
   tableIdent    TableIdent
@@ -279,11 +277,9 @@ func skipToEnd(yylex interface{}) {
 %type <str> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
-%type <updateExprs> on_dup_opt
-%type <updateExprs> update_list
+%type <setExprs> on_dup_opt
 %type <setExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
-%type <updateExpr> update_expression
 %type <setExpr> set_expression transaction_char
 %type <str> isolation_level
 %type <bytes> for_from
@@ -447,7 +443,7 @@ insert_statement:
     ins.OnDup = OnDup($7)
     $$ = ins
   }
-| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET update_list on_dup_opt
+| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET set_list on_dup_opt
   {
     cols := make(Columns, 0, len($7))
     vals := make(ValTuple, 0, len($8))
@@ -469,7 +465,7 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt ignore_opt table_references SET set_list where_expression_opt order_by_opt limit_opt
   {
     $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
   }
@@ -566,15 +562,15 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte($3))}
+    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte($3))}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
+    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColIdent(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
+    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
   }
 
 isolation_level:
@@ -3471,7 +3467,7 @@ on_dup_opt:
   {
     $$ = nil
   }
-| ON DUPLICATE KEY UPDATE update_list
+| ON DUPLICATE KEY UPDATE set_list
   {
     $$ = $5
   }
@@ -3512,22 +3508,6 @@ tuple_expression:
     }
   }
 
-update_list:
-  update_expression
-  {
-    $$ = UpdateExprs{$1}
-  }
-| update_list ',' update_expression
-  {
-    $$ = append($1, $3)
-  }
-
-update_expression:
-  column_name '=' expression
-  {
-    $$ = &UpdateExpr{Name: $1, Expr: $3}
-  }
-
 set_list:
   set_expression
   {
@@ -3539,21 +3519,21 @@ set_list:
   }
 
 set_expression:
-  reserved_sql_id '=' ON
+  column_name '=' ON
   {
     $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
   }
-| reserved_sql_id '=' OFF
+| column_name '=' OFF
   {
     $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("off"))}
   }
-| reserved_sql_id '=' expression
+| column_name '=' expression
   {
     $$ = &SetExpr{Name: $1, Expr: $3}
   }
 | charset_or_character_set charset_value collate_opt
   {
-    $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
+    $$ = &SetExpr{Name: NewColName(string($1)), Expr: $2}
   }
 
 charset_or_character_set:

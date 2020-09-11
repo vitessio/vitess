@@ -55,7 +55,7 @@ parser:
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test: build dependency_check
+test: build 
 	echo $$(date): Running unit tests
 	tools/unit_test_runner.sh
 
@@ -84,7 +84,7 @@ e2e_test: build
 unit_test_cover: build
 	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
-unit_test_race: build dependency_check
+unit_test_race: build 
 	tools/unit_test_race.sh
 
 e2e_test_race: build
@@ -280,6 +280,3 @@ tools:
 minimaltools:
 	echo $$(date): Installing minimal dependencies
 	BUILD_PYTHON=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
-
-dependency_check:
-	./tools/dependency_check.sh

@@ -621,7 +621,7 @@ type Update struct {
 	Comments   Comments
 	Ignore     string
 	TableExprs TableExprs
-	Exprs      UpdateExprs
+	Exprs      SetExprs
 	Where      *Where
 	OrderBy    OrderBy
 	Limit      *Limit
@@ -2366,6 +2366,17 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Name)
 }
 
+// Format formats the node.
+func (node TableName) String() string {
+	if node.IsEmpty() {
+		return ""
+	}
+	if !node.Qualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name)
+	}
+	return node.Name.String()
+}
+
 func (node TableName) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
@@ -3065,6 +3076,14 @@ type ColName struct {
 	Qualifier TableName
 }
 
+// NewColName returns a simple ColName with no table qualifier
+func NewColName(name string) *ColName {
+	return &ColName{
+		Name:      NewColIdent(name),
+		Qualifier: TableName{},
+	}
+}
+
 // Format formats the node.
 func (node *ColName) Format(buf *TrackedBuffer) {
 	if !node.Qualifier.IsEmpty() {
@@ -3095,6 +3114,18 @@ func (node *ColName) Equal(c *ColName) bool {
 		return false
 	}
 	return node.Name.Equal(c.Name) && node.Qualifier == c.Qualifier
+}
+
+// Equal returns true if the column name matches the string given. Only true for column names with no qualifier.
+func (node *ColName) EqualString(s string) bool {
+	return node.Qualifier.IsEmpty() && node.Name.EqualString(s)
+}
+
+func (node *ColName) String() string {
+	if !node.Qualifier.IsEmpty() {
+		return fmt.Sprintf("%s.%s", node.Qualifier.String(), node.Name.String())
+	}
+	return node.Name.String()
 }
 
 // ColTuple represents a list of column values.
@@ -3891,49 +3922,6 @@ func (node Values) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// UpdateExprs represents a list of update expressions.
-type UpdateExprs []*UpdateExpr
-
-// Format formats the node.
-func (node UpdateExprs) Format(buf *TrackedBuffer) {
-	var prefix string
-	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
-	}
-}
-
-func (node UpdateExprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// UpdateExpr represents an update expression.
-type UpdateExpr struct {
-	Name *ColName
-	Expr Expr
-}
-
-// Format formats the node.
-func (node *UpdateExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v = %v", node.Name, node.Expr)
-}
-
-func (node *UpdateExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Name,
-		node.Expr,
-	)
-}
-
 // SetExprs represents a list of set expressions.
 type SetExprs []*SetExpr
 
@@ -3957,7 +3945,7 @@ func (node SetExprs) walkSubtree(visit Visit) error {
 
 // SetExpr represents a set expression.
 type SetExpr struct {
-	Name ColIdent
+	Name *ColName
 	Expr Expr
 }
 
@@ -4000,18 +3988,18 @@ func (node *SetExpr) walkSubtree(visit Visit) error {
 }
 
 // OnDup represents an ON DUPLICATE KEY clause.
-type OnDup UpdateExprs
+type OnDup SetExprs
 
 // Format formats the node.
 func (node OnDup) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Myprintf(" on duplicate key update %v", UpdateExprs(node))
+	buf.Myprintf(" on duplicate key update %v", SetExprs(node))
 }
 
 func (node OnDup) walkSubtree(visit Visit) error {
-	return Walk(visit, UpdateExprs(node))
+	return Walk(visit, SetExprs(node))
 }
 
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
