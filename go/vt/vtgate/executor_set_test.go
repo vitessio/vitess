@@ -355,7 +355,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	want := "1"
-	got := string(result.Rows[0][1].ToString())
+	got := result.Rows[0][1].ToString()
 	assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
 
 	// Update metadata
