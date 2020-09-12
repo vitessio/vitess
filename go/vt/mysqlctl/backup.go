@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -136,33 +135,23 @@ func Backup(ctx context.Context, params BackupParams) error {
 // checkNoDB makes sure there is no user data already there.
 // Used by Restore, as we do not want to destroy an existing DB.
 // The user's database name must be given since we ignore all others.
-// Returns true if the specified DB either doesn't exist, or has no tables.
+// Returns (true, nil) if the specified DB doesn't exist.
 // Returns (false, nil) if the check succeeds but the condition is not
-// satisfied (there is a DB with tables).
-// Returns non-nil error if one occurs while trying to perform the check.
+// satisfied (there is a DB).
+// Returns (false, non-nil error) if one occurs while trying to perform the check.
 func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW DATABASES")
 	if err != nil {
 		return false, vterrors.Wrap(err, "checkNoDB failed")
 	}
 
-	backtickDBName := sqlescape.EscapeID(dbName)
 	for _, row := range qr.Rows {
 		if row[0].ToString() == dbName {
-			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+backtickDBName)
-			if err != nil {
-				return false, vterrors.Wrap(err, "checkNoDB failed")
-			}
-			if len(tableQr.Rows) == 0 {
-				// no tables == empty db, all is well
-				continue
-			}
 			// found active db
 			log.Warningf("checkNoDB failed, found active db %v", dbName)
 			return false, nil
 		}
 	}
-
 	return true, nil
 }
 
