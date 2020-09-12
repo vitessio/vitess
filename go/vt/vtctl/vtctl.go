@@ -378,6 +378,9 @@ var commands = []commandGroup{
 			{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
+			{"ListShardRanges", commandListShardRanges,
+				"<num shards>",
+				"Lists shard ranges assuming a keyspace with N shards and an even sharding."},
 			{"Panic", commandPanic,
 				"",
 				"HIDDEN Triggers a panic on the server side, to test the handling."},
@@ -2987,7 +2990,69 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
+}
 
+func commandListShardRanges(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	numShards := subFlags.Int("num_shards", 2, "Number of shards to compute shard ranges for.")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+
+	shardRanges, err := listShardRanges(*numShards)
+	if err != nil {
+		return err
+	}
+
+	return printJSON(wr.Logger(), shardRanges)
+}
+
+func listShardRanges(shards int) ([]string, error) {
+	var format string
+	var maxShards int
+
+	switch {
+	case shards <= 0:
+		return nil, errors.New("shards must be greater than zero")
+	case shards <= 256:
+		format = "%02x"
+		maxShards = 256
+	case shards <= 65536:
+		format = "%04x"
+		maxShards = 65536
+	default:
+		return nil, errors.New("this tool does not support more than 65336 shards in a single keyspace")
+	}
+
+	rangeFormatter := func(start, end int) string {
+		var (
+			startKid string
+			endKid   string
+		)
+
+		if start != 0 {
+			startKid = fmt.Sprintf(format, start)
+		}
+
+		if end != maxShards {
+			endKid = fmt.Sprintf(format, end)
+		}
+
+		return fmt.Sprintf("%s-%s", startKid, endKid)
+	}
+
+	start := 0
+	end := 0
+	size := maxShards / shards
+	shardRanges := make([]string, 0, shards)
+
+	for i := 1; i <= shards; i++ {
+		end = i * size
+		shardRanges = append(shardRanges, rangeFormatter(start, end))
+		start = end
+	}
+
+	return shardRanges, nil
 }
 
 func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
