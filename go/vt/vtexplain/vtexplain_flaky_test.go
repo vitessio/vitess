@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 var testOutputTempDir string
@@ -39,15 +40,27 @@ func defaultTestOpts() *Options {
 	}
 }
 
-func initTest(mode string, opts *Options, t *testing.T) {
+type testopts struct {
+	shardmap map[string]map[string]*topo.ShardInfo
+}
+
+func initTest(mode string, opts *Options, topts *testopts, t *testing.T) {
 	schema, err := ioutil.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
 	vSchema, err := ioutil.ReadFile("testdata/test-vschema.json")
 	require.NoError(t, err)
 
+	shardmap := ""
+	if topts.shardmap != nil {
+		shardmapBytes, err := json.Marshal(topts.shardmap)
+		require.NoError(t, err)
+
+		shardmap = string(shardmapBytes)
+	}
+
 	opts.ExecutionMode = mode
-	err = Init(string(vSchema), string(schema), "", opts)
+	err = Init(string(vSchema), string(schema), shardmap, opts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 }
 
@@ -61,13 +74,13 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 	}
 
 	for _, mode := range modes {
-		runTestCase(testcase, mode, opts, t)
+		runTestCase(testcase, mode, opts, &testopts{}, t)
 	}
 }
 
-func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
+func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
-		initTest(mode, opts, t)
+		initTest(mode, opts, topts, t)
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 		sql, err := ioutil.ReadFile(sqlFile)
@@ -130,7 +143,7 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	initTest(ModeMulti, defaultTestOpts(), t)
+	initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
 
 	tests := []struct {
 		SQL string
