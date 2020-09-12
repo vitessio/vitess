@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -242,3 +243,48 @@ func TestJSONOutput(t *testing.T) {
 		t.Errorf(diff)
 	}
 }
+
+func TestUsingKeyspaceShardMap(t *testing.T) {
+	tests := []struct {
+		testcase      string
+		ShardRangeMap map[string]map[string]*topo.ShardInfo
+	}{
+		{
+			testcase: "select-sharded-8",
+			ShardRangeMap: map[string]map[string]*topo.ShardInfo{
+				"ks_sharded": {
+					"-20":   topo.NewShardInfo("ks_sharded", "-20", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"20-40": topo.NewShardInfo("ks_sharded", "20-40", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"40-60": topo.NewShardInfo("ks_sharded", "40-60", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"60-80": topo.NewShardInfo("ks_sharded", "60-80", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"80-a0": topo.NewShardInfo("ks_sharded", "80-a0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"a0-c0": topo.NewShardInfo("ks_sharded", "a0-c0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"c0-e0": topo.NewShardInfo("ks_sharded", "c0-e0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"e0-":   topo.NewShardInfo("ks_sharded", "e0-", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+				},
+			},
+		},
+		{
+			testcase: "uneven-keyspace",
+			ShardRangeMap: map[string]map[string]*topo.ShardInfo{
+				// Have mercy on the poor soul that has this keyspace sharding.
+				// But, hey, vtexplain still works so they have that going for them.
+				"ks_sharded": {
+					"-80":   topo.NewShardInfo("ks_sharded", "-80", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"80-90": topo.NewShardInfo("ks_sharded", "80-90", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"90-a0": topo.NewShardInfo("ks_sharded", "90-a0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"a0-e8": topo.NewShardInfo("ks_sharded", "a0-e8", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"e8-":   topo.NewShardInfo("ks_sharded", "e8-", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		runTestCase(test.testcase, ModeMulti, defaultTestOpts(), &testopts{test.ShardRangeMap}, t)
+	}
+}
+
+type vtexplainTestTopoVersion struct{}
+
+func (vtexplain *vtexplainTestTopoVersion) String() string { return "vtexplain-test-topo" }
