@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sysvars"
+
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/vt/log"
@@ -342,21 +344,7 @@ func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.Expre
 
 var _ SetOp = (*SysVarSetAware)(nil)
 
-// System variables that needs special handling
-const (
-	Autocommit          = "autocommit"
-	ClientFoundRows     = "client_found_rows"
-	SkipQueryPlanCache  = "skip_query_plan_cache"
-	TxReadOnly          = "tx_read_only"
-	TransactionReadOnly = "transaction_read_only"
-	SQLSelectLimit      = "sql_select_limit"
-	TransactionMode     = "transaction_mode"
-	Workload            = "workload"
-	Charset             = "charset"
-	Names               = "names"
-)
-
-//MarshalJSON provides the type to SetOp for plan json
+//MarshalJSON marshals all the json
 func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -371,84 +359,105 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 
 //Execute implements the SetOp interface method
 func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+	var err error
 	switch svss.Name {
-	// These are all the boolean values we need to handle
-	case Autocommit, ClientFoundRows, SkipQueryPlanCache, TxReadOnly, TransactionReadOnly:
-		value, err := svss.Expr.Evaluate(env)
-		if err != nil {
-			return err
-		}
-		boolValue, err := value.ToBooleanStrict()
-		if err != nil {
-			return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
-		}
-		switch svss.Name {
-		case Autocommit:
-			vcursor.Session().SetAutocommit(boolValue)
-		case ClientFoundRows:
-			vcursor.Session().SetClientFoundRows(boolValue)
-		case SkipQueryPlanCache:
-			vcursor.Session().SetSkipQueryPlanCache(boolValue)
-		case TxReadOnly, TransactionReadOnly:
-			// TODO (4127): This is a dangerous NOP.
-		}
-
-	case SQLSelectLimit:
-		value, err := svss.Expr.Evaluate(env)
-		if err != nil {
-			return err
-		}
-
-		v := value.Value()
-		if !v.IsIntegral() {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
-		}
-		intValue, err := v.ToInt64()
+	case sysvars.Autocommit.Name:
+		err = svss.setBoolSysVar(env, vcursor.Session().SetAutocommit)
+	case sysvars.ClientFoundRows.Name:
+		err = svss.setBoolSysVar(env, vcursor.Session().SetClientFoundRows)
+	case sysvars.SkipQueryPlanCache.Name:
+		err = svss.setBoolSysVar(env, vcursor.Session().SetSkipQueryPlanCache)
+	case sysvars.TxReadOnly.Name,
+		sysvars.TransactionReadOnly.Name:
+		// TODO (4127): This is a dangerous NOP.
+		noop := func(bool) error { return nil }
+		err = svss.setBoolSysVar(env, noop)
+	case sysvars.SQLSelectLimit.Name:
+		intValue, err := svss.evalAsInt64(env)
 		if err != nil {
 			return err
 		}
 		vcursor.Session().SetSQLSelectLimit(intValue)
-
-		// String settings
-	case TransactionMode, Workload, Charset, Names:
-		value, err := svss.Expr.Evaluate(env)
+	case sysvars.TransactionMode.Name:
+		str, err := svss.evalAsString(env)
 		if err != nil {
 			return err
 		}
-		v := value.Value()
-		if !v.IsText() && !v.IsBinary() {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %s", svss.Name, value.Value().Type().String())
+		out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", str)
 		}
-
-		str := v.ToString()
-		switch svss.Name {
-		case TransactionMode:
-			out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
-			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", str)
-			}
-			vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
-		case Workload:
-			out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(str)]
-			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
-			}
-			vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
-		case Charset, Names:
-			switch strings.ToLower(str) {
-			case "", "utf8", "utf8mb4", "latin1", "default":
-				// do nothing
-				break
-			default:
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
-			}
+		vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
+	case sysvars.Workload.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(str)]
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
+		}
+		vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
+	case sysvars.Charset.Name, sysvars.Names.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		switch strings.ToLower(str) {
+		case "", "utf8", "utf8mb4", "latin1", "default":
+			// do nothing
+			break
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
 		}
 
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct %s", svss.Name)
 	}
 
-	return nil
+	return err
+}
+
+func (svss *SysVarSetAware) evalAsInt64(env evalengine.ExpressionEnv) (int64, error) {
+	value, err := svss.Expr.Evaluate(env)
+	if err != nil {
+		return 0, err
+	}
+
+	v := value.Value()
+	if !v.IsIntegral() {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
+	}
+	intValue, err := v.ToInt64()
+	if err != nil {
+		return 0, err
+	}
+	return intValue, nil
+}
+
+func (svss *SysVarSetAware) evalAsString(env evalengine.ExpressionEnv) (string, error) {
+	value, err := svss.Expr.Evaluate(env)
+	if err != nil {
+		return "", err
+	}
+	v := value.Value()
+	if !v.IsText() && !v.IsBinary() {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %s", svss.Name, value.Value().Type().String())
+	}
+
+	return v.ToString(), nil
+}
+
+func (svss *SysVarSetAware) setBoolSysVar(env evalengine.ExpressionEnv, setter func(bool) error) error {
+	value, err := svss.Expr.Evaluate(env)
+	if err != nil {
+		return err
+	}
+	boolValue, err := value.ToBooleanStrict()
+	if err != nil {
+		return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
+	}
+	return setter(boolValue)
 }
 
 //VariableName implements the SetOp interface method

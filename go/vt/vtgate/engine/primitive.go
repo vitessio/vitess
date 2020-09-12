@@ -111,9 +111,9 @@ type (
 		ShardSession() []*srvtopo.ResolvedShard
 
 		SetAutocommit(bool) error
-		SetClientFoundRows(bool)
-		SetSkipQueryPlanCache(bool)
-		SetSQLSelectLimit(int64)
+		SetClientFoundRows(bool) error
+		SetSkipQueryPlanCache(bool) error
+		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
 	}

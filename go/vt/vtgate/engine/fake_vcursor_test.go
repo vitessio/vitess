@@ -92,15 +92,15 @@ func (t noopVCursor) SetAutocommit(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetClientFoundRows(bool) {
+func (t noopVCursor) SetClientFoundRows(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetSkipQueryPlanCache(bool) {
+func (t noopVCursor) SetSkipQueryPlanCache(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetSQLSelectLimit(int64) {
+func (t noopVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 
@@ -393,15 +393,15 @@ func (f *loggingVCursor) SetAutocommit(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetClientFoundRows(bool) {
+func (f *loggingVCursor) SetClientFoundRows(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetSkipQueryPlanCache(bool) {
+func (f *loggingVCursor) SetSkipQueryPlanCache(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetSQLSelectLimit(int64) {
+func (f *loggingVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 
