@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -244,6 +245,18 @@ func TestJSONOutput(t *testing.T) {
 	}
 }
 
+func testShardInfo(ks, start, end string, t *testing.T) *topo.ShardInfo {
+	kr, err := key.ParseKeyRangeParts(start, end)
+	require.NoError(t, err)
+
+	return topo.NewShardInfo(
+		ks,
+		fmt.Sprintf("%s-%s", start, end),
+		&topodata.Shard{KeyRange: kr},
+		&vtexplainTestTopoVersion{},
+	)
+}
+
 func TestUsingKeyspaceShardMap(t *testing.T) {
 	tests := []struct {
 		testcase      string
@@ -253,14 +266,14 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 			testcase: "select-sharded-8",
 			ShardRangeMap: map[string]map[string]*topo.ShardInfo{
 				"ks_sharded": {
-					"-20":   topo.NewShardInfo("ks_sharded", "-20", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"20-40": topo.NewShardInfo("ks_sharded", "20-40", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"40-60": topo.NewShardInfo("ks_sharded", "40-60", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"60-80": topo.NewShardInfo("ks_sharded", "60-80", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"80-a0": topo.NewShardInfo("ks_sharded", "80-a0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"a0-c0": topo.NewShardInfo("ks_sharded", "a0-c0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"c0-e0": topo.NewShardInfo("ks_sharded", "c0-e0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"e0-":   topo.NewShardInfo("ks_sharded", "e0-", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"-20":   testShardInfo("ks_sharded", "", "20", t),
+					"20-40": testShardInfo("ks_sharded", "20", "40", t),
+					"40-60": testShardInfo("ks_sharded", "40", "60", t),
+					"60-80": testShardInfo("ks_sharded", "60", "80", t),
+					"80-a0": testShardInfo("ks_sharded", "80", "a0", t),
+					"a0-c0": testShardInfo("ks_sharded", "a0", "c0", t),
+					"c0-e0": testShardInfo("ks_sharded", "c0", "e0", t),
+					"e0-":   testShardInfo("ks_sharded", "e0", "", t),
 				},
 			},
 		},
@@ -270,11 +283,11 @@ func TestUsingKeyspaceShardMap(t *testing.T) {
 				// Have mercy on the poor soul that has this keyspace sharding.
 				// But, hey, vtexplain still works so they have that going for them.
 				"ks_sharded": {
-					"-80":   topo.NewShardInfo("ks_sharded", "-80", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"80-90": topo.NewShardInfo("ks_sharded", "80-90", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"90-a0": topo.NewShardInfo("ks_sharded", "90-a0", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"a0-e8": topo.NewShardInfo("ks_sharded", "a0-e8", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
-					"e8-":   topo.NewShardInfo("ks_sharded", "e8-", &topodata.Shard{KeyRange: &topodata.KeyRange{}}, &vtexplainTestTopoVersion{}),
+					"-80":   testShardInfo("ks_sharded", "", "80", t),
+					"80-90": testShardInfo("ks_sharded", "80", "90", t),
+					"90-a0": testShardInfo("ks_sharded", "90", "a0", t),
+					"a0-e8": testShardInfo("ks_sharded", "a0", "e8", t),
+					"e8-":   testShardInfo("ks_sharded", "e8", "", t),
 				},
 			},
 		},
