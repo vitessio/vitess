@@ -34,6 +34,9 @@ const (
 	// MysqlClearPassword transmits the password in the clear.
 	MysqlClearPassword = "mysql_clear_password"
 
+	// CachingSha2Password uses a salt and transmits a SHA256 hash on the wire.
+	CachingSha2Password = "caching_sha2_password"
+
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
 	MysqlDialog = "dialog"
@@ -141,11 +144,20 @@ const (
 	// ComQuit is COM_QUIT.
 	ComQuit = 0x01
 
+	// AuthMoreDataPacket is sent when
+	AuthMoreDataPacket = 0x01
+
 	// ComInitDB is COM_INIT_DB.
 	ComInitDB = 0x02
 
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
+
+	// CachingSha2FastAuth is sent before OKPacket when server authenticates using cache
+	CachingSha2FastAuth = 0x03
+
+	// CachingSha2FullAuth is sent when server requests un-scrambled password to authenticate
+	CachingSha2FullAuth = 0x04
 
 	// ComPing is COM_PING.
 	ComPing = 0x0e
