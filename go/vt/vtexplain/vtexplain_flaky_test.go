@@ -216,7 +216,6 @@ func TestJSONOutput(t *testing.T) {
             {
                 "BindVars": {
                     "#maxLimit": "10001",
-                    "__vtschemaname": "''",
                     "vtg1": "1"
                 },
                 "SQL": "select :vtg1 from user where id = :vtg1",

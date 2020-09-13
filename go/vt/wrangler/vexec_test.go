@@ -32,20 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 )
 
-func TestListStreams(t *testing.T) {
-	ctx := context.Background()
-	workflow := "wrWorkflow"
-	keyspace := "target"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
-	defer env.close()
-	var logger = logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
-	//query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication where workflow = 'wrWorkflow' and db_name = 'vt_target'"
-
-	wr.WorkflowAction(ctx, workflow, keyspace, "ListStreams", false)
-
-}
-
 func TestVExec(t *testing.T) {
 	ctx := context.Background()
 	workflow := "wrWorkflow"
@@ -293,7 +279,16 @@ func TestWorkflowListStreams(t *testing.T) {
 
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false)
 	require.Nil(t, err)
-	require.Equal(t, "map[Tablet{zone1-0000000200}:rows_affected:1  Tablet{zone1-0000000210}:rows_affected:1 ]", fmt.Sprintf("%v", results))
+
+	// convert map to list and sort it for comparison
+	var gotResults []string
+	for key, result := range results {
+		gotResults = append(gotResults, fmt.Sprintf("%s:%v", key.String(), result))
+	}
+	sort.Strings(gotResults)
+	wantResults := []string{"Tablet{zone1-0000000200}:rows_affected:1 ", "Tablet{zone1-0000000210}:rows_affected:1 "}
+	sort.Strings(wantResults)
+	require.ElementsMatch(t, wantResults, gotResults)
 
 	logger.Clear()
 	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true)

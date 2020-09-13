@@ -86,6 +86,15 @@ type (
 		Lock           string
 	}
 
+	// VStream represents a VSTREAM statement.
+	VStream struct {
+		Comments   Comments
+		SelectExpr SelectExpr
+		Table      TableName
+		Where      *Where
+		Limit      *Limit
+	}
+
 	// Stream represents a SELECT statement.
 	Stream struct {
 		Comments   Comments
@@ -270,6 +279,7 @@ type (
 func (*Union) iStatement()             {}
 func (*Select) iStatement()            {}
 func (*Stream) iStatement()            {}
+func (*VStream) iStatement()           {}
 func (*Insert) iStatement()            {}
 func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
@@ -919,6 +929,12 @@ func (node *Union) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *UnionSelect) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, " %s %v", node.Type, node.Statement)
+}
+
+// Format formats the node.
+func (node *VStream) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "vstream %v%v from %v",
+		node.Comments, node.SelectExpr, node.Table)
 }
 
 // Format formats the node.

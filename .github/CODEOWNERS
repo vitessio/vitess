@@ -4,3 +4,7 @@
 /helm/ @derekperkins @dkhenry
 /config/mycnf/ @morgo
 /go/vt/mysqlctl/mysqld.go @morgo
+/go/test/endtoend/vtgate @harshit-gangal @systay
+/go/vt/vtgate @harshit-gangal @systay
+/go/vt/vttablet/tabletserver @harshit-gangal @systay
+/go/vt/sqlparser @harshit-gangal @systay

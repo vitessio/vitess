@@ -340,7 +340,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/buffer"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": 13,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -349,7 +349,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/cellalias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": 13,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -358,7 +358,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": 15,
 			"RetryMax": 0,
 			"Tags": []
 		},

@@ -10,11 +10,21 @@ set -euo pipefail
 FLAVOR="$1"
 export DEBIAN_FRONTEND=noninteractive
 
-retry() {
-    for i in $(seq 1 10); do
-        if "$@"; then return; fi
+KEYSERVERS=(
+    ha.pool.sks-keyservers.net
+    keyserver.ubuntu.com
+    hkp://p80.pool.sks-keyservers.net:80
+    hkp://keyserver.ubuntu.com:80
+)
+
+add_apt_key() {
+    for i in {1..3}; do
+        for keyserver in "${KEYSERVERS[@]}"; do
+            if apt-key adv --no-tty --keyserver "${keyserver}" --recv-keys "$1"; then return; fi
+        done
     done
 }
+
 
 # Install base packages that are common to all flavors.
 BASE_PACKAGES=(
@@ -102,16 +112,16 @@ esac
 case "${FLAVOR}" in
 mysql56|mysql57|mysql80)
     # repo.mysql.com
-    retry apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 8C718D3B5072E1F5
+    add_apt_key 8C718D3B5072E1F5
     ;;
 mariadb|mariadb103)
     # digitalocean.com
-    retry apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys F1656F24C74CD1D8
+    add_apt_key F1656F24C74CD1D8
     ;;
 esac
 
 # All flavors (except mariadb*) include Percona XtraBackup (from repo.percona.com).
-retry apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5
+add_apt_key 9334A25F8507EFA5
 
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
@@ -171,7 +181,7 @@ esac
 # Install flavor-specific packages
 apt-get update
 apt-get install -y --no-install-recommends "${PACKAGES[@]}"
- 
- # Clean up files we won't need in the final image.
- rm -rf /var/lib/apt/lists/*
- rm -rf /var/lib/mysql/
+
+# Clean up files we won't need in the final image.
+rm -rf /var/lib/apt/lists/*
+rm -rf /var/lib/mysql/
