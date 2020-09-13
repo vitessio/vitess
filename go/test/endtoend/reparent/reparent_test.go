@@ -36,7 +36,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func XTestMasterToSpareStateChangeImpossible(t *testing.T) {
+func TestMasterToSpareStateChangeImpossible(t *testing.T) {
+	t.Skip("If this test is run, TestReparentNoChoiceDownMaster fails with tracker?!")
 	defer cluster.PanicHandler(t)
 
 	// need at least one replica because of semi-sync
