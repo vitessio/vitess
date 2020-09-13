@@ -28,6 +28,7 @@ import (
 )
 
 func TestReparentGracefulRangeBased(t *testing.T) {
+	t.Skip("Seems to have side-effects on other tests")
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
