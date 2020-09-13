@@ -66,7 +66,6 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
-	return
 	shardOrders(t)
 	shardMerchant(t)
 
