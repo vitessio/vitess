@@ -36,7 +36,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestMasterToSpareStateChangeImpossible(t *testing.T) {
+func XTestMasterToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	// need at least one replica because of semi-sync
