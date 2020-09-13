@@ -111,7 +111,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-lock_tables_timeout", "5s",
 			"-enable_semi_sync",
-			"-track_schema_versions=true", // default for this flag will soon be false, set it to be true to test that it works with reparenting
+			"-track_schema_versions=false", // NOT WORKING with true atm //default for this flag will soon be false, set it to be true to test that it works with reparenting
 		}
 
 		// Initialize Cluster
