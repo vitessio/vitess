@@ -286,6 +286,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vreplication": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"reparent": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/reparent"],
