@@ -996,6 +996,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	// dictated by stream_buffer_size.
 	result := &sqltypes.Result{}
 	byteCount := 0
+	seenResults := false
 	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
 		// If the row has field info, send it separately.
 		// TODO(sougou): this behavior is for handling tests because
@@ -1005,6 +1006,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 			if err := callback(qrfield); err != nil {
 				return err
 			}
+			seenResults = true
 		}
 
 		for _, row := range qr.Rows {
@@ -1015,6 +1017,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 
 			if byteCount >= e.streamSize {
 				err := callback(result)
+				seenResults = true
 				result = &sqltypes.Result{}
 				byteCount = 0
 				if err != nil {
@@ -1026,7 +1029,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	})
 
 	// Send left-over rows.
-	if len(result.Rows) > 0 {
+	if len(result.Rows) > 0 || !seenResults {
 		if err := callback(result); err != nil {
 			return err
 		}
