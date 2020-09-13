@@ -7,19 +7,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Increase file limit
-      run: sudo sysctl -w fs.file-max=65536
-
-    - name: Debug
-      run: |
-        echo "running ulimit"
-        ulimit -a
-        echo "cat limits.conf"
-        cat /etc/security/limits.conf
-        ulimit -n unlimited
-        echo "after setting unlimited ulimit"
-        ulimit -a
-
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
