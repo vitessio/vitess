@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -891,7 +892,7 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "")
-	require.EqualError(t, err, "startQueryStreams(sources): WaitForPosition for tablet cell-0000000101: context deadline exceeded")
+	require.EqualError(t, err, "startQueryStreams(sources): VDiff timed out for tablet cell-0000000101: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>")
 }
 
 func TestVDiffFindPKs(t *testing.T) {
@@ -961,4 +962,20 @@ func TestVDiffFindPKs(t *testing.T) {
 		})
 	}
 
+}
+
+func TestLogSteps(t *testing.T) {
+	testcases := []struct {
+		n   int64
+		log string
+	}{
+		{1, "1"}, {2000, "2k"}, {1000000, "1m"}, {330000, ""}, {330001, ""},
+		{4000000, "4m"}, {40000000, "40m"}, {41000000, "41m"}, {4110000, ""},
+		{5000000000, "5b"}, {5010000000, "5.010b"}, {5011000000, "5.011b"},
+	}
+	for _, tc := range testcases {
+		t.Run(strconv.Itoa(int(tc.n)), func(t *testing.T) {
+			require.Equal(t, tc.log, logSteps(tc.n))
+		})
+	}
 }

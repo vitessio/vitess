@@ -27,8 +27,16 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// NullBindVariable is a bindvar with NULL value.
-var NullBindVariable = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
+var (
+	// BvSchemaName is bind variable to be sent down to vttablet for schema name.
+	BvSchemaName = "__vtschemaname"
+
+	// BvReplaceSchemaName is bind variable to be sent down to vttablet to replace schema name.
+	BvReplaceSchemaName = "__replacevtschemaname"
+
+	// NullBindVariable is a bindvar with NULL value.
+	NullBindVariable = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
+)
 
 // ValueToProto converts Value to a *querypb.Value.
 func ValueToProto(v Value) *querypb.Value {

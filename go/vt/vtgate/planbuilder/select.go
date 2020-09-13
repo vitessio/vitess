@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/key"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -146,7 +148,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	if !isOnlyDual(sel.From) {
+	if !isOnlyDual(sel) {
 		return nil, nil
 	}
 
@@ -191,11 +193,16 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engin
 	}, nil
 }
 
-func isOnlyDual(from sqlparser.TableExprs) bool {
-	if len(from) > 1 {
+func isOnlyDual(sel *sqlparser.Select) bool {
+	if sel.Where != nil || sel.GroupBy != nil || sel.Having != nil || sel.Limit != nil || sel.OrderBy != nil {
+		// we can only deal with queries without any other subclauses - just SELECT and FROM, nothing else is allowed
 		return false
 	}
-	table, ok := from[0].(*sqlparser.AliasedTableExpr)
+
+	if len(sel.From) > 1 {
+		return false
+	}
+	table, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return false
 	}
@@ -257,7 +264,7 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 						return false
 					}
 					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
-					parent.Right = sqlparser.NewArgument([]byte(":" + engine.BvSchemaName))
+					parent.Right = sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName))
 				}
 			}
 		}
