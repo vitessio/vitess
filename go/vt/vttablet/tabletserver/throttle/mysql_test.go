@@ -1,6 +1,7 @@
 /*
-   Copyright 2017 GitHub Inc.
-	 See https://github.com/github/freno/blob/master/LICENSE
+ Copyright 2017 GitHub Inc.
+
+ Licensed under MIT License. See https://github.com/github/freno/blob/master/LICENSE
 */
 
 package throttle
