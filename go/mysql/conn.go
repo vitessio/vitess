@@ -105,10 +105,6 @@ type Conn struct {
 	// and CapabilityClientFoundRows.
 	Capabilities uint32
 
-	// DefaultAuthPluginName is the name of server's default authentication plugin.
-	// It is set during the initial handshake.
-	DefaultAuthPluginName string
-
 	// CharacterSet is the character set used by the other side of the
 	// connection.
 	// It is set during the initial handshake.
@@ -122,6 +118,13 @@ type Conn struct {
 	// UserData is custom data returned by the AuthServer module.
 	// It is set during the initial handshake.
 	UserData Getter
+
+	// salt is sent by the server during initial handshake to be used for authentication
+	salt []byte
+
+	// authPluginName is the name of server's authentication plugin.
+	// It is set during the initial handshake.
+	authPluginName string
 
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
