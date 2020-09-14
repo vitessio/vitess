@@ -526,6 +526,11 @@ func (vc *vcursorImpl) SysVarSetEnabled() bool {
 	return *sysVarSetEnabled
 }
 
+func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
+	vc.safeSession.FoundRows = foundRows
+	vc.safeSession.foundRowsHandled = true
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
