@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
@@ -164,8 +165,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 }
 
-func TestSetSystemVarWithConnectionFailure(t *testing.T) {
-	t.Skip("failing at the moment")
+func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -178,15 +178,20 @@ func TestSetSystemVarWithConnectionFailure(t *testing.T) {
 
 	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
 	checkedExec(t, conn, "set sql_safe_updates = 1")
-	qr := checkedExec(t, conn, "select connection_id() from test where id = 80")
+	qr := checkedExec(t, conn, "select @@sql_safe_updates, connection_id() from test where id = 80")
+	require.Equal(t, "1", qr.Rows[0][0].ToString())
 
-	// kill the mysql connection shard which has transaction open.
-	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // 80-
-	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	// Connection timeout.
+	time.Sleep(10 * time.Second)
 
-	// we still want to have our system setting applied
+	// first query will fail
 	_, err = exec(t, conn, `select @@sql_safe_updates from test where id = 80`)
-	require.NoError(t, err)
+	require.Error(t, err)
+
+	// this query is able to succeed.
+	newQR := checkedExec(t, conn, `select @@sql_safe_updates, connection_id() from test where id = 80`)
+	require.Equal(t, qr.Rows[0][0], newQR.Rows[0][0])
+	require.NotEqual(t, qr.Rows[0][1], newQR.Rows[0][1])
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
