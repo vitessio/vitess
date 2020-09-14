@@ -116,10 +116,10 @@ func TestRewrites(in *testing.T) {
 
 			s := String(expected)
 			require.Equal(t, s, String(result.AST))
-			require.Equal(t, tc.liid, result.NeedLastInsertID, "should need last insert id")
-			require.Equal(t, tc.db, result.NeedDatabase, "should need database name")
-			require.Equal(t, tc.foundRows, result.NeedFoundRows, "should need found rows")
-			require.Equal(t, tc.rowCount, result.NeedRowCount, "should need row count")
+			require.Equal(t, tc.liid, result.NeedsFuncResult(LastInsertIDName), "should need last insert id")
+			require.Equal(t, tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
+			require.Equal(t, tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
+			require.Equal(t, tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
 			require.Equal(t, tc.udv, len(result.NeedUserDefinedVariables), "should need row count")
 		})
 	}
