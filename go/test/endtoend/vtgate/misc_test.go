@@ -345,6 +345,16 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 	exec(t, conn, "set workload='oltp'")
 }
 
+func TestFoundRowsOnDualQueries(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "select 42")
+	assertMatches(t, conn, "select found_rows()", "[[UINT64(1)]]")
+}
+
 func TestUseStmtInOLAP(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
