@@ -251,8 +251,6 @@ func (vp *vplayer) updateTime(ts int64) (err error) {
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return fmt.Errorf("error %v updating time", err)
 	}
-	vp.unsavedEvent = nil
-	vp.timeLastSaved = time.Now()
 	return nil
 }
 

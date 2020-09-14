@@ -111,6 +111,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-lock_tables_timeout", "5s",
 			"-enable_semi_sync",
+			"-track_schema_versions=false", // remove this line once https://github.com/vitessio/vitess/issues/6474 is fixed
 		}
 
 		// Initialize Cluster

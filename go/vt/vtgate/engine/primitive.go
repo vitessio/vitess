@@ -118,6 +118,7 @@ type (
 		SetSQLSelectLimit(int64)
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
+		SetFoundRows(uint64)
 	}
 
 	// Plan represents the execution strategy for a given query.
