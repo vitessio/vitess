@@ -385,7 +385,8 @@ func (session *SafeSession) UpdateLockHeartbeat() {
 func (session *SafeSession) TriggerLockHeartBeat() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return time.Now().Unix()-session.LastLockHeartbeat >= session.lockHeatbeatTime
+	now := time.Now().Unix()
+	return now-session.LastLockHeartbeat >= int64(lockHeartbeatTime.Seconds())
 }
 
 //InLockSession returns whether locking is used on this session.
