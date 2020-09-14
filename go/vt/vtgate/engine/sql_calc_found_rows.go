@@ -19,7 +19,7 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -58,7 +58,7 @@ func (s SQLCalcFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.
 		return nil, err
 	}
 	if len(countQr.Rows) != 1 || len(countQr.Rows[0]) != 1 {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "count query is not a scalar")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "count query is not a scalar")
 	}
 	fr, err := evalengine.ToUint64(countQr.Rows[0][0])
 	if err != nil {
@@ -75,17 +75,31 @@ func (s SQLCalcFoundRows) StreamExecute(vcursor VCursor, bindVars map[string]*qu
 		return err
 	}
 
-	return s.CountPrimitive.StreamExecute(vcursor, bindVars, wantfields, func(countQr *sqltypes.Result) error {
-		if len(countQr.Rows) != 1 || len(countQr.Rows[0]) != 1 {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "count query is not a scalar")
+	var fr *uint64
+
+	err = s.CountPrimitive.StreamExecute(vcursor, bindVars, wantfields, func(countQr *sqltypes.Result) error {
+		if len(countQr.Rows) == 0 && countQr.Fields != nil {
+			// this is the fields, which we can ignore
+			return nil
 		}
-		fr, err := evalengine.ToUint64(countQr.Rows[0][0])
+		if len(countQr.Rows) != 1 || len(countQr.Rows[0]) != 1 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "count query is not a scalar")
+		}
+		toUint64, err := evalengine.ToUint64(countQr.Rows[0][0])
 		if err != nil {
 			return err
 		}
-		vcursor.Session().SetFoundRows(fr)
+		fr = &toUint64
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if fr == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "count query for SQL_CALC_FOUND_ROWS never returned a value")
+	}
+	vcursor.Session().SetFoundRows(*fr)
+	return nil
 }
 
 //GetFields implements the Primitive interface

@@ -52,6 +52,7 @@ func TestFoundRows(t *testing.T) {
 	runTests("olap")
 
 	// cleanup test data
+	exec(t, conn, "set workload = oltp")
 	exec(t, conn, "delete from t2")
 	exec(t, conn, "delete from t2_id4_idx")
 }
