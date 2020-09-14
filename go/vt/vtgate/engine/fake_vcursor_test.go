@@ -53,6 +53,10 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t noopVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	panic("implement me")
+}
+
 func (t noopVCursor) SetFoundRows(u uint64) {
 	panic("implement me")
 }
