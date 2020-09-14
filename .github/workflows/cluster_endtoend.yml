@@ -9,6 +9,12 @@ jobs:
         name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
 
     steps:
+    - name: cat /proc/sys/fs/aio-max-nr
+      run: |
+        cat /proc/sys/fs/aio-max-nr
+        echo "can I update /proc/sys/fs/aio-max-nr?"
+        sudo echo 1048576 > /proc/sys/fs/aio-max-nr
+
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
