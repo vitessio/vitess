@@ -111,7 +111,8 @@ func TestTxEngineClose(t *testing.T) {
 	assert.Less(t, int64(10*time.Millisecond), int64(time.Since(start)))
 	assert.Greater(t, int64(25*time.Millisecond), int64(time.Since(start)))
 
-	// Immediate close, but connection is in use.
+	// Immediate close with connection is in use which should be
+	// immediately closed
 	te.open()
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
@@ -123,9 +124,6 @@ func TestTxEngineClose(t *testing.T) {
 	te.shutdown(true)
 	if diff := time.Since(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
-	}
-	if diff := time.Since(start); diff < 100*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.1", diff)
 	}
 
 	// Normal close with Reserved connection timeout wait.
