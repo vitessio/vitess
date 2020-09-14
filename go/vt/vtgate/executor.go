@@ -999,6 +999,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	result := &sqltypes.Result{}
 	byteCount := 0
 	seenResults := false
+	var foundRows uint64
 	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
 		// If the row has field info, send it separately.
 		// TODO(sougou): this behavior is for handling tests because
@@ -1011,8 +1012,10 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 			seenResults = true
 		}
 
+		foundRows += uint64(len(qr.Rows))
 		for _, row := range qr.Rows {
 			result.Rows = append(result.Rows, row)
+
 			for _, col := range row {
 				byteCount += col.Len()
 			}
@@ -1039,6 +1042,12 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+
+	// save session stats for future queries
+	if !safeSession.foundRowsHandled {
+		safeSession.FoundRows = foundRows
+	}
+	safeSession.RowCount = -1
 
 	return err
 }
