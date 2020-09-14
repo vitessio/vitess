@@ -38,6 +38,10 @@ type SafeSession struct {
 	mustRollback    bool
 	autocommitState autocommitState
 	commitOrder     vtgatepb.CommitOrder
+
+	// this is a signal that found_rows has already been handles by the primitives,
+	// and doesn't have to be updated by the executor
+	foundRowsHandled bool
 	*vtgatepb.Session
 }
 
