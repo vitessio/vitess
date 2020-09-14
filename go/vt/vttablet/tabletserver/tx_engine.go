@@ -490,6 +490,7 @@ outer:
 // including the prepared ones.
 // This is used for transitioning from a master to a non-master
 // serving type.
+/*
 func (te *TxEngine) rollbackTransactions() {
 	te.rollbackPrepared()
 	ctx := tabletenv.LocalContext()
@@ -499,6 +500,7 @@ func (te *TxEngine) rollbackTransactions() {
 	// have to be revisited.
 	te.txPool.RollbackNonBusy(ctx)
 }
+*/
 
 func (te *TxEngine) rollbackPrepared() {
 	ctx := tabletenv.LocalContext()

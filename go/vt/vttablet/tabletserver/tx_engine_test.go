@@ -116,7 +116,7 @@ func TestTxEngineClose(t *testing.T) {
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		_, err = c.Exec(ctx, "select sleep(30)", 10, true)
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
