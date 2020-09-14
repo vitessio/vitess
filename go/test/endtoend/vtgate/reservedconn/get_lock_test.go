@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/sync2"
 
 	"github.com/stretchr/testify/assert"
@@ -234,9 +235,9 @@ func TestLocksKeepLockConnectionActive(t *testing.T) {
 	defer conn.Close()
 
 	assertMatches(t, conn, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
-	time.Sleep(3 * time.Second) // lock heartbeat time is 2 seconds.
+	time.Sleep(3 * time.Second)                                      // lock heartbeat time is 2 seconds.
 	assertMatches(t, conn, `select * from test where id = 42`, `[]`) // this will trigger heartbeat.
-	time.Sleep(3 * time.Second) // lock connection will not timeout after 5 seconds.
+	time.Sleep(3 * time.Second)                                      // lock connection will not timeout after 5 seconds.
 	assertMatches(t, conn, `select is_free_lock('lock')`, `[[INT64(0)]]`)
 
 }
