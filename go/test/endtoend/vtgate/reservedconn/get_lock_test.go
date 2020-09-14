@@ -14,14 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package reservedconn
 
 import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
-
 	"vitess.io/vitess/go/sync2"
 
 	"github.com/stretchr/testify/assert"
@@ -39,7 +38,7 @@ func TestLockUnlock(t *testing.T) {
 	assertMatches(t, conn, `select get_lock('lock name', 2)`, `[[INT64(1)]]`)
 	assertMatches(t, conn, `select is_free_lock('lock name')`, `[[INT64(0)]]`)
 	assert.NotEmpty(t,
-		exec(t, conn, `select is_used_lock('lock name')`))
+		checkedExec(t, conn, `select is_used_lock('lock name')`))
 	assertMatches(t, conn, `select release_lock('lock name')`, `[[INT64(1)]]`)
 	assertMatches(t, conn, `select release_all_locks()`, `[[UINT64(1)]]`)
 	assertMatches(t, conn, `select release_lock('lock name')`, `[[NULL]]`)
@@ -142,7 +141,7 @@ func TestLocksBlocksWithTx(t *testing.T) {
 	// in the first connection, grab a lock
 	assertMatches(t, conn1, `select get_lock('lock', 2)`, `[[INT64(1)]]`)
 	exec(t, conn1, "begin")
-	exec(t, conn1, "insert into t1(id1, id2) values(1,1)") // -80
+	exec(t, conn1, "insert into test(id, val1) values(1,'1')") // -80
 	exec(t, conn1, "commit")
 
 	released := sync2.NewAtomicBool(false)
@@ -162,7 +161,7 @@ func TestLocksBlocksWithTx(t *testing.T) {
 
 	released.Set(true)
 	assertMatches(t, conn1, `select release_lock('lock')`, `[[INT64(1)]]`)
-	exec(t, conn1, "delete from t1")
+	exec(t, conn1, "delete from test")
 }
 
 func TestLocksWithTxFailure(t *testing.T) {
@@ -179,11 +178,11 @@ func TestLocksWithTxFailure(t *testing.T) {
 
 	exec(t, conn1, "use `ks:80-`")
 	exec(t, conn1, "begin")
-	qr := exec(t, conn1, "select connection_id()")
+	qr := checkedExec(t, conn1, "select connection_id()")
 	exec(t, conn1, "use ks")
 	// kill the mysql connection shard which has transaction open.
 	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].MasterTablet() // 80-
-	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), KeyspaceName, false)
+	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
 
 	// transaction fails on commit.
 	_, err = conn1.ExecuteFetch("commit", 1, true)
@@ -195,17 +194,17 @@ func TestLocksWithTxFailure(t *testing.T) {
 }
 
 func TestLocksWithTxOngoingAndReleaseLock(t *testing.T) {
-	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
-	defer conn1.Close()
+	defer conn.Close()
 
-	assertMatches(t, conn1, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
-	exec(t, conn1, "begin")
-	exec(t, conn1, "insert into t1(id1, id2) values(1,1)")
-	assertMatches(t, conn1, `select release_lock('lock')`, `[[INT64(1)]]`)
-	assertMatches(t, conn1, `select id1, id2 from t1 where id1 = 1`, `[[INT64(1) INT64(1)]]`)
-	exec(t, conn1, "rollback")
-	assertIsEmpty(t, conn1, `select id1, id2 from t1 where id1 = 1`)
+	assertMatches(t, conn, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into test(id, val1) values(1,'1')")
+	assertMatches(t, conn, `select release_lock('lock')`, `[[INT64(1)]]`)
+	assertMatches(t, conn, `select id, val1 from test where id = 1`, `[[INT64(1) VARCHAR("1")]]`)
+	exec(t, conn, "rollback")
+	assertIsEmpty(t, conn, `select id, val1 from test where id = 1`)
 }
 
 func TestLocksWithTxOngoingAndLockFails(t *testing.T) {
@@ -220,11 +219,37 @@ func TestLocksWithTxOngoingAndLockFails(t *testing.T) {
 	assertMatches(t, conn2, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
 
 	exec(t, conn1, "begin")
-	exec(t, conn1, "insert into t1(id1, id2) values(1,1)")
+	exec(t, conn1, "insert into test(id, val1) values(1,'1')")
 	assertMatches(t, conn1, `select get_lock('lock', 1)`, `[[INT64(0)]]`)
-	assertMatches(t, conn1, `select id1, id2 from t1 where id1 = 1`, `[[INT64(1) INT64(1)]]`)
+	assertMatches(t, conn1, `select id, val1 from test where id = 1`, `[[INT64(1) VARCHAR("1")]]`)
 	exec(t, conn1, "rollback")
-	assertIsEmpty(t, conn1, `select id1, id2 from t1 where id1 = 1`)
+	assertIsEmpty(t, conn1, `select id, val1 from test where id = 1`)
 
 	assertMatches(t, conn2, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
+}
+
+func TestLocksKeepLockConnectionActive(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	assertMatches(t, conn, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
+	time.Sleep(3 * time.Second) // lock heartbeat time is 2 seconds.
+	assertMatches(t, conn, `select * from test where id = 42`, `[]`) // this will trigger heartbeat.
+	time.Sleep(3 * time.Second) // lock connection will not timeout after 5 seconds.
+	assertMatches(t, conn, `select is_free_lock('lock')`, `[[INT64(0)]]`)
+
+}
+
+func TestLocksResetLockOnTimeout(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	assertMatches(t, conn, `select get_lock('lock', -1)`, `[[INT64(1)]]`)
+	time.Sleep(6 * time.Second) // lock connection timeout is 5 seconds.
+	_, err = exec(t, conn, `select is_free_lock('lock')`)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "held locks released")
+	assertMatches(t, conn, `select is_free_lock('lock')`, `[[INT64(1)]]`)
 }
