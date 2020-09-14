@@ -53,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
@@ -105,6 +106,7 @@ type TabletServer struct {
 	messager     *messager.Engine
 	hs           *healthStreamer
 	lagThrottler *throttle.Throttler
+	tableDropper *gc.TableDropper
 
 	// sm manages state transitions.
 	sm *stateManager
@@ -165,6 +167,15 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 			return tsv.sm.Target().TabletType
 		},
 	)
+	tsv.tableDropper = gc.NewTableDropper(tsv, topoServer,
+		func() topodatapb.TabletType {
+			if tsv.sm == nil {
+				return topodatapb.TabletType_UNKNOWN
+			}
+			return tsv.sm.Target().TabletType
+		},
+		tsv.lagThrottler,
+	)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
@@ -178,6 +189,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		te:          tsv.te,
 		messager:    tsv.messager,
 		throttler:   tsv.lagThrottler,
+		dropper:     tsv.tableDropper,
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -216,6 +228,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.tableDropper.InitDBConfig(target.Keyspace, target.Shard)
 	return nil
 }
 
@@ -380,6 +393,11 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 // LagThrottler returns the throttle.Throttler part of TabletServer.
 func (tsv *TabletServer) LagThrottler() *throttle.Throttler {
 	return tsv.lagThrottler
+}
+
+// TableDropper returns the tableDropper part of TabletServer.
+func (tsv *TabletServer) TableDropper() *gc.TableDropper {
+	return tsv.tableDropper
 }
 
 // SchemaEngine returns the SchemaEngine part of TabletServer.

@@ -106,6 +106,7 @@ type stateManager struct {
 	te          txEngine
 	messager    subComponent
 	throttler   lagThrottler
+	dropper     tableDropper
 
 	// hcticks starts on initialiazation and runs forever.
 	hcticks *timer.Timer
@@ -158,6 +159,11 @@ type (
 	}
 
 	lagThrottler interface {
+		Open() error
+		Close()
+	}
+
+	tableDropper interface {
 		Open() error
 		Close()
 	}
@@ -410,6 +416,7 @@ func (sm *stateManager) serveMaster() error {
 	}
 	sm.messager.Open()
 	sm.throttler.Open()
+	sm.dropper.Open()
 	sm.setState(topodatapb.TabletType_MASTER, StateServing)
 	return nil
 }
@@ -429,6 +436,7 @@ func (sm *stateManager) unserveMaster() error {
 }
 
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
+	sm.dropper.Close()
 	sm.throttler.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
@@ -477,6 +485,7 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	sm.dropper.Close()
 	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
