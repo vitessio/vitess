@@ -57,6 +57,10 @@ func (t noopVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 	panic("implement me")
 }
 
+func (t noopVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
+}
+
 func (t noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
@@ -201,6 +205,10 @@ type loggingVCursor struct {
 	log []string
 
 	resolvedTargetTabletType topodatapb.TabletType
+}
+
+func (f *loggingVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) InTransactionAndIsDML() bool {
