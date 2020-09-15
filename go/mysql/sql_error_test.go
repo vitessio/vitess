@@ -30,7 +30,7 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 
 	cases := []testCase{
 		testCase{"misc", ERTooManyUserConnections},
-		testCase{"grpc: received message larger than max (99282 vs. 1234): trailer", ERTooManyUserConnections},
+		testCase{"grpc: received message larger than max (99282 vs. 1234): trailer", ERNetPacketTooLarge},
 		testCase{"grpc: received message larger than max (1234 vs. 1234)", ERNetPacketTooLarge},
 		testCase{"header: grpc: received message larger than max (1234 vs. 1234)", ERNetPacketTooLarge},
 		// This should be explicitly handled by returning ERNetPacketTooLarge from the execturo directly
