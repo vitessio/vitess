@@ -333,6 +333,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
 			{Name: "@@workload", Type: sqltypes.VarBinary},
 		},
+		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
 			sqltypes.NULL,
