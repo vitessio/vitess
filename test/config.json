@@ -457,7 +457,7 @@
 		},
 		"vtgate_setstatement": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/setstatement"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,
