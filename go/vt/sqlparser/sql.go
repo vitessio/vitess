@@ -4061,13 +4061,13 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:599
 		{
-			yyVAL.characteristic = &AccessMode{Mode: TxReadWrite}
+			yyVAL.characteristic = &AccessMode{Mode: ReadWrite}
 		}
 	case 67:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:603
 		{
-			yyVAL.characteristic = &AccessMode{Mode: TxReadOnly}
+			yyVAL.characteristic = &AccessMode{Mode: ReadOnly}
 		}
 	case 68:
 		yyDollar = yyS[yypt-2 : yypt+1]
