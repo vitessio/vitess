@@ -106,7 +106,7 @@ type yySymType struct {
 	vindexParams         []VindexParam
 	showFilter           *ShowFilter
 	optLike              *OptLike
-	isolationLevel       IsolationLevelT
+	isolationLevel       IsolationLevel
 }
 
 const LEX_ERROR = 57346
@@ -4055,19 +4055,19 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:596
 		{
-			yyVAL.characteristic = &IsolationLevel{Level: yyDollar[3].isolationLevel}
+			yyVAL.characteristic = yyDollar[3].isolationLevel
 		}
 	case 66:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:600
 		{
-			yyVAL.characteristic = &AccessMode{Mode: ReadWrite}
+			yyVAL.characteristic = ReadWrite
 		}
 	case 67:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:604
 		{
-			yyVAL.characteristic = &AccessMode{Mode: ReadOnly}
+			yyVAL.characteristic = ReadOnly
 		}
 	case 68:
 		yyDollar = yyS[yypt-2 : yypt+1]
