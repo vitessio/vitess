@@ -18,27 +18,27 @@ package sqlparser
 
 // BindVarNeeds represents the bind vars that need to be provided as the result of expression rewriting.
 type BindVarNeeds struct {
-	needFunctionResult,
-	needSystemVariable,
+	NeedFunctionResult,
+	NeedSystemVariable,
 	// NeedUserDefinedVariables keeps track of all user defined variables a query is using
 	NeedUserDefinedVariables []string
 }
 
 //MergeWith adds bind vars needs coming from sub scopes
 func (bvn *BindVarNeeds) MergeWith(other *BindVarNeeds) {
-	bvn.needFunctionResult = append(bvn.needFunctionResult, other.needFunctionResult...)
-	bvn.needSystemVariable = append(bvn.needSystemVariable, other.needSystemVariable...)
+	bvn.NeedFunctionResult = append(bvn.NeedFunctionResult, other.NeedFunctionResult...)
+	bvn.NeedSystemVariable = append(bvn.NeedSystemVariable, other.NeedSystemVariable...)
 	bvn.NeedUserDefinedVariables = append(bvn.NeedUserDefinedVariables, other.NeedUserDefinedVariables...)
 }
 
 //AddFuncResult adds a function bindvar need
 func (bvn *BindVarNeeds) AddFuncResult(name string) {
-	bvn.needFunctionResult = append(bvn.needFunctionResult, name)
+	bvn.NeedFunctionResult = append(bvn.NeedFunctionResult, name)
 }
 
 //AddSysVar adds a system variable bindvar need
 func (bvn *BindVarNeeds) AddSysVar(name string) {
-	bvn.needSystemVariable = append(bvn.needSystemVariable, name)
+	bvn.NeedSystemVariable = append(bvn.NeedSystemVariable, name)
 }
 
 //AddUserDefVar adds a user defined variable bindvar need
@@ -48,12 +48,18 @@ func (bvn *BindVarNeeds) AddUserDefVar(name string) {
 
 //NeedsFuncResult says if a function result needs to be provided
 func (bvn *BindVarNeeds) NeedsFuncResult(name string) bool {
-	return contains(bvn.needFunctionResult, name)
+	return contains(bvn.NeedFunctionResult, name)
 }
 
 //NeedsSysVar says if a function result needs to be provided
 func (bvn *BindVarNeeds) NeedsSysVar(name string) bool {
-	return contains(bvn.needSystemVariable, name)
+	return contains(bvn.NeedSystemVariable, name)
+}
+
+func (bvn *BindVarNeeds) HasRewrites() bool {
+	return len(bvn.NeedFunctionResult) > 0 ||
+		len(bvn.NeedUserDefinedVariables) > 0 ||
+		len(bvn.NeedSystemVariable) > 0
 }
 
 func contains(strings []string, name string) bool {

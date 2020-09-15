@@ -19,13 +19,18 @@ package sqlparser
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/sysvars"
+
 	"github.com/stretchr/testify/require"
 )
 
 type myTestCase struct {
-	in, expected                  string
-	liid, db, foundRows, rowCount bool
-	udv                           int
+	in, expected                                    string
+	liid, db, foundRows, rowCount                   bool
+	udv                                             int
+	autocommit, clientFoundRows, skipQueryPlanCache bool
+	sqlSelectLimit, transactionMode, workload       bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -101,26 +106,58 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT lower(database())",
 		expected: "SELECT lower(:__vtdbname) as `lower(database())`",
 		db:       true,
+	}, {
+		in:         "SELECT @@autocommit",
+		expected:   "SELECT :__vtautocommit as `@@autocommit`",
+		autocommit: true,
+	}, {
+		in:              "SELECT @@client_found_rows",
+		expected:        "SELECT :__vtclient_found_rows as `@@client_found_rows`",
+		clientFoundRows: true,
+	}, {
+		in:                 "SELECT @@skip_query_plan_cache",
+		expected:           "SELECT :__vtskip_query_plan_cache as `@@skip_query_plan_cache`",
+		skipQueryPlanCache: true,
+	}, {
+		in:             "SELECT @@sql_select_limit",
+		expected:       "SELECT :__vtsql_select_limit as `@@sql_select_limit`",
+		sqlSelectLimit: true,
+	}, {
+		in:              "SELECT @@transaction_mode",
+		expected:        "SELECT :__vttransaction_mode as `@@transaction_mode`",
+		transactionMode: true,
+	}, {
+		in:       "SELECT @@workload",
+		expected: "SELECT :__vtworkload as `@@workload`",
+		workload: true,
 	}}
 
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
 			stmt, err := Parse(tc.in)
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := RewriteAST(stmt)
-			require.NoError(t, err)
+			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
-			require.NoError(t, err, "test expectation does not parse [%s]", tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
 			s := String(expected)
-			require.Equal(t, s, String(result.AST))
-			require.Equal(t, tc.liid, result.NeedsFuncResult(LastInsertIDName), "should need last insert id")
-			require.Equal(t, tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
-			require.Equal(t, tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
-			require.Equal(t, tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
-			require.Equal(t, tc.udv, len(result.NeedUserDefinedVariables), "should need row count")
+			assert := assert.New(t)
+			assert.Equal(s, String(result.AST))
+			assert.Equal(tc.liid, result.NeedsFuncResult(LastInsertIDName), "should need last insert id")
+			assert.Equal(tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
+			assert.Equal(tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
+			assert.Equal(tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
+			assert.Equal(tc.udv, len(result.NeedUserDefinedVariables), "count of user defined variables")
+			assert.Equal(tc.autocommit, result.NeedsSysVar(sysvars.Autocommit.Name), "should need :__vtautocommit")
+			assert.Equal(tc.clientFoundRows, result.NeedsSysVar(sysvars.ClientFoundRows.Name), "should need :__vtclientFoundRows")
+			assert.Equal(tc.skipQueryPlanCache, result.NeedsSysVar(sysvars.SkipQueryPlanCache.Name), "should need :__vtskipQueryPlanCache")
+			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
+			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
+			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
 		})
 	}
 }

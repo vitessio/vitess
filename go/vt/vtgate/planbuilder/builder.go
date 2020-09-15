@@ -281,7 +281,7 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	instruction, err := createInstructionFor(query, stmt, vschema)
 	if err != nil {
 		return nil, err
