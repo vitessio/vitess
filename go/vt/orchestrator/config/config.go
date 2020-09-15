@@ -277,7 +277,7 @@ func newConfiguration() *Configuration {
 		StatusEndpoint:                             DefaultStatusAPIEndpoint,
 		StatusOUVerify:                             false,
 		BackendDB:                                  "sqlite",
-		SQLite3DataFile:                            ":memory:",
+		SQLite3DataFile:                            "file::memory:?mode=memory&cache=shared",
 		SkipOrchestratorDatabaseUpdate:             false,
 		PanicIfDifferentDatabaseDeploy:             false,
 		RaftBind:                                   "127.0.0.1:10008",
