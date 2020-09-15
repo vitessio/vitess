@@ -375,7 +375,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 	case sysvars.SQLSelectLimit.Name:
 		intValue, err := svss.evalAsInt64(env)
 		if err != nil {
-			return err
+			return vterrors.Wrapf(err, "failed to evaluate value for %s", sysvars.SQLSelectLimit.Name)
 		}
 		vcursor.Session().SetSQLSelectLimit(intValue)
 	case sysvars.TransactionMode.Name:
@@ -426,7 +426,7 @@ func (svss *SysVarSetAware) evalAsInt64(env evalengine.ExpressionEnv) (int64, er
 
 	v := value.Value()
 	if !v.IsIntegral() {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected int, unexpected value type: %T", value.Value().Type().String())
 	}
 	intValue, err := v.ToInt64()
 	if err != nil {

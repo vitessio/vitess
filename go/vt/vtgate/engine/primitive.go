@@ -124,10 +124,10 @@ type (
 	// each node does its part by combining the results of the
 	// sub-nodes.
 	Plan struct {
-		Type                   sqlparser.StatementType // The type of query we have
-		Original               string                  // Original is the original query.
-		Instructions           Primitive               // Instructions contains the instructions needed to fulfil the query.
-		sqlparser.BindVarNeeds                         // Stores BindVars needed to be provided as part of expression rewriting
+		Type         sqlparser.StatementType // The type of query we have
+		Original     string                  // Original is the original query.
+		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
+		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
 
 		mu           sync.Mutex    // Mutex to protect the fields below
 		ExecCount    uint64        // Count of times this plan was executed

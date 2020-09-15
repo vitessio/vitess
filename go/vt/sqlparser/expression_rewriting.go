@@ -19,7 +19,8 @@ package sqlparser
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sysvars"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -105,6 +106,18 @@ const (
 	UserDefinedVariableName = "__vtudv"
 )
 
+func (er *expressionRewriter) rewriteAliasedExpr(cursor *Cursor, node *AliasedExpr) (*BindVarNeeds, error) {
+	inner := newExpressionRewriter()
+	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
+	tmp := Rewrite(node.Expr, inner.goingDown, nil)
+	newExpr, ok := tmp.(Expr)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
+	}
+	node.Expr = newExpr
+	return inner.bindVars, nil
+}
+
 func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
@@ -114,31 +127,48 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			if ok && aliasedExpr.As.IsEmpty() {
 				buf := NewTrackedBuffer(nil)
 				aliasedExpr.Expr.Format(buf)
-				inner := newExpressionRewriter()
-				inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-				tmp := Rewrite(aliasedExpr.Expr, inner.goingDown, nil)
-				newExpr, ok := tmp.(Expr)
-				if !ok {
-					log.Errorf("failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
+				innerBindVarNeeds, err := er.rewriteAliasedExpr(cursor, aliasedExpr)
+				if err != nil {
+					er.err = err
 					return false
 				}
-				aliasedExpr.Expr = newExpr
-				if inner.didAnythingChange() {
+				if innerBindVarNeeds.HasRewrites() {
 					aliasedExpr.As = NewColIdent(buf.String())
 				}
-				er.bindVars.MergeWith(inner.bindVars)
+				er.bindVars.MergeWith(innerBindVarNeeds)
 			}
 		}
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
 	case *ColName:
-		if node.Name.at == SingleAt {
-			udv := strings.ToLower(node.Name.CompliantName())
-			cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
-			er.bindVars.AddUserDefVar(udv)
+		switch node.Name.at {
+		case SingleAt:
+			er.udvRewrite(cursor, node)
+		case DoubleAt:
+			er.sysVarRewrite(cursor, node)
 		}
 	}
 	return true
+}
+
+func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
+	lowered := node.Name.Lowered()
+	switch lowered {
+	case sysvars.Autocommit.Name,
+		sysvars.ClientFoundRows.Name,
+		sysvars.SkipQueryPlanCache.Name,
+		sysvars.SQLSelectLimit.Name,
+		sysvars.TransactionMode.Name,
+		sysvars.Workload.Name:
+		cursor.Replace(bindVarExpression("__vt" + lowered))
+		er.bindVars.AddSysVar(lowered)
+	}
+}
+
+func (er *expressionRewriter) udvRewrite(cursor *Cursor, node *ColName) {
+	udv := strings.ToLower(node.Name.CompliantName())
+	cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
+	er.bindVars.AddUserDefVar(udv)
 }
 
 func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
@@ -178,12 +208,6 @@ func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 			er.bindVars.AddFuncResult(RowCountName)
 		}
 	}
-}
-
-func (er *expressionRewriter) didAnythingChange() bool {
-	return len(er.bindVars.NeedUserDefinedVariables) > 0 ||
-		len(er.bindVars.needSystemVariable) > 0 ||
-		len(er.bindVars.needFunctionResult) > 0
 }
 
 func bindVarExpression(name string) Expr {
