@@ -88,6 +88,8 @@ type (
 		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
+
+		LookupRowLockShardSession() vtgatepb.CommitOrder
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -116,6 +118,7 @@ type (
 		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
+		SetFoundRows(uint64)
 	}
 
 	// Plan represents the execution strategy for a given query.
