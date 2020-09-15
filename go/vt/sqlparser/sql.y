@@ -283,8 +283,8 @@ func skipToEnd(yylex interface{}) {
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <byt> exists_opt
-%type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <byt> exists_opt not_exists_opt
+%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
@@ -666,11 +666,19 @@ create_statement:
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
+    var notexists bool
+    if $3 != 0 {
+       notexists = true
+    }
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: notexists}
   }
 | CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
+    var notexists bool
+    if $3 != 0 {
+       notexists = true
+    }
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: notexists}
   }
 
 vindex_type_opt:
@@ -1570,11 +1578,19 @@ drop_statement:
   }
 | DROP DATABASE exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
+    var exists bool
+    if $3 != 0 {
+       exists = true
+    }
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: exists}
   }
 | DROP SCHEMA exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
+    var exists bool
+    if $3 != 0 {
+       exists = true
+    }
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: exists}
   }
 
 truncate_statement:
@@ -3383,9 +3399,9 @@ exists_opt:
   { $$ = 1 }
 
 not_exists_opt:
-  { $$ = struct{}{} }
+  { $$ = 0 }
 | IF NOT EXISTS
-  { $$ = struct{}{} }
+  { $$ = 1 }
 
 ignore_opt:
   { $$ = "" }
