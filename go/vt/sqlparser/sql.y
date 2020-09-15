@@ -597,11 +597,11 @@ transaction_char:
   }
 | READ WRITE
   {
-    $$ = &AccessMode{Mode: TxReadWrite}
+    $$ = &AccessMode{Mode: ReadWrite}
   }
 | READ ONLY
   {
-    $$ = &AccessMode{Mode: TxReadOnly}
+    $$ = &AccessMode{Mode: ReadOnly}
   }
 
 isolation_level:

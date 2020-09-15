@@ -163,8 +163,10 @@ type (
 
 	// AccessMode is ReadOnly/ReadWrite
 	AccessMode struct {
-		Mode string
+		Mode AccessModeT
 	}
+
+	AccessModeT int8
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
 	DBDDL struct {
@@ -265,6 +267,11 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
+)
+
+const (
+	ReadOnly AccessModeT = iota
+	ReadWrite
 )
 
 func (*Union) iStatement()             {}
@@ -1914,5 +1921,9 @@ func (node *IsolationLevel) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AccessMode) Format(buf *TrackedBuffer) {
-	buf.WriteString(node.Mode)
+	if node.Mode == ReadOnly {
+		buf.WriteString(TxReadOnly)
+	} else {
+		buf.WriteString(TxReadWrite)
+	}
 }
