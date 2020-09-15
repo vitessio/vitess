@@ -25,14 +25,12 @@ import (
 
 func TestIsGCTableName(t *testing.T) {
 	tm := time.Now()
-	hints := []TableGCHint{HoldTableGCHint, PurgeTableGCHint, DropTableGCHint}
+	hints := []TableGCHint{HoldTableGCHint, PurgeTableGCHint, EvacTableGCHint, DropTableGCHint}
 	for _, hint := range hints {
 		for i := 0; i < 10; i++ {
-			for _, at := range []bool{false, true} {
-				tableName, err := generateGCTableName(hint, at, tm)
-				assert.NoError(t, err)
-				assert.True(t, IsGCTableName(tableName))
-			}
+			tableName, err := generateGCTableName(hint, tm)
+			assert.NoError(t, err)
+			assert.True(t, IsGCTableName(tableName))
 		}
 	}
 	names := []string{
@@ -46,5 +44,43 @@ func TestIsGCTableName(t *testing.T) {
 	}
 	for _, tableName := range names {
 		assert.False(t, IsGCTableName(tableName))
+	}
+}
+
+func TestAnalyzeGCTableName(t *testing.T) {
+	baseTime, err := time.Parse(time.RFC1123, "Tue, 15 Sep 2020 12:04:10 UTC")
+	assert.NoError(t, err)
+	tt := []struct {
+		tableName string
+		hint      TableGCHint
+		t         time.Time
+	}{
+		{
+			tableName: "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			hint:      DropTableGCHint,
+			t:         baseTime,
+		},
+		{
+			tableName: "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			hint:      HoldTableGCHint,
+			t:         baseTime,
+		},
+		{
+			tableName: "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			hint:      EvacTableGCHint,
+			t:         baseTime,
+		},
+		{
+			tableName: "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			hint:      PurgeTableGCHint,
+			t:         baseTime,
+		},
+	}
+	for _, ts := range tt {
+		isGC, hint, tm, err := AnalyzeGCTableName(ts.tableName)
+		assert.NoError(t, err)
+		assert.True(t, isGC)
+		assert.Equal(t, ts.hint, hint)
+		assert.Equal(t, ts.t, tm)
 	}
 }

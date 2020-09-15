@@ -25,13 +25,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// TableGCHint provides a hint for the type of GC table: HOLD? PURGE? DROP?
+// TableGCHint provides a hint for the type of GC table: HOLD? PURGE? EVAC? DROP? See details below
 type TableGCHint string
 
 const (
-	HoldTableGCHint  TableGCHint = "HOLD"
+	// HoldTableGCHint is the state where table was just renamed away. Data is still in tact,
+	// and the user has the option to rename it back. A "safety" period.
+	HoldTableGCHint TableGCHint = "HOLD"
+	// PurgeTableGCHint is the state where we purge table data. Table in this state is "lost" to the user.
+	// if in this state, the table will be fully purged.
 	PurgeTableGCHint TableGCHint = "PURGE"
-	DropTableGCHint  TableGCHint = "DROP"
+	// EvacTableGCHint is a waiting state, where we merely wait out the table's pages to be
+	// gone from InnoDB's buffer pool, adaptive hash index cache, and whatnot.
+	EvacTableGCHint TableGCHint = "EVAC"
+	// DropTableGCHint is the state where the table is to be dropped. Probably ASAP
+	DropTableGCHint TableGCHint = "DROP"
 )
 
 const (
@@ -39,7 +47,7 @@ const (
 )
 
 var (
-	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|DROP)_[0-f]{32}_(at|)[0-9]{14}$`)
+	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|EVAC|DROP)_[0-f]{32}_([0-9]{14})$`)
 )
 
 // CreateUUID creates a globally unique ID, returned as string
@@ -61,16 +69,24 @@ func ToReadableTimestamp(t time.Time) string {
 	return t.Format(readableTimeFormat)
 }
 
-func generateGCTableName(hint TableGCHint, at bool, t time.Time) (string, error) {
+func generateGCTableName(hint TableGCHint, t time.Time) (string, error) {
 	uuid, err := createUUID()
 	if err != nil {
 		return "", err
 	}
 	timestamp := ToReadableTimestamp(t)
-	if at {
-		timestamp = fmt.Sprintf("at%s", timestamp)
-	}
 	return fmt.Sprintf("_vt_%s_%s_%s", hint, uuid, timestamp), nil
+}
+
+// AnalyzeGCTableName analyzes a given table name to see if it's a GC table, and if so, parse out
+// its hint and timestamp
+func AnalyzeGCTableName(tableName string) (isGCTable bool, hint TableGCHint, t time.Time, err error) {
+	submatch := gcTableNameRegexp.FindStringSubmatch(tableName)
+	if len(submatch) == 0 {
+		return false, hint, t, nil
+	}
+	t, err = time.Parse(readableTimeFormat, submatch[2])
+	return true, TableGCHint(submatch[1]), t, err
 }
 
 // IsGCTableName answers 'true' when the given table name stands for a GC table
@@ -79,15 +95,10 @@ func IsGCTableName(tableName string) bool {
 }
 
 // GenerateRenameStatement generates a "RENAME TABLE" statement, where a table is renamed to a GC table.
-func GenerateRenameStatement(fromTableName string, hint TableGCHint, at bool, t time.Time) (string, error) {
-	gcTableName, err := generateGCTableName(hint, at, t)
+func GenerateRenameStatement(fromTableName string, hint TableGCHint, t time.Time) (statement string, toTableName string, err error) {
+	toTableName, err = generateGCTableName(hint, t)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return fmt.Sprintf("RENAME TABLE `%s` TO %s", fromTableName, gcTableName), nil
-}
-
-// GenerateRenameDropStatement generates a "RENAME TABLE" to a _vt_DROP name, to be dropped in n days
-func GenerateRenameDropStatement(fromTableName string, dropInDays int) (string, error) {
-	return GenerateRenameStatement(fromTableName, DropTableGCHint, true, time.Now().Add(time.Duration(dropInDays*24)*time.Hour))
+	return fmt.Sprintf("RENAME TABLE `%s` TO %s", fromTableName, toTableName), toTableName, nil
 }
