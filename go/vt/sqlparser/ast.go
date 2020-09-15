@@ -158,14 +158,18 @@ type (
 
 	// IsolationLevel is self-explanatory in this context
 	IsolationLevel struct {
-		Level string
+		Level IsolationLevelT
 	}
+
+	// IsolationLevelT is an enum for isolation levels
+	IsolationLevelT int8
 
 	// AccessMode is ReadOnly/ReadWrite
 	AccessMode struct {
 		Mode AccessModeT
 	}
 
+	// AccessModeT is enum for the mode - ReadOnly or ReadWrite
 	AccessModeT int8
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
@@ -272,6 +276,11 @@ type (
 const (
 	ReadOnly AccessModeT = iota
 	ReadWrite
+
+	ReadUncommitted IsolationLevelT = iota
+	ReadCommitted
+	RepeatableRead
+	Serializable
 )
 
 func (*Union) iStatement()             {}
@@ -1916,7 +1925,19 @@ func (*AccessMode) iChar()     {}
 
 // Format formats the node.
 func (node *IsolationLevel) Format(buf *TrackedBuffer) {
-	buf.WriteString("isolation level " + node.Level)
+	buf.WriteString("isolation level ")
+	switch node.Level {
+	case ReadUncommitted:
+		buf.WriteString(ReadUncommittedStr)
+	case ReadCommitted:
+		buf.WriteString(ReadCommittedStr)
+	case RepeatableRead:
+		buf.WriteString(RepeatableReadStr)
+	case Serializable:
+		buf.WriteString(SerializableStr)
+	default:
+		buf.WriteString("Unknown Isolation level value")
+	}
 }
 
 // Format formats the node.

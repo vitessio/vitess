@@ -117,6 +117,7 @@ func skipToEnd(yylex interface{}) {
   vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  isolationLevel IsolationLevelT
 }
 
 %token LEX_ERROR
@@ -278,7 +279,7 @@ func skipToEnd(yylex interface{}) {
 %type <setExpr> set_expression
 %type <characteristic> transaction_char
 %type <characteristics> transaction_chars
-%type <str> isolation_level
+%type <isolationLevel> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
@@ -593,7 +594,7 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &IsolationLevel{Level: string($3)}
+    $$ = &IsolationLevel{Level: $3}
   }
 | READ WRITE
   {

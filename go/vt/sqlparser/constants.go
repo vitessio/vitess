@@ -158,10 +158,10 @@ const (
 	TransactionStr = "transaction"
 
 	// Transaction isolation levels
-	ReadUncommitted = "read uncommitted"
-	ReadCommitted   = "read committed"
-	RepeatableRead  = "repeatable read"
-	Serializable    = "serializable"
+	ReadUncommittedStr = "read uncommitted"
+	ReadCommittedStr   = "read committed"
+	RepeatableReadStr  = "repeatable read"
+	SerializableStr    = "serializable"
 
 	TxReadOnly  = "read only"
 	TxReadWrite = "read write"
