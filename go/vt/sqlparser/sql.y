@@ -594,15 +594,15 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &IsolationLevel{Level: $3}
+    $$ = $3
   }
 | READ WRITE
   {
-    $$ = &AccessMode{Mode: ReadWrite}
+    $$ = ReadWrite
   }
 | READ ONLY
   {
-    $$ = &AccessMode{Mode: ReadOnly}
+    $$ = ReadOnly
   }
 
 isolation_level:

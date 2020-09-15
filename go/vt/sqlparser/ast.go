@@ -156,21 +156,11 @@ type (
 		iChar()
 	}
 
-	// IsolationLevel is self-explanatory in this context
-	IsolationLevel struct {
-		Level IsolationLevelT
-	}
+	// IsolationLevel is an enum for isolation levels
+	IsolationLevel int8
 
-	// IsolationLevelT is an enum for isolation levels
-	IsolationLevelT int8
-
-	// AccessMode is ReadOnly/ReadWrite
-	AccessMode struct {
-		Mode AccessModeT
-	}
-
-	// AccessModeT is enum for the mode - ReadOnly or ReadWrite
-	AccessModeT int8
+	// AccessMode is enum for the mode - ReadOnly or ReadWrite
+	AccessMode int8
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
 	DBDDL struct {
@@ -274,10 +264,10 @@ type (
 )
 
 const (
-	ReadOnly AccessModeT = iota
+	ReadOnly AccessMode = iota
 	ReadWrite
 
-	ReadUncommitted IsolationLevelT = iota
+	ReadUncommitted IsolationLevel = iota
 	ReadCommitted
 	RepeatableRead
 	Serializable
@@ -1920,13 +1910,13 @@ func (node ColIdent) AtCount() AtCount {
 	return node.at
 }
 
-func (*IsolationLevel) iChar() {}
-func (*AccessMode) iChar()     {}
+func (IsolationLevel) iChar() {}
+func (AccessMode) iChar()     {}
 
 // Format formats the node.
-func (node *IsolationLevel) Format(buf *TrackedBuffer) {
+func (node IsolationLevel) Format(buf *TrackedBuffer) {
 	buf.WriteString("isolation level ")
-	switch node.Level {
+	switch node {
 	case ReadUncommitted:
 		buf.WriteString(ReadUncommittedStr)
 	case ReadCommitted:
@@ -1941,8 +1931,8 @@ func (node *IsolationLevel) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *AccessMode) Format(buf *TrackedBuffer) {
-	if node.Mode == ReadOnly {
+func (node AccessMode) Format(buf *TrackedBuffer) {
+	if node == ReadOnly {
 		buf.WriteString(TxReadOnly)
 	} else {
 		buf.WriteString(TxReadWrite)
