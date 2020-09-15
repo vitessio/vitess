@@ -325,35 +325,35 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
-//SetOptions sets the options
+// SetOptions sets the options
 func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Options = options
 }
 
-//StoreSavepoint stores the savepoint and release savepoint queries in the session
+// StoreSavepoint stores the savepoint and release savepoint queries in the session
 func (session *SafeSession) StoreSavepoint(sql string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Savepoints = append(session.Savepoints, sql)
 }
 
-//InReservedConn returns true if the session needs to execute on a dedicated connection
+// InReservedConn returns true if the session needs to execute on a dedicated connection
 func (session *SafeSession) InReservedConn() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.Session.InReservedConn
 }
 
-//SetReservedConn set the InReservedConn setting.
+// SetReservedConn set the InReservedConn setting.
 func (session *SafeSession) SetReservedConn(reservedConn bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.InReservedConn = reservedConn
 }
 
-//SetPreQueries returns the prequeries that need to be run when reserving a connection
+// SetPreQueries returns the prequeries that need to be run when reserving a connection
 func (session *SafeSession) SetPreQueries() []string {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -366,7 +366,7 @@ func (session *SafeSession) SetPreQueries() []string {
 	return result
 }
 
-//SetLockSession sets the lock session.
+// SetLockSession sets the lock session.
 func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSession) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -374,14 +374,14 @@ func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSe
 	session.LastLockHeartbeat = time.Now().Unix()
 }
 
-//UpdateLockHeartbeat updates the LastLockHeartbeat time
+// UpdateLockHeartbeat updates the LastLockHeartbeat time
 func (session *SafeSession) UpdateLockHeartbeat() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LastLockHeartbeat = time.Now().Unix()
 }
 
-//TriggerLockHeartBeat returns if it time to trigger next lock heartbeat
+// TriggerLockHeartBeat returns if it time to trigger next lock heartbeat
 func (session *SafeSession) TriggerLockHeartBeat() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -389,21 +389,21 @@ func (session *SafeSession) TriggerLockHeartBeat() bool {
 	return now-session.LastLockHeartbeat >= int64(lockHeartbeatTime.Seconds())
 }
 
-//InLockSession returns whether locking is used on this session.
+// InLockSession returns whether locking is used on this session.
 func (session *SafeSession) InLockSession() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.LockSession != nil
 }
 
-//ResetLock resets the lock session
+// ResetLock resets the lock session
 func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = nil
 }
 
-//ResetAll resets the shard sessions and lock session.
+// ResetAll resets the shard sessions and lock session.
 func (session *SafeSession) ResetAll() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -418,7 +418,7 @@ func (session *SafeSession) ResetAll() {
 	session.LockSession = nil
 }
 
-//ResetShard reset the shard session for the provided tablet alias.
+// ResetShard reset the shard session for the provided tablet alias.
 func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -466,7 +466,7 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 	return append(sessions[:idx], sessions[idx+1:]...), nil
 }
 
-//GetOrCreateOptions will return the current options struct, or create one and return it if no-one exists
+// GetOrCreateOptions will return the current options struct, or create one and return it if no-one exists
 func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 	if session.Session.Options == nil {
 		session.Session.Options = &querypb.ExecuteOptions{}
