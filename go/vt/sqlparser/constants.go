@@ -195,6 +195,7 @@ const (
 	UnionDistinct
 )
 
+// Constants for Enum Type - Insert.Action
 const (
 	InsertAct InsertAction = iota
 	ReplaceAct
