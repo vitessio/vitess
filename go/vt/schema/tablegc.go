@@ -25,21 +25,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// TableGCHint provides a hint for the type of GC table: HOLD? PURGE? EVAC? DROP? See details below
-type TableGCHint string
+// TableGCState provides a state for the type of GC table: HOLD? PURGE? EVAC? DROP? See details below
+type TableGCState string
 
 const (
-	// HoldTableGCHint is the state where table was just renamed away. Data is still in tact,
+	// HoldTableGCState is the state where table was just renamed away. Data is still in tact,
 	// and the user has the option to rename it back. A "safety" period.
-	HoldTableGCHint TableGCHint = "HOLD"
-	// PurgeTableGCHint is the state where we purge table data. Table in this state is "lost" to the user.
+	HoldTableGCState TableGCState = "HOLD"
+	// PurgeTableGCState is the state where we purge table data. Table in this state is "lost" to the user.
 	// if in this state, the table will be fully purged.
-	PurgeTableGCHint TableGCHint = "PURGE"
-	// EvacTableGCHint is a waiting state, where we merely wait out the table's pages to be
+	PurgeTableGCState TableGCState = "PURGE"
+	// EvacTableGCState is a waiting state, where we merely wait out the table's pages to be
 	// gone from InnoDB's buffer pool, adaptive hash index cache, and whatnot.
-	EvacTableGCHint TableGCHint = "EVAC"
-	// DropTableGCHint is the state where the table is to be dropped. Probably ASAP
-	DropTableGCHint TableGCHint = "DROP"
+	EvacTableGCState TableGCState = "EVAC"
+	// DropTableGCState is the state where the table is to be dropped. Probably ASAP
+	DropTableGCState TableGCState = "DROP"
 )
 
 const (
@@ -48,6 +48,14 @@ const (
 
 var (
 	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|EVAC|DROP)_[0-f]{32}_([0-9]{14})$`)
+	gcLifecycleRegexp = regexp.MustCompile(`[ ,;]+`)
+
+	gcStates = map[string]TableGCState{
+		string(HoldTableGCState):  HoldTableGCState,
+		string(PurgeTableGCState): PurgeTableGCState,
+		string(EvacTableGCState):  EvacTableGCState,
+		string(DropTableGCState):  DropTableGCState,
+	}
 )
 
 // CreateUUID creates a globally unique ID, returned as string
@@ -69,24 +77,24 @@ func ToReadableTimestamp(t time.Time) string {
 	return t.Format(readableTimeFormat)
 }
 
-func generateGCTableName(hint TableGCHint, t time.Time) (string, error) {
+func generateGCTableName(state TableGCState, t time.Time) (string, error) {
 	uuid, err := createUUID()
 	if err != nil {
 		return "", err
 	}
 	timestamp := ToReadableTimestamp(t)
-	return fmt.Sprintf("_vt_%s_%s_%s", hint, uuid, timestamp), nil
+	return fmt.Sprintf("_vt_%s_%s_%s", state, uuid, timestamp), nil
 }
 
 // AnalyzeGCTableName analyzes a given table name to see if it's a GC table, and if so, parse out
-// its hint and timestamp
-func AnalyzeGCTableName(tableName string) (isGCTable bool, hint TableGCHint, t time.Time, err error) {
+// its state and timestamp
+func AnalyzeGCTableName(tableName string) (isGCTable bool, state TableGCState, t time.Time, err error) {
 	submatch := gcTableNameRegexp.FindStringSubmatch(tableName)
 	if len(submatch) == 0 {
-		return false, hint, t, nil
+		return false, state, t, nil
 	}
 	t, err = time.Parse(readableTimeFormat, submatch[2])
-	return true, TableGCHint(submatch[1]), t, err
+	return true, TableGCState(submatch[1]), t, err
 }
 
 // IsGCTableName answers 'true' when the given table name stands for a GC table
@@ -95,10 +103,28 @@ func IsGCTableName(tableName string) bool {
 }
 
 // GenerateRenameStatement generates a "RENAME TABLE" statement, where a table is renamed to a GC table.
-func GenerateRenameStatement(fromTableName string, hint TableGCHint, t time.Time) (statement string, toTableName string, err error) {
-	toTableName, err = generateGCTableName(hint, t)
+func GenerateRenameStatement(fromTableName string, state TableGCState, t time.Time) (statement string, toTableName string, err error) {
+	toTableName, err = generateGCTableName(state, t)
 	if err != nil {
 		return "", "", err
 	}
 	return fmt.Sprintf("RENAME TABLE `%s` TO %s", fromTableName, toTableName), toTableName, nil
+}
+
+// ParseGCLifecycle parses a comma separated list of gc states and returns a map of indicated states
+func ParseGCLifecycle(gcLifecycle string) (states map[TableGCState]bool, err error) {
+	states = make(map[TableGCState]bool)
+	tokens := gcLifecycleRegexp.Split(gcLifecycle, -1)
+	for _, token := range tokens {
+		if token == "" {
+			continue
+		}
+		token = strings.ToUpper(token)
+		state, ok := gcStates[token]
+		if !ok {
+			return states, fmt.Errorf("Unknown GC state: %s", token)
+		}
+		states[state] = true
+	}
+	return states, nil
 }
