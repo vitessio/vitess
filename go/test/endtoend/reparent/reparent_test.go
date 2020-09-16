@@ -272,10 +272,6 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
 	//Args:
 	//downMaster: kills the old master first
-	defer cluster.PanicHandler(t)
-	setupReparentCluster(t)
-	defer teardownCluster()
-
 	ctx := context.Background()
 
 	// now manually reparent 1 out of 2 tablets
