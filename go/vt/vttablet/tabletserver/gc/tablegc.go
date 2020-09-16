@@ -20,7 +20,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
+	"net/http"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -37,19 +39,26 @@ import (
 )
 
 const (
-	leaderCheckInterval = 5 * time.Second
-	evacHours           = 72
+	leaderCheckInterval     = 5 * time.Second
+	purgeReentranceInterval = 1 * time.Minute
+	// throttleCheckDuration controls both how frequently the throttler is checked. as well as
+	// how long to sleep if throttler blocks us
+	throttleCheckDuration = 250 * time.Millisecond
+	evacHours             = 72
+	throttlerAppName      = "tablegc"
 )
 
 var checkInterval = flag.Duration("gc_check_interval", 1*time.Hour, "Interval between garbage collection checks")
 var gcLifecycle = flag.String("table_gc_lifecycle", "hold,purge,evac,drop", "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
 
 var (
-	// TODO(shlomi): implement shortly
-	// 	purgeLimit = 50
-	// 	purgeQuery = "delete from %a limit %d"
+	purgeLimit      = 50
+	purgeQuery      = "delete from %a limit %d"
 	sqlShowVtTables = `show tables like '\_vt\_%'`
 	sqlDropTable    = "drop table if exists `%a`"
+	throttleFlags   = &throttle.CheckFlags{
+		LowPriority: true,
+	}
 )
 
 type transitionRequest struct {
@@ -77,8 +86,7 @@ type TableGC struct {
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
 
-	//TODO(shlomi): implement
-	//	lastThrottleCheckTime time.Time
+	lastSuccessfulThrottleCheck time.Time
 
 	initOnce   sync.Once
 	initMutex  sync.Mutex
@@ -174,6 +182,7 @@ func (collector *TableGC) Close() {
 func (collector *TableGC) Operate(ctx context.Context) {
 	tableCheckTicker := time.NewTicker(*checkInterval)
 	leaderCheckTicker := time.NewTicker(leaderCheckInterval)
+	purgeReentranceTicker := time.NewTimer(purgeReentranceInterval)
 
 	for {
 		select {
@@ -203,6 +212,10 @@ func (collector *TableGC) Operate(ctx context.Context) {
 		case <-tableCheckTicker.C:
 			{
 				_ = collector.checkTables(ctx)
+			}
+		case <-purgeReentranceTicker.C:
+			{
+				go collector.purge(ctx)
 			}
 		case dropTableName := <-collector.dropTablesChan:
 			{
@@ -256,6 +269,15 @@ func (collector *TableGC) generateTansition(ctx context.Context, fromState schem
 	}
 }
 
+func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName string) {
+	go func() {
+		transition := collector.generateTansition(ctx, fromState, fromTableName)
+		if transition != nil {
+			collector.transitionRequestsChan <- transition
+		}
+	}()
+}
+
 func (collector *TableGC) checkTables(ctx context.Context) error {
 	if atomic.LoadInt64(&collector.isPrimary) == 0 {
 		return nil
@@ -267,12 +289,12 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, sqlShowVtTables, 10000, true)
+	res, err := conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
 	if err != nil {
 		return err
 	}
 
-	for _, row := range tm.Rows {
+	for _, row := range res.Rows {
 		tableName := row[0].ToString()
 
 		isGCTable, state, t, err := schema.AnalyzeGCTableName(tableName)
@@ -290,28 +312,17 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 			continue
 		}
 
-		submitTransitionRequest := func(fromState schema.TableGCState, fromTableName string) {
-			go func() {
-				transition := collector.generateTansition(ctx, fromState, fromTableName)
-				if transition != nil {
-					collector.transitionRequestsChan <- transition
-				}
-			}()
-		}
-
 		if state == schema.HoldTableGCState {
 			// Hold period expired. Moving to next state
-			submitTransitionRequest(state, tableName)
+			collector.submitTransitionRequest(ctx, state, tableName)
 		}
 		if state == schema.PurgeTableGCState {
 			// This table needs to be purged. Make sure to enlist it (we may already have)
 			collector.addPurgingTable(tableName)
-			// TODO(shlomi): this should only happen after rows have been purged
-			submitTransitionRequest(state, tableName)
 		}
 		if state == schema.EvacTableGCState {
 			// This table was in EVAC state for the required period. It will transition into DROP state
-			submitTransitionRequest(state, tableName)
+			collector.submitTransitionRequest(ctx, state, tableName)
 		}
 		if state == schema.DropTableGCState {
 			// This table needs to be dropped immediately.
@@ -320,6 +331,51 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// purge continuously purges rows from a table.
+// This function is non-reentrant: there's only one instance of this function running at any given time.
+// A timer keeps calling this function, so if it bails out (e.g. on error) it will later resume work
+func (collector *TableGC) purge(ctx context.Context) error {
+	tableName, found := collector.nextTableToPurge()
+	if !found {
+		// Nothing do do here...
+		return nil
+	}
+	conn, err := collector.pool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	for {
+		if time.Since(collector.lastSuccessfulThrottleCheck) > throttleCheckDuration {
+			// It's time to run a throttler check
+			checkResult := collector.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
+			if checkResult.StatusCode != http.StatusOK {
+				// whoops, we got throttled. Back off, sleep, try again
+				time.Sleep(throttleCheckDuration)
+				continue
+			}
+			collector.lastSuccessfulThrottleCheck = time.Now()
+		}
+		// OK, we're clear to go!
+
+		// Issue a DELETE
+		parsed := sqlparser.BuildParsedQuery(purgeQuery, tableName, purgeLimit)
+		res, err := conn.Exec(ctx, parsed.Query, 1, true)
+		if err != nil {
+			return err
+		}
+		if res.RowsAffected == 0 {
+			// The table is now empty!
+			// we happen to know at this time that the table is in PURGE state,
+			// I mean, that's why we're here. We can hard code that.
+			collector.submitTransitionRequest(ctx, schema.PurgeTableGCState, tableName)
+			collector.removePurgingTable(tableName)
+			return nil
+		}
+	}
 }
 
 // dropTable runs an actual DROP TABLE statement, and marks the end of the line for the
@@ -393,15 +449,14 @@ func (collector *TableGC) addPurgingTable(tableName string) {
 	collector.purgingTables[tableName] = true
 }
 
-// TODO(shlomi): uncomment
-// // removePurgingTable removes a table from the purging list; likely this is called when
-// // the table is fully purged and is renamed away to be dropped.
-// func (collector *TableGC) removePurgingTable(tableName string) {
-// 	collector.purgeMutex.Lock()
-// 	defer collector.purgeMutex.Unlock()
+// removePurgingTable removes a table from the purging list; likely this is called when
+// the table is fully purged and is renamed away to be dropped.
+func (collector *TableGC) removePurgingTable(tableName string) {
+	collector.purgeMutex.Lock()
+	defer collector.purgeMutex.Unlock()
 
-// 	delete(collector.purgingTables, tableName)
-// }
+	delete(collector.purgingTables, tableName)
+}
 
 // nextTableToPurge returns the name of the next table we should start purging.
 // We pick the table with the oldest timestamp.
