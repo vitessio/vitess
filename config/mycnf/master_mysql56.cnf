@@ -39,8 +39,3 @@ plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisy
 # a master that becomes unresponsive.
 rpl_semi_sync_master_timeout = 1000000000000000000
 rpl_semi_sync_master_wait_no_slave = 1
-
-
-# Reduce to test if replication e2e works with this
-open-files-limit = 1024
-innodb-open-files = 256

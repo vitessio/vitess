@@ -20,7 +20,3 @@ innodb_doublewrite=0
 # https://github.com/vitessio/vitess/issues/5396
 
 sql_mode = STRICT_TRANS_TABLES
-
-# Reduce to test if replication e2e works with this
-open-files-limit = 1024
-innodb-open-files = 256
