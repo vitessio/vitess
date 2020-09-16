@@ -123,7 +123,7 @@ func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topoda
 		tabletTypeFunc: tabletTypeFunc,
 		ts:             ts,
 		pool: connpool.NewPool(env, "TableGCPool", tabletenv.ConnPoolConfig{
-			Size:               1,
+			Size:               3, // must be at least 2: purge cycle can use 1 busily.
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 
@@ -367,6 +367,23 @@ func (collector *TableGC) purge(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
+	// Disable binary logging, re-enable afterwards
+	if _, err := conn.Exec(ctx, "SET sql_log_bin = OFF", 0, false); err != nil {
+		fmt.Printf("========= 1 err=%+v\n", err)
+		return err
+	}
+	fmt.Printf("======  SQL_LOG_BIN=OFF\n")
+	defer func() {
+		if !conn.IsClosed() {
+			if _, err := conn.Exec(ctx, "SET sql_log_bin = ON", 0, false); err != nil {
+				fmt.Printf("========= 2 err=%+v\n", err)
+				// if we can't reset the sql_log_bin flag, let's just close the connection.
+				conn.Close()
+			}
+			fmt.Printf("======  SQL_LOG_BIN=ON\n")
+		}
+	}()
+
 	for {
 		fmt.Printf("========= purge tableName=%+v LOOP\n", tableName)
 		if time.Since(collector.lastSuccessfulThrottleCheck) > throttleCheckDuration {
@@ -382,7 +399,6 @@ func (collector *TableGC) purge(ctx context.Context) error {
 		// OK, we're clear to go!
 
 		// Issue a DELETE
-		// TODO(shlomi): SET SQL_LOG_BIN=0
 		parsed := sqlparser.BuildParsedQuery(sqlPurgeTable, tableName)
 		fmt.Printf("========= purge tableName=%+v parsed=%+v\n", tableName, parsed)
 		res, err := conn.Exec(ctx, parsed.Query, 1, true)
