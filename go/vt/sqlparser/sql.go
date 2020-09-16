@@ -4127,19 +4127,19 @@ yydefault:
 //line sql.y:653
 		{
 			// Change this to an alter statement
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[7].tableName}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[7].tableName}
 		}
 	case 77:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:658
 		{
-			yyVAL.statement = &DDL{Action: CreateStr, Table: yyDollar[3].tableName.ToViewName()}
+			yyVAL.statement = &DDL{Action: CreateDDLAction, Table: yyDollar[3].tableName.ToViewName()}
 		}
 	case 78:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:662
 		{
-			yyVAL.statement = &DDL{Action: CreateStr, Table: yyDollar[5].tableName.ToViewName()}
+			yyVAL.statement = &DDL{Action: CreateDDLAction, Table: yyDollar[5].tableName.ToViewName()}
 		}
 	case 79:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -4207,7 +4207,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:718
 		{
-			yyVAL.ddl = &DDL{Action: CreateStr, Table: yyDollar[4].tableName}
+			yyVAL.ddl = &DDL{Action: CreateDDLAction, Table: yyDollar[4].tableName}
 			setDDL(yylex, yyVAL.ddl)
 		}
 	case 90:
@@ -5061,45 +5061,45 @@ yydefault:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:1381
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[4].tableName}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[4].tableName}
 		}
 	case 230:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1385
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[4].tableName}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[4].tableName}
 		}
 	case 231:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1389
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[4].tableName}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[4].tableName}
 		}
 	case 232:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1393
 		{
 			// Change this to a rename statement
-			yyVAL.statement = &DDL{Action: RenameStr, FromTables: TableNames{yyDollar[4].tableName}, ToTables: TableNames{yyDollar[7].tableName}}
+			yyVAL.statement = &DDL{Action: RenameDDLAction, FromTables: TableNames{yyDollar[4].tableName}, ToTables: TableNames{yyDollar[7].tableName}}
 		}
 	case 233:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1398
 		{
 			// Rename an index can just be an alter
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[4].tableName}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[4].tableName}
 		}
 	case 234:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1403
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[3].tableName.ToViewName()}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[3].tableName.ToViewName()}
 		}
 	case 235:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1407
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[4].tableName, PartitionSpec: yyDollar[5].partSpec}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[4].tableName, PartitionSpec: yyDollar[5].partSpec}
 		}
 	case 236:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -5118,7 +5118,7 @@ yydefault:
 //line sql.y:1419
 		{
 			yyVAL.statement = &DDL{
-				Action: CreateVindexStr,
+				Action: CreateVindexDDLAction,
 				Table:  yyDollar[5].tableName,
 				VindexSpec: &VindexSpec{
 					Name:   NewColIdent(yyDollar[5].tableName.Name.String()),
@@ -5132,7 +5132,7 @@ yydefault:
 //line sql.y:1431
 		{
 			yyVAL.statement = &DDL{
-				Action: DropVindexStr,
+				Action: DropVindexDDLAction,
 				Table:  yyDollar[5].tableName,
 				VindexSpec: &VindexSpec{
 					Name: NewColIdent(yyDollar[5].tableName.Name.String()),
@@ -5143,20 +5143,20 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1441
 		{
-			yyVAL.statement = &DDL{Action: AddVschemaTableStr, Table: yyDollar[5].tableName}
+			yyVAL.statement = &DDL{Action: AddVschemaTableDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 241:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1445
 		{
-			yyVAL.statement = &DDL{Action: DropVschemaTableStr, Table: yyDollar[5].tableName}
+			yyVAL.statement = &DDL{Action: DropVschemaTableDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 242:
 		yyDollar = yyS[yypt-12 : yypt+1]
 //line sql.y:1449
 		{
 			yyVAL.statement = &DDL{
-				Action: AddColVindexStr,
+				Action: AddColVindexDDLAction,
 				Table:  yyDollar[4].tableName,
 				VindexSpec: &VindexSpec{
 					Name:   yyDollar[7].colIdent,
@@ -5171,7 +5171,7 @@ yydefault:
 //line sql.y:1462
 		{
 			yyVAL.statement = &DDL{
-				Action: DropColVindexStr,
+				Action: DropColVindexDDLAction,
 				Table:  yyDollar[4].tableName,
 				VindexSpec: &VindexSpec{
 					Name: yyDollar[7].colIdent,
@@ -5182,14 +5182,14 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1472
 		{
-			yyVAL.statement = &DDL{Action: AddSequenceStr, Table: yyDollar[5].tableName}
+			yyVAL.statement = &DDL{Action: AddSequenceDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 245:
 		yyDollar = yyS[yypt-9 : yypt+1]
 //line sql.y:1476
 		{
 			yyVAL.statement = &DDL{
-				Action: AddAutoIncStr,
+				Action: AddAutoIncDDLAction,
 				Table:  yyDollar[4].tableName,
 				AutoIncSpec: &AutoIncSpec{
 					Column:   yyDollar[7].colIdent,
@@ -5237,7 +5237,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1537
 		{
-			yyVAL.ddl = &DDL{Action: RenameStr, FromTables: TableNames{yyDollar[1].tableName}, ToTables: TableNames{yyDollar[3].tableName}}
+			yyVAL.ddl = &DDL{Action: RenameDDLAction, FromTables: TableNames{yyDollar[1].tableName}, ToTables: TableNames{yyDollar[3].tableName}}
 		}
 	case 267:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -5255,14 +5255,14 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DDL{Action: DropStr, FromTables: yyDollar[4].tableNames, IfExists: exists}
+			yyVAL.statement = &DDL{Action: DropDDLAction, FromTables: yyDollar[4].tableNames, IfExists: exists}
 		}
 	case 269:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:1557
 		{
 			// Change this to an alter statement
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[5].tableName}
+			yyVAL.statement = &DDL{Action: AlterDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 270:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -5272,7 +5272,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DDL{Action: DropStr, FromTables: TableNames{yyDollar[4].tableName.ToViewName()}, IfExists: exists}
+			yyVAL.statement = &DDL{Action: DropDDLAction, FromTables: TableNames{yyDollar[4].tableName.ToViewName()}, IfExists: exists}
 		}
 	case 271:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -5290,13 +5290,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1580
 		{
-			yyVAL.statement = &DDL{Action: TruncateStr, Table: yyDollar[3].tableName}
+			yyVAL.statement = &DDL{Action: TruncateDDLAction, Table: yyDollar[3].tableName}
 		}
 	case 274:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1584
 		{
-			yyVAL.statement = &DDL{Action: TruncateStr, Table: yyDollar[2].tableName}
+			yyVAL.statement = &DDL{Action: TruncateDDLAction, Table: yyDollar[2].tableName}
 		}
 	case 275:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -5805,7 +5805,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1977
 		{
-			yyVAL.statement = &DDL{Action: FlushStr}
+			yyVAL.statement = &DDL{Action: FlushDDLAction}
 		}
 	case 358:
 		yyDollar = yyS[yypt-0 : yypt+1]

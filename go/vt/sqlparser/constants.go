@@ -207,3 +207,21 @@ const (
 	AlterDBDDLAction
 	DropDBDDLAction
 )
+
+// Constants for Enum Type - DDL.Action
+const (
+	CreateDDLAction DDLAction = iota
+	AlterDDLAction
+	DropDDLAction
+	RenameDDLAction
+	TruncateDDLAction
+	FlushDDLAction
+	CreateVindexDDLAction
+	DropVindexDDLAction
+	AddVschemaTableDDLAction
+	DropVschemaTableDDLAction
+	AddColVindexDDLAction
+	DropColVindexDDLAction
+	AddSequenceDDLAction
+	AddAutoIncDDLAction
+)

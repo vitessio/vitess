@@ -652,15 +652,15 @@ create_statement:
 | CREATE constraint_opt INDEX id_or_var using_opt ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $7}
+    $$ = &DDL{Action: AlterDDLAction, Table: $7}
   }
 | CREATE VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: CreateStr, Table: $3.ToViewName()}
+    $$ = &DDL{Action: CreateDDLAction, Table: $3.ToViewName()}
   }
 | CREATE OR REPLACE VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
+    $$ = &DDL{Action: CreateDDLAction, Table: $5.ToViewName()}
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
@@ -716,7 +716,7 @@ vindex_param:
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateStr, Table: $4}
+    $$ = &DDL{Action: CreateDDLAction, Table: $4}
     setDDL(yylex, $$)
   }
 
@@ -1379,33 +1379,33 @@ table_opt_value:
 alter_statement:
   ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $4}
   }
 | ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $4}
   }
 | ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $4}
   }
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
+    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
   }
 | ALTER ignore_opt TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $4}
   }
 | ALTER VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
+    $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
   }
 | ALTER ignore_opt TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterDDLAction, Table: $4, PartitionSpec: $5}
   }
 | ALTER DATABASE id_or_var ddl_skip_to_end
   {
@@ -1418,7 +1418,7 @@ alter_statement:
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
-        Action: CreateVindexStr,
+        Action: CreateVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
           Name: NewColIdent($5.Name.String()),
@@ -1430,7 +1430,7 @@ alter_statement:
 | ALTER VSCHEMA DROP VINDEX table_name
   {
     $$ = &DDL{
-        Action: DropVindexStr,
+        Action: DropVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
           Name: NewColIdent($5.Name.String()),
@@ -1439,16 +1439,16 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD TABLE table_name
   {
-    $$ = &DDL{Action: AddVschemaTableStr, Table: $5}
+    $$ = &DDL{Action: AddVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA DROP TABLE table_name
   {
-    $$ = &DDL{Action: DropVschemaTableStr, Table: $5}
+    $$ = &DDL{Action: DropVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
-        Action: AddColVindexStr,
+        Action: AddColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
             Name: $7,
@@ -1461,7 +1461,7 @@ alter_statement:
 | ALTER VSCHEMA ON table_name DROP VINDEX sql_id
   {
     $$ = &DDL{
-        Action: DropColVindexStr,
+        Action: DropColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
             Name: $7,
@@ -1470,12 +1470,12 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD SEQUENCE table_name
   {
-    $$ = &DDL{Action: AddSequenceStr, Table: $5}
+    $$ = &DDL{Action: AddSequenceDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &DDL{
-        Action: AddAutoIncStr,
+        Action: AddAutoIncDDLAction,
         Table: $4,
         AutoIncSpec: &AutoIncSpec{
             Column: $7,
@@ -1535,7 +1535,7 @@ rename_statement:
 rename_list:
   table_name TO table_name
   {
-    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$1}, ToTables: TableNames{$3}}
+    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$1}, ToTables: TableNames{$3}}
   }
 | rename_list ',' table_name TO table_name
   {
@@ -1551,12 +1551,12 @@ drop_statement:
     if $3 != 0 {
       exists = true
     }
-    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
+    $$ = &DDL{Action: DropDDLAction, FromTables: $4, IfExists: exists}
   }
 | DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $5}
+    $$ = &DDL{Action: AlterDDLAction, Table: $5}
   }
 | DROP VIEW exists_opt table_name ddl_skip_to_end
   {
@@ -1564,7 +1564,7 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
+    $$ = &DDL{Action: DropDDLAction, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
   }
 | DROP DATABASE exists_opt id_or_var
   {
@@ -1578,11 +1578,11 @@ drop_statement:
 truncate_statement:
   TRUNCATE TABLE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $3}
+    $$ = &DDL{Action: TruncateDDLAction, Table: $3}
   }
 | TRUNCATE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $2}
+    $$ = &DDL{Action: TruncateDDLAction, Table: $2}
   }
 analyze_statement:
   ANALYZE TABLE table_name
@@ -1975,7 +1975,7 @@ other_statement:
 flush_statement:
   FLUSH skip_to_end
   {
-    $$ = &DDL{Action: FlushStr}
+    $$ = &DDL{Action: FlushDDLAction}
   }
 comment_opt:
   {

@@ -148,7 +148,7 @@ const (
 
 // AffectedTables returns the list table names affected by the DDL.
 func (node *DDL) AffectedTables() TableNames {
-	if node.Action == RenameStr || node.Action == DropStr {
+	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
 		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
 		list = append(list, node.FromTables...)
 		list = append(list, node.ToTables...)
@@ -802,6 +802,42 @@ func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit,
 	}
 
 	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Type: typ, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+}
+
+// GetDDLActionString returns the string associated with the DDLAction Enum
+func GetDDLActionString(action DDLAction) string {
+	switch action {
+	case CreateDDLAction:
+		return CreateStr
+	case AlterDDLAction:
+		return AlterStr
+	case DropDDLAction:
+		return DropStr
+	case RenameDDLAction:
+		return RenameStr
+	case TruncateDDLAction:
+		return TruncateStr
+	case FlushDDLAction:
+		return FlushStr
+	case CreateVindexDDLAction:
+		return CreateVindexStr
+	case DropVindexDDLAction:
+		return DropVindexStr
+	case AddVschemaTableDDLAction:
+		return AddVschemaTableStr
+	case DropVschemaTableDDLAction:
+		return DropVschemaTableStr
+	case AddColVindexDDLAction:
+		return AddColVindexStr
+	case DropColVindexDDLAction:
+		return DropColVindexStr
+	case AddSequenceDDLAction:
+		return AddSequenceStr
+	case AddAutoIncDDLAction:
+		return AddAutoIncStr
+	default:
+		return "Unknown DDL Action"
+	}
 }
 
 // AtCount represents the '@' count in ColIdent
