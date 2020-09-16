@@ -215,7 +215,14 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 		return nil, err
 	}
 
-	searchPrefix := objName(dir, "")
+	var searchPrefix *string
+	if dir == "/" {
+		searchPrefix = objName("")
+	} else {
+		searchPrefix = objName(dir, "")
+	}
+	log.Infof("objName: %v", searchPrefix)
+
 	query := &s3.ListObjectsV2Input{
 		Bucket:    bucket,
 		Delimiter: &delimiter,
