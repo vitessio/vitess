@@ -119,6 +119,7 @@ func skipToEnd(yylex interface{}) {
   optLike       *OptLike
   isolationLevel IsolationLevel
   unionType	UnionType
+  insertAction InsertAction
 }
 
 %token LEX_ERROR
@@ -228,7 +229,8 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
 %type <bytes2> comment_opt comment_list
-%type <str> insert_or_replace explain_format_opt wild_opt
+%type <str> explain_format_opt wild_opt
+%type <insertAction> insert_or_replace
 %type <unionType> union_op
 %type <bytes> explain_synonyms
 %type <str> distinct_opt cache_opt match_option separator_opt
@@ -503,11 +505,11 @@ insert_statement:
 insert_or_replace:
   INSERT
   {
-    $$ = InsertStr
+    $$ = InsertAct
   }
 | REPLACE
   {
-    $$ = ReplaceStr
+    $$ = ReplaceAct
   }
 
 update_statement:

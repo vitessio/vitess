@@ -59,7 +59,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 		}
 		return buildInsertUnshardedPlan(ins, vschemaTable)
 	}
-	if ins.Action == sqlparser.ReplaceStr {
+	if ins.Action == sqlparser.ReplaceAct {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
 	return buildInsertShardedPlan(ins, vschemaTable)

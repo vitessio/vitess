@@ -105,7 +105,7 @@ type (
 	// of the implications the deletion part may have on vindexes.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
-		Action     string
+		Action     InsertAction
 		Comments   Comments
 		Ignore     string
 		Table      TableName
@@ -114,6 +114,9 @@ type (
 		Rows       InsertRows
 		OnDup      OnDup
 	}
+
+	// InsertAction is the action for insert.
+	InsertAction int8
 
 	// Update represents an UPDATE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
@@ -937,10 +940,24 @@ func (node *Stream) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
-		node.Action,
-		node.Comments, node.Ignore,
-		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	switch node.Action {
+	case InsertAct:
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+			InsertStr,
+			node.Comments, node.Ignore,
+			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	case ReplaceAct:
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+			ReplaceStr,
+			node.Comments, node.Ignore,
+			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	default:
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+			"Unkown Insert Action",
+			node.Comments, node.Ignore,
+			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	}
+
 }
 
 // Format formats the node.
