@@ -664,11 +664,11 @@ create_statement:
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String())}
   }
 | CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String())}
   }
 
 vindex_type_opt:
@@ -1409,11 +1409,11 @@ alter_statement:
   }
 | ALTER DATABASE id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
+    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
   }
 | ALTER SCHEMA id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
+    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
@@ -1568,11 +1568,11 @@ drop_statement:
   }
 | DROP DATABASE exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String())}
   }
 | DROP SCHEMA exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String())}
   }
 
 truncate_statement:

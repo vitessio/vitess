@@ -200,3 +200,10 @@ const (
 	InsertAct InsertAction = iota
 	ReplaceAct
 )
+
+// Constants for Enum Type - DBDDL.Action
+const (
+	CreateDBDDLAction DBDDLAction = iota
+	AlterDBDDLAction
+	DropDBDDLAction
+)
