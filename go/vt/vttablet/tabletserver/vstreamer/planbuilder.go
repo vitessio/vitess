@@ -477,6 +477,13 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Vindex:        cv.Vindex,
 			VindexColumns: vindexColumns,
 		}, nil
+	case *sqlparser.Literal:
+		return ColExpr{
+			Field: &querypb.Field{
+				Name: aliased.As.CompliantName(),
+				Type: sqltypes.VarBinary,
+			},
+		}, nil
 	default:
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}

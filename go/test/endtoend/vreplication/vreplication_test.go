@@ -67,6 +67,8 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t)
 	insertInitialData(t)
+	materializeRollup(t)
+
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
 	shardOrders(t)
 	shardMerchant(t)
@@ -617,6 +619,22 @@ func materializeProduct(t *testing.T) {
 	}
 }
 
+func materializeRollup(t *testing.T) {
+	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeSalesVSchema, "product"); err != nil {
+		t.Fatal(err)
+	}
+	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
+	if err := vc.VtctlClient.ExecuteCommand("Materialize", materializeRollupSpec); err != nil {
+		t.Fatal(err)
+	}
+	if vc.WaitForVReplicationToCatchup(productTab, "rollup", "vt_product", 1*time.Second) != nil {
+		assert.Fail(t, "Materialize timed out for product.rollup")
+	}
+	assert.Empty(t, validateCount(t, vtgateConn, "product", "rollup", 1))
+	assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		`[[VARCHAR("total") INT32(2)]]`))
+}
+
 func materializeSales(t *testing.T) {
 	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeSalesVSchema, "product"); err != nil {
 		t.Fatal(err)
@@ -625,7 +643,7 @@ func materializeSales(t *testing.T) {
 		t.Fatal(err)
 	}
 	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	if vc.WaitForVReplicationToCatchup(productTab, "sales", "vt_product", 5*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(productTab, "sales", "vt_product", 10*time.Second) != nil {
 		assert.Fail(t, "Materialize timed out for product.sales")
 	}
 	assert.Empty(t, validateCount(t, vtgateConn, "product", "sales", 2))

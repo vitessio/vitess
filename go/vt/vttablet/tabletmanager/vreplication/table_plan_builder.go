@@ -383,6 +383,11 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			return cexpr, nil
 		}
 	}
+	if expr, ok := aliased.Expr.(*sqlparser.Literal); ok {
+		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: expr})
+		cexpr.expr = expr
+		return cexpr, nil
+	}
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
