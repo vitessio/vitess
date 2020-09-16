@@ -44,12 +44,13 @@ var (
 
 func init() {
 	defaultRdonly = 0
-	defaultReplicas = 1
+	defaultReplicas = 0
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	allCellNames = "zone1"
+
 	vc = InitCluster(t, []string{defaultCellName})
 	assert.NotNil(t, vc)
 
@@ -202,7 +203,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	}
 
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+sourceCellOrAlias, "-workflow=p2c",
-		"-tablet_types="+"replica,rdonly", "product", "customer", "customer"); err != nil {
+		"-tablet_types="+"master,replica,rdonly", "product", "customer", "customer"); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 
@@ -221,7 +222,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	}
 
 	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	productTabReplica := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
+	//productTabReplica := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
 	query := "select * from customer"
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 	insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
@@ -243,7 +244,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		t.Fatalf("SwitchReads error: %s\n", output)
 	}
 
-	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTabReplica, "customer", query, query))
+	//assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTabReplica, "customer", query, query))
 	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
 	want = dryRunResultsSwitchWritesCustomerShard
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", "customer.p2c"); err != nil {
@@ -502,7 +503,7 @@ func shardOrders(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+defaultCell.Name, "-workflow=o2c",
-		"-tablet_types="+"replica,rdonly", "product", "customer", "orders"); err != nil {
+		"-tablet_types="+"master,replica,rdonly", "product", "customer", "orders"); err != nil {
 		t.Fatal(err)
 	}
 	customerTab1 := vc.Cells[defaultCell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -545,7 +546,7 @@ func shardMerchant(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+defaultCell.Name, "-workflow=p2m",
-		"-tablet_types="+"replica,rdonly", "product", "merchant", "merchant"); err != nil {
+		"-tablet_types="+"master,replica,rdonly", "product", "merchant", "merchant"); err != nil {
 		t.Fatal(err)
 	}
 
