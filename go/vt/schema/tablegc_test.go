@@ -25,10 +25,10 @@ import (
 
 func TestIsGCTableName(t *testing.T) {
 	tm := time.Now()
-	hints := []TableGCHint{HoldTableGCHint, PurgeTableGCHint, EvacTableGCHint, DropTableGCHint}
-	for _, hint := range hints {
+	states := []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState}
+	for _, state := range states {
 		for i := 0; i < 10; i++ {
-			tableName, err := generateGCTableName(hint, tm)
+			tableName, err := generateGCTableName(state, tm)
 			assert.NoError(t, err)
 			assert.True(t, IsGCTableName(tableName))
 		}
@@ -52,35 +52,98 @@ func TestAnalyzeGCTableName(t *testing.T) {
 	assert.NoError(t, err)
 	tt := []struct {
 		tableName string
-		hint      TableGCHint
+		state     TableGCState
 		t         time.Time
 	}{
 		{
 			tableName: "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			hint:      DropTableGCHint,
+			state:     DropTableGCState,
 			t:         baseTime,
 		},
 		{
 			tableName: "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			hint:      HoldTableGCHint,
+			state:     HoldTableGCState,
 			t:         baseTime,
 		},
 		{
 			tableName: "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			hint:      EvacTableGCHint,
+			state:     EvacTableGCState,
 			t:         baseTime,
 		},
 		{
 			tableName: "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
-			hint:      PurgeTableGCHint,
+			state:     PurgeTableGCState,
 			t:         baseTime,
 		},
 	}
 	for _, ts := range tt {
-		isGC, hint, tm, err := AnalyzeGCTableName(ts.tableName)
+		isGC, state, tm, err := AnalyzeGCTableName(ts.tableName)
 		assert.NoError(t, err)
 		assert.True(t, isGC)
-		assert.Equal(t, ts.hint, hint)
+		assert.Equal(t, ts.state, state)
 		assert.Equal(t, ts.t, tm)
+	}
+}
+
+func TestParseGCLifecycle(t *testing.T) {
+	tt := []struct {
+		lifecycle string
+		states    map[TableGCState]bool
+		expectErr bool
+	}{
+		{
+			lifecycle: "",
+			states:    map[TableGCState]bool{},
+		},
+		{
+			lifecycle: "drop",
+			states: map[TableGCState]bool{
+				DropTableGCState: true,
+			},
+		},
+		{
+			lifecycle: "   drop, ",
+			states: map[TableGCState]bool{
+				DropTableGCState: true,
+			},
+		},
+		{
+			lifecycle: "hold, drop",
+			states: map[TableGCState]bool{
+				HoldTableGCState: true,
+				DropTableGCState: true,
+			},
+		},
+		{
+			lifecycle: "hold,purge, evac;drop",
+			states: map[TableGCState]bool{
+				HoldTableGCState:  true,
+				PurgeTableGCState: true,
+				EvacTableGCState:  true,
+				DropTableGCState:  true,
+			},
+		},
+		{
+			lifecycle: "hold,purge,evac,drop",
+			states: map[TableGCState]bool{
+				HoldTableGCState:  true,
+				PurgeTableGCState: true,
+				EvacTableGCState:  true,
+				DropTableGCState:  true,
+			},
+		},
+		{
+			lifecycle: "hold, other, drop",
+			expectErr: true,
+		},
+	}
+	for _, ts := range tt {
+		states, err := ParseGCLifecycle(ts.lifecycle)
+		if ts.expectErr {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+			assert.Equal(t, ts.states, states)
+		}
 	}
 }
