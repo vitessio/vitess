@@ -117,7 +117,8 @@ func skipToEnd(yylex interface{}) {
   vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
-  isolationLevel IsolationLevelT
+  isolationLevel IsolationLevel
+  unionType	UnionType
 }
 
 %token LEX_ERROR
@@ -227,7 +228,8 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace explain_format_opt wild_opt
+%type <str> insert_or_replace explain_format_opt wild_opt
+%type <unionType> union_op
 %type <bytes> explain_synonyms
 %type <str> distinct_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
@@ -1995,15 +1997,15 @@ comment_list:
 union_op:
   UNION
   {
-    $$ = UnionStr
+    $$ = UnionBasic
   }
 | UNION ALL
   {
-    $$ = UnionAllStr
+    $$ = UnionAll
   }
 | UNION DISTINCT
   {
-    $$ = UnionDistinctStr
+    $$ = UnionDistinct
   }
 
 cache_opt:

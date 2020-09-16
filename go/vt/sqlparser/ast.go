@@ -73,9 +73,12 @@ type (
 
 	// UnionSelect represents union type and select statement after first select statement.
 	UnionSelect struct {
-		Type      string
+		Type      UnionType
 		Statement SelectStatement
 	}
+
+	// UnionType is the type of union
+	UnionType int8
 
 	// Union represents a UNION statement.
 	Union struct {
@@ -261,16 +264,6 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
-)
-
-const (
-	ReadOnly AccessMode = iota
-	ReadWrite
-
-	ReadUncommitted IsolationLevel = iota
-	ReadCommitted
-	RepeatableRead
-	Serializable
 )
 
 func (*Union) iStatement()             {}
@@ -924,7 +917,16 @@ func (node *Union) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *UnionSelect) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %s %v", node.Type, node.Statement)
+	switch node.Type {
+	case UnionBasic:
+		buf.astPrintf(node, " %s %v", UnionStr, node.Statement)
+	case UnionAll:
+		buf.astPrintf(node, " %s %v", UnionAllStr, node.Statement)
+	case UnionDistinct:
+		buf.astPrintf(node, " %s %v", UnionDistinctStr, node.Statement)
+	default:
+		buf.astPrintf(node, " %s %v", "Unknown Union Type", node.Statement)
+	}
 }
 
 // Format formats the node.
