@@ -603,7 +603,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
 		throttler:   &testLagThrottler{},
-		dropper:     &testTableDropper{},
+		tableGC:     &testTableGC{},
 	}
 	sm.Init(env, querypb.Target{})
 	sm.hs.InitDBConfig(querypb.Target{})
@@ -801,17 +801,17 @@ func (te *testLagThrottler) Close() {
 	te.state = testStateClosed
 }
 
-type testTableDropper struct {
+type testTableGC struct {
 	testOrderState
 }
 
-func (te *testTableDropper) Open() error {
+func (te *testTableGC) Open() error {
 	te.order = order.Add(1)
 	te.state = testStateOpen
 	return nil
 }
 
-func (te *testTableDropper) Close() {
+func (te *testTableGC) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }

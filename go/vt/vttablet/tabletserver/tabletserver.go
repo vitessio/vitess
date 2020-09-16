@@ -106,7 +106,7 @@ type TabletServer struct {
 	messager     *messager.Engine
 	hs           *healthStreamer
 	lagThrottler *throttle.Throttler
-	tableDropper *gc.TableDropper
+	tableGC      *gc.TableGC
 
 	// sm manages state transitions.
 	sm *stateManager
@@ -167,7 +167,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 			return tsv.sm.Target().TabletType
 		},
 	)
-	tsv.tableDropper = gc.NewTableDropper(tsv, topoServer,
+	tsv.tableGC = gc.NewTableGC(tsv, topoServer,
 		func() topodatapb.TabletType {
 			if tsv.sm == nil {
 				return topodatapb.TabletType_UNKNOWN
@@ -189,7 +189,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		te:          tsv.te,
 		messager:    tsv.messager,
 		throttler:   tsv.lagThrottler,
-		dropper:     tsv.tableDropper,
+		tableGC:     tsv.tableGC,
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -228,7 +228,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
-	tsv.tableDropper.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	return nil
 }
 
@@ -395,9 +395,9 @@ func (tsv *TabletServer) LagThrottler() *throttle.Throttler {
 	return tsv.lagThrottler
 }
 
-// TableDropper returns the tableDropper part of TabletServer.
-func (tsv *TabletServer) TableDropper() *gc.TableDropper {
-	return tsv.tableDropper
+// TableGC returns the tableDropper part of TabletServer.
+func (tsv *TabletServer) TableGC() *gc.TableGC {
+	return tsv.tableGC
 }
 
 // SchemaEngine returns the SchemaEngine part of TabletServer.
