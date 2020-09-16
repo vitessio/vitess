@@ -170,12 +170,15 @@ type (
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
 	DBDDL struct {
-		Action   string
+		Action   DBDDLAction
 		DBName   string
 		IfExists bool
 		Collate  string
 		Charset  string
 	}
+
+	// DBDDLAction is an enum for DBDDL Actions
+	DBDDLAction int8
 
 	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 	DDL struct {
@@ -1000,14 +1003,16 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateStr, AlterStr:
-		buf.WriteString(fmt.Sprintf("%s database %s", node.Action, node.DBName))
-	case DropStr:
+	case CreateDBDDLAction:
+		buf.WriteString(fmt.Sprintf("%s database %s", CreateStr, node.DBName))
+	case AlterDBDDLAction:
+		buf.WriteString(fmt.Sprintf("%s database %s", AlterStr, node.DBName))
+	case DropDBDDLAction:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, exists, node.DBName))
+		buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
 	}
 }
 

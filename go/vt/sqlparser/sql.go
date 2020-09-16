@@ -4145,13 +4145,13 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:666
 		{
-			yyVAL.statement = &DBDDL{Action: CreateStr, DBName: string(yyDollar[4].colIdent.String())}
+			yyVAL.statement = &DBDDL{Action: CreateDBDDLAction, DBName: string(yyDollar[4].colIdent.String())}
 		}
 	case 80:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:670
 		{
-			yyVAL.statement = &DBDDL{Action: CreateStr, DBName: string(yyDollar[4].colIdent.String())}
+			yyVAL.statement = &DBDDL{Action: CreateDBDDLAction, DBName: string(yyDollar[4].colIdent.String())}
 		}
 	case 81:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -5105,13 +5105,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1411
 		{
-			yyVAL.statement = &DBDDL{Action: AlterStr, DBName: string(yyDollar[3].colIdent.String())}
+			yyVAL.statement = &DBDDL{Action: AlterDBDDLAction, DBName: string(yyDollar[3].colIdent.String())}
 		}
 	case 237:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1415
 		{
-			yyVAL.statement = &DBDDL{Action: AlterStr, DBName: string(yyDollar[3].colIdent.String())}
+			yyVAL.statement = &DBDDL{Action: AlterDBDDLAction, DBName: string(yyDollar[3].colIdent.String())}
 		}
 	case 238:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -5278,13 +5278,13 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1570
 		{
-			yyVAL.statement = &DBDDL{Action: DropStr, DBName: string(yyDollar[4].colIdent.String())}
+			yyVAL.statement = &DBDDL{Action: DropDBDDLAction, DBName: string(yyDollar[4].colIdent.String())}
 		}
 	case 272:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1574
 		{
-			yyVAL.statement = &DBDDL{Action: DropStr, DBName: string(yyDollar[4].colIdent.String())}
+			yyVAL.statement = &DBDDL{Action: DropDBDDLAction, DBName: string(yyDollar[4].colIdent.String())}
 		}
 	case 273:
 		yyDollar = yyS[yypt-3 : yypt+1]
