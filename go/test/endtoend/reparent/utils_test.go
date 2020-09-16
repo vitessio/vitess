@@ -143,9 +143,6 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		}
 	}
 
-	// We do not need semiSync for this test case.
-	clusterInstance.EnableSemiSync = false
-
 	// create tablet manager client
 	tmClient = tmc.NewClient()
 	setupShard(ctx, t, shardName, tablets)
