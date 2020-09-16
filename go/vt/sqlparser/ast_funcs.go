@@ -791,7 +791,7 @@ func (node *Union) SetLock(lock string) {
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, typ string, by OrderBy, limit *Limit, lock string) *Union {
+func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit, lock string) *Union {
 	union, isUnion := lhs.(*Union)
 	if isUnion {
 		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Type: typ, Statement: rhs})

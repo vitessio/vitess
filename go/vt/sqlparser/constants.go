@@ -173,3 +173,24 @@ const (
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
 )
+
+// Constants for Enum type - AccessMode
+const (
+	ReadOnly AccessMode = iota
+	ReadWrite
+)
+
+//Constants for Enum type - IsolationLevel
+const (
+	ReadUncommitted IsolationLevel = iota
+	ReadCommitted
+	RepeatableRead
+	Serializable
+)
+
+// Constants for Union.Type
+const (
+	UnionBasic UnionType = iota
+	UnionAll
+	UnionDistinct
+)

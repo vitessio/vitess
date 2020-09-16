@@ -50,7 +50,7 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 		}
 		err := unionRouteMerge(pb.bldr, rpb.bldr, us)
 		if err != nil {
-			if us.Type != sqlparser.UnionAllStr {
+			if us.Type != sqlparser.UnionAll {
 				return err
 			}
 
