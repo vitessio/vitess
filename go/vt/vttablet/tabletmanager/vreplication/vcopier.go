@@ -197,7 +197,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}()
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
-
 	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.pkInfoMap, nil)
 	if err != nil {
 		return err
