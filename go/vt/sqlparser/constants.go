@@ -194,3 +194,8 @@ const (
 	UnionAll
 	UnionDistinct
 )
+
+const (
+	InsertAct InsertAction = iota
+	ReplaceAct
+)

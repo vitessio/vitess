@@ -83,7 +83,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
 	}
-	if ins.Action != sqlparser.InsertStr {
+	if ins.Action != sqlparser.InsertAct {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
 	if ins.Ignore != "" {
