@@ -19,7 +19,6 @@ limitations under the License.
 package vtctl
 
 // The following comment section contains definitions for command arguments.
-// It is parsed to generate the vtctl documentation automatically.
 /*
 COMMAND ARGUMENT DEFINITIONS
 
