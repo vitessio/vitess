@@ -519,6 +519,15 @@
 			"Tags": [
 				"worker_test"
 			]
+		},
+		"vreplication": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 24,
+			"RetryMax": 0,
+			"Tags": []
 		}
 	}
 }
