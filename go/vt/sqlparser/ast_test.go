@@ -182,14 +182,14 @@ func TestDDL(t *testing.T) {
 	}{{
 		query: "create table a",
 		output: &DDL{
-			Action: CreateStr,
+			Action: CreateDDLAction,
 			Table:  TableName{Name: NewTableIdent("a")},
 		},
 		affected: []string{"a"},
 	}, {
 		query: "rename table a to b",
 		output: &DDL{
-			Action: RenameStr,
+			Action: RenameDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 			},
@@ -201,7 +201,7 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "rename table a to b, c to d",
 		output: &DDL{
-			Action: RenameStr,
+			Action: RenameDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 				TableName{Name: NewTableIdent("c")},
@@ -215,7 +215,7 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "drop table a",
 		output: &DDL{
-			Action: DropStr,
+			Action: DropDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 			},
@@ -224,7 +224,7 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "drop table a, b",
 		output: &DDL{
-			Action: DropStr,
+			Action: DropDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 				TableName{Name: NewTableIdent("b")},

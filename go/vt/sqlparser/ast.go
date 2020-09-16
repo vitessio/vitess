@@ -182,15 +182,15 @@ type (
 
 	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 	DDL struct {
-		Action string
+		Action DDLAction
 
-		// FromTables is set if Action is RenameStr or DropStr.
+		// FromTables is set if Action is RenameDDLAction or DropDDLAction.
 		FromTables TableNames
 
-		// ToTables is set if Action is RenameStr.
+		// ToTables is set if Action is RenameDDLAction.
 		ToTables TableNames
 
-		// Table is set if Action is other than RenameStr or DropStr.
+		// Table is set if Action is other than RenameDDLAction or DropDDLAction.
 		Table TableName
 
 		// The following fields are set if a DDL was fully analyzed.
@@ -199,15 +199,18 @@ type (
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
 
-		// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
+		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
 
-		// VindexCols is set for AddColVindexStr.
+		// VindexCols is set for AddColVindexDDLAction.
 		VindexCols []ColIdent
 
-		// AutoIncSpec is set for AddAutoIncStr.
+		// AutoIncSpec is set for AddAutoIncDDLAction.
 		AutoIncSpec *AutoIncSpec
 	}
+
+	// DDLAction is an enum for DDL.Action
+	DDLAction int8
 
 	// ParenSelect is a parenthesized SELECT statement.
 	ParenSelect struct {
@@ -1019,42 +1022,42 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateStr:
+	case CreateDDLAction:
 		if node.OptLike != nil {
-			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.OptLike)
+			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.OptLike)
 		} else if node.TableSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.TableSpec)
+			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.TableSpec)
 		} else {
-			buf.astPrintf(node, "%s table %v", node.Action, node.Table)
+			buf.astPrintf(node, "%s table %v", CreateStr, node.Table)
 		}
-	case DropStr:
+	case DropDDLAction:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.astPrintf(node, "%s table%s %v", node.Action, exists, node.FromTables)
-	case RenameStr:
-		buf.astPrintf(node, "%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
+		buf.astPrintf(node, "%s table%s %v", DropStr, exists, node.FromTables)
+	case RenameDDLAction:
+		buf.astPrintf(node, "%s table %v to %v", RenameStr, node.FromTables[0], node.ToTables[0])
 		for i := 1; i < len(node.FromTables); i++ {
 			buf.astPrintf(node, ", %v to %v", node.FromTables[i], node.ToTables[i])
 		}
-	case AlterStr:
+	case AlterDDLAction:
 		if node.PartitionSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+			buf.astPrintf(node, "%s table %v %v", AlterStr, node.Table, node.PartitionSpec)
 		} else {
-			buf.astPrintf(node, "%s table %v", node.Action, node.Table)
+			buf.astPrintf(node, "%s table %v", AlterStr, node.Table)
 		}
-	case FlushStr:
-		buf.astPrintf(node, "%s", node.Action)
-	case CreateVindexStr:
+	case FlushDDLAction:
+		buf.astPrintf(node, "%s", FlushStr)
+	case CreateVindexDDLAction:
 		buf.astPrintf(node, "alter vschema create vindex %v %v", node.Table, node.VindexSpec)
-	case DropVindexStr:
+	case DropVindexDDLAction:
 		buf.astPrintf(node, "alter vschema drop vindex %v", node.Table)
-	case AddVschemaTableStr:
+	case AddVschemaTableDDLAction:
 		buf.astPrintf(node, "alter vschema add table %v", node.Table)
-	case DropVschemaTableStr:
+	case DropVschemaTableDDLAction:
 		buf.astPrintf(node, "alter vschema drop table %v", node.Table)
-	case AddColVindexStr:
+	case AddColVindexDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
 		for i, col := range node.VindexCols {
 			if i != 0 {
@@ -1067,14 +1070,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.VindexSpec.Type.String() != "" {
 			buf.astPrintf(node, " %v", node.VindexSpec)
 		}
-	case DropColVindexStr:
+	case DropColVindexDDLAction:
 		buf.astPrintf(node, "alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
-	case AddSequenceStr:
+	case AddSequenceDDLAction:
 		buf.astPrintf(node, "alter vschema add sequence %v", node.Table)
-	case AddAutoIncStr:
+	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
-		buf.astPrintf(node, "%s table %v", node.Action, node.Table)
+		buf.astPrintf(node, "%s table %v", GetDDLActionString(node.Action), node.Table)
 	}
 }
 

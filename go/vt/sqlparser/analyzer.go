@@ -253,7 +253,7 @@ func IsDMLStatement(stmt Statement) bool {
 //IsVschemaDDL returns true if the query is an Vschema alter ddl.
 func IsVschemaDDL(ddl *DDL) bool {
 	switch ddl.Action {
-	case CreateVindexStr, DropVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
+	case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
 		return true
 	}
 	return false
