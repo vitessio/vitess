@@ -291,7 +291,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": 13,
 			"RetryMax": 0,
 			"Tags": []
 		},
