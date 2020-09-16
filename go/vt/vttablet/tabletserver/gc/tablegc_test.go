@@ -19,6 +19,8 @@ package gc
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/schema"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,5 +67,87 @@ func TestNextTableToPurge(t *testing.T) {
 		if ok {
 			assert.Equal(t, ts.next, next)
 		}
+	}
+}
+
+func TestNextState(t *testing.T) {
+	tt := []struct {
+		lifecycle string
+		state     schema.TableGCState
+		next      schema.TableGCState
+	}{
+		{
+			lifecycle: "hold,purge,evac,drop",
+			state:     schema.HoldTableGCState,
+			next:      schema.PurgeTableGCState,
+		},
+		{
+			lifecycle: "hold,purge,evac,drop",
+			state:     schema.PurgeTableGCState,
+			next:      schema.EvacTableGCState,
+		},
+		{
+			lifecycle: "hold,purge,evac,drop",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "hold,purge,evac",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "hold,purge",
+			state:     schema.HoldTableGCState,
+			next:      schema.PurgeTableGCState,
+		},
+		{
+			lifecycle: "hold,purge",
+			state:     schema.PurgeTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "hold",
+			state:     schema.HoldTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "evac,drop",
+			state:     schema.HoldTableGCState,
+			next:      schema.EvacTableGCState,
+		},
+		{
+			lifecycle: "evac,drop",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "drop",
+			state:     schema.HoldTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "drop",
+			state:     schema.EvacTableGCState,
+			next:      schema.DropTableGCState,
+		},
+		{
+			lifecycle: "",
+			state:     schema.HoldTableGCState,
+			next:      schema.DropTableGCState,
+		},
+	}
+	for _, ts := range tt {
+		collector := &TableGC{}
+		var err error
+		collector.lifecycleStates, err = schema.ParseGCLifecycle(ts.lifecycle)
+		collector.lifecycleStates[schema.DropTableGCState] = true
+		assert.NoError(t, err)
+		next := collector.nextState(ts.state)
+		assert.NotNil(t, next)
+		assert.Equal(t, ts.next, *next)
+
+		postDrop := collector.nextState(schema.DropTableGCState)
+		assert.Nil(t, postDrop)
 	}
 }
