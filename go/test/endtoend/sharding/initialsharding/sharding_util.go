@@ -130,7 +130,7 @@ func ClusterWrapper(isMulti bool) (int, error) {
 }
 
 func initClusterForInitialSharding(keyspaceName string, shardNames []string, totalTabletsRequired int, rdonly bool, isMulti bool) {
-	var mysqlProcesses []*exec.Cmd
+	var mysqlProcesses []*cluster.MySQLCmd
 	var extraArgs []string
 	if isMulti {
 		extraArgs = []string{"-db-credentials-file", dbCredentialFile}
@@ -512,15 +512,6 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 		}
 	}
 
-	if isExternal {
-		// get status for the destination master tablet, make sure we have it all
-		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3956, 2002)
-		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4048, 2002)
-	} else {
-		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
-		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
-	}
-
 	// check we can't migrate the master just yet
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
 	require.Error(t, err)
@@ -638,7 +629,7 @@ func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions
 // Create a new init_db.sql file that sets up passwords for all users.
 // Then we use a db-credentials-file with the passwords.
 func writeInitDBFile() {
-	initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+	initDb, _ := ioutil.ReadFile(path.Join(cluster.GetEnvOrPanic("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDbFile = path.Join(ClusterInstance.TmpDirectory, "init_db_with_passwords.sql")
 	sql = sql + GetPasswordUpdateSQL(ClusterInstance) + `

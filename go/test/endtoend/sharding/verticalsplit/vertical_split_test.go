@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os/exec"
 	"path"
 	"reflect"
 	"strings"
@@ -289,9 +288,6 @@ func TestVerticalSplit(t *testing.T) {
 		"--min_healthy_rdonly_tablets", "1",
 		"destination_keyspace/0")
 	require.NoError(t, err)
-
-	// get status for destination master tablet, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, destinationMasterTablet, 700, 300)
 
 	// check query service is off on destination master, as filtered
 	// replication is enabled. Even health check should not interfere.
@@ -625,7 +621,7 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 }
 
 func initializeCluster() (int, error) {
-	var mysqlProcesses []*exec.Cmd
+	var mysqlProcesses []*cluster.MySQLCmd
 	clusterInstance = cluster.NewCluster(cellj, hostname)
 
 	// Start topo server

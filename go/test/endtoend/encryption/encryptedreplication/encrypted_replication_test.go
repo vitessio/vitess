@@ -19,7 +19,6 @@ package encryptedreplication
 import (
 	"flag"
 	"os"
-	"os/exec"
 	"path"
 	"testing"
 
@@ -81,7 +80,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 }
 
 func initializeCluster(t *testing.T) (int, error) {
-	var mysqlProcesses []*exec.Cmd
+	var mysqlProcesses []*cluster.MySQLCmd
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
 	// Start topo server

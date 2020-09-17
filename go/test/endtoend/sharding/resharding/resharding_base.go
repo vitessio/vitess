@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path"
 	"strings"
 	"sync"
@@ -253,7 +252,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), 4)
 
 	//Start MySql
-	var mysqlCtlProcessList []*exec.Cmd
+	var mysqlCtlProcessList []*cluster.MySQLCmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Infof("Starting mysql for tablet %v", tablet.Alias)
@@ -589,10 +588,6 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
 	require.Nil(t, err)
-
-	// get status for destination master tablets, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, *shard2Master, 436, 216)
-	sharding.CheckRunningBinlogPlayer(t, *shard3Master, 456, 216)
 
 	// tests a failover switching serving to a different replica
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Replica2.Alias, "replica")
