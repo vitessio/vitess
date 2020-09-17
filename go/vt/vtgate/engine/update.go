@@ -21,6 +21,8 @@ import (
 	"sort"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -44,6 +46,9 @@ type Update struct {
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string]VindexValues
+
+	// UpdateVindex contains the offset from ownedVindexQuery to provide input decision for vindex update.
+	UpdateVindex map[string]int
 
 	// Update does not take inputs
 	noInputs
@@ -227,6 +232,16 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		for _, colVindex := range upd.Table.Owned {
 			// Update columns only if they're being changed.
 			if updColValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
+				offset := upd.UpdateVindex[colVindex.Name]
+				if !row[offset].IsNull() {
+					val, err := evalengine.ToInt64(row[offset])
+					if err != nil {
+						return err
+					}
+					if val == int64(1) {
+						continue
+					}
+				}
 				fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
 				var vindexColumnKeys []sqltypes.Value
 				for _, vCol := range colVindex.Columns {
@@ -267,7 +282,8 @@ func (upd *Update) description() PrimitiveDescription {
 
 	var changedVindexes []string
 	for vindex := range upd.ChangedVindexValues {
-		changedVindexes = append(changedVindexes, vindex)
+		offset := upd.UpdateVindex[vindex]
+		changedVindexes = append(changedVindexes, fmt.Sprintf("%s:%d", vindex, offset))
 	}
 	sort.Strings(changedVindexes) // We sort these so random changes in the map order does not affect output
 	if len(changedVindexes) > 0 {
