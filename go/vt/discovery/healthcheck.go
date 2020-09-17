@@ -617,14 +617,11 @@ func (hc *HealthCheckImpl) WaitForAllServingTablets(ctx context.Context, targets
 
 // FilterTargetsByKeyspaces only returns the targets that are part of the provided keyspaces
 func FilterTargetsByKeyspaces(keyspaces []string, targets []*query.Target) []*query.Target {
-	filteredTargets := make([]*query.Target, len(targets))
+	filteredTargets := make([]*query.Target, 0)
 
 	// Keep them all if there are no keyspaces to watch
 	if len(KeyspacesToWatch) == 0 {
-		for _, target := range targets {
-			filteredTargets = append(filteredTargets, target)
-		}
-		return filteredTargets
+		return append(filteredTargets, targets...)
 	}
 
 	// Let's remove from the target shards that are not in the keyspaceToWatch list.
