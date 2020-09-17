@@ -214,14 +214,18 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 				"c3": {Value: sqltypes.NewInt64(3)},
 			},
 		},
+		UpdateVindex: map[string]int{
+			"twocol": 4,
+			"onecol": 5,
+		},
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|c1|c2|c3",
-			"int64|int64|int64|int64",
+			"id|c1|c2|c3|twocol|onecol",
+			"int64|int64|int64|int64|int64|int64",
 		),
-		"1|4|5|6",
+		"1|4|5|6|0|0",
 	)}
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.results = results
@@ -261,11 +265,11 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	// Failure case: multiple rows changing.
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|c1|c2|c3",
-			"int64|int64|int64|int64",
+			"id|c1|c2|c3|twocol|onecol",
+			"int64|int64|int64|int64|int64|int64",
 		),
-		"1|4|5|6",
-		"1|7|8|9",
+		"1|4|5|6|0|0",
+		"1|7|8|9|0|0",
 	)}
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.results = results
@@ -315,14 +319,18 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 				"c3": {Value: sqltypes.NewInt64(3)},
 			},
 		},
+		UpdateVindex: map[string]int{
+			"twocol": 4,
+			"onecol": 5,
+		},
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|c1|c2|c3",
-			"int64|int64|int64|int64",
+			"id|c1|c2|c3|twocol|onecol",
+			"int64|int64|int64|int64|int64|int64",
 		),
-		"1|4|5|6",
+		"1|4|5|6|0|0",
 	)}
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.results = results
@@ -362,11 +370,11 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	// Update can affect multiple rows
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|c1|c2|c3",
-			"int64|int64|int64|int64",
+			"id|c1|c2|c3|twocol|onecol",
+			"int64|int64|int64|int64|int64|int64",
 		),
-		"1|4|5|6",
-		"1|7|8|9",
+		"1|4|5|6|0|0",
+		"1|7|8|9|0|0",
 	)}
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.results = results
@@ -450,15 +458,19 @@ func TestUpdateInChangedVindex(t *testing.T) {
 				"c3": {Value: sqltypes.NewInt64(3)},
 			},
 		},
+		UpdateVindex: map[string]int{
+			"twocol": 4,
+			"onecol": 5,
+		},
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|c1|c2|c3",
-			"int64|int64|int64|int64",
+			"id|c1|c2|c3|twocol|onecol",
+			"int64|int64|int64|int64|int64|int64",
 		),
-		"1|4|5|6",
-		"2|21|22|23",
+		"1|4|5|6|0|0",
+		"2|21|22|23|0|0",
 	)}
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.results = results
@@ -504,12 +516,12 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	// Failure case: multiple rows changing.
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"id|c1|c2|c3",
-			"int64|int64|int64|int64",
+			"id|c1|c2|c3|twocol|onecol",
+			"int64|int64|int64|int64|int64|int64",
 		),
-		"1|4|5|6",
-		"1|7|8|9",
-		"2|21|22|23",
+		"1|4|5|6|0|0",
+		"1|7|8|9|0|0",
+		"2|21|22|23|0|0",
 	)}
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.results = results
