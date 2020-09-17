@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"testing"
 	"time"
@@ -88,7 +87,7 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		shard := &localCluster.Keyspaces[0].Shards[0]
 		// changing password for mysql user
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		initDb, _ := ioutil.ReadFile(path.Join(cluster.GetEnvOrPanic("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
@@ -98,7 +97,7 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
 		// start mysql process for all replicas and master
-		var mysqlProcs []*exec.Cmd
+		var mysqlProcs []*cluster.MySQLCmd
 		for i := 0; i < 3; i++ {
 			tabletType := "replica"
 			tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)

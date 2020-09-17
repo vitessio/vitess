@@ -22,10 +22,11 @@ package mysqlctl
 
 type mysqlFlavor string
 
+// Flavor constants define the type of mysql flavor being used
 const (
-	flavorMySQL   mysqlFlavor = "mysql"
-	flavorPercona mysqlFlavor = "percona"
-	flavorMariaDB mysqlFlavor = "mariadb"
+	FlavorMySQL   mysqlFlavor = "mysql"
+	FlavorPercona mysqlFlavor = "percona"
+	FlavorMariaDB mysqlFlavor = "mariadb"
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
@@ -54,8 +55,8 @@ func (c *capabilitySet) hasMaria104InstallDb() bool {
 // or Percona Server. At least currently, Vitess doesn't
 // make use of any specific Percona Server features.
 func (c *capabilitySet) isMySQLLike() bool {
-	return c.flavor == flavorMySQL || c.flavor == flavorPercona
+	return c.flavor == FlavorMySQL || c.flavor == FlavorPercona
 }
 func (c *capabilitySet) isMariaDB() bool {
-	return c.flavor == flavorMariaDB
+	return c.flavor == FlavorMariaDB
 }

@@ -182,7 +182,7 @@ func listBackups(shardKsName string) ([]string, error) {
 	backups, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
 		"-backup_storage_implementation", "file",
 		"-file_backup_storage_root",
-		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+		path.Join(cluster.GetEnvOrPanic("VTDATAROOT"), "tmp", "backupstorage"),
 		"ListBackups", shardKsName,
 	)
 	if err != nil {
@@ -206,7 +206,7 @@ func removeBackups(t *testing.T) {
 		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
 			"-backup_storage_implementation", "file",
 			"-file_backup_storage_root",
-			path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+			path.Join(cluster.GetEnvOrPanic("VTDATAROOT"), "tmp", "backupstorage"),
 			"RemoveBackup", shardKsName, backup,
 		)
 		require.Nil(t, err)

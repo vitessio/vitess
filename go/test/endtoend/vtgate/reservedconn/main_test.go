@@ -14,10 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package setstatement
+package reservedconn
 
 import (
 	"flag"
+	"fmt"
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 
@@ -30,6 +33,7 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
 	cell            = "zone1"
 	hostname        = "localhost"
@@ -121,12 +125,17 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
+		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {
 			return 1
 		}
 
+		vtParams = mysql.ConnParams{
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
+		}
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -142,4 +151,20 @@ func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	return qr
+}
+
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := checkedExec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+	}
+}
+
+func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
+	t.Helper()
+	qr := checkedExec(t, conn, query)
+	assert.Empty(t, qr.Rows)
 }

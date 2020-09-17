@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path"
 	"strings"
 	"sync"
@@ -164,7 +163,7 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), 4)
 
 	//Start MySql
-	var mysqlCtlProcessList []*exec.Cmd
+	var mysqlCtlProcessList []*cluster.MySQLCmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Infof("Starting MySql for tablet %v", tablet.Alias)
@@ -412,9 +411,6 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
-
-	// get status for destination master tablets, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, *shard3Master, 300, 100)
 
 	sharding.CheckTabletQueryService(t, *shard3Master, "NOT_SERVING", false, *clusterInstance)
 	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
