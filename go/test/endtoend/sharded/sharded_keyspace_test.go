@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -198,7 +197,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			Name: shardName,
 		}
 
-		var mysqlCtlProcessList []*exec.Cmd
+		var mysqlCtlProcessList []*cluster.MySQLCmd
 
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
@@ -215,11 +214,11 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return
-			} else {
-				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,

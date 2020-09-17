@@ -66,28 +66,62 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 	return tmpProcess.Wait()
 }
 
-// StartProcess starts the mysqlctl and returns the process reference
-func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
-	tmpProcess := exec.Command(
-		mysqlctl.Binary,
-		"-log_dir", mysqlctl.LogDirectory,
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+// MySQLCmd wraps a exec.Cmd and restarts it with verbose settings if it would fail
+type MySQLCmd struct {
+	mysqlctl *MysqlctlProcess
+	cmd      *exec.Cmd
+}
+
+//Wait waits for the underlying process to finish. If it fails, it's restarted with more log output
+func (m *MySQLCmd) Wait() error {
+	err := m.cmd.Wait()
+	if err != nil {
+		err = m.startProcess(true)
+		if err != nil {
+			return err
+		}
+		return m.cmd.Wait()
+	}
+	return nil
+}
+
+func (m *MySQLCmd) startProcess(verbose bool) error {
+	proc := exec.Command(
+		m.mysqlctl.Binary,
+		"-log_dir", m.mysqlctl.LogDirectory,
+		"-tablet_uid", fmt.Sprintf("%d", m.mysqlctl.TabletUID),
+		"-mysql_port", fmt.Sprintf("%d", m.mysqlctl.MySQLPort),
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
+		proc.Args = append(proc.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
 	}
 
-	if len(mysqlctl.ExtraArgs) > 0 {
-		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
+	if len(m.mysqlctl.ExtraArgs) > 0 {
+		proc.Args = append(proc.Args, m.mysqlctl.ExtraArgs...)
 	}
-	if mysqlctl.InitMysql {
-		tmpProcess.Args = append(tmpProcess.Args, "init",
-			"-init_db_sql_file", mysqlctl.InitDBFile)
+	if m.mysqlctl.InitMysql {
+		proc.Args = append(proc.Args, "init",
+			"-init_db_sql_file", m.mysqlctl.InitDBFile)
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "start")
-	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
-	return tmpProcess, tmpProcess.Start()
+	proc.Args = append(proc.Args, "start")
+	log.Infof("Starting mysqlctl with command: %v", proc.Args)
+	if verbose {
+		proc.Stdout = os.Stdout
+		proc.Stderr = os.Stderr
+	}
+
+	m.cmd = proc
+
+	return proc.Start()
+}
+
+// StartProcess starts the mysqlctl and returns the process reference
+func (mysqlctl *MysqlctlProcess) StartProcess() (*MySQLCmd, error) {
+	cmd := &MySQLCmd{
+		mysqlctl: mysqlctl,
+	}
+
+	return cmd, cmd.startProcess(false)
 }
 
 // Stop executes mysqlctl command to stop mysql instance
@@ -119,11 +153,11 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/relay-logs", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
+	os.RemoveAll(path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
+	os.RemoveAll(path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d/relay-logs", tabletUID)))
+	os.RemoveAll(path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
+	os.RemoveAll(path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
+	os.RemoveAll(path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
@@ -133,7 +167,7 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
 		LogDirectory: tmpDirectory,
-		InitDBFile:   path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"),
+		InitDBFile:   path.Join(GetEnvOrPanic("VTROOT"), "/config/init_db.sql"),
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
@@ -156,7 +190,7 @@ func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username 
 	}
 	params := mysql.ConnParams{
 		Uname:      username,
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
+		UnixSocket: path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
 	}
 
 	return mysql.Connect(ctx, &params)
