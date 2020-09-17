@@ -355,7 +355,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		goto Cleanup
 	}
 	if tablet == nil {
-		log.Errorf("tablet alias is nil")
+		// This can happen because Orc rediscovers instances by alt hostnames,
+		// lit localhost, ip, etc.
+		// TODO(sougou): disable this ability.
 		goto Cleanup
 	}
 
@@ -838,11 +840,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// We need to update candidate_database_instance.
 	// We register the rule even if it hasn't changed,
 	// to bump the last_suggested time.
-	if tablet.Type == topodatapb.TabletType_MASTER || tablet.Type == topodatapb.TabletType_REPLICA {
-		instance.PromotionRule = NeutralPromoteRule
-	} else {
-		instance.PromotionRule = MustNotPromoteRule
-	}
+	instance.PromotionRule = PromotionRule(tablet)
 	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
 	logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 
