@@ -28,7 +28,7 @@ import (
 
 func init() {
 	forSettings(sysvars.IgnoreThese, buildSetOpIgnore)
-	forSettings(sysvars.UseReservedConn, buildSetOpVarSet)
+	forSettings(sysvars.UseReservedConn, buildSetOpReservedConn)
 	forSettings(sysvars.CheckAndIgnore, buildSetOpCheckAndIgnore)
 	forSettings(sysvars.NotSupported, buildNotSupported)
 	forSettings(sysvars.VitessAware, buildSetOpVitessAware)

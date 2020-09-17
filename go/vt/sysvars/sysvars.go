@@ -38,11 +38,9 @@ type SystemVariable struct {
 }
 
 var (
-	on          = "1"
-	off         = "0"
-	multi       = "'MULTI'"
-	unspecified = "'UNSPECIFIED'"
-	utf8        = "'utf8'"
+	on   = "1"
+	off  = "0"
+	utf8 = "'utf8'"
 
 	Autocommit          = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
 	ClientFoundRows     = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
@@ -50,8 +48,8 @@ var (
 	TxReadOnly          = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	TransactionReadOnly = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
 	SQLSelectLimit      = SystemVariable{Name: "sql_select_limit", Default: off}
-	TransactionMode     = SystemVariable{Name: "transaction_mode", Default: multi, IdentifierAsString: true}
-	Workload            = SystemVariable{Name: "workload", Default: unspecified, IdentifierAsString: true}
+	TransactionMode     = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
+	Workload            = SystemVariable{Name: "workload", IdentifierAsString: true}
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 

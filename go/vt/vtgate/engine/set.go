@@ -75,8 +75,8 @@ type (
 		Expr              string
 	}
 
-	// SysVarSet implements the SetOp interface and will write the changes variable into the session
-	SysVarSet struct {
+	// SysVarReservedConn implements the SetOp interface and will write the changes variable into the session
+	SysVarReservedConn struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination `json:",omitempty"`
@@ -254,27 +254,27 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 	return nil
 }
 
-var _ SetOp = (*SysVarSet)(nil)
+var _ SetOp = (*SysVarReservedConn)(nil)
 
 //MarshalJSON provides the type to SetOp for plan json
-func (svs *SysVarSet) MarshalJSON() ([]byte, error) {
+func (svs *SysVarReservedConn) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
-		SysVarSet
+		SysVarReservedConn
 	}{
-		Type:      "SysVarSet",
-		SysVarSet: *svs,
+		Type:               "SysVarSet",
+		SysVarReservedConn: *svs,
 	})
 
 }
 
 //VariableName implements the SetOp interface method
-func (svs *SysVarSet) VariableName() string {
+func (svs *SysVarReservedConn) VariableName() string {
 	return svs.Name
 }
 
 //Execute implements the SetOp interface method
-func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+func (svs *SysVarReservedConn) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	// For those running on advanced vitess settings.
 	if svs.TargetDestination != nil {
 		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
@@ -308,7 +308,7 @@ func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) err
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env evalengine.ExpressionEnv) error {
+func (svs *SysVarReservedConn) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env evalengine.ExpressionEnv) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := 0; i < len(rss); i++ {
 		queries[i] = &querypb.BoundQuery{
@@ -320,7 +320,7 @@ func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedS
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
+func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
 	if err != nil {
