@@ -179,8 +179,8 @@ type (
 	DBDDL struct {
 		Action      string
 		DBName      string
-		IfExists    bool
-		IfNotExists bool
+		IfExists    BoolVal
+		IfNotExists BoolVal
 		Collate     string
 		Charset     string
 	}
@@ -199,7 +199,7 @@ type (
 		Table TableName
 
 		// The following fields are set if a DDL was fully analyzed.
-		IfExists      bool
+		IfExists      BoolVal
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec

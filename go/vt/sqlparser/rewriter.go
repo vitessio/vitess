@@ -188,12 +188,24 @@ func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
 }
 
+func replaceDBDDLIfExists(newNode, parent SQLNode) {
+	parent.(*DBDDL).IfExists = newNode.(BoolVal)
+}
+
+func replaceDBDDLIfNotExists(newNode, parent SQLNode) {
+	parent.(*DBDDL).IfNotExists = newNode.(BoolVal)
+}
+
 func replaceDDLAutoIncSpec(newNode, parent SQLNode) {
 	parent.(*DDL).AutoIncSpec = newNode.(*AutoIncSpec)
 }
 
 func replaceDDLFromTables(newNode, parent SQLNode) {
 	parent.(*DDL).FromTables = newNode.(TableNames)
+}
+
+func replaceDDLIfExists(newNode, parent SQLNode) {
+	parent.(*DDL).IfExists = newNode.(BoolVal)
 }
 
 func replaceDDLOptLike(newNode, parent SQLNode) {
@@ -1013,10 +1025,13 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
 
 	case *DBDDL:
+		a.apply(node, n.IfExists, replaceDBDDLIfExists)
+		a.apply(node, n.IfNotExists, replaceDBDDLIfNotExists)
 
 	case *DDL:
 		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
 		a.apply(node, n.FromTables, replaceDDLFromTables)
+		a.apply(node, n.IfExists, replaceDDLIfExists)
 		a.apply(node, n.OptLike, replaceDDLOptLike)
 		a.apply(node, n.PartitionSpec, replaceDDLPartitionSpec)
 		a.apply(node, n.Table, replaceDDLTable)
