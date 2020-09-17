@@ -590,10 +590,6 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
 	require.Nil(t, err)
 
-	// get status for destination master tablets, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, *shard2Master, 436, 216)
-	sharding.CheckRunningBinlogPlayer(t, *shard3Master, 456, 216)
-
 	// tests a failover switching serving to a different replica
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Replica2.Alias, "replica")
 	require.Nil(t, err)
