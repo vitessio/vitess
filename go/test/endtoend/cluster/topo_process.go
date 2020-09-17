@@ -151,7 +151,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v1/kv/?keys", topo.Host, topo.Port)
 
-	configFile := path.Join(GetEnvOrPanic("VTDATAROOT"), "consul.json")
+	configFile := path.Join(os.Getenv("VTDATAROOT"), "consul.json")
 
 	config := fmt.Sprintf(`{"ports":{"dns":%d,"http":%d,"serf_lan":%d,"serf_wan":%d}}`,
 		cluster.GetAndReservePort(), topo.Port, cluster.GetAndReservePort(), cluster.GetAndReservePort())
@@ -305,8 +305,8 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 
 	topo.AdvertiseClientURL = fmt.Sprintf("http://%s:%d", topo.Host, topo.Port)
 	topo.ListenClientURL = fmt.Sprintf("http://%s:%d", topo.Host, topo.Port)
-	topo.DataDirectory = path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port))
-	topo.LogDirectory = path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port), "logs")
+	topo.DataDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port))
+	topo.LogDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port), "logs")
 	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v2/keys", topo.Host, topo.Port)
 	topo.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return topo

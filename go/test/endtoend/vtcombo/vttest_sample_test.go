@@ -28,8 +28,6 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
@@ -72,7 +70,7 @@ func TestMain(m *testing.M) {
 
 		var cfg vttest.Config
 		cfg.Topology = topology
-		cfg.SchemaDir = cluster.GetEnvOrPanic("VTROOT") + "/test/vttest_schema"
+		cfg.SchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema"
 		cfg.DefaultSchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema/default"
 
 		localCluster = &vttest.LocalCluster{
