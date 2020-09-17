@@ -615,8 +615,30 @@ func (hc *HealthCheckImpl) WaitForAllServingTablets(ctx context.Context, targets
 	return hc.waitForTablets(ctx, targets, true)
 }
 
+func (hc *HealthCheckImpl) filterTargets(targets []*query.Target) []*query.Target {
+	if len(KeyspacesToWatch) == 0 {
+		return targets
+	}
+	// Let's remove from the target shards that are not in the keyspaceToWatch list.
+	for i, target := range targets {
+		keepTarget := false
+		for _, keyspaceToWatch := range KeyspacesToWatch {
+			if target.Keyspace == keyspaceToWatch {
+				keepTarget = true
+			}
+		}
+		if !keepTarget {
+			log.Infof("removing the following target as is not part of keyspaces_to_watch: %v", target)
+			targets[i] = nil
+		}
+	}
+	return targets
+}
+
 // waitForTablets is the internal method that polls for tablets.
 func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.Target, requireServing bool) error {
+	targets = hc.filterTargets(targets)
+
 	for {
 		// We nil targets as we find them.
 		allPresent := true
@@ -648,6 +670,11 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 		select {
 		case <-ctx.Done():
 			timer.Stop()
+			for _, target := range targets {
+				if target != nil {
+					log.Infof("couldn't find tablets for the following target: %v", target)
+				}
+			}
 			return ctx.Err()
 		case <-timer.C:
 		}
