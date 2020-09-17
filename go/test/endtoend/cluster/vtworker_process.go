@@ -156,6 +156,7 @@ func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 	return tmpProcess.Run()
 }
 
+// ExecuteCommandInBg executes command in the background
 func (vtworker *VtworkerProcess) ExecuteCommandInBg(args ...string) (*exec.Cmd, error) {
 	args = append([]string{"-vtworker_client_protocol", "grpc",
 		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
@@ -207,7 +208,7 @@ func VtworkerProcessInstance(httpPort int, grpcPort int, topoPort int, hostname 
 		GrpcPort:               grpcPort,
 		ExecuteRetryTime:       "1s",
 		CommandDisplayInterval: "10ms",
-		Directory:              os.Getenv("VTDATAROOT"),
+		Directory:              GetEnvOrPanic("VTDATAROOT"),
 		Server:                 fmt.Sprintf("%s:%d", hostname, grpcPort),
 	}
 	vtworker.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, vtworker.Port)

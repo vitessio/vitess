@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"testing"
@@ -85,7 +84,7 @@ type Tablet struct {
 }
 
 func init() {
-	originalVtdataroot = os.Getenv("VTDATAROOT")
+	originalVtdataroot = cluster.GetEnvOrPanic("VTDATAROOT")
 }
 
 func initGlobals() {
@@ -185,7 +184,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 }
 
 // AddTablet creates new tablet with specified attributes
-func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
+func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *cluster.MySQLCmd, error) {
 	tablet := &Tablet{}
 
 	vttablet := cluster.VttabletProcessInstance(
@@ -241,7 +240,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			keyspace.Shards[shardName] = shard
 		}
 		for i, cell := range cells {
-			dbProcesses := make([]*exec.Cmd, 0)
+			dbProcesses := make([]*cluster.MySQLCmd, 0)
 			tablets := make([]*Tablet, 0)
 			if i == 0 {
 				// only add master tablet for first cell, so first time CreateShard is called

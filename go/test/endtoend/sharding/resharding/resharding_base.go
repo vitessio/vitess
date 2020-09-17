@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path"
 	"strings"
 	"sync"
@@ -253,7 +252,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), 4)
 
 	//Start MySql
-	var mysqlCtlProcessList []*exec.Cmd
+	var mysqlCtlProcessList []*cluster.MySQLCmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Infof("Starting mysql for tablet %v", tablet.Alias)
