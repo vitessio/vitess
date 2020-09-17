@@ -160,11 +160,11 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		CommonArg:                   *vtctl,
 		ServiceMap:                  "grpc-vtctl",
 		BackupStorageImplementation: "file",
-		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
+		FileBackupStorageRoot:       path.Join(GetEnvOrPanic("VTDATAROOT"), "/backups"),
 		LogDir:                      tmpDirectory,
 		Port:                        httpPort,
 		GrpcPort:                    grpcPort,
-		Directory:                   os.Getenv("VTDATAROOT"),
+		Directory:                   GetEnvOrPanic("VTDATAROOT"),
 	}
 	vtctld.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, vtctld.Port)
 	return vtctld
