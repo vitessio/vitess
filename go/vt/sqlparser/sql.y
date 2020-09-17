@@ -283,7 +283,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <byt> exists_opt not_exists_opt
+%type <boolVal> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -666,19 +666,11 @@ create_statement:
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
-    var notexists bool
-    if $3 != 0 {
-       notexists = true
-    }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: notexists}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: $3}
   }
 | CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
-    var notexists bool
-    if $3 != 0 {
-       notexists = true
-    }
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: notexists}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: $3}
   }
 
 vindex_type_opt:
@@ -1557,11 +1549,7 @@ rename_list:
 drop_statement:
   DROP TABLE exists_opt table_name_list
   {
-    var exists bool
-    if $3 != 0 {
-      exists = true
-    }
-    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: $3}
   }
 | DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
@@ -1570,27 +1558,15 @@ drop_statement:
   }
 | DROP VIEW exists_opt table_name ddl_skip_to_end
   {
-    var exists bool
-        if $3 != 0 {
-          exists = true
-        }
-    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
   }
 | DROP DATABASE exists_opt id_or_var
   {
-    var exists bool
-    if $3 != 0 {
-       exists = true
-    }
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: exists}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
   }
 | DROP SCHEMA exists_opt id_or_var
   {
-    var exists bool
-    if $3 != 0 {
-       exists = true
-    }
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: exists}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
   }
 
 truncate_statement:
@@ -3394,14 +3370,14 @@ for_from:
 | FROM
 
 exists_opt:
-  { $$ = 0 }
+  { $$ = BoolVal(false) }
 | IF EXISTS
-  { $$ = 1 }
+  { $$ = BoolVal(true) }
 
 not_exists_opt:
-  { $$ = 0 }
+  { $$ = BoolVal(false) }
 | IF NOT EXISTS
-  { $$ = 1 }
+  { $$ = BoolVal(true) }
 
 ignore_opt:
   { $$ = "" }
