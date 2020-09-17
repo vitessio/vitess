@@ -334,7 +334,7 @@ func (vc *vcursorImpl) InTransactionAndIsDML() bool {
 
 func (vc *vcursorImpl) LookupRowLockShardSession() vtgatepb.CommitOrder {
 	switch vc.logStats.StmtType {
-	case "DELETE":
+	case "DELETE", "UPDATE":
 		return vtgatepb.CommitOrder_POST
 	}
 	return vtgatepb.CommitOrder_PRE
