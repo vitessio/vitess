@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"testing"
 
@@ -121,16 +120,15 @@ func TestMain(m *testing.M) {
 		}
 
 		//Start MySql
-		var mysqlCtlProcessList []*exec.Cmd
+		var mysqlCtlProcessList []*cluster.MySQLCmd
 		for _, shard := range clusterInstance.Keyspaces[0].Shards {
 			for _, tablet := range shard.Vttablets {
 				log.Infof("Starting MySql for tablet %v", tablet.Alias)
-				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+				proc, err := tablet.MysqlctlProcess.StartProcess()
+				if err != nil {
 					return 1
-				} else {
-					// ignore golint warning, we need the else block to use proc
-					mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 				}
+				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
 		}
 
@@ -156,7 +154,7 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	connParams := mysql.ConnParams{
 		Uname:      username,
 		DbName:     dbName,
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
+		UnixSocket: path.Join(cluster.GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
 	}
 	return connParams
 }

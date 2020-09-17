@@ -139,7 +139,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
+	os.RemoveAll(path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
 }
 
 // MysqlCtldProcessInstance returns a Mysqlctld handle for mysqlctld process
@@ -149,7 +149,7 @@ func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string)
 		Name:         "mysqlctld",
 		Binary:       "mysqlctld",
 		LogDirectory: tmpDirectory,
-		InitDBFile:   path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"),
+		InitDBFile:   path.Join(GetEnvOrPanic("VTROOT"), "/config/init_db.sql"),
 	}
 	mysqlctld.MySQLPort = mySQLPort
 	mysqlctld.TabletUID = tabletUID
@@ -159,7 +159,7 @@ func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string)
 
 // IsHealthy gives the health status of mysql.
 func (mysqlctld *MysqlctldProcess) IsHealthy() bool {
-	socketFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctld.TabletUID), "/mysql.sock")
+	socketFile := path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctld.TabletUID), "/mysql.sock")
 	params := NewConnParams(0, mysqlctld.Password, socketFile, "")
 	_, err := mysql.Connect(context.Background(), &params)
 	return err == nil

@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -82,7 +81,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
-		var mysqlCtlProcessList []*exec.Cmd
+		var mysqlCtlProcessList []*cluster.MySQLCmd
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
@@ -153,7 +152,7 @@ func TestAutoDetect(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	// Start up tablets with an empty MYSQL_FLAVOR, which means auto-detect
-	sqlFlavor := os.Getenv("MYSQL_FLAVOR")
+	sqlFlavor, found := os.LookupEnv("MYSQL_FLAVOR")
 	os.Setenv("MYSQL_FLAVOR", "")
 
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
@@ -166,6 +165,8 @@ func TestAutoDetect(t *testing.T) {
 	require.Nil(t, err, "error should be nil")
 
 	//Reset flavor
-	os.Setenv("MYSQL_FLAVOR", sqlFlavor)
+	if found {
+		os.Setenv("MYSQL_FLAVOR", sqlFlavor)
+	}
 
 }

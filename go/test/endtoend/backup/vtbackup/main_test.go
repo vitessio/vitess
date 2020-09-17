@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"testing"
 
@@ -84,7 +83,7 @@ func TestMain(m *testing.M) {
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		initDb, _ := ioutil.ReadFile(path.Join(cluster.GetEnvOrPanic("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
@@ -102,7 +101,7 @@ func TestMain(m *testing.M) {
 		shard.Vttablets = []*cluster.Vttablet{master, replica1, replica2}
 
 		// Start MySql processes
-		var mysqlProcs []*exec.Cmd
+		var mysqlProcs []*cluster.MySQLCmd
 		for _, tablet := range shard.Vttablets {
 			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
@@ -113,12 +112,11 @@ func TestMain(m *testing.M) {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return 1, err
-			} else {
-				// ignore golint warning, we need the else block to use proc
-				mysqlProcs = append(mysqlProcs, proc)
 			}
+			mysqlProcs = append(mysqlProcs, proc)
 		}
 		for _, proc := range mysqlProcs {
 			if err := proc.Wait(); err != nil {
