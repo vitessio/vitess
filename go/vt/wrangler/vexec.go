@@ -26,11 +26,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -119,7 +119,6 @@ func (vx *vexec) outputDryRunInfo(wr *Wrangler) error {
 
 func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
-	workflow := vx.workflow
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
 	var mu sync.Mutex
@@ -129,15 +128,11 @@ func (vx *vexec) exec(query string) (map[*topo.TabletInfo]*querypb.QueryResult, 
 		wg.Add(1)
 		go func(ctx context.Context, master *topo.TabletInfo) {
 			defer wg.Done()
-			log.Infof("Running %s on %s\n", query, master.AliasString())
 			qr, err := vx.wr.VReplicationExec(ctx, master.Alias, query)
-			log.Infof("Result is %s: %v", master.AliasString(), qr)
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
-				if qr.RowsAffected == 0 {
-					log.Infof("no matching streams found for workflow %s, tablet %s, query %s", workflow, master.Alias, query)
-				} else {
+				if qr.RowsAffected != 0 {
 					mu.Lock()
 					results[master] = qr
 					mu.Unlock()
@@ -194,10 +189,18 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 // WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	if action == "show" {
-		_, err := wr.ShowWorkflow(ctx, workflow, keyspace)
+		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
+		if err != nil {
+			return nil, err
+		}
+		err = dumpStreamListAsJSON(replStatus, wr)
 		return nil, err
 	} else if action == "listall" {
-		_, err := wr.ListAllWorkflows(ctx, keyspace)
+		workflows, err := wr.ListAllWorkflows(ctx, keyspace)
+		if err != nil {
+			return nil, err
+		}
+		wr.printWorkflowList(workflows)
 		return nil, err
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
@@ -387,7 +390,6 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		qr := sqltypes.Proto3ToResult(result)
 		for _, row := range qr.Rows {
 			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, master)
-			fmt.Printf("getReplicationStatusFromRow status for master %s is %v\n", master.AliasString(), status)
 			if err != nil {
 				return nil, err
 			}
@@ -445,7 +447,6 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string) ([]st
 		}
 	}
 	workflows := workflowsSet.List()
-	wr.printWorkflowList(workflows)
 	return workflows, nil
 }
 
@@ -457,10 +458,6 @@ func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string)
 	}
 	if len(replStatus.ShardStatuses) == 0 {
 		return nil, fmt.Errorf("no streams found for workflow %s in keyspace %s", workflow, keyspace)
-	}
-
-	if err := dumpStreamListAsJSON(replStatus, wr); err != nil {
-		return nil, err
 	}
 
 	return replStatus, nil
