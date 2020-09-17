@@ -25,8 +25,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -56,7 +54,7 @@ type mysqlMaster struct {
 
 // newBinlogServer returns an instance of binlog server
 func newBinlogServer(hostname string, port int) (*binLogServer, error) {
-	dataDir := path.Join(cluster.GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("%s_%d", binlogDataDir, port))
+	dataDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", binlogDataDir, port))
 	fmt.Println(dataDir)
 	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 		err := os.Mkdir(dataDir, 0700)
@@ -66,7 +64,7 @@ func newBinlogServer(hostname string, port int) (*binLogServer, error) {
 		}
 	}
 	return &binLogServer{
-		executablePath: path.Join(cluster.GetEnvOrPanic("EXTRA_BIN"), binlogExecutableName),
+		executablePath: path.Join(os.Getenv("EXTRA_BIN"), binlogExecutableName),
 		dataDirectory:  dataDir,
 		username:       binlogUser,
 		hostname:       hostname,

@@ -169,7 +169,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		cluster.Cell = DefaultCell
 	}
 	cluster.TopoPort = cluster.GetAndReservePort()
-	cluster.TmpDirectory = path.Join(GetEnvOrPanic("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
+	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
 	cluster.TopoProcess = *TopoProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, *topoFlavor, "global")
 
 	log.Infof("Starting topo server %v on port: %d", *topoFlavor, cluster.TopoPort)
@@ -210,15 +210,6 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	return
 }
 
-//GetEnvOrPanic panics is an environment variable is missing
-func GetEnvOrPanic(name string) string {
-	getenv, found := os.LookupEnv(name)
-	if !found {
-		panic(fmt.Sprintf("need %s to be set", name))
-	}
-	return getenv
-}
-
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"
 func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, replicaCount int, rdonly bool) error {
 	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly)
@@ -239,12 +230,13 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
-	var mysqlctlProcessList []*MySQLCmd
+	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
 			Name: shardName,
 		}
 		log.Infof("Starting shard: %v", shardName)
+		mysqlctlProcessList = []*exec.Cmd{}
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
@@ -446,8 +438,8 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex)}
 	go cluster.CtrlCHandler()
-	cluster.OriginalVTDATAROOT = GetEnvOrPanic("VTDATAROOT")
-	cluster.CurrentVTDATAROOT = path.Join(cluster.OriginalVTDATAROOT, fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
+	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
+	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
 	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	rand.Seed(time.Now().UTC().UnixNano())

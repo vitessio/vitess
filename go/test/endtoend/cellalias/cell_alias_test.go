@@ -26,6 +26,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,7 +126,7 @@ func TestMain(m *testing.M) {
 		shard2Replica = localCluster.NewVttabletInstance("replica", 0, cell2)
 		shard2Rdonly = localCluster.NewVttabletInstance("rdonly", 0, cell2)
 
-		var mysqlProcs []*cluster.MySQLCmd
+		var mysqlProcs []*exec.Cmd
 		for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica, shard1Rdonly, shard2Master, shard2Replica, shard2Rdonly} {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,

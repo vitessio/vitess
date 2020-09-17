@@ -219,7 +219,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		Name:                  "vtgate",
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
-		Directory:             GetEnvOrPanic("VTDATAROOT"),
+		Directory:             os.Getenv("VTDATAROOT"),
 		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
