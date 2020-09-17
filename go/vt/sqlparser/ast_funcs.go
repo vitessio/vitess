@@ -805,7 +805,7 @@ func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit,
 }
 
 // GetDDLActionString returns the string associated with the DDLAction Enum
-func GetDDLActionString(action DDLAction) string {
+func (action DDLAction) GetDDLActionString() string {
 	switch action {
 	case CreateDDLAction:
 		return CreateStr
