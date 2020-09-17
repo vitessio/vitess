@@ -73,10 +73,11 @@ var (
 )
 
 const (
-	utf8    = "utf8"
-	utf8mb4 = "utf8mb4"
-	both    = "both"
-	charset = "charset"
+	utf8          = "utf8"
+	utf8mb4       = "utf8mb4"
+	both          = "both"
+	charset       = "charset"
+	bindVarPrefix = "__vt"
 )
 
 func init() {
@@ -260,33 +261,33 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 	for _, funcName := range bindVarNeeds.NeedSystemVariable {
 		switch funcName {
 		case sysvars.Autocommit.Name:
-			bindVars["__vt"+sysvars.Autocommit.Name] = sqltypes.BoolBindVariable(session.Autocommit)
+			bindVars[bindVarPrefix+sysvars.Autocommit.Name] = sqltypes.BoolBindVariable(session.Autocommit)
 		case sysvars.ClientFoundRows.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.ClientFoundRows
 			})
-			bindVars["__vt"+sysvars.ClientFoundRows.Name] = sqltypes.BoolBindVariable(v)
+			bindVars[bindVarPrefix+sysvars.ClientFoundRows.Name] = sqltypes.BoolBindVariable(v)
 		case sysvars.SkipQueryPlanCache.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.ClientFoundRows
 			})
-			bindVars["__vt"+sysvars.SkipQueryPlanCache.Name] = sqltypes.BoolBindVariable(v)
+			bindVars[bindVarPrefix+sysvars.SkipQueryPlanCache.Name] = sqltypes.BoolBindVariable(v)
 		case sysvars.SQLSelectLimit.Name:
 			var v int64
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.SqlSelectLimit
 			})
-			bindVars["__vt"+sysvars.SQLSelectLimit.Name] = sqltypes.Int64BindVariable(v)
+			bindVars[bindVarPrefix+sysvars.SQLSelectLimit.Name] = sqltypes.Int64BindVariable(v)
 		case sysvars.TransactionMode.Name:
-			bindVars["__vt"+sysvars.TransactionMode.Name] = sqltypes.StringBindVariable(session.TransactionMode.String())
+			bindVars[bindVarPrefix+sysvars.TransactionMode.Name] = sqltypes.StringBindVariable(session.TransactionMode.String())
 		case sysvars.Workload.Name:
 			var v string
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.GetWorkload().String()
 			})
-			bindVars["__vt"+sysvars.Workload.Name] = sqltypes.StringBindVariable(v)
+			bindVars[bindVarPrefix+sysvars.Workload.Name] = sqltypes.StringBindVariable(v)
 		}
 	}
 
