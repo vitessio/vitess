@@ -87,7 +87,7 @@ func (tc *LegacyTabletStatsCache) waitForTablets(ctx context.Context, targets []
 		case <-ctx.Done():
 			for _, target := range targets {
 				if target != nil {
-					log.Infof("couldn't find tablets for the following target: %v", target)
+					log.Infof("couldn't find tablets for target: %v", target)
 				}
 			}
 			timer.Stop()
