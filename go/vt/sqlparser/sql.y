@@ -120,6 +120,7 @@ func skipToEnd(yylex interface{}) {
   isolationLevel IsolationLevel
   unionType	UnionType
   insertAction InsertAction
+  scope 	Scope
 }
 
 %token LEX_ERROR
@@ -297,7 +298,7 @@ func skipToEnd(yylex interface{}) {
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
-%type <str> set_session_or_global show_session_or_global
+%type <scope> set_session_or_global show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
@@ -582,7 +583,7 @@ set_transaction_statement:
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4}
+    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4, Scope: ImplicitScope}
   }
 
 transaction_chars:
@@ -630,11 +631,11 @@ isolation_level:
 set_session_or_global:
   SESSION
   {
-    $$ = SessionStr
+    $$ = SessionScope
   }
 | GLOBAL
   {
-    $$ = GlobalStr
+    $$ = GlobalScope
   }
 
 create_statement:
@@ -1593,64 +1594,64 @@ analyze_statement:
 show_statement:
   SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String())}
+    $$ = &Show{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
 | SHOW CHARACTER SET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Type: CharsetStr, ShowTablesOpt: showTablesOpt}
+    $$ = &Show{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
   }
 | SHOW CHARSET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String())}
+    $$ = &Show{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
   }
 | SHOW CREATE TABLE table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
+    $$ = &Show{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}
   }
 | SHOW CREATE TRIGGER ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
   }
 | SHOW CREATE VIEW ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
   }
 | SHOW DATABASES ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Scope: ImplicitScope}
   }
 | SHOW ENGINES
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Scope: ImplicitScope}
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Scope: ImplicitScope}
   }
 | SHOW PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Scope: ImplicitScope}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
@@ -1658,21 +1659,21 @@ show_statement:
   }
 | SHOW TABLE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Scope: ImplicitScope}
   }
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
     // this is ugly, but I couldn't find a better way for now
     if $3 == "processlist" {
-      $$ = &Show{Type: $3}
+      $$ = &Show{Type: $3, Scope: ImplicitScope}
     } else {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
-      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
+      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
     }
   }
 | SHOW show_session_or_global VARIABLES ddl_skip_to_end
@@ -1681,32 +1682,32 @@ show_statement:
   }
 | SHOW COLLATION
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Scope: ImplicitScope}
   }
 | SHOW COLLATION WHERE expression
   {
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4}
+    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Scope: string($2), Type: string($3), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}
   }
 | SHOW VSCHEMA TABLES
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
   }
 | SHOW VSCHEMA VINDEXES
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
   }
 | SHOW VSCHEMA VINDEXES ON table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
+    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Scope: ImplicitScope}
   }
 /*
  * Catch-all for show statements without vitess keywords:
@@ -1720,7 +1721,7 @@ show_statement:
  */
 | SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2.String())}
+    $$ = &Show{Type: string($2.String()), Scope: ImplicitScope}
   }
 
 tables_or_processlist:
@@ -1804,15 +1805,15 @@ like_opt:
 show_session_or_global:
   /* empty */
   {
-    $$ = ""
+    $$ = ImplicitScope
   }
 | SESSION
   {
-    $$ = SessionStr
+    $$ = SessionScope
   }
 | GLOBAL
   {
-    $$ = GlobalStr
+    $$ = GlobalScope
   }
 
 use_statement:
@@ -3329,19 +3330,19 @@ set_list:
 set_expression:
   reserved_sql_id '=' ON
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrLiteral([]byte("on"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("on"))}
   }
 | reserved_sql_id '=' OFF
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrLiteral([]byte("off"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("off"))}
   }
 | reserved_sql_id '=' expression
   {
-    $$ = &SetExpr{Name: $1, Expr: $3}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: $3}
   }
 | charset_or_character_set charset_value collate_opt
   {
-    $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
+    $$ = &SetExpr{Name: NewColIdent(string($1)), Scope: ImplicitScope, Expr: $2}
   }
 |  set_session_or_global set_expression
   {

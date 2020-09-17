@@ -840,6 +840,26 @@ func (action DDLAction) GetDDLActionString() string {
 	}
 }
 
+// GetScopeString returns the string associated with the Scope enum
+func (scope Scope) GetScopeString() string {
+	switch scope {
+	case SessionScope:
+		return SessionStr
+	case GlobalScope:
+		return GlobalStr
+	case VitessMetadataScope:
+		return VitessMetadataStr
+	case VariableScope:
+		return VariableStr
+	case LocalScope:
+		return LocalStr
+	case ImplicitScope:
+		return ImplicitStr
+	default:
+		return "Unknown Scope"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
