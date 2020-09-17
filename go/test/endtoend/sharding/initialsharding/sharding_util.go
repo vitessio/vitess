@@ -130,7 +130,7 @@ func ClusterWrapper(isMulti bool) (int, error) {
 }
 
 func initClusterForInitialSharding(keyspaceName string, shardNames []string, totalTabletsRequired int, rdonly bool, isMulti bool) {
-	var mysqlProcesses []*cluster.MySQLCmd
+	var mysqlProcesses []*exec.Cmd
 	var extraArgs []string
 	if isMulti {
 		extraArgs = []string{"-db-credentials-file", dbCredentialFile}
@@ -629,7 +629,7 @@ func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions
 // Create a new init_db.sql file that sets up passwords for all users.
 // Then we use a db-credentials-file with the passwords.
 func writeInitDBFile() {
-	initDb, _ := ioutil.ReadFile(path.Join(cluster.GetEnvOrPanic("VTROOT"), "/config/init_db.sql"))
+	initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDbFile = path.Join(ClusterInstance.TmpDirectory, "init_db_with_passwords.sql")
 	sql = sql + GetPasswordUpdateSQL(ClusterInstance) + `

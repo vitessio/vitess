@@ -62,25 +62,16 @@ endif
 	bash ./build.env
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
 
-check-prefix:
-	if [ -z ${PREFIX+x} ]; then echo "set the PREFIX environment with the install target"; false; fi
-
-check-vtroot:
-	if [ -z ${VTROOT+x} ]; then echo "need VTROOT environment variable set"; false; fi
-
-check-version:
-	if [ -z ${VERSION+x} ]; then echo "Set the env var VERSION with the release version"; false; fi
-
 # install copies the files needed to run Vitess into the given directory tree.
 # Usage: make install PREFIX=/path/to/install/root
-install: check-prefix build
+install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
 # Usage: make install PREFIX=/path/to/install/root
-install-testing: check-vtroot check-prefix build
+install-testing: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,mysqlctl,vtcombo,vttestserver} "$${PREFIX}/bin/"
@@ -170,7 +161,7 @@ ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
 
-$(PROTO_GO_OUTS): check-vtroot install_protoc-gen-go proto/*.proto
+$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
 		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
 		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
@@ -309,7 +300,10 @@ docker_unit_test:
 
 # Release a version.
 # This will generate a tar.gz file into the releases folder with the current source
-release: check-version docker_base
+release: docker_base
+	@if [ -z "$VERSION" ]; then \
+	  echo "Set the env var VERSION with the release version"; exit 1;\
+	fi
 	mkdir -p releases
 	docker build -f docker/Dockerfile.release -t vitess/release .
 	docker run -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/release
@@ -318,7 +312,10 @@ release: check-version docker_base
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
-packages: check-version docker_base
+packages: docker_base
+	@if [ -z "$VERSION" ]; then \
+	  echo "Set the env var VERSION with the release version"; exit 1;\
+	fi
 	mkdir -p releases
 	docker build -f docker/packaging/Dockerfile -t vitess/packaging .
 	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t deb --deb-no-default-config-files

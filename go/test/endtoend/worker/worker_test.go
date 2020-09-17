@@ -269,7 +269,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		// third replica up the whole time.
 
 		// start mysql
-		var mysqlCtlProcessStartList []*cluster.MySQLCmd
+		var mysqlCtlProcessStartList []*exec.Cmd
 
 		for _, tablet := range []*cluster.Vttablet{shard0Master, shard1Master} {
 			tablet.MysqlctlProcess.InitMysql = false
@@ -580,7 +580,7 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 	assert.Nil(t, err)
 
 	// Start MySql
-	var mysqlCtlProcessList []*cluster.MySQLCmd
+	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range localCluster.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
