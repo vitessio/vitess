@@ -494,7 +494,7 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
 }
 
-//SetAutocommit implementes the SessionActions interface
+//SetAutocommit implements the SessionActions interface
 func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
 	if autocommit && vc.safeSession.InTransaction() {
 		if err := vc.executor.Commit(vc.ctx, vc.safeSession); err != nil {
@@ -505,27 +505,30 @@ func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
 	return nil
 }
 
-//SetClientFoundRows implementes the SessionActions interface
-func (vc *vcursorImpl) SetClientFoundRows(clientFoundRows bool) {
+//SetClientFoundRows implements the SessionActions interface
+func (vc *vcursorImpl) SetClientFoundRows(clientFoundRows bool) error {
 	vc.safeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
+	return nil
 }
 
-//SetSkipQueryPlanCache implementes the SessionActions interface
-func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) {
+//SetSkipQueryPlanCache implements the SessionActions interface
+func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) error {
 	vc.safeSession.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
+	return nil
 }
 
-//SetSkipQueryPlanCache implementes the SessionActions interface
-func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) {
+//SetSkipQueryPlanCache implements the SessionActions interface
+func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) error {
 	vc.safeSession.GetOrCreateOptions().SqlSelectLimit = limit
+	return nil
 }
 
-//SetSkipQueryPlanCache implementes the SessionActions interface
+//SetSkipQueryPlanCache implements the SessionActions interface
 func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
 	vc.safeSession.TransactionMode = mode
 }
 
-//SetWorkload implementes the SessionActions interface
+//SetWorkload implements the SessionActions interface
 func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
