@@ -1077,7 +1077,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
-		buf.astPrintf(node, "%s table %v", GetDDLActionString(node.Action), node.Table)
+		buf.astPrintf(node, "%s table %v", node.Action.GetDDLActionString(), node.Table)
 	}
 }
 

@@ -216,7 +216,7 @@ func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 			continue
 		}
 		if ddl.Action != sqlparser.CreateDDLAction {
-			log.Infof("ignoring %s table statement", sqlparser.GetDDLActionString(ddl.Action))
+			log.Infof("ignoring %s table statement", ddl.Action.GetDDLActionString())
 			continue
 		}
 		if ddl.TableSpec == nil && ddl.OptLike == nil {
