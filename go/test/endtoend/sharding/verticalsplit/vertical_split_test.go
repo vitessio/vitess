@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os/exec"
 	"path"
 	"reflect"
 	"strings"
@@ -621,7 +622,7 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 }
 
 func initializeCluster() (int, error) {
-	var mysqlProcesses []*cluster.MySQLCmd
+	var mysqlProcesses []*exec.Cmd
 	clusterInstance = cluster.NewCluster(cellj, hostname)
 
 	// Start topo server

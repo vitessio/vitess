@@ -241,7 +241,7 @@ func TestSecureTransport(t *testing.T) {
 }
 
 func clusterSetUp(t *testing.T) (int, error) {
-	var mysqlProcesses []*cluster.MySQLCmd
+	var mysqlProcesses []*exec.Cmd
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
 	// Start topo server

@@ -98,7 +98,7 @@ func TestMain(m *testing.M) {
 
 		var cfg vttest.Config
 		cfg.Topology = topology
-		cfg.SchemaDir = cluster.GetEnvOrPanic("VTROOT") + "/test/vttest_schema"
+		cfg.SchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema"
 		cfg.DefaultSchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema/default"
 
 		localCluster = &vttest.LocalCluster{
@@ -159,7 +159,7 @@ func CreateWebDriver(port int) error {
 	// selenium.SetDebug(true)
 
 	// Set common Options
-	options := selenium.ChromeDriver(cluster.GetEnvOrPanic("VTROOT") + "/dist")
+	options := selenium.ChromeDriver(os.Getenv("VTROOT") + "/dist")
 
 	if os.Getenv("CI") == "true" && os.Getenv("TRAVIS") == "true" {
 

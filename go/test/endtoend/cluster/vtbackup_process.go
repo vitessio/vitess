@@ -71,7 +71,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		//Backup Arguments are not optional
 		"-backup_storage_implementation", "file",
 		"-file_backup_storage_root",
-		path.Join(GetEnvOrPanic("VTDATAROOT"), "tmp", "backupstorage"),
+		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
 	)
 
 	if vtbackup.initialBackup {
@@ -127,7 +127,7 @@ func VtbackupProcessInstance(tabletUID int, mysqlPort int, newInitDBFile string,
 		Binary:        "vtbackup",
 		CommonArg:     *vtctl,
 		LogDir:        tmpDirectory,
-		Directory:     GetEnvOrPanic("VTDATAROOT"),
+		Directory:     os.Getenv("VTDATAROOT"),
 		TabletAlias:   fmt.Sprintf("%s-%010d", cell, tabletUID),
 		initDBfile:    newInitDBFile,
 		Keyspace:      keyspace,

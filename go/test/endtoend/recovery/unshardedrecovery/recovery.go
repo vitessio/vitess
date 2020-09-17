@@ -95,7 +95,7 @@ func TestMainImpl(m *testing.M) {
 		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
 
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := ioutil.ReadFile(path.Join(cluster.GetEnvOrPanic("VTROOT"), "/config/init_db.sql"))
+		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
@@ -108,7 +108,7 @@ func TestMainImpl(m *testing.M) {
 			Name: shardName,
 		}
 
-		var mysqlProcs []*cluster.MySQLCmd
+		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 4; i++ {
 			tabletType := "replica"
 			if i == 0 {

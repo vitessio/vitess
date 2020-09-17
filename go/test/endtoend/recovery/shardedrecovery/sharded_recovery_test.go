@@ -511,7 +511,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	require.NoError(t, err)
 	// Start MySql
-	var mysqlCtlProcessList []*cluster.MySQLCmd
+	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range localCluster.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
