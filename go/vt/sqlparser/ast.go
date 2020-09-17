@@ -152,9 +152,12 @@ type (
 	SetTransaction struct {
 		SQLNode
 		Comments        Comments
-		Scope           string
+		Scope           Scope
 		Characteristics []Characteristic
 	}
+
+	// Scope is an enum for scope of query
+	Scope int8
 
 	// Characteristic is a transaction related change
 	Characteristic interface {
@@ -224,7 +227,7 @@ type (
 		OnTable                TableName
 		Table                  TableName
 		ShowTablesOpt          *ShowTablesOpt
-		Scope                  string
+		Scope                  Scope
 		ShowCollationFilterOpt Expr
 	}
 
@@ -857,7 +860,7 @@ type SetExprs []*SetExpr
 
 // SetExpr represents a set expression.
 type SetExpr struct {
-	Scope string
+	Scope Scope
 	Name  ColIdent
 	Expr  Expr
 }
@@ -989,10 +992,10 @@ func (node *Set) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetTransaction) Format(buf *TrackedBuffer) {
-	if node.Scope == "" {
+	if node.Scope == ImplicitScope {
 		buf.astPrintf(node, "set %vtransaction ", node.Comments)
 	} else {
-		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope)
+		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.GetScopeString())
 	}
 
 	for i, char := range node.Characteristics {
@@ -1323,10 +1326,10 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%v", opt.Filter)
 		return
 	}
-	if node.Scope == "" {
+	if node.Scope == ImplicitScope {
 		buf.astPrintf(node, "show %s", nodeType)
 	} else {
-		buf.astPrintf(node, "show %s %s", node.Scope, nodeType)
+		buf.astPrintf(node, "show %s %s", node.Scope.GetScopeString(), nodeType)
 	}
 	if node.HasOnTable() {
 		buf.astPrintf(node, " on %v", node.OnTable)
@@ -1895,8 +1898,8 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
-	if node.Scope != "" {
-		buf.WriteString(node.Scope)
+	if node.Scope != ImplicitScope {
+		buf.WriteString(node.Scope.GetScopeString())
 		buf.WriteString(" ")
 	}
 	// We don't have to backtick set variable names.

@@ -44,6 +44,7 @@ const (
 	GlobalStr         = "global"
 	VitessMetadataStr = "vitess_metadata"
 	VariableStr       = "variable"
+	LocalStr          = "local"
 	ImplicitStr       = ""
 
 	// DDL strings.
@@ -224,4 +225,14 @@ const (
 	DropColVindexDDLAction
 	AddSequenceDDLAction
 	AddAutoIncDDLAction
+)
+
+// Constants for Enum Type - Scope
+const (
+	SessionScope Scope = iota
+	GlobalScope
+	VitessMetadataScope
+	VariableScope
+	LocalScope
+	ImplicitScope
 )
