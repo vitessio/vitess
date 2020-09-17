@@ -13,3 +13,5 @@ Bugs Fixed
 
 Enhancements 
 * Make emergency reparents more robust. #6206
+* Fix where clause in information schema with correct database name #6599
+* set workload = 'olap'; can not repeat, but set workload = 'oltp' can; #4086
