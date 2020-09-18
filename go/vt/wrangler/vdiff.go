@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/golang/protobuf/proto"
@@ -358,10 +360,20 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	for _, pk := range table.PrimaryKeyColumns {
 		found := false
 		for i, selExpr := range targetSelect.SelectExprs {
-			colname := selExpr.(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
-			if pk == colname {
+			expr := selExpr.(*sqlparser.AliasedExpr).Expr
+			var colname string
+			switch ct := expr.(type) {
+			case *sqlparser.ColName:
+				colname = ct.Name.String()
+			case *sqlparser.FuncExpr: //eg. weight_string()
+				colname = ct.Name.String()
+			default:
+				log.Warningf("Unhandled type found for column in vdiff: %v(%v)", selExpr, ct)
+				colname = ""
+			}
+			if strings.EqualFold(pk, colname) {
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
-				// We'll be comparing pks seperately. So, remove them from compareCols.
+				// We'll be comparing pks separately. So, remove them from compareCols.
 				td.compareCols[i] = -1
 				found = true
 				break
