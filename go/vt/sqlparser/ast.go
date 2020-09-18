@@ -179,8 +179,8 @@ type (
 	DBDDL struct {
 		Action      string
 		DBName      string
-		IfExists    BoolVal
-		IfNotExists BoolVal
+		IfExists    bool
+		IfNotExists bool
 		Collate     string
 		Charset     string
 	}
@@ -199,7 +199,7 @@ type (
 		Table TableName
 
 		// The following fields are set if a DDL was fully analyzed.
-		IfExists      BoolVal
+		IfExists      bool
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
@@ -360,16 +360,16 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	NotNull       BoolVal
-	Autoincrement BoolVal
+	NotNull       bool
+	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
 	Comment       *Literal
 
 	// Numeric field options
 	Length   *Literal
-	Unsigned BoolVal
-	Zerofill BoolVal
+	Unsigned bool
+	Zerofill bool
 	Scale    *Literal
 
 	// Text field options
