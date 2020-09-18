@@ -405,7 +405,7 @@ func initializeCluster(t *testing.T) {
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-restore_from_backup", "-enable_semi_sync")
 
-	err = clusterInstance.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	require.NoError(t, err)
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
