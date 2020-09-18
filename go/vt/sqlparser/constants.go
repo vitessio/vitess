@@ -229,10 +229,10 @@ const (
 
 // Constants for Enum Type - Scope
 const (
-	SessionScope Scope = iota
+	ImplicitScope Scope = iota
+	SessionScope
 	GlobalScope
 	VitessMetadataScope
 	VariableScope
 	LocalScope
-	ImplicitScope
 )
