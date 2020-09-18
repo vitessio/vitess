@@ -34,16 +34,14 @@ func buildUpdatePlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 	eupd := &engine.Update{
-		DML:                 *dml,
-		ChangedVindexValues: make(map[string]engine.VindexValues),
-		UpdateVindex:        make(map[string]int),
+		DML: *dml,
 	}
 
 	if dml.Opcode == engine.Unsharded {
 		return eupd, nil
 	}
 
-	if eupd.ChangedVindexValues, eupd.UpdateVindex, eupd.OwnedVindexQuery, err = buildChangedVindexesValues(upd, eupd.Table, ksidCol); err != nil {
+	if eupd.ChangedVindexValues, eupd.OwnedVindexQuery, err = buildChangedVindexesValues(upd, eupd.Table, ksidCol); err != nil {
 		return nil, err
 	}
 	if len(eupd.ChangedVindexValues) != 0 {
@@ -55,20 +53,11 @@ func buildUpdatePlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCol string) (map[string]engine.VindexValues, map[string]int, string, error) {
-	changedVindexes := make(map[string]engine.VindexValues)
-	updateVindexes := make(map[string]int)
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select %s", ksidCol)
-	offset := 1
-	for _, cv := range table.Owned {
-		for _, column := range cv.Columns {
-			buf.Myprintf(", %v", column)
-			offset++
-		}
-	}
+func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCol string) (map[string]*engine.VindexValues, string, error) {
+	changedVindexes := make(map[string]*engine.VindexValues)
+	buf, offset := initialQuery(ksidCol, table)
 	for i, vindex := range table.ColumnVindexes {
-		vindexValueMap := make(engine.VindexValues)
+		vindexValueMap := make(map[string]sqltypes.PlanValue)
 		first := true
 		for _, vcol := range vindex.Columns {
 			// Searching in order of columns in colvindex.
@@ -78,12 +67,12 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 					continue
 				}
 				if found {
-					return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", assignment.Name.Name)
+					return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", assignment.Name.Name)
 				}
 				found = true
 				pv, err := extractValueFromUpdate(assignment)
 				if err != nil {
-					return nil, nil, "", err
+					return nil, "", err
 				}
 				vindexValueMap[vcol.String()] = pv
 				if first {
@@ -100,26 +89,42 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		}
 
 		if update.Limit != nil && len(update.OrderBy) == 0 {
-			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: %v", vindex.Name)
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: %v", vindex.Name)
 		}
 		if i == 0 {
-			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on vindex: %v", vindex.Name)
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on vindex: %v", vindex.Name)
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
-			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
 		if !vindex.Owned {
-			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
-		changedVindexes[vindex.Name] = vindexValueMap
-		updateVindexes[vindex.Name] = offset
+		changedVindexes[vindex.Name] = &engine.VindexValues{
+			PvMap:  vindexValueMap,
+			Offset: offset,
+		}
 		offset++
 	}
 	if len(changedVindexes) == 0 {
-		return nil, nil, "", nil
+		return nil, "", nil
 	}
+	// generate rest of the owned vindex query.
 	buf.Myprintf(" from %v%v%v%v for update", table.Name, update.Where, update.OrderBy, update.Limit)
-	return changedVindexes, updateVindexes, buf.String(), nil
+	return changedVindexes, buf.String(), nil
+}
+
+func initialQuery(ksidCol string, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("select %s", ksidCol)
+	offset := 1
+	for _, cv := range table.Owned {
+		for _, column := range cv.Columns {
+			buf.Myprintf(", %v", column)
+			offset++
+		}
+	}
+	return buf, offset
 }
 
 // extractValueFromUpdate given an UpdateExpr attempts to extracts the Value

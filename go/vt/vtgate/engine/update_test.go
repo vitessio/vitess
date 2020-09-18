@@ -205,18 +205,20 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
-		ChangedVindexValues: map[string]VindexValues{
+		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				"c1": {Value: sqltypes.NewInt64(1)},
-				"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]sqltypes.PlanValue{
+					"c1": {Value: sqltypes.NewInt64(1)},
+					"c2": {Value: sqltypes.NewInt64(2)},
+				},
+				Offset: 4,
 			},
 			"onecol": {
-				"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]sqltypes.PlanValue{
+					"c3": {Value: sqltypes.NewInt64(3)},
+				},
+				Offset: 5,
 			},
-		},
-		UpdateVindex: map[string]int{
-			"twocol": 4,
-			"onecol": 5,
 		},
 	}
 
@@ -262,7 +264,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 
-	// Failure case: multiple rows changing.
+	// multiple rows changing.
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|c1|c2|c3|twocol|onecol",
@@ -310,18 +312,20 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
-		ChangedVindexValues: map[string]VindexValues{
+		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				"c1": {Value: sqltypes.NewInt64(1)},
-				"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]sqltypes.PlanValue{
+					"c1": {Value: sqltypes.NewInt64(1)},
+					"c2": {Value: sqltypes.NewInt64(2)},
+				},
+				Offset: 4,
 			},
 			"onecol": {
-				"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]sqltypes.PlanValue{
+					"c3": {Value: sqltypes.NewInt64(3)},
+				},
+				Offset: 5,
 			},
-		},
-		UpdateVindex: map[string]int{
-			"twocol": 4,
-			"onecol": 5,
 		},
 	}
 
@@ -449,18 +453,20 @@ func TestUpdateInChangedVindex(t *testing.T) {
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
-		ChangedVindexValues: map[string]VindexValues{
+		ChangedVindexValues: map[string]*VindexValues{
 			"twocol": {
-				"c1": {Value: sqltypes.NewInt64(1)},
-				"c2": {Value: sqltypes.NewInt64(2)},
+				PvMap: map[string]sqltypes.PlanValue{
+					"c1": {Value: sqltypes.NewInt64(1)},
+					"c2": {Value: sqltypes.NewInt64(2)},
+				},
+				Offset: 4,
 			},
 			"onecol": {
-				"c3": {Value: sqltypes.NewInt64(3)},
+				PvMap: map[string]sqltypes.PlanValue{
+					"c3": {Value: sqltypes.NewInt64(3)},
+				},
+				Offset: 5,
 			},
-		},
-		UpdateVindex: map[string]int{
-			"twocol": 4,
-			"onecol": 5,
 		},
 	}
 
@@ -513,7 +519,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
 
-	// Failure case: multiple rows changing.
+	// multiple rows changing.
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|c1|c2|c3|twocol|onecol",

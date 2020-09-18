@@ -38,17 +38,17 @@ import (
 var _ Primitive = (*Update)(nil)
 
 // VindexValues contains changed values for a vindex.
-type VindexValues map[string]sqltypes.PlanValue
+type VindexValues struct {
+	PvMap  map[string]sqltypes.PlanValue
+	Offset int // Offset from ownedVindexQuery to provide input decision for vindex update.
+}
 
 // Update represents the instructions to perform an update.
 type Update struct {
 	DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
-	ChangedVindexValues map[string]VindexValues
-
-	// UpdateVindex contains the offset from ownedVindexQuery to provide input decision for vindex update.
-	UpdateVindex map[string]int
+	ChangedVindexValues map[string]*VindexValues
 
 	// Update does not take inputs
 	noInputs
@@ -232,13 +232,13 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		for _, colVindex := range upd.Table.Owned {
 			// Update columns only if they're being changed.
 			if updColValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
-				offset := upd.UpdateVindex[colVindex.Name]
+				offset := updColValues.Offset
 				if !row[offset].IsNull() {
 					val, err := evalengine.ToInt64(row[offset])
 					if err != nil {
 						return err
 					}
-					if val == int64(1) {
+					if val == int64(1) { // 1 means that the old and new value are same and vindex update is not required.
 						continue
 					}
 				}
@@ -248,7 +248,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 					// Fetch the column values.
 					origColValue := row[fieldColNumMap[vCol.String()]]
 					fromIds = append(fromIds, origColValue)
-					if colValue, exists := updColValues[vCol.String()]; exists {
+					if colValue, exists := updColValues.PvMap[vCol.String()]; exists {
 						resolvedVal, err := colValue.ResolveValue(bindVars)
 						if err != nil {
 							return err
@@ -281,9 +281,8 @@ func (upd *Update) description() PrimitiveDescription {
 	addFieldsIfNotEmpty(upd.DML, other)
 
 	var changedVindexes []string
-	for vindex := range upd.ChangedVindexValues {
-		offset := upd.UpdateVindex[vindex]
-		changedVindexes = append(changedVindexes, fmt.Sprintf("%s:%d", vindex, offset))
+	for k, v := range upd.ChangedVindexValues {
+		changedVindexes = append(changedVindexes, fmt.Sprintf("%s:%d", k, v.Offset))
 	}
 	sort.Strings(changedVindexes) // We sort these so random changes in the map order does not affect output
 	if len(changedVindexes) > 0 {
