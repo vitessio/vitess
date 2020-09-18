@@ -98,10 +98,6 @@ func replaceColumnDefinitionName(newNode, parent SQLNode) {
 	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
 
-func replaceColumnTypeAutoincrement(newNode, parent SQLNode) {
-	parent.(*ColumnType).Autoincrement = newNode.(BoolVal)
-}
-
 func replaceColumnTypeComment(newNode, parent SQLNode) {
 	parent.(*ColumnType).Comment = newNode.(*Literal)
 }
@@ -114,24 +110,12 @@ func replaceColumnTypeLength(newNode, parent SQLNode) {
 	parent.(*ColumnType).Length = newNode.(*Literal)
 }
 
-func replaceColumnTypeNotNull(newNode, parent SQLNode) {
-	parent.(*ColumnType).NotNull = newNode.(BoolVal)
-}
-
 func replaceColumnTypeOnUpdate(newNode, parent SQLNode) {
 	parent.(*ColumnType).OnUpdate = newNode.(Expr)
 }
 
 func replaceColumnTypeScale(newNode, parent SQLNode) {
 	parent.(*ColumnType).Scale = newNode.(*Literal)
-}
-
-func replaceColumnTypeUnsigned(newNode, parent SQLNode) {
-	parent.(*ColumnType).Unsigned = newNode.(BoolVal)
-}
-
-func replaceColumnTypeZerofill(newNode, parent SQLNode) {
-	parent.(*ColumnType).Zerofill = newNode.(BoolVal)
 }
 
 type replaceColumnsItems int
@@ -188,24 +172,12 @@ func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
 }
 
-func replaceDBDDLIfExists(newNode, parent SQLNode) {
-	parent.(*DBDDL).IfExists = newNode.(BoolVal)
-}
-
-func replaceDBDDLIfNotExists(newNode, parent SQLNode) {
-	parent.(*DBDDL).IfNotExists = newNode.(BoolVal)
-}
-
 func replaceDDLAutoIncSpec(newNode, parent SQLNode) {
 	parent.(*DDL).AutoIncSpec = newNode.(*AutoIncSpec)
 }
 
 func replaceDDLFromTables(newNode, parent SQLNode) {
 	parent.(*DDL).FromTables = newNode.(TableNames)
-}
-
-func replaceDDLIfExists(newNode, parent SQLNode) {
-	parent.(*DDL).IfExists = newNode.(BoolVal)
 }
 
 func replaceDDLOptLike(newNode, parent SQLNode) {
@@ -979,15 +951,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceColumnDefinitionName)
 
 	case *ColumnType:
-		a.apply(node, n.Autoincrement, replaceColumnTypeAutoincrement)
 		a.apply(node, n.Comment, replaceColumnTypeComment)
 		a.apply(node, n.Default, replaceColumnTypeDefault)
 		a.apply(node, n.Length, replaceColumnTypeLength)
-		a.apply(node, n.NotNull, replaceColumnTypeNotNull)
 		a.apply(node, n.OnUpdate, replaceColumnTypeOnUpdate)
 		a.apply(node, n.Scale, replaceColumnTypeScale)
-		a.apply(node, n.Unsigned, replaceColumnTypeUnsigned)
-		a.apply(node, n.Zerofill, replaceColumnTypeZerofill)
 
 	case Columns:
 		replacer := replaceColumnsItems(0)
@@ -1025,13 +993,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
 
 	case *DBDDL:
-		a.apply(node, n.IfExists, replaceDBDDLIfExists)
-		a.apply(node, n.IfNotExists, replaceDBDDLIfNotExists)
 
 	case *DDL:
 		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
 		a.apply(node, n.FromTables, replaceDDLFromTables)
-		a.apply(node, n.IfExists, replaceDDLIfExists)
 		a.apply(node, n.OptLike, replaceDDLOptLike)
 		a.apply(node, n.PartitionSpec, replaceDDLPartitionSpec)
 		a.apply(node, n.Table, replaceDDLTable)

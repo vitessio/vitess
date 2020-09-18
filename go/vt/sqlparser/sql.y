@@ -75,6 +75,7 @@ func skipToEnd(yylex interface{}) {
   expr          Expr
   exprs         Exprs
   boolVal       BoolVal
+  boolean	bool
   literal        *Literal
   colTuple      ColTuple
   values        Values
@@ -283,7 +284,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolVal> exists_opt not_exists_opt
+%type <boolean> exists_opt not_exists_opt null_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -299,9 +300,8 @@ func skipToEnd(yylex interface{}) {
 %type <literal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
 %type <str> charset_opt collate_opt
-%type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolVal> null_opt auto_increment_opt
+%type <boolean> auto_increment_opt unsigned_opt zero_fill_opt
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -1032,34 +1032,34 @@ decimal_length_opt:
 
 unsigned_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | UNSIGNED
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 zero_fill_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | ZEROFILL
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 // Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
 null_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | NULL
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | NOT NULL
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 column_default_opt:
@@ -1082,11 +1082,11 @@ on_update_opt:
 
 auto_increment_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | AUTO_INCREMENT
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 charset_opt:
@@ -3370,14 +3370,14 @@ for_from:
 | FROM
 
 exists_opt:
-  { $$ = BoolVal(false) }
+  { $$ = false }
 | IF EXISTS
-  { $$ = BoolVal(true) }
+  { $$ = true }
 
 not_exists_opt:
-  { $$ = BoolVal(false) }
+  { $$ = false }
 | IF NOT EXISTS
-  { $$ = BoolVal(true) }
+  { $$ = true }
 
 ignore_opt:
   { $$ = "" }
