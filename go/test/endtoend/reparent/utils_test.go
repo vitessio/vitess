@@ -118,7 +118,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	}
 
 	// Initialize Cluster
-	err = clusterInstance.LaunchCluster(keyspace, []cluster.Shard{*shard})
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	if err != nil {
 		t.Fatalf("Cannot launch cluster: %s", err.Error())
 	}
