@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
+	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -423,6 +424,94 @@ func TestHealthCheckTimeout(t *testing.T) {
 	// wait for the exponential backoff to wear off and health monitoring to resume.
 	result = <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
+}
+
+func TestWaitForAllServingTablets(t *testing.T) {
+	ts := memorytopo.NewServer("cell")
+	hc := createTestHc(ts)
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+	targets := []*query.Target{
+		{
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
+	}
+	input := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(tablet, input)
+
+	// create a channel and subscribe to healthcheck
+	resultChan := hc.Subscribe()
+	hc.AddTablet(tablet)
+	// there will be a first result, get and discard it
+	<-resultChan
+	// empty
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	err := hc.WaitForAllServingTablets(ctx, targets)
+	assert.NotNil(t, err, "error should not be nil")
+
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+
+	input <- shr
+	<-resultChan
+	// // check it's there
+
+	targets = []*query.Target{
+		{
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
+	}
+
+	err = hc.WaitForAllServingTablets(ctx, targets)
+	assert.Nil(t, err, "error should be nil. Targets are found")
+
+	targets = []*query.Target{
+		{
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
+		{
+			Keyspace:   "newkeyspace",
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
+	}
+
+	err = hc.WaitForAllServingTablets(ctx, targets)
+	assert.NotNil(t, err, "error should not be nil (there are no tablets on this keyspace")
+
+	targets = []*query.Target{
+		{
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
+		{
+			Keyspace:   "newkeyspace",
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
+	}
+
+	KeyspacesToWatch = []string{tablet.Keyspace}
+
+	err = hc.WaitForAllServingTablets(ctx, targets)
+	assert.Nil(t, err, "error should be nil. Keyspace with no tablets is filtered")
+
+	KeyspacesToWatch = []string{}
 }
 
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
