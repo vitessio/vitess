@@ -691,9 +691,23 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			return nil, err
 		}
 
-		rows := make([][]sqltypes.Value, len(keyspaces))
-		for i, v := range keyspaces {
-			rows[i] = buildVarCharRow(v)
+		var filter *regexp.Regexp
+
+		if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
+			filter = sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
+		}
+
+		if filter == nil {
+			filter = regexp.MustCompile(".*")
+		}
+
+		log.Infof("Using filter %s", filter)
+
+		rows := make([][]sqltypes.Value, 0, len(keyspaces))
+		for _, v := range keyspaces {
+			if filter.MatchString(v) {
+				rows = append(rows, buildVarCharRow(v))
+			}
 		}
 
 		return &sqltypes.Result{
