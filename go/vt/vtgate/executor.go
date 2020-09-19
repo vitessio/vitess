@@ -739,6 +739,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 			if filter.Filter != nil {
 				// TODO build a query planner I guess? lol that should be fun
+				log.Infof("SHOW VITESS_SHARDS where clause %+v. Ignoring this for now.", filter.Filter)
 			}
 
 			return keyspaceFilters, shardFilters
@@ -944,10 +945,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 // (tablet, servingState, mtst) -> bool
 type tabletFilter func(*topodatapb.Tablet, string, int64) bool
-
-func allowTabletFilter(_ *topodatapb.Tablet, _ string, _ int64) bool {
-	return true
-}
 
 func (e *Executor) showTablets(show *sqlparser.Show) (*sqltypes.Result, error) {
 	getTabletFilters := func(show *sqlparser.Show) []tabletFilter {
