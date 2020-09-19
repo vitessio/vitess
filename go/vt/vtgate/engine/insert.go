@@ -18,7 +18,6 @@ package engine
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"strconv"
 	"strings"
@@ -39,8 +38,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-var seqAutoValueOnZero = flag.Bool("seq-auto-value-on-zero", false, "For sequences, act as if NO_AUTO_VALUE_ON_ZERO is not set")
 
 var _ Primitive = (*Insert)(nil)
 
@@ -276,17 +273,17 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	return result, nil
 }
 
+// shouldGenerate determines if a sequence value should be generated for a given value
 func shouldGenerate(v sqltypes.Value) bool {
 	if v.IsNull() {
 		return true
 	}
+
 	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
-	// treats 0 as a value that should generate a new ID.
-	if *seqAutoValueOnZero {
-		n, err := evalengine.ToUint64(v)
-		if err == nil && n == 0 {
-			return true
-		}
+	// treats 0 as a value that should generate a new sequence.
+	n, err := evalengine.ToUint64(v)
+	if err == nil && n == 0 {
+		return true
 	}
 
 	return false
