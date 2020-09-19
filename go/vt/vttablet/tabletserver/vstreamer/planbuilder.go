@@ -21,6 +21,8 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -478,13 +480,27 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			VindexColumns: vindexColumns,
 		}, nil
 	case *sqlparser.Literal:
+		var typ querypb.Type
+		switch inner.Type {
+		case sqlparser.StrVal:
+			typ = sqltypes.VarChar
+		case sqlparser.IntVal:
+		case sqlparser.HexNum:
+		case sqlparser.HexVal:
+			typ = sqltypes.Int64
+		case sqlparser.FloatVal:
+			typ = sqltypes.Float64
+		case sqlparser.BitVal:
+			typ = sqltypes.Bit
+		}
 		return ColExpr{
 			Field: &querypb.Field{
 				Name: aliased.As.CompliantName(),
-				Type: sqltypes.VarBinary,
+				Type: typ,
 			},
 		}, nil
 	default:
+		log.Infof("Unsupported expression: %v", inner)
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
 }
