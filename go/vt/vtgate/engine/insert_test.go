@@ -118,9 +118,6 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 }
 
 func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
-	*seqAutoValueOnZero = true
-	defer func() { *seqAutoValueOnZero = false }()
-
 	ins := NewQueryInsert(
 		InsertUnsharded,
 		&vindexes.Keyspace{
