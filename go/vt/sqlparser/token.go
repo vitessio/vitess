@@ -405,6 +405,8 @@ var keywords = map[string]int{
 	"vitess":              VITESS,
 	"vitess_keyspaces":    VITESS_KEYSPACES,
 	"vitess_metadata":     VITESS_METADATA,
+	"vitess_shards":       VITESS_SHARDS,
+	"vitess_tablets":      VITESS_TABLETS,
 	"vschema":             VSCHEMA,
 	"warnings":            WARNINGS,
 	"when":                WHEN,

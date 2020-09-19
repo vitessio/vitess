@@ -189,7 +189,7 @@ func skipToEnd(yylex interface{}) {
 
 // Supported SHOW tokens
 %token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -328,6 +328,7 @@ func skipToEnd(yylex interface{}) {
 %type <colIdent> id_or_var vindex_type vindex_type_opt
 %type <bytes> alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <str> vitess_topo
 
 %start any_command
 
@@ -1714,14 +1715,16 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
+/* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
+| SHOW vitess_topo like_or_where_opt
+  {
+    $$ = &Show{Type: $2}
+  }
 /*
  * Catch-all for show statements without vitess keywords:
  *
  *  SHOW BINARY LOGS
  *  SHOW INVALID
- *  SHOW VITESS_KEYSPACES
- *  SHOW VITESS_TABLETS
- *  SHOW VITESS_SHARDS
  *  SHOW VITESS_TARGET
  */
 | SHOW id_or_var ddl_skip_to_end
@@ -1735,6 +1738,16 @@ tables_or_processlist:
     $$ = string($1)
   }
 | PROCESSLIST
+  {
+    $$ = string($1)
+  }
+
+vitess_topo:
+  VITESS_TABLETS
+  {
+    $$ = string($1)
+  }
+| VITESS_SHARDS
   {
     $$ = string($1)
   }
@@ -3786,6 +3799,8 @@ non_reserved_keyword:
 | VITESS
 | VITESS_KEYSPACES
 | VITESS_METADATA
+| VITESS_SHARDS
+| VITESS_TABLETS
 | VSCHEMA
 | WARNINGS
 | WITH
