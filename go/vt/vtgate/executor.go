@@ -716,6 +716,36 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case "vitess_shards":
+		showVitessShardsFilters := func(show *sqlparser.Show) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
+			keyspaceFilters := []func(string) bool{}
+			shardFilters := []func(string, *topodatapb.ShardReference) bool{}
+
+			if show.ShowTablesOpt == nil || show.ShowTablesOpt.Filter == nil {
+				return keyspaceFilters, shardFilters
+			}
+			
+			filter := show.ShowTablesOpt.Filter
+			log.Infof("have filter: %+v\n", filter)
+
+			if filter.Like != "" {
+				likeRexep := sqlparser.LikeToRegexp(filter.Like)
+
+				shardFilters = append(shardFilters, func(ks string, shard *topodatapb.ShardReference) bool {
+					return likeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
+				})
+
+				return keyspaceFilters, shardFilters
+			}
+
+			if filter.Filter != nil {
+				// TODO build a query planner I guess? lol that should be fun
+			}
+
+			return keyspaceFilters, shardFilters
+		}
+
+		keyspaceFilters, shardFilters := showVitessShardsFilters(show)
+
 		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 		if err != nil {
 			return nil, err
@@ -723,6 +753,18 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 		var rows [][]sqltypes.Value
 		for _, keyspace := range keyspaces {
+			skipKeyspace := false
+			for _, filter := range keyspaceFilters {
+				if !filter(keyspace) {
+					skipKeyspace = true
+					break
+				}
+			}
+
+			if skipKeyspace {
+				continue
+			}
+
 			_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
 			if err != nil {
 				// There might be a misconfigured keyspace or no shards in the keyspace.
@@ -731,6 +773,18 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 
 			for _, shard := range shards {
+				skipShard := false
+				for _, filter := range shardFilters {
+					if !filter(keyspace, shard) {
+						skipShard = true
+						break
+					}
+				}
+
+				if skipShard {
+					continue
+				}
+
 				rows = append(rows, buildVarCharRow(topoproto.KeyspaceShardString(keyspace, shard.Name)))
 			}
 		}
