@@ -1718,7 +1718,10 @@ show_statement:
 /* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
 | SHOW vitess_topo like_or_where_opt
   {
-    $$ = &Show{Type: $2}
+    // This should probably be a different type (ShowVitessTopoOpt), but
+    // just getting the thing working for now
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{Type: $2, ShowTablesOpt: showTablesOpt}
   }
 /*
  * Catch-all for show statements without vitess keywords:
