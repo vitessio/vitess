@@ -723,7 +723,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			if show.ShowTablesOpt == nil || show.ShowTablesOpt.Filter == nil {
 				return keyspaceFilters, shardFilters
 			}
-			
+
 			filter := show.ShowTablesOpt.Filter
 			log.Infof("have filter: %+v\n", filter)
 
@@ -795,7 +795,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case "vitess_tablets":
-		return e.showTablets()
+		return e.showTablets(show)
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -942,7 +942,44 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats, ignoreMaxMemoryRows)
 }
 
-func (e *Executor) showTablets() (*sqltypes.Result, error) {
+// (tablet, servingState, mtst) -> bool
+type tabletFilter func(*topodatapb.Tablet, string, int64) bool
+
+func allowTabletFilter(_ *topodatapb.Tablet, _ string, _ int64) bool {
+	return true
+}
+
+func (e *Executor) showTablets(show *sqlparser.Show) (*sqltypes.Result, error) {
+	getTabletFilters := func(show *sqlparser.Show) []tabletFilter {
+		filters := []tabletFilter{}
+
+		if show.ShowTablesOpt == nil || show.ShowTablesOpt.Filter == nil {
+			return filters
+		}
+
+		filter := show.ShowTablesOpt.Filter
+		if filter.Like != "" {
+			tabletRegexp := sqlparser.LikeToRegexp(filter.Like)
+
+			f := func(tablet *topodatapb.Tablet, servingState string, masterTermStartTime int64) bool {
+				return tabletRegexp.MatchString(tablet.Hostname)
+			}
+
+			filters = append(filters, f)
+			return filters
+		}
+
+		if filter.Filter != nil {
+			log.Infof("have show tablets where clause: %+v. not doing anything with it (for now)\n", filter.Filter)
+		}
+
+		return filters
+	}
+
+	tabletFilters := getTabletFilters(show)
+
+	log.Infof("have %d tablet filters\n", len(tabletFilters))
+
 	var rows [][]sqltypes.Value
 	if UsingLegacyGateway() {
 		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
@@ -958,6 +995,19 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 					// this code depends on the fact that TabletExternallyReparentedTimestamp is the seconds since epoch start
 					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
 				}
+
+				skipTablet := false
+				for _, filter := range tabletFilters {
+					if !filter(ts.Tablet, state, mtst) {
+						skipTablet = true
+						break
+					}
+				}
+
+				if skipTablet {
+					continue
+				}
+
 				rows = append(rows, buildVarCharRow(
 					s.Cell,
 					s.Target.Keyspace,
@@ -984,6 +1034,19 @@ func (e *Executor) showTablets() (*sqltypes.Result, error) {
 					// this code depends on the fact that MasterTermStartTime is the seconds since epoch start
 					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
 				}
+
+				skipTablet := false
+				for _, filter := range tabletFilters {
+					if !filter(ts.Tablet, state, mtst) {
+						skipTablet = true
+						break
+					}
+				}
+
+				if skipTablet {
+					continue
+				}
+
 				rows = append(rows, buildVarCharRow(
 					s.Cell,
 					s.Target.Keyspace,
