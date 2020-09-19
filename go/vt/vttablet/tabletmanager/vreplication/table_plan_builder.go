@@ -248,7 +248,17 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 		return nil, err
 	}
 
+	// if there are no columns being selected the select expression can be empty, so we "select 1" so we have a valid
+	// select to get a row back
+	if len(tpb.sendSelect.SelectExprs) == 0 {
+		tpb.sendSelect.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+			&sqlparser.AliasedExpr{
+				Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+			},
+		})
+	}
 	sendRule.Filter = sqlparser.String(tpb.sendSelect)
+
 	tablePlan := tpb.generate()
 	tablePlan.SendRule = sendRule
 	return tablePlan, nil
@@ -382,11 +392,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.expr = &sqlparser.ColName{Name: sqlparser.NewColIdent("keyspace_id")}
 			return cexpr, nil
 		}
-	}
-	if expr, ok := aliased.Expr.(*sqlparser.Literal); ok {
-		tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: expr})
-		cexpr.expr = expr
-		return cexpr, nil
 	}
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
