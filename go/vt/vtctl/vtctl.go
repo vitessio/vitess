@@ -3043,11 +3043,33 @@ func listShardRanges(shards int) ([]string, error) {
 
 	start := 0
 	end := 0
-	size := maxShards / shards
+
+	// If shards does not divide evenly into maxShards, then there is some lossiness,
+	// where each shard is smaller than it should technically be (if, for example, size == 25.6).
+	// If we choose to keep everything in ints, then we have two choices:
+	// 	- Have every shard in #numshards be a uniform size, tack on an additional shard
+	//	  at the end of the range to account for the loss. This is bad because if you ask for
+	//	  7 shards, you'll actually get 7 uniform shards with 1 small shard, for 8 total shards.
+	//	  It's also bad because one shard will have much different data distribution than the rest.
+	//	- Expand the final shard to include whatever is left in the keyrange. This will give the
+	//	  correct number of shards, which is good, but depending on how lossy each individual shard is,
+	//	  you could end with that final shard being significantly larger than the rest of the shards,
+	//	  so this doesn't solve the data distribution problem.
+	//
+	// By tracking the "real" end (both in the real number sense, and in the truthfulness of the value sense),
+	// we can re-truncate the integer end on each iteration, which spreads the lossiness more
+	// evenly across the shards.
+	//
+	// This implementation has no impact on shard numbers that are powers of 2, even at large numbers,
+	// which you can see in the tests.
+	size := float64(maxShards) / float64(shards)
+	realEnd := float64(0)
 	shardRanges := make([]string, 0, shards)
 
 	for i := 1; i <= shards; i++ {
-		end = i * size
+		realEnd = float64(i) * size
+
+		end = int(realEnd)
 		shardRanges = append(shardRanges, rangeFormatter(start, end))
 		start = end
 	}
