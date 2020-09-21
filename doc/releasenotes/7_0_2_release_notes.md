@@ -3,6 +3,9 @@ This update fixes several regressions that were deemed significant enough to be 
 Configuration Changes
 
 Bugs Fixed
+
+* Backport: VDiff: fix panic for tables with a unicode_loose_md5 vindex #6745
+* Backport: Turn off schema tracker by default #6746
 * Backport restore: do not change tablet type to RESTORE if not actually performing a restore #6687
 * Backport: tm init: publish displayState #6686
 * Backport: tm: add more logging to checkMastership #6685
