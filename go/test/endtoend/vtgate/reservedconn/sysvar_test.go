@@ -230,11 +230,11 @@ func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 
 	checkedExec(t, conn, `update test set val2 = 2 where val1 is null`)
-	assertMatches(t, conn, `select id, val1, val2 from test`, `[[INT64(80) NULL INT64(2)]]`)
+	assertMatches(t, conn, `select id, val1, val2 from test`, `[[INT64(80) NULL INT32(2)]]`)
 	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 
 	checkedExec(t, conn, `update test set val1 = 'text' where val1 is null`)
-	assertMatches(t, conn, `select id, val1, val2 from test`, `[[INT64(80) VARCHAR("text") INT64(2)]]`)
+	assertMatches(t, conn, `select id, val1, val2 from test`, `[[INT64(80) VARCHAR("text") INT32(2)]]`)
 	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 
 	checkedExec(t, conn, `delete from test where val1 = 'text'`)
