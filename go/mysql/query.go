@@ -948,8 +948,16 @@ func (c *Conn) writeFields(result *sqltypes.Result) error {
 		return err
 	}
 
+	var returnDatabaseName string
+	if len(result.Fields) >= 1 && strings.HasPrefix(result.Fields[0].Database, "vt_") {
+		returnDatabaseName = strings.TrimPrefix(result.Fields[0].Database, "vt_")
+	} else {
+		returnDatabaseName = result.Fields[0].Database
+	}
+
 	// Now send each Field.
 	for _, field := range result.Fields {
+		field.Database = returnDatabaseName
 		if err := c.writeColumnDefinition(field); err != nil {
 			return err
 		}
