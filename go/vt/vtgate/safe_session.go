@@ -214,7 +214,10 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	if session.autocommitState == autocommitted {
+	// additional check of transaction id is required
+	// as now in autocommit mode there can be session due to reserved connection
+	// that needs to be stored as shard session.
+	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
 		// Should be unreachable
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected autocommit state")
 	}
