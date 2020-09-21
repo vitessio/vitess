@@ -360,7 +360,7 @@ func (node TableName) ToViewName() TableName {
 
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
-func NewWhere(typ string, expr Expr) *Where {
+func NewWhere(typ WhereType, expr Expr) *Where {
 	if expr == nil {
 		return nil
 	}
@@ -733,7 +733,7 @@ func (node *Select) SetLock(lock Lock) {
 func (node *Select) AddWhere(expr Expr) {
 	if node.Where == nil {
 		node.Where = &Where{
-			Type: WhereStr,
+			Type: WhereClause,
 			Expr: expr,
 		}
 		return
@@ -749,7 +749,7 @@ func (node *Select) AddWhere(expr Expr) {
 func (node *Select) AddHaving(expr Expr) {
 	if node.Having == nil {
 		node.Having = &Where{
-			Type: HavingStr,
+			Type: HavingClause,
 			Expr: expr,
 		}
 		return
@@ -879,6 +879,18 @@ func (lock Lock) GetLockString() string {
 		return ShareModeStr
 	default:
 		return "Unknown lock"
+	}
+}
+
+// GetWhereTypeString returns the string associated with WhereType
+func (whereType WhereType) GetWhereTypeString() string {
+	switch whereType {
+	case WhereClause:
+		return WhereStr
+	case HavingClause:
+		return HavingStr
+	default:
+		return "Unknown where type"
 	}
 }
 

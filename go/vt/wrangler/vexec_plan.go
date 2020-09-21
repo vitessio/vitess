@@ -108,7 +108,7 @@ func (vx *vexec) addDefaultWheres(where *sqlparser.Where) *sqlparser.Where {
 		}
 		if newWhere == nil {
 			newWhere = &sqlparser.Where{
-				Type: sqlparser.WhereStr,
+				Type: sqlparser.WhereClause,
 				Expr: expr,
 			}
 		} else {
