@@ -378,9 +378,9 @@ var commands = []commandGroup{
 			{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
-			{"ListShardRanges", commandListShardRanges,
+			{"GenerateShardRanges", commandGenerateShardRanges,
 				"<num shards>",
-				"Lists shard ranges assuming a keyspace with N shards and an even sharding."},
+				"Generates shard ranges assuming a keyspace with N shards."},
 			{"Panic", commandPanic,
 				"",
 				"HIDDEN Triggers a panic on the server side, to test the handling."},
@@ -2992,14 +2992,14 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	return nil
 }
 
-func commandListShardRanges(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	numShards := subFlags.Int("num_shards", 2, "Number of shards to compute shard ranges for.")
+func commandGenerateShardRanges(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	numShards := subFlags.Int("num_shards", 2, "Number of shards to generate shard ranges for.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 
-	shardRanges, err := listShardRanges(*numShards)
+	shardRanges, err := generateShardRanges(*numShards)
 	if err != nil {
 		return err
 	}
@@ -3007,7 +3007,7 @@ func commandListShardRanges(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	return printJSON(wr.Logger(), shardRanges)
 }
 
-func listShardRanges(shards int) ([]string, error) {
+func generateShardRanges(shards int) ([]string, error) {
 	var format string
 	var maxShards int
 

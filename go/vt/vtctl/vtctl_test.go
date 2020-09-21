@@ -6,7 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestListShardRanges(t *testing.T) {
+func TestGenerateShardRanges(t *testing.T) {
 	type args struct {
 		shards int
 	}
@@ -57,7 +57,7 @@ func TestListShardRanges(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := listShardRanges(tt.args.shards)
+			got, err := generateShardRanges(tt.args.shards)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("listShardRanges() error = %v, wantErr %v", err, tt.wantErr)
 
@@ -72,7 +72,7 @@ func TestListShardRanges(t *testing.T) {
 }
 
 func TestShardCalculatorForShardsGreaterThan512(t *testing.T) {
-	got, err := listShardRanges(512)
+	got, err := generateShardRanges(512)
 	if err != nil {
 		t.Errorf("listShardRanges() error = %v", err)
 	}
