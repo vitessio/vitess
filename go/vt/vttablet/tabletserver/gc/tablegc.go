@@ -135,7 +135,7 @@ func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topoda
 		tabletTypeFunc: tabletTypeFunc,
 		ts:             ts,
 		pool: connpool.NewPool(env, "TableGCPool", tabletenv.ConnPoolConfig{
-			Size:               1,
+			Size:               2,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 
@@ -150,6 +150,7 @@ func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topoda
 
 // InitDBConfig initializes keyspace and shard
 func (collector *TableGC) InitDBConfig(keyspace, shard, dbName string) {
+	log.Info("TableGC: init")
 	collector.keyspace = keyspace
 	collector.shard = shard
 	collector.dbName = dbName
@@ -167,8 +168,8 @@ func (collector *TableGC) Open() (err error) {
 	if err != nil {
 		return fmt.Errorf("Error parsing -table_gc_lifecycle flag: %+v", err)
 	}
-	collector.lifecycleStates[schema.DropTableGCState] = true
 
+	log.Info("TableGC: opening")
 	collector.pool.Open(collector.env.Config().DB.AppWithDB(), collector.env.Config().DB.DbaWithDB(), collector.env.Config().DB.AppDebugWithDB())
 	collector.initOnce.Do(func() {
 		// Operate() will be mindful of Open/Close state changes, so we only need to start it once.
@@ -188,6 +189,7 @@ func (collector *TableGC) Close() {
 		return
 	}
 
+	log.Info("TableGC: closing")
 	collector.pool.Close()
 	atomic.StoreInt64(&collector.isOpen, 0)
 }
@@ -198,29 +200,30 @@ func (collector *TableGC) Operate(ctx context.Context) {
 	leaderCheckTicker := time.NewTicker(leaderCheckInterval)
 	purgeReentranceTicker := time.NewTicker(purgeReentranceInterval)
 
+	log.Info("TableGC: operating")
 	for {
 		select {
 		case <-leaderCheckTicker.C:
 			{
 				// sparse
-				wasPreviouslyPrimary := (collector.isPrimary > 0)
 				shouldBePrimary := false
 				if atomic.LoadInt64(&collector.isOpen) > 0 {
 					if collector.tabletTypeFunc() == topodatapb.TabletType_MASTER {
 						shouldBePrimary = true
 					}
 				}
+
+				if collector.isPrimary == 0 && shouldBePrimary {
+					log.Infof("TableGC: transition into primary")
+				}
+				if collector.isPrimary > 0 && !shouldBePrimary {
+					log.Infof("TableGC: transition out of primary")
+				}
+
 				if shouldBePrimary {
 					atomic.StoreInt64(&collector.isPrimary, 1)
 				} else {
 					atomic.StoreInt64(&collector.isPrimary, 0)
-				}
-
-				if collector.isPrimary > 0 && wasPreviouslyPrimary {
-					log.Infof("TableGC: transition into leadership")
-				}
-				if collector.isPrimary == 0 && wasPreviouslyPrimary {
-					log.Infof("TableGC: transition out of leadership")
 				}
 			}
 		case <-tableCheckTicker.C:
@@ -255,7 +258,6 @@ func (collector *TableGC) Operate(ctx context.Context) {
 		}
 
 		if collector.isPrimary == 0 {
-			log.Infof("TableGC: not primary")
 			time.Sleep(1 * time.Second)
 		}
 	}
@@ -298,6 +300,7 @@ func (collector *TableGC) generateTansition(ctx context.Context, fromState schem
 
 // submitTransitionRequest generates and queues a transition request for a given table
 func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName string) {
+	log.Infof("TableGC: submitting transition request for %s", fromTableName)
 	go func() {
 		transition := collector.generateTansition(ctx, fromState, fromTableName)
 		if transition != nil {
@@ -319,6 +322,8 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
+
+	log.Infof("TableGC: check tables")
 
 	res, err := conn.Exec(ctx, sqlShowVtTables, math.MaxInt32, true)
 	if err != nil {
@@ -342,6 +347,7 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 			// net yet time to operate on this table
 			continue
 		}
+		log.Infof("TableGC: will operate on table %s", tableName)
 
 		if state == schema.HoldTableGCState {
 			// Hold period expired. Moving to next state

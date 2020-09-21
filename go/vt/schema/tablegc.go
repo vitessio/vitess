@@ -58,16 +58,16 @@ var (
 	}
 )
 
-// CreateUUID creates a globally unique ID, returned as string
+// CreateUUID creates a globally unique ID, returned as non-delimited string
 // example result: 55d00cdce6ab11eabfe60242ac1c000d
 func createUUID() (string, error) {
 	u, err := uuid.NewUUID()
 	if err != nil {
 		return "", err
 	}
-	uuid := u.String()
-	uuid = strings.Replace(uuid, "-", "", -1)
-	return uuid, nil
+	result := u.String()
+	result = strings.Replace(result, "-", "", -1)
+	return result, nil
 }
 
 // ToReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
@@ -126,5 +126,7 @@ func ParseGCLifecycle(gcLifecycle string) (states map[TableGCState]bool, err err
 		}
 		states[state] = true
 	}
+	// DROP is implicitly included.
+	states[DropTableGCState] = true
 	return states, nil
 }
