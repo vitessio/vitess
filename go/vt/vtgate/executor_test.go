@@ -794,6 +794,30 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("show vitess_tablets:\n%+v, want\n%+v", qr, wantqr)
 	}
 
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vitess_tablets like 'x'", nil)
+	require.NoError(t, err)
+	wantqr = &sqltypes.Result{
+		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows:         [][]sqltypes.Value{},
+		RowsAffected: 0,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vitess_tablets LIKE:\n%+v, want\n%+v", qr, wantqr)
+	}
+
+	qr, err = executor.Execute(ctx, "TestExecute", session, "show vitess_tablets like '-20%'", nil)
+	require.NoError(t, err)
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "SERVING", "aa-0000000000", "-20", "1970-01-01T00:00:01Z"),
+		},
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(qr, wantqr) {
+		t.Errorf("show vitess_tablets LIKE:\n%+v, want\n%+v", qr, wantqr)
+	}
+
 	qr, err = executor.Execute(ctx, "TestExecute", session, "show vschema vindexes", nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
