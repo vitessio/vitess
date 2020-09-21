@@ -84,7 +84,7 @@ func (ms *memorySort) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (ms *memorySort) PushLock(lock string) error {
+func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 

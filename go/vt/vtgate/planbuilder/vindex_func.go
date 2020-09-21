@@ -83,7 +83,7 @@ func (vf *vindexFunc) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (vf *vindexFunc) PushLock(lock string) error {
+func (vf *vindexFunc) PushLock(lock sqlparser.Lock) error {
 	return nil
 }
 

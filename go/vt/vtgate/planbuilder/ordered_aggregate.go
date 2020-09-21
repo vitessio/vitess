@@ -236,7 +236,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (oa *orderedAggregate) PushLock(lock string) error {
+func (oa *orderedAggregate) PushLock(lock sqlparser.Lock) error {
 	return oa.input.PushLock(lock)
 }
 
