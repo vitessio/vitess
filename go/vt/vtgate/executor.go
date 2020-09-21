@@ -977,7 +977,7 @@ func (e *Executor) showTablets(show *sqlparser.Show) (*sqltypes.Result, error) {
 
 	log.Infof("have %d tablet filters\n", len(tabletFilters))
 
-	var rows [][]sqltypes.Value
+	rows := [][]sqltypes.Value{}
 	if UsingLegacyGateway() {
 		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
 		for _, s := range status {
