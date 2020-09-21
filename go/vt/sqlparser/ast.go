@@ -584,9 +584,12 @@ type IndexHints struct {
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {
-	Type string
+	Type WhereType
 	Expr Expr
 }
+
+// WhereType is an enum for Where.Type
+type WhereType int8
 
 // *********** Expressions
 type (
@@ -1585,7 +1588,7 @@ func (node *Where) Format(buf *TrackedBuffer) {
 	if node == nil || node.Expr == nil {
 		return
 	}
-	buf.astPrintf(node, " %s %v", node.Type, node.Expr)
+	buf.astPrintf(node, " %s %v", node.Type.GetWhereTypeString(), node.Expr)
 }
 
 // Format formats the node.

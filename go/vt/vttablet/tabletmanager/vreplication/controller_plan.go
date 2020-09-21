@@ -148,7 +148,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v", vreplicationTableName, upd.Where)
 	upd.Where = &sqlparser.Where{
-		Type: sqlparser.WhereStr,
+		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
 			Operator: sqlparser.InStr,
@@ -190,7 +190,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v", vreplicationTableName, del.Where)
 	del.Where = &sqlparser.Where{
-		Type: sqlparser.WhereStr,
+		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
 			Operator: sqlparser.InStr,
@@ -202,7 +202,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	buf2.Myprintf("%v", del)
 
 	copyStateWhere := &sqlparser.Where{
-		Type: sqlparser.WhereStr,
+		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("vrepl_id")},
 			Operator: sqlparser.InStr,

@@ -244,3 +244,9 @@ const (
 	ForUpdateLock
 	ShareModeLock
 )
+
+// Constants for Enum Type - WhereType
+const (
+	WhereClause WhereType = iota
+	HavingClause
+)
