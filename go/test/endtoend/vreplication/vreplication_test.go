@@ -192,6 +192,7 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 
 // FIXME: if testReverse if false we don't dropsources and that creates a problem later on in the test due to existence of blacklisted tables
 func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string) {
+	ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 	if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
 	}
@@ -231,6 +232,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	var output string
 	var err error
 
+	printShardPositions(vc, ksShards, "p2c: Before SwitchReads (rdonly)")
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=rdonly", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads error: %s\n", output)
 	}
@@ -238,6 +240,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "-dry_run", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads Dry Run error: %s\n", output)
 	}
+	printShardPositions(vc, ksShards, "p2c: Before SwitchReads (replica)")
 	validateDryRunResults(t, output, want)
 	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchReads error: %s\n", output)
@@ -249,12 +252,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		t.Fatalf("SwitchWrites error: %s\n", output)
 	}
 	validateDryRunResults(t, output, want)
+	printShardPositions(vc, ksShards, "p2c: Before SwitchWrites")
 
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "customer.p2c"); err != nil {
 		t.Fatalf("SwitchWrites error: %s\n", output)
 	}
-	ksShards := []string{"product/0", "customer/-80", "customer/80-"}
-	printShardPositions(vc, ksShards)
+	printShardPositions(vc, ksShards, "p2c: After SwitchWrites")
 	insertQuery2 := "insert into customer(name) values('tempCustomer2')"
 	matchInsertQuery2 := "insert into customer(name, cid) values (:vtg1, :_cid0)"
 	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
@@ -273,10 +276,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "product.p2c_reverse"); err != nil {
 			t.Fatalf("SwitchReads error: %s\n", output)
 		}
-		printShardPositions(vc, ksShards)
+		printShardPositions(vc, ksShards, "pc2_reverse: before SwitchWrites")
 		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "product.p2c_reverse"); err != nil {
 			t.Fatalf("SwitchWrites error: %s\n", output)
 		}
+		printShardPositions(vc, ksShards, "pc2_reverse: after SwitchWrites")
 		insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
 		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 		// both inserts go into 80-, this tests the edge-case where a stream (-80) has no relevant new events after the previous switch

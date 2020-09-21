@@ -242,13 +242,13 @@ func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, wo
 	}
 }
 
-func printShardPositions(vc *VitessCluster, ksShards []string) {
+func printShardPositions(vc *VitessCluster, ksShards []string, msg string) {
 	for _, ksShard := range ksShards {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ShardReplicationPositions", ksShard)
 		if err != nil {
 			fmt.Printf("Error in ShardReplicationPositions: %v, output %v", err, output)
 		} else {
-			fmt.Printf("Position of %s: %s", ksShard, output)
+			fmt.Printf("%s: Position of %s: %s", msg, ksShard, output)
 		}
 	}
 }
