@@ -142,6 +142,14 @@ func TestParens(t *testing.T) {
 		{in: "(a | b) between (5) and (7)", expected: "a | b between 5 and 7"},
 		{in: "(a and b) between (5) and (7)", expected: "(a and b) between 5 and 7"},
 		{in: "(true is true) is null", expected: "(true is true) is null"},
+		{in: "3 * (100 div 3)", expected: "3 * (100 div 3)"},
+		{in: "100 div 2 div 2", expected: "100 div 2 div 2"},
+		{in: "100 div (2 div 2)", expected: "100 div (2 div 2)"},
+		{in: "(100 div 2) div 2", expected: "100 div 2 div 2"},
+		{in: "((((((1000))))))", expected: "1000"},
+		{in: "100 - (50 + 10)", expected: "100 - (50 + 10)"},
+		{in: "100 - 50 + 10", expected: "100 - 50 + 10"},
+		{in: "true and (true and true)", expected: "true and (true and true)"},
 	}
 
 	for _, tc := range tests {
