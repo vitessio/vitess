@@ -123,6 +123,7 @@ func skipToEnd(yylex interface{}) {
   scope 	Scope
   ignore 	Ignore
   lock 		Lock
+  joinType  	JoinType
 }
 
 %token LEX_ERROR
@@ -247,7 +248,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list
-%type <str> inner_join outer_join straight_join natural_join
+%type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
@@ -2295,52 +2296,52 @@ table_alias:
 inner_join:
   JOIN
   {
-    $$ = JoinStr
+    $$ = NormalJoinType
   }
 | INNER JOIN
   {
-    $$ = JoinStr
+    $$ = NormalJoinType
   }
 | CROSS JOIN
   {
-    $$ = JoinStr
+    $$ = NormalJoinType
   }
 
 straight_join:
   STRAIGHT_JOIN
   {
-    $$ = StraightJoinStr
+    $$ = StraightJoinType
   }
 
 outer_join:
   LEFT JOIN
   {
-    $$ = LeftJoinStr
+    $$ = LeftJoinType
   }
 | LEFT OUTER JOIN
   {
-    $$ = LeftJoinStr
+    $$ = LeftJoinType
   }
 | RIGHT JOIN
   {
-    $$ = RightJoinStr
+    $$ = RightJoinType
   }
 | RIGHT OUTER JOIN
   {
-    $$ = RightJoinStr
+    $$ = RightJoinType
   }
 
 natural_join:
  NATURAL JOIN
   {
-    $$ = NaturalJoinStr
+    $$ = NaturalJoinType
   }
 | NATURAL outer_join
   {
-    if $2 == LeftJoinStr {
-      $$ = NaturalLeftJoinStr
+    if $2 == LeftJoinType {
+      $$ = NaturalLeftJoinType
     } else {
-      $$ = NaturalRightJoinStr
+      $$ = NaturalRightJoinType
     }
   }
 

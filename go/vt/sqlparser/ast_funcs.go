@@ -894,6 +894,28 @@ func (whereType WhereType) GetWhereTypeString() string {
 	}
 }
 
+// GetJoinTypeString returns the string associated with JoinType
+func (joinType JoinType) GetJoinTypeString() string {
+	switch joinType {
+	case NormalJoinType:
+		return JoinStr
+	case StraightJoinType:
+		return StraightJoinStr
+	case LeftJoinType:
+		return LeftJoinStr
+	case RightJoinType:
+		return RightJoinStr
+	case NaturalJoinType:
+		return NaturalJoinStr
+	case NaturalLeftJoinType:
+		return NaturalLeftJoinStr
+	case NaturalRightJoinType:
+		return NaturalRightJoinStr
+	default:
+		return "Unknown join type"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
