@@ -56,6 +56,7 @@ const (
 	StmtSavepoint
 	StmtSRollback
 	StmtRelease
+	StmtVStream
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -138,6 +139,8 @@ func Preview(sql string) StatementType {
 		return StmtSelect
 	case "stream":
 		return StmtStream
+	case "vstream":
+		return StmtVStream
 	case "insert":
 		return StmtInsert
 	case "replace":
@@ -192,6 +195,8 @@ func (s StatementType) String() string {
 		return "SELECT"
 	case StmtStream:
 		return "STREAM"
+	case StmtVStream:
+		return "VSTREAM"
 	case StmtInsert:
 		return "INSERT"
 	case StmtReplace:

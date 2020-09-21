@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -961,4 +962,20 @@ func TestVDiffFindPKs(t *testing.T) {
 		})
 	}
 
+}
+
+func TestLogSteps(t *testing.T) {
+	testcases := []struct {
+		n   int64
+		log string
+	}{
+		{1, "1"}, {2000, "2k"}, {1000000, "1m"}, {330000, ""}, {330001, ""},
+		{4000000, "4m"}, {40000000, "40m"}, {41000000, "41m"}, {4110000, ""},
+		{5000000000, "5b"}, {5010000000, "5.010b"}, {5011000000, "5.011b"},
+	}
+	for _, tc := range testcases {
+		t.Run(strconv.Itoa(int(tc.n)), func(t *testing.T) {
+			require.Equal(t, tc.log, logSteps(tc.n))
+		})
+	}
 }

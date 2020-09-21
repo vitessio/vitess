@@ -805,6 +805,26 @@ func replaceUseDBName(newNode, parent SQLNode) {
 	parent.(*Use).DBName = newNode.(TableIdent)
 }
 
+func replaceVStreamComments(newNode, parent SQLNode) {
+	parent.(*VStream).Comments = newNode.(Comments)
+}
+
+func replaceVStreamLimit(newNode, parent SQLNode) {
+	parent.(*VStream).Limit = newNode.(*Limit)
+}
+
+func replaceVStreamSelectExpr(newNode, parent SQLNode) {
+	parent.(*VStream).SelectExpr = newNode.(SelectExpr)
+}
+
+func replaceVStreamTable(newNode, parent SQLNode) {
+	parent.(*VStream).Table = newNode.(TableName)
+}
+
+func replaceVStreamWhere(newNode, parent SQLNode) {
+	parent.(*VStream).Where = newNode.(*Where)
+}
+
 type replaceValTupleItems int
 
 func (r *replaceValTupleItems) replace(newNode, container SQLNode) {
@@ -1347,6 +1367,13 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Use:
 		a.apply(node, n.DBName, replaceUseDBName)
+
+	case *VStream:
+		a.apply(node, n.Comments, replaceVStreamComments)
+		a.apply(node, n.Limit, replaceVStreamLimit)
+		a.apply(node, n.SelectExpr, replaceVStreamSelectExpr)
+		a.apply(node, n.Table, replaceVStreamTable)
+		a.apply(node, n.Where, replaceVStreamWhere)
 
 	case ValTuple:
 		replacer := replaceValTupleItems(0)

@@ -31,6 +31,8 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -52,6 +54,9 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// this is the healthcheck used by vtgate, used by the "vstream * from" functionality
+var vtgateHealthCheck discovery.HealthCheck
 
 var (
 	errNoKeyspace     = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format (items in <> are optional): keyspace<:shard><@type> or keyspace<[range]><@type>")
@@ -943,7 +948,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
 	vcursor.SetIgnoreMaxMemoryRows(true)
-
 	switch stmtType {
 	case sqlparser.StmtStream:
 		// this is a stream statement for messaging
@@ -958,6 +962,9 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		// These statements don't populate plan.Instructions. We want to make sure we don't try to
 		// dereference nil Instructions which would panic.
 		fallthrough
+	case sqlparser.StmtVStream:
+		log.Infof("handleVStream called with target %v", target)
+		return e.handleVStream(ctx, sql, target, callback, vcursor, logStats)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type for OLAP: %s", stmtType)
 	}

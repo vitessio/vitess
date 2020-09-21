@@ -375,6 +375,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
+	vtgateHealthCheck = hc
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
