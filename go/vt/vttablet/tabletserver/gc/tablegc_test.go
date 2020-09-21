@@ -141,7 +141,6 @@ func TestNextState(t *testing.T) {
 		collector := &TableGC{}
 		var err error
 		collector.lifecycleStates, err = schema.ParseGCLifecycle(ts.lifecycle)
-		collector.lifecycleStates[schema.DropTableGCState] = true
 		assert.NoError(t, err)
 		next := collector.nextState(ts.state)
 		assert.NotNil(t, next)

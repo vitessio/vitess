@@ -93,7 +93,9 @@ func TestParseGCLifecycle(t *testing.T) {
 	}{
 		{
 			lifecycle: "",
-			states:    map[TableGCState]bool{},
+			states: map[TableGCState]bool{
+				DropTableGCState: true,
+			},
 		},
 		{
 			lifecycle: "drop",
