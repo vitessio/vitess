@@ -115,7 +115,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 		table,
 		table.Keyspace,
 	)
-	if ins.Ignore != "" {
+	if ins.Ignore {
 		eins.Opcode = engine.InsertShardedIgnore
 	}
 	if ins.OnDup != nil {
@@ -208,7 +208,7 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	eins.Mid = make([]string, len(valueTuples))
 	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
-		node.Comments, node.Ignore,
+		node.Comments, node.Ignore.GetIgnoreString(),
 		node.Table, node.Columns)
 	eins.Prefix = prefixBuf.String()
 	for rowNum, val := range valueTuples {

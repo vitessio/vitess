@@ -116,13 +116,16 @@ type (
 	Insert struct {
 		Action     InsertAction
 		Comments   Comments
-		Ignore     string
+		Ignore     Ignore
 		Table      TableName
 		Partitions Partitions
 		Columns    Columns
 		Rows       InsertRows
 		OnDup      OnDup
 	}
+
+	// Ignore represents whether ignore was specified or not
+	Ignore bool
 
 	// InsertAction is the action for insert.
 	InsertAction int8
@@ -131,7 +134,7 @@ type (
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
 		Comments   Comments
-		Ignore     string
+		Ignore     Ignore
 		TableExprs TableExprs
 		Exprs      UpdateExprs
 		Where      *Where
@@ -969,17 +972,17 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 	case InsertAct:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			InsertStr,
-			node.Comments, node.Ignore,
+			node.Comments, node.Ignore.GetIgnoreString(),
 			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	case ReplaceAct:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			ReplaceStr,
-			node.Comments, node.Ignore,
+			node.Comments, node.Ignore.GetIgnoreString(),
 			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	default:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			"Unkown Insert Action",
-			node.Comments, node.Ignore,
+			node.Comments, node.Ignore.GetIgnoreString(),
 			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	}
 
@@ -988,7 +991,7 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
-		node.Comments, node.Ignore, node.TableExprs,
+		node.Comments, node.Ignore.GetIgnoreString(), node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
