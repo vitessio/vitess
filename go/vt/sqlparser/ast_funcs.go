@@ -860,6 +860,14 @@ func (scope Scope) GetScopeString() string {
 	}
 }
 
+// GetIgnoreString returns the IgnoreStr if ignore is true.
+func (ignore Ignore) GetIgnoreString() string {
+	if ignore {
+		return IgnoreStr
+	}
+	return ""
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

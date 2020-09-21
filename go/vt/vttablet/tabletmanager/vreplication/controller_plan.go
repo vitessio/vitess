@@ -86,7 +86,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	if ins.Action != sqlparser.InsertAct {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
-	if ins.Ignore != "" {
+	if ins.Ignore {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
 	if ins.Partitions != nil {

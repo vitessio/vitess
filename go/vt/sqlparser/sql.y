@@ -121,6 +121,7 @@ func skipToEnd(yylex interface{}) {
   unionType	UnionType
   insertAction InsertAction
   scope 	Scope
+  ignore 	Ignore
 }
 
 %token LEX_ERROR
@@ -286,7 +287,8 @@ func skipToEnd(yylex interface{}) {
 %type <characteristics> transaction_chars
 %type <isolationLevel> isolation_level
 %type <bytes> for_from
-%type <str> ignore_opt default_opt
+%type <str> default_opt
+%type <ignore> ignore_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
@@ -3394,9 +3396,9 @@ not_exists_opt:
   { $$ = struct{}{} }
 
 ignore_opt:
-  { $$ = "" }
+  { $$ = false }
 | IGNORE
-  { $$ = IgnoreStr }
+  { $$ = true }
 
 non_add_drop_or_rename_operation:
   ALTER
