@@ -250,3 +250,14 @@ const (
 	WhereClause WhereType = iota
 	HavingClause
 )
+
+// Constants for Enum Type - JoinType
+const (
+	NormalJoinType JoinType = iota
+	StraightJoinType
+	LeftJoinType
+	RightJoinType
+	NaturalJoinType
+	NaturalLeftJoinType
+	NaturalRightJoinType
+)

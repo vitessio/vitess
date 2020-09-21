@@ -79,7 +79,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	opcode := engine.NormalJoin
 	if ajoin != nil {
 		switch {
-		case ajoin.Join == sqlparser.LeftJoinStr:
+		case ajoin.Join == sqlparser.LeftJoinType:
 			opcode = engine.LeftJoin
 
 			// For left joins, we have to push the ON clause into the RHS.

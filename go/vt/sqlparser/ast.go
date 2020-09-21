@@ -526,10 +526,13 @@ type (
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.
 	JoinTableExpr struct {
 		LeftExpr  TableExpr
-		Join      string
+		Join      JoinType
 		RightExpr TableExpr
 		Condition JoinCondition
 	}
+
+	// JoinType represents the type of Join for JoinTableExpr
+	JoinType int8
 
 	// ParenTableExpr represents a parenthesized list of TableExpr.
 	ParenTableExpr struct {
@@ -1565,7 +1568,7 @@ func (node JoinCondition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join, node.RightExpr, node.Condition)
+	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join.GetJoinTypeString(), node.RightExpr, node.Condition)
 }
 
 // Format formats the node.
