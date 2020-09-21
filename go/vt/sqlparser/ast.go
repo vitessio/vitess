@@ -50,7 +50,7 @@ type (
 		iInsertRows()
 		AddOrder(*Order)
 		SetLimit(*Limit)
-		SetLock(lock string)
+		SetLock(lock Lock)
 		SQLNode
 	}
 
@@ -68,8 +68,11 @@ type (
 		Having           *Where
 		OrderBy          OrderBy
 		Limit            *Limit
-		Lock             string
+		Lock             Lock
 	}
+
+	// Lock is an enum for the type of lock in the statement
+	Lock int8
 
 	// UnionSelect represents union type and select statement after first select statement.
 	UnionSelect struct {
@@ -86,7 +89,7 @@ type (
 		UnionSelects   []*UnionSelect
 		OrderBy        OrderBy
 		Limit          *Limit
-		Lock           string
+		Lock           Lock
 	}
 
 	// VStream represents a VSTREAM statement.
@@ -923,7 +926,7 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		node.Comments, options, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
-		node.Limit, node.Lock)
+		node.Limit, node.Lock.GetLockString())
 }
 
 // Format formats the node.
@@ -937,7 +940,7 @@ func (node *Union) Format(buf *TrackedBuffer) {
 	for _, us := range node.UnionSelects {
 		buf.astPrintf(node, "%v", us)
 	}
-	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock)
+	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock.GetLockString())
 }
 
 // Format formats the node.

@@ -135,7 +135,7 @@ func (jb *join) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (jb *join) PushLock(lock string) error {
+func (jb *join) PushLock(lock sqlparser.Lock) error {
 	err := jb.Left.PushLock(lock)
 	if err != nil {
 		return err

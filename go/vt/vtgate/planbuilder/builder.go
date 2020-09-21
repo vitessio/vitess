@@ -111,7 +111,7 @@ type builder interface {
 	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
 	// PushLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
-	PushLock(lock string) error
+	PushLock(lock sqlparser.Lock) error
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.

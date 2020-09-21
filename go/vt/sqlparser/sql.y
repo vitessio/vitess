@@ -122,6 +122,7 @@ func skipToEnd(yylex interface{}) {
   insertAction InsertAction
   scope 	Scope
   ignore 	Ignore
+  lock 		Lock
 }
 
 %token LEX_ERROR
@@ -274,7 +275,7 @@ func skipToEnd(yylex interface{}) {
 %type <order> order
 %type <str> asc_desc_opt
 %type <limit> limit_opt
-%type <str> lock_opt
+%type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
@@ -3211,15 +3212,15 @@ limit_opt:
 
 lock_opt:
   {
-    $$ = ""
+    $$ = NoLock
   }
 | FOR UPDATE
   {
-    $$ = ForUpdateStr
+    $$ = ForUpdateLock
   }
 | LOCK IN SHARE MODE
   {
-    $$ = ShareModeStr
+    $$ = ShareModeLock
   }
 
 // insert_data expands all combinations into a single rule.

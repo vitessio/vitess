@@ -103,7 +103,7 @@ func (rb *route) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (rb *route) PushLock(lock string) error {
+func (rb *route) PushLock(lock sqlparser.Lock) error {
 	rb.Select.SetLock(lock)
 	return nil
 }

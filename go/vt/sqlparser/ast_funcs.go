@@ -724,7 +724,7 @@ func (node *Select) SetLimit(limit *Limit) {
 }
 
 // SetLock sets the lock clause
-func (node *Select) SetLock(lock string) {
+func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
@@ -771,7 +771,7 @@ func (node *ParenSelect) SetLimit(limit *Limit) {
 }
 
 // SetLock sets the lock clause
-func (node *ParenSelect) SetLock(lock string) {
+func (node *ParenSelect) SetLock(lock Lock) {
 	node.Select.SetLock(lock)
 }
 
@@ -786,12 +786,12 @@ func (node *Union) SetLimit(limit *Limit) {
 }
 
 // SetLock sets the lock clause
-func (node *Union) SetLock(lock string) {
+func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit, lock string) *Union {
+func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit, lock Lock) *Union {
 	union, isUnion := lhs.(*Union)
 	if isUnion {
 		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Type: typ, Statement: rhs})
@@ -866,6 +866,20 @@ func (ignore Ignore) GetIgnoreString() string {
 		return IgnoreStr
 	}
 	return ""
+}
+
+// GetLockString returns the string associated with the type of lock
+func (lock Lock) GetLockString() string {
+	switch lock {
+	case NoLock:
+		return NoLockStr
+	case ForUpdateLock:
+		return ForUpdateStr
+	case ShareModeLock:
+		return ShareModeStr
+	default:
+		return "Unknown lock"
+	}
 }
 
 // AtCount represents the '@' count in ColIdent

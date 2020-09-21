@@ -23,6 +23,7 @@ const (
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
+	NoLockStr    = ""
 	ForUpdateStr = " for update"
 	ShareModeStr = " lock in share mode"
 
@@ -235,4 +236,11 @@ const (
 	VitessMetadataScope
 	VariableScope
 	LocalScope
+)
+
+// Constants for Enum Type - Lock
+const (
+	NoLock Lock = iota
+	ForUpdateLock
+	ShareModeLock
 )
