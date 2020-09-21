@@ -152,20 +152,20 @@ func (g *generator) likeExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &ComparisonExpr{
-		Operator: LikeStr,
+		Operator: LikeOp,
 		Left:     g.stringExpr(),
 		Right:    g.stringExpr(),
 	}
 }
 
-var comparisonOps = []string{EqualStr, LessThanStr, GreaterThanStr, LessEqualStr, GreaterEqualStr, NotEqualStr, NullSafeEqualStr}
+var comparisonOps = []ComparisonExprOperator{EqualOp, LessThanOp, GreaterThanOp, LessEqualOp, GreaterEqualOp, NotEqualOp, NullSafeEqualOp}
 
 func (g *generator) comparison(f func() Expr) Expr {
 	g.enter()
 	defer g.exit()
 
 	cmp := &ComparisonExpr{
-		Operator: g.randomOfS(comparisonOps),
+		Operator: comparisonOps[g.r.Intn(len(comparisonOps))],
 		Left:     f(),
 		Right:    f(),
 	}
@@ -276,9 +276,9 @@ func (g *generator) inExpr() Expr {
 	for i := 0; i < size; i++ {
 		tuples = append(tuples, g.intExpr())
 	}
-	op := InStr
+	op := InOp
 	if g.randomBool() {
-		op = NotInStr
+		op = NotInOp
 	}
 
 	return &ComparisonExpr{

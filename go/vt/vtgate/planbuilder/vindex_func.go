@@ -109,7 +109,7 @@ func (vf *vindexFunc) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, wh
 	if !ok {
 		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)")
 	}
-	if comparison.Operator != sqlparser.EqualStr {
+	if comparison.Operator != sqlparser.EqualOp {
 		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (not equality)")
 	}
 	colname, ok := comparison.Left.(*sqlparser.ColName)

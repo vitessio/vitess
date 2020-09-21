@@ -389,7 +389,7 @@ func TestIsAggregate(t *testing.T) {
 
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
-		Operator: NotEqualStr,
+		Operator: NotEqualOp,
 		Left:     newIntLiteral("1"),
 		Right:    newIntLiteral("1"),
 	}
@@ -398,7 +398,7 @@ func TestIsImpossible(t *testing.T) {
 	}
 
 	f = ComparisonExpr{
-		Operator: EqualStr,
+		Operator: EqualOp,
 		Left:     newIntLiteral("1"),
 		Right:    newIntLiteral("1"),
 	}
@@ -407,7 +407,7 @@ func TestIsImpossible(t *testing.T) {
 	}
 
 	f = ComparisonExpr{
-		Operator: NotEqualStr,
+		Operator: NotEqualOp,
 		Left:     newIntLiteral("1"),
 		Right:    newIntLiteral("2"),
 	}

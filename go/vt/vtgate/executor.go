@@ -1296,13 +1296,13 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 			rightString := string(literal.Val)
 
 			switch cmpExp.Operator {
-			case sqlparser.EqualStr:
+			case sqlparser.EqualOp:
 				for _, colName := range colNames {
 					if rightString == colName {
 						filteredColName = colName
 					}
 				}
-			case sqlparser.LikeStr:
+			case sqlparser.LikeOp:
 				filteredColName, err = checkLikeOpt(rightString, colNames)
 				if err != nil {
 					return nil, err
