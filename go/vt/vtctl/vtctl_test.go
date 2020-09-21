@@ -3,7 +3,8 @@ package vtctl
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateShardRanges(t *testing.T) {
@@ -58,15 +59,13 @@ func TestGenerateShardRanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := generateShardRanges(tt.args.shards)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("listShardRanges() error = %v, wantErr %v", err, tt.wantErr)
-
-				return
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
 			}
 
-			if !cmp.Equal(got, tt.want) {
-				t.Errorf("listShardRanges() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }
