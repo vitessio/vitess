@@ -741,12 +741,6 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// We call SetReadOnly only after the topo has been updated to avoid
-	// situations where two tablets are master at the DB level but not at the vitess level
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
 	return mysql.EncodePosition(pos), nil
 }
 
