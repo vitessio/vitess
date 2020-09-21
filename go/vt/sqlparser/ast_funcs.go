@@ -406,7 +406,7 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	if right, ok = node.Right.(*Literal); !ok {
 		return false
 	}
-	if node.Operator == NotEqualStr && left.Type == right.Type {
+	if node.Operator == NotEqualOp && left.Type == right.Type {
 		if len(left.Val) != len(right.Val) {
 			return false
 		}
@@ -913,6 +913,40 @@ func (joinType JoinType) GetJoinTypeString() string {
 		return NaturalRightJoinStr
 	default:
 		return "Unknown join type"
+	}
+}
+
+// GetOperatorString returns the operator as a string
+func (op ComparisonExprOperator) GetOperatorString() string {
+	switch op {
+	case EqualOp:
+		return EqualStr
+	case LessThanOp:
+		return LessThanStr
+	case GreaterThanOp:
+		return GreaterThanStr
+	case LessEqualOp:
+		return LessEqualStr
+	case GreaterEqualOp:
+		return GreaterEqualStr
+	case NotEqualOp:
+		return NotEqualStr
+	case NullSafeEqualOp:
+		return NullSafeEqualStr
+	case InOp:
+		return InStr
+	case NotInOp:
+		return NotInStr
+	case LikeOp:
+		return LikeStr
+	case NotLikeOp:
+		return NotLikeStr
+	case RegexpOp:
+		return RegexpStr
+	case NotRegexpOp:
+		return NotRegexpStr
+	default:
+		return "Unknown ComparisonExpOperator"
 	}
 }
 

@@ -261,3 +261,20 @@ const (
 	NaturalLeftJoinType
 	NaturalRightJoinType
 )
+
+// Constants for Enum Type - ComparisonExprOperator
+const (
+	EqualOp ComparisonExprOperator = iota
+	LessThanOp
+	GreaterThanOp
+	LessEqualOp
+	GreaterEqualOp
+	NotEqualOp
+	NullSafeEqualOp
+	InOp
+	NotInOp
+	LikeOp
+	NotLikeOp
+	RegexpOp
+	NotRegexpOp
+)

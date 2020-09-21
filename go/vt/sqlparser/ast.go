@@ -624,10 +624,13 @@ type (
 
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
-		Operator    string
+		Operator    ComparisonExprOperator
 		Left, Right Expr
 		Escape      Expr
 	}
+
+	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
+	ComparisonExprOperator int8
 
 	// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
 	RangeCond struct {
@@ -1625,7 +1628,7 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator.GetOperatorString(), node.Right)
 	if node.Escape != nil {
 		buf.astPrintf(node, " escape %v", node.Escape)
 	}

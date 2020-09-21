@@ -124,6 +124,7 @@ func skipToEnd(yylex interface{}) {
   ignore 	Ignore
   lock 		Lock
   joinType  	JoinType
+  comparisonExprOperator ComparisonExprOperator
 }
 
 %token LEX_ERROR
@@ -255,7 +256,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> where_expression_opt
 %type <expr> condition
 %type <boolVal> boolean_value
-%type <str> compare
+%type <comparisonExprOperator> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
@@ -2462,27 +2463,27 @@ condition:
   }
 | value_expression IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: InStr, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
   }
 | value_expression NOT IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotInStr, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
   }
 | value_expression LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: LikeStr, Right: $3, Escape: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $4}
   }
 | value_expression NOT LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeStr, Right: $4, Escape: $5}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $5}
   }
 | value_expression REGEXP value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: RegexpStr, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
   }
 | value_expression NOT REGEXP value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpStr, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
@@ -2526,31 +2527,31 @@ is_suffix:
 compare:
   '='
   {
-    $$ = EqualStr
+    $$ = EqualOp
   }
 | '<'
   {
-    $$ = LessThanStr
+    $$ = LessThanOp
   }
 | '>'
   {
-    $$ = GreaterThanStr
+    $$ = GreaterThanOp
   }
 | LE
   {
-    $$ = LessEqualStr
+    $$ = LessEqualOp
   }
 | GE
   {
-    $$ = GreaterEqualStr
+    $$ = GreaterEqualOp
   }
 | NE
   {
-    $$ = NotEqualStr
+    $$ = NotEqualOp
   }
 | NULL_SAFE_EQUAL
   {
-    $$ = NullSafeEqualStr
+    $$ = NullSafeEqualOp
   }
 
 like_escape_opt:

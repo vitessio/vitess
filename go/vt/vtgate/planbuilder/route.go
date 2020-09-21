@@ -289,7 +289,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				})
 			}
 		case *sqlparser.ComparisonExpr:
-			if node.Operator == sqlparser.EqualStr {
+			if node.Operator == sqlparser.EqualOp {
 				if rb.exprIsValue(node.Left) && !rb.exprIsValue(node.Right) {
 					node.Left, node.Right = node.Right, node.Left
 				}
@@ -555,7 +555,7 @@ func (rb *route) canMergeOnFilter(pb *primitiveBuilder, rrb *route, filter sqlpa
 	if !ok {
 		return false
 	}
-	if comparison.Operator != sqlparser.EqualStr {
+	if comparison.Operator != sqlparser.EqualOp {
 		return false
 	}
 	left := comparison.Left
@@ -636,11 +636,11 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
-		case sqlparser.EqualStr:
+		case sqlparser.EqualOp:
 			return rb.computeEqualPlan(pb, node)
-		case sqlparser.InStr:
+		case sqlparser.InOp:
 			return rb.computeINPlan(pb, node)
-		case sqlparser.NotInStr:
+		case sqlparser.NotInOp:
 			return rb.computeNotInPlan(node.Right), nil, nil
 		}
 	case *sqlparser.IsExpr:
