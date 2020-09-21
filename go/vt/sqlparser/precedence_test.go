@@ -148,6 +148,9 @@ func TestParens(t *testing.T) {
 		{in: "100 - (50 + 10)", expected: "100 - (50 + 10)"},
 		{in: "100 - 50 + 10", expected: "100 - 50 + 10"},
 		{in: "true and (true and true)", expected: "true and (true and true)"},
+		{in: "10 - 2 - 1", expected: "10 - 2 - 1"},
+		{in: "(10 - 2) - 1", expected: "10 - 2 - 1"},
+		{in: "10 - (2 - 1)", expected: "10 - (2 - 1)"},
 	}
 
 	for _, tc := range tests {
