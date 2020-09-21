@@ -17,7 +17,6 @@ package master
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -222,7 +221,6 @@ func TestHold(t *testing.T) {
 		exists, purgeTableName, err := tableExists(`\_vt\_PURGE\_%`)
 		assert.NoError(t, err)
 		assert.True(t, exists)
-		fmt.Printf("Found table: %s\n", purgeTableName)
 		err = dropTable(purgeTableName)
 		assert.NoError(t, err)
 	}
@@ -337,7 +335,6 @@ func TestPurge(t *testing.T) {
 		exists, evacTableName, err := tableExists(`\_vt\_EVAC\_%`)
 		assert.NoError(t, err)
 		assert.True(t, exists)
-		fmt.Printf("Found table: %s\n", evacTableName)
 		checkTableRows(t, evacTableName, 0)
 		err = dropTable(evacTableName)
 		assert.NoError(t, err)
