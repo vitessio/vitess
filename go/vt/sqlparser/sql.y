@@ -125,6 +125,7 @@ func skipToEnd(yylex interface{}) {
   lock 		Lock
   joinType  	JoinType
   comparisonExprOperator ComparisonExprOperator
+  isExprOperator IsExprOperator
 }
 
 %token LEX_ERROR
@@ -260,7 +261,7 @@ func skipToEnd(yylex interface{}) {
 %type <ins> insert_data
 %type <expr> value value_expression num_val
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
-%type <str> is_suffix
+%type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list
 %type <values> tuple_list
@@ -2501,27 +2502,27 @@ condition:
 is_suffix:
   NULL
   {
-    $$ = IsNullStr
+    $$ = IsNullOp
   }
 | NOT NULL
   {
-    $$ = IsNotNullStr
+    $$ = IsNotNullOp
   }
 | TRUE
   {
-    $$ = IsTrueStr
+    $$ = IsTrueOp
   }
 | NOT TRUE
   {
-    $$ = IsNotTrueStr
+    $$ = IsNotTrueOp
   }
 | FALSE
   {
-    $$ = IsFalseStr
+    $$ = IsFalseOp
   }
 | NOT FALSE
   {
-    $$ = IsNotFalseStr
+    $$ = IsNotFalseOp
   }
 
 compare:

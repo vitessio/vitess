@@ -284,3 +284,13 @@ const (
 	BetweenOp RangeCondOperator = iota
 	NotBetweenOp
 )
+
+// Constant for Enum Type - IsExprOperator
+const (
+	IsNullOp IsExprOperator = iota
+	IsNotNullOp
+	IsTrueOp
+	IsNotTrueOp
+	IsFalseOp
+	IsNotFalseOp
+)

@@ -962,6 +962,26 @@ func (op RangeCondOperator) GetOperatorString() string {
 	}
 }
 
+// GetOperatorString returns the operator as a string
+func (op IsExprOperator) GetOperatorString() string {
+	switch op {
+	case IsNullOp:
+		return IsNullStr
+	case IsNotNullOp:
+		return IsNotNullStr
+	case IsTrueOp:
+		return IsTrueStr
+	case IsNotTrueOp:
+		return IsNotTrueStr
+	case IsFalseOp:
+		return IsFalseStr
+	case IsNotFalseOp:
+		return IsNotFalseStr
+	default:
+		return "Unknown IsExprOperator"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
