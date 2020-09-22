@@ -69,14 +69,6 @@ func TestStreamRowsScan(t *testing.T) {
 	wantQuery := "select id, val from t1 order by id"
 	checkStream(t, "select 1 from t1", nil, wantQuery, wantStream)
 
-	// t1: test for unsupported integer literal
-	wantError := "only the integer literal 1 is supported"
-	expectStreamError(t, "select 2 from t1", wantError)
-
-	// t1: test for unsupported literal type
-	wantError = "only integer literals are supported"
-	expectStreamError(t, "select 'a' from t1", wantError)
-
 	// t1: simulates rollup, with non-pk column
 	wantStream = []string{
 		`fields:<name:"1" type:INT64 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
@@ -172,6 +164,14 @@ func TestStreamRowsScan(t *testing.T) {
 	}
 	wantQuery = "select id1, id2, id3, val from t4 where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
 	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
+
+	// t1: test for unsupported integer literal
+	wantError := "only the integer literal 1 is supported"
+	expectStreamError(t, "select 2 from t1", wantError)
+
+	// t1: test for unsupported literal type
+	wantError = "only integer literals are supported"
+	expectStreamError(t, "select 'a' from t1", wantError)
 }
 
 func TestStreamRowsUnicode(t *testing.T) {

@@ -70,6 +70,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	materializeRollup(t)
 
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
+	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
 
@@ -361,14 +362,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
 		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 3))
 		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 4))
-
-		insertMoreProducts(t)
-		time.Sleep(1 * time.Second)
-		assert.Empty(t, validateCount(t, vtgateConn, "product", "rollup", 1))
-		assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
-			`[[VARCHAR("total") INT32(5)]]`))
-
 	}
+}
+
+func validateRollupReplicates(t *testing.T) {
+	insertMoreProducts(t)
+	time.Sleep(1 * time.Second)
+	assert.Empty(t, validateCount(t, vtgateConn, "product", "rollup", 1))
+	assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		`[[VARCHAR("total") INT32(5)]]`))
 }
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
