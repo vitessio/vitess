@@ -164,9 +164,10 @@ func TestStreamRowsScan(t *testing.T) {
 	}
 	wantQuery = "select id1, id2, id3, val from t4 where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
 	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
+	expectStreamError(t, "select * from t4", "asfas")
 
 	// t1: test for unsupported integer literal
-	wantError := "only the integer literal 1 is supported"
+	wantError := "only the integer literal 1 is supported2"
 	expectStreamError(t, "select 2 from t1", wantError)
 
 	// t1: test for unsupported literal type
@@ -438,7 +439,6 @@ func expectStreamError(t *testing.T, query string, want string) {
 		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			return nil
 		})
-		require.Error(t, err, want)
-		require.Equal(t, want, err.Error(), "Got incorrect error")
+		require.EqualError(t, err, want, "Got incorrect error")
 	}()
 }
