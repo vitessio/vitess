@@ -104,7 +104,7 @@ type Throttler struct {
 
 	lastCheckTimeNano int64
 
-	initOnce           sync.Once
+	closeChan          chan bool
 	initMutex          sync.Mutex
 	throttledAppsMutex sync.Mutex
 
@@ -150,6 +150,8 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 		recentApps:             cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:          cache.New(cache.NoExpiration, 0),
+
+		closeChan: make(chan bool),
 
 		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 
@@ -198,10 +200,7 @@ func (throttler *Throttler) Open() error {
 	}
 
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
-	throttler.initOnce.Do(func() {
-		// Operate() will be mindful of Open/Close state changes, so we only need to start it once.
-		go throttler.Operate(context.Background())
-	})
+	go throttler.Operate(context.Background())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
 	return nil
@@ -215,6 +214,8 @@ func (throttler *Throttler) Close() {
 		// not open
 		return
 	}
+
+	throttler.closeChan <- true
 
 	throttler.pool.Close()
 	atomic.StoreInt64(&throttler.isOpen, 0)
@@ -285,31 +286,32 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlAggregateTicker := time.NewTicker(mysqlAggreateInterval)
 	throttledAppsTicker := time.NewTicker(throttledAppsSnapshotInterval)
 
-	// initial read of inventory:
-	go throttler.refreshMySQLInventory(ctx)
-
 	shouldCreateThrottlerUser := false
 	for {
 		select {
+		case <-throttler.closeChan:
+			{
+				return
+			}
 		case <-leaderCheckTicker.C:
 			{
 				// sparse
-				wasPreviouslyLeader := throttler.isLeader
 				shouldBeLeader := false
 				if atomic.LoadInt64(&throttler.isOpen) > 0 {
 					if throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER {
 						shouldBeLeader = true
 					}
 				}
-				throttler.isLeader = shouldBeLeader
 
-				if throttler.isLeader && !wasPreviouslyLeader {
+				if shouldBeLeader && !throttler.isLeader {
 					log.Infof("Throttler: transition into leadership")
 					shouldCreateThrottlerUser = true
 				}
-				if wasPreviouslyLeader && !throttler.isLeader {
+				if throttler.isLeader && !shouldBeLeader {
 					log.Infof("Throttler: transition out of leadership")
 				}
+
+				throttler.isLeader = shouldBeLeader
 
 				if throttler.isLeader && shouldCreateThrottlerUser {
 					password, err := throttler.createThrottlerUser(ctx)
@@ -343,7 +345,9 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		case <-mysqlRefreshTicker.C:
 			{
 				// sparse
-				go throttler.refreshMySQLInventory(ctx)
+				if throttler.isLeader {
+					go throttler.refreshMySQLInventory(ctx)
+				}
 			}
 		case probes := <-throttler.mysqlClusterProbesChan:
 			{
@@ -358,10 +362,6 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			{
 				go throttler.expireThrottledApps()
 			}
-		}
-		if !throttler.isLeader {
-			log.Infof("Throttler: not leader")
-			time.Sleep(1 * time.Second)
 		}
 	}
 }
@@ -398,9 +398,6 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 // refreshMySQLInventory will re-structure the inventory based on reading config settings, and potentially
 // re-querying dynamic data such as HAProxy list of hosts
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
-	if !throttler.isLeader {
-		return nil
-	}
 	log.Infof("refreshing MySQL inventory")
 
 	addInstanceKey := func(key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
