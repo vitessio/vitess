@@ -432,20 +432,13 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 
 func expectStreamError(t *testing.T, query string, want string) {
 	t.Helper()
-
 	ch := make(chan error)
 	go func() {
 		defer close(ch)
 		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			return nil
 		})
-		if err != nil {
-			got := err.Error()
-			if got != want {
-				t.Errorf("Incorrect error: want %s, got %s", want, got)
-			}
-			return
-		}
-		t.Errorf("An error was expected: %s", want)
+		require.Error(t, err, want)
+		require.Equal(t, want, err.Error(), "Got incorrect error")
 	}()
 }
