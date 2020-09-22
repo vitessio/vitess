@@ -244,10 +244,6 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
