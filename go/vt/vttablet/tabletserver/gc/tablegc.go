@@ -256,10 +256,6 @@ func (collector *TableGC) Operate(ctx context.Context) {
 				}
 			}
 		}
-
-		if collector.isPrimary == 0 {
-			time.Sleep(1 * time.Second)
-		}
 	}
 }
 
