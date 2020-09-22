@@ -43,6 +43,45 @@ type testcase struct {
 	output [][]string
 }
 
+func TestSetStatement(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into t1 values (1, 'aaa')",
+			"commit",
+			"set global log_builtin_as_identified_by_password=1", // without this the set password is converted to an alter user
+			"SET PASSWORD FOR 'vt_appdebug'@'localhost'='abc123'",
+			"set global log_builtin_as_identified_by_password=0",
+			"SET PASSWORD FOR 'vt_appdebug'@'localhost'='abc124'",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`gtid`,
+			`other`,
+		}, {
+			`gtid`,
+			`ddl`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func TestVersion(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1648,6 +1687,14 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			case "commit":
 				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
+				}
+			case "other":
+				if evs[i].Type != binlogdatapb.VEventType_OTHER {
+					t.Fatalf("%v (%d): event: %v, want other", input, i, evs[i])
+				}
+			case "ddl":
+				if evs[i].Type != binlogdatapb.VEventType_DDL {
+					t.Fatalf("%v (%d): event: %v, want ddl", input, i, evs[i])
 				}
 			default:
 				evs[i].Timestamp = 0
