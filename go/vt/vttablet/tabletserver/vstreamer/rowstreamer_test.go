@@ -61,12 +61,52 @@ func TestStreamRowsScan(t *testing.T) {
 
 	engine.se.Reload(context.Background())
 
-	// t1: all rows
+	// t1: simulates rollup
 	wantStream := []string{
+		`fields:<name:"1" type:INT64 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:1 values:"1" > rows:<lengths:1 values:"1" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery := "select id, val from t1 order by id"
+	checkStream(t, "select 1 from t1", nil, wantQuery, wantStream)
+
+	// t1: test for unsupported integer literal
+	wantError := "only the integer literal 1 is supported"
+	expectStreamError(t, "select 2 from t1", wantError)
+
+	// t1: test for unsupported literal type
+	wantError = "only integer literals are supported"
+	expectStreamError(t, "select 'a' from t1", wantError)
+
+	// t1: simulates rollup, with non-pk column
+	wantStream = []string{
+		`fields:<name:"1" type:INT64 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"1bbb" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery = "select id, val from t1 order by id"
+	checkStream(t, "select 1, val from t1", nil, wantQuery, wantStream)
+
+	// t1: simulates rollup, with pk and non-pk column
+	wantStream = []string{
+		`fields:<name:"1" type:INT64 > fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:1 lengths:1 lengths:3 values:"11aaa" > rows:<lengths:1 lengths:1 lengths:3 values:"12bbb" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery = "select id, val from t1 order by id"
+	checkStream(t, "select 1, id, val from t1", nil, wantQuery, wantStream)
+
+	// t1: no pk in select list
+	wantStream = []string{
+		`fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:3 values:"aaa" > rows:<lengths:3 values:"bbb" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery = "select id, val from t1 order by id"
+	checkStream(t, "select val from t1", nil, wantQuery, wantStream)
+
+	// t1: all rows
+	wantStream = []string{
 		`fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 values:"2" > `,
 	}
-	wantQuery := "select id, val from t1 order by id"
+	wantQuery = "select id, val from t1 order by id"
 	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
 
 	// t1: lastpk=1
@@ -388,4 +428,24 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 	for err := range ch {
 		t.Error(err)
 	}
+}
+
+func expectStreamError(t *testing.T, query string, want string) {
+	t.Helper()
+
+	ch := make(chan error)
+	go func() {
+		defer close(ch)
+		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+			return nil
+		})
+		if err != nil {
+			got := err.Error()
+			if got != want {
+				t.Errorf("Incorrect error: want %s, got %s", want, got)
+			}
+			return
+		}
+		t.Errorf("An error was expected: %s", want)
+	}()
 }
