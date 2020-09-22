@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	tabletPickerRetryDelay   = 5 * time.Second
+	tabletPickerRetryDelay   = 30 * time.Second
 	muTabletPickerRetryDelay sync.Mutex
 )
 

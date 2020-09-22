@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
@@ -88,6 +89,8 @@ type ColExpr struct {
 	VindexColumns []int
 
 	Field *querypb.Field
+
+	FixedValue sqltypes.Value
 }
 
 // Table contains the metadata for a table.
@@ -131,6 +134,10 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
+		if colExpr.ColNum == -1 {
+			result[i] = colExpr.FixedValue
+			continue
+		}
 		if colExpr.ColNum >= len(values) {
 			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
@@ -480,24 +487,24 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			VindexColumns: vindexColumns,
 		}, nil
 	case *sqlparser.Literal:
-		var typ querypb.Type
-		switch inner.Type {
-		case sqlparser.StrVal:
-			typ = sqltypes.VarChar
-		case sqlparser.IntVal:
-		case sqlparser.HexNum:
-		case sqlparser.HexVal:
-			typ = sqltypes.Int64
-		case sqlparser.FloatVal:
-			typ = sqltypes.Float64
-		case sqlparser.BitVal:
-			typ = sqltypes.Bit
+		//allow only intval 1
+		if inner.Type != sqlparser.IntVal {
+			return ColExpr{}, fmt.Errorf("only integer literals are supported")
+		}
+		num, err := strconv.ParseInt(string(inner.Val), 0, 64)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		if num != 1 {
+			return ColExpr{}, fmt.Errorf("only the integer literal 1 is supported")
 		}
 		return ColExpr{
 			Field: &querypb.Field{
-				Name: aliased.As.CompliantName(),
-				Type: typ,
+				Name: "1",
+				Type: querypb.Type_INT64,
 			},
+			ColNum:     -1,
+			FixedValue: sqltypes.NewInt64(num),
 		}, nil
 	default:
 		log.Infof("Unsupported expression: %v", inner)

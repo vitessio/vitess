@@ -192,6 +192,11 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	execVtgateQuery(t, vtgateConn, "customer", sql)
 }
 
+func insertMoreProducts(t *testing.T) {
+	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
+	execVtgateQuery(t, vtgateConn, "product", sql)
+}
+
 // FIXME: if testReverse if false we don't dropsources and that creates a problem later on in the test due to existence of blacklisted tables
 func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string) {
 	if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
@@ -356,6 +361,13 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
 		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 3))
 		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 4))
+
+		insertMoreProducts(t)
+		time.Sleep(1 * time.Second)
+		assert.Empty(t, validateCount(t, vtgateConn, "product", "rollup", 1))
+		assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+			`[[VARCHAR("total") INT32(5)]]`))
+
 	}
 }
 
@@ -615,7 +627,7 @@ func materializeProduct(t *testing.T) {
 		}
 	}
 	for _, tab := range customerTablets {
-		assert.Empty(t, validateCountInTablet(t, tab, "customer", "cproduct", 2))
+		assert.Empty(t, validateCountInTablet(t, tab, "customer", "cproduct", 5))
 	}
 }
 
