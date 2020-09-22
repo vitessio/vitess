@@ -278,3 +278,9 @@ const (
 	RegexpOp
 	NotRegexpOp
 )
+
+// Constant for Enum Type - RangeCondOperator
+const (
+	BetweenOp RangeCondOperator = iota
+	NotBetweenOp
+)

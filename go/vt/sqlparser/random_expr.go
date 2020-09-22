@@ -292,11 +292,11 @@ func (g *generator) between() Expr {
 	g.enter()
 	defer g.exit()
 
-	var op string
+	var op RangeCondOperator
 	if g.randomBool() {
-		op = BetweenStr
+		op = BetweenOp
 	} else {
-		op = NotBetweenStr
+		op = NotBetweenOp
 	}
 
 	return &RangeCond{

@@ -950,6 +950,18 @@ func (op ComparisonExprOperator) GetOperatorString() string {
 	}
 }
 
+// GetOperatorString returns the operator as a string
+func (op RangeCondOperator) GetOperatorString() string {
+	switch op {
+	case BetweenOp:
+		return BetweenStr
+	case NotBetweenOp:
+		return NotBetweenStr
+	default:
+		return "Unknown RangeCondOperator"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

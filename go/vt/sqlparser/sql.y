@@ -2487,11 +2487,11 @@ condition:
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: BetweenStr, From: $3, To: $5}
+    $$ = &RangeCond{Left: $1, Operator: BetweenOp, From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: NotBetweenStr, From: $4, To: $6}
+    $$ = &RangeCond{Left: $1, Operator: NotBetweenOp, From: $4, To: $6}
   }
 | EXISTS subquery
   {

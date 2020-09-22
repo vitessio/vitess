@@ -634,10 +634,13 @@ type (
 
 	// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
 	RangeCond struct {
-		Operator string
+		Operator RangeCondOperator
 		Left     Expr
 		From, To Expr
 	}
+
+	// RangeCondOperator is an enum for RangeCond.Operator
+	RangeCondOperator int8
 
 	// IsExpr represents an IS ... or an IS NOT ... expression.
 	IsExpr struct {
@@ -1636,7 +1639,7 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
+	buf.astPrintf(node, "%v %s %v and %v", node.Left, node.Operator.GetOperatorString(), node.From, node.To)
 }
 
 // Format formats the node.
