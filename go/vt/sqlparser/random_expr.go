@@ -311,10 +311,10 @@ func (g *generator) isExpr() Expr {
 	g.enter()
 	defer g.exit()
 
-	ops := []string{IsNullStr, IsNotNullStr, IsTrueStr, IsNotTrueStr, IsFalseStr, IsNotFalseStr}
+	ops := []IsExprOperator{IsNullOp, IsNotNullOp, IsTrueOp, IsNotTrueOp, IsFalseOp, IsNotFalseOp}
 
 	return &IsExpr{
-		Operator: g.randomOfS(ops),
+		Operator: ops[g.r.Intn(len(ops))],
 		Expr:     g.booleanExpr(),
 	}
 }

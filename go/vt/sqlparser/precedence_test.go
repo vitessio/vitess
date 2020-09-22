@@ -35,7 +35,7 @@ func readable(node Expr) string {
 	case *BinaryExpr:
 		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator, readable(node.Right))
 	case *IsExpr:
-		return fmt.Sprintf("(%s %s)", readable(node.Expr), node.Operator)
+		return fmt.Sprintf("(%s %s)", readable(node.Expr), node.Operator.GetOperatorString())
 	default:
 		return String(node)
 	}

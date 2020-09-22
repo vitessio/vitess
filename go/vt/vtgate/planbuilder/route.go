@@ -678,7 +678,7 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 // computeEqualPlan computes the plan for an equality constraint.
 func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
-	if comparison.Operator != sqlparser.IsNullStr {
+	if comparison.Operator != sqlparser.IsNullOp {
 		return engine.SelectScatter, nil, nil
 	}
 

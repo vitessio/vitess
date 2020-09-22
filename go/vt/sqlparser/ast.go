@@ -644,9 +644,12 @@ type (
 
 	// IsExpr represents an IS ... or an IS NOT ... expression.
 	IsExpr struct {
-		Operator string
+		Operator IsExprOperator
 		Expr     Expr
 	}
+
+	// IsExprOperator is an enum for IsExpr.Operator
+	IsExprOperator int8
 
 	// ExistsExpr represents an EXISTS expression.
 	ExistsExpr struct {
@@ -1644,7 +1647,7 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IsExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s", node.Expr, node.Operator)
+	buf.astPrintf(node, "%v %s", node.Expr, node.Operator.GetOperatorString())
 }
 
 // Format formats the node.
