@@ -72,13 +72,9 @@ func TestGenerateShardRanges(t *testing.T) {
 
 func TestShardCalculatorForShardsGreaterThan512(t *testing.T) {
 	got, err := generateShardRanges(512)
-	if err != nil {
-		t.Errorf("listShardRanges() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	want := "ff80-"
 
-	if got[511] != want {
-		t.Errorf("Invalid mapping for a 512 shard keyspace. Expected %v, want %v", got[511], want)
-	}
+	assert.Equal(t, want, got[511], "Invalid mapping for a 512-shard keyspace. Expected %v, got %v", want, got[511])
 }
