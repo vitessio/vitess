@@ -55,14 +55,17 @@ func TestSetStatement(t *testing.T) {
 		"drop table t1",
 	})
 	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa')",
+		"commit",
+	}
+	if !strings.Contains(strings.ToLower(env.Flavor), "mariadb") {
+		queries = append(queries, "set global log_builtin_as_identified_by_password=1")
+	}
+	queries = append(queries, "SET PASSWORD FOR 'vt_appdebug'@'localhost'='*CDE65254CC57BC0C3D0A85509B5CEA654126BF56'")
 	testcases := []testcase{{
-		input: []string{
-			"begin",
-			"insert into t1 values (1, 'aaa')",
-			"commit",
-			"set global log_builtin_as_identified_by_password=1", // without this the set password is converted to an alter user
-			"SET PASSWORD FOR 'vt_appdebug'@'localhost'='*CDE65254CC57BC0C3D0A85509B5CEA654126BF56'",
-		},
+		input: queries,
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
