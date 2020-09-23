@@ -311,3 +311,16 @@ const (
 	JSONExtractOp
 	JSONUnquoteExtractOp
 )
+
+// Constant for Enum Type - UnaryExprOperator
+const (
+	UPlusOp UnaryExprOperator = iota
+	UMinusOp
+	TildaOp
+	BangOp
+	BinaryOp
+	UBinaryOp
+	Utf8mb4Op
+	Utf8Op
+	Latin1Op
+)

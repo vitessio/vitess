@@ -706,9 +706,12 @@ type (
 
 	// UnaryExpr represents a unary value expression.
 	UnaryExpr struct {
-		Operator string
+		Operator UnaryExprOperator
 		Expr     Expr
 	}
+
+	// UnaryExprOperator is an enum for UnaryExpr.Operator
+	UnaryExprOperator int8
 
 	// IntervalExpr represents a date-time INTERVAL expression.
 	IntervalExpr struct {
@@ -1725,10 +1728,10 @@ func (node *BinaryExpr) Format(buf *TrackedBuffer) {
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 	if _, unary := node.Expr.(*UnaryExpr); unary {
 		// They have same precedence so parenthesis is not required.
-		buf.astPrintf(node, "%s %v", node.Operator, node.Expr)
+		buf.astPrintf(node, "%s %v", node.Operator.GetOperatorString(), node.Expr)
 		return
 	}
-	buf.astPrintf(node, "%s%v", node.Operator, node.Expr)
+	buf.astPrintf(node, "%s%v", node.Operator.GetOperatorString(), node.Expr)
 }
 
 // Format formats the node.
