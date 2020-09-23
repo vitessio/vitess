@@ -66,17 +66,17 @@ func precedenceFor(in Expr) Precendence {
 		return P11
 	case *BinaryExpr:
 		switch node.Operator {
-		case BitOrStr:
+		case BitOrOp:
 			return P10
-		case BitAndStr:
+		case BitAndOp:
 			return P9
-		case ShiftLeftStr, ShiftRightStr:
+		case ShiftLeftOp, ShiftRightOp:
 			return P8
-		case PlusStr, MinusStr:
+		case PlusOp, MinusOp:
 			return P7
-		case DivStr, MultStr, ModStr, IntDivStr:
+		case DivOp, MultOp, ModOp, IntDivOp:
 			return P6
-		case BitXorStr:
+		case BitXorOp:
 			return P5
 		}
 	case *UnaryExpr:

@@ -2617,51 +2617,51 @@ value_expression:
   }
 | value_expression '&' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
   }
 | value_expression '|' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: BitOrStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
   }
 | value_expression '^' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: BitXorStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
   }
 | value_expression '+' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: PlusStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
   }
 | value_expression '-' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: MinusStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
   }
 | value_expression '*' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: MultStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
   }
 | value_expression '/' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: DivStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
   }
 | value_expression DIV value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: IntDivStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
   }
 | value_expression '%' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
   }
 | value_expression MOD value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
   }
 | value_expression SHIFT_LEFT value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
   }
 | value_expression SHIFT_RIGHT value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
   }
 | column_name JSON_EXTRACT_OP value
   {

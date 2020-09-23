@@ -697,9 +697,12 @@ type (
 
 	// BinaryExpr represents a binary value expression.
 	BinaryExpr struct {
-		Operator    string
+		Operator    BinaryExprOperator
 		Left, Right Expr
 	}
+
+	// BinaryExprOperator is an enum for BinaryExpr.Operator
+	BinaryExprOperator int8
 
 	// UnaryExpr represents a unary value expression.
 	UnaryExpr struct {
@@ -1715,7 +1718,7 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator.GetOperatorString(), node.Right)
 }
 
 // Format formats the node.
