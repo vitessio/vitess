@@ -1574,17 +1574,17 @@ func (node Exprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AndExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v and %v", node.Left, node.Right)
+	buf.astPrintf(node, "%l and %r", node.Left, node.Right)
 }
 
 // Format formats the node.
 func (node *OrExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v or %v", node.Left, node.Right)
+	buf.astPrintf(node, "%l or %r", node.Left, node.Right)
 }
 
 // Format formats the node.
 func (node *XorExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v xor %v", node.Left, node.Right)
+	buf.astPrintf(node, "%l xor %r", node.Left, node.Right)
 }
 
 // Format formats the node.
@@ -1594,7 +1594,7 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator, node.Right)
 	if node.Escape != nil {
 		buf.astPrintf(node, " escape %v", node.Escape)
 	}
@@ -1602,7 +1602,7 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
+	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator, node.From, node.To)
 }
 
 // Format formats the node.
@@ -1675,7 +1675,7 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator, node.Right)
 }
 
 // Format formats the node.

@@ -765,6 +765,9 @@ func (vs *vstreamer) rebuildPlans() error {
 		if err != nil {
 			return err
 		}
+		if newPlan == nil {
+			continue
+		}
 		vs.plans[id] = &streamerPlan{
 			Plan:     newPlan,
 			TableMap: plan.TableMap,
