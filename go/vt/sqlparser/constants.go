@@ -334,3 +334,9 @@ const (
 	NaturalLanguageModeWithQueryExpansionOpt
 	QueryExpansionOpt
 )
+
+// Constant for Enum Type - OrderDirection
+const (
+	AscOrder OrderDirection = iota
+	DescOrder
+)

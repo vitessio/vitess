@@ -477,12 +477,12 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 		if err != nil {
 			return nil, fmt.Errorf("generating order by clause: %v", err)
 		}
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscOrder})
 	}
 
 	// Append the distinct aggregate if any.
 	if oa.extraDistinct != nil {
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscScr})
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscOrder})
 	}
 
 	// Push down the order by.

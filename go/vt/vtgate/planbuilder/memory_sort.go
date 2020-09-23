@@ -70,7 +70,7 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 		}
 		ob := engine.OrderbyParams{
 			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescScr,
+			Desc: order.Direction == sqlparser.DescOrder,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}
