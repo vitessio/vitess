@@ -176,6 +176,10 @@ func replaceDDLAutoIncSpec(newNode, parent SQLNode) {
 	parent.(*DDL).AutoIncSpec = newNode.(*AutoIncSpec)
 }
 
+func replaceDDLComments(newNode, parent SQLNode) {
+	parent.(*DDL).Comments = newNode.(Comments)
+}
+
 func replaceDDLFromTables(newNode, parent SQLNode) {
 	parent.(*DDL).FromTables = newNode.(TableNames)
 }
@@ -996,6 +1000,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *DDL:
 		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
+		a.apply(node, n.Comments, replaceDDLComments)
 		a.apply(node, n.FromTables, replaceDDLFromTables)
 		a.apply(node, n.OptLike, replaceDDLOptLike)
 		a.apply(node, n.PartitionSpec, replaceDDLPartitionSpec)

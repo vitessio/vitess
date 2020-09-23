@@ -189,6 +189,8 @@ type (
 	DDL struct {
 		Action string
 
+		Comments Comments
+
 		// FromTables is set if Action is RenameStr or DropStr.
 		FromTables TableNames
 
@@ -1025,7 +1027,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.astPrintf(node, "%s table%s %v", node.Action, exists, node.FromTables)
+		buf.astPrintf(node, "%s %vtable%s %v", node.Action, node.Comments, exists, node.FromTables)
 	case RenameStr:
 		buf.astPrintf(node, "%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
 		for i := 1; i < len(node.FromTables); i++ {

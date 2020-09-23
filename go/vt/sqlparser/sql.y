@@ -1547,26 +1547,26 @@ rename_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list
+  DROP comment_opt TABLE exists_opt table_name_list
   {
-    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: $3}
+    $$ = &DDL{Action: DropStr, FromTables: $5, IfExists: $4, Comments: Comments($2)}
   }
-| DROP INDEX id_or_var ON table_name ddl_skip_to_end
+| DROP comment_opt INDEX id_or_var ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $5}
+    $$ = &DDL{Action: AlterStr, Table: $6}
   }
-| DROP VIEW exists_opt table_name ddl_skip_to_end
+| DROP comment_opt VIEW exists_opt table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
+    $$ = &DDL{Action: DropStr, FromTables: TableNames{$5.ToViewName()}, IfExists: $4}
   }
-| DROP DATABASE exists_opt id_or_var
+| DROP comment_opt DATABASE exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
+    $$ = &DBDDL{Action: DropStr, DBName: string($5.String()), IfExists: $4}
   }
-| DROP SCHEMA exists_opt id_or_var
+| DROP comment_opt SCHEMA exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
+    $$ = &DBDDL{Action: DropStr, DBName: string($5.String()), IfExists: $4}
   }
 
 truncate_statement:
@@ -1971,6 +1971,7 @@ flush_statement:
   {
     $$ = &DDL{Action: FlushStr}
   }
+
 comment_opt:
   {
     setAllowComments(yylex, true)
