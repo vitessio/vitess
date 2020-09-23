@@ -129,6 +129,7 @@ func skipToEnd(yylex interface{}) {
   boolean 		bool
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
+  explainType 	  ExplainType
 }
 
 %token LEX_ERROR
@@ -238,7 +239,8 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
 %type <bytes2> comment_opt comment_list
-%type <str> explain_format_opt wild_opt
+%type <str> wild_opt
+%type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <unionType> union_op
 %type <bytes> explain_synonyms
@@ -1895,27 +1897,27 @@ release_statement:
 
 explain_format_opt:
   {
-    $$ = ""
+    $$ = EmptyType
   }
 | FORMAT '=' JSON
   {
-    $$ = JSONStr
+    $$ = JSONType
   }
 | FORMAT '=' TREE
   {
-    $$ = TreeStr
+    $$ = TreeType
   }
 | FORMAT '=' VITESS
   {
-    $$ = VitessStr
+    $$ = VitessType
   }
 | FORMAT '=' TRADITIONAL
   {
-    $$ = TraditionalStr
+    $$ = TraditionalType
   }
 | ANALYZE
   {
-    $$ = AnalyzeStr
+    $$ = AnalyzeType
   }
 
 explain_synonyms:

@@ -1098,6 +1098,26 @@ func (ty IndexHintsType) GetIndexHintsType() string {
 	}
 }
 
+// GetExplainType returns the type as a string
+func (ty ExplainType) GetExplainType() string {
+	switch ty {
+	case EmptyType:
+		return EmptyStr
+	case TreeType:
+		return TreeStr
+	case JSONType:
+		return JSONStr
+	case VitessType:
+		return VitessStr
+	case TraditionalType:
+		return TraditionalStr
+	case AnalyzeType:
+		return AnalyzeStr
+	default:
+		return "Unknown ExplainType"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

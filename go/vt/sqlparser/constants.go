@@ -171,6 +171,7 @@ const (
 	TxReadWrite = "read write"
 
 	// Explain formats
+	EmptyStr       = ""
 	TreeStr        = "tree"
 	JSONStr        = "json"
 	VitessStr      = "vitess"
@@ -358,4 +359,14 @@ const (
 // Constant for Enum Type - PartitionSpecAction
 const (
 	ReorganizeAction PartitionSpecAction = iota
+)
+
+// Constant for Enum Type - ExplainType
+const (
+	EmptyType ExplainType = iota
+	TreeType
+	JSONType
+	VitessType
+	TraditionalType
+	AnalyzeType
 )
