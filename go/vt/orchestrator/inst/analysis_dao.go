@@ -81,6 +81,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(master_instance.binary_log_file) AS binary_log_file,
 		MIN(master_instance.binary_log_pos) AS binary_log_pos,
 		MIN(master_instance.suggested_cluster_alias) AS suggested_cluster_alias,
+		MIN(master_tablet.info) AS master_tablet_info,
 		MIN(
 			IFNULL(
 				master_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
@@ -201,6 +202,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(
 			master_instance.semi_sync_master_status
 		) AS semi_sync_master_status,
+		MIN(
+			master_instance.semi_sync_replica_enabled
+		) AS semi_sync_replica_enabled,
 		SUM(replica_instance.is_co_master) AS count_co_master_replicas,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
@@ -306,6 +310,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			vitess_tablet.hostname = master_instance.hostname
 			AND vitess_tablet.port = master_instance.port
 		)
+		LEFT JOIN vitess_tablet master_tablet ON (
+			master_tablet.hostname = master_instance.master_host
+			AND master_tablet.port = master_instance.master_port
+		)
 		LEFT JOIN hostname_resolve ON (
 			master_instance.hostname = hostname_resolve.hostname
 		)
@@ -348,8 +356,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.hostname,
 		vitess_tablet.port
 	ORDER BY
-		tablet_type ASC,
-		master_timestamp DESC
+		vitess_tablet.tablet_type ASC,
+		vitess_tablet.master_timestamp DESC
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
@@ -364,6 +372,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		if err := proto.UnmarshalText(m.GetString("tablet_info"), tablet); err != nil {
 			log.Errorf("could not read tablet %v: %v", m.GetString("tablet_info"), err)
 			return nil
+		}
+
+		masterTablet := &topodatapb.Tablet{}
+		if str := m.GetString("master_tablet_info"); str != "" {
+			if err := proto.UnmarshalText(str, masterTablet); err != nil {
+				log.Errorf("could not read tablet %v: %v", str, err)
+				return nil
+			}
 		}
 
 		a.TabletType = tablet.Type
@@ -416,6 +432,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.PseudoGTIDImmediateTopology = m.GetBool("is_pseudo_gtid")
 		a.SemiSyncMasterEnabled = m.GetBool("semi_sync_master_enabled")
 		a.SemiSyncMasterStatus = m.GetBool("semi_sync_master_status")
+		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncMasterWaitForReplicaCount = m.GetUint("semi_sync_master_wait_for_slave_count")
@@ -486,6 +503,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = MasterIsReadOnly
 			a.Description = "Master is read-only"
 			//
+		} else if a.IsClusterMaster && MasterSemiSync(a.AnalyzedInstanceKey) != 0 && !a.SemiSyncMasterEnabled {
+			a.Analysis = MasterSemiSyncMustBeSet
+			a.Description = "Master semi-sync must be set"
+			//
+		} else if a.IsClusterMaster && MasterSemiSync(a.AnalyzedInstanceKey) == 0 && a.SemiSyncMasterEnabled {
+			a.Analysis = MasterSemiSyncMustNotBeSet
+			a.Description = "Master semi-sync must not be set"
+			//
 		} else if topo.IsReplicaType(a.TabletType) && ca.masterKey == nil {
 			a.Analysis = ClusterHasNoMaster
 			a.Description = "Cluster has no master"
@@ -505,6 +530,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsMaster && a.ReplicationStopped {
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
+			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsMaster && ReplicaSemiSyncFromTablet(masterTablet, tablet) && !a.SemiSyncReplicaEnabled {
+			a.Analysis = ReplicaSemiSyncMustBeSet
+			a.Description = "Replica semi-sync must be set"
+			//
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsMaster && !ReplicaSemiSyncFromTablet(masterTablet, tablet) && a.SemiSyncReplicaEnabled {
+			a.Analysis = ReplicaSemiSyncMustNotBeSet
+			a.Description = "Replica semi-sync must not be set"
 			//
 			// TODO(sougou): Events below here are either ignored or not possible.
 		} else if a.IsMaster && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {

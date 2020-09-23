@@ -177,11 +177,12 @@ type (
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
 	DBDDL struct {
-		Action   string
-		DBName   string
-		IfExists bool
-		Collate  string
-		Charset  string
+		Action      string
+		DBName      string
+		IfExists    bool
+		IfNotExists bool
+		Collate     string
+		Charset     string
 	}
 
 	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
@@ -369,16 +370,16 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	NotNull       BoolVal
-	Autoincrement BoolVal
+	NotNull       bool
+	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
 	Comment       *Literal
 
 	// Numeric field options
 	Length   *Literal
-	Unsigned BoolVal
-	Zerofill BoolVal
+	Unsigned bool
+	Zerofill bool
 	Scale    *Literal
 
 	// Text field options
@@ -1001,7 +1002,13 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateStr, AlterStr:
+	case CreateStr:
+		notExists := ""
+		if node.IfNotExists {
+			notExists = " if not exists"
+		}
+		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, notExists, node.DBName))
+	case AlterStr:
 		buf.WriteString(fmt.Sprintf("%s database %s", node.Action, node.DBName))
 	case DropStr:
 		exists := ""
