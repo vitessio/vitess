@@ -141,8 +141,9 @@ const (
 	Utf8Str    = "_utf8 "
 	Latin1Str  = "_latin1 "
 
-	// this string is "character set" and this comment is required
+	// ConvertType.Operator
 	CharacterSetStr = " character set"
+	NoOperatorStr   = ""
 	CharsetStr      = "charset"
 
 	// MatchExpr.Option
@@ -339,4 +340,10 @@ const (
 const (
 	AscOrder OrderDirection = iota
 	DescOrder
+)
+
+// Constant for Enum Type - ConvertTypeOperator
+const (
+	NoOperator ConvertTypeOperator = iota
+	CharacterSetOp
 )
