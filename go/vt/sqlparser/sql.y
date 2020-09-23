@@ -2677,30 +2677,30 @@ value_expression:
   }
 | BINARY value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BinaryStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: BinaryOp, Expr: $2}
   }
 | UNDERSCORE_BINARY value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: UBinaryOp, Expr: $2}
   }
 | UNDERSCORE_UTF8 value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: Utf8Str, Expr: $2}
+    $$ = &UnaryExpr{Operator: Utf8Op, Expr: $2}
   }
 | UNDERSCORE_UTF8MB4 value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: Utf8mb4Str, Expr: $2}
+    $$ = &UnaryExpr{Operator: Utf8mb4Op, Expr: $2}
   }
 | UNDERSCORE_LATIN1 value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: Latin1Str, Expr: $2}
+    $$ = &UnaryExpr{Operator: Latin1Op, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(*Literal); ok && num.Type == IntVal {
       $$ = num
     } else {
-      $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
+      $$ = &UnaryExpr{Operator: UPlusOp, Expr: $2}
     }
   }
 | '-'  value_expression %prec UNARY
@@ -2714,16 +2714,16 @@ value_expression:
         $$ = NewIntLiteral(append([]byte("-"), num.Val...))
       }
     } else {
-      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
+      $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
     }
   }
 | '~'  value_expression
   {
-    $$ = &UnaryExpr{Operator: TildaStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
   }
 | '!' value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BangStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
   }
 | INTERVAL value_expression sql_id
   {

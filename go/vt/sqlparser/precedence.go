@@ -81,11 +81,11 @@ func precedenceFor(in Expr) Precendence {
 		}
 	case *UnaryExpr:
 		switch node.Operator {
-		case UPlusStr, UMinusStr:
+		case UPlusOp, UMinusOp:
 			return P4
-		case BangStr:
+		case BangOp:
 			return P3
-		case BinaryStr:
+		case BinaryOp:
 			return P2
 		}
 	case *IntervalExpr:

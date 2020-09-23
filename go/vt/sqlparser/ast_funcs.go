@@ -1016,6 +1016,32 @@ func (op BinaryExprOperator) GetOperatorString() string {
 	}
 }
 
+// GetOperatorString returns the operator as a string
+func (op UnaryExprOperator) GetOperatorString() string {
+	switch op {
+	case UPlusOp:
+		return UPlusStr
+	case UMinusOp:
+		return UMinusStr
+	case TildaOp:
+		return TildaStr
+	case BangOp:
+		return BangStr
+	case BinaryOp:
+		return BinaryStr
+	case UBinaryOp:
+		return UBinaryStr
+	case Utf8mb4Op:
+		return Utf8mb4Str
+	case Utf8Op:
+		return Utf8Str
+	case Latin1Op:
+		return Latin1Str
+	default:
+		return "Unknown UnaryExprOperator"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
