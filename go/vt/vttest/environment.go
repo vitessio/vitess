@@ -85,9 +85,6 @@ type Environment interface {
 	// any temporary data in the environment. Environments that can
 	// last through several test runs do not need to implement it.
 	TearDown() error
-
-	// Flavor is set to the MySQL Server flavor used for testing
-	Flavor() string
 }
 
 // LocalTestEnv is an Environment implementation for local testing
@@ -97,7 +94,6 @@ type LocalTestEnv struct {
 	TmpPath      string
 	DefaultMyCnf []string
 	Env          []string
-	MySQLFlavor  string
 }
 
 // DefaultMySQLFlavor is the MySQL flavor used by vttest when MYSQL_FLAVOR is not
@@ -206,11 +202,6 @@ func (env *LocalTestEnv) TearDown() error {
 	return os.RemoveAll(env.TmpPath)
 }
 
-// Flavor implements Flavor for LocalTestEnv.
-func (env *LocalTestEnv) Flavor() string {
-	return env.MySQLFlavor
-}
-
 func tmpdir(dataroot string) (dir string, err error) {
 	dir, err = ioutil.TempDir(dataroot, "vttest")
 	return
@@ -266,7 +257,6 @@ func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string)
 		BasePort:     basePort,
 		TmpPath:      directory,
 		DefaultMyCnf: mycnf,
-		MySQLFlavor:  flavor,
 		Env: []string{
 			fmt.Sprintf("VTDATAROOT=%s", directory),
 			fmt.Sprintf("MYSQL_FLAVOR=%s", flavor),

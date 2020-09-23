@@ -43,7 +43,23 @@ type testcase struct {
 	output [][]string
 }
 
+func isMariaDB(t *testing.T) bool {
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select version()")
+	require.NoError(t, err)
+	require.NotNil(t, qr)
+	require.NotNil(t, qr.Rows)
+	require.NotEqual(t, len(qr.Rows), 0)
+	version := qr.Rows[0][0].String()
+	if strings.Contains(strings.ToLower(version), "mariadb") {
+		log.Infof("Flavor IS MariaDB\n")
+		return true
+	}
+	log.Infof("Flavor is NOT MariaDB\n")
+	return false
+}
+
 func TestSetStatement(t *testing.T) {
+
 	if testing.Short() {
 		t.Skip()
 	}
@@ -60,7 +76,7 @@ func TestSetStatement(t *testing.T) {
 		"insert into t1 values (1, 'aaa')",
 		"commit",
 	}
-	if !strings.Contains(strings.ToLower(env.Flavor), "mariadb") {
+	if !isMariaDB(t) {
 		queries = append(queries, "set global log_builtin_as_identified_by_password=1")
 	}
 	queries = append(queries, "SET PASSWORD FOR 'vt_appdebug'@'localhost'='*CDE65254CC57BC0C3D0A85509B5CEA654126BF56'")
