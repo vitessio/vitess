@@ -1522,7 +1522,7 @@ alter_object_type:
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
   {
-    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+    $$ = &PartitionSpec{Action: ReorganizeAction, Name: $3, Definitions: $6}
   }
 
 partition_definitions:
