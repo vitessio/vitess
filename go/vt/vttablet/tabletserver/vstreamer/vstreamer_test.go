@@ -61,9 +61,7 @@ func TestSetStatement(t *testing.T) {
 			"insert into t1 values (1, 'aaa')",
 			"commit",
 			"set global log_builtin_as_identified_by_password=1", // without this the set password is converted to an alter user
-			"SET PASSWORD FOR 'vt_appdebug'@'localhost'='abc123'",
-			"set global log_builtin_as_identified_by_password=0",
-			"SET PASSWORD FOR 'vt_appdebug'@'localhost'='abc124'",
+			"SET PASSWORD FOR 'vt_appdebug'@'localhost'='*CDE65254CC57BC0C3D0A85509B5CEA654126BF56'",
 		},
 		output: [][]string{{
 			`begin`,
@@ -74,9 +72,6 @@ func TestSetStatement(t *testing.T) {
 		}, {
 			`gtid`,
 			`other`,
-		}, {
-			`gtid`,
-			`ddl`,
 		}},
 	}}
 	runCases(t, nil, testcases, "current", nil)
