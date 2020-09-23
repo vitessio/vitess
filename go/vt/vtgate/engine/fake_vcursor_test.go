@@ -299,7 +299,8 @@ func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
 }
 
-func (f *loggingVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
+func (f *loggingVCursor) SubmitOnlineDDL(onlineDDL *schema.OnlineDDL) error {
+	f.log = append(f.log, fmt.Sprintf("SubmitOnlineDDL: %s", onlineDDL.ToString()))
 	return nil
 }
 
