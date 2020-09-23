@@ -50,7 +50,7 @@ var (
 
 // ParseAlterTableOptions parses a ALTER ... TABLE... statement into:
 // - explicit schema and table, if available
-// - alter roptions (anything that follows ALTER ... TABLE)
+// - alter options (anything that follows ALTER ... TABLE)
 func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTable, alterOptions string) {
 	alterOptions = strings.TrimSpace(alterStatement)
 	for _, alterTableRegexp := range alterTableExplicitSchemaTableRegexps {

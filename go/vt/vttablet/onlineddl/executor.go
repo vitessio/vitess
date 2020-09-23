@@ -317,7 +317,7 @@ func (e *Executor) getThrottleReplicas(ctx context.Context) ([]string, error) {
 }
 
 // ExecuteWithGhost validates and runs a gh-ost process.
-// Validation included testing the backend MySQL server and the gh-ost binray itself
+// Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	e.migrationMutex.Lock()
@@ -400,7 +400,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	serveSocketFile := path.Join(tempDir, "serve.sock")
 
 	if err := e.deleteGhostPanicFlagFile(onlineDDL.UUID); err != nil {
-		log.Errorf("Error removing gh-ost panic filag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
+		log.Errorf("Error removing gh-ost panic flag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
 		return err
 	}
 	// Validate gh-ost binary:

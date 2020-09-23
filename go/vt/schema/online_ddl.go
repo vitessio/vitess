@@ -50,11 +50,6 @@ func MigrationQueuedPath() string {
 	return fmt.Sprintf("%s/queued", MigrationBasePath())
 }
 
-// MigrationCompletePath is the base path for schema migrations that have been rcompleted on all shards
-func MigrationCompletePath() string {
-	return fmt.Sprintf("%s/complete", MigrationBasePath())
-}
-
 // MigrationJobsKeyspacePath is the base path for a tablet job, by keyspace
 func MigrationJobsKeyspacePath(keyspace string) string {
 	return fmt.Sprintf("%s/jobs/%s", MigrationBasePath(), keyspace)
@@ -119,7 +114,7 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
 func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.DDLStrategy, options string) (*OnlineDDL, error) {
-	uuid, err := CreateUUID()
+	u, err := CreateUUID()
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +122,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.
 		Keyspace:    keyspace,
 		Table:       table,
 		SQL:         sql,
-		UUID:        uuid,
+		UUID:        u,
 		Strategy:    strategy,
 		Options:     options,
 		RequestTime: time.Now().UnixNano(),
@@ -148,6 +143,11 @@ func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
 // ToJSON exports this onlineDDL to JSON
 func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
+}
+
+// ToString returns a simple string representation of this instance
+func (onlineDDL *OnlineDDL) ToString() string {
+	return fmt.Sprintf("OnlineDDL: keyspace=%s, table=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.Table, onlineDDL.SQL)
 }
 
 // WriteTopo writes this online DDL to given topo connection, based on basePath and and this DDL's UUID
@@ -173,7 +173,7 @@ func CreateUUID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	uuid := u.String()
-	uuid = strings.Replace(uuid, "-", "_", -1)
-	return uuid, nil
+	result := u.String()
+	result = strings.Replace(result, "-", "_", -1)
+	return result, nil
 }
