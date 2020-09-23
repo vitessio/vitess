@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"io"
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -272,7 +273,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return "", "", err
 	}
 
-	gtidsChan := make(chan []string)
+	gtidsChan := make(chan []string, 1)
 
 	go func() {
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
@@ -287,19 +288,19 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 					if event.Timestamp >= restoreTime {
 						afterPos = event.Gtid
 						gtidsChan <- []string{event.Gtid, beforePos}
-						break
+						return io.EOF
 					}
 
 					if eventPos.AtLeast(lastPos) {
 						gtidsChan <- []string{"", beforePos}
-						break
+						return io.EOF
 					}
 					beforePos = event.Gtid
 				}
 			}
 			return nil
 		})
-		if err != nil {
+		if err != nil && err != io.EOF {
 			gtidsChan <- []string{"", ""}
 		}
 	}()
