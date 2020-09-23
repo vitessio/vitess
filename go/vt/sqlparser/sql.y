@@ -126,6 +126,7 @@ func skipToEnd(yylex interface{}) {
   joinType  	JoinType
   comparisonExprOperator ComparisonExprOperator
   isExprOperator IsExprOperator
+  boolean 		bool
 }
 
 %token LEX_ERROR
@@ -239,7 +240,8 @@ func skipToEnd(yylex interface{}) {
 %type <insertAction> insert_or_replace
 %type <unionType> union_op
 %type <bytes> explain_synonyms
-%type <str> distinct_opt cache_opt match_option separator_opt
+%type <str> cache_opt match_option separator_opt
+%type <boolean> distinct_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
@@ -2039,15 +2041,15 @@ cache_opt:
 
 distinct_opt:
   {
-    $$ = ""
+    $$ = false
   }
 | DISTINCT
   {
-    $$ = DistinctStr
+    $$ = true
   }
 | DISTINCTROW
   {
-    $$ = DistinctStr
+    $$ = true
   }
 
 select_expression_list_opt:
