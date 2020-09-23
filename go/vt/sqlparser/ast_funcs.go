@@ -1042,6 +1042,24 @@ func (op UnaryExprOperator) GetOperatorString() string {
 	}
 }
 
+// GetOptionString returns the option as a string
+func (option MatchExprOption) GetOptionString() string {
+	switch option {
+	case NoOption:
+		return NoOptionStr
+	case BooleanModeOpt:
+		return BooleanModeStr
+	case NaturalLanguageModeOpt:
+		return NaturalLanguageModeStr
+	case NaturalLanguageModeWithQueryExpansionOpt:
+		return NaturalLanguageModeWithQueryExpansionStr
+	case QueryExpansionOpt:
+		return QueryExpansionStr
+	default:
+		return "Unknown MatchExprOption"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
