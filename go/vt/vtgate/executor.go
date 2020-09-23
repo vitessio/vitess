@@ -701,8 +701,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			filter = regexp.MustCompile(".*")
 		}
 
-		log.Infof("Using filter %s", filter)
-
 		rows := make([][]sqltypes.Value, 0, len(keyspaces))
 		for _, v := range keyspaces {
 			if filter.MatchString(v) {
@@ -725,7 +723,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 
 			filter := show.ShowTablesOpt.Filter
-			log.Infof("have filter: %+v\n", filter)
 
 			if filter.Like != "" {
 				likeRexep := sqlparser.LikeToRegexp(filter.Like)
@@ -739,7 +736,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 			if filter.Filter != nil {
 				// TODO build a query planner I guess? lol that should be fun
-				log.Infof("SHOW VITESS_SHARDS where clause %+v. Ignoring this for now.", filter.Filter)
+				log.Infof("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter)
 			}
 
 			return keyspaceFilters, shardFilters
@@ -967,15 +964,13 @@ func (e *Executor) showTablets(show *sqlparser.Show) (*sqltypes.Result, error) {
 		}
 
 		if filter.Filter != nil {
-			log.Infof("have show tablets where clause: %+v. not doing anything with it (for now)\n", filter.Filter)
+			log.Infof("SHOW VITESS_TABLETS where clause: %+v. Ignoring this (for now).", filter.Filter)
 		}
 
 		return filters
 	}
 
 	tabletFilters := getTabletFilters(show)
-
-	log.Infof("have %d tablet filters\n", len(tabletFilters))
 
 	rows := [][]sqltypes.Value{}
 	if UsingLegacyGateway() {
