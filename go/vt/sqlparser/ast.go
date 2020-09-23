@@ -277,9 +277,12 @@ type (
 
 	// Explain represents an EXPLAIN statement
 	Explain struct {
-		Type      string
+		Type      ExplainType
 		Statement Statement
 	}
+
+	// ExplainType is an enum for Explain.Type
+	ExplainType int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -1458,11 +1461,11 @@ func (node *Release) Format(buf *TrackedBuffer) {
 func (node *Explain) Format(buf *TrackedBuffer) {
 	format := ""
 	switch node.Type {
-	case "": // do nothing
-	case AnalyzeStr:
+	case EmptyType: // do nothing
+	case AnalyzeType:
 		format = AnalyzeStr + " "
 	default:
-		format = "format = " + node.Type + " "
+		format = "format = " + node.Type.GetExplainType() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
 }
