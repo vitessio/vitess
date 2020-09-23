@@ -127,6 +127,7 @@ func skipToEnd(yylex interface{}) {
   comparisonExprOperator ComparisonExprOperator
   isExprOperator IsExprOperator
   boolean 		bool
+  matchExprOption MatchExprOption
 }
 
 %token LEX_ERROR
@@ -240,7 +241,8 @@ func skipToEnd(yylex interface{}) {
 %type <insertAction> insert_or_replace
 %type <unionType> union_op
 %type <bytes> explain_synonyms
-%type <str> cache_opt match_option separator_opt
+%type <str> cache_opt separator_opt
+%type <matchExprOption> match_option
 %type <boolean> distinct_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -2947,23 +2949,23 @@ function_call_conflict:
 match_option:
 /*empty*/
   {
-    $$ = ""
+    $$ = NoOption
   }
 | IN BOOLEAN MODE
   {
-    $$ = BooleanModeStr
+    $$ = BooleanModeOpt
   }
 | IN NATURAL LANGUAGE MODE
  {
-    $$ = NaturalLanguageModeStr
+    $$ = NaturalLanguageModeOpt
  }
 | IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION
  {
-    $$ = NaturalLanguageModeWithQueryExpansionStr
+    $$ = NaturalLanguageModeWithQueryExpansionOpt
  }
 | WITH QUERY EXPANSION
  {
-    $$ = QueryExpansionStr
+    $$ = QueryExpansionOpt
  }
 
 charset:

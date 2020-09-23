@@ -146,6 +146,7 @@ const (
 	CharsetStr      = "charset"
 
 	// MatchExpr.Option
+	NoOptionStr                              = ""
 	BooleanModeStr                           = " in boolean mode"
 	NaturalLanguageModeStr                   = " in natural language mode"
 	NaturalLanguageModeWithQueryExpansionStr = " in natural language mode with query expansion"
@@ -323,4 +324,13 @@ const (
 	Utf8mb4Op
 	Utf8Op
 	Latin1Op
+)
+
+// Constant for Enum Type - MatchExprOption
+const (
+	NoOption MatchExprOption = iota
+	BooleanModeOpt
+	NaturalLanguageModeOpt
+	NaturalLanguageModeWithQueryExpansionOpt
+	QueryExpansionOpt
 )

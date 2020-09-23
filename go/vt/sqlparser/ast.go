@@ -784,8 +784,11 @@ type (
 	MatchExpr struct {
 		Columns SelectExprs
 		Expr    Expr
-		Option  string
+		Option  MatchExprOption
 	}
+
+	// MatchExprOption is an enum for MatchExpr.Option
+	MatchExprOption int8
 
 	// CaseExpr represents a CASE expression.
 	CaseExpr struct {
@@ -1832,7 +1835,7 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *MatchExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option)
+	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option.GetOptionString())
 }
 
 // Format formats the node.
