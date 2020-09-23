@@ -875,8 +875,11 @@ type OrderBy []*Order
 // Order represents an ordering expression.
 type Order struct {
 	Expr      Expr
-	Direction string
+	Direction OrderDirection
 }
+
+// OrderDirection is an enum for Order.Direction
+type OrderDirection int8
 
 // Limit represents a LIMIT clause.
 type Limit struct {
@@ -1899,7 +1902,7 @@ func (node *Order) Format(buf *TrackedBuffer) {
 		}
 	}
 
-	buf.astPrintf(node, "%v %s", node.Expr, node.Direction)
+	buf.astPrintf(node, "%v %s", node.Expr, node.Direction.GetOrderDirectionString())
 }
 
 // Format formats the node.

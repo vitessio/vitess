@@ -1060,6 +1060,18 @@ func (option MatchExprOption) GetOptionString() string {
 	}
 }
 
+// GetOrderDirectionString returns the direction as a string
+func (dir OrderDirection) GetOrderDirectionString() string {
+	switch dir {
+	case AscOrder:
+		return AscScr
+	case DescOrder:
+		return DescScr
+	default:
+		return "Unknown OrderDirection"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

@@ -128,6 +128,7 @@ func skipToEnd(yylex interface{}) {
   isExprOperator IsExprOperator
   boolean 		bool
   matchExprOption MatchExprOption
+  orderDirection  OrderDirection
 }
 
 %token LEX_ERROR
@@ -280,7 +281,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <order> order
-%type <str> asc_desc_opt
+%type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list
@@ -3189,15 +3190,15 @@ order:
 
 asc_desc_opt:
   {
-    $$ = AscScr
+    $$ = AscOrder
   }
 | ASC
   {
-    $$ = AscScr
+    $$ = AscOrder
   }
 | DESC
   {
-    $$ = DescScr
+    $$ = DescOrder
   }
 
 limit_opt:
