@@ -342,10 +342,13 @@ type OptLike struct {
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
-	Action      string
+	Action      PartitionSpecAction
 	Name        ColIdent
 	Definitions []*PartitionDefinition
 }
+
+// PartitionSpecAction is an enum for PartitionSpec.Action
+type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
@@ -1147,8 +1150,8 @@ func (node *OptLike) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case ReorganizeStr:
-		buf.astPrintf(node, "%s %v into (", node.Action, node.Name)
+	case ReorganizeAction:
+		buf.astPrintf(node, "%s %v into (", ReorganizeStr, node.Name)
 		var prefix string
 		for _, pd := range node.Definitions {
 			buf.astPrintf(node, "%s%v", prefix, pd)

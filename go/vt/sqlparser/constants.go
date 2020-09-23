@@ -354,3 +354,8 @@ const (
 	IgnoreOp
 	ForceOp
 )
+
+// Constant for Enum Type - PartitionSpecAction
+const (
+	ReorganizeAction PartitionSpecAction = iota
+)

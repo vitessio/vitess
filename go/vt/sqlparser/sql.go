@@ -5238,7 +5238,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1524
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: ReorganizeStr, Name: yyDollar[3].colIdent, Definitions: yyDollar[6].partDefs}
+			yyVAL.partSpec = &PartitionSpec{Action: ReorganizeAction, Name: yyDollar[3].colIdent, Definitions: yyDollar[6].partDefs}
 		}
 	case 263:
 		yyDollar = yyS[yypt-1 : yypt+1]
