@@ -743,7 +743,7 @@ type (
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
-		Distinct  string
+		Distinct  bool
 		Exprs     SelectExprs
 		OrderBy   OrderBy
 		Separator string
@@ -1777,7 +1777,11 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "group_concat(%s%v%v%s%v)", node.Distinct, node.Exprs, node.OrderBy, node.Separator, node.Limit)
+	if node.Distinct {
+		buf.astPrintf(node, "group_concat(%s%v%v%s%v)", DistinctStr, node.Exprs, node.OrderBy, node.Separator, node.Limit)
+	} else {
+		buf.astPrintf(node, "group_concat(%v%v%s%v)", node.Exprs, node.OrderBy, node.Separator, node.Limit)
+	}
 }
 
 // Format formats the node.
