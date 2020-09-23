@@ -163,6 +163,11 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		if err != nil {
 			return err
 		}
+		// We call SetReadOnly only after the topo has been updated to avoid
+		// situations where two tablets are master at the DB level but not at the vitess level
+		if err := ts.tm.MysqlDaemon.SetReadOnly(false); err != nil {
+			return err
+		}
 
 		ts.tablet.Type = tabletType
 		ts.tablet.MasterTermStartTime = masterTermStartTime
