@@ -982,6 +982,40 @@ func (op IsExprOperator) GetOperatorString() string {
 	}
 }
 
+// GetOperatorString returns the operator as a string
+func (op BinaryExprOperator) GetOperatorString() string {
+	switch op {
+	case BitAndOp:
+		return BitAndStr
+	case BitOrOp:
+		return BitOrStr
+	case BitXorOp:
+		return BitXorStr
+	case PlusOp:
+		return PlusStr
+	case MinusOp:
+		return MinusStr
+	case MultOp:
+		return MultStr
+	case DivOp:
+		return DivStr
+	case IntDivOp:
+		return IntDivStr
+	case ModOp:
+		return ModStr
+	case ShiftLeftOp:
+		return ShiftLeftStr
+	case ShiftRightOp:
+		return ShiftRightStr
+	case JSONExtractOp:
+		return JSONExtractOpStr
+	case JSONUnquoteExtractOp:
+		return JSONUnquoteExtractOpStr
+	default:
+		return "Unknown BinaryExprOperator"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

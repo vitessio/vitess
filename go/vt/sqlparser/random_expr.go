@@ -208,7 +208,7 @@ func (g *generator) caseExpr(valueF func() Expr) Expr {
 	}
 }
 
-var arithmeticOps = []string{BitAndStr, BitOrStr, BitXorStr, PlusStr, MinusStr, MultStr, DivStr, IntDivStr, ModStr, ShiftRightStr, ShiftLeftStr}
+var arithmeticOps = []BinaryExprOperator{BitAndOp, BitOrOp, BitXorOp, PlusOp, MinusOp, MultOp, DivOp, IntDivOp, ModOp, ShiftRightOp, ShiftLeftOp}
 
 func (g *generator) arithmetic() Expr {
 	g.enter()

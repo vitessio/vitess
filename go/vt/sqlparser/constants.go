@@ -89,21 +89,19 @@ const (
 	HavingStr = "having"
 
 	// ComparisonExpr.Operator
-	EqualStr             = "="
-	LessThanStr          = "<"
-	GreaterThanStr       = ">"
-	LessEqualStr         = "<="
-	GreaterEqualStr      = ">="
-	NotEqualStr          = "!="
-	NullSafeEqualStr     = "<=>"
-	InStr                = "in"
-	NotInStr             = "not in"
-	LikeStr              = "like"
-	NotLikeStr           = "not like"
-	RegexpStr            = "regexp"
-	NotRegexpStr         = "not regexp"
-	JSONExtractOp        = "->"
-	JSONUnquoteExtractOp = "->>"
+	EqualStr         = "="
+	LessThanStr      = "<"
+	GreaterThanStr   = ">"
+	LessEqualStr     = "<="
+	GreaterEqualStr  = ">="
+	NotEqualStr      = "!="
+	NullSafeEqualStr = "<=>"
+	InStr            = "in"
+	NotInStr         = "not in"
+	LikeStr          = "like"
+	NotLikeStr       = "not like"
+	RegexpStr        = "regexp"
+	NotRegexpStr     = "not regexp"
 
 	// RangeCond.Operator
 	BetweenStr    = "between"
@@ -118,17 +116,19 @@ const (
 	IsNotFalseStr = "is not false"
 
 	// BinaryExpr.Operator
-	BitAndStr     = "&"
-	BitOrStr      = "|"
-	BitXorStr     = "^"
-	PlusStr       = "+"
-	MinusStr      = "-"
-	MultStr       = "*"
-	DivStr        = "/"
-	IntDivStr     = "div"
-	ModStr        = "%"
-	ShiftLeftStr  = "<<"
-	ShiftRightStr = ">>"
+	BitAndStr               = "&"
+	BitOrStr                = "|"
+	BitXorStr               = "^"
+	PlusStr                 = "+"
+	MinusStr                = "-"
+	MultStr                 = "*"
+	DivStr                  = "/"
+	IntDivStr               = "div"
+	ModStr                  = "%"
+	ShiftLeftStr            = "<<"
+	ShiftRightStr           = ">>"
+	JSONExtractOpStr        = "->"
+	JSONUnquoteExtractOpStr = "->>"
 
 	// UnaryExpr.Operator
 	UPlusStr   = "+"
@@ -293,4 +293,21 @@ const (
 	IsNotTrueOp
 	IsFalseOp
 	IsNotFalseOp
+)
+
+// Constant for Enum Type - BinaryExprOperator
+const (
+	BitAndOp BinaryExprOperator = iota
+	BitOrOp
+	BitXorOp
+	PlusOp
+	MinusOp
+	MultOp
+	DivOp
+	IntDivOp
+	ModOp
+	ShiftLeftOp
+	ShiftRightOp
+	JSONExtractOp
+	JSONUnquoteExtractOp
 )
