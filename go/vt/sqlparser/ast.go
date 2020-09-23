@@ -862,9 +862,12 @@ type ConvertType struct {
 	Type     string
 	Length   *Literal
 	Scale    *Literal
-	Operator string
+	Operator ConvertTypeOperator
 	Charset  string
 }
+
+// ConvertTypeOperator is an enum for ConvertType.Operator
+type ConvertTypeOperator int8
 
 // GroupBy represents a GROUP BY clause.
 type GroupBy []Expr
@@ -1832,7 +1835,7 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ")")
 	}
 	if node.Charset != "" {
-		buf.astPrintf(node, "%s %s", node.Operator, node.Charset)
+		buf.astPrintf(node, "%s %s", node.Operator.GetOperatorString(), node.Charset)
 	}
 }
 

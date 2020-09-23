@@ -1072,6 +1072,18 @@ func (dir OrderDirection) GetOrderDirectionString() string {
 	}
 }
 
+// GetOperatorString returns the operator as a string
+func (op ConvertTypeOperator) GetOperatorString() string {
+	switch op {
+	case NoOperator:
+		return NoOperatorStr
+	case CharacterSetOp:
+		return CharacterSetStr
+	default:
+		return "Unknown ConvertTypeOperator"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
