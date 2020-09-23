@@ -51,6 +51,8 @@ type Env struct {
 	Dbcfgs       *dbconfigs.DBConfigs
 	Mysqld       *mysqlctl.Mysqld
 	SchemaEngine *schema.Engine
+
+	Flavor string
 }
 
 // Init initializes an Env.
@@ -94,7 +96,7 @@ func Init() (*Env, error) {
 		os.RemoveAll(te.cluster.Config.SchemaDir)
 		return nil, fmt.Errorf("could not launch mysql: %v", err)
 	}
-
+	te.Flavor = te.cluster.Env.Flavor()
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	config := tabletenv.NewDefaultConfig()
 	config.DB = te.Dbcfgs
