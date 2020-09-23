@@ -203,16 +203,12 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 	return true
 }
 
-// tableMatches is similar to buildPlan below and MatchTable in vreplication/table_plan_builder.go.
-func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
-	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
-		return false
-	}
+func ruleMatches(tableName string, filter *binlogdatapb.Filter) bool {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
 			expr := strings.Trim(rule.Match, "/")
-			result, err := regexp.MatchString(expr, table.Name.String())
+			result, err := regexp.MatchString(expr, tableName)
 			if err != nil {
 				return false
 			}
@@ -220,11 +216,19 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 				continue
 			}
 			return true
-		case table.Name.String() == rule.Match:
+		case tableName == rule.Match:
 			return true
 		}
 	}
 	return false
+}
+
+// tableMatches is similar to buildPlan below and MatchTable in vreplication/table_plan_builder.go.
+func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
+	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+		return false
+	}
+	return ruleMatches(table.Name.String(), filter)
 }
 
 func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
