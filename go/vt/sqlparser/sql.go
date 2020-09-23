@@ -6345,25 +6345,25 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2386
 		{
-			yyVAL.indexHints = &IndexHints{Type: UseStr, Indexes: yyDollar[4].columns}
+			yyVAL.indexHints = &IndexHints{Type: UseOp, Indexes: yyDollar[4].columns}
 		}
 	case 447:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:2390
 		{
-			yyVAL.indexHints = &IndexHints{Type: UseStr}
+			yyVAL.indexHints = &IndexHints{Type: UseOp}
 		}
 	case 448:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2394
 		{
-			yyVAL.indexHints = &IndexHints{Type: IgnoreStr, Indexes: yyDollar[4].columns}
+			yyVAL.indexHints = &IndexHints{Type: IgnoreOp, Indexes: yyDollar[4].columns}
 		}
 	case 449:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2398
 		{
-			yyVAL.indexHints = &IndexHints{Type: ForceStr, Indexes: yyDollar[4].columns}
+			yyVAL.indexHints = &IndexHints{Type: ForceOp, Indexes: yyDollar[4].columns}
 		}
 	case 450:
 		yyDollar = yyS[yypt-0 : yypt+1]

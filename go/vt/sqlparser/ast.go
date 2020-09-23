@@ -581,9 +581,12 @@ type JoinCondition struct {
 
 // IndexHints represents a list of index hints.
 type IndexHints struct {
-	Type    string
+	Type    IndexHintsType
 	Indexes []ColIdent
 }
+
+// IndexHintsType is an enum for IndexHints.Type
+type IndexHintsType int8
 
 // Where represents a WHERE or HAVING clause.
 type Where struct {
@@ -1597,7 +1600,7 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IndexHints) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %sindex ", node.Type)
+	buf.astPrintf(node, " %sindex ", node.Type.GetIndexHintsType())
 	if len(node.Indexes) == 0 {
 		buf.astPrintf(node, "()")
 	} else {

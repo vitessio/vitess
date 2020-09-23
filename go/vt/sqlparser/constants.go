@@ -347,3 +347,10 @@ const (
 	NoOperator ConvertTypeOperator = iota
 	CharacterSetOp
 )
+
+// Constant for Enum Type - IndexHintsType
+const (
+	UseOp IndexHintsType = iota
+	IgnoreOp
+	ForceOp
+)

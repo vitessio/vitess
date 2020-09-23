@@ -1084,6 +1084,20 @@ func (op ConvertTypeOperator) GetOperatorString() string {
 	}
 }
 
+// GetIndexHintsType returns the type as a string
+func (ty IndexHintsType) GetIndexHintsType() string {
+	switch ty {
+	case UseOp:
+		return UseStr
+	case IgnoreOp:
+		return IgnoreStr
+	case ForceOp:
+		return ForceStr
+	default:
+		return "Unknown IndexHintsType"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

@@ -2384,19 +2384,19 @@ index_hint_list:
   }
 | USE INDEX openb column_list closeb
   {
-    $$ = &IndexHints{Type: UseStr, Indexes: $4}
+    $$ = &IndexHints{Type: UseOp, Indexes: $4}
   }
 | USE INDEX openb closeb
   {
-    $$ = &IndexHints{Type: UseStr}
+    $$ = &IndexHints{Type: UseOp}
   }
 | IGNORE INDEX openb column_list closeb
   {
-    $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
+    $$ = &IndexHints{Type: IgnoreOp, Indexes: $4}
   }
 | FORCE INDEX openb column_list closeb
   {
-    $$ = &IndexHints{Type: ForceStr, Indexes: $4}
+    $$ = &IndexHints{Type: ForceOp, Indexes: $4}
   }
 
 where_expression_opt:
