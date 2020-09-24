@@ -19,8 +19,8 @@
 # Use a temporary layer for the build stage.
 FROM vitess/bootstrap:mysql80 AS builder
 
-# Allows some docker builds to disable CGO
-ARG CGO_ENABLED=0
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
 
 # Re-copy sources from working tree.
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
@@ -82,6 +82,7 @@ ENV MYSQL_FLAVOR MySQL80
 
 # Copy artifacts from builder layer.
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/orchestrator /vt/web/orchestrator
 
 RUN mkdir -p /licenses
 COPY LICENSE /licenses

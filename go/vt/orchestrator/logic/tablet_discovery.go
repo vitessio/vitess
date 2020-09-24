@@ -174,21 +174,26 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	if err != nil {
 		return nil, err
 	}
-	_, unlock, err := ts.LockShard(context.TODO(), tablet.Keyspace, tablet.Shard, "Orc Recovery")
+	ctx, cancel := context.WithTimeout(context.TODO(), 1*time.Second)
+	defer cancel()
+	_, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	return unlock, err
 }
 
 // TabletRefresh refreshes the tablet info.
-func TabletRefresh(instanceKey inst.InstanceKey) error {
+func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ti, err := ts.GetTablet(context.TODO(), tablet.Alias)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return inst.SaveTablet(ti.Tablet)
+	if err := inst.SaveTablet(ti.Tablet); err != nil {
+		return nil, err
+	}
+	return ti.Tablet, nil
 }
 
 // TabletDemoteMaster requests the master tablet to stop accepting transactions.
@@ -210,10 +215,14 @@ func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
 		return err
 	}
 	tmc := tmclient.NewTabletManagerClient()
+	// TODO(sougou): this should be controllable because we may want
+	// to give a longer timeout for a graceful takeover.
+	ctx, cancel := context.WithTimeout(context.TODO(), 1*time.Second)
+	defer cancel()
 	if forward {
-		_, err = tmc.DemoteMaster(context.TODO(), tablet)
+		_, err = tmc.DemoteMaster(ctx, tablet)
 	} else {
-		err = tmc.UndoDemoteMaster(context.TODO(), tablet)
+		err = tmc.UndoDemoteMaster(ctx, tablet)
 	}
 	return err
 }

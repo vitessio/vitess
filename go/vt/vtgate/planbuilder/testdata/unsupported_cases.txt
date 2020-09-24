@@ -423,3 +423,15 @@
 # insert using select get_lock from table
 "insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
 "unsupported: insert into select"
+
+# union with SQL_CALC_FOUND_ROWS 
+"(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
+"SQL_CALC_FOUND_ROWS not supported with union"
+
+# set with DEFAULT - vitess aware
+"set workload = default"
+"DEFAULT not supported for @@workload"
+
+# set with DEFAULT - reserved connection
+"set sql_mode = default"
+"DEFAULT not supported for @@sql_mode"
