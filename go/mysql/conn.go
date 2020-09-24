@@ -1263,9 +1263,38 @@ func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	}
 
 	// Warnings.
-	warnings, _, ok := readUint16(data, pos)
+	warnings, pos, ok := readUint16(data, pos)
 	if !ok {
 		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet warnings: %v", data)
+	}
+
+	if CapabilityFlags&CapabilityClientSessionTrack != 0 {
+		// info
+		pos, _ = skipLenEncString(data, pos)
+		if statusFlags&ServerSessionStateChanged != 0 {
+			_, pos, ok := readLenEncInt(data, pos)
+			if !ok {
+				return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet session state change length: %v", data)
+			}
+			sscType, pos, ok := readByte(data, pos)
+			if !ok {
+				return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet session state change type: %v", data)
+			}
+			switch sscType {
+			case SessionTrackGtids:
+				// Move past the total length of the changed entity: 1 byte
+				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
+				gtids, _, ok := readLenEncString(data, pos+2)
+				if !ok {
+					return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet gtids: %v", data)
+				}
+				fmt.Printf("\n gtids: %s \n", gtids)
+			}
+
+		}
+	} else {
+		// info
+		skipLenEncString(data, pos)
 	}
 
 	return affectedRows, lastInsertID, statusFlags, warnings, nil
