@@ -32,6 +32,10 @@ type expressionConverter struct {
 }
 
 func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
+	var (
+		ON  = evalengine.NewLiteralInt(1)
+		OFF = evalengine.NewLiteralInt(0)
+	)
 	switch node := astExpr.(type) {
 	case *sqlparser.Literal:
 		//set autocommit = 'on'

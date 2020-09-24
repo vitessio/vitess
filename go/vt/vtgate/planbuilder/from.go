@@ -96,7 +96,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
 		case *sqlparser.Select:
-			if err := spb.processSelect(stmt, nil); err != nil {
+			if err := spb.processSelect(stmt, nil, ""); err != nil {
 				return err
 			}
 		case *sqlparser.Union:
