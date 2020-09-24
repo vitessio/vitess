@@ -520,6 +520,7 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		"-binlog_host", binlogServer.hostname,
 		"-binlog_port", fmt.Sprintf("%d", binlogServer.port),
 		"-binlog_user", binlogServer.username,
+		"-binlog_password", binlogServer.password,
 		"-pitr_gtid_lookup_timeout", lookupTimeout,
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
