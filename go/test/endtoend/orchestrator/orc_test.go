@@ -17,12 +17,16 @@ limitations under the License.
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -46,14 +50,6 @@ func createCluster(t *testing.T, numReplicas int, numRdonly int) *cluster.LocalP
 	hostname := "localhost"
 	cell1 := "zone1"
 	cell2 := "zone2"
-	//	insertSQL       = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
-	//	sqlSchema       = `
-	//	create table vt_insert_test (
-	//	id bigint,
-	//	msg varchar(64),
-	//	primary key (id)
-	//	) Engine=InnoDB
-	//	`
 	tablets := []*cluster.Vttablet{}
 	clusterInstance := cluster.NewCluster(cell1, hostname)
 
@@ -142,6 +138,20 @@ func TestMasterElection(t *testing.T) {
 
 	//log.Exitf("error")
 	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
+
+	validateTopology(t, clusterInstance, true)
+
+	// create tables, insert data and make sure it is replicated correctly
+	sqlSchema := `
+		create table vt_insert_test (
+		id bigint,
+		msg varchar(64),
+		primary key (id)
+		) Engine=InnoDB
+		`
+	runSQL(t, sqlSchema, shard0.Vttablets[0])
+	confirmReplication(t, shard0.Vttablets[0], []*cluster.Vttablet{shard0.Vttablets[1]})
+
 }
 
 // 2. bring down master, let orc promote replica
@@ -181,27 +191,17 @@ func TestDownMaster(t *testing.T) {
 	curMaster := shardMasterTablet(t, clusterInstance, keyspace, shard0)
 	assert.NotNil(t, curMaster, "should have elected a master")
 
-	// Make the current master agent and database unavailable.
-	err = curMaster.VttabletProcess.TearDown()
-	require.NoError(t, err)
+	// Make the current master database unavailable.
 	err = curMaster.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
 	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be master
+		// we know we have only two tablets, so the "other" one must be the new master
 		if tablet.Alias != curMaster.Alias {
 			checkMasterTablet(t, clusterInstance, tablet)
 			break
 		}
 	}
-}
-
-// Cases to test:
-// 3. create cluster with 2 replicas let orc choose master
-// Graceful reparent to other replica
-// verify replication is setup correctly
-func TestGracefulReparent(t *testing.T) {
-
 }
 
 func shardMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace *cluster.Keyspace, shard *cluster.Shard) *cluster.Vttablet {
@@ -249,6 +249,8 @@ func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, table
 			time.Sleep(time.Second)
 			continue
 		} else {
+			// allow time for tablet state to be updated after topo is updated
+			time.Sleep(time.Second)
 			// make sure the health stream is updated
 			result, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
 			require.NoError(t, err)
@@ -257,7 +259,7 @@ func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, table
 			err = json2.Unmarshal([]byte(result), &streamHealthResponse)
 			require.NoError(t, err)
 
-			assert.True(t, streamHealthResponse.GetServing())
+			assert.True(t, streamHealthResponse.GetServing(), "stream health: %v", streamHealthResponse)
 			tabletType := streamHealthResponse.GetTarget().GetTabletType()
 			require.Equal(t, topodatapb.TabletType_MASTER, tabletType)
 			break
@@ -265,29 +267,41 @@ func checkMasterTablet(t *testing.T, cluster *cluster.LocalProcessCluster, table
 	}
 }
 
-//func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
-//	// wait until it gets the data
-//	timeout := time.Now().Add(10 * time.Second)
-//	for time.Now().Before(timeout) {
-//		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
-//		qr := runSQL(ctx, t, selectSQL, tablet)
-//		if len(qr.Rows) == 1 {
-//			return nil
-//		}
-//		time.Sleep(300 * time.Millisecond)
-//	}
-//	return fmt.Errorf("data is not yet replicated")
-//}
-//
-//func validateTopology(t *testing.T, pingTablets bool) {
-//	if pingTablets {
-//		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
-//		require.NoError(t, err)
-//	} else {
-//		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-//		require.NoError(t, err)
-//	}
-//}
+func confirmReplication(t *testing.T, master *cluster.Vttablet, replicas []*cluster.Vttablet) {
+	n := 2 // random value ...
+	// insert data into the new master, check the connected replica work
+	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", n, n)
+	runSQL(t, insertSQL, master)
+	time.Sleep(100 * time.Millisecond)
+	for _, tab := range replicas {
+		err := checkInsertedValues(t, tab, n)
+		require.NoError(t, err)
+	}
+}
+
+func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) error {
+	// wait until it gets the data
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
+		qr := runSQL(t, selectSQL, tablet)
+		if len(qr.Rows) == 1 {
+			return nil
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	return fmt.Errorf("data is not yet replicated")
+}
+
+func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTablets bool) {
+	if pingTablets {
+		err := cluster.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
+		require.NoError(t, err)
+	} else {
+		err := cluster.VtctlclientProcess.ExecuteCommand("Validate")
+		require.NoError(t, err)
+	}
+}
 
 func killTablets(t *testing.T, shard *cluster.Shard) {
 	for _, tablet := range shard.Vttablets {
@@ -297,29 +311,31 @@ func killTablets(t *testing.T, shard *cluster.Shard) {
 	}
 }
 
-//func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
-//	connParams := mysql.ConnParams{
-//		Uname:      username,
-//		DbName:     dbName,
-//		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
-//	}
-//	return connParams
-//}
-//
-//func runSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
-//	// Get Connection
-//	tabletParams := getMysqlConnParam(tablet)
-//	conn, err := mysql.Connect(ctx, &tabletParams)
-//	require.Nil(t, err)
-//	defer conn.Close()
-//
-//	// runSQL
-//	return execute(t, conn, sql)
-//}
-//
-//func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-//	t.Helper()
-//	qr, err := conn.ExecuteFetch(query, 1000, true)
-//	require.Nil(t, err)
-//	return qr
-//}
+func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
+	connParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		DbName:     "vt_ks",
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
+	}
+	return connParams
+}
+
+func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// runSQL
+	return execute(t, conn, sql)
+}
+
+func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	require.Nil(t, err)
+	return qr
+}

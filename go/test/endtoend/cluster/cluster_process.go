@@ -681,8 +681,7 @@ func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *Orchestrat
 	return &OrchestratorProcess{
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
-		//ExtraArgs: cluster.OrcExtraArgs,
-		Config: configFile,
+		Config:       configFile,
 	}
 }
 

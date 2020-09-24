@@ -35,10 +35,8 @@ type OrchestratorProcess struct {
 	LogDir    string
 	ExtraArgs []string
 	Config    string
-	//Protocol  string // http
-
-	proc *exec.Cmd
-	exit chan error
+	proc      *exec.Cmd
+	exit      chan error
 }
 
 // Setup starts orc process with required arguements
