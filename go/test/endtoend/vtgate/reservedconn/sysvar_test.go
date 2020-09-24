@@ -14,14 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package setstatement
+package reservedconn
 
 import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -164,8 +164,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 }
 
-func TestSetSystemVarWithConnectionFailure(t *testing.T) {
-	t.Skip("failing at the moment")
+func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
@@ -178,15 +177,20 @@ func TestSetSystemVarWithConnectionFailure(t *testing.T) {
 
 	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
 	checkedExec(t, conn, "set sql_safe_updates = 1")
-	qr := checkedExec(t, conn, "select connection_id() from test where id = 80")
+	qr := checkedExec(t, conn, "select @@sql_safe_updates, connection_id() from test where id = 80")
+	require.Equal(t, "1", qr.Rows[0][0].ToString())
 
-	// kill the mysql connection shard which has transaction open.
-	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // 80-
-	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
+	// Connection timeout.
+	time.Sleep(10 * time.Second)
 
-	// we still want to have our system setting applied
+	// first query will fail
 	_, err = exec(t, conn, `select @@sql_safe_updates from test where id = 80`)
-	require.NoError(t, err)
+	require.Error(t, err)
+
+	// this query is able to succeed.
+	newQR := checkedExec(t, conn, `select @@sql_safe_updates, connection_id() from test where id = 80`)
+	require.Equal(t, qr.Rows[0][0], newQR.Rows[0][0])
+	require.NotEqual(t, qr.Rows[0][1], newQR.Rows[0][1])
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
@@ -206,6 +210,36 @@ func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 	checkedExec(t, conn, "commit")
 	assertMatches(t, conn, "select id, val1 from test", "[[INT64(80) NULL]]")
 	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
+}
+
+func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	checkedExec(t, conn, `delete from test`)
+
+	checkedExec(t, conn, `set sql_safe_updates = 1`)
+
+	checkedExec(t, conn, `insert into test (id, val1) values (80, null)`)
+	assertMatches(t, conn, `select id, val1 from test`, `[[INT64(80) NULL]]`)
+	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
+
+	checkedExec(t, conn, `update test set val2 = 2 where val1 is null`)
+	assertMatches(t, conn, `select id, val1, val2 from test`, `[[INT64(80) NULL INT32(2)]]`)
+	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
+
+	checkedExec(t, conn, `update test set val1 = 'text' where val1 is null`)
+	assertMatches(t, conn, `select id, val1, val2 from test`, `[[INT64(80) VARCHAR("text") INT32(2)]]`)
+	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
+
+	checkedExec(t, conn, `delete from test where val1 = 'text'`)
+	assertMatches(t, conn, `select id, val1, val2 from test`, `[]`)
+	assertMatches(t, conn, `select @@sql_safe_updates`, `[[INT64(1)]]`)
 }
 
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
@@ -296,15 +330,4 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 
 	// subsequent queries on 80- will pass
 	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr, err := exec(t, conn, query)
-	require.NoError(t, err)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
 }

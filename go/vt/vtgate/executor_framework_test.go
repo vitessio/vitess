@@ -95,7 +95,16 @@ var executorVSchema = `
 		},
 		"krcol_vdx": {
 			"type": "keyrange_lookuper"
-		}
+		},
+    	"t1_lkp_vdx": {
+      		"type": "consistent_lookup_unique",
+      		"params": {
+        		"table": "t1_lkp_idx",
+        		"from": "unq_col",
+        		"to": "keyspace_id"
+      		},
+      	"owner": "t1"
+    	}
 	},
 	"tables": {
 		"user": {
@@ -231,6 +240,26 @@ var executorVSchema = `
 					"name": "keyspace_id"
 				}
 			]
+		},
+		"t1": {
+      		"column_vindexes": [
+				{
+				  	"column": "id",
+				  	"name": "hash_index"
+				},
+				{
+				  	"column": "unq_col",
+				  	"name": "t1_lkp_vdx"
+				}
+            ]
+    	},
+		"t1_lkp_idx": {
+			"column_vindexes": [
+				{
+					"column": "unq_col",
+				  	"name": "hash_index"
+				}
+			]
 		}
 	}
 }
@@ -349,7 +378,7 @@ func createLegacyExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandb
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 	// Create these connections so scatter queries don't fail.
 	_ = hc.AddTestTablet(cell, "20-40", 1, "TestExecutor", "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	_ = hc.AddTestTablet(cell, "60-60", 1, "TestExecutor", "60-80", topodatapb.TabletType_MASTER, true, 1, nil)
+	_ = hc.AddTestTablet(cell, "60-80", 1, "TestExecutor", "60-80", topodatapb.TabletType_MASTER, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "80-a0", 1, "TestExecutor", "80-a0", topodatapb.TabletType_MASTER, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "a0-c0", 1, "TestExecutor", "a0-c0", topodatapb.TabletType_MASTER, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "c0-e0", 1, "TestExecutor", "c0-e0", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -375,6 +404,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
+	vtgateHealthCheck = hc
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})

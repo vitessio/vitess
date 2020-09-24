@@ -19,8 +19,11 @@ package vtgate
 import (
 	"flag"
 	"io"
+	"regexp"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -165,6 +168,21 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	var mu sync.Mutex
 	qr = new(sqltypes.Result)
 
+	if session.InLockSession() && session.TriggerLockHeartBeat() {
+		go func() {
+			_, lockErr := stc.ExecuteLock(ctx, &srvtopo.ResolvedShard{
+				Target:  session.LockSession.Target,
+				Gateway: stc.gateway,
+			}, &querypb.BoundQuery{
+				Sql:           "select 1",
+				BindVariables: nil,
+			}, session)
+			if lockErr != nil {
+				log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
+			}
+		}()
+	}
+
 	allErrors := stc.multiGoTransaction(
 		ctx,
 		"Execute",
@@ -235,18 +253,17 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	)
 
 	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
-		return nil, []error{vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
+		return nil, []error{mysql.NewSQLError(mysql.ERNetPacketTooLarge, "", "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
 	}
 
 	return qr, allErrors.GetErrors()
 }
 
+var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) ended")
+
 func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) {
-	if info.reservedID != 0 && info.transactionID == 0 {
-		sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost {
-			session.ResetShard(info.alias)
-		}
+	if info.reservedID != 0 && info.transactionID == 0 && !isConnectionAlive(err) {
+		session.ResetShard(info.alias)
 	}
 }
 
@@ -609,6 +626,11 @@ func (stc *ScatterConn) ExecuteLock(
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
 		}
 		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
+		if err != nil && !isConnectionAlive(err) {
+			session.ResetLock()
+			err = vterrors.Wrap(err, "held locks released")
+		}
+		session.UpdateLockHeartbeat()
 	case reserve:
 		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
 		if err != nil && reservedID != 0 {
@@ -630,6 +652,14 @@ func (stc *ScatterConn) ExecuteLock(
 		return nil, err
 	}
 	return qr, err
+}
+
+func isConnectionAlive(err error) bool {
+	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+	if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost || (sqlErr.Number() == mysql.ERQueryInterrupted && errRegx.Match([]byte(sqlErr.Error()))) {
+		return false
+	}
+	return true
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet

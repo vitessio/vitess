@@ -1589,6 +1589,8 @@ var (
 	}, {
 		input: "stream * from t",
 	}, {
+		input: "vstream * from t",
+	}, {
 		input: "stream /* comment */ * from t",
 	}, {
 		input: "begin",
@@ -1608,16 +1610,17 @@ var (
 		input:  "create schema test_db",
 		output: "create database test_db",
 	}, {
-		input:  "create database if not exists test_db",
-		output: "create database test_db",
+		input: "create database if not exists test_db",
+	}, {
+		input:  "create schema if not exists test_db",
+		output: "create database if not exists test_db",
 	}, {
 		input: "drop database test_db",
 	}, {
 		input:  "drop schema test_db",
 		output: "drop database test_db",
 	}, {
-		input:  "drop database if exists test_db",
-		output: "drop database test_db",
+		input: "drop database if exists test_db",
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",

@@ -29,8 +29,12 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sysvars"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -53,6 +57,9 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// this is the healthcheck used by vtgate, used by the "vstream * from" functionality
+var vtgateHealthCheck discovery.HealthCheck
+
 var (
 	errNoKeyspace     = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format (items in <> are optional): keyspace<:shard><@type> or keyspace<[range]><@type>")
 	defaultTabletType topodatapb.TabletType
@@ -66,10 +73,11 @@ var (
 )
 
 const (
-	utf8    = "utf8"
-	utf8mb4 = "utf8mb4"
-	both    = "both"
-	charset = "charset"
+	utf8          = "utf8"
+	utf8mb4       = "utf8mb4"
+	both          = "both"
+	charset       = "charset"
+	bindVarPrefix = "__vt"
 )
 
 func init() {
@@ -158,7 +166,9 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	if err != nil {
 		return
 	}
-	safeSession.FoundRows = result.RowsAffected
+	if !safeSession.foundRowsHandled {
+		safeSession.FoundRows = result.RowsAffected
+	}
 	if result.InsertID > 0 {
 		safeSession.LastInsertId = result.InsertID
 	}
@@ -234,13 +244,51 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 }
 
 // addNeededBindVars adds bind vars that are needed by the plan
-func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
-	if bindVarNeeds.NeedDatabase {
-		bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(session.TargetString)
+func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
+	for _, funcName := range bindVarNeeds.NeedFunctionResult {
+		switch funcName {
+		case sqlparser.DBVarName:
+			bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(session.TargetString)
+		case sqlparser.LastInsertIDName:
+			bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(session.GetLastInsertId())
+		case sqlparser.FoundRowsName:
+			bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(session.FoundRows)
+		case sqlparser.RowCountName:
+			bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
+		}
 	}
 
-	if bindVarNeeds.NeedLastInsertID {
-		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(session.GetLastInsertId())
+	for _, funcName := range bindVarNeeds.NeedSystemVariable {
+		switch funcName {
+		case sysvars.Autocommit.Name:
+			bindVars[bindVarPrefix+sysvars.Autocommit.Name] = sqltypes.BoolBindVariable(session.Autocommit)
+		case sysvars.ClientFoundRows.Name:
+			var v bool
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.ClientFoundRows
+			})
+			bindVars[bindVarPrefix+sysvars.ClientFoundRows.Name] = sqltypes.BoolBindVariable(v)
+		case sysvars.SkipQueryPlanCache.Name:
+			var v bool
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.ClientFoundRows
+			})
+			bindVars[bindVarPrefix+sysvars.SkipQueryPlanCache.Name] = sqltypes.BoolBindVariable(v)
+		case sysvars.SQLSelectLimit.Name:
+			var v int64
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.SqlSelectLimit
+			})
+			bindVars[bindVarPrefix+sysvars.SQLSelectLimit.Name] = sqltypes.Int64BindVariable(v)
+		case sysvars.TransactionMode.Name:
+			bindVars[bindVarPrefix+sysvars.TransactionMode.Name] = sqltypes.StringBindVariable(session.TransactionMode.String())
+		case sysvars.Workload.Name:
+			var v string
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.GetWorkload().String()
+			})
+			bindVars[bindVarPrefix+sysvars.Workload.Name] = sqltypes.StringBindVariable(v)
+		}
 	}
 
 	udvMap := session.UserDefinedVariables
@@ -255,15 +303,14 @@ func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVa
 		bindVars[sqlparser.UserDefinedVariableName+udv] = val
 	}
 
-	if bindVarNeeds.NeedFoundRows {
-		bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(session.FoundRows)
-	}
-
-	if bindVarNeeds.NeedRowCount {
-		bindVars[sqlparser.RowCountName] = sqltypes.Int64BindVariable(session.RowCount)
-	}
-
 	return nil
+}
+
+func ifOptionsExist(session *SafeSession, f func(*querypb.ExecuteOptions)) {
+	options := session.GetOptions()
+	if options != nil {
+		f(options)
+	}
 }
 
 func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
@@ -943,7 +990,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
 	vcursor.SetIgnoreMaxMemoryRows(true)
-
 	switch stmtType {
 	case sqlparser.StmtStream:
 		// this is a stream statement for messaging
@@ -958,6 +1004,9 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		// These statements don't populate plan.Instructions. We want to make sure we don't try to
 		// dereference nil Instructions which would panic.
 		fallthrough
+	case sqlparser.StmtVStream:
+		log.Infof("handleVStream called with target %v", target)
+		return e.handleVStream(ctx, sql, target, callback, vcursor, logStats)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type for OLAP: %s", stmtType)
 	}
@@ -989,6 +1038,8 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	// dictated by stream_buffer_size.
 	result := &sqltypes.Result{}
 	byteCount := 0
+	seenResults := false
+	var foundRows uint64
 	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
 		// If the row has field info, send it separately.
 		// TODO(sougou): this behavior is for handling tests because
@@ -998,16 +1049,20 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 			if err := callback(qrfield); err != nil {
 				return err
 			}
+			seenResults = true
 		}
 
+		foundRows += uint64(len(qr.Rows))
 		for _, row := range qr.Rows {
 			result.Rows = append(result.Rows, row)
+
 			for _, col := range row {
 				byteCount += col.Len()
 			}
 
 			if byteCount >= e.streamSize {
 				err := callback(result)
+				seenResults = true
 				result = &sqltypes.Result{}
 				byteCount = 0
 				if err != nil {
@@ -1019,7 +1074,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	})
 
 	// Send left-over rows.
-	if len(result.Rows) > 0 {
+	if len(result.Rows) > 0 || !seenResults {
 		if err := callback(result); err != nil {
 			return err
 		}
@@ -1027,6 +1082,12 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+
+	// save session stats for future queries
+	if !safeSession.foundRowsHandled {
+		safeSession.FoundRows = foundRows
+	}
+	safeSession.RowCount = -1
 
 	return err
 }
@@ -1126,9 +1187,9 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 	query := sql
 	statement := stmt
-	bindVarNeeds := sqlparser.BindVarNeeds{}
+	bindVarNeeds := &sqlparser.BindVarNeeds{}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
-		return nil, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "query payload size above threshold")
+		return nil, mysql.NewSQLError(mysql.ERNetPacketTooLarge, "", "query payload size above threshold")
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)

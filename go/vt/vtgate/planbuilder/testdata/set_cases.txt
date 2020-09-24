@@ -457,4 +457,25 @@
     ]
   }
 }
-                
+
+# set autocommit to default
+"set @@autocommit = default"
+{
+  "QueryType": "SET",
+  "Original": "set @@autocommit = default",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(1)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}

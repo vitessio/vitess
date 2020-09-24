@@ -75,6 +75,7 @@ func skipToEnd(yylex interface{}) {
   expr          Expr
   exprs         Exprs
   boolVal       BoolVal
+  boolean	bool
   literal        *Literal
   colTuple      ColTuple
   values        Values
@@ -121,7 +122,7 @@ func skipToEnd(yylex interface{}) {
 
 %token LEX_ERROR
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
@@ -220,7 +221,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
 %type <statement> explain_statement explainable_statement
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
+%type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -283,8 +284,8 @@ func skipToEnd(yylex interface{}) {
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <byt> exists_opt
-%type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <boolean> exists_opt not_exists_opt null_opt
+%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
@@ -299,9 +300,8 @@ func skipToEnd(yylex interface{}) {
 %type <literal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
 %type <str> charset_opt collate_opt
-%type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolVal> null_opt auto_increment_opt
+%type <boolean> auto_increment_opt unsigned_opt zero_fill_opt
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -348,6 +348,7 @@ command:
     $$ = $1
   }
 | stream_statement
+| vstream_statement
 | insert_statement
 | update_statement
 | delete_statement
@@ -452,6 +453,12 @@ stream_statement:
   STREAM comment_opt select_expression FROM table_name
   {
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
+  }
+
+vstream_statement:
+  VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
+  {
+    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereStr, $6), Limit: $7}
   }
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
@@ -659,11 +666,11 @@ create_statement:
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: $3}
   }
 | CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: $3}
   }
 
 vindex_type_opt:
@@ -1025,34 +1032,34 @@ decimal_length_opt:
 
 unsigned_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | UNSIGNED
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 zero_fill_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | ZEROFILL
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 // Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
 null_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | NULL
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | NOT NULL
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 column_default_opt:
@@ -1075,11 +1082,11 @@ on_update_opt:
 
 auto_increment_opt:
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 | AUTO_INCREMENT
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 
 charset_opt:
@@ -1542,11 +1549,7 @@ rename_list:
 drop_statement:
   DROP TABLE exists_opt table_name_list
   {
-    var exists bool
-    if $3 != 0 {
-      exists = true
-    }
-    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: $3}
   }
 | DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
@@ -1555,19 +1558,15 @@ drop_statement:
   }
 | DROP VIEW exists_opt table_name ddl_skip_to_end
   {
-    var exists bool
-        if $3 != 0 {
-          exists = true
-        }
-    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
   }
 | DROP DATABASE exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
   }
 | DROP SCHEMA exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
+    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
   }
 
 truncate_statement:
@@ -3371,14 +3370,14 @@ for_from:
 | FROM
 
 exists_opt:
-  { $$ = 0 }
+  { $$ = false }
 | IF EXISTS
-  { $$ = 1 }
+  { $$ = true }
 
 not_exists_opt:
-  { $$ = struct{}{} }
+  { $$ = false }
 | IF NOT EXISTS
-  { $$ = struct{}{} }
+  { $$ = true }
 
 ignore_opt:
   { $$ = "" }

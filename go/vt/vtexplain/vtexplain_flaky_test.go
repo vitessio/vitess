@@ -26,6 +26,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 var testOutputTempDir string
@@ -39,15 +42,27 @@ func defaultTestOpts() *Options {
 	}
 }
 
-func initTest(mode string, opts *Options, t *testing.T) {
+type testopts struct {
+	shardmap map[string]map[string]*topo.ShardInfo
+}
+
+func initTest(mode string, opts *Options, topts *testopts, t *testing.T) {
 	schema, err := ioutil.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
 	vSchema, err := ioutil.ReadFile("testdata/test-vschema.json")
 	require.NoError(t, err)
 
+	shardmap := ""
+	if topts.shardmap != nil {
+		shardmapBytes, err := json.Marshal(topts.shardmap)
+		require.NoError(t, err)
+
+		shardmap = string(shardmapBytes)
+	}
+
 	opts.ExecutionMode = mode
-	err = Init(string(vSchema), string(schema), opts)
+	err = Init(string(vSchema), string(schema), shardmap, opts)
 	require.NoError(t, err, "vtexplain Init error\n%s", string(schema))
 }
 
@@ -61,13 +76,13 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 	}
 
 	for _, mode := range modes {
-		runTestCase(testcase, mode, opts, t)
+		runTestCase(testcase, mode, opts, &testopts{}, t)
 	}
 }
 
-func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
+func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testing.T) {
 	t.Run(testcase, func(t *testing.T) {
-		initTest(mode, opts, t)
+		initTest(mode, opts, topts, t)
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
 		sql, err := ioutil.ReadFile(sqlFile)
@@ -130,7 +145,7 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	initTest(ModeMulti, defaultTestOpts(), t)
+	initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
 
 	tests := []struct {
 		SQL string
@@ -216,7 +231,6 @@ func TestJSONOutput(t *testing.T) {
             {
                 "BindVars": {
                     "#maxLimit": "10001",
-                    "__vtschemaname": "''",
                     "vtg1": "1"
                 },
                 "SQL": "select :vtg1 from user where id = :vtg1",
@@ -230,3 +244,60 @@ func TestJSONOutput(t *testing.T) {
 		t.Errorf(diff)
 	}
 }
+
+func testShardInfo(ks, start, end string, t *testing.T) *topo.ShardInfo {
+	kr, err := key.ParseKeyRangeParts(start, end)
+	require.NoError(t, err)
+
+	return topo.NewShardInfo(
+		ks,
+		fmt.Sprintf("%s-%s", start, end),
+		&topodata.Shard{KeyRange: kr},
+		&vtexplainTestTopoVersion{},
+	)
+}
+
+func TestUsingKeyspaceShardMap(t *testing.T) {
+	tests := []struct {
+		testcase      string
+		ShardRangeMap map[string]map[string]*topo.ShardInfo
+	}{
+		{
+			testcase: "select-sharded-8",
+			ShardRangeMap: map[string]map[string]*topo.ShardInfo{
+				"ks_sharded": {
+					"-20":   testShardInfo("ks_sharded", "", "20", t),
+					"20-40": testShardInfo("ks_sharded", "20", "40", t),
+					"40-60": testShardInfo("ks_sharded", "40", "60", t),
+					"60-80": testShardInfo("ks_sharded", "60", "80", t),
+					"80-a0": testShardInfo("ks_sharded", "80", "a0", t),
+					"a0-c0": testShardInfo("ks_sharded", "a0", "c0", t),
+					"c0-e0": testShardInfo("ks_sharded", "c0", "e0", t),
+					"e0-":   testShardInfo("ks_sharded", "e0", "", t),
+				},
+			},
+		},
+		{
+			testcase: "uneven-keyspace",
+			ShardRangeMap: map[string]map[string]*topo.ShardInfo{
+				// Have mercy on the poor soul that has this keyspace sharding.
+				// But, hey, vtexplain still works so they have that going for them.
+				"ks_sharded": {
+					"-80":   testShardInfo("ks_sharded", "", "80", t),
+					"80-90": testShardInfo("ks_sharded", "80", "90", t),
+					"90-a0": testShardInfo("ks_sharded", "90", "a0", t),
+					"a0-e8": testShardInfo("ks_sharded", "a0", "e8", t),
+					"e8-":   testShardInfo("ks_sharded", "e8", "", t),
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		runTestCase(test.testcase, ModeMulti, defaultTestOpts(), &testopts{test.ShardRangeMap}, t)
+	}
+}
+
+type vtexplainTestTopoVersion struct{}
+
+func (vtexplain *vtexplainTestTopoVersion) String() string { return "vtexplain-test-topo" }

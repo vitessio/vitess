@@ -317,6 +317,10 @@ func TestInformationSchemaQuery(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
 	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+
+	qr, err = conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE table_schema = 'NONE'", 1000, true)
+	require.Nil(t, err)
+	assert.Empty(t, qr.Rows)
 }
 
 func TestOffsetAndLimitWithOLAP(t *testing.T) {
@@ -329,6 +333,42 @@ func TestOffsetAndLimitWithOLAP(t *testing.T) {
 	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
 	exec(t, conn, "set workload='olap'")
 	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
+}
+
+func TestSwitchBetweenOlapAndOltp(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "set workload='olap'")
+	exec(t, conn, "set workload='oltp'")
+}
+
+func TestFoundRowsOnDualQueries(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "select 42")
+	assertMatches(t, conn, "select found_rows()", "[[UINT64(1)]]")
+}
+
+func TestUseStmtInOLAP(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	queries := []string{"set workload='olap'", "use `ks:80-`"}
+	for i, q := range queries {
+		t.Run(fmt.Sprintf("%d-%s", i, q), func(t *testing.T) {
+			exec(t, conn, q)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

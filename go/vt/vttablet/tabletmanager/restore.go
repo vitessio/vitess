@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"io"
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -76,12 +77,9 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+
 	tablet := tm.Tablet()
 	originalType := tablet.Type
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
-		return err
-	}
-
 	// Try to restore. Depending on the reason for failure, we may be ok.
 	// If we're not ok, return an error and the tm will log.Fatalf,
 	// causing the process to be restarted and the restore retried.
@@ -117,6 +115,24 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
 	}
 
+	// Check whether we're going to restore before changing to RESTORE type,
+	// so we keep our MasterTermStartTime (if any) if we aren't actually restoring.
+	ok, err := mysqlctl.ShouldRestore(ctx, params)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
+		return mysqlctl.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+	}
+	// We should not become master after restore, because that would incorrectly
+	// start a new master term, and it's likely our data dir will be out of date.
+	if originalType == topodatapb.TabletType_MASTER {
+		originalType = tm.baseTabletType
+	}
+	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
+		return err
+	}
 	// Loop until a backup exists, unless we were told to give up immediately.
 	var backupManifest *mysqlctl.BackupManifest
 	for {
@@ -161,11 +177,6 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		}
 	case mysqlctl.ErrNoBackup:
 		// No-op, starting with empty database.
-	case mysqlctl.ErrExistingDB:
-		// No-op, assuming we've just restarted.  Note the
-		// replication reporter may restart replication at the
-		// next health check if it thinks it should. We do not
-		// alter replication here.
 	default:
 		// If anything failed, we should reset the original tablet type
 		if err := tm.tmState.ChangeTabletType(ctx, originalType); err != nil {
@@ -262,7 +273,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return "", "", err
 	}
 
-	gtidsChan := make(chan []string)
+	gtidsChan := make(chan []string, 1)
 
 	go func() {
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
@@ -277,19 +288,19 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 					if event.Timestamp >= restoreTime {
 						afterPos = event.Gtid
 						gtidsChan <- []string{event.Gtid, beforePos}
-						break
+						return io.EOF
 					}
 
 					if eventPos.AtLeast(lastPos) {
 						gtidsChan <- []string{"", beforePos}
-						break
+						return io.EOF
 					}
 					beforePos = event.Gtid
 				}
 			}
 			return nil
 		})
-		if err != nil {
+		if err != nil && err != io.EOF {
 			gtidsChan <- []string{"", ""}
 		}
 	}()
