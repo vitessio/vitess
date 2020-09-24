@@ -15,6 +15,7 @@ The following is the full list, alphabetically ordered.
 * Morgan Tocker ([morgo](https://github.com/morgo)) morgan@planetscale.com
 * Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@slack-corp.com
+* Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
 * Sugu Sougoumarane ([sougou](https://github.com/sougou)) sougou@planetscale.com
 
 ## Areas of expertise
@@ -29,10 +30,10 @@ dkhenry, morgo
 sougou, rafael, tirsen, dweitzman, systay
 
 ### Parser
-sougou, dweitzman, deepthi, systay
+sougou, dweitzman, deepthi, systay, harshit-gangal
 
 ### Cluster Management
-deepthi, rafael, enisoc
+deepthi, rafael, enisoc, shlomi-noach
 
 ### Java
 mpawliszyn, pH14, harshit-gangal

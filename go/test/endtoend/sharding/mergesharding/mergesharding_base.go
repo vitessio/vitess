@@ -413,9 +413,6 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
 
-	// get status for destination master tablets, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, *shard3Master, 300, 100)
-
 	sharding.CheckTabletQueryService(t, *shard3Master, "NOT_SERVING", false, *clusterInstance)
 	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"VtTabletStreamHealth",

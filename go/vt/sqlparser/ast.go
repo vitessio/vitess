@@ -188,11 +188,12 @@ type (
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
 	DBDDL struct {
-		Action   DBDDLAction
-		DBName   string
-		IfExists bool
-		Collate  string
-		Charset  string
+		Action      DBDDLAction
+		DBName      string
+		IfExists    bool
+		IfNotExists bool
+		Collate     string
+		Charset     string
 	}
 
 	// DBDDLAction is an enum for DBDDL Actions
@@ -382,16 +383,16 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	NotNull       BoolVal
-	Autoincrement BoolVal
+	NotNull       bool
+	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
 	Comment       *Literal
 
 	// Numeric field options
 	Length   *Literal
-	Unsigned BoolVal
-	Zerofill BoolVal
+	Unsigned bool
+	Zerofill bool
 	Scale    *Literal
 
 	// Text field options
@@ -1071,7 +1072,11 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateDBDDLAction:
-		buf.WriteString(fmt.Sprintf("%s database %s", CreateStr, node.DBName))
+		notExists := ""
+		if node.IfNotExists {
+			notExists = " if not exists"
+		}
+		buf.WriteString(fmt.Sprintf("%s database%s %v", CreateStr, notExists, node.DBName))
 	case AlterDBDDLAction:
 		buf.WriteString(fmt.Sprintf("%s database %s", AlterStr, node.DBName))
 	case DropDBDDLAction:
@@ -1638,17 +1643,17 @@ func (node Exprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AndExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v and %v", node.Left, node.Right)
+	buf.astPrintf(node, "%l and %r", node.Left, node.Right)
 }
 
 // Format formats the node.
 func (node *OrExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v or %v", node.Left, node.Right)
+	buf.astPrintf(node, "%l or %r", node.Left, node.Right)
 }
 
 // Format formats the node.
 func (node *XorExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v xor %v", node.Left, node.Right)
+	buf.astPrintf(node, "%l xor %r", node.Left, node.Right)
 }
 
 // Format formats the node.
@@ -1658,7 +1663,7 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator.GetOperatorString(), node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.GetOperatorString(), node.Right)
 	if node.Escape != nil {
 		buf.astPrintf(node, " escape %v", node.Escape)
 	}
@@ -1666,7 +1671,7 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v and %v", node.Left, node.Operator.GetOperatorString(), node.From, node.To)
+	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator.GetOperatorString(), node.From, node.To)
 }
 
 // Format formats the node.
@@ -1739,7 +1744,7 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v", node.Left, node.Operator.GetOperatorString(), node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.GetOperatorString(), node.Right)
 }
 
 // Format formats the node.

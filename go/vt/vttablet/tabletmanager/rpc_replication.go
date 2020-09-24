@@ -244,10 +244,6 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
 	}
@@ -738,12 +734,6 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	}
 
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
-	// We call SetReadOnly only after the topo has been updated to avoid
-	// situations where two tablets are master at the DB level but not at the vitess level
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
 

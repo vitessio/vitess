@@ -1,4 +1,4 @@
-name: docker test 2
+name: docker_test_2
 on: [push, pull_request]
 jobs:
 
@@ -16,6 +16,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run tests which requires docker - 2
+    - name: Run tests which require docker - 2
       run: |
         go run test.go -docker=true --follow -shard 25
