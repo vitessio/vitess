@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -316,4 +318,19 @@ func TestReplicationStatus(t *testing.T) {
 	if err != mysql.ErrNotReplica {
 		t.Errorf("Got unexpected result for ShowReplicationStatus: %v %v", status, err)
 	}
+}
+
+func TestSessionTrackGTIDs(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch(`set session session_track_gtids='own_gtid'`, 1000, false)
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch(`create table vttest.t1(id bigint primary key)`, 1000, false)
+	require.NoError(t, err)
+
+	_, err = conn.ExecuteFetch(`insert into vttest.t1 values (1)`, 1000, false)
+	require.NoError(t, err)
 }
