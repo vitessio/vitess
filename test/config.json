@@ -546,6 +546,15 @@
 			"Shard": 24,
 			"RetryMax": 0,
 			"Tags": []
+		},
+		"orchestrator": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/orchestrator"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
+			"RetryMax": 0,
+			"Tags": []
 		}
 	}
 }
