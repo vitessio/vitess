@@ -43,6 +43,57 @@ type testcase struct {
 	output [][]string
 }
 
+func checkIfOptionIsSupported(t *testing.T, variable string) bool {
+	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("show variables like '%s'", variable))
+	require.NoError(t, err)
+	require.NotNil(t, qr)
+	if qr.Rows != nil && len(qr.Rows) == 1 {
+		return true
+	}
+	return false
+}
+
+func TestSetStatement(t *testing.T) {
+
+	if testing.Short() {
+		t.Skip()
+	}
+	if !checkIfOptionIsSupported(t, "log_builtin_as_identified_by_password") {
+		// the combination of setting this option and support for "set password" only works on a few flavors
+		log.Info("Cannot test SetStatement on this flavor")
+		return
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa')",
+		"commit",
+		"set global log_builtin_as_identified_by_password=1",
+		"SET PASSWORD FOR 'vt_appdebug'@'localhost'='*AA17DA66C7C714557F5485E84BCAFF2C209F2F53'", //select password('vtappdebug_password');
+	}
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`gtid`,
+			`other`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func TestVersion(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1705,6 +1756,14 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			case "commit":
 				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
 					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
+				}
+			case "other":
+				if evs[i].Type != binlogdatapb.VEventType_OTHER {
+					t.Fatalf("%v (%d): event: %v, want other", input, i, evs[i])
+				}
+			case "ddl":
+				if evs[i].Type != binlogdatapb.VEventType_DDL {
+					t.Fatalf("%v (%d): event: %v, want ddl", input, i, evs[i])
 				}
 			default:
 				evs[i].Timestamp = 0
