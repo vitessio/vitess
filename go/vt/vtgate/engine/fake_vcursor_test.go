@@ -53,6 +53,14 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t noopVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
+}
+
 func (t noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
@@ -92,15 +100,15 @@ func (t noopVCursor) SetAutocommit(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetClientFoundRows(bool) {
+func (t noopVCursor) SetClientFoundRows(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetSkipQueryPlanCache(bool) {
+func (t noopVCursor) SetSkipQueryPlanCache(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetSQLSelectLimit(int64) {
+func (t noopVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 
@@ -197,6 +205,10 @@ type loggingVCursor struct {
 	log []string
 
 	resolvedTargetTabletType topodatapb.TabletType
+}
+
+func (f *loggingVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) InTransactionAndIsDML() bool {
@@ -393,15 +405,15 @@ func (f *loggingVCursor) SetAutocommit(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetClientFoundRows(bool) {
+func (f *loggingVCursor) SetClientFoundRows(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetSkipQueryPlanCache(bool) {
+func (f *loggingVCursor) SetSkipQueryPlanCache(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetSQLSelectLimit(int64) {
+func (f *loggingVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 

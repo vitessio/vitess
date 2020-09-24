@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/key"
@@ -33,26 +35,27 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
-	sel := stmt.(*sqlparser.Select)
+func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+		sel := stmt.(*sqlparser.Select)
 
-	p, err := handleDualSelects(sel, vschema)
-	if err != nil {
-		return nil, err
-	}
-	if p != nil {
-		return p, nil
-	}
+		p, err := handleDualSelects(sel, vschema)
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
+			return p, nil
+		}
 
-	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
-	if err := pb.processSelect(sel, nil); err != nil {
-		return nil, err
+		pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
+		if err := pb.processSelect(sel, nil, query); err != nil {
+			return nil, err
+		}
+		if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
+			return nil, err
+		}
+		return pb.bldr.Primitive(), nil
 	}
-	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
-		return nil, err
-	}
-	return pb.bldr.Primitive(), nil
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
@@ -90,15 +93,26 @@ func buildSelectPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
-func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, query string) error {
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
 		}
 	}
-	if sel.SQLCalcFoundRows && sel.Limit != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "sql_calc_found_rows not yet fully supported")
+	if sel.SQLCalcFoundRows {
+		if outer != nil || query == "" {
+			return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+		}
+		sel.SQLCalcFoundRows = false
+		if sel.Limit != nil {
+			builder, err := buildSQLCalcFoundRowsPlan(query, sel, outer, pb.vschema)
+			if err != nil {
+				return err
+			}
+			pb.bldr = builder
+			return nil
+		}
 	}
 
 	if err := pb.processTableExprs(sel.From); err != nil {
@@ -145,6 +159,59 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 	}
 	pb.bldr.PushMisc(sel)
 	return nil
+}
+
+func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {
+	ljt := newJointab(sqlparser.GetBindvars(sel))
+	frpb := newPrimitiveBuilder(vschema, ljt)
+	err := frpb.processSelect(sel, outer, "")
+	if err != nil {
+		return nil, err
+	}
+
+	statement, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+	sel2 := statement.(*sqlparser.Select)
+
+	sel2.SQLCalcFoundRows = false
+	sel2.OrderBy = nil
+	sel2.Limit = nil
+
+	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
+		Expr: &sqlparser.FuncExpr{
+			Name:  sqlparser.NewColIdent("count"),
+			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
+		},
+	}}
+	if sel2.GroupBy == nil && sel2.Having == nil {
+		// if there is no grouping, we can use the same query and
+		// just replace the SELECT sub-clause to have a single count(*)
+		sel2.SelectExprs = countStartExpr
+	} else {
+		// when there is grouping, we have to move the original query into a derived table.
+		//                       select id, sum(12) from user group by id =>
+		// select count(*) from (select id, sum(12) from user group by id) t
+		sel3 := &sqlparser.Select{
+			SelectExprs: countStartExpr,
+			From: []sqlparser.TableExpr{
+				&sqlparser.AliasedTableExpr{
+					Expr: &sqlparser.Subquery{Select: sel2},
+					As:   sqlparser.NewTableIdent("t"),
+				},
+			},
+		}
+		sel2 = sel3
+	}
+
+	cjt := newJointab(sqlparser.GetBindvars(sel2))
+	countpb := newPrimitiveBuilder(vschema, cjt)
+	err = countpb.processSelect(sel2, outer, "")
+	if err != nil {
+		return nil, err
+	}
+	return &sqlCalcFoundRows{LimitQuery: frpb.bldr, CountQuery: countpb.bldr, ljt: ljt, cjt: cjt}, nil
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {

@@ -31,7 +31,7 @@ import (
 )
 
 func TestSetSystemVariableAsString(t *testing.T) {
-	setOp := SysVarSet{
+	setOp := SysVarReservedConn{
 		Name: "x",
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
@@ -198,7 +198,7 @@ func TestSetTable(t *testing.T) {
 		{
 			testName: "sysvar set without destination",
 			setOps: []SetOp{
-				&SysVarSet{
+				&SysVarReservedConn{
 					Name: "x",
 					Keyspace: &vindexes.Keyspace{
 						Name:    "ks",
@@ -216,7 +216,7 @@ func TestSetTable(t *testing.T) {
 		{
 			testName: "sysvar set not modifying setting",
 			setOps: []SetOp{
-				&SysVarSet{
+				&SysVarReservedConn{
 					Name: "x",
 					Keyspace: &vindexes.Keyspace{
 						Name:    "ks",
@@ -233,7 +233,7 @@ func TestSetTable(t *testing.T) {
 		{
 			testName: "sysvar set modifying setting",
 			setOps: []SetOp{
-				&SysVarSet{
+				&SysVarReservedConn{
 					Name: "x",
 					Keyspace: &vindexes.Keyspace{
 						Name:    "ks",
@@ -282,7 +282,7 @@ func TestSetTable(t *testing.T) {
 
 func TestSysVarSetErr(t *testing.T) {
 	setOps := []SetOp{
-		&SysVarSet{
+		&SysVarReservedConn{
 			Name: "x",
 			Keyspace: &vindexes.Keyspace{
 				Name:    "ks",

@@ -98,10 +98,6 @@ func replaceColumnDefinitionName(newNode, parent SQLNode) {
 	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
 
-func replaceColumnTypeAutoincrement(newNode, parent SQLNode) {
-	parent.(*ColumnType).Autoincrement = newNode.(BoolVal)
-}
-
 func replaceColumnTypeComment(newNode, parent SQLNode) {
 	parent.(*ColumnType).Comment = newNode.(*Literal)
 }
@@ -114,24 +110,12 @@ func replaceColumnTypeLength(newNode, parent SQLNode) {
 	parent.(*ColumnType).Length = newNode.(*Literal)
 }
 
-func replaceColumnTypeNotNull(newNode, parent SQLNode) {
-	parent.(*ColumnType).NotNull = newNode.(BoolVal)
-}
-
 func replaceColumnTypeOnUpdate(newNode, parent SQLNode) {
 	parent.(*ColumnType).OnUpdate = newNode.(Expr)
 }
 
 func replaceColumnTypeScale(newNode, parent SQLNode) {
 	parent.(*ColumnType).Scale = newNode.(*Literal)
-}
-
-func replaceColumnTypeUnsigned(newNode, parent SQLNode) {
-	parent.(*ColumnType).Unsigned = newNode.(BoolVal)
-}
-
-func replaceColumnTypeZerofill(newNode, parent SQLNode) {
-	parent.(*ColumnType).Zerofill = newNode.(BoolVal)
 }
 
 type replaceColumnsItems int
@@ -967,15 +951,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceColumnDefinitionName)
 
 	case *ColumnType:
-		a.apply(node, n.Autoincrement, replaceColumnTypeAutoincrement)
 		a.apply(node, n.Comment, replaceColumnTypeComment)
 		a.apply(node, n.Default, replaceColumnTypeDefault)
 		a.apply(node, n.Length, replaceColumnTypeLength)
-		a.apply(node, n.NotNull, replaceColumnTypeNotNull)
 		a.apply(node, n.OnUpdate, replaceColumnTypeOnUpdate)
 		a.apply(node, n.Scale, replaceColumnTypeScale)
-		a.apply(node, n.Unsigned, replaceColumnTypeUnsigned)
-		a.apply(node, n.Zerofill, replaceColumnTypeZerofill)
 
 	case Columns:
 		replacer := replaceColumnsItems(0)

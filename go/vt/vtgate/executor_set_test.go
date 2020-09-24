@@ -170,7 +170,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "unexpected value type for sql_select_limit: string",
+		err: "failed to evaluate value for sql_select_limit: expected int, unexpected value type: string",
 	}, {
 		in:  "set autocommit = 1+1",
 		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
@@ -355,7 +355,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	want := "1"
-	got := string(result.Rows[0][1].ToString())
+	got := result.Rows[0][1].ToString()
 	assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
 
 	// Update metadata

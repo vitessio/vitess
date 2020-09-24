@@ -72,6 +72,8 @@ var (
 
 	// Put set-passthrough under a flag.
 	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	// lockHeartbeatTime is used to set the next heartbeat time.
+	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 )
 
 func getTxMode() vtgatepb.TransactionMode {

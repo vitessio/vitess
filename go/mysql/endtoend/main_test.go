@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	vtenv "vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -76,6 +77,32 @@ func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, b
 	// The args contain '-v' 3 times, to switch to very verbose output.
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
+
+	version, getErr := mysqlctl.GetVersionString()
+	f, v, err := mysqlctl.ParseVersionString(version)
+
+	if getErr != nil || err != nil {
+		f, v, err = mysqlctl.GetVersionFromEnv()
+		if err != nil {
+			vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
+			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set your PATH so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
+	PATH: %s
+	VT_MYSQL_ROOT: %s
+	VTROOT: %s
+	vtenv.VtMysqlRoot(): %s
+	MYSQL_FLAVOR: %s
+	`,
+				os.Getenv("PATH"),
+				os.Getenv("VT_MYSQL_ROOT"),
+				os.Getenv("VTROOT"),
+				vtenvMysqlRoot,
+				os.Getenv("MYSQL_FLAVOR"))
+			panic(message)
+		}
+	}
+
+	t.Logf("Using flavor: %v, version: %v", f, v)
+
 	args := []string{
 		"-v", "-v", "-v",
 	}
@@ -97,12 +124,15 @@ func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, b
 		args = append(args, "-D", params.DbName)
 	}
 	if params.Flags&mysql.CapabilityClientSSL > 0 {
+		if f != mysqlctl.FlavorMySQL || v.Major != 8 {
+			args = append(args,
+				"--ssl",
+				"--ssl-verify-server-cert")
+		}
 		args = append(args,
-			"--ssl",
 			"--ssl-ca", params.SslCa,
 			"--ssl-cert", params.SslCert,
-			"--ssl-key", params.SslKey,
-			"--ssl-verify-server-cert")
+			"--ssl-key", params.SslKey)
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),

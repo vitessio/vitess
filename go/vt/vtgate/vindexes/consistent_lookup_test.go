@@ -506,6 +506,10 @@ type loggingVCursor struct {
 	log     []string
 }
 
+func (vc *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_PRE
+}
+
 func (vc *loggingVCursor) InTransactionAndIsDML() bool {
 	return false
 }

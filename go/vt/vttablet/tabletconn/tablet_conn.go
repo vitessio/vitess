@@ -18,6 +18,7 @@ package tabletconn
 
 import (
 	"flag"
+	"sync"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -50,9 +51,14 @@ type TabletDialer func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) 
 
 var dialers = make(map[string]TabletDialer)
 
+// mu This mutex helps us prevent data races when registering / getting dialers
+var mu sync.Mutex
+
 // RegisterDialer is meant to be used by TabletDialer implementations
 // to self register.
 func RegisterDialer(name string, dialer TabletDialer) {
+	mu.Lock()
+	defer mu.Unlock()
 	if _, ok := dialers[name]; ok {
 		log.Fatalf("Dialer %s already exists", name)
 	}
@@ -61,6 +67,8 @@ func RegisterDialer(name string, dialer TabletDialer) {
 
 // GetDialer returns the dialer to use, described by the command line flag
 func GetDialer() TabletDialer {
+	mu.Lock()
+	defer mu.Unlock()
 	td, ok := dialers[*TabletProtocol]
 	if !ok {
 		log.Exitf("No dialer registered for tablet protocol %s", *TabletProtocol)

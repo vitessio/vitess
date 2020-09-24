@@ -22,6 +22,7 @@ package vtexplain
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	"golang.org/x/net/context"
@@ -52,14 +53,14 @@ var (
 	}
 )
 
-func initVtgateExecutor(vSchemaStr string, opts *Options) error {
+func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
 	explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
 	healthCheck = discovery.NewFakeHealthCheck()
 
 	resolver := newFakeResolver(opts, explainTopo, vtexplainCell)
 
-	err := buildTopology(opts, vSchemaStr, opts.NumShards)
+	err := buildTopology(opts, vSchemaStr, ksShardMapStr, opts.NumShards)
 	if err != nil {
 		return err
 	}
@@ -88,7 +89,7 @@ func newFakeResolver(opts *Options, serv srvtopo.Server, cell string) *vtgate.Re
 	return vtgate.NewResolver(srvResolver, serv, cell, sc)
 }
 
-func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) error {
+func buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numShardsPerKeyspace int) error {
 	explainTopo.Lock.Lock()
 	defer explainTopo.Lock.Unlock()
 
@@ -102,29 +103,84 @@ func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) e
 	}
 	explainTopo.Keyspaces = srvVSchema.Keyspaces
 
-	explainTopo.TabletConns = make(map[string]*explainTablet)
-	for ks, vschema := range explainTopo.Keyspaces {
-		numShards := 1
-		if vschema.Sharded {
-			numShards = numShardsPerKeyspace
-		}
-		for i := 0; i < numShards; i++ {
-			kr, err := key.EvenShardsKeyRange(i, numShards)
-			if err != nil {
-				return err
-			}
-			shard := key.KeyRangeString(kr)
-			hostname := fmt.Sprintf("%s/%s", ks, shard)
-			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard)
+	ksShardMap, err := getKeyspaceShardMap(ksShardMapStr)
+	if err != nil {
+		return err
+	}
 
-			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
+	explainTopo.TabletConns = make(map[string]*explainTablet)
+	explainTopo.KeyspaceShards = make(map[string]map[string]*topodatapb.ShardReference)
+	for ks, vschema := range explainTopo.Keyspaces {
+		shards, err := getShardRanges(ks, vschema, ksShardMap, numShardsPerKeyspace)
+		if err != nil {
+			return err
+		}
+
+		explainTopo.KeyspaceShards[ks] = make(map[string]*topodatapb.ShardReference)
+
+		for _, shard := range shards {
+			hostname := fmt.Sprintf("%s/%s", ks, shard.Name)
+			log.Infof("registering test tablet %s for keyspace %s shard %s", hostname, ks, shard.Name)
+
+			tablet := healthCheck.AddFakeTablet(vtexplainCell, hostname, 1, ks, shard.Name, topodatapb.TabletType_MASTER, true, 1, nil, func(t *topodatapb.Tablet) queryservice.QueryService {
 				return newTablet(opts, t)
 			})
 			explainTopo.TabletConns[hostname] = tablet.(*explainTablet)
+			explainTopo.KeyspaceShards[ks][shard.Name] = shard
 		}
 	}
 
 	return err
+}
+
+func getKeyspaceShardMap(ksShardMapStr string) (map[string]map[string]*topo.ShardInfo, error) {
+	if ksShardMapStr == "" {
+		return map[string]map[string]*topo.ShardInfo{}, nil
+	}
+
+	// keyspace-name -> shard-name -> ShardInfo
+	var ksShardMap map[string]map[string]*topo.ShardInfo
+	err := json2.Unmarshal([]byte(ksShardMapStr), &ksShardMap)
+
+	return ksShardMap, err
+}
+
+func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[string]map[string]*topo.ShardInfo, numShardsPerKeyspace int) ([]*topodatapb.ShardReference, error) {
+	shardMap, ok := ksShardMap[ks]
+	if ok {
+		shards := make([]*topodatapb.ShardReference, 0, len(shardMap))
+		for shard, info := range shardMap {
+			ref := &topodatapb.ShardReference{
+				Name:     shard,
+				KeyRange: info.KeyRange,
+			}
+
+			shards = append(shards, ref)
+		}
+		return shards, nil
+
+	}
+
+	numShards := 1
+	if vschema.Sharded {
+		numShards = numShardsPerKeyspace
+	}
+
+	shards := make([]*topodatapb.ShardReference, numShards)
+
+	for i := 0; i < numShards; i++ {
+		kr, err := key.EvenShardsKeyRange(i, numShards)
+		if err != nil {
+			return nil, err
+		}
+
+		shards[i] = &topodatapb.ShardReference{
+			Name:     key.KeyRangeString(kr),
+			KeyRange: kr,
+		}
+	}
+
+	return shards, nil
 }
 
 func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
