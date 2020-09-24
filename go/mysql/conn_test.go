@@ -217,7 +217,7 @@ func TestBasicPackets(t *testing.T) {
 	if err != nil || len(data) == 0 || data[0] != OKPacket {
 		t.Fatalf("cConn.ReadPacket - OKPacket failed: %v %v", data, err)
 	}
-	affectedRows, lastInsertID, statusFlags, warnings, err := parseOKPacket(data)
+	affectedRows, lastInsertID, statusFlags, warnings, _, err := parseOKPacket(data)
 	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
 	}
@@ -230,7 +230,7 @@ func TestBasicPackets(t *testing.T) {
 	if err != nil || len(data) == 0 || !isEOFPacket(data) {
 		t.Fatalf("cConn.ReadPacket - OKPacket with EOF header failed: %v %v", data, err)
 	}
-	affectedRows, lastInsertID, statusFlags, warnings, err = parseOKPacket(data)
+	affectedRows, lastInsertID, statusFlags, warnings, _, err = parseOKPacket(data)
 	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
 	}

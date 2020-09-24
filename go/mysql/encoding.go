@@ -295,3 +295,38 @@ func readLenEncStringAsBytesCopy(data []byte, pos int) ([]byte, int, bool) {
 	copy(result, data[pos:pos+s])
 	return result, pos + s, true
 }
+
+type decoder struct {
+	data []byte
+	pos  int
+}
+
+func (d *decoder) readLenEncInt() (uint64, bool) {
+	res, newPos, ok := readLenEncInt(d.data, d.pos)
+	d.pos = newPos
+	return res, ok
+}
+
+func (d *decoder) readUint16() (uint16, bool) {
+	res, newPos, ok := readUint16(d.data, d.pos)
+	d.pos = newPos
+	return res, ok
+}
+
+func (d *decoder) readByte() (byte, bool) {
+	res, newPos, ok := readByte(d.data, d.pos)
+	d.pos = newPos
+	return res, ok
+}
+
+func (d *decoder) skipLenEncString() bool {
+	newPos, ok := skipLenEncString(d.data, d.pos)
+	d.pos = newPos
+	return ok
+}
+
+func (d *decoder) readLenEncString() (string, bool) {
+	res, newPos, ok := readLenEncString(d.data, d.pos)
+	d.pos = newPos
+	return res, ok
+}
