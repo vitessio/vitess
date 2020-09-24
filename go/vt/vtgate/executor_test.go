@@ -790,9 +790,7 @@ func TestExecutorShow(t *testing.T) {
 		},
 		RowsAffected: 9,
 	}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vitess_tablets:\n%+v, want\n%+v", qr, wantqr)
-	}
+	utils.MustMatch(t, wantqr, qr, "show vitess_tablets")
 
 	qr, err = executor.Execute(ctx, "TestExecute", session, "show vitess_tablets like 'x'", nil)
 	require.NoError(t, err)
@@ -801,9 +799,7 @@ func TestExecutorShow(t *testing.T) {
 		Rows:         [][]sqltypes.Value{},
 		RowsAffected: 0,
 	}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("show vitess_tablets LIKE:\n%+v, want\n%+v", qr, wantqr)
-	}
+	utils.MustMatch(t, wantqr, qr, "show vitess_tablets LIKE")
 
 	qr, err = executor.Execute(ctx, "TestExecute", session, "show vitess_tablets like '-20%'", nil)
 	require.NoError(t, err)
