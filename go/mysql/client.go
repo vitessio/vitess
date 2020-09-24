@@ -517,7 +517,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 // HandshakeResponse41.
 func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *ConnParams) error {
 	// Build our flags, with CapabilityClientSSL.
-	var flags uint32 = CapabilityClientLongPassword |
+	CapabilityFlags = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
 		CapabilityClientProtocol41 |
 		CapabilityClientTransactions |
@@ -531,7 +531,8 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
 		// Pass-through ClientFoundRows flag.
-		CapabilityClientFoundRows&uint32(params.Flags)
+		CapabilityClientFoundRows&uint32(params.Flags) |
+		CapabilityClientSessionTrack
 
 	length :=
 		4 + // Client capability flags.
@@ -541,13 +542,13 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		flags |= CapabilityClientConnectWithDB
+		CapabilityFlags |= CapabilityClientConnectWithDB
 	}
 
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, flags)
+	pos = writeUint32(data, pos, CapabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)
@@ -562,11 +563,14 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	return nil
 }
 
+// CapabilityFlags is client capability flag sent to mysql on connect
+var CapabilityFlags uint32
+
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a SQLError.
 func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword []byte, characterSet uint8, params *ConnParams) error {
 	// Build our flags.
-	var flags uint32 = CapabilityClientLongPassword |
+	CapabilityFlags = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
 		CapabilityClientProtocol41 |
 		CapabilityClientTransactions |
@@ -579,7 +583,8 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
 		// Pass-through ClientFoundRows flag.
-		CapabilityClientFoundRows&uint32(params.Flags)
+		CapabilityClientFoundRows&uint32(params.Flags) |
+		CapabilityClientSessionTrack
 
 	// FIXME(alainjobart) add multi statement.
 
@@ -596,7 +601,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		flags |= CapabilityClientConnectWithDB
+		CapabilityFlags |= CapabilityClientConnectWithDB
 		length += lenNullString(params.DbName)
 	}
 
@@ -609,7 +614,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, flags)
+	pos = writeUint32(data, pos, CapabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)
