@@ -84,11 +84,13 @@ type Stats struct {
 
 	State sync2.AtomicString
 
-	PhaseTimings  *stats.Timings
-	QueryTimings  *stats.Timings
-	QueryCount    *stats.CountersWithSingleLabel
-	CopyRowCount  *stats.Counter
-	CopyLoopCount *stats.Counter
+	PhaseTimings        *stats.Timings
+	QueryTimings        *stats.Timings
+	QueryCount          *stats.CountersWithSingleLabel
+	CopyRowCount        *stats.Counter
+	CopyLoopCount       *stats.Counter
+	TabletPickerLatency *stats.Timings
+	ErrorCounts         *stats.CountersWithMultiLabels
 }
 
 // SetLastPosition sets the last replication position.
@@ -129,7 +131,8 @@ func NewStats() *Stats {
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")
-
+	bps.TabletPickerLatency = stats.NewTimings("", "", "")
+	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	return bps
 }
 
