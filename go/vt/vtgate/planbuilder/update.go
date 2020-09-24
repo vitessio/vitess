@@ -41,9 +41,12 @@ func buildUpdatePlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 		return eupd, nil
 	}
 
-	if eupd.ChangedVindexValues, eupd.OwnedVindexQuery, err = buildChangedVindexesValues(upd, eupd.Table, ksidCol); err != nil {
+	cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidCol)
+	if err != nil {
 		return nil, err
 	}
+	eupd.ChangedVindexValues = cvv
+	eupd.OwnedVindexQuery = ovq
 	if len(eupd.ChangedVindexValues) != 0 {
 		eupd.KsidVindex = ksidVindex
 	}
