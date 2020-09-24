@@ -179,10 +179,10 @@ func TestNoReplicas(t *testing.T) {
 
 		time.Sleep(10 * time.Second)
 		// This makes no REPLICA servers available. We expect something like:
-		// {"StatusCode":500,"Value":0,"Threshold":1,"Message":"No hosts found"}
+		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		resp, err := throttleCheck()
 		assert.NoError(t, err)
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 	{
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")

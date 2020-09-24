@@ -22,7 +22,6 @@ type MetricResultFunc func() (metricResult MetricResult, threshold float64)
 
 // ErrThresholdExceeded is the common error one may get checking on metric result
 var ErrThresholdExceeded = errors.New("Threshold exceeded")
-var errNoHosts = errors.New("No hosts found")
 var errNoResultYet = errors.New("Metric not collected yet")
 
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
@@ -40,7 +39,7 @@ type noHostsMetricResult struct{}
 
 // Get implements MetricResult
 func (metricResult *noHostsMetricResult) Get() (float64, error) {
-	return 0, errNoHosts
+	return 0, nil
 }
 
 // NoHostsMetricResult is a result indicating "no hosts"
