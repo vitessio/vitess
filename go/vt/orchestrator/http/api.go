@@ -3219,7 +3219,7 @@ func (this *HttpAPI) AutomatedRecoveryFilters(params martini.Params, r render.Re
 // AuditFailureDetection provides list of topology_failure_detection entries
 func (this *HttpAPI) AuditFailureDetection(params martini.Params, r render.Render, req *http.Request) {
 
-	var audits []logic.TopologyRecovery
+	var audits []*logic.TopologyRecovery
 	var err error
 
 	if detectionId, derr := strconv.ParseInt(params["id"], 10, 0); derr == nil && detectionId > 0 {
@@ -3267,7 +3267,7 @@ func (this *HttpAPI) ReadReplicationAnalysisChangelog(params martini.Params, r r
 
 // AuditRecovery provides list of topology-recovery entries
 func (this *HttpAPI) AuditRecovery(params martini.Params, r render.Render, req *http.Request) {
-	var audits []logic.TopologyRecovery
+	var audits []*logic.TopologyRecovery
 	var err error
 
 	if recoveryUID := params["uid"]; recoveryUID != "" {
