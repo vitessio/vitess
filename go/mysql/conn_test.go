@@ -21,10 +21,13 @@ import (
 	crypto_rand "crypto/rand"
 	"math/rand"
 	"net"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/utils"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -202,6 +205,8 @@ func TestPackets(t *testing.T) {
 }
 
 func TestBasicPackets(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
 		listener.Close()
@@ -210,65 +215,66 @@ func TestBasicPackets(t *testing.T) {
 	}()
 
 	// Write OK packet, read it, compare.
-	if err := sConn.writeOKPacket(12, 34, 56, 78); err != nil {
-		t.Fatalf("writeOKPacket failed: %v", err)
-	}
+	err := sConn.writeOKPacket(12, 34, 56, 78)
+	require.NoError(err)
+
 	data, err := cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != OKPacket {
-		t.Fatalf("cConn.ReadPacket - OKPacket failed: %v %v", data, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], OKPacket, "OKPacket")
+
 	affectedRows, lastInsertID, statusFlags, warnings, _, err := parseOKPacket(data)
-	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
+	require.NoError(err)
+	if affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
 	}
 
 	// Write OK packet with EOF header, read it, compare.
-	if err := sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78); err != nil {
-		t.Fatalf("writeOKPacketWithEOFHeader failed: %v", err)
-	}
+	err = sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78)
+	require.NoError(err)
+
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || !isEOFPacket(data) {
-		t.Fatalf("cConn.ReadPacket - OKPacket with EOF header failed: %v %v", data, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.True(isEOFPacket(data), "expected EOF")
+
 	affectedRows, lastInsertID, statusFlags, warnings, _, err = parseOKPacket(data)
-	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
+	require.NoError(err)
+	if affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
 	}
 
 	// Write error packet, read it, compare.
-	if err := sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason"); err != nil {
-		t.Fatalf("writeErrorPacket failed: %v", err)
-	}
+	err = sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason")
+	require.NoError(err)
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ErrPacket {
-		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+
 	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason")) {
-		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
-	}
+	utils.MustMatch(t, err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason"), "")
 
 	// Write error packet from error, read it, compare.
-	if err := sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")); err != nil {
-		t.Fatalf("writeErrorPacketFromError failed: %v", err)
-	}
+	err = sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied"))
+	require.NoError(err)
+
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ErrPacket {
-		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+
 	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")) {
-		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
-	}
+	utils.MustMatch(t, err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied"), "")
 
 	// Write EOF packet, read it, compare first byte. Payload is always ignored.
-	if err := sConn.writeEOFPacket(0x8912, 0xabba); err != nil {
-		t.Fatalf("writeEOFPacket failed: %v", err)
-	}
+	err = sConn.writeEOFPacket(0x8912, 0xabba)
+	require.NoError(err)
+
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || !isEOFPacket(data) {
-		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.True(isEOFPacket(data), "expected EOF")
 }
 
 // Mostly a sanity check.

@@ -691,6 +691,37 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	return c.writeEphemeralPacket()
 }
 
+func (c *Conn) writeOKPacketWithGTIDs(affectedRows, lastInsertID uint64, flags uint16, warnings uint16, gtids string) error {
+	TODO := uint64(12)
+
+	length := 1 + // OKPacket
+		lenEncIntSize(affectedRows) +
+		lenEncIntSize(lastInsertID) +
+		2 + // flags
+		2 + // warnings
+		lenEncStringSize("") + //
+		lenEncIntSize(TODO) +
+		3 + //- size and encoding spec
+		lenEncStringSize(gtids) // the actual gtids
+
+	data, pos := c.startEphemeralPacketWithHeader(length)
+	pos = writeByte(data, pos, OKPacket)
+	pos = writeLenEncInt(data, pos, affectedRows)
+	pos = writeLenEncInt(data, pos, lastInsertID)
+	pos = writeUint16(data, pos, flags)
+	pos = writeUint16(data, pos, warnings)
+
+	// add session state change tracking
+	pos = writeLenEncString(data, pos, "") // human readable info
+	pos = writeLenEncInt(data, pos, TODO)  // total length of session state change info
+	pos = writeByte(data, pos, SessionTrackGtids)
+	pos = writeByte(data, pos, 88) // total length of session state change info
+	pos = writeByte(data, pos, 1)  // gtid encoding spec - only text available today
+	_ = writeLenEncString(data, pos, gtids)
+
+	return c.writeEphemeralPacket()
+}
+
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
 // This is used at the end of a result set if
 // CapabilityClientDeprecateEOF is set.
@@ -990,7 +1021,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					if len(qr.Fields) == 0 {
 						sendFinished = true
 						// We should not send any more packets after this.
-						return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+						return c.writeOKPacketWithGTIDs(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0, qr.SessionStateChanges)
 					}
 					if err := c.writeFields(qr); err != nil {
 						return err
@@ -1156,7 +1187,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 				// We should not send any more packets after this, but make sure
 				// to extract the affected rows and last insert id from the result
 				// struct here since clients expect it.
-				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
+				return c.writeOKPacketWithGTIDs(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c), qr.SessionStateChanges)
 			}
 			if err := c.writeFields(qr); err != nil {
 				return err
