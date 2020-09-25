@@ -305,7 +305,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 		}
 		orderby = append(orderby, &sqlparser.Order{
 			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
-			Direction: sqlparser.AscScr,
+			Direction: sqlparser.AscOrder,
 		})
 	}
 	return orderby, nil

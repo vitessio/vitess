@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -175,7 +176,7 @@ func (mysqld *Mysqld) collectBasicTableData(ctx context.Context, dbName string, 
 		return nil, err
 	}
 
-	tds := make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
+	tds := make(tableDefinitions, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
@@ -210,6 +211,8 @@ func (mysqld *Mysqld) collectBasicTableData(ctx context.Context, dbName string, 
 			RowCount:   rowCount,
 		})
 	}
+
+	sort.Sort(tds)
 
 	return tds, nil
 }
@@ -476,3 +479,20 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
+
+//tableDefinitions is a sortable collection of table definitions
+type tableDefinitions []*tabletmanagerdatapb.TableDefinition
+
+func (t tableDefinitions) Len() int {
+	return len(t)
+}
+
+func (t tableDefinitions) Less(i, j int) bool {
+	return t[i].Name < t[j].Name
+}
+
+func (t tableDefinitions) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+var _ sort.Interface = (tableDefinitions)(nil)

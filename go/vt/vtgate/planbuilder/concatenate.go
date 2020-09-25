@@ -111,7 +111,7 @@ func (c *concatenate) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (c *concatenate) PushLock(lock string) error {
+func (c *concatenate) PushLock(lock sqlparser.Lock) error {
 	err := c.lhs.PushLock(lock)
 	if err != nil {
 		return err
