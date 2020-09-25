@@ -19,10 +19,10 @@ package sqltypes
 import (
 	"github.com/golang/protobuf/proto"
 
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	vtgatepb "github.com/liquidata-inc/vitess/go/vt/proto/vtgate"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	vtgatepb "github.com/dolthub/vitess/go/vt/proto/vtgate"
 )
 
 // This file contains the proto3 conversion functions for the structures

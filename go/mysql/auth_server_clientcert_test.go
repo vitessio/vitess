@@ -25,8 +25,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/liquidata-inc/vitess/go/vt/tlstest"
-	"github.com/liquidata-inc/vitess/go/vt/vttls"
+	"github.com/dolthub/vitess/go/vt/tlstest"
+	"github.com/dolthub/vitess/go/vt/vttls"
 )
 
 const clientCertUsername = "Client Cert"

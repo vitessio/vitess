@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/liquidata-inc/vitess/go/sqltypes"
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/sqltypes"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 func TestNormalize(t *testing.T) {

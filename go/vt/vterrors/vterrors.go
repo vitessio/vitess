@@ -91,7 +91,7 @@ import (
 	"io"
 
 	"golang.org/x/net/context"
-	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
 )
 
 // LogErrStacks controls whether or not printing errors includes the

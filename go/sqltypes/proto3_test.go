@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 )
 
 func TestResult(t *testing.T) {

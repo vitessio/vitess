@@ -28,10 +28,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/liquidata-inc/vitess/go/vt/log"
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/dolthub/vitess/go/vt/log"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 )
 
 var (

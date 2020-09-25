@@ -29,14 +29,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/liquidata-inc/vitess/go/sqltypes"
-	vtenv "github.com/liquidata-inc/vitess/go/vt/env"
-	"github.com/liquidata-inc/vitess/go/vt/tlstest"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
-	"github.com/liquidata-inc/vitess/go/vt/vttls"
+	"github.com/dolthub/vitess/go/sqltypes"
+	vtenv "github.com/dolthub/vitess/go/vt/env"
+	"github.com/dolthub/vitess/go/vt/tlstest"
+	"github.com/dolthub/vitess/go/vt/vterrors"
+	"github.com/dolthub/vitess/go/vt/vttls"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
 )
 
 var selectRowsResult = &sqltypes.Result{

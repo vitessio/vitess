@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 )
 
 // mysqlFlavor implements the Flavor interface for Mysql.

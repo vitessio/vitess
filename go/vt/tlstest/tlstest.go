@@ -25,7 +25,7 @@ import (
 	"os/exec"
 	"path"
 
-	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/dolthub/vitess/go/vt/log"
 )
 
 const (

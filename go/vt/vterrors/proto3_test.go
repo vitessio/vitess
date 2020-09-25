@@ -21,7 +21,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
 )
 
 func TestFromVtRPCError(t *testing.T) {

@@ -23,10 +23,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/liquidata-inc/vitess/go/bytes2"
-	"github.com/liquidata-inc/vitess/go/hack"
+	"github.com/dolthub/vitess/go/bytes2"
+	"github.com/dolthub/vitess/go/hack"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 var (

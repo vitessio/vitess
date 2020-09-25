@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 const (

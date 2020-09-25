@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	binlogdatapb "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/dolthub/vitess/go/vt/proto/binlogdata"
 )
 
 // sample event data

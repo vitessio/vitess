@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
 )
 
 var errGeneric = "generic error"
