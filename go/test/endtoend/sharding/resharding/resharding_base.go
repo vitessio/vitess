@@ -248,7 +248,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	}
 
 	// Initialize Cluster
-	err = clusterInstance.LaunchCluster(keyspace, []cluster.Shard{*shard0, *shard1, *shard2, *shard3})
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard0, *shard1, *shard2, *shard3})
 	require.Nil(t, err)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), 4)
 
