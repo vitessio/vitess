@@ -519,6 +519,42 @@
 			"Tags": [
 				"worker_test"
 			]
+		},
+		"vreplication_multicell": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_cellalias": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 23,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_basic": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "Basic"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 24,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"orchestrator": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/orchestrator"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
+			"RetryMax": 0,
+			"Tags": []
 		}
 	}
 }

@@ -315,6 +315,39 @@ func TestSelectLastInsertId(t *testing.T) {
 	utils.MustMatch(t, result, wantResult, "Mismatch")
 }
 
+func TestSelectSystemVariables(t *testing.T) {
+	masterSession.LastInsertId = 52
+	executor, _, _, _ := createLegacyExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@sql_select_limit, @@transaction_mode, @@workload"
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@@autocommit", Type: sqltypes.Int32},
+			{Name: "@@client_found_rows", Type: sqltypes.Int32},
+			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int32},
+			{Name: "@@sql_select_limit", Type: sqltypes.Int64},
+			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
+			{Name: "@@workload", Type: sqltypes.VarBinary},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			// the following are the uninitialised session values
+			sqltypes.NULL,
+			sqltypes.NULL,
+			sqltypes.NULL,
+			sqltypes.NewInt64(0),
+			sqltypes.NewVarBinary("UNSPECIFIED"),
+			sqltypes.NewVarBinary(""),
+		}},
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, result, wantResult, "Mismatch")
+}
+
 func TestSelectUserDefindVariable(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
@@ -385,7 +418,7 @@ func TestRowCount(t *testing.T) {
 	require.NoError(t, err)
 	testRowCount(t, executor, -1)
 
-	_, err = executorExec(executor, "update user set name = 'abc' where id in (42, 24)", map[string]*querypb.BindVariable{})
+	_, err = executorExec(executor, "delete from user where id in (42, 24)", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	testRowCount(t, executor, 2)
 }

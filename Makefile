@@ -43,6 +43,7 @@ endif
 # Safe, since this code isn't performance critical.
 export CGO_CFLAGS := -O1
 
+# regenerate rice-box.go when any of the .cnf files change
 embed_config:
 	cd go/vt/mysqlctl
 	go run github.com/GeertJohan/go.rice/rice embed-go
@@ -67,7 +68,7 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctld,orchestrator,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
 # Usage: make install PREFIX=/path/to/install/root

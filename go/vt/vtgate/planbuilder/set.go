@@ -57,13 +57,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 
 	for _, expr := range stmt.Exprs {
 		switch expr.Scope {
-		case sqlparser.GlobalStr:
+		case sqlparser.GlobalScope:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported global scope in set: %s", sqlparser.String(expr))
 			// AST struct has been prepared before getting here, so no scope here means that
 			// we have a UDV. If the original query didn't explicitly specify the scope, it
 			// would have been explictly set to sqlparser.SessionStr before reaching this
 			// phase of planning
-		case "":
+		case sqlparser.ImplicitScope:
 			evalExpr, err := ec.convert(expr.Expr /*boolean*/, false /*identifierAsString*/, false)
 			if err != nil {
 				return nil, err
@@ -74,7 +74,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 			}
 
 			setOps = append(setOps, setOp)
-		case sqlparser.SessionStr:
+		case sqlparser.SessionScope:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct in set: %s", sqlparser.String(expr))
@@ -108,9 +108,13 @@ func buildNotSupported(setting) planFunc {
 
 func buildSetOpIgnore(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+		value, err := extractValue(expr, s.boolean)
+		if err != nil {
+			return nil, err
+		}
 		return &engine.SysVarIgnore{
 			Name: expr.Name.Lowered(),
-			Expr: extractValue(expr, s.boolean),
+			Expr: value,
 		}, nil
 	}
 }
@@ -126,12 +130,16 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema ContextVSchema, boole
 	if err != nil {
 		return nil, err
 	}
+	value, err := extractValue(expr, boolean)
+	if err != nil {
+		return nil, err
+	}
 
 	return &engine.SysVarCheckAndIgnore{
 		Name:              expr.Name.Lowered(),
 		Keyspace:          keyspace,
 		TargetDestination: dest,
-		Expr:              extractValue(expr, boolean),
+		Expr:              value,
 	}, nil
 }
 
@@ -155,7 +163,7 @@ func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
 	return valid
 }
 
-func buildSetOpVarSet(s setting) planFunc {
+func buildSetOpReservedConn(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
 			return planSysVarCheckIgnore(expr, vschema, s.boolean)
@@ -164,15 +172,21 @@ func buildSetOpVarSet(s setting) planFunc {
 		if err != nil {
 			return nil, err
 		}
+		value, err := extractValue(expr, s.boolean)
+		if err != nil {
+			return nil, err
+		}
 
-		return &engine.SysVarSet{
+		return &engine.SysVarReservedConn{
 			Name:              expr.Name.Lowered(),
 			Keyspace:          ks,
 			TargetDestination: vschema.Destination(),
-			Expr:              extractValue(expr, s.boolean),
+			Expr:              value,
 		}, nil
 	}
 }
+
+const defaultNotSupportedErrFmt = "DEFAULT not supported for @@%s"
 
 func buildSetOpVitessAware(s setting) planFunc {
 	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
@@ -182,7 +196,8 @@ func buildSetOpVitessAware(s setting) planFunc {
 		_, isDefault := astExpr.Expr.(*sqlparser.Default)
 		if isDefault {
 			if s.defaultValue == nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "don't know default value for %s", astExpr.Name)
+
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, defaultNotSupportedErrFmt, astExpr.Name)
 			}
 			runtimeExpr = s.defaultValue
 		} else {
@@ -212,15 +227,15 @@ func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destina
 	return keyspace, dest, nil
 }
 
-func extractValue(expr *sqlparser.SetExpr, boolean bool) string {
+func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	switch node := expr.Expr.(type) {
 	case *sqlparser.Literal:
 		if node.Type == sqlparser.StrVal && boolean {
 			switch strings.ToLower(string(node.Val)) {
 			case "on":
-				return "1"
+				return "1", nil
 			case "off":
-				return "0"
+				return "0", nil
 			}
 		}
 	case *sqlparser.ColName:
@@ -229,15 +244,17 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) string {
 		if node.Name.AtCount() == sqlparser.NoAt {
 			switch node.Name.Lowered() {
 			case "on":
-				return "1"
+				return "1", nil
 			case "off":
-				return "0"
+				return "0", nil
 			}
-			return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr))
+			return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
 		}
+	case *sqlparser.Default:
+		return "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, expr.Name)
 	}
 
-	return sqlparser.String(expr.Expr)
+	return sqlparser.String(expr.Expr), nil
 }
 
 // whitelist of functions knows to be safe to pass through to mysql for evaluation
