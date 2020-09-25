@@ -432,7 +432,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		_, out := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
 		name := string(out)
 		switch expr.Scope {
-		case sqlparser.VitessMetadataStr:
+		case sqlparser.VitessMetadataScope:
 			value, err = getValueFor(expr)
 			if err != nil {
 				return nil, err
@@ -565,7 +565,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 	switch strings.ToLower(show.Type) {
 	case sqlparser.KeywordString(sqlparser.COLLATION), sqlparser.KeywordString(sqlparser.VARIABLES):
-		if show.Scope == sqlparser.VitessMetadataStr {
+		if show.Scope == sqlparser.VitessMetadataScope {
 			return e.handleShowVitessMetadata(ctx, show.ShowTablesOpt)
 		}
 
@@ -1473,13 +1473,13 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 			rightString := string(literal.Val)
 
 			switch cmpExp.Operator {
-			case sqlparser.EqualStr:
+			case sqlparser.EqualOp:
 				for _, colName := range colNames {
 					if rightString == colName {
 						filteredColName = colName
 					}
 				}
-			case sqlparser.LikeStr:
+			case sqlparser.LikeOp:
 				filteredColName, err = checkLikeOpt(rightString, colNames)
 				if err != nil {
 					return nil, err

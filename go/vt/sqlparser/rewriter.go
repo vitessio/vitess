@@ -898,7 +898,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	// (the order of the cases is alphabetical)
 	switch n := node.(type) {
 	case nil:
-	case *AccessMode:
+	case AccessMode:
 
 	case *AliasedExpr:
 		a.apply(node, n.As, replaceAliasedExprAs)
@@ -1088,7 +1088,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *IsExpr:
 		a.apply(node, n.Expr, replaceIsExprExpr)
 
-	case *IsolationLevel:
+	case IsolationLevel:
 
 	case JoinCondition:
 		a.apply(node, n.On, replaceJoinConditionOn)

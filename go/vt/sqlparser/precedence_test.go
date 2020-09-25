@@ -33,9 +33,9 @@ func readable(node Expr) string {
 	case *XorExpr:
 		return fmt.Sprintf("(%s xor %s)", readable(node.Left), readable(node.Right))
 	case *BinaryExpr:
-		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator, readable(node.Right))
+		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator.ToString(), readable(node.Right))
 	case *IsExpr:
-		return fmt.Sprintf("(%s %s)", readable(node.Expr), node.Operator)
+		return fmt.Sprintf("(%s %s)", readable(node.Expr), node.Operator.ToString())
 	default:
 		return String(node)
 	}
@@ -142,6 +142,17 @@ func TestParens(t *testing.T) {
 		{in: "(a | b) between (5) and (7)", expected: "a | b between 5 and 7"},
 		{in: "(a and b) between (5) and (7)", expected: "(a and b) between 5 and 7"},
 		{in: "(true is true) is null", expected: "(true is true) is null"},
+		{in: "3 * (100 div 3)", expected: "3 * (100 div 3)"},
+		{in: "100 div 2 div 2", expected: "100 div 2 div 2"},
+		{in: "100 div (2 div 2)", expected: "100 div (2 div 2)"},
+		{in: "(100 div 2) div 2", expected: "100 div 2 div 2"},
+		{in: "((((((1000))))))", expected: "1000"},
+		{in: "100 - (50 + 10)", expected: "100 - (50 + 10)"},
+		{in: "100 - 50 + 10", expected: "100 - 50 + 10"},
+		{in: "true and (true and true)", expected: "true and (true and true)"},
+		{in: "10 - 2 - 1", expected: "10 - 2 - 1"},
+		{in: "(10 - 2) - 1", expected: "10 - 2 - 1"},
+		{in: "10 - (2 - 1)", expected: "10 - (2 - 1)"},
 	}
 
 	for _, tc := range tests {
