@@ -806,7 +806,7 @@ func injectEmptyGTIDTransaction(instanceKey *InstanceKey, gtidEntry *OracleGtidS
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.InstanceDBExecContextTimeoutSeconds)*time.Second)
 	defer cancel()
 	conn, err := db.Conn(ctx)
 	if err != nil {
