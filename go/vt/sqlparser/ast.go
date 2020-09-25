@@ -25,12 +25,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/liquidata-inc/vitess/go/sqltypes"
-	"github.com/liquidata-inc/vitess/go/vt/log"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/log"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
 )
 
 // parserPool is a pool for parser objects.

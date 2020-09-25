@@ -19,9 +19,9 @@ package mysql
 import (
 	"fmt"
 
-	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/sqltypes"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 // This file provides a few utility variables and methods, mostly for tests.

@@ -8,7 +8,7 @@ import (
 	math "math"
 
 	proto "github.com/golang/protobuf/proto"
-	vttime "github.com/liquidata-inc/vitess/go/vt/proto/vttime"
+	vttime "github.com/dolthub/vitess/go/vt/proto/vttime"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

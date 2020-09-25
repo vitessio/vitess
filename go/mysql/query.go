@@ -22,11 +22,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liquidata-inc/vitess/go/sqltypes"
-	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 // This file contains the methods related to queries.

@@ -22,9 +22,9 @@ import (
 
 	"strconv"
 
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 )
 
 // numeric represents a numeric value extracted from

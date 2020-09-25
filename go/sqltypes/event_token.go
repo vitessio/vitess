@@ -17,7 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 // EventTokenMinimum returns an event token that is guaranteed to

@@ -8,10 +8,10 @@ import (
 	math "math"
 
 	proto "github.com/golang/protobuf/proto"
-	binlogdata "github.com/liquidata-inc/vitess/go/vt/proto/binlogdata"
-	query "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	topodata "github.com/liquidata-inc/vitess/go/vt/proto/topodata"
-	vtrpc "github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
+	binlogdata "github.com/dolthub/vitess/go/vt/proto/binlogdata"
+	query "github.com/dolthub/vitess/go/vt/proto/query"
+	topodata "github.com/dolthub/vitess/go/vt/proto/topodata"
+	vtrpc "github.com/dolthub/vitess/go/vt/proto/vtrpc"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

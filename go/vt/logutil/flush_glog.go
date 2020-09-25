@@ -17,7 +17,7 @@ limitations under the License.
 package logutil
 
 import (
-	"github.com/liquidata-inc/vitess/go/vt/log"
+	"github.com/dolthub/vitess/go/vt/log"
 )
 
 func init() {

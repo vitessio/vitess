@@ -1,4 +1,4 @@
-module github.com/liquidata-inc/vitess
+module github.com/dolthub/vitess
 
 go 1.12
 

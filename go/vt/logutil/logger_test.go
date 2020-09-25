@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liquidata-inc/vitess/go/race"
-	logutilpb "github.com/liquidata-inc/vitess/go/vt/proto/logutil"
+	"github.com/dolthub/vitess/go/race"
+	logutilpb "github.com/dolthub/vitess/go/vt/proto/logutil"
 )
 
 func TestLogEvent(t *testing.T) {

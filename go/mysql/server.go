@@ -23,15 +23,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liquidata-inc/vitess/go/netutil"
-	"github.com/liquidata-inc/vitess/go/sqltypes"
-	"github.com/liquidata-inc/vitess/go/stats"
-	"github.com/liquidata-inc/vitess/go/sync2"
-	"github.com/liquidata-inc/vitess/go/tb"
-	"github.com/liquidata-inc/vitess/go/vt/log"
-	querypb "github.com/liquidata-inc/vitess/go/vt/proto/query"
-	"github.com/liquidata-inc/vitess/go/vt/proto/vtrpc"
-	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"github.com/dolthub/vitess/go/netutil"
+	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/stats"
+	"github.com/dolthub/vitess/go/sync2"
+	"github.com/dolthub/vitess/go/tb"
+	"github.com/dolthub/vitess/go/vt/log"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 )
 
 const (
