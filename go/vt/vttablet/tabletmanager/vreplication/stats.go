@@ -148,20 +148,7 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
-	stats.NewCounterFunc(
-		"VReplicationTimeToFindSourceTablet",
-		"time taken by tablet picker to find an appropriate tablet",
-		func() int64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := int64(0)
-			for _, ct := range st.controllers {
-				for _, t := range ct.blpStats.TabletPickerLatency.Histograms() {
-					result += t.Total()
-				}
-			}
-			return result
-		})
+
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationPhaseTimingsCounts",
 		"vreplication per phase count of timings per stream",

@@ -191,9 +191,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
-		startTime := time.Now()
 		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
-		ct.blpStats.TabletPickerLatency.Record(ct.workflow, startTime)
 		if err != nil {
 			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
 			return err
