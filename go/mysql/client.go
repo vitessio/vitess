@@ -517,22 +517,12 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 // HandshakeResponse41.
 func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *ConnParams) error {
 	// Build our flags, with CapabilityClientSSL.
-	CapabilityFlags = CapabilityClientLongPassword |
-		CapabilityClientLongFlag |
-		CapabilityClientProtocol41 |
-		CapabilityClientTransactions |
-		CapabilityClientSecureConnection |
-		CapabilityClientMultiStatements |
-		CapabilityClientMultiResults |
-		CapabilityClientPluginAuth |
-		CapabilityClientPluginAuthLenencClientData |
-		CapabilityClientSSL |
+	capabilityFlags := CapabilityFlagsSsl |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
 		// Pass-through ClientFoundRows flag.
-		CapabilityClientFoundRows&uint32(params.Flags) |
-		CapabilityClientSessionTrack
+		CapabilityClientFoundRows&uint32(params.Flags)
 
 	length :=
 		4 + // Client capability flags.
@@ -542,13 +532,13 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		CapabilityFlags |= CapabilityClientConnectWithDB
+		capabilityFlags |= CapabilityClientConnectWithDB
 	}
 
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, CapabilityFlags)
+	pos = writeUint32(data, pos, capabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)
@@ -563,28 +553,32 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	return nil
 }
 
-// CapabilityFlags is client capability flag sent to mysql on connect
-var CapabilityFlags uint32
+// CapabilityFlags are client capability flag sent to mysql on connect
+const CapabilityFlags uint32 = CapabilityClientLongPassword |
+	CapabilityClientLongFlag |
+	CapabilityClientProtocol41 |
+	CapabilityClientTransactions |
+	CapabilityClientSecureConnection |
+	CapabilityClientMultiStatements |
+	CapabilityClientMultiResults |
+	CapabilityClientPluginAuth |
+	CapabilityClientPluginAuthLenencClientData |
+	CapabilityClientSessionTrack
+
+// CapabilityFlagsSsl signals that we can handle SSL as well
+const CapabilityFlagsSsl = CapabilityFlags |
+	CapabilityClientSSL
 
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a SQLError.
 func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword []byte, characterSet uint8, params *ConnParams) error {
 	// Build our flags.
-	CapabilityFlags = CapabilityClientLongPassword |
-		CapabilityClientLongFlag |
-		CapabilityClientProtocol41 |
-		CapabilityClientTransactions |
-		CapabilityClientSecureConnection |
-		CapabilityClientMultiStatements |
-		CapabilityClientMultiResults |
-		CapabilityClientPluginAuth |
-		CapabilityClientPluginAuthLenencClientData |
+	capabilityFlags := CapabilityFlags |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
 		// Pass-through ClientFoundRows flag.
-		CapabilityClientFoundRows&uint32(params.Flags) |
-		CapabilityClientSessionTrack
+		CapabilityClientFoundRows&uint32(params.Flags)
 
 	// FIXME(alainjobart) add multi statement.
 
@@ -601,7 +595,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		CapabilityFlags |= CapabilityClientConnectWithDB
+		capabilityFlags |= CapabilityClientConnectWithDB
 		length += lenNullString(params.DbName)
 	}
 
@@ -614,7 +608,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, CapabilityFlags)
+	pos = writeUint32(data, pos, capabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)

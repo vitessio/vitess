@@ -708,6 +708,9 @@ func (c *Conn) writeOKPacketWithGTIDs(affectedRows, lastInsertID uint64, flags u
 	pos = writeByte(data, pos, OKPacket)
 	pos = writeLenEncInt(data, pos, affectedRows)
 	pos = writeLenEncInt(data, pos, lastInsertID)
+	if gtids != "" {
+		flags |= ServerSessionStateChanged
+	}
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
 
@@ -715,8 +718,9 @@ func (c *Conn) writeOKPacketWithGTIDs(affectedRows, lastInsertID uint64, flags u
 	pos = writeLenEncString(data, pos, "") // human readable info
 	pos = writeLenEncInt(data, pos, TODO)  // total length of session state change info
 	pos = writeByte(data, pos, SessionTrackGtids)
-	pos = writeByte(data, pos, 88) // total length of session state change info
-	pos = writeByte(data, pos, 1)  // gtid encoding spec - only text available today
+	var ToDo byte = 88
+	pos = writeByte(data, pos, ToDo) // total length of session state change info
+	pos = writeByte(data, pos, ToDo) // gtid encoding spec - only text available today
 	_ = writeLenEncString(data, pos, gtids)
 
 	return c.writeEphemeralPacket()

@@ -229,6 +229,22 @@ func TestBasicPackets(t *testing.T) {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
 	}
 
+	// Write OK packet with affected GTIDs, read it, compare.
+	gtids := "foo-bar"
+	err = sConn.writeOKPacketWithGTIDs(23, 45, 67, 89, gtids)
+	require.NoError(err)
+
+	data, err = cConn.ReadPacket()
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], OKPacket, "OKPacket")
+
+	affectedRows, lastInsertID, statusFlags, warnings, gtids, err = parseOKPacket(data)
+	require.NoError(err)
+	if affectedRows != 23 || lastInsertID != 45 || statusFlags != 67|ServerSessionStateChanged || warnings != 89 || gtids != "foo-bar" {
+		t.Errorf("parseOKPacket with gtids returned unexpected data: affected: %v last_insert: %v status flags: %v wrnings: %v gtids: %s", affectedRows, lastInsertID, statusFlags, warnings, gtids)
+	}
+
 	// Write OK packet with EOF header, read it, compare.
 	err = sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78)
 	require.NoError(err)
