@@ -804,8 +804,8 @@ func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit,
 	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Type: typ, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
 }
 
-// GetDDLActionString returns the string associated with the DDLAction Enum
-func (action DDLAction) GetDDLActionString() string {
+// ToString returns the string associated with the DDLAction Enum
+func (action DDLAction) ToString() string {
 	switch action {
 	case CreateDDLAction:
 		return CreateStr
@@ -840,8 +840,8 @@ func (action DDLAction) GetDDLActionString() string {
 	}
 }
 
-// GetScopeString returns the string associated with the Scope enum
-func (scope Scope) GetScopeString() string {
+// ToString returns the string associated with the Scope enum
+func (scope Scope) ToString() string {
 	switch scope {
 	case SessionScope:
 		return SessionStr
@@ -860,16 +860,16 @@ func (scope Scope) GetScopeString() string {
 	}
 }
 
-// GetIgnoreString returns the IgnoreStr if ignore is true.
-func (ignore Ignore) GetIgnoreString() string {
+// ToString returns the IgnoreStr if ignore is true.
+func (ignore Ignore) ToString() string {
 	if ignore {
 		return IgnoreStr
 	}
 	return ""
 }
 
-// GetLockString returns the string associated with the type of lock
-func (lock Lock) GetLockString() string {
+// ToString returns the string associated with the type of lock
+func (lock Lock) ToString() string {
 	switch lock {
 	case NoLock:
 		return NoLockStr
@@ -882,8 +882,8 @@ func (lock Lock) GetLockString() string {
 	}
 }
 
-// GetWhereTypeString returns the string associated with WhereType
-func (whereType WhereType) GetWhereTypeString() string {
+// ToString returns the string associated with WhereType
+func (whereType WhereType) ToString() string {
 	switch whereType {
 	case WhereClause:
 		return WhereStr
@@ -894,8 +894,8 @@ func (whereType WhereType) GetWhereTypeString() string {
 	}
 }
 
-// GetJoinTypeString returns the string associated with JoinType
-func (joinType JoinType) GetJoinTypeString() string {
+// ToString returns the string associated with JoinType
+func (joinType JoinType) ToString() string {
 	switch joinType {
 	case NormalJoinType:
 		return JoinStr
@@ -916,8 +916,8 @@ func (joinType JoinType) GetJoinTypeString() string {
 	}
 }
 
-// GetOperatorString returns the operator as a string
-func (op ComparisonExprOperator) GetOperatorString() string {
+// ToString returns the operator as a string
+func (op ComparisonExprOperator) ToString() string {
 	switch op {
 	case EqualOp:
 		return EqualStr
@@ -950,8 +950,8 @@ func (op ComparisonExprOperator) GetOperatorString() string {
 	}
 }
 
-// GetOperatorString returns the operator as a string
-func (op RangeCondOperator) GetOperatorString() string {
+// ToString returns the operator as a string
+func (op RangeCondOperator) ToString() string {
 	switch op {
 	case BetweenOp:
 		return BetweenStr
@@ -962,8 +962,8 @@ func (op RangeCondOperator) GetOperatorString() string {
 	}
 }
 
-// GetOperatorString returns the operator as a string
-func (op IsExprOperator) GetOperatorString() string {
+// ToString returns the operator as a string
+func (op IsExprOperator) ToString() string {
 	switch op {
 	case IsNullOp:
 		return IsNullStr
@@ -982,8 +982,8 @@ func (op IsExprOperator) GetOperatorString() string {
 	}
 }
 
-// GetOperatorString returns the operator as a string
-func (op BinaryExprOperator) GetOperatorString() string {
+// ToString returns the operator as a string
+func (op BinaryExprOperator) ToString() string {
 	switch op {
 	case BitAndOp:
 		return BitAndStr
@@ -1016,8 +1016,8 @@ func (op BinaryExprOperator) GetOperatorString() string {
 	}
 }
 
-// GetOperatorString returns the operator as a string
-func (op UnaryExprOperator) GetOperatorString() string {
+// ToString returns the operator as a string
+func (op UnaryExprOperator) ToString() string {
 	switch op {
 	case UPlusOp:
 		return UPlusStr
@@ -1042,8 +1042,8 @@ func (op UnaryExprOperator) GetOperatorString() string {
 	}
 }
 
-// GetOptionString returns the option as a string
-func (option MatchExprOption) GetOptionString() string {
+// ToString returns the option as a string
+func (option MatchExprOption) ToString() string {
 	switch option {
 	case NoOption:
 		return NoOptionStr
@@ -1060,8 +1060,8 @@ func (option MatchExprOption) GetOptionString() string {
 	}
 }
 
-// GetOrderDirectionString returns the direction as a string
-func (dir OrderDirection) GetOrderDirectionString() string {
+// ToString returns the direction as a string
+func (dir OrderDirection) ToString() string {
 	switch dir {
 	case AscOrder:
 		return AscScr
@@ -1072,8 +1072,8 @@ func (dir OrderDirection) GetOrderDirectionString() string {
 	}
 }
 
-// GetOperatorString returns the operator as a string
-func (op ConvertTypeOperator) GetOperatorString() string {
+// ToString returns the operator as a string
+func (op ConvertTypeOperator) ToString() string {
 	switch op {
 	case NoOperator:
 		return NoOperatorStr
@@ -1084,8 +1084,8 @@ func (op ConvertTypeOperator) GetOperatorString() string {
 	}
 }
 
-// GetIndexHintsType returns the type as a string
-func (ty IndexHintsType) GetIndexHintsType() string {
+// ToString returns the type as a string
+func (ty IndexHintsType) ToString() string {
 	switch ty {
 	case UseOp:
 		return UseStr
@@ -1098,8 +1098,8 @@ func (ty IndexHintsType) GetIndexHintsType() string {
 	}
 }
 
-// GetExplainType returns the type as a string
-func (ty ExplainType) GetExplainType() string {
+// ToString returns the type as a string
+func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:
 		return EmptyStr

@@ -267,7 +267,7 @@ func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
 	case sqlparser.RightJoinType:
 		convertToLeftJoin(ajoin)
 	default:
-		return fmt.Errorf("unsupported: %s", ajoin.Join.GetJoinTypeString())
+		return fmt.Errorf("unsupported: %s", ajoin.Join.ToString())
 	}
 	if err := pb.processTableExpr(ajoin.LeftExpr); err != nil {
 		return err
