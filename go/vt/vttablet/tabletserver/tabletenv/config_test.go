@@ -201,7 +201,7 @@ func TestFlags(t *testing.T) {
 			TransactionLimitByPrincipal: true,
 		},
 		EnforceStrictTransTables: true,
-		DB: &dbconfigs.DBConfigs{},
+		DB:                       &dbconfigs.DBConfigs{},
 	}
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
