@@ -296,37 +296,57 @@ func readLenEncStringAsBytesCopy(data []byte, pos int) ([]byte, int, bool) {
 	return result, pos + s, true
 }
 
-type decoder struct {
+type coder struct {
 	data []byte
 	pos  int
 }
 
-func (d *decoder) readLenEncInt() (uint64, bool) {
+func (d *coder) readLenEncInt() (uint64, bool) {
 	res, newPos, ok := readLenEncInt(d.data, d.pos)
 	d.pos = newPos
 	return res, ok
 }
 
-func (d *decoder) readUint16() (uint16, bool) {
+func (d *coder) readUint16() (uint16, bool) {
 	res, newPos, ok := readUint16(d.data, d.pos)
 	d.pos = newPos
 	return res, ok
 }
 
-func (d *decoder) readByte() (byte, bool) {
+func (d *coder) readByte() (byte, bool) {
 	res, newPos, ok := readByte(d.data, d.pos)
 	d.pos = newPos
 	return res, ok
 }
 
-func (d *decoder) skipLenEncString() bool {
+func (d *coder) skipLenEncString() bool {
 	newPos, ok := skipLenEncString(d.data, d.pos)
 	d.pos = newPos
 	return ok
 }
 
-func (d *decoder) readLenEncString() (string, bool) {
+func (d *coder) readLenEncString() (string, bool) {
 	res, newPos, ok := readLenEncString(d.data, d.pos)
 	d.pos = newPos
 	return res, ok
+}
+
+func (d *coder) writeByte(value byte) {
+	newPos := writeByte(d.data, d.pos, value)
+	d.pos = newPos
+}
+
+func (d *coder) writeLenEncInt(i uint64) {
+	newPos := writeLenEncInt(d.data, d.pos, i)
+	d.pos = newPos
+}
+
+func (d *coder) writeUint16(value uint16) {
+	newPos := writeUint16(d.data, d.pos, value)
+	d.pos = newPos
+}
+
+func (d *coder) writeLenEncString(value string) {
+	newPos := writeLenEncString(d.data, d.pos, value)
+	d.pos = newPos
 }
