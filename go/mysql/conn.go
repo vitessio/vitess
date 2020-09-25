@@ -704,24 +704,29 @@ func (c *Conn) writeOKPacketWithGTIDs(affectedRows, lastInsertID uint64, flags u
 		3 + //- size and encoding spec
 		lenEncStringSize(gtids) // the actual gtids
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
-	pos = writeByte(data, pos, OKPacket)
-	pos = writeLenEncInt(data, pos, affectedRows)
-	pos = writeLenEncInt(data, pos, lastInsertID)
+	bytes, pos := c.startEphemeralPacketWithHeader(length)
+	data := &coder{
+		data: bytes,
+		pos:  pos,
+	}
+
+	data.writeByte(OKPacket)
+	data.writeLenEncInt(affectedRows)
+	data.writeLenEncInt(lastInsertID)
 	if gtids != "" {
 		flags |= ServerSessionStateChanged
 	}
-	pos = writeUint16(data, pos, flags)
-	pos = writeUint16(data, pos, warnings)
+	data.writeUint16(flags)
+	data.writeUint16(warnings)
 
 	// add session state change tracking
-	pos = writeLenEncString(data, pos, "") // human readable info
-	pos = writeLenEncInt(data, pos, TODO)  // total length of session state change info
-	pos = writeByte(data, pos, SessionTrackGtids)
+	data.writeLenEncString("") // human readable info
+	data.writeLenEncInt(TODO)  // total length of session state change info
+	data.writeByte(SessionTrackGtids)
 	var ToDo byte = 88
-	pos = writeByte(data, pos, ToDo) // total length of session state change info
-	pos = writeByte(data, pos, ToDo) // gtid encoding spec - only text available today
-	_ = writeLenEncString(data, pos, gtids)
+	data.writeByte(ToDo) // total length of session state change info
+	data.writeByte(ToDo) // gtid encoding spec - only text available today
+	data.writeLenEncString(gtids)
 
 	return c.writeEphemeralPacket()
 }
@@ -1276,7 +1281,7 @@ func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
 }
 
 func parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string, error) {
-	data := &decoder{
+	data := &coder{
 		data: in,
 		pos:  1, // We already read the type.
 	}
