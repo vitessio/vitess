@@ -152,6 +152,7 @@ func (vs *vstreamer) Stream() error {
 	pos, err := mysql.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)
+		vs.vse.vstreamersEndedWithErrors.Add(1)
 		return err
 	}
 	vs.pos = pos
@@ -821,7 +822,6 @@ func wrapError(err error, stopPos mysql.Position, vse *Engine) error {
 		log.Error(err)
 		return err
 	}
-	vse.vstreamersEndedSuccessfully.Add(1)
 	log.Infof("stream (at source tablet) ended @ %v", stopPos)
 	return nil
 }
