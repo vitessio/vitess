@@ -38,10 +38,14 @@ const (
 	DeadMasterAndSomeReplicas                               AnalysisCode = "DeadMasterAndSomeReplicas"
 	MasterHasMaster                                         AnalysisCode = "MasterHasMaster"
 	MasterIsReadOnly                                        AnalysisCode = "MasterIsReadOnly"
+	MasterSemiSyncMustBeSet                                 AnalysisCode = "MasterSemiSyncMustBeSet"
+	MasterSemiSyncMustNotBeSet                              AnalysisCode = "MasterSemiSyncMustNotBeSet"
 	ReplicaIsWritable                                       AnalysisCode = "ReplicaIsWritable"
 	NotConnectedToMaster                                    AnalysisCode = "NotConnectedToMaster"
 	ConnectedToWrongMaster                                  AnalysisCode = "ConnectedToWrongMaster"
 	ReplicationStopped                                      AnalysisCode = "ReplicationStopped"
+	ReplicaSemiSyncMustBeSet                                AnalysisCode = "ReplicaSemiSyncMustBeSet"
+	ReplicaSemiSyncMustNotBeSet                             AnalysisCode = "ReplicaSemiSyncMustNotBeSet"
 	UnreachableMasterWithLaggingReplicas                    AnalysisCode = "UnreachableMasterWithLaggingReplicas"
 	UnreachableMaster                                       AnalysisCode = "UnreachableMaster"
 	MasterSingleReplicaNotReplicating                       AnalysisCode = "MasterSingleReplicaNotReplicating"
@@ -164,6 +168,7 @@ type ReplicationAnalysis struct {
 	SemiSyncMasterStatus                      bool
 	SemiSyncMasterWaitForReplicaCount         uint
 	SemiSyncMasterClients                     uint
+	SemiSyncReplicaEnabled                    bool
 	CountSemiSyncReplicasEnabled              uint
 	CountLoggingReplicas                      uint
 	CountStatementBasedLoggingReplicas        uint

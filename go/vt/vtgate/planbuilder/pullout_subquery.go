@@ -72,7 +72,7 @@ func (ps *pulloutSubquery) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (ps *pulloutSubquery) PushLock(lock string) error {
+func (ps *pulloutSubquery) PushLock(lock sqlparser.Lock) error {
 	err := ps.subquery.PushLock(lock)
 	if err != nil {
 		return err

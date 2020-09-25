@@ -147,20 +147,25 @@ func startSpanTestable(ctx context.Context, query, label string,
 	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context, error) {
 	_, comments := sqlparser.SplitMarginComments(query)
 	match := r.FindStringSubmatch(comments.Leading)
-	var span trace.Span
-	if len(match) == 0 {
-		span, ctx = newSpan(ctx, label)
-	} else {
-		var err error
-		span, ctx, err = newSpanFromString(ctx, match[1], label)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
+	span, ctx := getSpan(ctx, match, newSpan, label, newSpanFromString)
 
 	trace.AnnotateSQL(span, query)
 
 	return span, ctx, nil
+}
+
+func getSpan(ctx context.Context, match []string, newSpan func(context.Context, string) (trace.Span, context.Context), label string, newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context) {
+	var span trace.Span
+	if len(match) != 0 {
+		var err error
+		span, ctx, err = newSpanFromString(ctx, match[1], label)
+		if err == nil {
+			return span, ctx
+		}
+		log.Warningf("Unable to parse VT_SPAN_CONTEXT: %s", err.Error())
+	}
+	span, ctx = newSpan(ctx, label)
+	return span, ctx
 }
 
 func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {

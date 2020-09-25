@@ -111,7 +111,7 @@ type builder interface {
 	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
 	// PushLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
-	PushLock(lock string) error
+	PushLock(lock sqlparser.Lock) error
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
@@ -281,7 +281,7 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	instruction, err := createInstructionFor(query, stmt, vschema)
 	if err != nil {
 		return nil, err
@@ -322,7 +322,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:
-		if stmt.Type == sqlparser.VitessStr {
+		if stmt.Type == sqlparser.VitessType {
 			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema)
 			if err != nil {
 				return nil, err

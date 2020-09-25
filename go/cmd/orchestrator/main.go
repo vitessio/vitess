@@ -18,8 +18,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"os"
 
 	"vitess.io/vitess/go/vt/orchestrator/app"
 	"vitess.io/vitess/go/vt/orchestrator/config"
@@ -32,19 +30,10 @@ var AppVersion, GitCommit string
 // main is the application's entry point. It will either spawn a CLI or HTTP itnerfaces.
 func main() {
 	// TODO(sougou): change this to use vitess servenv framework
+	// TODO(sougou): remove cli code
 	configFile := flag.String("config", "", "config file name")
-	command := flag.String("c", "", "command, required. See full list of commands via 'orchestrator -c help'")
-	strict := flag.Bool("strict", false, "strict mode (more checks, slower)")
-	instance := flag.String("i", "", "instance, host_fqdn[:port] (e.g. db.company.com:3306, db.company.com)")
 	sibling := flag.String("s", "", "sibling instance, host_fqdn[:port]")
 	destination := flag.String("d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
-	owner := flag.String("owner", "", "operation owner")
-	reason := flag.String("reason", "", "operation reason")
-	duration := flag.String("duration", "", "maintenance duration (format: 59s, 59m, 23h, 6d, 4w)")
-	pattern := flag.String("pattern", "", "regular expression pattern")
-	clusterAlias := flag.String("alias", "", "cluster alias")
-	pool := flag.String("pool", "", "Pool logical name (applies for pool-related commands)")
-	hostnameFlag := flag.String("hostname", "", "Hostname/fqdn/CNAME/VIP (applies for hostname/resolve related commands)")
 	discovery := flag.Bool("discovery", true, "auto discovery mode")
 	quiet := flag.Bool("quiet", false, "quiet")
 	verbose := flag.Bool("verbose", false, "verbose")
@@ -126,41 +115,17 @@ func main() {
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	if len(flag.Args()) == 0 && *command == "" {
-		// No command, no argument: just prompt
-		fmt.Println(app.AppPrompt)
-		return
-	}
-
 	helpTopic := ""
 	if flag.Arg(0) == "help" {
 		if flag.Arg(1) != "" {
 			helpTopic = flag.Arg(1)
-		}
-		if helpTopic == "" {
-			helpTopic = *command
-		}
-		if helpTopic == "" {
-			// hacky way to make the CLI kick in as if the user typed `orchestrator -c help cli`
-			*command = "help"
-			flag.Args()[0] = "cli"
 		}
 	}
 
 	switch {
 	case helpTopic != "":
 		app.HelpCommand(helpTopic)
-	case len(flag.Args()) == 0 || flag.Arg(0) == "cli":
-		app.CliWrapper(*command, *strict, *instance, *destination, *owner, *reason, *duration, *pattern, *clusterAlias, *pool, *hostnameFlag)
-	case flag.Arg(0) == "http":
-		app.Http(*discovery)
 	default:
-		fmt.Fprintln(os.Stderr, `Usage:
-  orchestrator --options... [cli|http]
-See complete list of commands:
-  orchestrator -c help
-Full blown documentation:
-  orchestrator`)
-		os.Exit(1)
+		app.Http(*discovery)
 	}
 }
