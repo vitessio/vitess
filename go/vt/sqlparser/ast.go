@@ -966,7 +966,7 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		node.Comments, options, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
-		node.Limit, node.Lock.GetLockString())
+		node.Limit, node.Lock.ToString())
 }
 
 // Format formats the node.
@@ -980,7 +980,7 @@ func (node *Union) Format(buf *TrackedBuffer) {
 	for _, us := range node.UnionSelects {
 		buf.astPrintf(node, "%v", us)
 	}
-	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock.GetLockString())
+	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock.ToString())
 }
 
 // Format formats the node.
@@ -1015,17 +1015,17 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 	case InsertAct:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			InsertStr,
-			node.Comments, node.Ignore.GetIgnoreString(),
+			node.Comments, node.Ignore.ToString(),
 			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	case ReplaceAct:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			ReplaceStr,
-			node.Comments, node.Ignore.GetIgnoreString(),
+			node.Comments, node.Ignore.ToString(),
 			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	default:
 		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
 			"Unkown Insert Action",
-			node.Comments, node.Ignore.GetIgnoreString(),
+			node.Comments, node.Ignore.ToString(),
 			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
 	}
 
@@ -1034,7 +1034,7 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
-		node.Comments, node.Ignore.GetIgnoreString(), node.TableExprs,
+		node.Comments, node.Ignore.ToString(), node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
@@ -1057,7 +1057,7 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 	if node.Scope == ImplicitScope {
 		buf.astPrintf(node, "set %vtransaction ", node.Comments)
 	} else {
-		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.GetScopeString())
+		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.ToString())
 	}
 
 	for i, char := range node.Characteristics {
@@ -1146,7 +1146,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
-		buf.astPrintf(node, "%s table %v", node.Action.GetDDLActionString(), node.Table)
+		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}
 }
 
@@ -1395,7 +1395,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.Scope == ImplicitScope {
 		buf.astPrintf(node, "show %s", nodeType)
 	} else {
-		buf.astPrintf(node, "show %s %s", node.Scope.GetScopeString(), nodeType)
+		buf.astPrintf(node, "show %s %s", node.Scope.ToString(), nodeType)
 	}
 	if node.HasOnTable() {
 		buf.astPrintf(node, " on %v", node.OnTable)
@@ -1470,7 +1470,7 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 	case AnalyzeType:
 		format = AnalyzeStr + " "
 	default:
-		format = "format = " + node.Type.GetExplainType() + " "
+		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
 }
@@ -1606,12 +1606,12 @@ func (node JoinCondition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join.GetJoinTypeString(), node.RightExpr, node.Condition)
+	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join.ToString(), node.RightExpr, node.Condition)
 }
 
 // Format formats the node.
 func (node *IndexHints) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %sindex ", node.Type.GetIndexHintsType())
+	buf.astPrintf(node, " %sindex ", node.Type.ToString())
 	if len(node.Indexes) == 0 {
 		buf.astPrintf(node, "()")
 	} else {
@@ -1629,7 +1629,7 @@ func (node *Where) Format(buf *TrackedBuffer) {
 	if node == nil || node.Expr == nil {
 		return
 	}
-	buf.astPrintf(node, " %s %v", node.Type.GetWhereTypeString(), node.Expr)
+	buf.astPrintf(node, " %s %v", node.Type.ToString(), node.Expr)
 }
 
 // Format formats the node.
@@ -1663,7 +1663,7 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.GetOperatorString(), node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.ToString(), node.Right)
 	if node.Escape != nil {
 		buf.astPrintf(node, " escape %v", node.Escape)
 	}
@@ -1671,12 +1671,12 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator.GetOperatorString(), node.From, node.To)
+	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator.ToString(), node.From, node.To)
 }
 
 // Format formats the node.
 func (node *IsExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s", node.Expr, node.Operator.GetOperatorString())
+	buf.astPrintf(node, "%v %s", node.Expr, node.Operator.ToString())
 }
 
 // Format formats the node.
@@ -1744,17 +1744,17 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.GetOperatorString(), node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.ToString(), node.Right)
 }
 
 // Format formats the node.
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 	if _, unary := node.Expr.(*UnaryExpr); unary {
 		// They have same precedence so parenthesis is not required.
-		buf.astPrintf(node, "%s %v", node.Operator.GetOperatorString(), node.Expr)
+		buf.astPrintf(node, "%s %v", node.Operator.ToString(), node.Expr)
 		return
 	}
-	buf.astPrintf(node, "%s%v", node.Operator.GetOperatorString(), node.Expr)
+	buf.astPrintf(node, "%s%v", node.Operator.ToString(), node.Expr)
 }
 
 // Format formats the node.
@@ -1849,13 +1849,13 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ")")
 	}
 	if node.Charset != "" {
-		buf.astPrintf(node, "%s %s", node.Operator.GetOperatorString(), node.Charset)
+		buf.astPrintf(node, "%s %s", node.Operator.ToString(), node.Charset)
 	}
 }
 
 // Format formats the node
 func (node *MatchExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option.GetOptionString())
+	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option.ToString())
 }
 
 // Format formats the node.
@@ -1919,7 +1919,7 @@ func (node *Order) Format(buf *TrackedBuffer) {
 		}
 	}
 
-	buf.astPrintf(node, "%v %s", node.Expr, node.Direction.GetOrderDirectionString())
+	buf.astPrintf(node, "%v %s", node.Expr, node.Direction.ToString())
 }
 
 // Format formats the node.
@@ -1969,7 +1969,7 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
 	if node.Scope != ImplicitScope {
-		buf.WriteString(node.Scope.GetScopeString())
+		buf.WriteString(node.Scope.ToString())
 		buf.WriteString(" ")
 	}
 	// We don't have to backtick set variable names.

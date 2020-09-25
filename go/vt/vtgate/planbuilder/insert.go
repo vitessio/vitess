@@ -208,7 +208,7 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	eins.Mid = make([]string, len(valueTuples))
 	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
-		node.Comments, node.Ignore.GetIgnoreString(),
+		node.Comments, node.Ignore.ToString(),
 		node.Table, node.Columns)
 	eins.Prefix = prefixBuf.String()
 	for rowNum, val := range valueTuples {
