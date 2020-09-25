@@ -506,7 +506,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		if selStmt.Where != nil {
 			switch v := selStmt.Where.Expr.(type) {
 			case *sqlparser.ComparisonExpr:
-				if v.Operator == sqlparser.InStr {
+				if v.Operator == sqlparser.InOp {
 					switch c := v.Left.(type) {
 					case *sqlparser.ColName:
 						switch values := v.Right.(type) {

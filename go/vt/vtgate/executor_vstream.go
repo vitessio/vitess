@@ -67,7 +67,7 @@ func getVStreamStartPos(stmt *sqlparser.VStream) (string, error) {
 	if stmt.Where != nil {
 		switch v := stmt.Where.Expr.(type) {
 		case *sqlparser.ComparisonExpr:
-			if v.Operator == sqlparser.GreaterThanStr {
+			if v.Operator == sqlparser.GreaterThanOp {
 				switch c := v.Left.(type) {
 				case *sqlparser.ColName:
 					switch val := v.Right.(type) {

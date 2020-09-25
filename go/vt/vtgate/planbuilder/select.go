@@ -323,7 +323,7 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 		if node.Name.EqualString("table_schema") {
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
-				if parent.Operator == sqlparser.EqualStr && shouldRewrite(parent.Right) {
+				if parent.Operator == sqlparser.EqualOp && shouldRewrite(parent.Right) {
 
 					evalExpr, err := sqlparser.Convert(parent.Right)
 					if err != nil {
