@@ -51,7 +51,7 @@ func NewBinlogWatcher(env tabletenv.Env, vs VStreamer, config *tabletenv.TabletC
 	return &BinlogWatcher{
 		env:              env,
 		vs:               vs,
-		watchReplication: config.WatchReplication,
+		watchReplication: config.WatchReplication || config.TrackSchemaVersions,
 	}
 }
 
@@ -94,7 +94,7 @@ func (blw *BinlogWatcher) process(ctx context.Context) {
 		err := blw.vs.Stream(ctx, "current", nil, filter, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		})
-		log.Infof("ReplicatinWatcher VStream ended: %v, retrying in 5 seconds", err)
+		log.Infof("ReplicationWatcher VStream ended: %v, retrying in 5 seconds", err)
 		select {
 		case <-ctx.Done():
 			return
