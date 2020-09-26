@@ -94,6 +94,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		MaxReplicationLag: 1 * time.Nanosecond,
 		CatchupRetryTime:  1 * time.Second,
 	}
+
 	send2 := func(evs []*binlogdatapb.VEvent) error {
 		vse.vstreamerEventsStreamed.Add(int64(len(evs)))
 		return send(evs)
