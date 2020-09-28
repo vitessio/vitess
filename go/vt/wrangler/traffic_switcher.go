@@ -137,6 +137,17 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return nil, err
 	}
 
+	// If journals exist notify user and fail
+	journalsExist, _, err := ts.checkJournals(ctx)
+	if err != nil {
+		wr.Logger().Errorf("checkJournals failed: %v", err)
+		return nil, err
+	}
+	if journalsExist {
+		wr.Logger().Errorf("Found a previous journal entry for %d", ts.id)
+		return nil, fmt.Errorf("found an entry from a previous run for migration id %d in _vt.resharding_journal, please review and delete it before proceeding", ts.id)
+	}
+
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -530,6 +541,7 @@ func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
 			expanded = append(expanded, fmt.Sprintf("%s:%d", shard, uid))
 		}
 	}
+
 	sort.Strings(expanded)
 	hasher := fnv.New64()
 	hasher.Write([]byte(targetKeyspace))
@@ -676,34 +688,50 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	return ts.wr.ts.MigrateServedType(ctx, ts.sourceKeyspace, toShards, fromShards, servedType, cells)
 }
 
+func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationId int64) (*binlogdatapb.Journal, error) {
+	var exists bool
+	journal := &binlogdatapb.Journal{}
+	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationId)
+	wr.Logger().Infof("********* running %s on %s", query, tablet.String())
+	p3qr, err := wr.tmc.VReplicationExec(ctx, tablet, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(p3qr.Rows) != 0 {
+		qr := sqltypes.Proto3ToResult(p3qr)
+
+		if !exists {
+			if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
+				return nil, err
+			}
+			wr.Logger().Infof("********* journal is %s", journal.String())
+			exists = true
+		}
+	}
+	return journal, nil
+
+}
+
 // checkJournals returns true if at least one journal has been created.
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var mu sync.Mutex
-	journal := &binlogdatapb.Journal{}
 	var exists bool
 	err = ts.forAllSources(func(source *tsSource) error {
-		statement := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", ts.id)
-		p3qr, err := ts.wr.tmc.VReplicationExec(ctx, source.master.Tablet, statement)
+		journal, err := ts.wr.checkIfJournalExistsOnTablet(ctx, source.master.Tablet, ts.id)
 		if err != nil {
 			return err
 		}
-		if len(p3qr.Rows) != 0 {
-			qr := sqltypes.Proto3ToResult(p3qr)
+		if journal.Id != 0 {
 			mu.Lock()
 			defer mu.Unlock()
-
-			if !exists {
-				if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
-					return err
-				}
-				exists = true
-			}
+			exists = true
 			source.journaled = true
+			sourceWorkflows = journal.SourceWorkflows
 		}
 		return nil
 	})
-	return exists, journal.SourceWorkflows, err
+	return exists, sourceWorkflows, err
 }
 
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {

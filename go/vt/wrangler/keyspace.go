@@ -113,17 +113,28 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
 				return
 			}
+			validations := []struct {
+				query string
+				msg   string
+			}{{
+				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(master.DbName()), encodeString(workflow)),
+				fmt.Sprintf("workflow %s already exists in keyspace %s", workflow, keyspace),
+			}, {
+				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN'", encodeString(master.DbName())),
+				fmt.Sprintf("workflow %s.%s is in a frozen state", keyspace, workflow),
+			}}
+			for _, validation := range validations {
+				p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, validation.query)
+				if err != nil {
+					allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
+					return
+				}
+				if len(p3qr.Rows) != 0 {
+					allErrors.RecordError(fmt.Errorf(validation.msg))
+					return
+				}
+			}
 
-			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(master.DbName()), encodeString(workflow))
-			p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, query)
-			if err != nil {
-				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
-				return
-			}
-			if len(p3qr.Rows) != 0 {
-				allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s", workflow, keyspace))
-				return
-			}
 		}(si)
 	}
 	wg.Wait()

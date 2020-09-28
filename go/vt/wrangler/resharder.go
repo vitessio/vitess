@@ -18,8 +18,13 @@ package wrangler
 
 import (
 	"fmt"
+	"hash/fnv"
+	"math"
+	"sort"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -58,6 +63,41 @@ type refStream struct {
 	tabletTypes string
 }
 
+// hashStreams produces a reproducible hash based on the input parameters.
+func (rs *resharder) getMigrationId(ctx context.Context) (int64, error) {
+	var expanded []string
+	var mu sync.Mutex
+	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
+		var id int64
+		var err error
+		targetMaster := rs.targetMasters[target.ShardName()]
+		query := fmt.Sprintf("select id from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(rs.workflow))
+		p3qr, err := rs.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query)
+		if err != nil {
+			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetMaster.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(p3qr)
+		for i := 0; i < len(qr.Rows); i++ {
+			id, err = evalengine.ToInt64(qr.Rows[i][0])
+			mu.Lock()
+			expanded = append(expanded, fmt.Sprintf("%s:%d", target.ShardName(), id))
+			mu.Unlock()
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	sort.Strings(expanded)
+	hasher := fnv.New64()
+	hasher.Write([]byte(rs.keyspace))
+	for _, str := range expanded {
+		hasher.Write([]byte(str))
+	}
+	// Convert to int64 after dropping the highest bit.
+	return int64(hasher.Sum64() & math.MaxInt64), nil
+}
+
 // Reshard initiates a resharding workflow.
 func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string, skipSchemaCopy bool, cell, tabletTypes string) error {
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
@@ -76,9 +116,16 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	if err := rs.createStreams(ctx); err != nil {
 		return vterrors.Wrap(err, "createStreams")
 	}
+	migrationId, err := rs.getMigrationId(ctx)
+	if err != nil {
+		return err
+	}
+	wr.Logger().Infof("********* Migration id is %d", migrationId)
+
 	if err := rs.startStreams(ctx); err != nil {
 		return vterrors.Wrap(err, "startStream")
 	}
+
 	return nil
 }
 
