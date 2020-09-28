@@ -58,6 +58,7 @@ var (
 	shard1Name     = "80-"
 	dbName         = "vt_ks"
 	mysqlUserName  = "vt_dba"
+	mysqlPassword  = "password"
 	vSchema        = `{
 		"sharded": true,
 		"vindexes": {
@@ -279,7 +280,6 @@ func TestPITRRecovery(t *testing.T) {
 	// | 14 | prd-14 | 1597219142 |
 	// +----+--------+------------+
 	testTabletRecovery(t, bs1, "2m", restoreKS3Name, "80-", "INT64(7)")
-
 }
 
 func performResharding(t *testing.T) {
@@ -347,6 +347,7 @@ func startBinlogServer(t *testing.T, masterTablet *cluster.Vttablet) *binLogServ
 		hostname: binlogHost,
 		port:     masterTablet.MysqlctlProcess.MySQLPort,
 		username: mysqlUserName,
+		password: mysqlPassword,
 	})
 	require.NoError(t, err)
 	return bs
@@ -424,7 +425,7 @@ func initializeCluster(t *testing.T) {
 	}
 
 	queryCmds := []string{
-		fmt.Sprintf("CREATE USER '%s'@'%%';", mysqlUserName),
+		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
 		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
 		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
 		fmt.Sprintf("create database %s;", "vt_ks"),
