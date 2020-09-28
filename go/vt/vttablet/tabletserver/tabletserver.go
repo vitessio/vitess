@@ -685,7 +685,16 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				logStats:       logStats,
 				tsv:            tsv,
 			}
-			return qre.Stream(callback)
+			newCallback := func(result *sqltypes.Result) error {
+				// Change database name in mysql output to the keyspace name
+				for _, f := range result.Fields {
+					if f.Database != "" {
+						f.Database = tsv.sm.target.Keyspace
+					}
+				}
+				return callback(result)
+			}
+			return qre.Stream(newCallback)
 		},
 	)
 }
