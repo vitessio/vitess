@@ -682,7 +682,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 		2 + // flags
 		2 // warnings
 	data, pos := c.startEphemeralPacketWithHeader(length)
-	pos = writeByte(data, pos, OKPacket)
+	pos = writeByte(data, pos, OKPacket) //header - OK or EOF
 	pos = writeLenEncInt(data, pos, affectedRows)
 	pos = writeLenEncInt(data, pos, lastInsertID)
 	pos = writeUint16(data, pos, flags)
@@ -691,18 +691,49 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	return c.writeEphemeralPacket()
 }
 
+/* writeOKPacketWithGTIDs writes an OK packet according to https://dev.mysql.com/doc/internals/en/packet-OK_Packet.html
++--------------------+-----------------------+-----------------------------------+
+| Type               | Name                  | Description                       |
++--------------------+-----------------------+-----------------------------------+
+| int<1>             | header                | [00] or [fe] the OK packet header |
++--------------------+-----------------------+-----------------------------------+
+| int<lenenc>        | affected_rows         | affected rows                     |
++--------------------+-----------------------+-----------------------------------+
+| int<lenenc>        | last_insert_id        | last insert-id                    |
++--------------------+-----------------------+-----------------------------------+
+| int<2>             | status_flags          | see possible status_flags here    |
++--------------------+-----------------------+-----------------------------------+
+| int<2>             | warnings              | number of warnings                |
++--------------------+-----------------------+-----------------------------------+
+| if capabilities & CLIENT_SESSION_TRACK {                                       |
++--------------------+-----------------------+-----------------------------------+
+|   string<lenenc>   | info                  | human readable information        |
++--------------------+-----------------------+-----------------------------------+
+|   if status_flags & SERVER_SESSION_STATE_CHANGED {                             |
++--------------------+-----------------------+-----------------------------------+
+|     string<lenenc> | session_state_changes | session state info - GTIDs here   |
++--------------------+-----------------------+-----------------------------------+
+|   }                                                                            |
++--------------------------------------------------------------------------------+
+| } else {                                                                       |
++--------------------+-----------------------+-----------------------------------+
+|   string<lenenc>   | info                  | human readable information        |
++--------------------+-----------------------+-----------------------------------+
+| }                                                                              |
++--------------------------------------------------------------------------------+
+*/
 func (c *Conn) writeOKPacketWithGTIDs(affectedRows, lastInsertID uint64, flags uint16, warnings uint16, gtids string) error {
-	TODO := uint64(12)
+	sessionStateSize := 3 + //- size and encoding spec
+		lenEncStringSize(gtids) // the actual gtids
 
+	sessionStateSizePlusSize := lenEncIntSize(uint64(sessionStateSize))
 	length := 1 + // OKPacket
 		lenEncIntSize(affectedRows) +
 		lenEncIntSize(lastInsertID) +
 		2 + // flags
 		2 + // warnings
-		lenEncStringSize("") + //
-		lenEncIntSize(TODO) +
-		3 + //- size and encoding spec
-		lenEncStringSize(gtids) // the actual gtids
+		lenEncStringSize("") + // human readable status information
+		sessionStateSizePlusSize + sessionStateSize //session state info
 
 	bytes, pos := c.startEphemeralPacketWithHeader(length)
 	data := &coder{
@@ -720,12 +751,11 @@ func (c *Conn) writeOKPacketWithGTIDs(affectedRows, lastInsertID uint64, flags u
 	data.writeUint16(warnings)
 
 	// add session state change tracking
-	data.writeLenEncString("") // human readable info
-	data.writeLenEncInt(TODO)  // total length of session state change info
+	data.writeLenEncString("")                            // human readable info
+	data.writeLenEncInt(uint64(sessionStateSizePlusSize)) // total length of session state change info
 	data.writeByte(SessionTrackGtids)
-	var ToDo byte = 88
-	data.writeByte(ToDo) // total length of session state change info
-	data.writeByte(ToDo) // gtid encoding spec - only text available today
+	data.writeByte(byte(sessionStateSizePlusSize + sessionStateSize)) // total length of session state change info
+	data.writeByte(byte(sessionStateSize))                            // gtid encoding spec - only text available today
 	data.writeLenEncString(gtids)
 
 	return c.writeEphemeralPacket()
