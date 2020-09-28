@@ -2154,7 +2154,7 @@ func TestReserveStats(t *testing.T) {
 	assert.NotEmpty(t, tsv.te.txPool.env.Stats().UserReservedTimesNs.Counts()["test"])
 }
 
-func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
+func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
 	db.SetName("databaseInMysql")
 	defer tsv.StopService()
@@ -2180,13 +2180,37 @@ func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
 	// Testing Execute Method
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	res, err2 := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-	require.NoError(t, err2)
+	res, err := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
 	}
 	_, err = tsv.Commit(ctx, &target, transactionID)
 	require.NoError(t, err)
+}
+
+func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	db.SetName("databaseInMysql")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Type:     sqltypes.VarBinary,
+				Database: "databaseInMysql",
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	r := db.AddQuery(executeSQL, executeSQLResult)
+	require.NotNil(t, r)
+	target := tsv.sm.target
 
 	// Testing StreamExecute Method
 	callback := func(res *sqltypes.Result) error {
@@ -2197,13 +2221,35 @@ func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
 		}
 		return nil
 	}
-	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, callback); err != nil {
-		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
-			executeSQL, err)
+	err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, callback)
+	require.NoError(t, err)
+}
+
+func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	db.SetName("databaseInMysql")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Type:     sqltypes.VarBinary,
+				Database: "databaseInMysql",
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
 	}
+	r := db.AddQuery(executeSQL, executeSQLResult)
+	require.NotNil(t, r)
+	target := tsv.sm.target
 
 	// Testing ExecuteBatch Method
-	if results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
+	results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
 		{
 			Sql:           executeSQL,
 			BindVariables: nil,
@@ -2212,46 +2258,114 @@ func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
 			Sql:           executeSQL,
 			BindVariables: nil,
 		},
-	}, true, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}); err != nil {
-		t.Fatal(err)
-	} else {
-		for _, res := range results {
-			for _, field := range res.Fields {
-				require.Equal(t, "keyspaceName", field.Database)
-			}
+	}, true, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	require.NoError(t, err)
+	for _, res := range results {
+		for _, field := range res.Fields {
+			require.Equal(t, "keyspaceName", field.Database)
 		}
 	}
+}
+
+func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	db.SetName("databaseInMysql")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Type:     sqltypes.VarBinary,
+				Database: "databaseInMysql",
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	r := db.AddQuery(executeSQL, executeSQLResult)
+	require.NotNil(t, r)
+	target := tsv.sm.target
 
 	// Test BeginExecute Method
-	res, transactionID, _, err = tsv.BeginExecute(ctx, &target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, _, err := tsv.BeginExecute(ctx, &target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
 	}
 	_, err = tsv.Commit(ctx, &target, transactionID)
 	require.NoError(t, err)
+}
 
-	// Test BeginExecute Method
-	if results, transactionID, _, err := tsv.BeginExecuteBatch(ctx, &target, []*querypb.BoundQuery{
-		{
-			Sql:           executeSQL,
-			BindVariables: nil,
+func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	db.SetName("databaseInMysql")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Type:     sqltypes.VarBinary,
+				Database: "databaseInMysql",
+			},
 		},
-		{
-			Sql:           executeSQL,
-			BindVariables: nil,
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
 		},
-	}, false, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}); err != nil {
-		t.Fatal(err)
-	} else {
-		for _, res := range results {
-			for _, field := range res.Fields {
-				require.Equal(t, "keyspaceName", field.Database)
-			}
-		}
-		_, err = tsv.Commit(ctx, &target, transactionID)
-		require.NoError(t, err)
 	}
+	r := db.AddQuery(executeSQL, executeSQLResult)
+	require.NotNil(t, r)
+	target := tsv.sm.target
+
+	// Test BeginExecuteBatch Method
+	results, transactionID, _, err := tsv.BeginExecuteBatch(ctx, &target, []*querypb.BoundQuery{
+		{
+			Sql:           executeSQL,
+			BindVariables: nil,
+		},
+		{
+			Sql:           executeSQL,
+			BindVariables: nil,
+		},
+	}, false, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	require.NoError(t, err)
+	for _, res := range results {
+		for _, field := range res.Fields {
+			require.Equal(t, "keyspaceName", field.Database)
+		}
+	}
+	_, err = tsv.Commit(ctx, &target, transactionID)
+	require.NoError(t, err)
+}
+
+func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	db.SetName("databaseInMysql")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Type:     sqltypes.VarBinary,
+				Database: "databaseInMysql",
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	r := db.AddQuery(executeSQL, executeSQLResult)
+	require.NotNil(t, r)
+	target := tsv.sm.target
 
 	// Test ReserveExecute
 	res, rID, _, err := tsv.ReserveExecute(ctx, &target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
@@ -2261,6 +2375,30 @@ func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
 	}
 	err = tsv.Release(ctx, &target, 0, rID)
 	require.NoError(t, err)
+}
+
+func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	db.SetName("databaseInMysql")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Type:     sqltypes.VarBinary,
+				Database: "databaseInMysql",
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	r := db.AddQuery(executeSQL, executeSQLResult)
+	require.NotNil(t, r)
+	target := tsv.sm.target
 
 	// Test for ReserveBeginExecute
 	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, executeSQL, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
