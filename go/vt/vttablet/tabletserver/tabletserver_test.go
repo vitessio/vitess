@@ -2201,6 +2201,26 @@ func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
 			executeSQL, err)
 	}
+
+	// Testing ExecuteBatch Method
+	if results, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
+		{
+			Sql:           executeSQL,
+			BindVariables: nil,
+		},
+		{
+			Sql:           executeSQL,
+			BindVariables: nil,
+		},
+	}, true, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}); err != nil {
+		t.Fatal(err)
+	} else {
+		for _, res := range results {
+			for _, field := range res.Fields {
+				require.Equal(t, "keyspaceName", field.Database)
+			}
+		}
+	}
 }
 
 func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
