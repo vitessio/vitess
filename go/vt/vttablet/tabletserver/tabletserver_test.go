@@ -2154,6 +2154,37 @@ func TestReserveStats(t *testing.T) {
 	assert.NotEmpty(t, tsv.te.txPool.env.Stats().UserReservedTimesNs.Counts()["test"])
 }
 
+func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "keyspaceName")
+	db.SetName("databaseInMysql")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Type:     sqltypes.VarBinary,
+				Database: "databaseInMysql",
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	r := db.AddQuery(executeSQL, executeSQLResult)
+	require.NotNil(t, r)
+	target := tsv.sm.target
+	transactionID, _, err := tsv.Begin(ctx, &target, nil)
+	require.NoError(t, err)
+	res, err2 := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: 2})
+	require.NoError(t, err2)
+	require.Equal(t, "keyspaceName", res.Fields[0].Database)
+	_, err = tsv.Commit(ctx, &target, transactionID)
+	require.NoError(t, err)
+}
+
 func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	config := tabletenv.NewDefaultConfig()
 	return setupTabletServerTestCustom(t, config, keyspaceName)
