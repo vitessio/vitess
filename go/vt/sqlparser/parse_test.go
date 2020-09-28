@@ -1379,9 +1379,17 @@ var (
 	}, {
 		input: "show vitess_keyspaces",
 	}, {
+		input: "show vitess_keyspaces like '%'",
+	}, {
 		input: "show vitess_shards",
 	}, {
+		input: "show vitess_shards like '%'",
+	}, {
 		input: "show vitess_tablets",
+	}, {
+		input: "show vitess_tablets like '%'",
+	}, {
+		input: "show vitess_tablets where hostname = 'some-tablet'",
 	}, {
 		input: "show vschema tables",
 	}, {
