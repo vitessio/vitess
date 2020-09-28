@@ -14,20 +14,204 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pitr
+package pitrtls
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 )
+
+var (
+	createTable = `create table product (id bigint(20) primary key, name char(10), created bigint(20));`
+	insertTable = `insert into product (id, name, created) values(%d, '%s', unix_timestamp());`
+	getCountID  = `select count(*) from product`
+)
+
+var (
+	clusterInstance *cluster.LocalProcessCluster
+
+	master        *cluster.Vttablet
+	replica       *cluster.Vttablet
+	shard0Master  *cluster.Vttablet
+	shard0Replica *cluster.Vttablet
+	shard1Master  *cluster.Vttablet
+	shard1Replica *cluster.Vttablet
+
+	cell           = "zone1"
+	hostname       = "localhost"
+	keyspaceName   = "ks"
+	restoreKS1Name = "restoreks1"
+	restoreKS2Name = "restoreks2"
+	restoreKS3Name = "restoreks3"
+	shardName      = "0"
+	shard0Name     = "-80"
+	shard1Name     = "80-"
+	dbName         = "vt_ks"
+	mysqlUserName  = "vt_dba"
+	mysqlPassword  = "password"
+	vSchema        = `{
+		"sharded": true,
+		"vindexes": {
+			"hash_index": {
+				"type": "hash"
+			}
+		},
+		"tables": {
+			"product": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash_index"
+					}
+				]
+			}
+		}
+	}`
+	commonTabletArg = []string{
+		"-vreplication_healthcheck_topology_refresh", "1s",
+		"-vreplication_healthcheck_retry_delay", "1s",
+		"-vreplication_retry_delay", "1s",
+		"-degraded_threshold", "5s",
+		"-lock_tables_timeout", "5s",
+		"-watch_replication_stream",
+		"-serving_state_grace_period", "1s"}
+)
+
+func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
+	var mysqlProcs []*exec.Cmd
+	for _, tablet := range tablets {
+		proc, _ := tablet.MysqlctlProcess.StopProcess()
+		mysqlProcs = append(mysqlProcs, proc)
+	}
+	for _, proc := range mysqlProcs {
+		err := proc.Wait()
+		require.NoError(t, err)
+	}
+	for _, tablet := range tablets {
+		tablet.VttabletProcess.TearDown()
+	}
+}
+
+func initializeCluster(t *testing.T) {
+	clusterInstance = cluster.NewCluster(cell, hostname)
+
+	// Start topo server
+	err := clusterInstance.StartTopo()
+	require.NoError(t, err)
+
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name: keyspaceName,
+	}
+	clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, *keyspace)
+
+	shard := &cluster.Shard{
+		Name: shardName,
+	}
+	shard0 := &cluster.Shard{
+		Name: shard0Name,
+	}
+	shard1 := &cluster.Shard{
+		Name: shard1Name,
+	}
+
+	// Defining all the tablets
+	master = clusterInstance.NewVttabletInstance("replica", 0, "")
+	replica = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Master = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Replica = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Master = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Replica = clusterInstance.NewVttabletInstance("replica", 0, "")
+
+	shard.Vttablets = []*cluster.Vttablet{master, replica}
+	shard0.Vttablets = []*cluster.Vttablet{shard0Master, shard0Replica}
+	shard1.Vttablets = []*cluster.Vttablet{shard1Master, shard1Replica}
+
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-restore_from_backup", "-enable_semi_sync")
+
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	require.NoError(t, err)
+	// Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			require.NoError(t, err)
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+		}
+	}
+
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
+		err = proc.Wait()
+		require.NoError(t, err)
+	}
+
+	queryCmds := []string{
+		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
+		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
+		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
+		fmt.Sprintf("create database %s;", "vt_ks"),
+		"FLUSH PRIVILEGES;",
+	}
+
+	for _, tablet := range []*cluster.Vttablet{master, replica, shard0Master, shard0Replica, shard1Master, shard1Replica} {
+		for _, query := range queryCmds {
+			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+			require.NoError(t, err)
+		}
+
+		err = tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+	}
+
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID)
+	require.NoError(t, err)
+
+	// Start vtgate
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+}
+
+func insertRow(t *testing.T, id int, productName string, isSlow bool) {
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	insertSmt := fmt.Sprintf(insertTable, id, productName)
+	_, err = conn.ExecuteFetch(insertSmt, 1000, true)
+	require.NoError(t, err)
+
+	if isSlow {
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName string) {
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CreateKeyspace",
+		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
+		"-snapshot_time", timeToRecover, restoreKeyspaceName)
+	log.Info(output)
+	require.NoError(t, err)
+}
 
 // Test pitr (Point in time recovery).
 // -------------------------------------------
