@@ -2221,6 +2221,15 @@ func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
 			}
 		}
 	}
+
+	// Test BeginExecute Method
+	res, transactionID, _, err = tsv.BeginExecute(ctx, &target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	require.NoError(t, err)
+	for _, field := range res.Fields {
+		require.Equal(t, "keyspaceName", field.Database)
+	}
+	_, err = tsv.Commit(ctx, &target, transactionID)
+	require.NoError(t, err)
 }
 
 func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
