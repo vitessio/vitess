@@ -1,0 +1,21 @@
+name: docker_test_3
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: Docker Test 3
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Run tests which require docker - 3
+      run: |
+        go run test.go -docker=true --follow -shard 26
