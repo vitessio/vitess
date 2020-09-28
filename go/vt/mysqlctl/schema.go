@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -75,7 +76,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
+	tds := make(tableDefinitions, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
@@ -133,8 +134,12 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		td.Type = tableType
 		td.DataLength = dataLength
 		td.RowCount = rowCount
-		sd.TableDefinitions = append(sd.TableDefinitions, td)
+		tds = append(tds, td)
 	}
+
+	sort.Sort(tds)
+
+	sd.TableDefinitions = tds
 
 	sd, err = tmutils.FilterTables(sd, tables, excludeTables, includeViews)
 	if err != nil {
@@ -374,3 +379,20 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
+
+//tableDefinitions is a sortable collection of table definitions
+type tableDefinitions []*tabletmanagerdatapb.TableDefinition
+
+func (t tableDefinitions) Len() int {
+	return len(t)
+}
+
+func (t tableDefinitions) Less(i, j int) bool {
+	return t[i].Name < t[j].Name
+}
+
+func (t tableDefinitions) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+var _ sort.Interface = (tableDefinitions)(nil)
