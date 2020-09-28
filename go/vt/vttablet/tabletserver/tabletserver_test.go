@@ -2176,13 +2176,31 @@ func TestDatabaseNameReplaceByKeyspaceName(t *testing.T) {
 	r := db.AddQuery(executeSQL, executeSQLResult)
 	require.NotNil(t, r)
 	target := tsv.sm.target
+
+	// Testing Execute Method
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	res, err2 := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: 2})
+	res, err2 := tsv.Execute(ctx, &target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	require.NoError(t, err2)
-	require.Equal(t, "keyspaceName", res.Fields[0].Database)
+	for _, field := range res.Fields {
+		require.Equal(t, "keyspaceName", field.Database)
+	}
 	_, err = tsv.Commit(ctx, &target, transactionID)
 	require.NoError(t, err)
+
+	// Testing StreamExecute Method
+	callback := func(res *sqltypes.Result) error {
+		for _, field := range res.Fields {
+			if field.Database != "" {
+				require.Equal(t, "keyspaceName", field.Database)
+			}
+		}
+		return nil
+	}
+	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, callback); err != nil {
+		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
+			executeSQL, err)
+	}
 }
 
 func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
