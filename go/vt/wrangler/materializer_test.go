@@ -37,6 +37,7 @@ import (
 )
 
 const mzUpdateQuery = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
+const mzSelectIdQuery = "select id from _vt.vreplication where db_name='vt_targetks' and workflow='workflow'"
 
 func TestMigrateTables(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
@@ -52,6 +53,7 @@ func TestMigrateTables(t *testing.T) {
 	defer env.close()
 
 	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectIdQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
