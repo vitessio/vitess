@@ -101,8 +101,8 @@ func TestUpdateEqual(t *testing.T) {
 	sbc2.Queries = nil
 	sbclookup.Queries = nil
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
-		"1|1|foo",
+		sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
+		"1|1|foo|0",
 	),
 	})
 
@@ -110,7 +110,7 @@ func TestUpdateEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql:           "select id, name, lastname from user2 where id = 1 for update",
+			Sql:           "select id, name, lastname, name = 'myname' and lastname = 'mylastname' from user2 where id = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		{
@@ -213,8 +213,8 @@ func TestUpdateMultiOwned(t *testing.T) {
 
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("id|a|b|c|d|e|f", "int64|int64|int64|int64|int64|int64|int64"),
-			"1|10|20|30|40|50|60",
+			sqltypes.MakeTestFields("id|a|b|c|d|e|f|lookup1|lookup3", "int64|int64|int64|int64|int64|int64|int64|int64|int64"),
+			"1|10|20|30|40|50|60|0|0",
 		),
 	})
 	_, err := executorExec(executor, "update user set a=1, b=2, f=4, e=3 where id=1", nil)
@@ -222,7 +222,7 @@ func TestUpdateMultiOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id, a, b, c, d, e, f from user where id = 1 for update",
+		Sql:           "select id, a, b, c, d, e, f, a = 1 and b = 2, e = 3 and f = 4 from user where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "update user set a = 1, b = 2, f = 4, e = 3 where id = 1",

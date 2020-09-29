@@ -45,35 +45,35 @@ func (n *setNormalizer) rewriteSetComingUp(cursor *Cursor) bool {
 func (n *setNormalizer) normalizeSetExpr(in *SetExpr) (*SetExpr, error) {
 	switch in.Name.at { // using switch so we can use break
 	case DoubleAt:
-		if in.Scope != "" {
+		if in.Scope != ImplicitScope {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot use scope and @@")
 		}
 		switch {
 		case strings.HasPrefix(in.Name.Lowered(), "session."):
 			in.Name = createColumn(in.Name.Lowered()[8:])
-			in.Scope = SessionStr
+			in.Scope = SessionScope
 		case strings.HasPrefix(in.Name.Lowered(), "global."):
 			in.Name = createColumn(in.Name.Lowered()[7:])
-			in.Scope = GlobalStr
+			in.Scope = GlobalScope
 		case strings.HasPrefix(in.Name.Lowered(), "vitess_metadata."):
 			in.Name = createColumn(in.Name.Lowered()[16:])
-			in.Scope = VitessMetadataStr
+			in.Scope = VitessMetadataScope
 		default:
 			in.Name.at = NoAt
-			in.Scope = SessionStr
+			in.Scope = SessionScope
 		}
 		return in, nil
 	case SingleAt:
-		if in.Scope != "" {
+		if in.Scope != ImplicitScope {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot mix scope and user defined variables")
 		}
 		return in, nil
 	case NoAt:
 		switch in.Scope {
-		case "":
-			in.Scope = SessionStr
-		case "local":
-			in.Scope = SessionStr
+		case ImplicitScope:
+			in.Scope = SessionScope
+		case LocalScope:
+			in.Scope = SessionScope
 		}
 		return in, nil
 	}

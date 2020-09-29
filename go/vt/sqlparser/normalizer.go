@@ -158,7 +158,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 // and iterate on converting each individual value into separate
 // bind vars.
 func (nz *normalizer) convertComparison(node *ComparisonExpr) {
-	if node.Operator != InStr && node.Operator != NotInStr {
+	if node.Operator != InOp && node.Operator != NotInOp {
 		return
 	}
 	tupleVals, ok := node.Right.(ValTuple)

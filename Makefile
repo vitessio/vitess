@@ -43,6 +43,7 @@ endif
 # Safe, since this code isn't performance critical.
 export CGO_CFLAGS := -O1
 
+# regenerate rice-box.go when any of the .cnf files change
 embed_config:
 	cd go/vt/mysqlctl
 	go run github.com/GeertJohan/go.rice/rice embed-go
