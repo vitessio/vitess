@@ -67,7 +67,6 @@ func TestSchemaVersioning(t *testing.T) {
 	defer cancel()
 	tsv.EnableHistorian(true)
 	tsv.SetTracking(true)
-	tsv.EnableHeartbeat(true)
 
 	target := &querypb.Target{
 		Keyspace:   "vttest",
@@ -167,7 +166,6 @@ func TestSchemaVersioning(t *testing.T) {
 	runCases(ctx, t, cases, eventCh)
 
 	tsv.SetTracking(false)
-	tsv.EnableHeartbeat(false)
 	cases = []test{
 		{
 			//comment prefix required so we don't look for ddl in schema_version
