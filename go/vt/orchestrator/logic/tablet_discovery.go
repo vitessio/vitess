@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/orchestrator/config"
+
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
@@ -67,26 +69,30 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 	if !IsLeaderOrActive() {
 		return
 	}
-	cells, err := ts.GetKnownCells(context.TODO())
+	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer cancel()
+	cells, err := ts.GetKnownCells(ctx)
 	if err != nil {
 		log.Errore(err)
 		return
 	}
 
+	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer refreshCancel()
 	var wg sync.WaitGroup
 	for _, cell := range cells {
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			refreshTabletsInCell(cell, loader)
+			refreshTabletsInCell(refreshCtx, cell, loader)
 		}(cell)
 	}
 	wg.Wait()
 }
 
-func refreshTabletsInCell(cell string, loader func(instanceKey *inst.InstanceKey)) {
+func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey)) {
 	latestInstances := make(map[inst.InstanceKey]bool)
-	tablets, err := topotools.GetAllTablets(context.TODO(), ts, cell)
+	tablets, err := topotools.GetAllTablets(ctx, ts, cell)
 	if err != nil {
 		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
 		return
@@ -174,7 +180,7 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.TODO(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
 	defer cancel()
 	_, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	return unlock, err
@@ -186,7 +192,9 @@ func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	if err != nil {
 		return nil, err
 	}
-	ti, err := ts.GetTablet(context.TODO(), tablet.Alias)
+	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer cancel()
+	ti, err := ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +225,7 @@ func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
 	tmc := tmclient.NewTabletManagerClient()
 	// TODO(sougou): this should be controllable because we may want
 	// to give a longer timeout for a graceful takeover.
-	ctx, cancel := context.WithTimeout(context.TODO(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	if forward {
 		_, err = tmc.DemoteMaster(ctx, tablet)
@@ -232,14 +240,18 @@ func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, er
 	if err != nil {
 		return nil, err
 	}
-	si, err := ts.GetShard(context.TODO(), tablet.Keyspace, tablet.Shard)
+	sCtx, sCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer sCancel()
+	si, err := ts.GetShard(sCtx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return nil, err
 	}
 	if !si.HasMaster() {
 		return nil, fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
-	master, err := ts.GetTablet(context.TODO(), si.MasterAlias)
+	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tCancel()
+	master, err := ts.GetTablet(tCtx, si.MasterAlias)
 	if err != nil {
 		return nil, err
 	}

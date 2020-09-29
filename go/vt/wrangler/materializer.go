@@ -786,7 +786,7 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte(vindexName))})
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte("{{.keyrange}}"))})
 				sel.Where = &sqlparser.Where{
-					Type: sqlparser.WhereStr,
+					Type: sqlparser.WhereClause,
 					Expr: &sqlparser.FuncExpr{
 						Name:  sqlparser.NewColIdent("in_keyrange"),
 						Exprs: subExprs,

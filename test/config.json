@@ -16,7 +16,7 @@
 			"File": "",
 			"Args": [],
 			"Command": [
-					"test/client_test.sh"
+				"test/client_test.sh"
 			],
 			"Manual": false,
 			"Shard": 25,
@@ -272,6 +272,17 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 10,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"pitrtls": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 26,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -544,6 +555,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 24,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"orchestrator": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/orchestrator"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
 			"RetryMax": 0,
 			"Tags": []
 		}
