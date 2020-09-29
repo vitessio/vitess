@@ -36,7 +36,7 @@ const (
 	mysqlCollectInterval        = 100 * time.Millisecond
 	mysqlDormantCollectInterval = 5 * time.Second
 	mysqlRefreshInterval        = 10 * time.Second
-	mysqlAggreateInterval       = 100 * time.Millisecond
+	mysqlAggregateInterval      = 100 * time.Millisecond
 
 	aggregatedMetricsExpiration   = 5 * time.Second
 	aggregatedMetricsCleanup      = 1 * time.Second
@@ -115,7 +115,7 @@ type Throttler struct {
 	httpClient                         *http.Client
 }
 
-// ThrottlerStatus published some status valus from the throttler
+// ThrottlerStatus published some status values from the throttler
 type ThrottlerStatus struct {
 	Keyspace string
 	Shard    string
@@ -277,7 +277,7 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 
 	password = base.RandomHash()[0:maxPasswordLength]
 	{
-		// There seems to be a bug where CREATE USER hangs. If CREATE USER is perceeded by
+		// There seems to be a bug where CREATE USER hangs. If CREATE USER is preceded by
 		// any query that writes to the binary log, CREATE USER does not hang.
 		// The simplest such query is FLUSH STATUS. Other options are FLUSH PRIVILEGES or similar.
 		// The bug was found in MySQL 8.0.21, and not found in 5.7.30
@@ -333,7 +333,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlCollectTicker := addTicker(mysqlCollectInterval)
 	mysqlDormantCollectTicker := addTicker(mysqlDormantCollectInterval)
 	mysqlRefreshTicker := addTicker(mysqlRefreshInterval)
-	mysqlAggregateTicker := addTicker(mysqlAggreateInterval)
+	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 
 	shouldCreateThrottlerUser := false

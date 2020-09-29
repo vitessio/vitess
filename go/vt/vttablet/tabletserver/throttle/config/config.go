@@ -17,7 +17,7 @@ func Settings() *ConfigurationSettings {
 // ConfigurationSettings models a set of configurable values, that can be
 // provided by the user via one or several JSON formatted files.
 //
-// Some of the settinges have reasonable default values, and some other
+// Some of the settings have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
 	ListenPort      int
