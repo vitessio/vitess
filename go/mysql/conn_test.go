@@ -19,12 +19,17 @@ package mysql
 import (
 	"bytes"
 	crypto_rand "crypto/rand"
+	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -288,3 +293,68 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiStatement(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+	// Write OK packet, read it, compare.
+	err := cConn.WriteComQuery("select 1;select 2")
+	require.NoError(t, err)
+
+	handler := &handlerT{}
+	err = sConn.handleNextCommand(handler)
+	require.NoError(t, err)
+
+	data, err := cConn.ReadPacket()
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+	require.EqualValues(t, data[0], OKPacket)
+
+	data, err = cConn.ReadPacket()
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+	require.EqualValues(t, data[0], ErrPacket)
+}
+
+type handlerT struct {
+	hasRun bool
+}
+
+func (h *handlerT) NewConnection(c *Conn) {
+	panic("implement me")
+}
+
+func (h *handlerT) ConnectionClosed(c *Conn) {
+	panic("implement me")
+}
+
+func (h *handlerT) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if h.hasRun {
+		return fmt.Errorf("apa")
+	}
+	h.hasRun = true
+	return callback(&sqltypes.Result{})
+}
+
+func (h *handlerT) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	panic("implement me")
+}
+
+func (h *handlerT) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+	panic("implement me")
+}
+
+func (h *handlerT) WarningCount(c *Conn) uint16 {
+	return 0
+}
+
+func (h *handlerT) ComResetConnection(c *Conn) {
+	panic("implement me")
+}
+
+var _ Handler = (*handlerT)(nil)

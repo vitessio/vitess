@@ -780,49 +780,28 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComQuery:
-		err := func() error {
-			c.startWriterBuffering()
-			defer func() {
-				if err := c.endWriterBuffering(); err != nil {
-					log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
-				}
-			}()
+		queryStart := time.Now()
+		query := c.parseComQuery(data)
+		c.recycleReadPacket()
 
-			queryStart := time.Now()
-			query := c.parseComQuery(data)
-			c.recycleReadPacket()
-
-			var queries []string
-			if c.Capabilities&CapabilityClientMultiStatements != 0 {
-				queries, err = sqlparser.SplitStatementToPieces(query)
-				if err != nil {
-					log.Errorf("Conn %v: Error splitting query: %v", c, err)
-					if werr := c.writeErrorPacketFromError(err); werr != nil {
-						// If we can't even write the error, we're done.
-						log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-						return werr
-					}
-				}
-			} else {
-				queries = []string{query}
-			}
-			for index, sql := range queries {
-				more := false
-				if index != len(queries)-1 {
-					more = true
-				}
-				if err := c.execQuery(sql, handler, more); err != nil {
-					return err
-				}
-			}
-
-			timings.Record(queryTimingKey, queryStart)
-
-			return nil
-		}()
+		queries, err := c.splitQueries(query)
 		if err != nil {
 			return err
 		}
+		for index, sql := range queries {
+			more := false
+			if index != len(queries)-1 {
+				more = true
+			}
+			err := c.execBufferedQuery(handler, sql, more)
+			if err != nil {
+				return err
+			}
+		}
+
+		timings.Record(queryTimingKey, queryStart)
+
+		return nil
 
 	case ComPing:
 		c.recycleReadPacket()
@@ -1127,6 +1106,42 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	}
 
 	return nil
+}
+
+func (c *Conn) splitQueries(query string) ([]string, error) {
+	if c.Capabilities&CapabilityClientMultiStatements == 0 {
+		return []string{query}, nil
+	}
+
+	queries, err := sqlparser.SplitStatementToPieces(query)
+	if err != nil {
+		log.Errorf("Conn %v: Error splitting query: %v", c, err)
+		c.startWriterBuffering()
+
+		if werr := c.writeErrorPacketFromError(err); werr != nil {
+			// If we can't even write the error, we're done.
+			log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+			return nil, werr
+		}
+
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+		}
+		return nil, err
+	}
+
+	return queries, nil
+}
+
+func (c *Conn) execBufferedQuery(handler Handler, sql string, more bool) error {
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+		}
+	}()
+
+	return c.execQuery(sql, handler, more)
 }
 
 func (c *Conn) execQuery(query string, handler Handler, more bool) error {
