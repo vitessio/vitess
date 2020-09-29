@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -306,55 +307,54 @@ func TestMultiStatement(t *testing.T) {
 	err := cConn.WriteComQuery("select 1;select 2")
 	require.NoError(t, err)
 
-	handler := &handlerT{}
+	expectedErr := fmt.Errorf("execution failed")
+	handler := &singleRun{t: t, err: expectedErr}
 	err = sConn.handleNextCommand(handler)
-	require.NoError(t, err)
+	require.Same(t, expectedErr, err)
 
 	data, err := cConn.ReadPacket()
-	require.NoError(t, err)
-	require.NotEmpty(t, data)
-	require.EqualValues(t, data[0], OKPacket)
-
-	data, err = cConn.ReadPacket()
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
 	require.EqualValues(t, data[0], ErrPacket)
 }
 
-type handlerT struct {
+type singleRun struct {
 	hasRun bool
+	t      *testing.T
+	err    error
 }
 
-func (h *handlerT) NewConnection(c *Conn) {
+func (h *singleRun) NewConnection(c *Conn) {
 	panic("implement me")
 }
 
-func (h *handlerT) ConnectionClosed(c *Conn) {
+func (h *singleRun) ConnectionClosed(c *Conn) {
 	panic("implement me")
 }
 
-func (h *handlerT) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+func (h *singleRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
 	if h.hasRun {
-		return fmt.Errorf("apa")
+		debug.PrintStack()
+		h.t.Fatal("don't do this!")
 	}
 	h.hasRun = true
-	return callback(&sqltypes.Result{})
+	return h.err
 }
 
-func (h *handlerT) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func (h *singleRun) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	panic("implement me")
 }
 
-func (h *handlerT) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+func (h *singleRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	panic("implement me")
 }
 
-func (h *handlerT) WarningCount(c *Conn) uint16 {
+func (h *singleRun) WarningCount(c *Conn) uint16 {
 	return 0
 }
 
-func (h *handlerT) ComResetConnection(c *Conn) {
+func (h *singleRun) ComResetConnection(c *Conn) {
 	panic("implement me")
 }
 
-var _ Handler = (*handlerT)(nil)
+var _ Handler = (*singleRun)(nil)
