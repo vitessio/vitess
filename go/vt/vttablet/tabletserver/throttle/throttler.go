@@ -56,6 +56,7 @@ const (
 )
 
 var throttleThreshold = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for throttling")
+var throttleTabletTypes = flag.String("throttle_tablet_types", "replica", "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
 
 var (
 	throttlerUser  = "vt_tablet_throttler"
@@ -89,6 +90,8 @@ type Throttler struct {
 	pool           *connpool.Pool
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
+
+	throttleTabletTypesMap map[topodatapb.TabletType]bool
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlInventoryChan      chan *mysql.Inventory
@@ -157,10 +160,39 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 
 		httpClient: base.SetupHTTPClient(0),
 	}
+	throttler.initThrottleTabletTypes()
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 	throttler.check = NewThrottlerCheck(throttler)
 
 	return throttler
+}
+
+func (throttler *Throttler) initThrottleTabletTypes() {
+	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)
+
+	tokens := strings.Split(*throttleTabletTypes, ",")
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		token = strings.ToLower(token)
+		switch token {
+		case "":
+			continue
+		case "replica":
+			throttler.throttleTabletTypesMap[topodatapb.TabletType_REPLICA] = true
+		case "rdonly", "batch":
+			throttler.throttleTabletTypesMap[topodatapb.TabletType_RDONLY] = true
+		case "spare":
+			throttler.throttleTabletTypesMap[topodatapb.TabletType_SPARE] = true
+		case "experimental":
+			throttler.throttleTabletTypesMap[topodatapb.TabletType_EXPERIMENTAL] = true
+		case "backup":
+			throttler.throttleTabletTypesMap[topodatapb.TabletType_BACKUP] = true
+		case "drained":
+			throttler.throttleTabletTypesMap[topodatapb.TabletType_DRAINED] = true
+		}
+	}
+	// always on:
+	throttler.throttleTabletTypesMap[topodatapb.TabletType_REPLICA] = true
 }
 
 // InitDBConfig initializes keyspace and shard
