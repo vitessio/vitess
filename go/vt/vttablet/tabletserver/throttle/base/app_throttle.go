@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// AppThrottle is the definition for an app throtting instruction
+// AppThrottle is the definition for an app throttling instruction
 // - Ratio: [0..1], 0 == no throttle, 1 == fully throttle
 type AppThrottle struct {
 	ExpireAt time.Time
