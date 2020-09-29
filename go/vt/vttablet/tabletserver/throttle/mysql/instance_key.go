@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// InstanceKey is an instance indicator, identifued by hostname and port
+// InstanceKey is an instance indicator, identified by hostname and port
 type InstanceKey struct {
 	Hostname string
 	Port     int

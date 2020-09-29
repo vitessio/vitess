@@ -56,7 +56,7 @@ func (s *SuspendableTicker) Resume() {
 	atomic.StoreInt64(&s.suspended, 0)
 }
 
-// Stop compeltely stops the timer, like time.Timer
+// Stop completely stops the timer, like time.Timer
 func (s *SuspendableTicker) Stop() {
 	s.ticker.Stop()
 }
