@@ -2173,8 +2173,7 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 			{sqltypes.NewVarBinary("row01")},
 		},
 	}
-	r := db.AddQuery(executeSQL, executeSQLResult)
-	require.NotNil(t, r)
+	db.AddQuery(executeSQL, executeSQLResult)
 	target := tsv.sm.target
 
 	// Testing Execute Method
@@ -2208,8 +2207,7 @@ func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 			{sqltypes.NewVarBinary("row01")},
 		},
 	}
-	r := db.AddQuery(executeSQL, executeSQLResult)
-	require.NotNil(t, r)
+	db.AddQuery(executeSQL, executeSQLResult)
 	target := tsv.sm.target
 
 	// Testing StreamExecute Method
@@ -2244,8 +2242,7 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 			{sqltypes.NewVarBinary("row01")},
 		},
 	}
-	r := db.AddQuery(executeSQL, executeSQLResult)
-	require.NotNil(t, r)
+	db.AddQuery(executeSQL, executeSQLResult)
 	target := tsv.sm.target
 
 	// Testing ExecuteBatch Method
@@ -2286,8 +2283,7 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 			{sqltypes.NewVarBinary("row01")},
 		},
 	}
-	r := db.AddQuery(executeSQL, executeSQLResult)
-	require.NotNil(t, r)
+	db.AddQuery(executeSQL, executeSQLResult)
 	target := tsv.sm.target
 
 	// Test BeginExecute Method
@@ -2319,8 +2315,7 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) 
 			{sqltypes.NewVarBinary("row01")},
 		},
 	}
-	r := db.AddQuery(executeSQL, executeSQLResult)
-	require.NotNil(t, r)
+	db.AddQuery(executeSQL, executeSQLResult)
 	target := tsv.sm.target
 
 	// Test BeginExecuteBatch Method
@@ -2363,8 +2358,7 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 			{sqltypes.NewVarBinary("row01")},
 		},
 	}
-	r := db.AddQuery(executeSQL, executeSQLResult)
-	require.NotNil(t, r)
+	db.AddQuery(executeSQL, executeSQLResult)
 	target := tsv.sm.target
 
 	// Test ReserveExecute
@@ -2396,8 +2390,7 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 			{sqltypes.NewVarBinary("row01")},
 		},
 	}
-	r := db.AddQuery(executeSQL, executeSQLResult)
-	require.NotNil(t, r)
+	db.AddQuery(executeSQL, executeSQLResult)
 	target := tsv.sm.target
 
 	// Test for ReserveBeginExecute
