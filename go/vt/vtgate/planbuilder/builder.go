@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -318,6 +319,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		if sqlparser.IsVschemaDDL(stmt) {
 			return buildVSchemaDDLPlan(stmt, vschema)
 		}
+		fmt.Printf("====== DDL: %s\n", sqlparser.String(stmt))
+		fmt.Printf("====== DDL comments: %v\n", stmt.Comments)
 		return buildDDLPlan(query, stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
