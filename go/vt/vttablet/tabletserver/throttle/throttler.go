@@ -173,22 +173,9 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 	tokens := strings.Split(*throttleTabletTypes, ",")
 	for _, token := range tokens {
 		token = strings.TrimSpace(token)
-		token = strings.ToLower(token)
-		switch token {
-		case "":
-			continue
-		case "replica":
-			throttler.throttleTabletTypesMap[topodatapb.TabletType_REPLICA] = true
-		case "rdonly", "batch":
-			throttler.throttleTabletTypesMap[topodatapb.TabletType_RDONLY] = true
-		case "spare":
-			throttler.throttleTabletTypesMap[topodatapb.TabletType_SPARE] = true
-		case "experimental":
-			throttler.throttleTabletTypesMap[topodatapb.TabletType_EXPERIMENTAL] = true
-		case "backup":
-			throttler.throttleTabletTypesMap[topodatapb.TabletType_BACKUP] = true
-		case "drained":
-			throttler.throttleTabletTypesMap[topodatapb.TabletType_DRAINED] = true
+		token = strings.ToUpper(token)
+		if value, ok := topodatapb.TabletType_value[token]; ok {
+			throttler.throttleTabletTypesMap[topodatapb.TabletType(value)] = true
 		}
 	}
 	// always on:
@@ -514,7 +501,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				if tablet.Type == topodatapb.TabletType_REPLICA {
+				if throttler.throttleTabletTypesMap[tablet.Type] {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
