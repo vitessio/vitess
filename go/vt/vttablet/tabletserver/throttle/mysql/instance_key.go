@@ -11,11 +11,6 @@ import (
 	"strings"
 )
 
-const (
-	// DefaultMySQLPort is the standard mysql port
-	DefaultMySQLPort = 3306
-)
-
 // InstanceKey is an instance indicator, identifued by hostname and port
 type InstanceKey struct {
 	Hostname string

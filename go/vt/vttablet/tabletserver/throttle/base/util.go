@@ -32,8 +32,3 @@ func RandomHash() string {
 	hasher.Write(rb)
 	return hex.EncodeToString(hasher.Sum(nil))
 }
-
-// ShortRandomHash returns a 8 hex character random string
-func ShortRandomHash() string {
-	return RandomHash()[0:8]
-}

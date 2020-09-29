@@ -484,30 +484,35 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		clusterSettings := clusterSettings
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
-		go func() error {
-			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
+		go func() {
+			err := func() error {
+				throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
 
-			tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
-			if err != nil {
-				return err
-			}
-			clusterProbes := &mysql.ClusterProbes{
-				ClusterName:      clusterName,
-				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-				InstanceProbes:   mysql.NewProbes(),
-			}
-			for _, tabletAlias := range tabletAliases {
-				tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
+				tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
 				if err != nil {
 					return err
 				}
-				if throttler.throttleTabletTypesMap[tablet.Type] {
-					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
-					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+				clusterProbes := &mysql.ClusterProbes{
+					ClusterName:      clusterName,
+					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
+					InstanceProbes:   mysql.NewProbes(),
 				}
+				for _, tabletAlias := range tabletAliases {
+					tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
+					if err != nil {
+						return err
+					}
+					if throttler.throttleTabletTypesMap[tablet.Type] {
+						key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
+						addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+					}
+				}
+				throttler.mysqlClusterProbesChan <- clusterProbes
+				return nil
+			}()
+			if err != nil {
+				log.Errorf("refreshMySQLInventory: %+v", err)
 			}
-			throttler.mysqlClusterProbesChan <- clusterProbes
-			return nil
 		}()
 	}
 	return nil
@@ -529,7 +534,7 @@ func (throttler *Throttler) aggregateMySQLMetrics(ctx context.Context) error {
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
 		aggregatedMetric := aggregateMySQLProbes(ctx, probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTCPErrors, ignoreHostsThreshold)
-		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
+		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
 }

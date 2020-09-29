@@ -20,12 +20,13 @@ func SetupHTTPClient(httpTimeout time.Duration) *http.Client {
 	if httpTimeout == 0 {
 		httpTimeout = defaultTimeout
 	}
-	dialTimeout := func(network, addr string) (net.Conn, error) {
-		return net.DialTimeout(network, addr, httpTimeout)
-	}
 	httpTransport := &http.Transport{
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: false},
-		Dial:                  dialTimeout,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+		DialContext: (&net.Dialer{
+			Timeout:   httpTimeout,
+			KeepAlive: httpTimeout,
+			DualStack: true,
+		}).DialContext,
 		ResponseHeaderTimeout: httpTimeout,
 	}
 	httpClient := &http.Client{Transport: httpTransport}
