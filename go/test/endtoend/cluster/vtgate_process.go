@@ -147,6 +147,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 	if err != nil {
 		return false
 	}
+	fmt.Printf("============= GetStatusForTabletOfShard name=%s, endPointsCount=%d, resp.StatusCode=%+v\n", name, endPointsCount, resp.StatusCode)
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
 		respByte, _ := ioutil.ReadAll(resp.Body)
@@ -157,6 +158,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
 		masterConnectionExist := false
 		if object.Kind() == reflect.Map {
+			fmt.Printf("============= GetStatusForTabletOfShard name=%s, endPointsCount=%d,  object.MapKeys() =%+v\n", name, endPointsCount, object.MapKeys())
 			for _, key := range object.MapKeys() {
 				if key.String() == name {
 					value := fmt.Sprintf("%v", object.MapIndex(key))
