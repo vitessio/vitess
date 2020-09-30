@@ -295,7 +295,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 	}
 }
 
-func TestMultiStatement(t *testing.T) {
+func TestMultiStatementStopsOnError(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	sConn.Capabilities |= CapabilityClientMultiStatements
 	defer func() {
@@ -303,18 +303,19 @@ func TestMultiStatement(t *testing.T) {
 		sConn.Close()
 		cConn.Close()
 	}()
-	// Write OK packet, read it, compare.
+
 	err := cConn.WriteComQuery("select 1;select 2")
 	require.NoError(t, err)
 
+	// this handler will return an error on the first run, and fail the test if it's run more times
 	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
-	require.True(t, res, res)
+	require.True(t, res, res, "we should not break the connection because of execution errors")
 
 	data, err := cConn.ReadPacket()
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
-	require.EqualValues(t, data[0], ErrPacket)
+	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
 }
 
 type singleRun struct {
