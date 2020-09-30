@@ -319,15 +319,23 @@ func (d *coder) readByte() (byte, bool) {
 	return res, ok
 }
 
-func (d *coder) skipLenEncString() bool {
-	newPos, ok := skipLenEncString(d.data, d.pos)
-	d.pos = newPos
-	return ok
-}
+//func (d *coder) skipLenEncString() bool {
+//	newPos, ok := skipLenEncString(d.data, d.pos)
+//	d.pos = newPos
+//	return ok
+//}
 
 func (d *coder) readLenEncString() (string, bool) {
 	res, newPos, ok := readLenEncString(d.data, d.pos)
 	d.pos = newPos
+	return res, ok
+}
+
+func (d *coder) readLenEncInfo() (string, bool) {
+	res, newPos, ok := readLenEncString(d.data, d.pos)
+	if ok {
+		d.pos = newPos
+	}
 	return res, ok
 }
 
