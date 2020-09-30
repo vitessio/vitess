@@ -1329,16 +1329,17 @@ var (
 	}, {
 		input: "show table status",
 	}, {
-		input: "show table status from dbname",
+		input:  "show table status from dbname",
+		output: "show table status",
 	}, {
 		input:  "show table status in dbname",
-		output: "show table status from dbname",
+		output: "show table status",
 	}, {
 		input:  "show table status in dbname LIKE '%' ",
-		output: "show table status from dbname like '%'",
+		output: "show table status like '%'",
 	}, {
 		input:  "show table status from dbname Where col=42 ",
-		output: "show table status from dbname where col = 42",
+		output: "show table status where col = 42",
 	}, {
 		input: "show tables",
 	}, {

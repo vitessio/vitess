@@ -2050,9 +2050,5 @@ func (node AccessMode) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
 	buf.WriteString("show table status")
-	if node.DatabaseName != "" {
-		buf.WriteString(" from ")
-		buf.WriteString(node.DatabaseName)
-	}
 	buf.astPrintf(node, "%v", node.Filter)
 }
