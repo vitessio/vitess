@@ -1310,7 +1310,7 @@ func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
 	return warnings, (statusFlags & ServerMoreResultsExists) != 0, nil
 }
 
-//PacketOK contains the ok packet details
+// PacketOK contains the ok packet details
 type PacketOK struct {
 	affectedRows uint64
 	lastInsertID uint64
@@ -1320,6 +1320,12 @@ type PacketOK struct {
 
 	sessionStateChangeType  uint8
 	sessionStateChangeValue interface{}
+}
+
+// TrackSystemVariable contains the name and values of system variables
+type TrackSystemVariable struct {
+	names  string
+	values string
 }
 
 func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
@@ -1374,24 +1380,58 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			if !ok {
 				return fail("invalid OK packet session state change type: %v", data)
 			}
+			packetOK.sessionStateChangeType = sscType
 			switch sscType {
+			case SessionTrackSystemVariables:
+				// Move past the total length of the changed entity: 1 byte
+				_, ok := data.readByte()
+				if !ok {
+					return fail("invalid OK packet system variables length: %v", data)
+				}
+				names, ok := data.readLenEncString()
+				if !ok {
+					return fail("invalid OK packet system variables names: %v", data)
+				}
+				values, ok := data.readLenEncString()
+				if !ok {
+					return fail("invalid OK packet system variables values: %v", data)
+				}
+				packetOK.sessionStateChangeValue = &TrackSystemVariable{names: names, values: values}
+			case SessionTrackSchema:
+				// Move past the total length of the changed entity: 1 byte
+				_, ok := data.readByte()
+				if !ok {
+					return fail("invalid OK packet schema length: %v", data)
+				}
+				schema, ok := data.readLenEncString()
+				if !ok {
+					return fail("invalid OK packet schema: %v", data)
+				}
+				packetOK.sessionStateChangeValue = schema
+			case SessionTrackStateChange:
+				tracked, ok := data.readLenEncString()
+				if !ok {
+					return fail("invalid OK packet tracked: %v", data)
+				}
+				packetOK.sessionStateChangeValue = tracked
 			case SessionTrackGtids:
 				// Move past the total length of the changed entity: 1 byte
 				_, ok := data.readByte()
 				if !ok {
-					return fail("invalid OK packet gtids: %v", data)
+					return fail("invalid OK packet gtids length: %v", data)
 				}
 				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
 				_, ok = data.readByte()
 				if !ok {
-					return fail("invalid OK packet gtids: %v", data)
+					return fail("invalid OK packet gtids type: %v", data)
 				}
 				gtids, ok := data.readLenEncString()
 				if !ok {
 					return fail("invalid OK packet gtids: %v", data)
 				}
-				packetOK.sessionStateChangeType = sscType
 				packetOK.sessionStateChangeValue = gtids
+			default:
+				fail("invalid OK packet session state change: %v", data)
 			}
 		}
 	} else {
