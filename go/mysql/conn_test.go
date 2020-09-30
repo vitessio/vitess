@@ -226,11 +226,12 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
-	affectedRows, lastInsertID, statusFlags, warnings, _, err := cConn.parseOKPacket(data)
+	packetOk, err := cConn.parseOKPacket(data)
 	require.NoError(err)
-	if affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
-		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
-	}
+	assert.EqualValues(12, packetOk.affectedRows)
+	assert.EqualValues(34, packetOk.lastInsertID)
+	assert.EqualValues(56, packetOk.statusFlags)
+	assert.EqualValues(78, packetOk.warnings)
 
 	// Write OK packet with affected GTIDs, read it, compare.
 	gtids := "foo-bar"
@@ -243,11 +244,14 @@ func TestBasicPackets(t *testing.T) {
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
 	cConn.Capabilities = CapabilityFlags
-	affectedRows, lastInsertID, statusFlags, warnings, gtids, err = cConn.parseOKPacket(data)
+	packetOk, err = cConn.parseOKPacket(data)
 	require.NoError(err)
-	if affectedRows != 23 || lastInsertID != 45 || statusFlags != 67|ServerSessionStateChanged || warnings != 89 || gtids != "foo-bar" {
-		t.Errorf("parseOKPacket with gtids returned unexpected data: affected: %v last_insert: %v status flags: %v wrnings: %v gtids: %s", affectedRows, lastInsertID, statusFlags, warnings, gtids)
-	}
+	assert.EqualValues(23, packetOk.affectedRows)
+	assert.EqualValues(45, packetOk.lastInsertID)
+	assert.EqualValues(67|ServerSessionStateChanged, packetOk.statusFlags)
+	assert.EqualValues(89, packetOk.warnings)
+	assert.EqualValues(SessionTrackGtids, packetOk.sessionStateChangeType)
+	// TODO harshit: fix this assert.EqualValues("SessionTrackGtids", packetOk.sessionStateChangeValue)
 
 	// Write OK packet with EOF header, read it, compare.
 	err = sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78)
@@ -258,11 +262,12 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.True(isEOFPacket(data), "expected EOF")
 
-	affectedRows, lastInsertID, statusFlags, warnings, _, err = cConn.parseOKPacket(data)
+	packetOk, err = cConn.parseOKPacket(data)
 	require.NoError(err)
-	if affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
-		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
-	}
+	assert.EqualValues(12, packetOk.affectedRows)
+	assert.EqualValues(34, packetOk.lastInsertID)
+	assert.EqualValues(56, packetOk.statusFlags)
+	assert.EqualValues(78, packetOk.warnings)
 
 	// Write error packet, read it, compare.
 	err = sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason")
@@ -332,11 +337,11 @@ func TestOkPackets(t *testing.T) {
 	for i, data := range testDataPackets {
 		t.Run("data packet:"+strconv.Itoa(i), func(t *testing.T) {
 			// parse the packet
-			affectedRows, lastInsertID, statusFlags, warnings, _, err := cConn.parseOKPacket(data[4:])
+			packetOk, err := cConn.parseOKPacket(data[4:])
 			require.NoError(err)
 
 			// write the ok packet from server
-			err = sConn.writeOKPacket(affectedRows, lastInsertID, statusFlags, warnings)
+			err = sConn.writeOKPacket(packetOk.affectedRows, packetOk.lastInsertID, packetOk.statusFlags, packetOk.warnings)
 			require.NoError(err)
 
 			// receive the ok packer on client

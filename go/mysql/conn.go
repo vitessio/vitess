@@ -1310,14 +1310,27 @@ func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
 	return warnings, (statusFlags & ServerMoreResultsExists) != 0, nil
 }
 
-func (c *Conn) parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string, error) {
+//PacketOK contains the ok packet details
+type PacketOK struct {
+	affectedRows uint64
+	lastInsertID uint64
+	statusFlags  uint16
+	warnings     uint16
+	//info         string
+
+	sessionStateChangeType  uint8
+	sessionStateChangeValue interface{}
+}
+
+func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	data := &coder{
 		data: in,
 		pos:  1, // We already read the type.
 	}
+	packetOK := &PacketOK{}
 
-	fail := func(format string, args ...interface{}) (uint64, uint64, uint16, uint16, string, error) {
-		return 0, 0, 0, 0, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
+	fail := func(format string, args ...interface{}) (*PacketOK, error) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
 	}
 
 	// Affected rows.
@@ -1325,24 +1338,28 @@ func (c *Conn) parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string,
 	if !ok {
 		return fail("invalid OK packet affectedRows: %v", data)
 	}
+	packetOK.affectedRows = affectedRows
 
 	// Last Insert ID.
 	lastInsertID, ok := data.readLenEncInt()
 	if !ok {
 		return fail("invalid OK packet lastInsertID: %v", data)
 	}
+	packetOK.lastInsertID = lastInsertID
 
 	// Status flags.
 	statusFlags, ok := data.readUint16()
 	if !ok {
 		return fail("invalid OK packet statusFlags: %v", data)
 	}
+	packetOK.statusFlags = statusFlags
 
 	// Warnings.
 	warnings, ok := data.readUint16()
 	if !ok {
 		return fail("invalid OK packet warnings: %v", data)
 	}
+	packetOK.warnings = warnings
 
 	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
 		// info
@@ -1372,7 +1389,8 @@ func (c *Conn) parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string,
 				if !ok {
 					return fail("invalid OK packet gtids: %v", data)
 				}
-				return affectedRows, lastInsertID, statusFlags, warnings, gtids, nil
+				packetOK.sessionStateChangeType = sscType
+				packetOK.sessionStateChangeValue = gtids
 			}
 		}
 	} else {
@@ -1380,7 +1398,7 @@ func (c *Conn) parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string,
 		data.skipLenEncString()
 	}
 
-	return affectedRows, lastInsertID, statusFlags, warnings, "", nil
+	return packetOK, nil
 }
 
 // isErrorPacket determines whether or not the packet is an error packet. Mostly here for
