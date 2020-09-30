@@ -1310,7 +1310,7 @@ func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
 	return warnings, (statusFlags & ServerMoreResultsExists) != 0, nil
 }
 
-func parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string, error) {
+func (c *Conn) parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string, error) {
 	data := &coder{
 		data: in,
 		pos:  1, // We already read the type.
@@ -1344,10 +1344,10 @@ func parseOKPacket(in []byte) (uint64, uint64, uint16, uint16, string, error) {
 		return fail("invalid OK packet warnings: %v", data)
 	}
 
-	if CapabilityFlags&CapabilityClientSessionTrack != 0 {
+	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
 		// info
 		data.skipLenEncString()
-		if statusFlags&ServerSessionStateChanged != 0 {
+		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			_, ok := data.readLenEncInt()
 			if !ok {
 				return fail("invalid OK packet session state change length: %v", data)
