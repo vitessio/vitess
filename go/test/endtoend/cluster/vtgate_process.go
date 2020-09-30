@@ -161,6 +161,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 				if key.String() == name {
 					value := fmt.Sprintf("%v", object.MapIndex(key))
 					countStr := strconv.Itoa(endPointsCount)
+					fmt.Printf("============= GetStatusForTabletOfShard name=%s, endPointsCount=%d, countStr=%+v\n", name, endPointsCount, countStr)
 					return value == countStr
 				}
 			}
