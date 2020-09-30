@@ -129,7 +129,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	if originalType == topodatapb.TabletType_MASTER {
 		originalType = tm.baseTabletType
 	}
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
+	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE, DBActionNone); err != nil {
 		return err
 	}
 	// Loop until a backup exists, unless we were told to give up immediately.
@@ -178,7 +178,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// No-op, starting with empty database.
 	default:
 		// If anything failed, we should reset the original tablet type
-		if err := tm.tmState.ChangeTabletType(ctx, originalType); err != nil {
+		if err := tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone); err != nil {
 			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
 		}
 		return vterrors.Wrap(err, "Can't restore backup")
@@ -194,7 +194,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 
 	// Change type back to original type if we're ok to serve.
-	return tm.tmState.ChangeTabletType(ctx, originalType)
+	return tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone)
 }
 
 // restoreToTimeFromBinlog restores to the snapshot time of the keyspace
