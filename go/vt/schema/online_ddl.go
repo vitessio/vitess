@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -107,7 +108,7 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 	}
 	onlineDDL, err := FromJSON(bytes)
 	if err != nil {
-		return nil, fmt.Errorf("ReadTopo unmarshal %s error: %s", entryPath, err.Error())
+		return nil, vterrors.Wrapf(err, "ReadTopo unmarshal %s", entryPath)
 	}
 	return onlineDDL, nil
 }
@@ -161,7 +162,7 @@ func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, baseP
 	}
 	_, err = conn.Create(ctx, fmt.Sprintf("%s/%s", basePath, onlineDDL.UUID), bytes)
 	if err != nil {
-		return fmt.Errorf("onlineDDL topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
+		return vterrors.Wrapf(err, "onlineDDL topo create: keyspace=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	return nil
 }
