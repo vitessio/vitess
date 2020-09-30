@@ -123,10 +123,7 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	case rt.isMaster || rt.mode == tabletenv.Disable:
 		return 0, nil
 	case rt.mode == tabletenv.Heartbeat:
-		{
-			_, err := rt.hr.Status()
-			return 0, err
-		}
+		return rt.hr.Status()
 	}
 	// rt.mode == tabletenv.Poller
 	return rt.poller.Status()
