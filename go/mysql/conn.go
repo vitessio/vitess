@@ -744,6 +744,16 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
 }
 
+func (c *Conn) logAndWriteError(inputErr error) bool {
+	err := c.writeErrorPacketFromError(inputErr)
+	if err != nil {
+		// If we can't even write the error, we're done.
+		log.Errorf("Conn %v: Error writing query error: %v", c, err)
+		return false
+	}
+	return true
+}
+
 // writeEOFPacket writes an EOF packet, through the buffer, and
 // doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
@@ -783,9 +793,9 @@ func (c *Conn) handleNextCommand(handler Handler) (kontinue bool) {
 		query := c.parseComQuery(data)
 		c.recycleReadPacket()
 
-		queries, err := c.splitQueries(query)
-		if err != nil {
-			return true
+		queries, kontinue := c.splitQueries(query)
+		if !kontinue {
+			return false
 		}
 		for index, sql := range queries {
 			more := false
@@ -793,7 +803,7 @@ func (c *Conn) handleNextCommand(handler Handler) (kontinue bool) {
 				more = true
 			}
 			res := c.execBufferedQuery(handler, sql, more)
-			if res != success {
+			if res != execSuccess {
 				return res != connErr
 			}
 		}
@@ -963,9 +973,7 @@ func (c *Conn) comPrepare(handler Handler, data []byte) bool {
 		queries, err = sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+			if !c.logAndWriteError(err) {
 				return false
 			}
 		}
@@ -974,14 +982,7 @@ func (c *Conn) comPrepare(handler Handler, data []byte) bool {
 	}
 
 	if len(queries) != 1 {
-		log.Errorf("can not prepare multiple statements", c)
-		if werr := c.writeErrorPacketFromError(fmt.Errorf("can not prepare multiple statements")); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-			return false
-		}
-
-		return true
+		return c.logAndWriteError(fmt.Errorf("can not prepare multiple statements"))
 	}
 
 	// Popoulate PrepareData
@@ -994,9 +995,7 @@ func (c *Conn) comPrepare(handler Handler, data []byte) bool {
 	statement, err := sqlparser.ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Conn %v: Error writing prepared statement error: %v", c, werr)
+		if !c.logAndWriteError(err) {
 			return false
 		}
 	}
@@ -1029,12 +1028,7 @@ func (c *Conn) comPrepare(handler Handler, data []byte) bool {
 	fld, err := handler.ComPrepare(c, queries[0], bindVars)
 
 	if err != nil {
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
-			return false
-		}
-		return true
+		return c.logAndWriteError(err)
 	}
 
 	if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
@@ -1064,12 +1058,7 @@ func (c *Conn) stmtExecute(handler Handler, data []byte) bool {
 	}
 
 	if err != nil {
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
-			return false
-		}
-		return true
+		return c.logAndWriteError(err)
 	}
 
 	callbackCalled := false
@@ -1104,9 +1093,7 @@ func (c *Conn) stmtExecute(handler Handler, data []byte) bool {
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
+		if !c.logAndWriteError(err) {
 			return false
 		}
 		return true
@@ -1132,9 +1119,9 @@ func (c *Conn) stmtExecute(handler Handler, data []byte) bool {
 	return true
 }
 
-func (c *Conn) splitQueries(query string) ([]string, error) {
+func (c *Conn) splitQueries(query string) ([]string, bool) {
 	if c.Capabilities&CapabilityClientMultiStatements == 0 {
-		return []string{query}, nil
+		return []string{query}, true
 	}
 
 	queries, err := sqlparser.SplitStatementToPieces(query)
@@ -1142,19 +1129,18 @@ func (c *Conn) splitQueries(query string) ([]string, error) {
 		log.Errorf("Conn %v: Error splitting query: %v", c, err)
 		c.startWriterBuffering()
 
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-			return nil, werr
+		if !c.logAndWriteError(err) {
+			return nil, false
 		}
 
 		if err := c.endWriterBuffering(); err != nil {
 			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			return nil, false
 		}
-		return nil, err
+		return nil, true
 	}
 
-	return queries, nil
+	return queries, true
 }
 
 func (c *Conn) execBufferedQuery(handler Handler, sql string, more bool) execResult {
@@ -1171,7 +1157,7 @@ func (c *Conn) execBufferedQuery(handler Handler, sql string, more bool) execRes
 type execResult int8
 
 const (
-	success execResult = iota
+	execSuccess execResult = iota
 	execErr
 	connErr
 )
@@ -1221,9 +1207,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
+		if !c.logAndWriteError(err) {
 			return connErr
 		}
 		return execErr
@@ -1246,7 +1230,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		}
 	}
 
-	return success
+	return execSuccess
 }
 
 //
