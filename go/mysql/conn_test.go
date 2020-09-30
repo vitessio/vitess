@@ -307,10 +307,9 @@ func TestMultiStatement(t *testing.T) {
 	err := cConn.WriteComQuery("select 1;select 2")
 	require.NoError(t, err)
 
-	expectedErr := fmt.Errorf("execution failed")
-	handler := &singleRun{t: t, err: expectedErr}
-	err = sConn.handleNextCommand(handler)
-	require.Same(t, expectedErr, err)
+	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, res)
 
 	data, err := cConn.ReadPacket()
 	require.NoError(t, err)

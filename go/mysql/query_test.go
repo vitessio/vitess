@@ -628,9 +628,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 
 	for i := 0; i < count; i++ {
-		err := sConn.handleNextCommand(&handler)
-		if err != nil {
-			t.Fatalf("error handling command: %v", err)
+		kontinue := sConn.handleNextCommand(&handler)
+		if !kontinue {
+			t.Fatalf("error handling command")
 		}
 	}
 
