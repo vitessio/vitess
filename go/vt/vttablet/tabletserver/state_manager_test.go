@@ -119,14 +119,13 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.te, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
-	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
 
-	verifySubcomponent(t, 4, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	verifySubcomponent(t, 5, sm.watcher, testStateClosed)
-
 	verifySubcomponent(t, 6, sm.se, testStateOpen)
 	verifySubcomponent(t, 7, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 8, sm.qe, testStateOpen)
@@ -144,14 +143,14 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.te, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 
-	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 4, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 7, sm.qe, testStateOpen)
@@ -170,10 +169,11 @@ func TestStateManagerClose(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotConnected, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.te, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
-	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 
 	verifySubcomponent(t, 5, sm.txThrottler, testStateClosed)
 	verifySubcomponent(t, 6, sm.qe, testStateClosed)
@@ -181,7 +181,6 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 8, sm.vstreamer, testStateClosed)
 	verifySubcomponent(t, 9, sm.rt, testStateClosed)
 	verifySubcomponent(t, 10, sm.se, testStateClosed)
-	verifySubcomponent(t, 11, sm.throttler, testStateClosed)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
