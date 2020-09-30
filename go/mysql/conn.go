@@ -675,18 +675,18 @@ func (c *Conn) IsClosed() bool {
 // writeOKPacket writes an OK packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
+func (c *Conn) writeOKPacket(packetOk *PacketOK) error {
 	length := 1 + // OKPacket
-		lenEncIntSize(affectedRows) +
-		lenEncIntSize(lastInsertID) +
+		lenEncIntSize(packetOk.affectedRows) +
+		lenEncIntSize(packetOk.lastInsertID) +
 		2 + // flags
 		2 // warnings
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeByte(data, pos, OKPacket) //header - OK or EOF
-	pos = writeLenEncInt(data, pos, affectedRows)
-	pos = writeLenEncInt(data, pos, lastInsertID)
-	pos = writeUint16(data, pos, flags)
-	_ = writeUint16(data, pos, warnings)
+	pos = writeLenEncInt(data, pos, packetOk.affectedRows)
+	pos = writeLenEncInt(data, pos, packetOk.lastInsertID)
+	pos = writeUint16(data, pos, packetOk.statusFlags)
+	_ = writeUint16(data, pos, packetOk.warnings)
 
 	return c.writeEphemeralPacket()
 }
@@ -903,7 +903,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				return err
 			}
 		} else {
-			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+			if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 				log.Errorf("Error writing ComPing result to %s: %v", c, err)
 				return err
 			}
@@ -1171,7 +1171,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
-		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+		if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 			log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
 			return err
 		}
@@ -1182,7 +1182,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		handler.ComResetConnection(c)
 		// Reset prepared statements
 		c.PrepareData = make(map[uint32]*PrepareData)
-		err = c.writeOKPacket(0, 0, 0, 0)
+		err = c.writeOKPacket(&PacketOK{})
 		if err != nil {
 			c.writeErrorPacketFromError(err)
 		}

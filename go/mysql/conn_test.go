@@ -218,7 +218,12 @@ func TestBasicPackets(t *testing.T) {
 	}()
 
 	// Write OK packet, read it, compare.
-	err := sConn.writeOKPacket(12, 34, 56, 78)
+	err := sConn.writeOKPacket(&PacketOK{
+		affectedRows: 12,
+		lastInsertID: 34,
+		statusFlags:  56,
+		warnings:     78,
+	})
 	require.NoError(err)
 
 	data, err := cConn.ReadPacket()
@@ -341,7 +346,7 @@ func TestOkPackets(t *testing.T) {
 			require.NoError(err)
 
 			// write the ok packet from server
-			err = sConn.writeOKPacket(packetOk.affectedRows, packetOk.lastInsertID, packetOk.statusFlags, packetOk.warnings)
+			err = sConn.writeOKPacket(packetOk)
 			require.NoError(err)
 
 			// receive the ok packer on client
