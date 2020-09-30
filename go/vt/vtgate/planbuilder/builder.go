@@ -341,7 +341,27 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
+	case *sqlparser.ShowTableStatus:
+		return buildShowTableStatusPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+}
+
+func buildShowTableStatusPlan(stmt *sqlparser.ShowTableStatus, vschema ContextVSchema) (engine.Primitive, error) {
+	destination, keyspace, _, err := vschema.TargetDestination(stmt.DatabaseName)
+	if err != nil {
+		return nil, err
+	}
+	if destination == nil {
+		destination = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             sqlparser.String(stmt),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
 }
