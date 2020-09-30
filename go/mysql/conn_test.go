@@ -19,8 +19,11 @@ package mysql
 import (
 	"bytes"
 	crypto_rand "crypto/rand"
+	"encoding/hex"
 	"math/rand"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -291,6 +294,79 @@ func TestBasicPackets(t *testing.T) {
 	require.NoError(err)
 	require.NotEmpty(data)
 	assert.True(isEOFPacket(data), "expected EOF")
+}
+
+func TestOkPackets(t *testing.T) {
+	require := require.New(t)
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	testDataPackets := [][]byte{
+		StringToPacket(`
+07 00 00 02 00 00 00 02    00 00 00                   ...........
+`),
+		StringToPacket(`
+0d 00 00 02 00 00 00 02    40 00 00 00 04 03 02 01    ........@.......
+31                                                    1
+`),
+		StringToPacket(`
+10 00 00 02 00 00 00 02    40 00 00 00 07 01 05 04    ........@.......
+74 65 73 74                                           test
+`),
+		StringToPacket(`
+1d 00 00 01 00 00 00 00    40 00 00 00 14 00 0f 0a    ........@.......
+61 75 74 6f 63 6f 6d 6d    69 74 03 4f 46 46 02 01    autocommit.OFF..
+31                                                    1
+`),
+		StringToPacket(`
+13 00 00 01 00 00 00 00    40 00 00 00 0a 01 05 04    ........@.......
+74 65 73 74 02 01 31                                  test..1
+`),
+	}
+
+	for i, data := range testDataPackets {
+		t.Run("data packet:"+strconv.Itoa(i), func(t *testing.T) {
+			// parse the packet
+			affectedRows, lastInsertID, statusFlags, warnings, _, err := parseOKPacket(data[4:])
+			require.NoError(err)
+
+			// write the ok packet from server
+			err = sConn.writeOKPacket(affectedRows, lastInsertID, statusFlags, warnings)
+			require.NoError(err)
+
+			// receive the ok packer on client
+			readData, err := cConn.ReadPacket()
+			require.NoError(err)
+			require.Equal(data[4:], readData)
+		})
+	}
+}
+
+func StringToPacket(value string) (data []byte) {
+	lines := strings.Split(value, "\n")
+	data = make([]byte, 0, 16*len(lines))
+	var values []string
+
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		if len(line) < 51 {
+			values = strings.Split(line, " ")
+		} else {
+			values = strings.Split(line[:51], " ")
+		}
+		for _, val := range values {
+			i, _ := hex.DecodeString(val)
+			data = append(data, i...)
+		}
+	}
+
+	return data
 }
 
 // Mostly a sanity check.
