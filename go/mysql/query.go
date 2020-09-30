@@ -427,7 +427,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 			} else {
 				var statusFlags uint16
 				var gtids string
-				_, _, statusFlags, warnings, gtids, err = parseOKPacket(data)
+				_, _, statusFlags, warnings, gtids, err = c.parseOKPacket(data)
 				if err != nil {
 					return nil, false, 0, err
 				}
@@ -492,7 +492,7 @@ func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64,
 
 	switch data[0] {
 	case OKPacket:
-		affectedRows, lastInsertID, status, warnings, gtids, err := parseOKPacket(data)
+		affectedRows, lastInsertID, status, warnings, gtids, err := c.parseOKPacket(data)
 		return affectedRows, lastInsertID, 0, (status & ServerMoreResultsExists) != 0, warnings, gtids, err
 	case ErrPacket:
 		// Error

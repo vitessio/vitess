@@ -226,7 +226,7 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
-	affectedRows, lastInsertID, statusFlags, warnings, _, err := parseOKPacket(data)
+	affectedRows, lastInsertID, statusFlags, warnings, _, err := cConn.parseOKPacket(data)
 	require.NoError(err)
 	if affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
@@ -242,7 +242,8 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
-	affectedRows, lastInsertID, statusFlags, warnings, gtids, err = parseOKPacket(data)
+	cConn.Capabilities = CapabilityFlags
+	affectedRows, lastInsertID, statusFlags, warnings, gtids, err = cConn.parseOKPacket(data)
 	require.NoError(err)
 	if affectedRows != 23 || lastInsertID != 45 || statusFlags != 67|ServerSessionStateChanged || warnings != 89 || gtids != "foo-bar" {
 		t.Errorf("parseOKPacket with gtids returned unexpected data: affected: %v last_insert: %v status flags: %v wrnings: %v gtids: %s", affectedRows, lastInsertID, statusFlags, warnings, gtids)
@@ -257,7 +258,7 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.True(isEOFPacket(data), "expected EOF")
 
-	affectedRows, lastInsertID, statusFlags, warnings, _, err = parseOKPacket(data)
+	affectedRows, lastInsertID, statusFlags, warnings, _, err = cConn.parseOKPacket(data)
 	require.NoError(err)
 	if affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
@@ -331,7 +332,7 @@ func TestOkPackets(t *testing.T) {
 	for i, data := range testDataPackets {
 		t.Run("data packet:"+strconv.Itoa(i), func(t *testing.T) {
 			// parse the packet
-			affectedRows, lastInsertID, statusFlags, warnings, _, err := parseOKPacket(data[4:])
+			affectedRows, lastInsertID, statusFlags, warnings, _, err := cConn.parseOKPacket(data[4:])
 			require.NoError(err)
 
 			// write the ok packet from server
