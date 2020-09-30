@@ -831,7 +831,7 @@ func (c *Conn) handleNextCommand(handler Handler) (kontinue bool) {
 			delete(c.PrepareData, stmtID)
 		}
 	case ComStmtReset:
-		c.stmtReset(data)
+		return c.stmtReset(data)
 	case ComResetConnection:
 		// Clean up and reset the connection
 		c.recycleReadPacket()
