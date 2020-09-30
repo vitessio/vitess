@@ -425,15 +425,15 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 					return nil, false, 0, err
 				}
 			} else {
-				var statusFlags uint16
-				var gtids string
-				_, _, statusFlags, warnings, gtids, err = c.parseOKPacket(data)
+				packetOk, err := c.parseOKPacket(data)
 				if err != nil {
 					return nil, false, 0, err
 				}
-				more = (statusFlags & ServerMoreResultsExists) != 0
+				warnings = packetOk.warnings
+				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
+				// TODO harshit: fix this
 				if gtids != "" {
-					result.SessionStateChanges = gtids
+					result.SessionStateChanges = "gtids"
 				}
 			}
 			return result, more, warnings, nil
@@ -492,8 +492,9 @@ func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64,
 
 	switch data[0] {
 	case OKPacket:
-		affectedRows, lastInsertID, status, warnings, gtids, err := c.parseOKPacket(data)
-		return affectedRows, lastInsertID, 0, (status & ServerMoreResultsExists) != 0, warnings, gtids, err
+		packetOk, err := c.parseOKPacket(data)
+		// TODO harshit : change this to return okpacket
+		return packetOk.affectedRows, packetOk.lastInsertID, 0, (packetOk.statusFlags & ServerMoreResultsExists) != 0, packetOk.warnings, "packetOk.", err
 	case ErrPacket:
 		// Error
 		err = ParseErrorPacket(data)
