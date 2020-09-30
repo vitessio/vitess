@@ -143,12 +143,10 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 // GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
 // endPointsCount : number of endpoints
 func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCount int) bool {
-	fmt.Printf("============= GetStatusForTabletOfShard name=%s, endPointsCount=%d, vtgate.VerifyURL=%+v\n", name, endPointsCount, vtgate.VerifyURL)
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
 		return false
 	}
-	fmt.Printf("============= GetStatusForTabletOfShard name=%s, endPointsCount=%d, resp.StatusCode=%+v\n", name, endPointsCount, resp.StatusCode)
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
 		respByte, _ := ioutil.ReadAll(resp.Body)
