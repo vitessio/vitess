@@ -477,11 +477,11 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
 	sm.qe.StopServing()
 	sm.tracker.Close()
-	sm.throttler.Close()
 	sm.requests.Wait()
 }
 
@@ -495,7 +495,6 @@ func (sm *stateManager) closeAll() {
 	sm.vstreamer.Close()
 	sm.rt.Close()
 	sm.se.Close()
-	sm.throttler.Close()
 	sm.setState(topodatapb.TabletType_UNKNOWN, StateNotConnected)
 }
 
