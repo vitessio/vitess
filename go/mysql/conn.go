@@ -1316,7 +1316,7 @@ type PacketOK struct {
 	lastInsertID uint64
 	statusFlags  uint16
 	warnings     uint16
-	//info         string
+	info         string
 
 	sessionStateChangeType  uint8
 	sessionStateChangeValue interface{}
@@ -1363,7 +1363,8 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 
 	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
 		// info
-		data.skipLenEncString()
+		info, _ := data.readLenEncInfo()
+		packetOK.info = info
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			_, ok := data.readLenEncInt()
 			if !ok {
@@ -1395,7 +1396,8 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 		}
 	} else {
 		// info
-		data.skipLenEncString()
+		info, _ := data.readLenEncInfo()
+		packetOK.info = info
 	}
 
 	return packetOK, nil
