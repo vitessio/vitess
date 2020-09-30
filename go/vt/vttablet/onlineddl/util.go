@@ -89,11 +89,6 @@ func RandomHash() string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// ShortRandomHash returns a 8 hex character random string
-func ShortRandomHash() string {
-	return RandomHash()[0:8]
-}
-
 // ToReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
 // (as opposed to unix timestamp which is just a number)
 // Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
