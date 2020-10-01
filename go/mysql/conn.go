@@ -678,16 +678,42 @@ func (c *Conn) IsClosed() bool {
 func (c *Conn) writeOKPacket(packetOk *PacketOK) error {
 	length := 1 + // OKPacket
 		lenEncIntSize(packetOk.affectedRows) +
-		lenEncIntSize(packetOk.lastInsertID) +
-		2 + // flags
-		2 // warnings
+		lenEncIntSize(packetOk.lastInsertID)
+	if c.Capabilities&CapabilityClientProtocol41 == CapabilityClientProtocol41 {
+		length += 4 // status_flags + warnings
+	} else if c.Capabilities&CapabilityClientTransactions == CapabilityClientTransactions {
+		length += 2 // status_flags
+	}
+
+	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		length += lenEncStringSize(packetOk.info) // info
+		if packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
+			length += 1 + // total length
+				1 // type
+		}
+	} else {
+		length += len(packetOk.info) // info
+	}
+
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeByte(data, pos, OKPacket) //header - OK or EOF
 	pos = writeLenEncInt(data, pos, packetOk.affectedRows)
 	pos = writeLenEncInt(data, pos, packetOk.lastInsertID)
-	pos = writeUint16(data, pos, packetOk.statusFlags)
-	_ = writeUint16(data, pos, packetOk.warnings)
-
+	if c.Capabilities&CapabilityClientProtocol41 == CapabilityClientProtocol41 {
+		pos = writeUint16(data, pos, packetOk.statusFlags)
+		pos = writeUint16(data, pos, packetOk.warnings)
+	} else if c.Capabilities&CapabilityClientTransactions == CapabilityClientTransactions {
+		pos = writeUint16(data, pos, packetOk.statusFlags)
+	}
+	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		pos = writeLenEncString(data, pos, packetOk.info)
+		if packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
+			pos = writeByte(data, pos, 0)
+			_ = writeByte(data, pos, packetOk.sessionStateChangeType)
+		}
+	} else {
+		_ = writeEOFString(data, pos, packetOk.info)
+	}
 	return c.writeEphemeralPacket()
 }
 
@@ -1360,17 +1386,20 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	}
 	packetOK.statusFlags = statusFlags
 
-	// Warnings.
-	warnings, ok := data.readUint16()
-	if !ok {
-		return fail("invalid OK packet warnings: %v", data)
+	if c.Capabilities&CapabilityClientProtocol41 == CapabilityClientProtocol41 {
+		// Warnings.
+		warnings, ok := data.readUint16()
+		if !ok {
+			return fail("invalid OK packet warnings: %v", data)
+		}
+		packetOK.warnings = warnings
 	}
-	packetOK.warnings = warnings
 
 	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
 		// info
 		info, _ := data.readLenEncInfo()
 		packetOK.info = info
+		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			_, ok := data.readLenEncInt()
 			if !ok {
