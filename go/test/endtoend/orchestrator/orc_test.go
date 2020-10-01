@@ -475,8 +475,8 @@ func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) erro
 
 func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTablets bool) {
 	if pingTablets {
-		err := cluster.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
-		require.NoError(t, err)
+		out, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "-ping-tablets=true")
+		require.NoError(t, err, out)
 	} else {
 		err := cluster.VtctlclientProcess.ExecuteCommand("Validate")
 		require.NoError(t, err)

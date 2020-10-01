@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
@@ -32,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -71,36 +69,16 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer cancel()
-	cells, err := ts.GetKnownCells(ctx)
+	tablets, err := ts.GetTabletMapForShard(ctx, config.Config.Keyspace, config.Config.Shard)
 	if err != nil {
-		log.Errore(err)
-		return
-	}
-
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-	defer refreshCancel()
-	var wg sync.WaitGroup
-	for _, cell := range cells {
-		wg.Add(1)
-		go func(cell string) {
-			defer wg.Done()
-			refreshTabletsInCell(refreshCtx, cell, loader)
-		}(cell)
-	}
-	wg.Wait()
-}
-
-func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey)) {
-	latestInstances := make(map[inst.InstanceKey]bool)
-	tablets, err := topotools.GetAllTablets(ctx, ts, cell)
-	if err != nil {
-		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
+		log.Errorf("Error fetching topo info for keyspace/shard %v/%v: %v", config.Config.Keyspace, config.Config.Shard, err)
 		return
 	}
 
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
+	latestInstances := make(map[inst.InstanceKey]bool)
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
 		if tablet.MysqlHostname == "" {
@@ -132,8 +110,8 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 
 	// Forget tablets that were removed.
 	toForget := make(map[inst.InstanceKey]*topodatapb.Tablet)
-	query := "select hostname, port, info from vitess_tablet where cell = ?"
-	err = db.QueryOrchestrator(query, sqlutils.Args(cell), func(row sqlutils.RowMap) error {
+	query := "select hostname, port, info from vitess_tablet"
+	err = db.QueryOrchestrator(query, nil, func(row sqlutils.RowMap) error {
 		curKey := inst.InstanceKey{
 			Hostname: row.GetString("hostname"),
 			Port:     row.GetInt("port"),
@@ -152,7 +130,7 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 		log.Errore(err)
 	}
 	for instanceKey, tablet := range toForget {
-		log.Infof("Forgeting: %v", tablet)
+		log.Infof("Forgetting: %v", tablet)
 		_, err := db.ExecOrchestrator(`
 					delete
 						from vitess_tablet

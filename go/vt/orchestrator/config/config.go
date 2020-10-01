@@ -255,6 +255,8 @@ type Configuration struct {
 	MaxConcurrentReplicaOperations             int               // Maximum number of concurrent operations on replicas
 	InstanceDBExecContextTimeoutSeconds        int               // Timeout on context used while calling ExecContext on instance database
 	LockShardTimeoutSeconds                    int               // Timeout on context used to lock shard. Should be a small value because we should fail-fast
+	Keyspace                                   string            // Keyspace that this instance is watching
+	Shard                                      string            // Shard that this instance is watching
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -429,6 +431,9 @@ func newConfiguration() *Configuration {
 }
 
 func (this *Configuration) postReadAdjustments() error {
+	if this.Keyspace == "" || this.Shard == "" {
+		log.Fatalf("Keyspace and Shard are required")
+	}
 	if this.MySQLOrchestratorCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {

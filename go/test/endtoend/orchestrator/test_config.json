@@ -5,5 +5,7 @@
   "MySQLReplicaUser": "vt_repl",
   "MySQLReplicaPassword": "",
   "RecoveryPeriodBlockSeconds": 1,
-  "InstancePollSeconds": 1
+  "InstancePollSeconds": 1,
+  "Keyspace": "ks",
+  "Shard": "0"
 }
