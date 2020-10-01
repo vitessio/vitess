@@ -644,10 +644,8 @@ func TestServer(t *testing.T) {
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
-	output, ok = runMysql(t, params, "panic")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "panic")
+	require.Error(t, err)
 	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
@@ -666,10 +664,8 @@ func TestServer(t *testing.T) {
 	}
 
 	// Run a 'select rows' command with results.
-	output, ok = runMysql(t, params, "select rows")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "select rows")
+	require.NoError(t, err)
 	if !strings.Contains(output, "nice name") ||
 		!strings.Contains(output, "nicer name") ||
 		!strings.Contains(output, "2 rows in set") {
@@ -681,10 +677,8 @@ func TestServer(t *testing.T) {
 
 	// Run a 'select rows' command with warnings
 	th.SetWarnings(13)
-	output, ok = runMysql(t, params, "select rows")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "select rows")
+	require.NoError(t, err)
 	if !strings.Contains(output, "nice name") ||
 		!strings.Contains(output, "nicer name") ||
 		!strings.Contains(output, "2 rows in set") ||
@@ -696,39 +690,31 @@ func TestServer(t *testing.T) {
 	// If there's an error after streaming has started,
 	// we should get a 2013
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
-	output, ok = runMysql(t, params, "error after send")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "error after send")
+	require.Error(t, err)
 	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
 	}
 
 	// Run an 'insert' command, no rows, but rows affected.
-	output, ok = runMysql(t, params, "insert")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "insert")
+	require.NoError(t, err)
 	if !strings.Contains(output, "Query OK, 123 rows affected") {
 		t.Errorf("Unexpected output for 'insert'")
 	}
 
 	// Run a 'schema echo' command, to make sure db name is right.
 	params.DbName = "XXXfancyXXX"
-	output, ok = runMysql(t, params, "schema echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "schema echo")
+	require.NoError(t, err)
 	if !strings.Contains(output, params.DbName) {
 		t.Errorf("Unexpected output for 'schema echo'")
 	}
 
 	// Sanity check: make sure this didn't go through SSL
-	output, ok = runMysql(t, params, "ssl echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "ssl echo")
+	require.NoError(t, err)
 	if !strings.Contains(output, "ssl_flag") ||
 		!strings.Contains(output, "OFF") ||
 		!strings.Contains(output, "1 row in set") {
@@ -736,10 +722,8 @@ func TestServer(t *testing.T) {
 	}
 
 	// UserData check: checks the server user data is correct.
-	output, ok = runMysql(t, params, "userData echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "userData echo")
+	require.NoError(t, err)
 	if !strings.Contains(output, "user1") ||
 		!strings.Contains(output, "user_data") ||
 		!strings.Contains(output, "userData1") {
@@ -748,10 +732,8 @@ func TestServer(t *testing.T) {
 
 	// Permissions check: check a bad password is rejected.
 	params.Pass = "bad"
-	output, ok = runMysql(t, params, "select rows")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "select rows")
+	require.Error(t, err)
 	if !strings.Contains(output, "1045") ||
 		!strings.Contains(output, "28000") ||
 		!strings.Contains(output, "Access denied") {
@@ -761,10 +743,8 @@ func TestServer(t *testing.T) {
 	// Permissions check: check an unknown user is rejected.
 	params.Pass = "password1"
 	params.Uname = "user2"
-	output, ok = runMysql(t, params, "select rows")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "select rows")
+	require.Error(t, err)
 	if !strings.Contains(output, "1045") ||
 		!strings.Contains(output, "28000") ||
 		!strings.Contains(output, "Access denied") {
@@ -1219,6 +1199,14 @@ const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
 
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
+	output, err := runMysqlWithErr(t, params, command)
+	if err != nil {
+		return output, false
+	}
+	return output, true
+
+}
+func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
@@ -1277,9 +1265,9 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 	out, err := cmd.CombinedOutput()
 	output := string(out)
 	if err != nil {
-		return output, false
+		return output, err
 	}
-	return output, true
+	return output, nil
 }
 
 // binaryPath does a limited path lookup for a command,
