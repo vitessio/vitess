@@ -297,26 +297,6 @@ func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 	return err
 }
 
-// getThrottleReplicas evaluates which tablets should be used to throttle the migration
-func (e *Executor) getThrottleReplicas(ctx context.Context) ([]string, error) {
-	throttleReplicas := []string{}
-
-	tabletAliases, err := e.ts.FindAllTabletAliasesInShard(ctx, e.keyspace, e.shard)
-	if err != nil {
-		return throttleReplicas, err
-	}
-	for _, tabletAlias := range tabletAliases {
-		tablet, err := e.ts.GetTablet(ctx, tabletAlias)
-		if err != nil {
-			return throttleReplicas, err
-		}
-		if tablet.Type == topodatapb.TabletType_REPLICA {
-			throttleReplicas = append(throttleReplicas, tablet.MysqlAddr())
-		}
-	}
-	return throttleReplicas, nil
-}
-
 // ExecuteWithGhost validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
@@ -591,6 +571,20 @@ export MYSQL_PWD
 	  }
 	}
 
+	sub get_slave_lag {
+		my ($self, %args) = @_;
+
+		return sub {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check")) {
+				# Got HTTP 200 OK, means throttler is happy
+				return 0;
+			}	else {
+				# Throttler requests to hold back
+				return 2147483647; # maxint, report *very* high lag
+			}
+		};
+	}
+
 	1;
 	`
 	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", *servenv.Port))
@@ -619,10 +613,6 @@ export MYSQL_PWD
 	log.Infof("+ OK")
 
 	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
-		return err
-	}
-	throttleReplicas, err := e.getThrottleReplicas(ctx)
-	if err != nil {
 		return err
 	}
 
@@ -671,24 +661,17 @@ export MYSQL_PWD
 			newTableName,
 			`--alter`,
 			alterOptions,
+			`--check-slave-lag`, // We use primary's identity so that pt-online-schema-change calls our lag plugin for exactly 1 server
+			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
 			executeFlag,
 			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
 		}
+
 		if execute {
 			args = append(args,
 				`--no-drop-new-table`,
 				`--no-drop-old-table`,
 			)
-			if len(throttleReplicas) > 0 {
-				// For pt-osc we only use a single replica (because --check-slave-lag only supports a single entry).
-				// In the future this will all be replaced by freno throttling
-				// tokenize host:port
-				tokens := strings.Split(throttleReplicas[0], ":")
-				args = append(args,
-					`--check-slave-lag`,
-					fmt.Sprintf(`h=%s,P=%s,D=%s,t=%s,u=%s`, tokens[0], tokens[1], e.dbName, onlineDDL.Table, onlineDDLUser),
-				)
-			}
 		}
 		args = append(args, strings.Fields(onlineDDL.Options)...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
@@ -1235,8 +1218,6 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		// We can fill them in.
 		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
 		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
-
-		fmt.Printf("======= will run this insert: %s \n", vx.Query)
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
