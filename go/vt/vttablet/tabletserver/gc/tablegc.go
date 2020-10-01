@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -100,9 +101,10 @@ type TableGC struct {
 
 	lastSuccessfulThrottleCheck time.Time
 
-	initOnce   sync.Once
 	initMutex  sync.Mutex
 	purgeMutex sync.Mutex
+
+	tickers [](*timer.SuspendableTicker)
 
 	purgingTables          map[string]bool
 	dropTablesChan         chan string
@@ -139,6 +141,8 @@ func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topoda
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 
+		tickers: [](*timer.SuspendableTicker){},
+
 		purgingTables:          map[string]bool{},
 		dropTablesChan:         make(chan string),
 		transitionRequestsChan: make(chan *transitionRequest),
@@ -154,6 +158,7 @@ func (collector *TableGC) InitDBConfig(keyspace, shard, dbName string) {
 	collector.keyspace = keyspace
 	collector.shard = shard
 	collector.dbName = dbName
+	go collector.Operate(context.Background())
 }
 
 // Open opens database pool and initializes the schema
@@ -171,11 +176,11 @@ func (collector *TableGC) Open() (err error) {
 
 	log.Info("TableGC: opening")
 	collector.pool.Open(collector.env.Config().DB.AppWithDB(), collector.env.Config().DB.DbaWithDB(), collector.env.Config().DB.AppDebugWithDB())
-	collector.initOnce.Do(func() {
-		// Operate() will be mindful of Open/Close state changes, so we only need to start it once.
-		go collector.Operate(context.Background())
-	})
 	atomic.StoreInt64(&collector.isOpen, 1)
+
+	for _, t := range collector.tickers {
+		t.Resume()
+	}
 
 	return nil
 }
@@ -190,41 +195,57 @@ func (collector *TableGC) Close() {
 	}
 
 	log.Info("TableGC: closing")
+	for _, t := range collector.tickers {
+		t.Suspend()
+	}
 	collector.pool.Close()
 	atomic.StoreInt64(&collector.isOpen, 0)
 }
 
 // Operate is the main entry point for the table garbage collector operation and logic.
 func (collector *TableGC) Operate(ctx context.Context) {
-	tableCheckTicker := time.NewTicker(*checkInterval)
-	leaderCheckTicker := time.NewTicker(leaderCheckInterval)
-	purgeReentranceTicker := time.NewTicker(purgeReentranceInterval)
+
+	addTicker := func(d time.Duration) *timer.SuspendableTicker {
+		collector.initMutex.Lock()
+		defer collector.initMutex.Unlock()
+
+		t := timer.NewSuspendableTicker(d, true)
+		collector.tickers = append(collector.tickers, t)
+		return t
+	}
+	tableCheckTicker := addTicker(*checkInterval)
+	leaderCheckTicker := addTicker(leaderCheckInterval)
+	purgeReentranceTicker := addTicker(purgeReentranceInterval)
 
 	log.Info("TableGC: operating")
 	for {
 		select {
 		case <-leaderCheckTicker.C:
 			{
-				// sparse
-				shouldBePrimary := false
-				if atomic.LoadInt64(&collector.isOpen) > 0 {
-					if collector.tabletTypeFunc() == topodatapb.TabletType_MASTER {
-						shouldBePrimary = true
+				func() {
+					collector.initMutex.Lock()
+					defer collector.initMutex.Unlock()
+					// sparse
+					shouldBePrimary := false
+					if atomic.LoadInt64(&collector.isOpen) > 0 {
+						if collector.tabletTypeFunc() == topodatapb.TabletType_MASTER {
+							shouldBePrimary = true
+						}
 					}
-				}
 
-				if collector.isPrimary == 0 && shouldBePrimary {
-					log.Infof("TableGC: transition into primary")
-				}
-				if collector.isPrimary > 0 && !shouldBePrimary {
-					log.Infof("TableGC: transition out of primary")
-				}
+					if collector.isPrimary == 0 && shouldBePrimary {
+						log.Infof("TableGC: transition into primary")
+					}
+					if collector.isPrimary > 0 && !shouldBePrimary {
+						log.Infof("TableGC: transition out of primary")
+					}
 
-				if shouldBePrimary {
-					atomic.StoreInt64(&collector.isPrimary, 1)
-				} else {
-					atomic.StoreInt64(&collector.isPrimary, 0)
-				}
+					if shouldBePrimary {
+						atomic.StoreInt64(&collector.isPrimary, 1)
+					} else {
+						atomic.StoreInt64(&collector.isPrimary, 0)
+					}
+				}()
 			}
 		case <-tableCheckTicker.C:
 			{
