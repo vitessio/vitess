@@ -10,9 +10,6 @@ package config
 // MySQL-specific configuration
 //
 
-// DefaultMySQLPort is the default mysql port
-const DefaultMySQLPort = 3306
-
 // MySQLClusterConfigurationSettings has the settings for a specific MySQL cluster. It derives its information
 // from MySQLConfigurationSettings
 type MySQLClusterConfigurationSettings struct {
@@ -54,9 +51,6 @@ type MySQLConfigurationSettings struct {
 
 // Hook to implement adjustments after reading each configuration file.
 func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
-	if settings.Port == 0 {
-		settings.Port = DefaultMySQLPort
-	}
 	// Username & password may be given as plaintext in the config file, or can be delivered
 	// via environment variables. We accept user & password in the form "${SOME_ENV_VARIABLE}"
 	// in which case we get the value from this process' invoking environment.
