@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -276,7 +277,7 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		return password, fmt.Errorf("createThrottlerUser(): server is read_only")
 	}
 
-	password = base.RandomHash()[0:maxPasswordLength]
+	password = textutil.RandomHash()[0:maxPasswordLength]
 	{
 		// There seems to be a bug where CREATE USER hangs. If CREATE USER is preceded by
 		// any query that writes to the binary log, CREATE USER does not hang.
