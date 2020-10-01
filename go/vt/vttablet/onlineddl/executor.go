@@ -427,19 +427,6 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		return err
 	}
 
-	throttleReplicas, err := e.getThrottleReplicas(ctx)
-	if err != nil {
-		return err
-	}
-
-	// The following sleep() is temporary and artificial. Because we create a new user for this
-	// migration, and because we throttle by replicas, we need to wait for the replicas to be
-	// caught up with the new user creation. Otherwise, the OSC tools will fail connecting to the replicas...
-	// Once we have a built in throttling service , we will no longe rneed to have the OSC tools probe the
-	// replicas. Instead, they will consult with our throttling service.
-	// TODO(shlomi): replace/remove this when we have a proper throttling solution
-	time.Sleep(time.Second)
-
 	runGhost := func(execute bool) error {
 		// Temporary hack (2020-08-11)
 		// Because sqlparser does not do full blown ALTER TABLE parsing,
@@ -475,16 +462,12 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check`, *servenv.Port),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
-		}
-		if len(throttleReplicas) > 0 {
-			args = append(args,
-				fmt.Sprintf("--throttle-control-replicas=%s", strings.Join(throttleReplicas, ",")),
-			)
 		}
 		args = append(args, strings.Fields(onlineDDL.Options)...)
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
