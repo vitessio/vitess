@@ -75,12 +75,13 @@ func TestStateManagerServeMaster(t *testing.T) {
 	verifySubcomponent(t, 2, sm.se, testStateOpen)
 	verifySubcomponent(t, 3, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 4, sm.qe, testStateOpen)
-	verifySubcomponent(t, 5, sm.ddle, testStateOpen)
-	verifySubcomponent(t, 6, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 7, sm.rt, testStateMaster)
-	verifySubcomponent(t, 8, sm.tracker, testStateOpen)
-	verifySubcomponent(t, 9, sm.te, testStateMaster)
-	verifySubcomponent(t, 10, sm.messager, testStateOpen)
+	verifySubcomponent(t, 5, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 6, sm.rt, testStateMaster)
+	verifySubcomponent(t, 7, sm.tracker, testStateOpen)
+	verifySubcomponent(t, 8, sm.te, testStateMaster)
+	verifySubcomponent(t, 9, sm.messager, testStateOpen)
+	verifySubcomponent(t, 10, sm.throttler, testStateOpen)
+	verifySubcomponent(t, 11, sm.ddle, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
@@ -96,14 +97,15 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 11, sm.ddle, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 3, sm.se, testStateOpen)
-	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 5, sm.qe, testStateOpen)
-	verifySubcomponent(t, 6, sm.ddle, testStateOpen)
+	verifySubcomponent(t, 4, sm.se, testStateOpen)
+	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 6, sm.qe, testStateOpen)
 	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
 	verifySubcomponent(t, 8, sm.te, testStateNonMaster)
 	verifySubcomponent(t, 9, sm.rt, testStateNonMaster)
@@ -119,20 +121,20 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.te, testStateClosed)
+	verifySubcomponent(t, 11, sm.ddle, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
-	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
 
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	verifySubcomponent(t, 5, sm.watcher, testStateClosed)
-
 	verifySubcomponent(t, 6, sm.se, testStateOpen)
 	verifySubcomponent(t, 7, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 8, sm.qe, testStateOpen)
-	verifySubcomponent(t, 10, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 9, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 11, sm.rt, testStateMaster)
-	verifySubcomponent(t, 9, sm.ddle, testStateOpen)
+	verifySubcomponent(t, 10, sm.rt, testStateMaster)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -144,21 +146,22 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.te, testStateClosed)
+	verifySubcomponent(t, 11, sm.ddle, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 
-	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 9, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 10, sm.rt, testStateNonMaster)
-	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
-	verifySubcomponent(t, 8, sm.ddle, testStateOpen)
+	verifySubcomponent(t, 9, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 10, sm.watcher, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -170,10 +173,12 @@ func TestStateManagerClose(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotConnected, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.te, testStateClosed)
+	verifySubcomponent(t, 11, sm.ddle, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.te, testStateClosed)
 	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
-	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 
 	verifySubcomponent(t, 5, sm.txThrottler, testStateClosed)
 	verifySubcomponent(t, 6, sm.qe, testStateClosed)
@@ -181,7 +186,6 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 8, sm.vstreamer, testStateClosed)
 	verifySubcomponent(t, 9, sm.rt, testStateClosed)
 	verifySubcomponent(t, 10, sm.se, testStateClosed)
-	verifySubcomponent(t, 11, sm.ddle, testStateClosed)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
@@ -283,14 +287,15 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
 
-	verifySubcomponent(t, 1, sm.messager, testStateClosed)
-	verifySubcomponent(t, 2, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 11, sm.ddle, testStateClosed)
+	verifySubcomponent(t, 1, sm.throttler, testStateClosed)
+	verifySubcomponent(t, 2, sm.messager, testStateClosed)
+	verifySubcomponent(t, 3, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 3, sm.se, testStateOpen)
-	verifySubcomponent(t, 4, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 5, sm.qe, testStateOpen)
-	verifySubcomponent(t, 6, sm.ddle, testStateOpen)
+	verifySubcomponent(t, 4, sm.se, testStateOpen)
+	verifySubcomponent(t, 5, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 6, sm.qe, testStateOpen)
 	verifySubcomponent(t, 7, sm.txThrottler, testStateOpen)
 	verifySubcomponent(t, 8, sm.te, testStateNonMaster)
 	verifySubcomponent(t, 9, sm.rt, testStateNonMaster)
@@ -598,6 +603,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
 		ddle:        &testOnlineDDLExecutor{},
+		throttler:   &testLagThrottler{},
 	}
 	sm.Init(env, querypb.Target{})
 	sm.hs.InitDBConfig(querypb.Target{})
@@ -791,6 +797,21 @@ func (te *testOnlineDDLExecutor) Open() error {
 }
 
 func (te *testOnlineDDLExecutor) Close() {
+	te.order = order.Add(1)
+	te.state = testStateClosed
+}
+
+type testLagThrottler struct {
+	testOrderState
+}
+
+func (te *testLagThrottler) Open() error {
+	te.order = order.Add(1)
+	te.state = testStateOpen
+	return nil
+}
+
+func (te *testLagThrottler) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }

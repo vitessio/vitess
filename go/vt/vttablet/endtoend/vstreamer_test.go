@@ -58,6 +58,8 @@ func TestSchemaVersioning(t *testing.T) {
 	tsv := framework.Server
 	tsv.EnableHistorian(false)
 	tsv.SetTracking(false)
+	tsv.EnableHeartbeat(false)
+	defer tsv.EnableHeartbeat(true)
 	defer tsv.EnableHistorian(true)
 	defer tsv.SetTracking(true)
 

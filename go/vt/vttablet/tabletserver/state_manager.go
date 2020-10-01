@@ -106,6 +106,7 @@ type stateManager struct {
 	te          txEngine
 	messager    subComponent
 	ddle        onlineDDLExecutor
+	throttler   lagThrottler
 
 	// hcticks starts on initialiazation and runs forever.
 	hcticks *timer.Timer
@@ -158,6 +159,11 @@ type (
 	}
 
 	onlineDDLExecutor interface {
+		Open() error
+		Close()
+	}
+
+	lagThrottler interface {
 		Open() error
 		Close()
 	}
@@ -409,6 +415,7 @@ func (sm *stateManager) serveMaster() error {
 		return err
 	}
 	sm.messager.Open()
+	sm.throttler.Open()
 	sm.setState(topodatapb.TabletType_MASTER, StateServing)
 	return nil
 }
@@ -428,6 +435,7 @@ func (sm *stateManager) unserveMaster() error {
 }
 
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
+	sm.throttler.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
 	sm.se.MakeNonMaster()
@@ -478,6 +486,7 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
 	sm.qe.StopServing()

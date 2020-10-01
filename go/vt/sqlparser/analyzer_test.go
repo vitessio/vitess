@@ -413,7 +413,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewFloat64(2.1)},
 	}, {
 		in: &UnaryExpr{
-			Operator: Latin1Str,
+			Operator: Latin1Op,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -422,7 +422,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: UBinaryStr,
+			Operator: UBinaryOp,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -431,7 +431,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: Utf8mb4Str,
+			Operator: Utf8mb4Op,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -440,7 +440,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: Utf8Str,
+			Operator: Utf8Op,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -449,7 +449,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: MinusStr,
+			Operator: UMinusOp,
 			Expr: &Literal{
 				Type: FloatVal,
 				Val:  []byte("2.1"),

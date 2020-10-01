@@ -160,7 +160,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	}
 	for _, ddl := range parsedDDLs {
 		switch ddl.Action {
-		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr, sqlparser.RenameStr:
+		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
 			continue
 		case sqlparser.AlterStr:
 			if ddl.OnlineHint != nil {
@@ -172,7 +172,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		}
 		tableName := ddl.Table.Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
-			if rowCount > 100000 && ddl.Action == sqlparser.AlterStr {
+			if rowCount > 100000 && ddl.Action == sqlparser.AlterDDLAction {
 				return true, fmt.Errorf(
 					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s alters a table with more than 100 thousand rows", sqlparser.String(ddl))
 			}

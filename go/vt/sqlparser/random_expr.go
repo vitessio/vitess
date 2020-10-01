@@ -152,20 +152,20 @@ func (g *generator) likeExpr() Expr {
 	g.enter()
 	defer g.exit()
 	return &ComparisonExpr{
-		Operator: LikeStr,
+		Operator: LikeOp,
 		Left:     g.stringExpr(),
 		Right:    g.stringExpr(),
 	}
 }
 
-var comparisonOps = []string{EqualStr, LessThanStr, GreaterThanStr, LessEqualStr, GreaterEqualStr, NotEqualStr, NullSafeEqualStr}
+var comparisonOps = []ComparisonExprOperator{EqualOp, LessThanOp, GreaterThanOp, LessEqualOp, GreaterEqualOp, NotEqualOp, NullSafeEqualOp}
 
 func (g *generator) comparison(f func() Expr) Expr {
 	g.enter()
 	defer g.exit()
 
 	cmp := &ComparisonExpr{
-		Operator: g.randomOfS(comparisonOps),
+		Operator: comparisonOps[g.r.Intn(len(comparisonOps))],
 		Left:     f(),
 		Right:    f(),
 	}
@@ -208,7 +208,7 @@ func (g *generator) caseExpr(valueF func() Expr) Expr {
 	}
 }
 
-var arithmeticOps = []string{BitAndStr, BitOrStr, BitXorStr, PlusStr, MinusStr, MultStr, DivStr, IntDivStr, ModStr, ShiftRightStr, ShiftLeftStr}
+var arithmeticOps = []BinaryExprOperator{BitAndOp, BitOrOp, BitXorOp, PlusOp, MinusOp, MultOp, DivOp, IntDivOp, ModOp, ShiftRightOp, ShiftLeftOp}
 
 func (g *generator) arithmetic() Expr {
 	g.enter()
@@ -276,9 +276,9 @@ func (g *generator) inExpr() Expr {
 	for i := 0; i < size; i++ {
 		tuples = append(tuples, g.intExpr())
 	}
-	op := InStr
+	op := InOp
 	if g.randomBool() {
-		op = NotInStr
+		op = NotInOp
 	}
 
 	return &ComparisonExpr{
@@ -292,11 +292,11 @@ func (g *generator) between() Expr {
 	g.enter()
 	defer g.exit()
 
-	var op string
+	var op RangeCondOperator
 	if g.randomBool() {
-		op = BetweenStr
+		op = BetweenOp
 	} else {
-		op = NotBetweenStr
+		op = NotBetweenOp
 	}
 
 	return &RangeCond{
@@ -311,10 +311,10 @@ func (g *generator) isExpr() Expr {
 	g.enter()
 	defer g.exit()
 
-	ops := []string{IsNullStr, IsNotNullStr, IsTrueStr, IsNotTrueStr, IsFalseStr, IsNotFalseStr}
+	ops := []IsExprOperator{IsNullOp, IsNotNullOp, IsTrueOp, IsNotTrueOp, IsFalseOp, IsNotFalseOp}
 
 	return &IsExpr{
-		Operator: g.randomOfS(ops),
+		Operator: ops[g.r.Intn(len(ops))],
 		Expr:     g.booleanExpr(),
 	}
 }
