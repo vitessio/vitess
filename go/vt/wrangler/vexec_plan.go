@@ -251,12 +251,12 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 	if !hasDBName {
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerParams.dbNameColumn)},
-			Operator: sqlparser.EqualStr,
+			Operator: sqlparser.EqualOp,
 			Right:    sqlparser.NewStrLiteral([]byte(vx.masters[0].DbName())),
 		}
 		if newWhere == nil {
 			newWhere = &sqlparser.Where{
-				Type: sqlparser.WhereStr,
+				Type: sqlparser.WhereClause,
 				Expr: expr,
 			}
 		} else {
@@ -269,7 +269,7 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 	if !hasWorkflow && vx.workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent(plannerParams.workflowColumn)},
-			Operator: sqlparser.EqualStr,
+			Operator: sqlparser.EqualOp,
 			Right:    sqlparser.NewStrLiteral([]byte(vx.workflow)),
 		}
 		newWhere.Expr = &sqlparser.AndExpr{

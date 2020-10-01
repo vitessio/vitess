@@ -783,6 +783,12 @@ var (
 	}, {
 		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
 	}, {
+		input: "delete /* simple */ ignore from a",
+	}, {
+		input: "delete ignore from a",
+	}, {
+		input: "delete /* limit */ ignore from a",
+	}, {
 		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
 	}, {
@@ -1376,9 +1382,17 @@ var (
 	}, {
 		input: "show vitess_keyspaces",
 	}, {
+		input: "show vitess_keyspaces like '%'",
+	}, {
 		input: "show vitess_shards",
 	}, {
+		input: "show vitess_shards like '%'",
+	}, {
 		input: "show vitess_tablets",
+	}, {
+		input: "show vitess_tablets like '%'",
+	}, {
+		input: "show vitess_tablets where hostname = 'some-tablet'",
 	}, {
 		input: "show vschema tables",
 	}, {

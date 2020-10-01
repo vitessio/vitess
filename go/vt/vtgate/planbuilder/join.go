@@ -79,7 +79,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	opcode := engine.NormalJoin
 	if ajoin != nil {
 		switch {
-		case ajoin.Join == sqlparser.LeftJoinStr:
+		case ajoin.Join == sqlparser.LeftJoinType:
 			opcode = engine.LeftJoin
 
 			// For left joins, we have to push the ON clause into the RHS.
@@ -135,7 +135,7 @@ func (jb *join) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (jb *join) PushLock(lock string) error {
+func (jb *join) PushLock(lock sqlparser.Lock) error {
 	err := jb.Left.PushLock(lock)
 	if err != nil {
 		return err

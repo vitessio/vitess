@@ -57,13 +57,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 
 	for _, expr := range stmt.Exprs {
 		switch expr.Scope {
-		case sqlparser.GlobalStr:
+		case sqlparser.GlobalScope:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported global scope in set: %s", sqlparser.String(expr))
 			// AST struct has been prepared before getting here, so no scope here means that
 			// we have a UDV. If the original query didn't explicitly specify the scope, it
 			// would have been explictly set to sqlparser.SessionStr before reaching this
 			// phase of planning
-		case "":
+		case sqlparser.ImplicitScope:
 			evalExpr, err := ec.convert(expr.Expr /*boolean*/, false /*identifierAsString*/, false)
 			if err != nil {
 				return nil, err
@@ -74,7 +74,7 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 			}
 
 			setOps = append(setOps, setOp)
-		case sqlparser.SessionStr:
+		case sqlparser.SessionScope:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct in set: %s", sqlparser.String(expr))
