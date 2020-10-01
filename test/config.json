@@ -397,6 +397,17 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_throttler": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 18,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"tabletmanager_zk2": {
 			"File": "unused.go",
 			"Args": [
