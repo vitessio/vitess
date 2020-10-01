@@ -344,24 +344,24 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 }
 
 // ReadQueryResult gets the result from the last written query.
-func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.Result, more bool, warnings uint16, err error) {
+func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, bool, uint16, error) {
 	// Get the result.
-	affectedRows, lastInsertID, colNumber, more, warnings, gtids, err := c.readComQueryResponse()
+	colNumber, packetOk, err := c.readComQueryResponse()
 	if err != nil {
 		return nil, false, 0, err
 	}
-
+	more := packetOk.statusFlags&ServerMoreResultsExists != 0
+	warnings := packetOk.warnings
 	if colNumber == 0 {
 		// OK packet, means no results. Just use the numbers.
 		return &sqltypes.Result{
-			RowsAffected:        affectedRows,
-			InsertID:            lastInsertID,
-			SessionStateChanges: gtids,
+			RowsAffected: packetOk.affectedRows,
+			InsertID:     packetOk.lastInsertID,
 		}, more, warnings, nil
 	}
 
 	fields := make([]querypb.Field, colNumber)
-	result = &sqltypes.Result{
+	result := &sqltypes.Result{
 		Fields: make([]*querypb.Field, colNumber),
 	}
 
@@ -432,9 +432,9 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 				warnings = packetOk.warnings
 				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
 				// TODO harshit: fix this
-				if gtids != "" {
-					result.SessionStateChanges = "gtids"
-				}
+				//if packetOk.sessionStateChangeValue != nil {
+				//	result.SessionStateChanges = "gtids"
+				//}
 			}
 			return result, more, warnings, nil
 
@@ -478,42 +478,36 @@ func (c *Conn) drainResults() error {
 	}
 }
 
-func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64, status int, more bool, warnings uint16, gtids string, err error) {
+func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
 	data, err := c.readEphemeralPacket()
 	if err != nil {
-		err = NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-		return
+		return 0, nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
 	if len(data) == 0 {
-		err = NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
-		return
+		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}
 
 	switch data[0] {
 	case OKPacket:
 		packetOk, err := c.parseOKPacket(data)
 		// TODO harshit : change this to return okpacket
-		return packetOk.affectedRows, packetOk.lastInsertID, 0, (packetOk.statusFlags & ServerMoreResultsExists) != 0, packetOk.warnings, "packetOk.", err
+		return 0, packetOk, err
 	case ErrPacket:
 		// Error
-		err = ParseErrorPacket(data)
-		return
+		return 0, nil, ParseErrorPacket(data)
 	case 0xfb:
 		// Local infile
-		err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
-		return
+		return 0, nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}
 	n, pos, ok := readLenEncInt(data, 0)
 	if !ok {
-		err = NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")
-		return
+		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")
 	}
 	if pos != len(data) {
-		err = NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extra data in COM_QUERY response")
-		return
+		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extra data in COM_QUERY response")
 	}
-	return 0, 0, int(n), false, 0, "", nil
+	return int(n), &PacketOK{}, nil
 }
 
 //
