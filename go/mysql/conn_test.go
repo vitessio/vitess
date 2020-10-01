@@ -19,12 +19,18 @@ package mysql
 import (
 	"bytes"
 	crypto_rand "crypto/rand"
+	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
+	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
@@ -288,3 +294,67 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiStatementStopsOnError(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	err := cConn.WriteComQuery("select 1;select 2")
+	require.NoError(t, err)
+
+	// this handler will return an error on the first run, and fail the test if it's run more times
+	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, res, "we should not break the connection because of execution errors")
+
+	data, err := cConn.ReadPacket()
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+}
+
+type singleRun struct {
+	hasRun bool
+	t      *testing.T
+	err    error
+}
+
+func (h *singleRun) NewConnection(*Conn) {
+	panic("implement me")
+}
+
+func (h *singleRun) ConnectionClosed(*Conn) {
+	panic("implement me")
+}
+
+func (h *singleRun) ComQuery(*Conn, string, func(*sqltypes.Result) error) error {
+	if h.hasRun {
+		debug.PrintStack()
+		h.t.Fatal("don't do this!")
+	}
+	h.hasRun = true
+	return h.err
+}
+
+func (h *singleRun) ComPrepare(*Conn, string, map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	panic("implement me")
+}
+
+func (h *singleRun) ComStmtExecute(*Conn, *PrepareData, func(*sqltypes.Result) error) error {
+	panic("implement me")
+}
+
+func (h *singleRun) WarningCount(*Conn) uint16 {
+	return 0
+}
+
+func (h *singleRun) ComResetConnection(*Conn) {
+	panic("implement me")
+}
+
+var _ Handler = (*singleRun)(nil)
