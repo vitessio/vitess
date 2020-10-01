@@ -1522,6 +1522,12 @@ func (tsv *TabletServer) registerThrottlerHandlers() {
 	tsv.registerThrottlerStatusHandler()
 }
 
+// EnableHeartbeat forces heartbeat to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
+	tsv.rt.EnableHeartbeat(enabled)
+}
+
 // SetTracking forces tracking to be on or off.
 // Only to be used for testing.
 func (tsv *TabletServer) SetTracking(enabled bool) {
