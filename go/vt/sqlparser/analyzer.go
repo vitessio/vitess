@@ -267,7 +267,7 @@ func IsVschemaDDL(ddl *DDL) bool {
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func IsOnlineSchemaDDL(ddl *DDL, sql string) bool {
 	switch ddl.Action {
-	case AlterStr:
+	case AlterDDLAction:
 		if ddl.OnlineHint != nil {
 			return ddl.OnlineHint.Strategy != ""
 		}

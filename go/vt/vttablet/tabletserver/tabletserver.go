@@ -160,14 +160,14 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tabletTypeFunc:= func() topodatapb.TabletType{
+	tabletTypeFunc := func() topodatapb.TabletType {
 		if tsv.sm == nil {
 			return topodatapb.TabletType_UNKNOWN
 		}
 		return tsv.sm.Target().TabletType
 	}
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer,tabletTypeFunc)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer,tabletTypeFunc)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer, tabletTypeFunc)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
@@ -180,11 +180,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		txThrottler: tsv.txThrottler,
 		te:          tsv.te,
 		messager:    tsv.messager,
-<<<<<<< HEAD
 		ddle:        tsv.onlineDDLExecutor,
-=======
 		throttler:   tsv.lagThrottler,
->>>>>>> master
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -202,12 +199,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
-<<<<<<< HEAD
 	tsv.registerMigrationStatusHandler()
-=======
 	tsv.registerThrottlerHandlers()
 
->>>>>>> master
 	return tsv
 }
 
@@ -226,11 +220,8 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
-<<<<<<< HEAD
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
-=======
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
->>>>>>> master
 	return nil
 }
 
@@ -392,15 +383,14 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
 }
 
-<<<<<<< HEAD
 // OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
 func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
 	return tsv.onlineDDLExecutor
-=======
+}
+
 // LagThrottler returns the throttle.Throttler part of TabletServer.
 func (tsv *TabletServer) LagThrottler() *throttle.Throttler {
 	return tsv.lagThrottler
->>>>>>> master
 }
 
 // SchemaEngine returns the SchemaEngine part of TabletServer.

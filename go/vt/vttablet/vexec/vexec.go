@@ -72,7 +72,7 @@ func (e *TabletVExec) analyzeWhereEqualsColumns(where *sqlparser.Where) ValColum
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:
-			if expr.Operator != sqlparser.EqualStr {
+			if expr.Operator != sqlparser.EqualOp {
 				continue
 			}
 			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
