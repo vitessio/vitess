@@ -416,6 +416,7 @@ func (sm *stateManager) serveMaster() error {
 	}
 	sm.messager.Open()
 	sm.throttler.Open()
+	sm.ddle.Open()
 	sm.setState(topodatapb.TabletType_MASTER, StateServing)
 	return nil
 }
@@ -435,6 +436,7 @@ func (sm *stateManager) unserveMaster() error {
 }
 
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
+	sm.ddle.Close()
 	sm.throttler.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
@@ -479,19 +481,16 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 	if err := sm.qe.Open(); err != nil {
 		return err
 	}
-	if err := sm.ddle.Open(); err != nil {
-		return err
-	}
 	return sm.txThrottler.Open()
 }
 
 func (sm *stateManager) unserveCommon() {
+	sm.ddle.Close()
 	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
 	sm.qe.StopServing()
 	sm.tracker.Close()
-	sm.ddle.Close()
 	sm.requests.Wait()
 }
 
@@ -505,7 +504,6 @@ func (sm *stateManager) closeAll() {
 	sm.vstreamer.Close()
 	sm.rt.Close()
 	sm.se.Close()
-	sm.ddle.Close()
 	sm.setState(topodatapb.TabletType_UNKNOWN, StateNotConnected)
 }
 

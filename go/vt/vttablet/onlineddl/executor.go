@@ -185,6 +185,7 @@ func (e *Executor) Open() error {
 		return nil
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
+	e.initSchema(context.Background())
 	e.ticks.Start(e.onMigrationCheckTick)
 
 	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
@@ -1087,7 +1088,6 @@ func (e *Executor) onMigrationCheckTick() {
 		return
 	}
 	ctx := context.Background()
-	e.initSchema(ctx)
 
 	e.scheduleNextMigration(ctx)
 	e.runNextMigration(ctx)
