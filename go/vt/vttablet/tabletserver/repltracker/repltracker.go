@@ -128,3 +128,9 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	// rt.mode == tabletenv.Poller
 	return rt.poller.Status()
 }
+
+// EnableHeartbeat enables or disables writes of heartbeat. This functionality
+// is only used by tests.
+func (rt *ReplTracker) EnableHeartbeat(enable bool) {
+	rt.hw.enableWrites(enable)
+}

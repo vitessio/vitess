@@ -148,6 +148,7 @@ type (
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
+		Ignore     Ignore
 		Comments   Comments
 		Targets    TableNames
 		TableExprs TableExprs
@@ -1048,6 +1049,9 @@ func (node *Update) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "delete %v", node.Comments)
+	if node.Ignore {
+		buf.WriteString("ignore ")
+	}
 	if node.Targets != nil {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
