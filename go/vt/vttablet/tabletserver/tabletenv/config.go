@@ -182,16 +182,21 @@ func Init() {
 		currentConfig.Consolidator = Disable
 	}
 
+	if heartbeatInterval == 0 {
+		heartbeatInterval = time.Duration(defaultConfig.ReplicationTracker.HeartbeatIntervalSeconds*1000) * time.Millisecond
+	}
+	if heartbeatInterval > time.Second {
+		heartbeatInterval = time.Second
+	}
+	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
+
 	switch {
 	case enableHeartbeat:
 		currentConfig.ReplicationTracker.Mode = Heartbeat
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
 	case enableReplicationReporter:
 		currentConfig.ReplicationTracker.Mode = Polling
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	default:
 		currentConfig.ReplicationTracker.Mode = Disable
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	}
 
 	currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval)
@@ -418,7 +423,8 @@ var defaultConfig = TabletConfig{
 		UnhealthyThresholdSeconds: 7200,
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
-		Mode: Disable,
+		Mode:                     Disable,
+		HeartbeatIntervalSeconds: 0.25,
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,
