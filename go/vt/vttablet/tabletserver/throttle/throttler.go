@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -109,7 +110,7 @@ type Throttler struct {
 
 	initMutex          sync.Mutex
 	throttledAppsMutex sync.Mutex
-	tickers            [](*base.SuspendableTicker)
+	tickers            [](*timer.SuspendableTicker)
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -154,7 +155,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		recentApps:             cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:          cache.New(cache.NoExpiration, 0),
 
-		tickers: [](*base.SuspendableTicker){},
+		tickers: [](*timer.SuspendableTicker){},
 
 		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 
@@ -320,11 +321,11 @@ func (throttler *Throttler) isDormant() bool {
 // run the probes, colelct metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context) {
 
-	addTicker := func(d time.Duration) *base.SuspendableTicker {
+	addTicker := func(d time.Duration) *timer.SuspendableTicker {
 		throttler.initMutex.Lock()
 		defer throttler.initMutex.Unlock()
 
-		t := base.NewSuspendableTicker(d, true)
+		t := timer.NewSuspendableTicker(d, true)
 		throttler.tickers = append(throttler.tickers, t)
 		return t
 	}
