@@ -162,7 +162,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		switch ddl.Action {
 		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
 			continue
-		case sqlparser.AlterStr:
+		case sqlparser.AlterDDLAction:
 			if ddl.OnlineHint != nil {
 				if ddl.OnlineHint.Strategy != schema.DDLStrategyNormal {
 					// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
@@ -248,7 +248,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		tableName := ""
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
-			if ddl.Action == sqlparser.AlterStr {
+			if ddl.Action == sqlparser.AlterDDLAction {
 				if ddl.OnlineHint != nil {
 					strategy = ddl.OnlineHint.Strategy
 					options = ddl.OnlineHint.Options

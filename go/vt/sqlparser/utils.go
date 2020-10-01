@@ -89,7 +89,7 @@ func NormalizeAlphabetically(query string) (normalized string, err error) {
 		for _, expr := range andExprs {
 			if newWhere == nil {
 				newWhere = &Where{
-					Type: WhereStr,
+					Type: WhereClause,
 					Expr: expr,
 				}
 			} else {
