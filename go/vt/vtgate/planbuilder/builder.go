@@ -357,6 +357,9 @@ func buildShowTableStatusPlan(stmt *sqlparser.ShowTableStatus, vschema ContextVS
 		destination = key.DestinationAnyShard{}
 	}
 
+	// Remove Database Name from the query.
+	stmt.DatabaseName = ""
+
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
