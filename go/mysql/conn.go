@@ -777,7 +777,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
 		res := c.execQuery("use "+sqlescape.EscapeID(db), handler, false)
-		return res == execSuccess // TODO: we shouldn't drop the connection if the user is asking for the wrong db
+		return res != connErr
 	case ComQuery:
 		c.startWriterBuffering()
 		defer func() {
@@ -875,12 +875,17 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 					return false
 				}
 			}
+			if len(queries) != 1 {
+				log.Errorf("Conn %v: can not prepare multiple statements", c, err)
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+					return false
+				}
+				return true
+			}
 		} else {
 			queries = []string{query}
-		}
-
-		if len(queries) != 1 {
-			return false // TODO: do we really want to close the connection because of this?
 		}
 
 		// Popoulate PrepareData
@@ -1031,24 +1036,36 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
 		if !ok {
-			err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
-			log.Error(err.Error())
-			return false // TODO: really break here?
+			err = fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
+				return false
+			}
+			return true
 		}
 
 		prepare, ok := c.PrepareData[stmtID]
 		if !ok {
-			err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
-			log.Error(err.Error())
-			return false // TODO: really break here?
+			err = fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
+				return false
+			}
+			return true
 		}
 
 		if prepare.BindVars == nil ||
 			prepare.ParamsCount == uint16(0) ||
 			paramID >= prepare.ParamsCount {
-			err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
-			log.Error(err.Error())
-			return false // TODO: really break here?
+			err = fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
+				return false
+			}
+			return true
 		}
 
 		chunk := make([]byte, len(chunkData))
