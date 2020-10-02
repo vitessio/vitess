@@ -2456,6 +2456,14 @@ func TestCreateTable(t *testing.T) {
 			"	s5 bit(1) default B'0'\n" +
 			")",
 	}, {
+		// test non_reserved word in column name
+		input: "create table t (\n" +
+			"	repair int\n" +
+			")",
+		output: "create table t (\n" +
+			"	`repair` int\n" +
+			")",
+	}, {
 		// test key field options
 		input: "create table t (\n" +
 			"	id int auto_increment primary key,\n" +
@@ -2784,6 +2792,11 @@ var (
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",
 		excludeMulti: true,
+	}, {
+		// non_reserved keywords are currently not permitted everywhere
+		input:        "create database repair",
+		output:       "syntax error at position 23 near 'repair'",
+		excludeMulti: true,
 	}}
 )
 
@@ -2792,6 +2805,7 @@ func TestErrors(t *testing.T) {
 		t.Run(tcase.input, func(t *testing.T) {
 			_, err := Parse(tcase.input)
 			require.Error(t, err, tcase.output)
+			require.Equal(t, err.Error(), tcase.output)
 		})
 	}
 }
