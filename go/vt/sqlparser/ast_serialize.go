@@ -37,6 +37,14 @@ type serializer struct {
 	buf bytes.Buffer
 }
 
+func encodeNils(buf []bool, startIdx int, refs ...interface{}) {
+	for i, f := range refs {
+		if isNilValue(f) {
+			buf[startIdx+i] = true
+		}
+	}
+}
+
 func (s *serializer) serialize(in SQLNode) {
 	switch node := in.(type) {
 	case *Literal:
@@ -46,8 +54,18 @@ func (s *serializer) serialize(in SQLNode) {
 	case *Select:
 		s.putByte(tSelect)
 		s.putRefBool(node.Cache)
-		s.putBools(node.Distinct, node.SQLCalcFoundRows, node.SQLCalcFoundRows)
-		s.encodeNullableFields(node.Comments, node.SelectExprs, node.From, node.Where, node.GroupBy, node.Having, node.OrderBy, node.Limit)
+		boolsAndNils := make([]bool, 11)
+		if node.Distinct {
+			boolsAndNils[0] = true
+		}
+		if node.SQLCalcFoundRows {
+			boolsAndNils[1] = true
+		}
+		if node.StraightJoinHint {
+			boolsAndNils[2] = true
+		}
+		encodeNils(boolsAndNils, 3, node.Comments, node.SelectExprs, node.From, node.Where, node.GroupBy, node.Having, node.OrderBy, node.Limit)
+		s.putBools(boolsAndNils...)
 		if node.SelectExprs != nil {
 			s.serialize(node.SelectExprs)
 		}
@@ -93,6 +111,12 @@ func (s *serializer) encodeNullableFields(fields ...interface{}) {
 }
 
 func (s *serializer) putBools(p ...bool) {
+	if len(p) > 8 {
+		s.putByte(0xfc)
+		s.putBools(p[:7]...)
+		s.putBools(p[8:]...)
+		return
+	}
 	var res byte
 	for i, b := range p {
 		if b {
