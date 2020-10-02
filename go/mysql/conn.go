@@ -190,6 +190,14 @@ type PrepareData struct {
 	BindVars    map[string]*querypb.BindVariable
 }
 
+type execResult byte
+
+const (
+	execSuccess execResult = iota
+	execErr
+	connErr
+)
+
 // bufPool is used to allocate and free buffers in an efficient way.
 var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 
@@ -1136,14 +1144,6 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 
 	return true
 }
-
-type execResult byte
-
-const (
-	execSuccess execResult = iota
-	execErr
-	connErr
-)
 
 func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	fieldSent := false
