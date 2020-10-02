@@ -130,7 +130,7 @@ type ShowTablesOpt struct {
 }
 
 // ValType specifies the type for Literal.
-type ValType int
+type ValType byte
 
 // These are the possible Valtype values.
 // HexNum represents a 0x... value. It cannot
