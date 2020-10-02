@@ -318,6 +318,28 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
 }
 
+func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	err := cConn.writeComInitDB("database")
+	require.NoError(t, err)
+
+	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, "we should not break the connection because of execution errors")
+
+	data, err := cConn.ReadPacket()
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+}
+
 type singleRun struct {
 	hasRun bool
 	t      *testing.T
