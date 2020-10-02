@@ -779,7 +779,7 @@ table_column_list:
   }
 
 column_definition:
-  id_or_var column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
