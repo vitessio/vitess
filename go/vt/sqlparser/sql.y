@@ -137,6 +137,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
+%token <bytes> OUTFILE S3
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
@@ -286,6 +287,7 @@ func skipToEnd(yylex interface{}) {
 %type <order> order
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
+%type <str> into_outfile_s3_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
@@ -417,12 +419,13 @@ do_statement:
   }
 
 select_statement:
-  base_select order_by_opt limit_opt lock_opt
+  base_select order_by_opt limit_opt lock_opt into_outfile_s3_opt
   {
     sel := $1.(*Select)
     sel.OrderBy = $2
     sel.Limit = $3
     sel.Lock = $4
+    sel.IntoOutfileS3 = $5
     $$ = sel
   }
 | openb select_statement closeb order_by_opt limit_opt lock_opt
@@ -3252,6 +3255,15 @@ lock_opt:
     $$ = ShareModeLock
   }
 
+into_outfile_s3_opt:
+  {
+    $$ = ""
+  }
+| INTO OUTFILE S3 STRING
+  {
+    $$ = string($4)
+  }
+
 // insert_data expands all combinations into a single rule.
 // This avoids a shift/reduce conflict while encountering the
 // following two possible constructs:
@@ -3604,6 +3616,7 @@ reserved_keyword:
 | OR
 | ORDER
 | OUTER
+| OUTFILE
 | OVER
 | PERCENT_RANK
 | RANK
@@ -3776,6 +3789,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| S3
 | SECONDARY
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
