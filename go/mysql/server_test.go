@@ -580,9 +580,7 @@ func TestServer(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
 	defer l.Close()
 	go l.Accept()
@@ -597,83 +595,16 @@ func TestServer(t *testing.T) {
 		Pass:  "password1",
 	}
 
-	initialTimingCounts := timings.Counts()
-	initialConnAccept := connAccept.Get()
-	initialConnSlow := connSlow.Get()
-	initialconnRefuse := connRefuse.Get()
-
-	// Run an 'error' command.
-	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
-	output, ok := runMysql(t, params, "error")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
-	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
-		!strings.Contains(output, "forced query error") {
-		t.Errorf("Unexpected output for 'error': %v", output)
-	}
-	if connCount.Get() != 0 {
-		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
-	}
-	if connAccept.Get()-initialConnAccept != 1 {
-		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
-	}
-	if connSlow.Get()-initialConnSlow != 1 {
-		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
-	}
-	if connRefuse.Get()-initialconnRefuse != 0 {
-		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
-	}
-
-	expectedTimingDeltas := map[string]int64{
-		"All":            2,
-		connectTimingKey: 1,
-		queryTimingKey:   1,
-	}
-	gotTimingCounts := timings.Counts()
-	for key, got := range gotTimingCounts {
-		expected := expectedTimingDeltas[key]
-		delta := got - initialTimingCounts[key]
-		if delta < expected {
-			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, delta)
-		}
-	}
-
-	// Set the slow connect threshold to something high that we don't expect to trigger
-	l.SlowConnectWarnThreshold.Set(time.Duration(time.Second * 1))
-
-	// Run a 'panic' command, other side should panic, recover and
-	// close the connection.
-	output, err = runMysqlWithErr(t, params, "panic")
-	require.Error(t, err)
-	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
-		!strings.Contains(output, "Lost connection to MySQL server during query") {
-		t.Errorf("Unexpected output for 'panic'")
-	}
-	if connCount.Get() != 0 {
-		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
-	}
-	if connAccept.Get()-initialConnAccept != 2 {
-		t.Errorf("Expected ConnAccept delta=2, got %d", connAccept.Get()-initialConnAccept)
-	}
-	if connSlow.Get()-initialConnSlow != 1 {
-		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
-	}
-	if connRefuse.Get()-initialconnRefuse != 0 {
-		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
-	}
-
 	// Run a 'select rows' command with results.
-	output, err = runMysqlWithErr(t, params, "select rows")
+	output, err := runMysqlWithErr(t, params, "select rows")
 	require.NoError(t, err)
+
 	if !strings.Contains(output, "nice name") ||
 		!strings.Contains(output, "nicer name") ||
 		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows'")
 	}
-	if strings.Contains(output, "warnings") {
-		t.Errorf("Unexpected warnings in 'select rows'")
-	}
+	assert.NotContains(t, output, "warnings")
 
 	// Run a 'select rows' command with warnings
 	th.SetWarnings(13)
@@ -754,6 +685,85 @@ func TestServer(t *testing.T) {
 	// Uncomment to leave setup up for a while, to run tests manually.
 	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
 	//	time.Sleep(60 * time.Minute)
+}
+
+func TestServerStats(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	timings.Reset()
+	connAccept.Reset()
+	connCount.Reset()
+	connSlow.Reset()
+	connRefuse.Reset()
+
+	// Run an 'error' command.
+	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
+	output, ok := runMysql(t, params, "error")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
+		!strings.Contains(output, "forced query error") {
+		t.Errorf("Unexpected output for 'error': %v", output)
+	}
+	assert.EqualValues(t, 0, connCount.Get(), "connCount")
+	assert.EqualValues(t, 1, connAccept.Get(), "connAccept")
+	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
+	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
+
+	expectedTimingDeltas := map[string]int64{
+		"All":            2,
+		connectTimingKey: 1,
+		queryTimingKey:   1,
+	}
+	gotTimingCounts := timings.Counts()
+	for key, got := range gotTimingCounts {
+		expected := expectedTimingDeltas[key]
+		if got < expected {
+			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, got)
+		}
+	}
+
+	// Set the slow connect threshold to something high that we don't expect to trigger
+	l.SlowConnectWarnThreshold.Set(time.Duration(time.Second * 1))
+
+	// Run a 'panic' command, other side should panic, recover and
+	// close the connection.
+	output, err = runMysqlWithErr(t, params, "panic")
+	require.Error(t, err)
+	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
+		!strings.Contains(output, "Lost connection to MySQL server during query") {
+		t.Errorf("Unexpected output for 'panic'")
+	}
+
+	assert.EqualValues(t, 0, connCount.Get(), "connCount")
+	assert.EqualValues(t, 2, connAccept.Get(), "connAccept")
+	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
+	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
 }
 
 // TestClearTextServer creates a Server that needs clear text
