@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const rsSelectIDQuery = "select id from _vt.vreplication where db_name='vt_ks' and workflow='resharderTest'"
 const rsSelectFrozenQuery = "select 1 from _vt.vreplication where db_name='vt_ks' and message='FROZEN'"
 const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values `
 const eol = "$"
@@ -102,8 +101,6 @@ func TestResharderOneToMany(t *testing.T) {
 					tc.cells+`', '`+tc.tabletTypes+`', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+eol,
 				&sqltypes.Result{},
 			)
-			env.tmc.expectVRQuery(200, rsSelectIDQuery, &sqltypes.Result{})
-			env.tmc.expectVRQuery(210, rsSelectIDQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
@@ -113,7 +110,6 @@ func TestResharderOneToMany(t *testing.T) {
 		})
 		env.close()
 	}
-
 }
 
 func TestResharderManyToOne(t *testing.T) {
@@ -142,7 +138,6 @@ func TestResharderManyToOne(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, rsSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "")
@@ -183,8 +178,6 @@ func TestResharderManyToMany(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, rsSelectIDQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, rsSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
@@ -238,8 +231,6 @@ func TestResharderOneRefTable(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, rsSelectIDQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, rsSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
@@ -308,8 +299,6 @@ func TestResharderOneRefStream(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, rsSelectIDQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, rsSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
@@ -387,8 +376,6 @@ func TestResharderNoRefStream(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, rsSelectIDQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, rsSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
@@ -433,8 +420,6 @@ func TestResharderCopySchema(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	env.tmc.expectVRQuery(200, rsSelectIDQuery, &sqltypes.Result{})
-	env.tmc.expectVRQuery(210, rsSelectIDQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
