@@ -137,7 +137,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return nil, err
 	}
 
-	// If journals exist notify user and fail
+	//If journals exist notify user and fail
 	journalsExist, _, err := ts.checkJournals(ctx)
 	if err != nil {
 		wr.Logger().Errorf("checkJournals failed: %v", err)
@@ -246,6 +246,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 			sw.cancelMigration(ctx, sm)
 			return 0, sw.logs(), nil
 		}
+		ts.wr.Logger().Infof("Stopping streams")
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
 			ts.wr.Logger().Errorf("stopStreams failed: %v", err)
@@ -257,24 +258,28 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
+		ts.wr.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
 			ts.wr.Logger().Errorf("stopSourceWrites failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
+		ts.wr.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
 			ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
+		ts.wr.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
 			ts.wr.Logger().Errorf("migrateStreams failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
+		ts.wr.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
 			ts.wr.Logger().Errorf("createReverseVReplication failed: %v", err)
 			sw.cancelMigration(ctx, sm)
@@ -688,27 +693,24 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	return ts.wr.ts.MigrateServedType(ctx, ts.sourceKeyspace, toShards, fromShards, servedType, cells)
 }
 
-func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationId int64) (*binlogdatapb.Journal, error) {
+func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationID int64) (*binlogdatapb.Journal, bool, error) {
 	var exists bool
 	journal := &binlogdatapb.Journal{}
-	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationId)
-	wr.Logger().Infof("********* running %s on %s", query, tablet.String())
+	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationID)
 	p3qr, err := wr.tmc.VReplicationExec(ctx, tablet, query)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if len(p3qr.Rows) != 0 {
 		qr := sqltypes.Proto3ToResult(p3qr)
-
 		if !exists {
 			if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
-				return nil, err
+				return nil, false, err
 			}
-			wr.Logger().Infof("********* journal is %s", journal.String())
 			exists = true
 		}
 	}
-	return journal, nil
+	return journal, exists, nil
 
 }
 
@@ -717,15 +719,15 @@ func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *to
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var mu sync.Mutex
 	var exists bool
+	var journal *binlogdatapb.Journal
 	err = ts.forAllSources(func(source *tsSource) error {
-		journal, err := ts.wr.checkIfJournalExistsOnTablet(ctx, source.master.Tablet, ts.id)
+		mu.Lock()
+		defer mu.Unlock()
+		journal, exists, err = ts.wr.checkIfJournalExistsOnTablet(ctx, source.master.Tablet, ts.id)
 		if err != nil {
 			return err
 		}
 		if journal.Id != 0 {
-			mu.Lock()
-			defer mu.Unlock()
-			exists = true
 			source.journaled = true
 			sourceWorkflows = journal.SourceWorkflows
 		}
@@ -872,7 +874,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				if ts.sourceKSSchema.Keyspace.Sharded {
 					vtable, ok := ts.sourceKSSchema.Tables[rule.Match]
 					if !ok {
-						return fmt.Errorf("table %s not found in vschema", rule.Match)
+						return fmt.Errorf("table %s not found in vschema1", rule.Match)
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.
