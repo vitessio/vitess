@@ -58,8 +58,8 @@ func encodeTableName(tableName string) string {
 	return buf.String()
 }
 
-// tableListSql returns an IN clause "('t1', 't2'...) for a list of tables."
-func tableListSql(tables []string) (string, error) {
+// tableListSQL returns an IN clause "('t1', 't2'...) for a list of tables."
+func tableListSQL(tables []string) (string, error) {
 	if len(tables) == 0 {
 		return "", vterrors.New(vtrpc.Code_INTERNAL, "no tables for tableListSql")
 	}
@@ -128,7 +128,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		go func() {
 			defer wg.Done()
 
-			log.Infof("mysqld GetSchema: GetPrimaryKeyColumns")
 			var err error
 			colMap, err = mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
 			if err != nil {
@@ -136,7 +135,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 				cancel()
 				return
 			}
-			log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done")
 		}()
 	}
 
@@ -145,11 +143,9 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		return nil, err
 	}
 
-	log.Infof("mysqld GetSchema: Collecting all table schemas")
 	for _, td := range tds {
 		td.PrimaryKeyColumns = colMap[td.Name]
 	}
-	log.Infof("mysqld GetSchema: Collecting all table schemas done")
 
 	sd.TableDefinitions = tds
 
@@ -308,7 +304,7 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	}
 	defer conn.Recycle()
 
-	tableList, err := tableListSql(tables)
+	tableList, err := tableListSQL(tables)
 	if err != nil {
 		return nil, err
 	}

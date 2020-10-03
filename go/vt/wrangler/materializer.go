@@ -64,20 +64,21 @@ const (
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
 	var tables []string
+	var err error
+
 	var vschema *vschemapb.Keyspace
+	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if strings.HasPrefix(tableSpecs, "{") {
+		if vschema.Tables == nil {
+			vschema.Tables = make(map[string]*vschemapb.Table)
+		}
 		wrap := fmt.Sprintf(`{"tables": %s}`, tableSpecs)
 		ks := &vschemapb.Keyspace{}
 		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
 			return err
 		}
-		var err error
-		vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 		if err != nil {
 			return err
-		}
-		if vschema.Tables == nil {
-			vschema.Tables = make(map[string]*vschemapb.Table)
 		}
 		for table, vtab := range ks.Tables {
 			vschema.Tables[table] = vtab
@@ -85,6 +86,14 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		}
 	} else {
 		tables = strings.Split(tableSpecs, ",")
+		if !vschema.Sharded {
+			if vschema.Tables == nil {
+				vschema.Tables = make(map[string]*vschemapb.Table)
+			}
+			for _, table := range tables {
+				vschema.Tables[table] = &vschemapb.Table{}
+			}
+		}
 	}
 
 	// Save routing rules before vschema. If we save vschema first, and routing rules
@@ -135,20 +144,19 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return err
 	}
 
-	migrationId, err := getMigrationId(targetKeyspace, tabletShards)
+	migrationID, err := getMigrationID(targetKeyspace, tabletShards)
 	if err != nil {
 		return err
 	}
-	wr.Logger().Infof("********* Migration id is %d", migrationId)
 
-	exists, tablets, err := wr.checkIfPreviousJournalExists(ctx, mz, migrationId)
+	exists, tablets, err := wr.checkIfPreviousJournalExists(ctx, mz, migrationID)
 	if err != nil {
 		return err
 	}
 	if exists {
-		wr.Logger().Errorf("Found a previous journal entry for %d", migrationId)
+		wr.Logger().Errorf("Found a previous journal entry for %d", migrationID)
 		msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
-			migrationId, strings.Join(tablets, ","))
+			migrationID, strings.Join(tablets, ","))
 		msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
 			workflow, targetKeyspace)
 		return fmt.Errorf(msg)
@@ -156,7 +164,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	return mz.startStreams(ctx)
 }
 
-func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materializer, migrationId int64) (bool, []string, error) {
+func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materializer, migrationID int64) (bool, []string, error) {
 	forAllSources := func(f func(*topo.ShardInfo) error) error {
 		var wg sync.WaitGroup
 		allErrors := &concurrency.AllErrorRecorder{}
@@ -185,14 +193,13 @@ func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materi
 		if tablet == nil {
 			return nil
 		}
-		journal, err := wr.checkIfJournalExistsOnTablet(ctx, tablet.Tablet, migrationId)
+		_, exists, err = wr.checkIfJournalExistsOnTablet(ctx, tablet.Tablet, migrationID)
 		if err != nil {
 			return err
 		}
-		if journal.Id != 0 {
+		if exists {
 			mu.Lock()
 			defer mu.Unlock()
-			exists = true
 			tablets = append(tablets, tablet.AliasString())
 		}
 		return nil
@@ -627,6 +634,9 @@ func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) 
 		qr := sqltypes.Proto3ToResult(qrproto)
 		for i := 0; i < len(qr.Rows); i++ {
 			id, err = evalengine.ToInt64(qr.Rows[i][0])
+			if err != nil {
+				return err
+			}
 			mu.Lock()
 			shardTablets = append(shardTablets, fmt.Sprintf("%s:%d", target.ShardName(), id))
 			mu.Unlock()
@@ -639,8 +649,8 @@ func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) 
 	return shardTablets, nil
 }
 
-// getMigrationId produces a reproducible hash based on the input parameters.
-func getMigrationId(targetKeyspace string, shardTablets []string) (int64, error) {
+// getMigrationID produces a reproducible hash based on the input parameters.
+func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error) {
 	sort.Strings(shardTablets)
 	hasher := fnv.New64()
 	hasher.Write([]byte(targetKeyspace))
@@ -724,13 +734,11 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 		return nil, fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
 	}
 
-	log.Infof("getting table schemas from source master %v...", sourceMaster)
 	var err error
 	sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, allTables, nil, false)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("got table schemas from source master %v.", sourceMaster)
 
 	for _, td := range sourceSchema.TableDefinitions {
 		sourceDDLs[td.Name] = td.Schema
@@ -746,12 +754,10 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		log.Infof("getting table schemas from target master %v...", target.MasterAlias)
 		targetSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, allTables, nil, false)
 		if err != nil {
 			return err
 		}
-		log.Infof("got table schemas from target master %v.", target.MasterAlias)
 
 		for _, td := range targetSchema.TableDefinitions {
 			hasTargetTable[td.Name] = true
@@ -822,7 +828,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		if len(applyDDLs) > 0 {
 			sql := strings.Join(applyDDLs, ";\n")
 
-			log.Infof("applying schema to target tablet %v, sql: %s", target.MasterAlias, sql)
 			_, err = mz.wr.tmc.ApplySchema(ctx, targetTablet.Tablet, &tmutils.SchemaChange{
 				SQL:              sql,
 				Force:            false,
@@ -831,7 +836,6 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			log.Infof("applied schema to target tablet %v.", target.MasterAlias)
 		}
 
 		return nil

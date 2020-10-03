@@ -308,9 +308,11 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
+		log.Errorf("%s", err.Error())
 		return nil, err
 	}
 	if fromTable.String() != ti.Name {
+		log.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 		return nil, fmt.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
@@ -318,9 +320,11 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 		Table: ti,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
+		log.Errorf("%s", err.Error())
 		return nil, err
 	}
 	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
+		log.Errorf("%s", err.Error())
 		return nil, err
 	}
 
