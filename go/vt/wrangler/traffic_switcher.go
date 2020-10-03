@@ -718,22 +718,23 @@ func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *to
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var mu sync.Mutex
-	var exists bool
-	var journal *binlogdatapb.Journal
 	err = ts.forAllSources(func(source *tsSource) error {
 		mu.Lock()
 		defer mu.Unlock()
-		journal, exists, err = ts.wr.checkIfJournalExistsOnTablet(ctx, source.master.Tablet, ts.id)
+		journal, exists, err := ts.wr.checkIfJournalExistsOnTablet(ctx, source.master.Tablet, ts.id)
 		if err != nil {
 			return err
 		}
-		if journal.Id != 0 {
+		if exists {
+			if journal.Id != 0 {
+				sourceWorkflows = journal.SourceWorkflows
+			}
 			source.journaled = true
-			sourceWorkflows = journal.SourceWorkflows
+			journalsExist = true
 		}
 		return nil
 	})
-	return exists, sourceWorkflows, err
+	return journalsExist, sourceWorkflows, err
 }
 
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {

@@ -1127,30 +1127,27 @@ func TestMigrateFailJournal(t *testing.T) {
 }
 
 func TestTableMigrateJournalExists(t *testing.T) {
-	t.Skip()
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	//tme.expectNoPreviousJournals()
+	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	//tme.expectNoPreviousJournals()
+	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	// mi.checkJournals: Show one journal as created.
 	tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""), nil)
-	tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""), nil)
-	//tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", &sqltypes.Result{}, nil)
-	//
-	//// mi.createJournals: Create the missing journal.
-	//journal2 := "insert into _vt.resharding_journal.*7672494164556733923,.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*80.*participants.*40.*40"
-	//tme.dbSourceClients[1].addQueryRE(journal2, &sqltypes.Result{}, nil)
+	tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", &sqltypes.Result{}, nil)
+
+	// mi.createJournals: Create the missing journal.
+	journal2 := "insert into _vt.resharding_journal.*7672494164556733923,.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*80.*participants.*40.*40"
+	tme.dbSourceClients[1].addQueryRE(journal2, &sqltypes.Result{}, nil)
 
 	// mi.startReverseVReplication
 	tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1'", resultid34, nil)
@@ -1193,23 +1190,17 @@ func TestTableMigrateJournalExists(t *testing.T) {
 
 	verifyQueries(t, tme.allDBClients)
 }
-
 func TestShardMigrateJournalExists(t *testing.T) {
-	t.Skip()
 	ctx := context.Background()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
-	// mi.checkJournals
-	tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""), nil)
-	tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
+	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// mi.checkJournals
-	tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""), nil)
-	tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
+	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1242,14 +1233,6 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
-	//tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
-	//tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
-	//tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
-	//tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
-
-	tme.expectWaitForCatchup()
-	tme.expectDeleteReverseVReplication()
-
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1267,7 +1250,6 @@ func TestShardMigrateJournalExists(t *testing.T) {
 
 	verifyQueries(t, tme.allDBClients)
 }
-
 func TestTableMigrateCancel(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
