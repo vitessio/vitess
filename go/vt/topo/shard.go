@@ -461,16 +461,18 @@ func (si *ShardInfo) updateMasterTabletControl(tc *topodatapb.Shard_TabletContro
 			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, blTablesNotPresent)
 		}
 		var newBlacklist []string
-		for _, blt := range tc.BlacklistedTables {
-			mustDelete := false
-			for _, table := range tables {
-				if blt == table {
-					mustDelete = true
-					break
+		if len(tables) != 0 { // legacy uses
+			for _, blt := range tc.BlacklistedTables {
+				mustDelete := false
+				for _, table := range tables {
+					if blt == table {
+						mustDelete = true
+						break
+					}
 				}
-			}
-			if !mustDelete {
-				newBlacklist = append(newBlacklist, blt)
+				if !mustDelete {
+					newBlacklist = append(newBlacklist, blt)
+				}
 			}
 		}
 		tc.BlacklistedTables = newBlacklist
