@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"strconv"
@@ -162,11 +163,19 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 		return result, err
 	}
 	defer conn.Recycle()
-	return withDDL.Exec(ctx, query, conn.Exec)
+	return conn.Exec(ctx, query, math.MaxInt32, true)
 }
 
 func (e *Executor) initSchema(ctx context.Context) error {
-	_, err := e.execQuery(ctx, sqlValidationQuery)
+	defer e.env.LogError()
+
+	conn, err := e.pool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+	parsed := sqlparser.BuildParsedQuery(sqlValidationQuery, "_vt")
+	_, err = withDDL.Exec(ctx, parsed.Query, conn.Exec)
 	return err
 }
 
