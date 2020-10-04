@@ -84,9 +84,9 @@ func (rt *ReplTracker) MakeMaster() {
 	log.Info("Replication Tracker: going into master mode")
 
 	rt.isMaster = true
-	rt.hw.Open()
 	if rt.mode == tabletenv.Heartbeat {
 		rt.hr.Close()
+		rt.hw.Open()
 	}
 }
 
@@ -97,9 +97,9 @@ func (rt *ReplTracker) MakeNonMaster() {
 	log.Info("Replication Tracker: going into non-master mode")
 
 	rt.isMaster = false
-	rt.hw.Close()
 	switch rt.mode {
 	case tabletenv.Heartbeat:
+		rt.hw.Close()
 		rt.hr.Open()
 	case tabletenv.Polling:
 		// Run the status once to pre-initialize values.
