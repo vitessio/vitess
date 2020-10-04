@@ -82,7 +82,7 @@ func TestReplTracker(t *testing.T) {
 	rt.InitDBConfig(target, mysqld)
 	assert.Equal(t, tabletenv.Polling, rt.mode)
 	assert.Equal(t, mysqld, rt.poller.mysqld)
-	assert.True(t, rt.hw.enabled)
+	assert.False(t, rt.hw.enabled)
 	assert.False(t, rt.hr.enabled)
 
 	rt.MakeNonMaster()
