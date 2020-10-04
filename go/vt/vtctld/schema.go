@@ -162,22 +162,22 @@ func reviewMigrationRequests(ctx context.Context, ts *topo.Server, tmClient tmcl
 func onMigrationCheckTick(ctx context.Context, ts *topo.Server, tmClient tmclient.TabletManagerClient) {
 	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
 	if err != nil {
-		log.Errorf("Executor.checkMigrations ConnForCell error: %s", err.Error())
+		log.Errorf("vtctld.onMigrationCheckTick ConnForCell error: %s", err.Error())
 		return
 	}
 
 	onlineDDLOnce.Do(func() {
 		// This creates the directory schema.MigrationRequestsPath(), once.
 		// From now on, we can ListDir() n that directory without errors, even if no migration has ever been created.
-		_, err = conn.Create(ctx, fmt.Sprintf("%s/sentry", schema.MigrationRequestsPath()), []byte{})
-		if err != nil {
-			log.Errorf("Executor.onlineDDLOnce Create sentry error: %s", err.Error())
+		_, err := conn.Create(ctx, fmt.Sprintf("%s/sentry", schema.MigrationRequestsPath()), []byte{})
+		if err != nil && !topo.IsErrType(err, topo.NodeExists) {
+			log.Errorf("vtctld.onMigrationCheckTick Create sentry error: %s", err.Error())
 		}
 	})
 
-	lockDescriptor, err := conn.Lock(ctx, schema.MigrationRequestsPath(), "cvtctld.checkMigrationRequests")
+	lockDescriptor, err := conn.Lock(ctx, schema.MigrationRequestsPath(), "vtctld.onMigrationCheckTick")
 	if err != nil {
-		log.Errorf("Executor.checkMigrations ConnForCell error: %s", err.Error())
+		log.Errorf("vtctld.onMigrationCheckTick ConnForCell error: %s", err.Error())
 		return
 	}
 	defer lockDescriptor.Unlock(ctx)
