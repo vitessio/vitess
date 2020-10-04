@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,7 +31,8 @@ import (
 )
 
 var (
-	migrationBasePath = "schema-migration"
+	migrationBasePath   = "schema-migration"
+	onlineDdlUUIDRegexp = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -74,9 +76,12 @@ const (
 )
 
 const (
+	// DDLStrategyNormal means not an online-ddl migration. Just a normal MySQL ALTER TABLE
 	DDLStrategyNormal sqlparser.DDLStrategy = ""
-	DDLStrategyGhost  sqlparser.DDLStrategy = "gh-ost"
-	DDLStrategyPTOSC  sqlparser.DDLStrategy = "pt-osc"
+	// DDLStrategyGhost requests gh-ost to run the migration
+	DDLStrategyGhost sqlparser.DDLStrategy = "gh-ost"
+	// DDLStrategyPTOSC requests pt-online-schema-change to run the migration
+	DDLStrategyPTOSC sqlparser.DDLStrategy = "pt-osc"
 )
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
@@ -176,4 +181,10 @@ func CreateUUID() (string, error) {
 	result := u.String()
 	result = strings.Replace(result, "-", "_", -1)
 	return result, nil
+}
+
+// IsOnlineDDLUUID answers 'true' when the given string is an online-ddl UUID, e.g.:
+// a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a
+func IsOnlineDDLUUID(uuid string) bool {
+	return onlineDdlUUIDRegexp.MatchString(uuid)
 }
