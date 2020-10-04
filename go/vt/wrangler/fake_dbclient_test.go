@@ -48,7 +48,6 @@ func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
 	}
 	i := dbrs.index
 	dbrs.index++
-	//fmt.Printf("Next: %d/%d::%s\n", dbrs.index, len(dbrs.results), query)
 	return dbrs.results[i].result, dbrs.results[i].err
 }
 
@@ -76,27 +75,21 @@ func newFakeDBClient() *fakeDBClient {
 }
 
 func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err error) {
-	//fmt.Printf("@@@Addquery %s\n", query)
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queries[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
-		//fmt.Printf("@@@AQuery: %d:%s remaining %d/%v", len(dbrs.results), query, dbrs.index, dc.queries[query])
 		return
 	}
 	dc.queries[query] = &dbResults{results: []*dbResult{dbr}, err: err}
-	//fmt.Printf("@@@BQuery: %d:%s remaining %v\n",1, query,  dc.queries[query])
 }
 
 func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err error) {
-	//fmt.Printf("$$$ %s\n", query)
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queriesRE[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
-		//fmt.Printf("AQueryRE: %d:%s remaining %d/%v", len(dbrs.results), query, dbrs.index, dc.queriesRE[query])
 		return
 	}
 	dc.queriesRE[query] = &dbResults{results: []*dbResult{dbr}, err: err}
-	//fmt.Printf("BQueryRE: %d:%s remaining %v\n",1, query,  dc.queriesRE[query])
 }
 
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
@@ -134,26 +127,20 @@ func (dc *fakeDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
-	//fmt.Printf("@@@ query: %s, ALL: %v\n", query, dc.queries)
 	if testMode == "debug" {
 		fmt.Printf("ExecuteFetch:::: %s\n", query)
 	}
 	if dbrs := dc.queries[query]; dbrs != nil {
-		//fmt.Printf("check: %s remaining %d:%v\n", query, dbrs.index, dc.queriesRE[query])
 		return dbrs.next(query)
 	}
 	for re, dbrs := range dc.queriesRE {
-		//fmt.Printf("checkRE: %s :against: %s: remaining %d:%v\n", query, re, dbrs.index, dc.queriesRE[query])
 		if regexp.MustCompile(re).MatchString(query) {
-			//fmt.Printf("checkRE: MATCH %s :against: %s remaining %d:%v\n", query, re, dbrs.index, dc.queriesRE[query])
 			return dbrs.next(query)
 		}
-		//fmt.Printf("checkRE: NO MATCH %s :against: %s remaining %d:%v\n", query, re, dbrs.index, dc.queriesRE[query])
 	}
 	if result := dc.invariants[query]; result != nil {
 		return result, nil
 	}
-	//fmt.Printf("unexpected query: %s\n", query)
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
