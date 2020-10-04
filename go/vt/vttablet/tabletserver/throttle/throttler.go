@@ -694,6 +694,9 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 
 // Check is the main serving function of the throttler, and returns a check result for this cluster's lag
 func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	if !throttler.env.Config().EnableLagThrottler {
+		return okMetricCheckResult
+	}
 	return throttler.check.Check(ctx, appName, "mysql", localStoreName, remoteAddr, flags)
 }
 
