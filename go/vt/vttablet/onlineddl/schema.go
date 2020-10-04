@@ -51,7 +51,7 @@ const (
 		KEY keyspace_shard_idx (keyspace,shard),
 		KEY status_idx (migration_status, liveness_timestamp)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	sqlValidationQuery         = `select 1 from schema_migrations limit 1`
+	sqlValidationQuery         = `select 1 from %s.schema_migrations limit 1`
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
 			migration_status='ready',
