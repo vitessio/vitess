@@ -73,6 +73,11 @@ type heartbeatWriter struct {
 // newHeartbeatWriter creates a new heartbeatWriter.
 func newHeartbeatWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *heartbeatWriter {
 	config := env.Config()
+
+	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler {
+		return &heartbeatWriter{}
+	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
 	return &heartbeatWriter{
 		env:         env,
