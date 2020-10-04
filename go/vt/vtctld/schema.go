@@ -19,6 +19,7 @@ package vtctld
 import (
 	"flag"
 	"fmt"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -38,6 +39,7 @@ import (
 
 var (
 	migrationCheckTicks *timer.Timer
+	onlineDDLOnce       sync.Once
 )
 
 var (
@@ -67,6 +69,10 @@ func runMigrationRequestChecks(ts *topo.Server, tmClient tmclient.TabletManagerC
 }
 
 func reviewMigrationRequest(ctx context.Context, ts *topo.Server, tmClient tmclient.TabletManagerClient, conn topo.Conn, uuid string) error {
+	if !schema.IsOnlineDDLUUID(uuid) {
+		// Just some other entry in this path, e.g. a sentry or a placeholder.
+		return nil
+	}
 	entryPath := fmt.Sprintf("%s/%s", schema.MigrationRequestsPath(), uuid)
 	onlineDDL, err := schema.ReadTopo(ctx, conn, entryPath)
 	if err != nil {
@@ -159,6 +165,15 @@ func onMigrationCheckTick(ctx context.Context, ts *topo.Server, tmClient tmclien
 		log.Errorf("Executor.checkMigrations ConnForCell error: %s", err.Error())
 		return
 	}
+
+	onlineDDLOnce.Do(func() {
+		// This creates the directory schema.MigrationRequestsPath(), once.
+		// From now on, we can ListDir() n that directory without errors, even if no migration has ever been created.
+		_, err = conn.Create(ctx, fmt.Sprintf("%s/sentry", schema.MigrationRequestsPath()), []byte{})
+		if err != nil {
+			log.Errorf("Executor.onlineDDLOnce Create sentry error: %s", err.Error())
+		}
+	})
 
 	lockDescriptor, err := conn.Lock(ctx, schema.MigrationRequestsPath(), "cvtctld.checkMigrationRequests")
 	if err != nil {
