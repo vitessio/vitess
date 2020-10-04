@@ -186,7 +186,9 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
 	throttler.shard = shard
-	go throttler.Operate(context.Background())
+	if throttler.env.Config().EnableLagThrottler {
+		go throttler.Operate(context.Background())
+	}
 }
 
 // initThrottler initializes config
