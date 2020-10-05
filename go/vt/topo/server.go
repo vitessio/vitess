@@ -168,6 +168,7 @@ var (
 // If an implementation with that name already exists, it log.Fatals out.
 // Call this in the 'init' function in your topology implementation module.
 func RegisterFactory(name string, factory Factory) {
+
 	if factories[name] != nil {
 		log.Fatalf("Duplicate topo.Factory registration for %v", name)
 	}

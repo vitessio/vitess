@@ -54,6 +54,9 @@ sleep 3 # required for now
 mysql --table < ../common/select_customer0_data.sql
 # Expected to fail!
 mysql --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
+
+exit
+
 ./205_clean_commerce.sh
 # Expected to fail!
 mysql --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
@@ -81,5 +84,5 @@ sleep 3 # TODO: Required for now!
 mysql --table < ../common/select_customer-80_data.sql
 mysql --table < ../common/select_customer80-_data.sql
 
-./401_teardown.sh
+#./401_teardown.sh
 

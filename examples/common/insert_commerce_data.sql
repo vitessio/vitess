@@ -10,3 +10,8 @@ insert into corder(customer_id, sku, price) values(2, 'SKU-1002', 30);
 insert into corder(customer_id, sku, price) values(3, 'SKU-1002', 30);
 insert into corder(customer_id, sku, price) values(4, 'SKU-1002', 30);
 insert into corder(customer_id, sku, price) values(5, 'SKU-1002', 30);
+update customer set email = 'rohit@a.com' where customer_id = 1;
+update customer set email = 'nayak@a.com' where customer_id = 3;
+delete from customer where customer_id = 4;
+
+

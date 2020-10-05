@@ -1,0 +1,3 @@
+
+rm -r commerce.log customer.log
+go run *.go -ids 1,3 -table customer -pk customer_id -source commerce -target customer -vtctld localhost:15999 -vtgate localhost:15991 -cells zone1 -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global

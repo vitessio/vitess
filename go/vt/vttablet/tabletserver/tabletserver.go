@@ -215,7 +215,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
-	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
+	//tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	return nil
 }
 
