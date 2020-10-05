@@ -663,6 +663,15 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				return err
 			}
 			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+
+			// Change database name in mysql output to the keyspace name
+			if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+				for _, f := range result.Fields {
+					if f.Database != "" {
+						f.Database = tsv.sm.target.Keyspace
+					}
+				}
+			}
 			return nil
 		},
 	)
@@ -698,7 +707,18 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				logStats:       logStats,
 				tsv:            tsv,
 			}
-			return qre.Stream(callback)
+			newCallback := func(result *sqltypes.Result) error {
+				if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+					// Change database name in mysql output to the keyspace name
+					for _, f := range result.Fields {
+						if f.Database != "" {
+							f.Database = tsv.sm.target.Keyspace
+						}
+					}
+				}
+				return callback(result)
+			}
+			return qre.Stream(newCallback)
 		},
 	)
 }
