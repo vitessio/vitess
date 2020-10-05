@@ -721,6 +721,23 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	return c.writeEphemeralPacket()
 }
 
+func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...interface{}) bool {
+	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
+		log.Errorf("Error writing error to %s: %v", c, err)
+		return false
+	}
+	return true
+}
+
+func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
+	werr := c.writeErrorPacketFromError(err)
+	if werr != nil {
+		log.Errorf("Error writing error to %s: %v", c, werr)
+		return false
+	}
+	return true
+}
+
 // writeErrorPacket writes an error packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
@@ -814,8 +831,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
-		if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]); err != nil {
-			log.Errorf("Error writing error packet to %s: %s", c, err)
+		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
 	}
@@ -840,8 +856,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	c.recycleReadPacket()
 	if !ok {
 		log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
-		if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
-			log.Error("Error writing error packet to client: %v", err)
+		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -849,8 +864,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
-		if err := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); err != nil {
-			log.Error("Error writing error packet to client: %v", err)
+		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data) {
 			return false
 		}
 	}
@@ -873,35 +887,20 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 	c.recycleReadPacket()
 	if !ok {
 		err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
-			return false
-		}
-		return true
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
-			return false
-		}
-		return true
+		return !c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	if prepare.BindVars == nil ||
 		prepare.ParamsCount == uint16(0) ||
 		paramID >= prepare.ParamsCount {
 		err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
-			return false
-		}
-		return true
+		return !c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	chunk := make([]byte, len(chunkData))
@@ -937,12 +936,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	}
 
 	if err != nil {
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
-			return false
-		}
-		return true
+		return !c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	fieldSent := false
@@ -977,9 +971,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
+		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return false
 		}
 	} else {
@@ -1014,21 +1006,11 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 		queries, err := sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-				return false
-			}
-			return true
+			return !c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
 			log.Errorf("Conn %v: can not prepare multiple statements", c, err)
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-				return false
-			}
-			return true
+			return !c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
 		queries = []string{query}
@@ -1044,9 +1026,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	statement, err := sqlparser.ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Conn %v: Error writing prepared statement error: %v", c, werr)
+		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return false
 		}
 	}
@@ -1079,12 +1059,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	fld, err := handler.ComPrepare(c, queries[0], bindVars)
 
 	if err != nil {
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
-			return false
-		}
-		return true
+		return !c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
@@ -1105,8 +1080,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 			c.Capabilities &^= CapabilityClientMultiStatements
 		default:
 			log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
-			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
-				log.Errorf("Error writing error packet to client: %v", err)
+			if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
 				return false
 			}
 		}
@@ -1116,8 +1090,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 		}
 	} else {
 		log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
-		if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
-			log.Errorf("Error writing error packet to client: %v", err)
+		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -1128,8 +1101,7 @@ func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.isShutdown() {
-		if err := c.writeErrorPacket(ERServerShutdown, SSServerShutdown, "Server shutdown in progress"); err != nil {
-			log.Errorf("Error writing ComPing error to %s: %v", c, err)
+		if !c.writeErrorAndLog(ERServerShutdown, SSServerShutdown, "Server shutdown in progress") {
 			return false
 		}
 	} else {
@@ -1160,12 +1132,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 		queries, err = sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			if werr := c.writeErrorPacketFromError(err); werr != nil {
-				// If we can't even write the error, we're done.
-				log.Errorf("Conn %v: Error writing query error: %v", c, werr)
-				return false
-			}
-			return true
+			return !c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
 		queries = []string{query}
@@ -1228,9 +1195,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
+		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return connErr
 		}
 		return execErr
