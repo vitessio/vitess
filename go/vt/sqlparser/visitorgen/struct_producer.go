@@ -76,7 +76,7 @@ func ToVisitorPlan(input *SourceInformation) *VisitorPlan {
 		stroct, isStruct := input.structs[typ.rawTypeName()]
 		if isStruct {
 			for _, f := range stroct.fields {
-				switchit.Fields = append(switchit.Fields, trySingleItem(input, f, typ)...)
+				switchit.Fields = append(switchit.Fields, extractVisitorFields(input, f, typ)...)
 			}
 		} else {
 			itemType := input.getItemTypeOfArray(typ)
@@ -94,7 +94,7 @@ func ToVisitorPlan(input *SourceInformation) *VisitorPlan {
 	return &output
 }
 
-func trySingleItem(input *SourceInformation, f *Field, typ Type) []VisitorItem {
+func extractVisitorFields(input *SourceInformation, f *Field, typ Type) []VisitorItem {
 	if input.isSQLNode(f.typ) {
 		return []VisitorItem{&SingleFieldItem{
 			StructType: typ,

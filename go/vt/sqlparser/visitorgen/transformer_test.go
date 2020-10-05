@@ -30,7 +30,7 @@ func TestSimplestAst(t *testing.T) {
 
 		type NodeStruct struct {}
 
-		func (*NodeStruct) iNode{}
+		func (*NodeStruct) iNode() {}
 	*/
 	input := &SourceFile{
 		lines: []Sast{
