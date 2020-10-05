@@ -1,6 +1,7 @@
 package sqlparser
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -33,6 +34,7 @@ func TestFirstRoundTrip(t *testing.T) {
 
 	mustMatch(t, stmt, output, "serialize round trip")
 }
+
 func BenchmarkParse(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		stmt, _ := Parse(sql)
@@ -41,6 +43,7 @@ func BenchmarkParse(b *testing.B) {
 		}
 	}
 }
+
 func BenchmarkDeserialize(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		stmt := Deserialize(btes)
@@ -48,4 +51,36 @@ func BenchmarkDeserialize(b *testing.B) {
 			b.Fail()
 		}
 	}
+}
+
+func TestReadWriteBools(t *testing.T) {
+	s := serializer{
+		buf: bytes.Buffer{},
+	}
+
+	in := []bool{true, false, false, true, true, true, false, false, true, false, false}
+
+	s.putBools(in)
+	d := &deserializer{buf: s.buf.Bytes()}
+	out := d.readBools(len(in))
+
+	assert.Equal(t, in, out)
+}
+
+func TestReadWriteComments(t *testing.T) {
+	s := serializer{
+		buf: bytes.Buffer{},
+	}
+
+	in := Comments{
+		[]byte("comment line 1"),
+		[]byte("comment line 2"),
+		[]byte("comment line 3"),
+	}
+
+	s.serialize(in)
+	d := &deserializer{buf: s.buf.Bytes()}
+	out := d.deserializeComment()
+
+	assert.Equal(t, in, out)
 }

@@ -20,13 +20,16 @@ func (d *deserializer) deserializeStatement() Statement {
 	switch b {
 	case tSelect:
 		cache := d.readBoolRef()
-		bools := d.readBools()
+		bools := d.readBools(11)
 		distinct := bools[0]
 		straightJoinHint := bools[1]
 		sqlCalcFoundRows := bools[2]
-		nils := d.readBools()
+		var comments Comments
+		if !bools[3] {
+			comments = d.deserializeComment()
+		}
 		var expressions SelectExprs
-		if !nils[1] {
+		if !bools[4] {
 			exprSize := d.readVint()
 			expressions = make(SelectExprs, exprSize)
 			for i := 0; i < exprSize; i++ {
@@ -34,7 +37,7 @@ func (d *deserializer) deserializeStatement() Statement {
 			}
 		}
 		var tableExprs TableExprs
-		if !nils[1] {
+		if !bools[5] {
 			fromSize := d.readVint()
 			tableExprs = make(TableExprs, fromSize)
 			for i := 0; i < fromSize; i++ {
@@ -43,11 +46,11 @@ func (d *deserializer) deserializeStatement() Statement {
 		}
 
 		return &Select{
+			Comments:         comments,
 			Cache:            cache,
 			Distinct:         distinct,
 			StraightJoinHint: straightJoinHint,
 			SQLCalcFoundRows: sqlCalcFoundRows,
-			Comments:         nil,
 			SelectExprs:      expressions,
 			From:             tableExprs,
 		}
@@ -73,14 +76,26 @@ func (d *deserializer) readByte() byte {
 	return d.buf[d.nextPos()]
 }
 
-func (d *deserializer) readBools() []bool {
-	res := make([]bool, 8)
-	byt := d.readByte()
-	for i := 0; i < 8; i++ {
-		b := (byt & (1 << i)) == 0
-		res[i] = !b
+func (d *deserializer) readBools(size int) []bool {
+	var recursiveResult []bool
+	for size > 8 {
+		// when we are dealing with arrays larger than a single byte, we 
+		// go into recursive mode and read one byte at the time
+		recursiveResult = append(recursiveResult, d.readBools(8)...)
+		size -= 8
 	}
-	return res
+
+	byt := d.readByte()
+	chunk := make([]bool, size)
+	for i := 0; i < size; i++ {
+		b := (byt & (1 << i)) == 0
+		chunk[i] = !b
+	}
+
+	if recursiveResult == nil {
+		return chunk
+	}
+	return append(recursiveResult, chunk...)
 }
 
 func (d *deserializer) readBoolRef() *bool {
@@ -113,6 +128,15 @@ func (d *deserializer) deserializeColdIdent() ColIdent {
 	}
 }
 
+func (d *deserializer) deserializeComment() Comments {
+	size := d.readVint()
+	result := make(Comments, size)
+	for i := 0; i < size; i++ {
+		row := d.readByteSlice()
+		result[i] = row
+	}
+	return result
+}
 func (d *deserializer) deserializeSelectExpr() SelectExpr {
 	b := d.readByte()
 	if b == 0 {

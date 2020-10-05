@@ -46,6 +46,10 @@ func encodeNils(buf []bool, startIdx int, refs ...interface{}) {
 }
 
 func (s *serializer) serialize(in SQLNode) {
+	if isNilValue(in) {
+		return
+	}
+
 	switch node := in.(type) {
 	case *Literal:
 		s.putByte(tLiteral)
@@ -65,17 +69,19 @@ func (s *serializer) serialize(in SQLNode) {
 			boolsAndNils[2] = true
 		}
 		encodeNils(boolsAndNils, 3, node.Comments, node.SelectExprs, node.From, node.Where, node.GroupBy, node.Having, node.OrderBy, node.Limit)
-		s.putBools(boolsAndNils...)
-		if node.SelectExprs != nil {
-			s.serialize(node.SelectExprs)
-		}
-		if node.From != nil {
-			s.serialize(node.From)
-		}
+		s.putBools(boolsAndNils)
+		s.serialize(node.Comments)
+		s.serialize(node.SelectExprs)
+		s.serialize(node.From)
 	case SelectExprs:
 		s.putVInt(len(node)) // size of slice
 		for _, e := range node {
 			s.serialize(e)
+		}
+	case Comments:
+		s.putVInt(len(node))
+		for _, row := range node {
+			s.putByteSlice(row)	
 		}
 	case *AliasedExpr:
 		s.putByte(tAliasedExpr) // type
@@ -107,16 +113,19 @@ func (s *serializer) encodeNullableFields(fields ...interface{}) {
 			bools[i] = true
 		}
 	}
-	s.putBools(bools...)
+	s.putBools(bools)
 }
 
-func (s *serializer) putBools(p ...bool) {
-	if len(p) > 8 {
-		s.putByte(0xfc)
-		s.putBools(p[:7]...)
-		s.putBools(p[8:]...)
-		return
+func (s *serializer) putBools(p []bool) {
+	// if we are dealing with an slice that wont fit into a byte, 
+	// we go into recursive mode and just call back into this method 
+	// with smaller chunks per call
+	for len(p) > 8 {
+		s.putBools(p[:7])
+		p = p[8:]
 	}
+
+	// when we get here, we know the bools will fit into a single byte
 	var res byte
 	for i, b := range p {
 		if b {
