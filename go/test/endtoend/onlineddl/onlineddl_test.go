@@ -88,6 +88,10 @@ func TestMain(m *testing.M) {
 			"-schema_change_controller", "local",
 			"-schema_change_check_interval", "1"}
 
+		clusterInstance.VtTabletExtraArgs = []string{
+			"-migration_check_interval", "5s",
+		}
+
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
@@ -239,7 +243,7 @@ func checkMigratedTable(t *testing.T, tableName string) {
 	expect := "ghost_col"
 	for i := range clusterInstance.Keyspaces[0].Shards {
 		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
-		assert.True(t, strings.Contains(createStatement, expect))
+		assert.Contains(t, createStatement, expect)
 	}
 }
 

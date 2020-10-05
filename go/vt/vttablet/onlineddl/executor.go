@@ -88,6 +88,7 @@ var emptyResult = &sqltypes.Result{
 
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
+var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 
 const (
 	maxPasswordLength     = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -120,10 +121,6 @@ type Executor struct {
 	isOpen bool
 }
 
-var (
-	migrationCheckInterval = time.Minute
-)
-
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
 func GhostBinaryFileName() (fileName string, isOverride bool) {
 	if *ghostOverridePath != "" {
@@ -152,7 +149,7 @@ func NewExecutor(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topod
 		}),
 		tabletTypeFunc: tabletTypeFunc,
 		ts:             ts,
-		ticks:          timer.NewTimer(migrationCheckInterval),
+		ticks:          timer.NewTimer(*migrationCheckInterval),
 	}
 }
 
