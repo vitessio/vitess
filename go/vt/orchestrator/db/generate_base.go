@@ -856,6 +856,8 @@ var generateSQLBase = []string{
 			hostname varchar(128) CHARACTER SET ascii NOT NULL,
 			port smallint(5) unsigned NOT NULL,
 			cell varchar(128) CHARACTER SET ascii NOT NULL,
+			keyspace varchar(128) CHARACTER SET ascii NOT NULL,
+			shard varchar(128) CHARACTER SET ascii NOT NULL,
 			tablet_type smallint(5) NOT NULL,
 			master_timestamp timestamp NOT NULL,
 			info varchar(512) CHARACTER SET ascii NOT NULL,
@@ -864,5 +866,8 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE INDEX cell_idx_vitess_tablet ON vitess_tablet (cell)
+	`,
+	`
+		CREATE INDEX ks_idx_vitess_tablet ON vitess_tablet (keyspace, shard)
 	`,
 }
