@@ -52,6 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -107,7 +108,8 @@ type TabletServer struct {
 	lagThrottler *throttle.Throttler
 
 	// sm manages state transitions.
-	sm *stateManager
+	sm                *stateManager
+	onlineDDLExecutor *onlineddl.Executor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
@@ -157,14 +159,15 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer,
-		func() topodatapb.TabletType {
-			if tsv.sm == nil {
-				return topodatapb.TabletType_UNKNOWN
-			}
-			return tsv.sm.Target().TabletType
-		},
-	)
+
+	tabletTypeFunc := func() topodatapb.TabletType {
+		if tsv.sm == nil {
+			return topodatapb.TabletType_UNKNOWN
+		}
+		return tsv.sm.Target().TabletType
+	}
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer, tabletTypeFunc)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
@@ -177,6 +180,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		txThrottler: tsv.txThrottler,
 		te:          tsv.te,
 		messager:    tsv.messager,
+		ddle:        tsv.onlineDDLExecutor,
 		throttler:   tsv.lagThrottler,
 	}
 
@@ -195,6 +199,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
+	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
 
 	return tsv
@@ -215,6 +220,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
+	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
 	return nil
 }
@@ -375,6 +381,11 @@ func (tsv *TabletServer) ClearQueryPlanCache() {
 // QueryService returns the QueryService part of TabletServer.
 func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
+}
+
+// OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
+func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
+	return tsv.onlineDDLExecutor
 }
 
 // LagThrottler returns the throttle.Throttler part of TabletServer.
@@ -1492,6 +1503,17 @@ func (tsv *TabletServer) registerTwopczHandler() {
 			te:       tsv.te,
 		}
 		twopczHandler(txe, w, r)
+	})
+}
+
+func (tsv *TabletServer) registerMigrationStatusHandler() {
+	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
+		ctx := tabletenv.LocalContext()
+		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, r.URL.Query().Get("uuid"), r.URL.Query().Get("status"), r.URL.Query().Get("dryrun")); err != nil {
+			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte("ok"))
 	})
 }
 
