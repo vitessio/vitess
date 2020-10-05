@@ -49,7 +49,8 @@ const (
 		PRIMARY KEY (id),
 		UNIQUE KEY uuid_idx (migration_uuid),
 		KEY keyspace_shard_idx (keyspace,shard),
-		KEY status_idx (migration_status, liveness_timestamp)
+		KEY status_idx (migration_status, liveness_timestamp),
+		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
 	sqlValidationQuery         = `select 1 from %s.schema_migrations limit 1`
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
@@ -119,6 +120,14 @@ const (
 			migration_status='running'
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
+	sqlSelectUncleanedArtifacts = `SELECT
+			migration_uuid,
+			artifacts
+		FROM %s.schema_migrations
+		WHERE
+			migration_status IN ('complete', 'failed')
+			AND cleanup_timestamp IS NULL
+	`
 	sqlSelectMigration = `SELECT
 			id,
 			migration_uuid,
@@ -171,7 +180,8 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
-	sqlDropTrigger = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlDropTrigger    = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike = "SHOW TABLES LIKE '%a'"
 )
 
 const (
