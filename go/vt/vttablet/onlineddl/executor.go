@@ -488,6 +488,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
+		defer e.gcArtifacts(ctx)
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
 		if err := runGhost(false); err != nil {
@@ -714,6 +715,7 @@ export MYSQL_PWD
 	go func() error {
 		defer atomic.StoreInt64(&e.migrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
+		defer e.gcArtifacts(ctx)
 
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
 		if err := runPTOSC(false); err != nil {
@@ -1102,7 +1104,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectUncleanedArtifacts, "_vt")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectUncollectedArtifacts, "_vt")
 	r, err := e.execQuery(ctx, parsed.Query)
 	if err != nil {
 		return err
