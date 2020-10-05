@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"vitess.io/vitess/go/textutil"
 )
 
 // TableGCState provides a state for the type of GC table: HOLD? PURGE? EVAC? DROP? See details below
@@ -48,7 +50,6 @@ const (
 
 var (
 	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|EVAC|DROP)_[0-f]{32}_([0-9]{14})$`)
-	gcLifecycleRegexp = regexp.MustCompile(`[ ,;]+`)
 
 	gcStates = map[string]TableGCState{
 		string(HoldTableGCState):  HoldTableGCState,
@@ -114,11 +115,8 @@ func GenerateRenameStatement(fromTableName string, state TableGCState, t time.Ti
 // ParseGCLifecycle parses a comma separated list of gc states and returns a map of indicated states
 func ParseGCLifecycle(gcLifecycle string) (states map[TableGCState]bool, err error) {
 	states = make(map[TableGCState]bool)
-	tokens := gcLifecycleRegexp.Split(gcLifecycle, -1)
+	tokens := textutil.SplitDelimitedList(gcLifecycle)
 	for _, token := range tokens {
-		if token == "" {
-			continue
-		}
 		token = strings.ToUpper(token)
 		state, ok := gcStates[token]
 		if !ok {

@@ -172,9 +172,8 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)
 
-	tokens := strings.Split(*throttleTabletTypes, ",")
+	tokens := textutil.SplitDelimitedList(*throttleTabletTypes)
 	for _, token := range tokens {
-		token = strings.TrimSpace(token)
 		token = strings.ToUpper(token)
 		if value, ok := topodatapb.TabletType_value[token]; ok {
 			throttler.throttleTabletTypesMap[topodatapb.TabletType(value)] = true
