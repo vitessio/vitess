@@ -93,10 +93,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -108,7 +104,9 @@ import (
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -412,6 +410,17 @@ var commands = []commandGroup{
 			{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] [-skip-verify] [-wait_replicas_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
 				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
+			{"OnlineDDL", commandOnlineDDL,
+				"<keyspace> <command> [<migration_uuid>]",
+				"Operates on online DDL (migrations). Examples:" +
+					" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace show all" +
+					" \nvtctl OnlineDDL test_keyspace show running" +
+					" \nvtctl OnlineDDL test_keyspace show complete" +
+					" \nvtctl OnlineDDL test_keyspace show failed" +
+					" \nvtctl OnlineDDL test_keyspace retry 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+			},
 
 			{"ValidateVersionShard", commandValidateVersionShard,
 				"<keyspace/shard>",
@@ -2434,6 +2443,77 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	)
 }
 
+func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() < 1 {
+		return fmt.Errorf("the <keyspace> argument is required for the OnlineDDL command")
+	}
+	keyspace := subFlags.Args()[0]
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("the <command> argument is required for the OnlineDDL command")
+	}
+	command := subFlags.Args()[1]
+	arg := ""
+	if subFlags.NArg() >= 3 {
+		arg = subFlags.Args()[2]
+	}
+	query := ""
+	uuid := ""
+	switch command {
+	case "show":
+		{
+			condition := ""
+			switch arg {
+			case "", "all":
+				condition = "migration_uuid like '%'"
+			case "recent":
+				condition = "requested_timestamp > now() - interval 1 week"
+			case
+				string(schema.OnlineDDLStatusCancelled),
+				string(schema.OnlineDDLStatusQueued),
+				string(schema.OnlineDDLStatusReady),
+				string(schema.OnlineDDLStatusRunning),
+				string(schema.OnlineDDLStatusComplete),
+				string(schema.OnlineDDLStatusFailed):
+				condition = fmt.Sprintf("migration_status='%s'", arg)
+			default:
+				uuid = arg
+				condition = fmt.Sprintf("migration_uuid='%s'", uuid)
+			}
+			query = fmt.Sprintf(`select
+				shard, mysql_schema, mysql_table, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status 
+				from _vt.schema_migrations where %s`, condition)
+		}
+	case "retry":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='retry' where migration_uuid='%s'`, uuid)
+		}
+	case "cancel":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid='%s'`, uuid)
+		}
+	default:
+		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
+	}
+
+	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
+	if err != nil {
+		return err
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
+}
+
 func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	tables := subFlags.String("tables", "", "Specifies a comma-separated list of tables to copy. Each is either an exact match, or a regular expression of the form /regexp/")
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
@@ -2874,78 +2954,21 @@ func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	}
 	query := subFlags.Arg(1)
 
-	results, err := wr.VExec(ctx, workflow, keyspace, query, *dryRun)
+	qr, err := wr.VExecResult(ctx, workflow, keyspace, query, *dryRun)
 	if err != nil {
 		return err
 	}
 	if *dryRun {
 		return nil
 	}
-	if len(results) == 0 {
+	if qr == nil {
 		wr.Logger().Printf("no result returned\n")
-	}
-	var qr *sqltypes.Result
-	var numFields int
-	for _, result := range results {
-		numFields = len(result.Fields)
-		break
-	}
-	if numFields != 0 {
-		qr = queryResultForTabletResults(results)
-	} else {
-		qr = queryResultForRowsAffected(results)
-	}
-	if len(qr.Rows) == 0 {
-		return nil
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
 	}
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
-}
-
-// called for workflow stop/start/delete. Only rows affected are reported per tablet
-func queryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
-	qr.Fields = []*querypb.Field{{
-		Name: "Tablet",
-		Type: sqltypes.VarBinary,
-	}, {
-		Name: "RowsAffected",
-		Type: sqltypes.Uint64,
-	}}
-	var row2 []sqltypes.Value
-	for tablet, result := range results {
-		row2 = nil
-		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
-		row2 = append(row2, sqltypes.NewUint64(result.RowsAffected))
-		qr.Rows = append(qr.Rows, row2)
-	}
-	return qr
-}
-
-func queryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
-	qr.Fields = []*querypb.Field{{
-		Name: "Tablet",
-		Type: sqltypes.VarBinary,
-	}}
-	var row2 []sqltypes.Value
-	for tablet, result := range results {
-		for _, row := range result.Rows {
-			if len(qr.Fields) == 1 {
-				qr.Fields = append(qr.Fields, result.Fields...)
-			}
-			row2 = nil
-			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
-			row2 = append(row2, row...)
-			qr.Rows = append(qr.Rows, row2)
-		}
-	}
-	return qr
 }
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2986,7 +3009,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		wr.Logger().Printf("no result returned\n")
 		return nil
 	}
-	qr := queryResultForRowsAffected(results)
+	qr := wr.QueryResultForRowsAffected(results)
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
