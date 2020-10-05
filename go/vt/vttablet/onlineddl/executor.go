@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -120,7 +121,7 @@ type Executor struct {
 }
 
 var (
-	migrationCheckInterval = time.Second * 10
+	migrationCheckInterval = time.Minute
 )
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
@@ -304,6 +305,24 @@ func (e *Executor) dropOnlineDDLUser(ctx context.Context) error {
 	parsed := sqlparser.BuildParsedQuery(sqlDropOnlineDDLUser, onlineDDLGrant)
 	_, err = conn.ExecuteFetch(parsed.Query, 0, false)
 	return err
+}
+
+// tableExists checks if a given table exists.
+func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, error) {
+	conn, err := e.pool.Get(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Recycle()
+
+	tableName = strings.ReplaceAll(tableName, `_`, `\_`)
+	parsed := sqlparser.BuildParsedQuery(sqlShowTablesLike, tableName)
+	rs, err := conn.Exec(ctx, parsed.Query, 1, true)
+	if err != nil {
+		return false, err
+	}
+	row := rs.Named().Row()
+	return (row != nil), nil
 }
 
 // ExecuteWithGhost validates and runs a gh-ost process.
@@ -645,7 +664,9 @@ export MYSQL_PWD
 		newTableName := fmt.Sprintf("_%s_%s_new", onlineDDL.UUID, ReadableTimestamp())
 
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID,
-			fmt.Sprintf("_%s_del", newTableName),
+			fmt.Sprintf("_%s_old", onlineDDL.Table),
+			fmt.Sprintf("__%s_old", onlineDDL.Table),
+			newTableName,
 		); err != nil {
 			return err
 		}
@@ -1053,6 +1074,58 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	return nil
 }
 
+// gcArtifacts garbage-collects migration artifacts from completed/failed migrations
+func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable string) error {
+	tableExists, err := e.tableExists(ctx, artifactTable)
+	if err != nil {
+		return err
+	}
+	if !tableExists {
+		return nil
+	}
+	renameStatement, _, err := schema.GenerateRenameStatement(artifactTable, schema.PurgeTableGCState, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	conn, err := e.pool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	_, err = conn.Exec(ctx, renameStatement, 1, true)
+	return err
+}
+
+// gcArtifacts garbage-collects migration artifacts from completed/failed migrations
+func (e *Executor) gcArtifacts(ctx context.Context) error {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	parsed := sqlparser.BuildParsedQuery(sqlSelectUncleanedArtifacts, "_vt")
+	r, err := e.execQuery(ctx, parsed.Query)
+	if err != nil {
+		return err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		artifacts := row["artifacts"].ToString()
+
+		artifactTables := textutil.SplitDelimitedList(artifacts)
+		for _, artifactTable := range artifactTables {
+			if err := e.gcArtifactTable(ctx, artifactTable); err != nil {
+				return err
+			}
+			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
+		}
+		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // onMigrationCheckTick runs all migrations life cycle
 func (e *Executor) onMigrationCheckTick() {
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
@@ -1064,10 +1137,21 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	ctx := context.Background()
 
-	e.scheduleNextMigration(ctx)
-	e.runNextMigration(ctx)
-	e.reviewRunningMigrations(ctx)
-	e.reviewStaleMigrations(ctx)
+	if err := e.scheduleNextMigration(ctx); err != nil {
+		log.Error(err)
+	}
+	if err := e.runNextMigration(ctx); err != nil {
+		log.Error(err)
+	}
+	if _, err := e.reviewRunningMigrations(ctx); err != nil {
+		log.Error(err)
+	}
+	if err := e.reviewStaleMigrations(ctx); err != nil {
+		log.Error(err)
+	}
+	if err := e.gcArtifacts(ctx); err != nil {
+		log.Error(err)
+	}
 }
 
 func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid string) error {
