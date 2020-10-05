@@ -120,7 +120,7 @@ const (
 			migration_status='running'
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
-	sqlSelectUncleanedArtifacts = `SELECT
+	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
 			artifacts
 		FROM %s.schema_migrations
