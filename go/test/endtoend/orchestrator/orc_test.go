@@ -40,7 +40,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func createCluster(t *testing.T, numReplicas int, numRdonly int) *cluster.LocalProcessCluster {
+func createCluster(t *testing.T, numReplicas int, numRdonly int, orcExtraArgs []string) *cluster.LocalProcessCluster {
 	keyspaceName := "ks"
 	shardName := "0"
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
@@ -113,6 +113,7 @@ func createCluster(t *testing.T, numReplicas int, numRdonly int) *cluster.LocalP
 
 	// Start orchestrator
 	clusterInstance.OrcProcess = clusterInstance.NewOrcProcess(path.Join(os.Getenv("PWD"), "test_config.json"))
+	clusterInstance.OrcProcess.ExtraArgs = orcExtraArgs
 	err = clusterInstance.OrcProcess.Setup()
 	require.NoError(t, err)
 
@@ -125,7 +126,45 @@ func createCluster(t *testing.T, numReplicas int, numRdonly int) *cluster.LocalP
 // verify replication is setup
 func TestMasterElection(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 1, 1)
+	clusterInstance := createCluster(t, 1, 1, nil)
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	defer func() {
+		clusterInstance.Teardown()
+		killTablets(t, shard0)
+	}()
+
+	//log.Exitf("error")
+	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
+}
+
+// Cases to test:
+// 1. create cluster with 1 replica and 1 rdonly, let orc choose master
+// verify rdonly is not elected, only replica
+// verify replication is setup
+func TestSingleKeyspace(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := createCluster(t, 1, 1, []string{"-clusters_to_watch", "ks"})
+	keyspace := &clusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	defer func() {
+		clusterInstance.Teardown()
+		killTablets(t, shard0)
+	}()
+
+	//log.Exitf("error")
+	checkMasterTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:])
+}
+
+// Cases to test:
+// 1. create cluster with 1 replica and 1 rdonly, let orc choose master
+// verify rdonly is not elected, only replica
+// verify replication is setup
+func TestKeyspaceShard(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := createCluster(t, 1, 1, []string{"-clusters_to_watch", "ks/0"})
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
@@ -141,7 +180,7 @@ func TestMasterElection(t *testing.T) {
 // 2. bring down master, let orc promote replica
 func TestDownMaster(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0)
+	clusterInstance := createCluster(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
@@ -168,7 +207,7 @@ func TestDownMaster(t *testing.T) {
 // 3. make master readonly, let orc repair
 func TestMasterReadOnly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0)
+	clusterInstance := createCluster(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
@@ -196,7 +235,7 @@ func TestMasterReadOnly(t *testing.T) {
 // 4. make replica ReadWrite, let orc repair
 func TestReplicaReadWrite(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0)
+	clusterInstance := createCluster(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
@@ -232,7 +271,7 @@ func TestReplicaReadWrite(t *testing.T) {
 // 5. stop replication, let orc repair
 func TestStopReplication(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0)
+	clusterInstance := createCluster(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
@@ -271,7 +310,7 @@ func TestStopReplication(t *testing.T) {
 // 6. setup replication from non-master, let orc repair
 func TestReplicationFromOtherReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 3, 0)
+	clusterInstance := createCluster(t, 3, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
@@ -322,7 +361,7 @@ func TestRepairAfterTER(t *testing.T) {
 	// test fails intermittently on CI, skip until it can be fixed.
 	t.SkipNow()
 	defer cluster.PanicHandler(t)
-	clusterInstance := createCluster(t, 2, 0)
+	clusterInstance := createCluster(t, 2, 0, nil)
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	defer func() {
@@ -469,8 +508,8 @@ func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) erro
 
 func validateTopology(t *testing.T, cluster *cluster.LocalProcessCluster, pingTablets bool) {
 	if pingTablets {
-		err := cluster.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
-		require.NoError(t, err)
+		out, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("Validate", "-ping-tablets=true")
+		require.NoError(t, err, out)
 	} else {
 		err := cluster.VtctlclientProcess.ExecuteCommand("Validate")
 		require.NoError(t, err)
