@@ -12,6 +12,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -39,10 +40,35 @@ func (rlc *RowLogConfig) String() string {
 	return s
 }
 
+func (rlc *RowLogConfig) Validate() bool {
+	if rlc.table == "" || len(rlc.cells) == 0 || rlc.vtctld == "" || rlc.vtgate == "" || len(rlc.ids) == 0 || rlc.targetKeyspace == "" || rlc.sourceKeyspace == "" || rlc.pk == "" {
+		return false
+	}
+	return true
+}
+
+//TODO
+func usage() {
+	logger := logutil.NewConsoleLogger()
+	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
+	flag.Usage = func() {
+		logger.Printf("Rowlog Usage:\n")
+		s := "rowlog -ids <id list csv> -table <table_name> -pk <primary_key_only_ints> -source <source_keyspace> -target <target_keyspace> "
+		s += "-vtctld <vtctl url> -vtgate <vtgate url> -cells <cell names csv> -topo_implementation <topo type, eg: etcd2> "
+		s += "-topo_global_server_address <top url> -topo_global_root <topo root dir>\n"
+		logger.Printf(s)
+	}
+}
+
 func main() {
+	usage()
 	defer log.Flush()
 	ctx := context.Background()
 	config := parseCommandLine()
+	if !config.Validate() {
+		flag.Usage()
+		return
+	}
 	log.Infof("Starting rowlogger with config: %s", config)
 	fmt.Printf("Starting rowlogger with\n%v\n", config)
 	ts := topo.Open()
@@ -64,7 +90,9 @@ func main() {
 	}()
 	wg.Wait()
 	log.Infof("rowlog done streaming from both source and target")
-	fmt.Printf("done\n")
+	fmt.Printf("done\nIf the program worked you should see two log files with the related binlog entries: %s.log and %s.log\n",
+		config.sourceKeyspace, config.targetKeyspace)
+	//generateHtml(config)
 }
 
 func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table, pk string, ids []string) {
@@ -380,3 +408,25 @@ func execVtctl(ctx context.Context, server string, args []string) ([]string, err
 		}
 	}
 }
+
+
+/*
+TODO: html export
+
+var tpl = `
+	<h2>Rowlog for {{.Keyspace}}.{{.Table}}</h2>
+
+`
+func generateHtml(config *RowLogConfig) {
+	var lines []string
+	for _, f := range []string{config.sourceKeyspace+".log",config.targetKeyspace+".log"} {
+		content, err := ioutil.ReadFile(f)
+		if err != nil {
+			log.Error(err.Error())
+			return
+		}
+		lines = strings.Split(string(content), "\n")
+	}
+
+}
+*/
