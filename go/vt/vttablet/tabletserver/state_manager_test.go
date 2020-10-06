@@ -82,6 +82,7 @@ func TestStateManagerServeMaster(t *testing.T) {
 	verifySubcomponent(t, 9, sm.messager, testStateOpen)
 	verifySubcomponent(t, 10, sm.throttler, testStateOpen)
 	verifySubcomponent(t, 11, sm.tableGC, testStateOpen)
+	verifySubcomponent(t, 11, sm.ddle, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
@@ -97,6 +98,7 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
 
+	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 1, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 2, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
@@ -121,6 +123,7 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
 	require.NoError(t, err)
 
+	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 1, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 2, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
@@ -146,6 +149,7 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotServing, "")
 	require.NoError(t, err)
 
+	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 1, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 2, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
@@ -173,6 +177,7 @@ func TestStateManagerClose(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_RDONLY, testNow, StateNotConnected, "")
 	require.NoError(t, err)
 
+	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 1, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 2, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
@@ -287,6 +292,7 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
 
+	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 1, sm.tableGC, testStateClosed)
 	verifySubcomponent(t, 2, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
@@ -602,6 +608,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		txThrottler: &testTxThrottler{},
 		te:          &testTxEngine{},
 		messager:    &testSubcomponent{},
+		ddle:        &testOnlineDDLExecutor{},
 		throttler:   &testLagThrottler{},
 		tableGC:     &testTableGC{},
 	}
@@ -782,6 +789,21 @@ func (te *testTxThrottler) Open() error {
 }
 
 func (te *testTxThrottler) Close() {
+	te.order = order.Add(1)
+	te.state = testStateClosed
+}
+
+type testOnlineDDLExecutor struct {
+	testOrderState
+}
+
+func (te *testOnlineDDLExecutor) Open() error {
+	te.order = order.Add(1)
+	te.state = testStateOpen
+	return nil
+}
+
+func (te *testOnlineDDLExecutor) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }
