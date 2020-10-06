@@ -339,20 +339,29 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildSetPlan(stmt, vschema)
 	case *sqlparser.DBDDL:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
-	case *sqlparser.Show, *sqlparser.SetTransaction:
+	case *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
-	case *sqlparser.ShowTableStatus:
-		return buildShowTableStatusPlan(stmt, vschema)
+	case *sqlparser.Show:
+		return buildShowPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 }
 
-func buildShowTableStatusPlan(stmt *sqlparser.ShowTableStatus, vschema ContextVSchema) (engine.Primitive, error) {
-	destination, keyspace, _, err := vschema.TargetDestination(stmt.DatabaseName)
+func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primitive, error) {
+	switch show := stmt.Internal.(type) {
+	case *sqlparser.ShowTableStatus:
+		return buildShowTableStatusPlan(show, vschema)
+	default:
+		return nil, ErrPlanNotSupported
+	}
+}
+
+func buildShowTableStatusPlan(show *sqlparser.ShowTableStatus, vschema ContextVSchema) (engine.Primitive, error) {
+	destination, keyspace, _, err := vschema.TargetDestination(show.DatabaseName)
 	if err != nil {
 		return nil, err
 	}
@@ -361,13 +370,14 @@ func buildShowTableStatusPlan(stmt *sqlparser.ShowTableStatus, vschema ContextVS
 	}
 
 	// Remove Database Name from the query.
-	stmt.DatabaseName = ""
+	show.DatabaseName = ""
 
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             sqlparser.String(stmt),
+		Query:             sqlparser.String(show),
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
+
 }
