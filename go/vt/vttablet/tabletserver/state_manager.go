@@ -537,11 +537,12 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.Infof("TabletServer transition: %v -> %v", sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state))
+	log.Infof("TabletServer transition: %v -> %v for tablet %s:%s/%s",
+		sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state),
+		sm.target.Cell, sm.target.Keyspace, sm.target.Shard)
 	sm.handleGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
 	if sm.state == StateNotConnected {
