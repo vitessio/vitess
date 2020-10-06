@@ -2098,6 +2098,56 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestIntoOutfileS3(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select * from t order by name limit 100 into outfile s3 'out_file_name'",
+		output: "select * from t order by name asc limit 100 into outfile s3 'out_file_name'",
+	}, {
+		input: "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
+	}, {
+		// Invalid queries but these are parsed and errors caught in planbuilder
+		input: "select * from t limit 100 into outfile s3 'out_file_name' union select * from t2",
+	}, {
+		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+
+	invalidSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select convert('abc' as date) from t",
+		output: "syntax error at position 24 near 'as'",
+	}, {
+		input:  "set transaction isolation level 12345",
+		output: "syntax error at position 38 near '12345'",
+	}}
+
+	for _, tcase := range invalidSQL {
+		_, err := Parse(tcase.input)
+		if err == nil || err.Error() != tcase.output {
+			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
 func TestPositionedErr(t *testing.T) {
 	invalidSQL := []struct {
 		input  string
@@ -2448,9 +2498,17 @@ func TestCreateTable(t *testing.T) {
 			"	f1 float default 1.23,\n" +
 			"	s1 varchar default 'c',\n" +
 			"	s2 varchar default 'this is a string',\n" +
-			"	s3 varchar default null,\n" +
+			"	`s3` varchar default null,\n" +
 			"	s4 timestamp default current_timestamp(),\n" +
 			"	s5 bit(1) default B'0'\n" +
+			")",
+	}, {
+		// test non_reserved word in column name
+		input: "create table t (\n" +
+			"	repair int\n" +
+			")",
+		output: "create table t (\n" +
+			"	`repair` int\n" +
 			")",
 	}, {
 		// test key field options
@@ -2781,6 +2839,11 @@ var (
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",
 		excludeMulti: true,
+	}, {
+		// non_reserved keywords are currently not permitted everywhere
+		input:        "create database repair",
+		output:       "syntax error at position 23 near 'repair'",
+		excludeMulti: true,
 	}}
 )
 
@@ -2789,6 +2852,7 @@ func TestErrors(t *testing.T) {
 		t.Run(tcase.input, func(t *testing.T) {
 			_, err := Parse(tcase.input)
 			require.Error(t, err, tcase.output)
+			require.Equal(t, err.Error(), tcase.output)
 		})
 	}
 }
