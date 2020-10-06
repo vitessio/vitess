@@ -337,6 +337,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
+	case *sqlparser.Load:
+		return buildPlanForBypassUsingQuery(query, vschema)
 	case *sqlparser.DBDDL:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
 	case *sqlparser.Show, *sqlparser.SetTransaction:
