@@ -138,7 +138,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
-%token <bytes> OUTFILE S3
+%token <bytes> OUTFILE S3 DATA LOAD
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
@@ -240,7 +240,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
-%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
+%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
 %type <str> wild_opt
 %type <explainType> explain_format_opt
@@ -395,6 +395,7 @@ command:
 | other_statement
 | flush_statement
 | do_statement
+| load_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -418,6 +419,12 @@ do_statement:
   DO expression_list
   {
     $$ = &OtherAdmin{}
+  }
+
+load_statement:
+  LOAD DATA FROM S3 STRING skip_to_end
+  {
+	$$ = &Load{InfileS3 : string($5)}
   }
 
 select_statement:
@@ -3706,6 +3713,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| DATA
 | DATE
 | DATETIME
 | DECIMAL
@@ -3748,6 +3756,7 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINESTRING
+| LOAD
 | LOCKED
 | LONGBLOB
 | LONGTEXT
