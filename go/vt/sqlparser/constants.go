@@ -64,6 +64,9 @@ const (
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 
+	// Online DDL hint
+	OnlineStr = "online"
+
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
 
