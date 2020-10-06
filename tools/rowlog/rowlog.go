@@ -40,6 +40,7 @@ func (rlc *RowLogConfig) String() string {
 }
 
 func main() {
+	defer log.Flush()
 	ctx := context.Background()
 	config := parseCommandLine()
 	log.Infof("Starting rowlogger with config: %s", config)
