@@ -121,6 +121,7 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
+		log.Errorf("Replicate error: %s", err.Error())
 		if err := vr.setMessage(err.Error()); err != nil {
 			log.Errorf("Failed to set error state: %v", err)
 		}
@@ -165,10 +166,12 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
+				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
 			}
 		case settings.StartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
+				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
 			}
 		default:
@@ -180,6 +183,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
 			}
 			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
+				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
 			return newVPlayer(vr, settings, nil, mysql.Position{}, "replicate").play(ctx)
