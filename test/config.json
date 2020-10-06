@@ -266,6 +266,15 @@
 				"site_test"
 			]
 		},
+		"onlineddl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 26,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
@@ -403,6 +412,17 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 18,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_tablegc": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/tablegc"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 27,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"

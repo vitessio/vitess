@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/vt/callerid"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -86,6 +88,7 @@ type vcursorImpl struct {
 	marginComments sqlparser.MarginComments
 	executor       iExecute
 	resolver       *srvtopo.Resolver
+	topoServer     *topo.Server
 	logStats       *LogStats
 	// rollbackOnPartialExec is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
@@ -137,7 +140,7 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, vschema *vindexes.VSchema, resolver *srvtopo.Resolver) (*vcursorImpl, error) {
+func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, vschema *vindexes.VSchema, resolver *srvtopo.Resolver, serv srvtopo.Server) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
@@ -146,6 +149,13 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 	// With DiscoveryGateway transactions are only allowed on master.
 	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "newVCursorImpl: transactions are supported only for master tablet types, current type: %v", tabletType)
+	}
+	var ts *topo.Server
+	if serv != nil {
+		ts, err = serv.GetTopoServer()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &vcursorImpl{
@@ -160,6 +170,7 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 		resolver:       resolver,
 		vschema:        vschema,
 		vm:             vm,
+		topoServer:     ts,
 	}, nil
 }
 
@@ -462,6 +473,16 @@ func (vc *vcursorImpl) Destination() key.Destination {
 // TabletType implements the ContextVSchema interface
 func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
 	return vc.tabletType
+}
+
+// SubmitOnlineDDL implements the VCursor interface
+func (vc *vcursorImpl) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
+	conn, err := vc.topoServer.ConnForCell(vc.ctx, topo.GlobalCell)
+	if err != nil {
+		return err
+	}
+	// Submit an online schema change by writing a migration request in topo
+	return onlineDDl.WriteTopo(vc.ctx, conn, schema.MigrationRequestsPath())
 }
 
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {

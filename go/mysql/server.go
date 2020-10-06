@@ -470,8 +470,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	for {
-		err := c.handleNextCommand(l.handler)
-		if err != nil {
+		kontinue := c.handleNextCommand(l.handler)
+		if !kontinue {
 			return
 		}
 	}

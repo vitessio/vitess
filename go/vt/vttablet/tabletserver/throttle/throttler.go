@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -109,7 +111,7 @@ type Throttler struct {
 
 	initMutex          sync.Mutex
 	throttledAppsMutex sync.Mutex
-	tickers            [](*base.SuspendableTicker)
+	tickers            [](*timer.SuspendableTicker)
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -154,7 +156,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		recentApps:             cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:          cache.New(cache.NoExpiration, 0),
 
-		tickers: [](*base.SuspendableTicker){},
+		tickers: [](*timer.SuspendableTicker){},
 
 		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 
@@ -170,9 +172,8 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)
 
-	tokens := strings.Split(*throttleTabletTypes, ",")
+	tokens := textutil.SplitDelimitedList(*throttleTabletTypes)
 	for _, token := range tokens {
-		token = strings.TrimSpace(token)
 		token = strings.ToUpper(token)
 		if value, ok := topodatapb.TabletType_value[token]; ok {
 			throttler.throttleTabletTypesMap[topodatapb.TabletType(value)] = true
@@ -186,7 +187,9 @@ func (throttler *Throttler) initThrottleTabletTypes() {
 func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.keyspace = keyspace
 	throttler.shard = shard
-	go throttler.Operate(context.Background())
+	if throttler.env.Config().EnableLagThrottler {
+		go throttler.Operate(context.Background())
+	}
 }
 
 // initThrottler initializes config
@@ -275,7 +278,7 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		return password, fmt.Errorf("createThrottlerUser(): server is read_only")
 	}
 
-	password = base.RandomHash()[0:maxPasswordLength]
+	password = textutil.RandomHash()[0:maxPasswordLength]
 	{
 		// There seems to be a bug where CREATE USER hangs. If CREATE USER is preceded by
 		// any query that writes to the binary log, CREATE USER does not hang.
@@ -320,11 +323,11 @@ func (throttler *Throttler) isDormant() bool {
 // run the probes, colelct metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context) {
 
-	addTicker := func(d time.Duration) *base.SuspendableTicker {
+	addTicker := func(d time.Duration) *timer.SuspendableTicker {
 		throttler.initMutex.Lock()
 		defer throttler.initMutex.Unlock()
 
-		t := base.NewSuspendableTicker(d, true)
+		t := timer.NewSuspendableTicker(d, true)
 		throttler.tickers = append(throttler.tickers, t)
 		return t
 	}
@@ -692,6 +695,9 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 
 // Check is the main serving function of the throttler, and returns a check result for this cluster's lag
 func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	if !throttler.env.Config().EnableLagThrottler {
+		return okMetricCheckResult
+	}
 	return throttler.check.Check(ctx, appName, "mysql", localStoreName, remoteAddr, flags)
 }
 
