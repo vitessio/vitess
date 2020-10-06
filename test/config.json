@@ -417,6 +417,17 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_tablegc": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/tablegc"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 27,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"tabletmanager_zk2": {
 			"File": "unused.go",
 			"Args": [

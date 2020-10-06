@@ -54,6 +54,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
@@ -106,6 +107,7 @@ type TabletServer struct {
 	messager     *messager.Engine
 	hs           *healthStreamer
 	lagThrottler *throttle.Throttler
+	tableGC      *gc.TableGC
 
 	// sm manages state transitions.
 	sm                *stateManager
@@ -168,6 +170,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	}
 	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer, tabletTypeFunc)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
+	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
@@ -182,6 +185,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		messager:    tsv.messager,
 		ddle:        tsv.onlineDDLExecutor,
 		throttler:   tsv.lagThrottler,
+		tableGC:     tsv.tableGC,
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -222,6 +226,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.hs.InitDBConfig(target)
 	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	return nil
 }
 
@@ -391,6 +396,11 @@ func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
 // LagThrottler returns the throttle.Throttler part of TabletServer.
 func (tsv *TabletServer) LagThrottler() *throttle.Throttler {
 	return tsv.lagThrottler
+}
+
+// TableGC returns the tableDropper part of TabletServer.
+func (tsv *TabletServer) TableGC() *gc.TableGC {
+	return tsv.tableGC
 }
 
 // SchemaEngine returns the SchemaEngine part of TabletServer.
