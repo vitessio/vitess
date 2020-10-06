@@ -170,7 +170,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	}
 	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer, tabletTypeFunc)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
-	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc)
+	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
