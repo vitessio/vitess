@@ -350,13 +350,23 @@ type ShowLegacy struct {
 	ShowCollationFilterOpt Expr
 }
 
+//ShowColumns is of ShowInternal type, holds the show columns statement.
+type ShowColumns struct {
+	Full   string
+	Table  TableName
+	DbName string
+	Filter *ShowFilter
+}
+
 // ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
 type ShowTableStatus struct {
 	DatabaseName string
 	Filter       *ShowFilter
 }
 
-func (*ShowLegacy) isShowInternal() {}
+
+func (*ShowLegacy) isShowInternal()  {}
+func (*ShowColumns) isShowInternal() {}
 func (*ShowTableStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
@@ -1410,6 +1420,17 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Internal)
+}
+
+// Format formats the node.
+func (node *ShowColumns) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s", node.Full)
+	buf.astPrintf(node, "columns from %v", node.Table)
+
+	buf.printIf(node.DbName != "", " from "+node.DbName)
+	if node.Filter != nil {
+		buf.astPrintf(node, "%v", node.Filter)
+	}
 }
 
 // Format formats the node.

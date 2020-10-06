@@ -1370,13 +1370,16 @@ var (
 	}, {
 		input: "show full tables where 1 = 0",
 	}, {
-		input: "show full columns from a like '%'",
+		input:  "show full columns in a in b like '%'",
+		output: "show full columns from a from b like '%'",
 	}, {
 		input: "show full columns from messages from test_keyspace like '%'",
 	}, {
-		input: "show full fields from a like '%'",
+		input:  "show full fields from a like '%'",
+		output: "show full columns from a like '%'",
 	}, {
-		input: "show fields from a like '%'",
+		input:  "show fields from a where 1 = 1",
+		output: "show columns from a where 1 = 1",
 	}, {
 		input:  "show triggers",
 		output: "show triggers",
