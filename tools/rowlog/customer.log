@@ -1,3 +1,0 @@
-customer_id	email	op	timestamp	gtid
-1	rohit@a.com	insert	Mon, 05 Oct 2020 22:12:51 +0200	MySQL56/03859508-0747-11eb-895d-04ed332e05c2:1-22
-3	nayak@a.com	insert	Mon, 05 Oct 2020 22:12:51 +0200	MySQL56/03859508-0747-11eb-895d-04ed332e05c2:1-22

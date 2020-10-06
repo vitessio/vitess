@@ -5,13 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 	"sync"
 	"time"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -27,40 +27,52 @@ import (
 )
 
 type RowLogConfig struct {
-	sourceKeyspace, targetKeyspace, table, vtgate, vtctld, pk string
-
 	ids, cells []string
+
+	sourceKeyspace, targetKeyspace, table, vtgate, vtctld, pk string
+}
+
+func (rlc *RowLogConfig) String() string {
+	s := fmt.Sprintf("\tsource:%s, target:%s, table:%s, ids:%s, pk:%s\n",
+		rlc.sourceKeyspace, rlc.targetKeyspace, rlc.table, strings.Join(rlc.ids, ","), rlc.pk)
+	s += fmt.Sprintf("\tvtgate:%s, vtctld:%s, cells:%s", rlc.vtgate, rlc.vtctld, strings.Join(rlc.cells, ","))
+	return s
 }
 
 func main() {
 	ctx := context.Background()
 	config := parseCommandLine()
-	fmt.Printf("config %v\n", config)
+	log.Infof("Starting rowlogger with config: %s", config)
+	fmt.Printf("Starting rowlogger with\n%v\n", config)
 	ts := topo.Open()
 	sourceTablet := getTablet(ctx, ts, config.cells, config.sourceKeyspace)
 	targetTablet := getTablet(ctx, ts, config.cells, config.targetKeyspace)
-
+	log.Infof("Using tablets %s and %s to get positions", sourceTablet, targetTablet)
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		startStreaming(ctx, config.vtgate, config.vtctld, config.sourceKeyspace, sourceTablet, config.table, config.pk, config.ids)
+		log.Infof("rowlog done streaming from both sources")
 	}()
 	go func() {
 		defer wg.Done()
 		startStreaming(ctx, config.vtgate, config.vtctld, config.targetKeyspace, targetTablet, config.table, config.pk, config.ids)
+		log.Infof("rowlog done streaming from both targets")
 	}()
 	wg.Wait()
+	log.Infof("rowlog done streaming from both sources and targets")
 }
 
 func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table, pk string, ids []string) {
-	curPos, stopPos := getPositions(ctx, vtctld, keyspace, tablet)
-	fmt.Printf("Positions are %s, %s\n", curPos, stopPos)
+	startPos, stopPos := getPositions(ctx, vtctld, keyspace, tablet)
+	log.Infof("Streaming keyspace %s from %s upto %s", keyspace, startPos, stopPos)
+	fmt.Printf("Streaming keyspace %s from %s upto %s\n", keyspace, startPos, stopPos)
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: keyspace,
 			Shard:    "0",
-			Gtid:     curPos,
+			Gtid:     startPos,
 		}},
 	}
 	filter := &binlogdatapb.Filter{
@@ -79,6 +91,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	var fields []*query.Field
 	var gtid string
 	var plan *TablePlan
+	var lastLoggedAt int64
 	for {
 		evs, err := reader.Recv()
 		switch err {
@@ -89,6 +102,11 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 					gtid = ev.Vgtid.ShardGtids[0].Gtid
 					if gtid == stopPos {
 						return
+					}
+					if ev.Timestamp - lastLoggedAt > 60 { // log progress every minute
+						lastLoggedAt = ev.Timestamp
+						log.Infof("Event time: %s", time.Unix(ev.Timestamp, 0).Format(time.RFC3339))
+						fmt.Printf(".")
 					}
 				case binlogdatapb.VEventType_FIELD:
 					fields = ev.FieldEvent.Fields
@@ -102,10 +120,12 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				}
 			}
 		case io.EOF:
+			log.Infof("stream ended")
 			fmt.Printf("stream ended\n")
 			return
 		default:
-			fmt.Printf("remote error: %v\n", err)
+			log.Errorf("remote error: %s", err)
+			fmt.Printf("remote error: %s\n", err.Error())
 			return
 		}
 	}
@@ -115,12 +135,13 @@ func output(filename, s string) {
 	f, err := os.OpenFile(filename+".log",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Println(err)
+		log.Errorf(err.Error())
 	}
 	defer f.Close()
 	if _, err := f.WriteString(s + "\n"); err != nil {
-		log.Println(err)
+		log.Errorf(err.Error())
 	}
+	log.Infof("Writing to %s.log: %s", filename, s)
 }
 
 func outputHeader(plan *TablePlan) {
@@ -195,12 +216,13 @@ func processRowEvent(plan *TablePlan, gtid string, ev *binlogdatapb.VEvent) []*R
 			op = "update"
 		} else if len(before) > 0 {
 			op = "delete"
+			afterVals = beforeVals
 		}
 
 		rowLog := &RowLog{
 			op:     op,
 			values: afterVals,
-			when:   time.Unix(ev.Timestamp, 0).Format(time.RFC1123Z),
+			when:   time.Unix(ev.Timestamp, 0).Format(time.RFC3339),
 			gtid:   gtid,
 		}
 		rowLogs = append(rowLogs, rowLog)
@@ -342,6 +364,7 @@ func execVtctl(ctx context.Context, server string, args []string) ([]string, err
 		case io.EOF:
 			return results, nil
 		default:
+			log.Errorf("remote error: %v", err)
 			return nil, fmt.Errorf("remote error: %v", err)
 		}
 	}

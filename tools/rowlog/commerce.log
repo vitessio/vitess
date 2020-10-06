@@ -1,5 +1,0 @@
-@1	@2	op	timestamp	gtid
-1	alice@domain.com	insert	Mon, 05 Oct 2020 22:11:54 +0200	MySQL56/f85a0362-0746-11eb-ab09-04ed332e05c2:1-10
-3	charlie@domain.com	insert	Mon, 05 Oct 2020 22:11:54 +0200	MySQL56/f85a0362-0746-11eb-ab09-04ed332e05c2:1-12
-1	rohit@a.com	update	Mon, 05 Oct 2020 22:11:54 +0200	MySQL56/f85a0362-0746-11eb-ab09-04ed332e05c2:1-22
-3	nayak@a.com	update	Mon, 05 Oct 2020 22:11:54 +0200	MySQL56/f85a0362-0746-11eb-ab09-04ed332e05c2:1-23
