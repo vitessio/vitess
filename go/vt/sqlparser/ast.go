@@ -198,6 +198,14 @@ type (
 		Charset     string
 	}
 
+	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
+	DDLStrategy string
+
+	// OnlineDDLHint indicates strategy and options for running an online DDL
+	OnlineDDLHint struct {
+		Strategy DDLStrategy
+		Options  string
+	}
 	// DBDDLAction is an enum for DBDDL Actions
 	DBDDLAction int8
 
@@ -219,6 +227,7 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
+		OnlineHint    *OnlineDDLHint
 
 		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec

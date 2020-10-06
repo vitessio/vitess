@@ -42,3 +42,5 @@ func NewErrorCheckResult(statusCode int, err error) *CheckResult {
 
 // NoSuchMetricCheckResult is a result returns when a metric is unknown
 var NoSuchMetricCheckResult = NewErrorCheckResult(http.StatusNotFound, base.ErrNoSuchMetric)
+
+var okMetricCheckResult = NewCheckResult(http.StatusOK, 0, 0, nil)
