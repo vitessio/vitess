@@ -1040,9 +1040,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	}
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// mi.checkJournals
 	tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", &sqltypes.Result{}, nil)
