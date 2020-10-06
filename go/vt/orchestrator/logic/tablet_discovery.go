@@ -19,7 +19,9 @@ package logic
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +39,8 @@ import (
 )
 
 var (
-	ts *topo.Server
+	ts              *topo.Server
+	clustersToWatch = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 )
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
@@ -69,38 +72,99 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 	if !IsLeaderOrActive() {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-	defer cancel()
-	cells, err := ts.GetKnownCells(ctx)
-	if err != nil {
-		log.Errore(err)
-		return
-	}
+	if *clustersToWatch == "" { // all known clusters
+		ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		defer cancel()
+		cells, err := ts.GetKnownCells(ctx)
+		if err != nil {
+			log.Errore(err)
+			return
+		}
 
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-	defer refreshCancel()
-	var wg sync.WaitGroup
-	for _, cell := range cells {
-		wg.Add(1)
-		go func(cell string) {
-			defer wg.Done()
-			refreshTabletsInCell(refreshCtx, cell, loader)
-		}(cell)
+		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		defer refreshCancel()
+		var wg sync.WaitGroup
+		for _, cell := range cells {
+			wg.Add(1)
+			go func(cell string) {
+				defer wg.Done()
+				refreshTabletsInCell(refreshCtx, cell, loader)
+			}(cell)
+		}
+		wg.Wait()
+	} else {
+		// Parse input and build list of keyspaces / shards
+		var keyspaceShards []*topo.KeyspaceShard
+		inputs := strings.Split(*clustersToWatch, ",")
+		for _, ks := range inputs {
+			if strings.Contains(ks, "/") {
+				// This is a keyspace/shard specification
+				input := strings.Split(ks, "/")
+				keyspaceShards = append(keyspaceShards, &topo.KeyspaceShard{Keyspace: input[0], Shard: input[1]})
+			} else {
+				// Assume this is a keyspace and find all shards in keyspace
+				ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+				defer cancel()
+				shards, err := ts.GetShardNames(ctx, ks)
+				if err != nil {
+					// Log the errr and continue
+					log.Errorf("Error fetching shards for keyspace: %v", ks)
+					continue
+				}
+				if len(shards) == 0 {
+					log.Errorf("Topo has no shards for ks: %v", ks)
+					continue
+				}
+				for _, s := range shards {
+					keyspaceShards = append(keyspaceShards, &topo.KeyspaceShard{Keyspace: ks, Shard: s})
+				}
+			}
+		}
+		if len(keyspaceShards) == 0 {
+			log.Errorf("Found no keyspaceShards for input: %v", *clustersToWatch)
+			return
+		}
+		refreshCtx, refreshCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+		defer refreshCancel()
+		var wg sync.WaitGroup
+		for _, ks := range keyspaceShards {
+			wg.Add(1)
+			go func(ks *topo.KeyspaceShard) {
+				defer wg.Done()
+				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader)
+			}(ks)
+		}
+		wg.Wait()
 	}
-	wg.Wait()
 }
 
 func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey)) {
-	latestInstances := make(map[inst.InstanceKey]bool)
-	tablets, err := topotools.GetAllTablets(ctx, ts, cell)
+	tablets, err := topotools.GetTabletMapForCell(ctx, ts, cell)
 	if err != nil {
 		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
 		return
 	}
+	query := "select hostname, port, info from vitess_tablet where cell = ?"
+	args := sqlutils.Args(cell)
+	refreshTablets(tablets, query, args, loader)
+}
 
+func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey)) {
+	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
+	if err != nil {
+		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
+		return
+	}
+	query := "select hostname, port, info from vitess_tablet where keyspace = ? and shard = ?"
+	args := sqlutils.Args(keyspace, shard)
+	refreshTablets(tablets, query, args, loader)
+}
+
+func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []interface{}, loader func(instanceKey *inst.InstanceKey)) {
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
+	latestInstances := make(map[inst.InstanceKey]bool)
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
 		if tablet.MysqlHostname == "" {
@@ -132,8 +196,7 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 
 	// Forget tablets that were removed.
 	toForget := make(map[inst.InstanceKey]*topodatapb.Tablet)
-	query := "select hostname, port, info from vitess_tablet where cell = ?"
-	err = db.QueryOrchestrator(query, sqlutils.Args(cell), func(row sqlutils.RowMap) error {
+	err := db.QueryOrchestrator(query, args, func(row sqlutils.RowMap) error {
 		curKey := inst.InstanceKey{
 			Hostname: row.GetString("hostname"),
 			Port:     row.GetInt("port"),
@@ -152,7 +215,7 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 		log.Errore(err)
 	}
 	for instanceKey, tablet := range toForget {
-		log.Infof("Forgeting: %v", tablet)
+		log.Infof("Forgetting: %v", tablet)
 		_, err := db.ExecOrchestrator(`
 					delete
 						from vitess_tablet
