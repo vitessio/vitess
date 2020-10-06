@@ -1690,10 +1690,9 @@ show_statement:
   {
     $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
   }
-| SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-    $$ = &Show{&ShowLegacy{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}}
+    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
