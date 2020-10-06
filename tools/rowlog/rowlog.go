@@ -50,19 +50,21 @@ func main() {
 	targetTablet := getTablet(ctx, ts, config.cells, config.targetKeyspace)
 	log.Infof("Using tablets %s and %s to get positions", sourceTablet, targetTablet)
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		startStreaming(ctx, config.vtgate, config.vtctld, config.sourceKeyspace, sourceTablet, config.table, config.pk, config.ids)
-		log.Infof("rowlog done streaming from both sources")
+		log.Infof("rowlog done streaming from source")
 	}()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		startStreaming(ctx, config.vtgate, config.vtctld, config.targetKeyspace, targetTablet, config.table, config.pk, config.ids)
-		log.Infof("rowlog done streaming from both targets")
+		log.Infof("rowlog done streaming from target")
 	}()
 	wg.Wait()
-	log.Infof("rowlog done streaming from both sources and targets")
+	log.Infof("rowlog done streaming from both source and target")
+	fmt.Printf("done\n")
 }
 
 func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table, pk string, ids []string) {
@@ -95,30 +97,37 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	var lastLoggedAt int64
 	for {
 		evs, err := reader.Recv()
+		//fmt.Printf("events received: %d\n",len(evs))
 		switch err {
 		case nil:
 			for _, ev := range evs {
+				now := time.Now().Unix()
+				if now-lastLoggedAt > 1 && ev.Timestamp != 0 { // log progress every ten seconds
+					lastLoggedAt = now
+					log.Infof("%s Progress: %s: %s", keyspace, time.Unix(ev.Timestamp, 0).Format(time.RFC3339), gtid)
+					fmt.Printf(".")
+				}
 				switch ev.Type {
 				case binlogdatapb.VEventType_VGTID:
 					gtid = ev.Vgtid.ShardGtids[0].Gtid
-					if gtid == stopPos {
-						return
-					}
-					if ev.Timestamp - lastLoggedAt > 60 { // log progress every minute
-						lastLoggedAt = ev.Timestamp
-						log.Infof("Event time: %s", time.Unix(ev.Timestamp, 0).Format(time.RFC3339))
-						fmt.Printf(".")
-					}
+					//fmt.Printf("gtid %s\n", gtid)
 				case binlogdatapb.VEventType_FIELD:
 					fields = ev.FieldEvent.Fields
+					//fmt.Printf("field %s\n", fields)
 					plan = getTablePlan(keyspace, fields, ev.FieldEvent.TableName, pk, ids)
 					outputHeader(plan)
 				case binlogdatapb.VEventType_ROW:
 					rows := processRowEvent(plan, gtid, ev)
 					if len(rows) > 0 {
+						//fmt.Printf("#rows %d\n", len(rows))
 						outputRows(plan, rows)
 					}
+				default:
+					//fmt.Printf("event type %v\n",ev.Type)
 				}
+			}
+			if gtid == stopPos {
+				return
 			}
 		case io.EOF:
 			log.Infof("stream ended")
@@ -130,6 +139,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 			return
 		}
 	}
+	log.Infof("Finished streaming keyspace %s from %s upto %s", keyspace, startPos, stopPos)
 }
 
 func output(filename, s string) {
