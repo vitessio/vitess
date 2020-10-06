@@ -105,7 +105,7 @@ type (
 	// Stream represents a SELECT statement.
 	Stream struct {
 		Comments   Comments
-		SelectExpr SelectExpr
+		SelectExpr SelectExprs
 		Table      TableName
 	}
 

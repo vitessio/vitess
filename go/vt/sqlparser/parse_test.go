@@ -1604,6 +1604,8 @@ var (
 	}, {
 		input: "stream /* comment */ * from t",
 	}, {
+		input: "stream col1, col2 from t",
+	}, {
 		input: "begin",
 	}, {
 		input:  "begin;",

@@ -74,7 +74,7 @@ func TestMessage(t *testing.T) {
 	defer exec(t, conn, "drop table vitess_message")
 
 	exec(t, streamConn, "set workload = 'olap'")
-	err = streamConn.ExecuteStreamFetch("stream * from vitess_message")
+	err = streamConn.ExecuteStreamFetch("stream id, message from vitess_message")
 	require.NoError(t, err)
 
 	wantFields := []*querypb.Field{{

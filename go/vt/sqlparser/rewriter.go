@@ -618,7 +618,7 @@ func replaceStreamComments(newNode, parent SQLNode) {
 }
 
 func replaceStreamSelectExpr(newNode, parent SQLNode) {
-	parent.(*Stream).SelectExpr = newNode.(SelectExpr)
+	parent.(*Stream).SelectExpr = newNode.(SelectExprs)
 }
 
 func replaceStreamTable(newNode, parent SQLNode) {

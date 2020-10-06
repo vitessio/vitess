@@ -475,7 +475,7 @@ simple_select:
   }
 
 stream_statement:
-  STREAM comment_opt select_expression FROM table_name
+  STREAM comment_opt select_expression_list FROM table_name
   {
     $$ = &Stream{Comments: Comments($2), SelectExpr: $3, Table: $5}
   }
