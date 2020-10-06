@@ -74,7 +74,7 @@ func TestMessage(t *testing.T) {
 	defer exec(t, conn, "drop table vitess_message")
 
 	exec(t, streamConn, "set workload = 'olap'")
-	err = streamConn.ExecuteStreamFetch("stream id, message from vitess_message")
+	err = streamConn.ExecuteStreamFetch("stream * from vitess_message")
 	require.NoError(t, err)
 
 	wantFields := []*querypb.Field{{
@@ -94,6 +94,220 @@ func TestMessage(t *testing.T) {
 	}
 	require.NoError(t, err)
 	assert.Equal(t, wantFields, gotFields)
+
+	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
+
+	// account for jitter in timings, maxJitter uses the current hardcoded value for jitter in message_manager.go
+	jitter := int64(0)
+	maxJitter := int64(1.4 * 1e9)
+
+	// Consume first message.
+	start := time.Now().UnixNano()
+	got, err := streamConn.FetchNext()
+	require.NoError(t, err)
+
+	want := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewVarChar("hello world"),
+	}
+	assert.Equal(t, want, got)
+
+	qr := exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	next, epoch := getTimeEpoch(qr)
+	jitter += epoch * maxJitter
+	// epoch could be 0 or 1, depending on how fast the row is updated
+	switch epoch {
+	case 0:
+		if !(start-1e9 < next && next < (start+jitter)) {
+			t.Errorf("next: %d. must be within 1s of start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	case 1:
+		if !(start < next && next < (start+jitter)+3e9) {
+			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	default:
+		t.Errorf("epoch: %d, must be 0 or 1", epoch)
+	}
+
+	// Consume the resend.
+	_, err = streamConn.FetchNext()
+	require.NoError(t, err)
+	qr = exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	next, epoch = getTimeEpoch(qr)
+	jitter += epoch * maxJitter
+	// epoch could be 1 or 2, depending on how fast the row is updated
+	switch epoch {
+	case 1:
+		if !(start < next && next < (start+jitter)+3e9) {
+			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	case 2:
+		if !(start+2e9 < next && next < (start+jitter)+6e9) {
+			t.Errorf("next: %d. must be about 3s after start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	default:
+		t.Errorf("epoch: %d, must be 1 or 2", epoch)
+	}
+
+	// Ack the message.
+	qr = exec(t, conn, "update vitess_message set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	assert.Equal(t, uint64(1), qr.RowsAffected)
+
+	// Within 3+1 seconds, the row should be deleted.
+	time.Sleep(4 * time.Second)
+	qr = exec(t, conn, "select time_acked, epoch from vitess_message where id = 1")
+	assert.Equal(t, 0, len(qr.Rows))
+}
+
+func TestMessageSelectColumns(t *testing.T) {
+	ctx := context.Background()
+
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	streamConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer streamConn.Close()
+
+	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	exec(t, conn, createMessage)
+	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+
+	defer exec(t, conn, "drop table vitess_message")
+
+	exec(t, streamConn, "set workload = 'olap'")
+	err = streamConn.ExecuteStreamFetch("stream id, message from vitess_message")
+	require.NoError(t, err)
+
+	wantFields := []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "message",
+		Type: sqltypes.VarChar,
+	}}
+	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
+	require.NoError(t, err)
+	assert.NotEqual(t, wantFields, gotFields)
+
+	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
+
+	// account for jitter in timings, maxJitter uses the current hardcoded value for jitter in message_manager.go
+	jitter := int64(0)
+	maxJitter := int64(1.4 * 1e9)
+
+	// Consume first message.
+	start := time.Now().UnixNano()
+	got, err := streamConn.FetchNext()
+	require.NoError(t, err)
+
+	want := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewVarChar("hello world"),
+	}
+	assert.Equal(t, want, got)
+
+	qr := exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	next, epoch := getTimeEpoch(qr)
+	jitter += epoch * maxJitter
+	// epoch could be 0 or 1, depending on how fast the row is updated
+	switch epoch {
+	case 0:
+		if !(start-1e9 < next && next < (start+jitter)) {
+			t.Errorf("next: %d. must be within 1s of start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	case 1:
+		if !(start < next && next < (start+jitter)+3e9) {
+			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	default:
+		t.Errorf("epoch: %d, must be 0 or 1", epoch)
+	}
+
+	// Consume the resend.
+	_, err = streamConn.FetchNext()
+	require.NoError(t, err)
+	qr = exec(t, conn, "select time_next, epoch from vitess_message where id = 1")
+	next, epoch = getTimeEpoch(qr)
+	jitter += epoch * maxJitter
+	// epoch could be 1 or 2, depending on how fast the row is updated
+	switch epoch {
+	case 1:
+		if !(start < next && next < (start+jitter)+3e9) {
+			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	case 2:
+		if !(start+2e9 < next && next < (start+jitter)+6e9) {
+			t.Errorf("next: %d. must be about 3s after start: %d", next/1e9, (start+jitter)/1e9)
+		}
+	default:
+		t.Errorf("epoch: %d, must be 1 or 2", epoch)
+	}
+
+	// Ack the message.
+	qr = exec(t, conn, "update vitess_message set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	assert.Equal(t, uint64(1), qr.RowsAffected)
+
+	// Within 3+1 seconds, the row should be deleted.
+	time.Sleep(4 * time.Second)
+	qr = exec(t, conn, "select time_acked, epoch from vitess_message where id = 1")
+	assert.Equal(t, 0, len(qr.Rows))
+}
+
+func TestMessageSelectColumnsError(t *testing.T) {
+	ctx := context.Background()
+
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	streamConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer streamConn.Close()
+
+	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	exec(t, conn, createMessage)
+	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+
+	defer exec(t, conn, "drop table vitess_message")
+
+	exec(t, streamConn, "set workload = 'olap'")
+	err = streamConn.ExecuteStreamFetch("stream id from vitess_message")
+	require.NoError(t, err)
+
+	wantFields := []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "message",
+		Type: sqltypes.VarChar,
+	}}
+	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
+	require.NoError(t, err)
+	assert.NotEqual(t, wantFields, gotFields)
 
 	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
 
