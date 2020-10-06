@@ -593,20 +593,24 @@ func replaceSetTransactionComments(newNode, parent SQLNode) {
 	parent.(*SetTransaction).Comments = newNode.(Comments)
 }
 
-func replaceShowOnTable(newNode, parent SQLNode) {
-	parent.(*Show).OnTable = newNode.(TableName)
-}
-
-func replaceShowShowCollationFilterOpt(newNode, parent SQLNode) {
-	parent.(*Show).ShowCollationFilterOpt = newNode.(Expr)
-}
-
-func replaceShowTable(newNode, parent SQLNode) {
-	parent.(*Show).Table = newNode.(TableName)
+func replaceShowInternal(newNode, parent SQLNode) {
+	parent.(*Show).Internal = newNode.(ShowInternal)
 }
 
 func replaceShowFilterFilter(newNode, parent SQLNode) {
 	parent.(*ShowFilter).Filter = newNode.(Expr)
+}
+
+func replaceShowLegacyOnTable(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).OnTable = newNode.(TableName)
+}
+
+func replaceShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
+}
+
+func replaceShowLegacyTable(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).Table = newNode.(TableName)
 }
 
 func replaceShowTableStatusFilter(newNode, parent SQLNode) {
@@ -1242,12 +1246,15 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Comments, replaceSetTransactionComments)
 
 	case *Show:
-		a.apply(node, n.OnTable, replaceShowOnTable)
-		a.apply(node, n.ShowCollationFilterOpt, replaceShowShowCollationFilterOpt)
-		a.apply(node, n.Table, replaceShowTable)
+		a.apply(node, n.Internal, replaceShowInternal)
 
 	case *ShowFilter:
 		a.apply(node, n.Filter, replaceShowFilterFilter)
+
+	case *ShowLegacy:
+		a.apply(node, n.OnTable, replaceShowLegacyOnTable)
+		a.apply(node, n.ShowCollationFilterOpt, replaceShowLegacyShowCollationFilterOpt)
+		a.apply(node, n.Table, replaceShowLegacyTable)
 
 	case *ShowTableStatus:
 		a.apply(node, n.Filter, replaceShowTableStatusFilter)

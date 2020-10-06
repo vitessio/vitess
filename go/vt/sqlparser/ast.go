@@ -249,19 +249,7 @@ type (
 
 	// Show represents a show statement.
 	Show struct {
-		Extended               string
-		Type                   string
-		OnTable                TableName
-		Table                  TableName
-		ShowTablesOpt          *ShowTablesOpt
-		Scope                  Scope
-		ShowCollationFilterOpt Expr
-	}
-
-	// ShowTableStatus is a struct for SHOW TABLE STATUS queries.
-	ShowTableStatus struct {
-		DatabaseName string
-		Filter       *ShowFilter
+		Internal ShowInternal
 	}
 
 	// Use represents a use statement.
@@ -339,12 +327,37 @@ func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
-func (*ShowTableStatus) iStatement()   {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
+
+//ShowInternal will represent all the show statement types.
+type ShowInternal interface {
+	isShowInternal()
+	SQLNode
+}
+
+//ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
+type ShowLegacy struct {
+	Extended               string
+	Type                   string
+	OnTable                TableName
+	Table                  TableName
+	ShowTablesOpt          *ShowTablesOpt
+	Scope                  Scope
+	ShowCollationFilterOpt Expr
+}
+
+// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
+type ShowTableStatus struct {
+	DatabaseName string
+	Filter       *ShowFilter
+}
+
+func (*ShowLegacy) isShowInternal() {}
+func (*ShowTableStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -1396,6 +1409,11 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v", node.Internal)
+}
+
+// Format formats the node.
+func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
 		nodeType == "databases" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {

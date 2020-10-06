@@ -94,8 +94,6 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSRollback
 	case *Release:
 		return StmtRelease
-	case *ShowTableStatus:
-		return StmtShow
 	default:
 		return StmtUnknown
 	}
