@@ -1212,7 +1212,7 @@ var (
 		output: "show create table t",
 	}, {
 		input:  "show create trigger t",
-		output: "show create trigger",
+		output: "show create trigger t",
 	}, {
 		input:  "show create user u",
 		output: "show create user",
@@ -1385,7 +1385,15 @@ var (
 		input: "show fields from a like '%'",
 	}, {
 		input:  "show triggers",
-		output: "show triggers",
+	}, {
+		input:  "show triggers from dbname",
+	}, {
+		input:  "show triggers in dbname",
+		output: "show triggers from dbname",
+	}, {
+		input:  "show triggers like 'pattern'",
+	}, {
+		input:  "show triggers where v = 'x'",
 	}, {
 		input:  "show variables",
 		output: "show variables",
