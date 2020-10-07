@@ -467,7 +467,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check`, *servenv.Port),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?p=low`, *servenv.Port),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -601,7 +601,7 @@ export MYSQL_PWD
 		my ($self, %args) = @_;
 
 		return sub {
-			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check")) {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?p=low")) {
 				# Got HTTP 200 OK, means throttler is happy
 				return 0;
 			}	else {
