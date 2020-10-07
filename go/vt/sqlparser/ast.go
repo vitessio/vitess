@@ -284,23 +284,23 @@ type Statement interface {
 
 type Statements []Statement
 
-func (*Union) iStatement()      {}
-func (*Select) iStatement()     {}
-func (*Stream) iStatement()     {}
-func (*Insert) iStatement()     {}
-func (*Update) iStatement()     {}
-func (*Delete) iStatement()     {}
-func (*Set) iStatement()        {}
-func (*DBDDL) iStatement()      {}
-func (*DDL) iStatement()        {}
-func (*Explain) iStatement()    {}
-func (*Show) iStatement()       {}
-func (*Use) iStatement()        {}
-func (*Begin) iStatement()      {}
-func (*Commit) iStatement()     {}
-func (*Rollback) iStatement()   {}
-func (*OtherRead) iStatement()  {}
-func (*OtherAdmin) iStatement() {}
+func (*Union) iStatement()         {}
+func (*Select) iStatement()        {}
+func (*Stream) iStatement()        {}
+func (*Insert) iStatement()        {}
+func (*Update) iStatement()        {}
+func (*Delete) iStatement()        {}
+func (*Set) iStatement()           {}
+func (*DBDDL) iStatement()         {}
+func (*DDL) iStatement()           {}
+func (*Explain) iStatement()       {}
+func (*Show) iStatement()          {}
+func (*Use) iStatement()           {}
+func (*Begin) iStatement()         {}
+func (*Commit) iStatement()        {}
+func (*Rollback) iStatement()      {}
+func (*OtherRead) iStatement()     {}
+func (*OtherAdmin) iStatement()    {}
 func (*BeginEndBlock) iStatement() {}
 
 // ParenSelect can actually not be a top level statement,
@@ -534,6 +534,17 @@ func (b *BeginEndBlock) walkSubtree(visit Visit) error {
 	return nil
 }
 
+type CaseStatement struct {
+	Expr  Expr
+	Cases []CaseStatementCase
+	Else  Statements
+}
+
+type CaseStatementCase struct {
+	Case       Expr
+	Statements Statements
+}
+
 // Stream represents a SELECT statement.
 type Stream struct {
 	Comments   Comments
@@ -758,7 +769,7 @@ type TriggerSpec struct {
 
 type TriggerOrder struct {
 	PrecedesOrFollows string // PrecedesStr, FollowsStr
-	OtherTriggerName string
+	OtherTriggerName  string
 }
 
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
@@ -790,8 +801,8 @@ type DDL struct {
 	Table TableName
 
 	// View name.
-	View                    TableName
-	ViewExpr                SelectStatement
+	View     TableName
+	ViewExpr SelectStatement
 
 	// This exposes the start and end index of the string that makes up the sub statement of the query given.
 	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
@@ -802,9 +813,9 @@ type DDL struct {
 	FromViews TableNames
 
 	// The following fields are set if a DDL was fully analyzed.
-	IfExists bool
+	IfExists    bool
 	IfNotExists bool
-	OrReplace bool
+	OrReplace   bool
 
 	// TableSpec contains the full table spec in case of a create, or a single column in case of an add, drop, or alter.
 	TableSpec     *TableSpec
@@ -1473,15 +1484,15 @@ func (ct *ColumnType) walkSubtree(visit Visit) error {
 // IndexSpec describes an index operation in an ALTER statement
 type IndexSpec struct {
 	// Action states whether it's a CREATE, DROP, or RENAME
-	Action   string
+	Action string
 	// FromName states the old name when renaming
 	FromName ColIdent
 	// ToName states the name to set when renaming or references the target table
-	ToName   ColIdent
+	ToName ColIdent
 	// Using states whether you're using BTREE, HASH, or none
-	Using    ColIdent
+	Using ColIdent
 	// Type specifies whether this is UNIQUE, FULLTEXT, SPATIAL, or normal (nothing)
-	Type     string
+	Type string
 	// Columns contains the column names when creating an index
 	Columns []*IndexColumn
 	// Options contains the index options when creating an index
@@ -1617,7 +1628,7 @@ func (ii *IndexInfo) walkSubtree(visit Visit) error {
 type IndexColumn struct {
 	Column ColIdent
 	Length *SQLVal
-	Order string
+	Order  string
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -1835,8 +1846,8 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 // Format strings for explain statements
 const (
 	TraditionalStr = "traditional"
-	TreeStr = "tree"
-	JsonStr = "json"
+	TreeStr        = "tree"
+	JsonStr        = "json"
 )
 
 // Explain represents an explain statement

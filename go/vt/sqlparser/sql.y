@@ -122,6 +122,8 @@ func skipToEnd(yylex interface{}) {
   vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  caseStatementCases []CaseStatementCase
+  caseStatementCase CaseStatementCase
 }
 
 %token LEX_ERROR
@@ -224,8 +226,10 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
-%type <statement> begin_end_block statement_list_statement
+%type <statement> begin_end_block statement_list_statement case_statement
 %type <statements> statement_list
+%type <caseStatementCases> case_statement_case_list
+%type <caseStatement> case_statement_case
 %type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
@@ -708,6 +712,32 @@ begin_end_block:
     $$ = &BeginEndBlock{Statements: $2}
   }
 
+case_statement:
+  CASE expression case_statement_case_list ';' END CASE
+  {
+    $$ = &CaseStatement{Expr: $2, Cases: $3}
+  }
+| CASE expression case_statement_case_list ';' ELSE statement_list ';' END CASE
+  {
+    $$ = &CaseStatement{Expr: $2, Cases: $3, Else: $6}
+  }
+
+case_statement_case_list:
+  case_statement_case
+  {
+    $$ = []CaseStatemnentCase{$1}
+  }
+| case_statement_case_list ';' case_statement_case
+  {
+    $$ = append($$, $3)
+  }
+
+case_statement_case:
+  WHEN expression THEN statement_list
+  {
+    $$ = CaseStatementCase{Case: $2, Statements: $4}
+  }
+
 statement_list:
   statement_list_statement
   {
@@ -727,6 +757,7 @@ statement_list_statement:
 | update_statement
 | delete_statement
 | set_statement
+| case_statement
 | begin_end_block
 
 vindex_type_opt:
