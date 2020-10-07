@@ -738,6 +738,32 @@ case_statement_case:
     $$ = CaseStatementCase{Case: $2, Statements: $4}
   }
 
+if_statement:
+  IF expression THEN statement_list ';' elseif_list END IF
+  {
+    $$ = &CaseStatement{Expr: $2, Cases: $3}
+  }
+| IF expression THEN statement_list ';' elseif_list ELSE statement_list ';' END IF
+  {
+    $$ = &CaseStatement{Expr: $2, Cases: $3, Else: $5}
+  }
+
+case_statement_case_list:
+  case_statement_case
+  {
+    $$ = []CaseStatementCase{$1}
+  }
+| case_statement_case_list case_statement_case
+  {
+    $$ = append($$, $2)
+  }
+
+case_statement_case:
+  WHEN expression THEN statement_list ';'
+  {
+    $$ = CaseStatementCase{Case: $2, Statements: $4}
+  }
+
 statement_list:
   statement_list_statement
   {

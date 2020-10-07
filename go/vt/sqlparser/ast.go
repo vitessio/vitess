@@ -535,12 +535,14 @@ func (b *BeginEndBlock) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// CaseStatement represents a CASE .. WHEN .. ELSE statement in a stored procedure / trigger
 type CaseStatement struct {
-	Expr  Expr
-	Cases []CaseStatementCase
-	Else  Statements
+	Expr  Expr // The case expression to switch on
+	Cases []CaseStatementCase // The set of WHEN values and attached statements
+	Else  Statements // The set of statements for the ELSE clause
 }
 
+// CaseStatementCase represents a single WHEN .. THEN clause in a CaseStatement
 type CaseStatementCase struct {
 	Case       Expr
 	Statements Statements
@@ -589,6 +591,69 @@ func (c *CaseStatement) walkSubtree(visit Visit) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// IfStatement represents an IF .. THEN .. ELSE statement in a stored procedure / trigger.
+type IfStatement struct {
+	Conditions []IfStatementCondition // The initial IF condition, followed by any ELSEIF conditions, in order.
+	Else  Statements // The statements of the ELSE clause, if any
+}
+
+// IfStatementCondition represents a single IF / ELSEIF branch in an IfStatement
+type IfStatementCondition struct {
+	Expr  Expr
+	Statements Statements
+}
+
+func (i *IfStatement) Format(buf *TrackedBuffer) {
+	for j, c := range i.Conditions {
+		if j == 0 {
+			buf.Myprintf("if %v then ", c.Expr)
+		} else {
+			buf.Myprintf("elseif %v then ", c.Expr)
+		}
+		for k, s := range c.Statements {
+			if k > 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf(";\n")
+	}
+
+	if len(i.Else) > 0 {
+		buf.Myprintf("else ")
+		for j, s := range i.Else {
+			if j > 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf(";\n")
+	}
+
+	buf.Myprintf("end if")
+}
+
+func (i *IfStatement) walkSubtree(visit Visit) error {
+	if i == nil {
+		return nil
+	}
+
+	for _, c := range i.Conditions {
+		for _, s := range c.Statements {
+			if err := Walk(visit, s); err != nil {
+				return err
+			}
+		}
+	}
+	for _, s := range i.Else {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
