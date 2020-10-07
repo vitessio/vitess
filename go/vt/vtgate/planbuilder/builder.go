@@ -350,34 +350,3 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 }
-
-func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primitive, error) {
-	switch show := stmt.Internal.(type) {
-	case *sqlparser.ShowTableStatus:
-		return buildShowTableStatusPlan(show, vschema)
-	default:
-		return nil, ErrPlanNotSupported
-	}
-}
-
-func buildShowTableStatusPlan(show *sqlparser.ShowTableStatus, vschema ContextVSchema) (engine.Primitive, error) {
-	destination, keyspace, _, err := vschema.TargetDestination(show.DatabaseName)
-	if err != nil {
-		return nil, err
-	}
-	if destination == nil {
-		destination = key.DestinationAnyShard{}
-	}
-
-	// Remove Database Name from the query.
-	show.DatabaseName = ""
-
-	return &engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: destination,
-		Query:             sqlparser.String(show),
-		IsDML:             false,
-		SingleShardOnly:   true,
-	}, nil
-
-}
