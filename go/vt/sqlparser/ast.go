@@ -302,6 +302,7 @@ func (*Rollback) iStatement()      {}
 func (*OtherRead) iStatement()     {}
 func (*OtherAdmin) iStatement()    {}
 func (*BeginEndBlock) iStatement() {}
+func (*CaseStatement) iStatement() {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -543,6 +544,52 @@ type CaseStatement struct {
 type CaseStatementCase struct {
 	Case       Expr
 	Statements Statements
+}
+
+func (c *CaseStatement) Format(buf *TrackedBuffer) {
+	buf.Myprintf("case %v\n", c.Expr)
+	for _, cas := range c.Cases {
+		buf.Myprintf("when %v then ", cas.Case)
+		for i, s := range cas.Statements {
+			if i != 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf(";\n")
+	}
+
+	if len(c.Else) > 0 {
+		buf.Myprintf("else ")
+		for i, s := range c.Else {
+			if i != 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf("\n")
+	}
+
+	buf.Myprintf("end case")
+}
+
+func (c *CaseStatement) walkSubtree(visit Visit) error {
+	if c == nil {
+		return nil
+	}
+	for _, cas := range c.Cases {
+		for _, s := range cas.Statements {
+			if err := Walk(visit, s); err != nil {
+				return err
+			}
+		}
+	}
+	for _, s := range c.Else {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Stream represents a SELECT statement.

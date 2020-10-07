@@ -229,7 +229,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> begin_end_block statement_list_statement case_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
-%type <caseStatement> case_statement_case
+%type <caseStatementCase> case_statement_case
 %type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
@@ -713,19 +713,19 @@ begin_end_block:
   }
 
 case_statement:
-  CASE expression case_statement_case_list ';' END CASE
+  CASE expression case_statement_case_list END CASE
   {
     $$ = &CaseStatement{Expr: $2, Cases: $3}
   }
-| CASE expression case_statement_case_list ';' ELSE statement_list ';' END CASE
+| CASE expression case_statement_case_list ELSE statement_list ';' END CASE
   {
-    $$ = &CaseStatement{Expr: $2, Cases: $3, Else: $6}
+    $$ = &CaseStatement{Expr: $2, Cases: $3, Else: $5}
   }
 
 case_statement_case_list:
   case_statement_case
   {
-    $$ = []CaseStatemnentCase{$1}
+    $$ = []CaseStatementCase{$1}
   }
 | case_statement_case_list case_statement_case
   {
