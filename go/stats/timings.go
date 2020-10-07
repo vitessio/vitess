@@ -168,6 +168,13 @@ func (t *Timings) Label() string {
 	return t.label
 }
 
+// Reset will clear histograms: used during testing
+func (t *Timings) Reset() {
+	t.mu.RLock()
+	t.histograms = make(map[string]*Histogram)
+	t.mu.RUnlock()
+}
+
 var bucketCutoffs = []int64{5e5, 1e6, 5e6, 1e7, 5e7, 1e8, 5e8, 1e9, 5e9, 1e10}
 
 var bucketLabels []string
