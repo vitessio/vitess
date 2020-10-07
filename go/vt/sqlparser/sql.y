@@ -727,13 +727,13 @@ case_statement_case_list:
   {
     $$ = []CaseStatemnentCase{$1}
   }
-| case_statement_case_list ';' case_statement_case
+| case_statement_case_list case_statement_case
   {
-    $$ = append($$, $3)
+    $$ = append($$, $2)
   }
 
 case_statement_case:
-  WHEN expression THEN statement_list
+  WHEN expression THEN statement_list ';'
   {
     $$ = CaseStatementCase{Case: $2, Statements: $4}
   }
