@@ -567,7 +567,7 @@ func (c *CaseStatement) Format(buf *TrackedBuffer) {
 			}
 			buf.Myprintf("%v", s)
 		}
-		buf.Myprintf("\n")
+		buf.Myprintf(";\n")
 	}
 
 	buf.Myprintf("end case")

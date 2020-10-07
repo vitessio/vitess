@@ -1125,10 +1125,25 @@ var (
 		}, {
 			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
+			// TODO: this is a test of parsing case statements, not triggers. would be better to isolate it
 			input: `create trigger t1 before delete on foo for each row begin
 case old.y
 when 1 then select a + 1 from c;
 when 0 then update a set b = 2; delete from z;
+end case;
+end`,
+		}, {
+			input: `create trigger t1 before delete on foo for each row begin
+case old.y
+when 1 then select a + 1 from c;
+end case;
+end`,
+		}, {
+			input: `create trigger t1 before delete on foo for each row begin
+case old.x
+when old.y then set @@var = 1;
+when 0 then update a set b = 2; delete from z;
+else select true from dual; delete from x;
 end case;
 end`,
 		}, {
