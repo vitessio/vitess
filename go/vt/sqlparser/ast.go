@@ -69,6 +69,7 @@ type (
 		OrderBy          OrderBy
 		Limit            *Limit
 		Lock             Lock
+		IntoOutfileS3    string
 	}
 
 	// Lock is an enum for the type of lock in the statement
@@ -984,6 +985,9 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock.ToString())
+	if node.IntoOutfileS3 != "" {
+		buf.astPrintf(node, " into outfile s3 '%s'", node.IntoOutfileS3)
+	}
 }
 
 // Format formats the node.
