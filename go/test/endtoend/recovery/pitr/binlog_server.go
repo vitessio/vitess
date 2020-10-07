@@ -32,12 +32,16 @@ const (
 	binlogExecutableName = "rippled"
 	binlogDataDir        = "binlog_dir"
 	binlogUser           = "ripple"
+	binlogPassword       = "ripplepassword"
+	binlogPasswordHash   = "D4CDF66E273494CEA9592162BEBB6D62D94C4168"
 )
 
 type binLogServer struct {
 	hostname       string
 	port           int
 	username       string
+	password       string
+	passwordHash   string
 	dataDirectory  string
 	executablePath string
 
@@ -67,6 +71,8 @@ func newBinlogServer(hostname string, port int) (*binLogServer, error) {
 		executablePath: path.Join(os.Getenv("EXTRA_BIN"), binlogExecutableName),
 		dataDirectory:  dataDir,
 		username:       binlogUser,
+		password:       binlogPassword,
+		passwordHash:   binlogPasswordHash,
 		hostname:       hostname,
 		port:           port,
 	}, nil
@@ -77,6 +83,7 @@ func (bs *binLogServer) start(master mysqlMaster) error {
 	bs.proc = exec.Command(
 		bs.executablePath,
 		fmt.Sprintf("-ripple_datadir=%s", bs.dataDirectory),
+		fmt.Sprintf("-ripple_server_password_hash=%s", bs.passwordHash),
 		fmt.Sprintf("-ripple_master_address=%s", master.hostname),
 		fmt.Sprintf("-ripple_master_port=%d", master.port),
 		fmt.Sprintf("-ripple_master_user=%s", master.username),

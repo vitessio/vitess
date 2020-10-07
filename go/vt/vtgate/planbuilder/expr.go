@@ -93,7 +93,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				highestOrigin = newOrigin
 			}
 		case *sqlparser.ComparisonExpr:
-			if node.Operator == sqlparser.InStr || node.Operator == sqlparser.NotInStr {
+			if node.Operator == sqlparser.InOp || node.Operator == sqlparser.NotInOp {
 				if sq, ok := node.Right.(*sqlparser.Subquery); ok {
 					constructsMap[sq] = node
 				}
@@ -162,12 +162,12 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		}
 		switch construct := construct.(type) {
 		case *sqlparser.ComparisonExpr:
-			if construct.Operator == sqlparser.InStr {
+			if construct.Operator == sqlparser.InOp {
 				// a in (subquery) -> (:__sq_has_values = 1 and (a in ::__sq))
 				newExpr := &sqlparser.AndExpr{
 					Left: &sqlparser.ComparisonExpr{
 						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
-						Operator: sqlparser.EqualStr,
+						Operator: sqlparser.EqualOp,
 						Right:    sqlparser.NewIntLiteral([]byte("1")),
 					},
 					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
@@ -179,7 +179,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				newExpr := &sqlparser.OrExpr{
 					Left: &sqlparser.ComparisonExpr{
 						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
-						Operator: sqlparser.EqualStr,
+						Operator: sqlparser.EqualOp,
 						Right:    sqlparser.NewIntLiteral([]byte("0")),
 					},
 					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),

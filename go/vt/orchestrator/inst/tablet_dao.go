@@ -52,7 +52,9 @@ func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
 		log.Errorf("Unexpected: tablet type did not change to master: %v", newMasterTablet.Type)
 		return nil
 	}
-	_, err = TopoServ.UpdateShardFields(context.TODO(), newMasterTablet.Keyspace, newMasterTablet.Shard, func(si *topo.ShardInfo) error {
+	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer cancel()
+	_, err = TopoServ.UpdateShardFields(ctx, newMasterTablet.Keyspace, newMasterTablet.Shard, func(si *topo.ShardInfo) error {
 		if proto.Equal(si.MasterAlias, newMasterTablet.Alias) && proto.Equal(si.MasterTermStartTime, newMasterTablet.MasterTermStartTime) {
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
@@ -92,10 +94,14 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType)
 		return nil, err
 	}
 	tmc := tmclient.NewTabletManagerClient()
-	if err := tmc.ChangeType(context.TODO(), tablet, tabletType); err != nil {
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	if err := tmc.ChangeType(tmcCtx, tablet, tabletType); err != nil {
 		return nil, err
 	}
-	ti, err := TopoServ.GetTablet(context.TODO(), tablet.Alias)
+	tsCtx, tsCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tsCancel()
+	ti, err := TopoServ.GetTablet(tsCtx, tablet.Alias)
 	if err != nil {
 		return nil, log.Errore(err)
 	}
@@ -133,14 +139,16 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	_, err := db.ExecOrchestrator(`
 		replace
 			into vitess_tablet (
-				hostname, port, cell, tablet_type, master_timestamp, info
+				hostname, port, cell, keyspace, shard, tablet_type, master_timestamp, info
 			) values (
-				?, ?, ?, ?, ?, ?
+				?, ?, ?, ?, ?, ?, ?, ?
 			)
 		`,
 		tablet.MysqlHostname,
 		int(tablet.MysqlPort),
 		tablet.Alias.Cell,
+		tablet.Keyspace,
+		tablet.Shard,
 		int(tablet.Type),
 		logutil.ProtoToTime(tablet.MasterTermStartTime),
 		proto.CompactTextString(tablet),
