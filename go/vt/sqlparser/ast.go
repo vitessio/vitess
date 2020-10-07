@@ -364,9 +364,8 @@ type ShowTableStatus struct {
 	Filter       *ShowFilter
 }
 
-
-func (*ShowLegacy) isShowInternal()  {}
-func (*ShowColumns) isShowInternal() {}
+func (*ShowLegacy) isShowInternal()      {}
+func (*ShowColumns) isShowInternal()     {}
 func (*ShowTableStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
