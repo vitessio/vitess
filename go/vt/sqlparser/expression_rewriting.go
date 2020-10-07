@@ -21,38 +21,9 @@ import (
 
 	"vitess.io/vitess/go/vt/sysvars"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-// PrepareAST will normalize the query
-func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool) (*RewriteASTResult, error) {
-	if parameterize {
-		Normalize(in, bindVars, prefix)
-	}
-	return RewriteAST(in)
-}
-
-// RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
-func RewriteAST(in Statement) (*RewriteASTResult, error) {
-	er := newExpressionRewriter()
-	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	setRewriter := &setNormalizer{}
-	out, ok := Rewrite(in, er.goingDown, setRewriter.rewriteSetComingUp).(Statement)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
-	}
-	if setRewriter.err != nil {
-		return nil, setRewriter.err
-	}
-
-	r := &RewriteASTResult{
-		AST:          out,
-		BindVarNeeds: er.bindVars,
-	}
-	return r, nil
-}
 
 func shouldRewriteDatabaseFunc(in Statement) bool {
 	selct, ok := in.(*Select)
@@ -71,12 +42,6 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 		return false
 	}
 	return tableName.Name.String() == "dual"
-}
-
-// RewriteASTResult contains the rewritten ast and meta information about it
-type RewriteASTResult struct {
-	*BindVarNeeds
-	AST Statement // The rewritten AST
 }
 
 type expressionRewriter struct {
@@ -171,42 +136,26 @@ func (er *expressionRewriter) udvRewrite(cursor *Cursor, node *ColName) {
 	er.bindVars.AddUserDefVar(udv)
 }
 
+var funcRewrites = map[string]string{
+	"last_insert_id": LastInsertIDName,
+	"database":       DBVarName,
+	"schema":         DBVarName,
+	"found_rows":     FoundRowsName,
+	"row_count":      RowCountName,
+}
+
 func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
-	switch {
-	// last_insert_id() -> :__lastInsertId
-	case node.Name.EqualString("last_insert_id"):
-		if len(node.Exprs) > 0 { //last_insert_id(x)
-			er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
-		} else {
-			cursor.Replace(bindVarExpression(LastInsertIDName))
-			er.bindVars.AddFuncResult(LastInsertIDName)
+	bindVar, found := funcRewrites[node.Name.Lowered()]
+	if found {
+		if bindVar == DBVarName && !er.shouldRewriteDatabaseFunc {
+			return
 		}
-	// database() -> :__vtdbname
-	case er.shouldRewriteDatabaseFunc &&
-		(node.Name.EqualString("database") ||
-			node.Name.EqualString("schema")):
 		if len(node.Exprs) > 0 {
-			er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
-		} else {
-			cursor.Replace(bindVarExpression(DBVarName))
-			er.bindVars.AddFuncResult(DBVarName)
+			er.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Argument to %s() not supported", node.Name.Lowered())
+			return
 		}
-	// found_rows() -> :__vtfrows
-	case node.Name.EqualString("found_rows"):
-		if len(node.Exprs) > 0 {
-			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to FOUND_ROWS() not supported")
-		} else {
-			cursor.Replace(bindVarExpression(FoundRowsName))
-			er.bindVars.AddFuncResult(FoundRowsName)
-		}
-	// row_count() -> :__vtrcount
-	case node.Name.EqualString("row_count"):
-		if len(node.Exprs) > 0 {
-			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to ROW_COUNT() not supported")
-		} else {
-			cursor.Replace(bindVarExpression(RowCountName))
-			er.bindVars.AddFuncResult(RowCountName)
-		}
+		cursor.Replace(bindVarExpression(bindVar))
+		er.bindVars.AddFuncResult(bindVar)
 	}
 }
 
