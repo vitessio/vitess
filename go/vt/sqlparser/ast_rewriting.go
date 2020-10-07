@@ -41,7 +41,7 @@ func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	er := newExpressionRewriter()
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
-	out, ok := Rewrite(in, er.goingDown, setRewriter.rewriteSetComingUp).(Statement)
+	out, ok := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp).(Statement)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
 	}

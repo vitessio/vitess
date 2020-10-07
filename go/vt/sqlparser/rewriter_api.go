@@ -88,4 +88,5 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 // replace the object with something of the wrong type, or the visitor will panic.
 func (c *Cursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
+	c.node = newNode
 }
