@@ -798,3 +798,10 @@ func TestDefaultStatus(t *testing.T) {
 		String(&Default{ColName: "status"}),
 		"default(`status`)")
 }
+
+func TestShowTableStatus(t *testing.T) {
+	query := "Show Table Status FROM customer"
+	tree, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, tree)
+}

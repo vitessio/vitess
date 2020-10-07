@@ -258,6 +258,12 @@ type (
 		ShowCollationFilterOpt Expr
 	}
 
+	// ShowTableStatus is a struct for SHOW TABLE STATUS queries.
+	ShowTableStatus struct {
+		DatabaseName string
+		Filter       *ShowFilter
+	}
+
 	// Use represents a use statement.
 	Use struct {
 		DBName TableIdent
@@ -333,6 +339,7 @@ func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
+func (*ShowTableStatus) iStatement()   {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -2055,4 +2062,14 @@ func (node AccessMode) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString(TxReadWrite)
 	}
+}
+
+// Format formats the node.
+func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
+	buf.WriteString("show table status")
+	if node.DatabaseName != "" {
+		buf.WriteString(" from ")
+		buf.WriteString(node.DatabaseName)
+	}
+	buf.astPrintf(node, "%v", node.Filter)
 }
