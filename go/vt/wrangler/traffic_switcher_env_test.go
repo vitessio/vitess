@@ -396,6 +396,13 @@ func (tme *testMigraterEnv) setMasterPositions() {
 	}
 }
 
+func (tme *testMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
+}
+
 func (tme *testShardMigraterEnv) forAllStreams(f func(i, j int)) {
 	for i := range tme.targetShards {
 		for j := range tme.sourceShards {
@@ -493,4 +500,11 @@ func (tme *testShardMigraterEnv) expectCancelMigration() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
 	tme.expectDeleteReverseVReplication()
+}
+
+func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
 }
