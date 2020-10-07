@@ -140,6 +140,9 @@ func (tp *TxPool) transactionKiller() {
 		if conn.IsTainted() && conn.IsInTransaction() {
 			tp.env.Stats().KillCounters.Add("Transactions", 1)
 		}
+		if conn.IsInTransaction() {
+			tp.txComplete(conn, tx.TxKill)
+		}
 		conn.Releasef("exceeded timeout: %v", tp.Timeout())
 	}
 }
@@ -236,6 +239,13 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 			return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 		}
 		conn, err = tp.createConn(ctx, options)
+		defer func() {
+			if err != nil {
+				// The transaction limiter frees transactions on rollback or commit. If we fail to create the transaction,
+				// release immediately since there will be no rollback or commit.
+				tp.limiter.Release(immediateCaller, effectiveCaller)
+			}
+		}()
 	}
 	if err != nil {
 		return nil, "", err
