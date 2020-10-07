@@ -1902,7 +1902,7 @@ show_statement:
   }
 | SHOW CREATE TRIGGER table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
+    $$ = &Show{Type: CreateTriggerStr, Table: $4}
   }
 | SHOW CREATE VIEW table_name
   {

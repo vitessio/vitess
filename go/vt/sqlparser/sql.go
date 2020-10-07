@@ -5828,7 +5828,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:1904
 		{
-			yyVAL.statement = &Show{Type: string(yyDollar[2].bytes) + " " + string(yyDollar[3].bytes), Table: yyDollar[4].tableName}
+			yyVAL.statement = &Show{Type: CreateTriggerStr, Table: yyDollar[4].tableName}
 		}
 	case 339:
 		yyDollar = yyS[yypt-4 : yypt+1]

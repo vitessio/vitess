@@ -1863,6 +1863,10 @@ func (node *Explain) walkSubtree(visit Visit) error {
 	return nil
 }
 
+const (
+	CreateTriggerStr = "create trigger"
+)
+
 // Show represents a show statement.
 type Show struct {
 	Type                   string
@@ -1903,7 +1907,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		}
 		return
 	}
-	if node.Type == "create trigger" {
+	if node.Type == CreateTriggerStr {
 		buf.Myprintf("show create trigger %v", node.Table)
 		return
 	}
