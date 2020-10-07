@@ -39,6 +39,10 @@ func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (en
 	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
 
+		if sel.IntoOutfileS3 != "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: non bypass query with into outfile s3")
+		}
+
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
 			return nil, err
@@ -113,6 +117,10 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 			pb.bldr = builder
 			return nil
 		}
+	}
+	// Into Outfile is not supported in subquery.
+	if sel.IntoOutfileS3 != "" && (outer != nil || query == "") {
+		return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'INTO OUTFILE S3'")
 	}
 
 	if err := pb.processTableExprs(sel.From); err != nil {
@@ -323,7 +331,7 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 		if node.Name.EqualString("table_schema") {
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
-				if parent.Operator == sqlparser.EqualStr && shouldRewrite(parent.Right) {
+				if parent.Operator == sqlparser.EqualOp && shouldRewrite(parent.Right) {
 
 					evalExpr, err := sqlparser.Convert(parent.Right)
 					if err != nil {

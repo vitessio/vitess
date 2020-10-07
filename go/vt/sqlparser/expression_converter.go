@@ -47,13 +47,13 @@ func Convert(e Expr) (evalengine.Expr, error) {
 	case *BinaryExpr:
 		var op evalengine.BinaryExpr
 		switch node.Operator {
-		case PlusStr:
+		case PlusOp:
 			op = &evalengine.Addition{}
-		case MinusStr:
+		case MinusOp:
 			op = &evalengine.Subtraction{}
-		case MultStr:
+		case MultOp:
 			op = &evalengine.Multiplication{}
-		case DivStr:
+		case DivOp:
 			op = &evalengine.Division{}
 		default:
 			return nil, ErrExprNotSupported

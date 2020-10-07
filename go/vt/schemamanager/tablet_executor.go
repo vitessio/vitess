@@ -24,7 +24,9 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -158,12 +160,19 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	}
 	for _, ddl := range parsedDDLs {
 		switch ddl.Action {
-		case sqlparser.DropStr, sqlparser.CreateStr, sqlparser.TruncateStr, sqlparser.RenameStr:
+		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
 			continue
+		case sqlparser.AlterDDLAction:
+			if ddl.OnlineHint != nil {
+				if ddl.OnlineHint.Strategy != schema.DDLStrategyNormal {
+					// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
+					continue
+				}
+			}
 		}
 		tableName := ddl.Table.Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
-			if rowCount > 100000 && ddl.Action == sqlparser.AlterStr {
+			if rowCount > 100000 && ddl.Action == sqlparser.AlterDDLAction {
 				return true, fmt.Errorf(
 					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s alters a table with more than 100 thousand rows", sqlparser.String(ddl))
 			}
@@ -209,15 +218,46 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 	}()
 
+	// We added the WITH_GHOST and WITH_PT hints to ALTER TABLE syntax, but these hints are
+	// obviously not accepted by MySQL.
+	// To run preflightSchemaChanges we must clean up such hints from the ALTER TABLE statement.
+	// Because our sqlparser does not do a complete parse of ALTER TABLE statements at this time,
+	// we resort to temporary regexp based parsing.
+	// TODO(shlomi): replace the below with sqlparser based reconstruction of the query,
+	//               when sqlparser has a complete coverage of ALTER TABLE syntax
+	sqlsWithoutAlterTableHints := []string{}
+	for _, sql := range sqls {
+		sqlsWithoutAlterTableHints = append(sqlsWithoutAlterTableHints, schema.RemoveOnlineDDLHints(sql))
+	}
 	// Make sure the schema changes introduce a table definition change.
-	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
+	if err := exec.preflightSchemaChanges(ctx, sqlsWithoutAlterTableHints); err != nil {
 		execResult.ExecutorErr = err.Error()
 		return &execResult
 	}
 
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
-		exec.executeOnAllTablets(ctx, &execResult, sql)
+
+		stat, err := sqlparser.Parse(sql)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return &execResult
+		}
+		strategy := schema.DDLStrategyNormal
+		options := ""
+		tableName := ""
+		switch ddl := stat.(type) {
+		case *sqlparser.DDL:
+			if ddl.Action == sqlparser.AlterDDLAction {
+				if ddl.OnlineHint != nil {
+					strategy = ddl.OnlineHint.Strategy
+					options = ddl.OnlineHint.Options
+				}
+			}
+			tableName = ddl.Table.Name.String()
+		}
+		exec.wr.Logger().Infof("Received DDL request. strategy = %+v", strategy)
+		exec.executeOnAllTablets(ctx, &execResult, sql, tableName, strategy, options)
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -225,7 +265,30 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	return &execResult
 }
 
-func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string) {
+func (exec *TabletExecutor) executeOnAllTablets(
+	ctx context.Context, execResult *ExecuteResult, sql string,
+	tableName string, strategy sqlparser.DDLStrategy, options string,
+) {
+	if strategy != schema.DDLStrategyNormal {
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return
+		}
+		conn, err := exec.wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
+		if err != nil {
+			execResult.ExecutorErr = fmt.Sprintf("online DDL ConnForCell error:%s", err.Error())
+			return
+		}
+		err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+		}
+		exec.wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
+		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+		return
+	}
+
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)

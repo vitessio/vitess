@@ -536,3 +536,13 @@ message SlaveWasRestartedRequest {
 // Deprecated
 message SlaveWasRestartedResponse {
 }
+
+message VExecRequest {
+  string query = 1;
+  string workflow = 2;
+  string keyspace = 3;
+}
+
+message VExecResponse {
+  query.QueryResult result = 1;
+}
