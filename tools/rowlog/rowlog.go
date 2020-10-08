@@ -2,13 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -96,7 +100,13 @@ func main() {
 }
 
 func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table, pk string, ids []string) {
-	startPos, stopPos := getPositions(ctx, vtctld, keyspace, tablet)
+	flavor := getFlavor(ctx, vtctld, keyspace)
+	if flavor == "" {
+		return
+	}
+	startPos, stopPos, err := getPositions(ctx, vtctld, tablet)
+	startPos = flavor + "/" + startPos
+	stopPos = flavor + "/" + stopPos
 	log.Infof("Streaming keyspace %s from %s upto %s", keyspace, startPos, stopPos)
 	fmt.Printf("Streaming keyspace %s from %s upto %s\n", keyspace, startPos, stopPos)
 	vgtid := &binlogdatapb.VGtid{
@@ -123,6 +133,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	var gtid string
 	var plan *TablePlan
 	var lastLoggedAt int64
+	var numRows int
 	for {
 		evs, err := reader.Recv()
 		//fmt.Printf("events received: %d\n",len(evs))
@@ -130,7 +141,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 		case nil:
 			for _, ev := range evs {
 				now := time.Now().Unix()
-				if now-lastLoggedAt > 1 && ev.Timestamp != 0 { // log progress every ten seconds
+				if now-lastLoggedAt > 60 && ev.Timestamp != 0 { // log progress every ten seconds
 					lastLoggedAt = now
 					log.Infof("%s Progress: %s: %s", keyspace, time.Unix(ev.Timestamp, 0).Format(time.RFC3339), gtid)
 					fmt.Printf(".")
@@ -145,6 +156,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 					plan = getTablePlan(keyspace, fields, ev.FieldEvent.TableName, pk, ids)
 					outputHeader(plan)
 				case binlogdatapb.VEventType_ROW:
+					numRows += len(ev.RowEvent.RowChanges)
 					rows := processRowEvent(plan, gtid, ev)
 					if len(rows) > 0 {
 						//fmt.Printf("#rows %d\n", len(rows))
@@ -154,12 +166,26 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 					//fmt.Printf("event type %v\n",ev.Type)
 				}
 			}
-			if gtid == stopPos {
+			//fmt.Printf("stopPos %s\n", stopPos)
+			var err error
+			var currentPosition, stopPosition mysql.Position
+			currentPosition, err = mysql.DecodePosition(gtid)
+			if err != nil {
+				fmt.Errorf("Error decoding position for %s:%vs\n", gtid, err.Error())
+			}
+			stopPosition, err = mysql.DecodePosition(stopPos)
+			if err != nil {
+				fmt.Errorf("Error decoding position for %s:%vs\n", stopPos, err.Error())
+			}
+			if currentPosition.AtLeast(stopPosition) {
+				log.Infof("Finished streaming keyspace %s from %s upto %s, total rows seen %d", keyspace, startPos, stopPos, numRows)
 				return
+			} else {
+				//log.Infof("CurrentPosition is Not At Least stoppos %s, %s", currentPosition.String(), stopPosition.String())
 			}
 		case io.EOF:
-			log.Infof("stream ended")
-			fmt.Printf("stream ended\n")
+			log.Infof("stream ended before reaching stoppos")
+			fmt.Printf("stream ended before reaching stoppos\n")
 			return
 		default:
 			log.Errorf("remote error: %s", err)
@@ -167,7 +193,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 			return
 		}
 	}
-	log.Infof("Finished streaming keyspace %s from %s upto %s", keyspace, startPos, stopPos)
+
 }
 
 func output(filename, s string) {
@@ -299,22 +325,21 @@ type TablePlan struct {
 	keyspace   string
 }
 
-func getPositions(ctx context.Context, server, keyspace, tablet string) (string, string) {
+func getFlavor(ctx context.Context, server, keyspace string) string {
 	curPos, err := getPosition(ctx, server, keyspace, "0")
+	//fmt.Printf("curpos is %s\n", curPos)
 	if err != nil {
-		return "", ""
+		return ""
 	}
 	if curPos == "" {
-		return "", ""
+		return ""
 	}
 	flavor := strings.Split(curPos, "/")[0]
-	firstPos, err := getLastPosition(ctx, server, tablet)
-	firstPos = flavor + "/" + firstPos
-	return firstPos, curPos
+	return flavor
 }
 
 func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace string) string {
-	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, "0", "master,replica,rdonly")
+	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, "0", "master")
 	if err != nil {
 		return ""
 	}
@@ -350,19 +375,57 @@ func parseCommandLine() *RowLogConfig {
 	}
 }
 
-func getLastPosition(ctx context.Context, server, tablet string) (string, error) {
-	query := "select GTID_SUBTRACT(@@GLOBAL.gtid_executed, @@GLOBAL.gtid_purged);"
-	results, err := execVtctl(ctx, server, []string{"ExecuteFetchAsDba", tablet, query})
+func processPositionResult(gtidset string) (string, string) {
+	gtids := strings.Trim(strings.Replace(gtidset, "|", "", 10), " \n")
+	arr := strings.Split(gtids, ":")
+	subs := strings.Split(arr[1], "-")
+	id, err := strconv.Atoi(subs[0])
+	if err != nil {
+		fmt.Errorf(err.Error())
+		return "",""
+	}
+	firstPos := arr[0] + ":" + strconv.Itoa(id)//subs[0]
+	lastPos := gtids
+	return firstPos, lastPos
+}
+
+// hack, should read json in a structured manner
+func parseExecOutput(result string) string {
+	resultMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(result), &resultMap)
+	if err != nil {
+		fmt.Errorf("error parsing result json %s", result)
+		return ""
+	}
+	rows := reflect.ValueOf(resultMap["rows"])
+	s := fmt.Sprintf("%v", rows)
+	s = strings.Trim(s, "[]")
+	//fmt.Printf("gtidset %s", s)
+	return s
+}
+
+func getPositions(ctx context.Context, server, tablet string) (string, string, error) {
+	query := "select GTID_SUBTRACT(@@GLOBAL.gtid_executed, GTID_SUBTRACT(@@GLOBAL.gtid_executed, @@GLOBAL.gtid_purged));"
+	results, err := execVtctl(ctx, server, []string{"ExecuteFetchAsDba", "-json", tablet, query})
 	if err != nil {
 		fmt.Println(err)
-		return "", err
+		log.Errorf(err.Error())
+		return "", "", err
 	}
-	line := results[14]
-	line = strings.Trim(strings.Replace(line, "|", "", 10), " \n")
-	arr := strings.Split(line, ":")
-	subs := strings.Split(arr[1], "-")
-	lastPos := arr[0] + ":" + subs[0]
-	return lastPos, nil
+	//fmt.Printf("results are %v\n", results)
+	firstPos := parseExecOutput(strings.Join(results,""))
+
+	query = "select @@GLOBAL.gtid_executed;"
+	results, err = execVtctl(ctx, server, []string{"ExecuteFetchAsDba","-json",  tablet, query})
+	if err != nil {
+		fmt.Println(err)
+		log.Errorf(err.Error())
+		return "", "", err
+	}
+	//fmt.Printf("results are %v\n", results)
+	lastPos := parseExecOutput(strings.Join(results,""))
+	//fmt.Printf("firstPos %s, lastPos %s\n", firstPos, lastPos)
+	return firstPos, lastPos, nil
 }
 
 func getPosition(ctx context.Context, server, keyspace, shard string) (string, error) {
@@ -408,7 +471,6 @@ func execVtctl(ctx context.Context, server string, args []string) ([]string, err
 		}
 	}
 }
-
 
 /*
 TODO: html export
