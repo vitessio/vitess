@@ -242,6 +242,11 @@ type (
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
+	// Load is for s3 statement
+	Load struct {
+		InfileS3 string
+	}
+
 	// ParenSelect is a parenthesized SELECT statement.
 	ParenSelect struct {
 		Select SelectStatement
@@ -327,6 +332,7 @@ func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
+func (*Load) iStatement()              {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -2100,6 +2106,11 @@ func (node AccessMode) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString(TxReadWrite)
 	}
+}
+
+// Format formats the node.
+func (node *Load) Format(buf *TrackedBuffer) {
+	buf.WriteString("AST node missing for Load type")
 }
 
 // Format formats the node.
