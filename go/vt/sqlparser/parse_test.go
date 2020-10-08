@@ -1336,8 +1336,18 @@ var (
 		input:  "show session status",
 		output: "show session status",
 	}, {
-		input:  "show table status",
-		output: "show table",
+		input: "show table status",
+	}, {
+		input: "show table status from dbname",
+	}, {
+		input:  "show table status in dbname",
+		output: "show table status from dbname",
+	}, {
+		input:  "show table status in dbname LIKE '%' ",
+		output: "show table status from dbname like '%'",
+	}, {
+		input:  "show table status from dbname Where col=42 ",
+		output: "show table status from dbname where col = 42",
 	}, {
 		input: "show tables",
 	}, {
