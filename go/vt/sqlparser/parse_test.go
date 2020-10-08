@@ -1164,6 +1164,13 @@ end`,
 		}, {
 			input: `create trigger t1 before delete on foo for each row begin
 if old.y > 0 then select a + 1 from c; update b set c = 1;
+elseif new.foo > rand() then set @@autocommit = 1;
+else insert into z values (1, 2, 3);
+end if;
+end`,
+		}, {
+			input: `create trigger t1 before delete on foo for each row begin
+if old.y > 0 then select a + 1 from c; update b set c = 1;
 else insert into z values (1, 2, 3);
 end if;
 end`,
