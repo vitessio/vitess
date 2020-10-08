@@ -795,19 +795,19 @@ elseif_list_item:
 signal_statement:
   SIGNAL signal_condition_value
   {
-    $$ = &SignalStatement{SqlStateValue: $2}
+    $$ = &Signal{SqlStateValue: string($2)}
   }
 | SIGNAL signal_condition_value SET signal_information_item_list
   {
-    $$ = &SignalStatement{SqlStateValue: $2, Info: $4}
+    $$ = &Signal{SqlStateValue: string($2), Info: $4}
   }
 
 signal_condition_value:
-  SQLSTATE value
+  SQLSTATE STRING
   {
     $$ = $2
   }
-| SQLSTATE VALUE value
+| SQLSTATE VALUE STRING
   {
     $$ = $3
   }
@@ -825,7 +825,7 @@ signal_information_item_list:
 signal_information_item:
   signal_information_name '=' value
   {
-    $$ = SignalInfo{Name: string($1), Value: $3}
+    $$ = SignalInfo{Name: string($1), Value: $3.(*SQLVal)}
   }
 
 signal_information_name:

@@ -304,6 +304,7 @@ func (*OtherAdmin) iStatement()    {}
 func (*BeginEndBlock) iStatement() {}
 func (*CaseStatement) iStatement() {}
 func (*IfStatement) iStatement()   {}
+func (*Signal) iStatement()        {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -658,8 +659,25 @@ func (i *IfStatement) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// SignalStatement represents the SIGNAL statement
-type SignalStatement struct {
+func (s *Signal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("signal sqlstate %v ", s.SqlStateValue)
+	if len(s.Info) > 0 {
+		buf.Myprintf("SET ")
+		for i, info := range s.Info {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%s = %s", info.Name, info.Value)
+		}
+	}
+}
+
+func (s *Signal) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// Signal represents the SIGNAL statement
+type Signal struct {
 	SqlStateValue string // always a 5-character string
 	Info []SignalInfo
 }
@@ -669,6 +687,8 @@ type SignalInfo struct {
 	Name string
 	Value *SQLVal
 }
+
+
 
 // Stream represents a SELECT statement.
 type Stream struct {
