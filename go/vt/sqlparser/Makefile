@@ -15,7 +15,8 @@
 MAKEFLAGS = -s
 
 sql.go: sql.y
-	go run golang.org/x/tools/cmd/goyacc -o sql.go sql.y
+	# go run golang.org/x/tools/cmd/goyacc -o sql.go sql.y
+	go run github.com/guptamanan100/tools/cmd/goyacc -o sql.go sql.y
 	gofmt -w sql.go
 
 clean:

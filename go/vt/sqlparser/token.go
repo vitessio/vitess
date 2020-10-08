@@ -464,7 +464,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		// Parse function to see how this is handled.
 		tkn.partialDDL = nil
 	}
-	lval.bytes = val
+	lval.val = val
 	tkn.lastToken = val
 	return typ
 }
