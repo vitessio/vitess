@@ -376,7 +376,6 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 		marker = resp.NextMarker
 	}
 
-	// This leaves the directory, trying to delete this directly with the blob API gives back
 	// Delete the blob representing the folder of the backup, remove any trailing slash to signify we want to remove the folder
 	// NOTE: you must set DeleteSnapshotsOptionNone or this will error out with a server side error
 	for retry := 0; retry < defaultRetryCount; retry = retry + 1 {
