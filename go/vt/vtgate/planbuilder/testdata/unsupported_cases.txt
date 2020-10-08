@@ -447,3 +447,9 @@
 # Multi shard query using into outfile s3
 "select * from user order by id limit 100 into outfile s3 'out_file_name'"
 "unsupported: non bypass query with into outfile s3"
+
+"load data from s3 'x.txt' into table x"
+"set bypass destination first"
+
+"load data from s3 'x.txt'"
+"set bypass destination first"
