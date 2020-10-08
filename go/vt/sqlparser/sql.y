@@ -177,7 +177,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
-%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
+%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
@@ -661,7 +661,7 @@ create_statement:
   }
 | CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
-    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}}
+    $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
 
 definer_opt:
@@ -2040,9 +2040,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
   }
-| SHOW CREATE TRIGGER ddl_skip_to_end
+| SHOW CREATE TRIGGER table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: CreateTriggerStr, Table: $4}
   }
 | SHOW CREATE VIEW table_name
   {
@@ -2094,6 +2094,10 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$6, AsOf:$5}
       $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
     }
+  }
+| SHOW full_opt TRIGGERS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{Type: string($3), ShowTablesOpt: &ShowTablesOpt{DbName: $4, Filter: $5}}
   }
 | SHOW show_session_or_global VARIABLES ddl_skip_to_end
   {
@@ -4101,6 +4105,7 @@ non_reserved_keyword:
 | TINYTEXT
 | TRANSACTION
 | TRIGGER
+| TRIGGERS
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED

@@ -2017,6 +2017,10 @@ func (node *Explain) walkSubtree(visit Visit) error {
 	return nil
 }
 
+const (
+	CreateTriggerStr = "create trigger"
+)
+
 // Show represents a show statement.
 type Show struct {
 	Type                   string
@@ -2032,7 +2036,7 @@ type Show struct {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields") && node.ShowTablesOpt != nil {
+	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields" || node.Type == "triggers") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		buf.Myprintf("show %s%s", opt.Full, node.Type)
 		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
@@ -2055,6 +2059,10 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		if node.ShowIndexFilterOpt != nil {
 			buf.Myprintf(" where %v", node.ShowIndexFilterOpt)
 		}
+		return
+	}
+	if node.Type == CreateTriggerStr {
+		buf.Myprintf("show create trigger %v", node.Table)
 		return
 	}
 	if node.Database != "" {

@@ -875,14 +875,14 @@ var (
 		}, {
 			input: "signal sqlstate value '45000'",
 		}, {
-			input: "signal sqlstate '45000'",
+			input:  "signal sqlstate '45000'",
 			output: "signal sqlstate value '45000'",
 		}, {
 			input: "signal sqlstate value '45000' set message_text = 'ouch!'",
 		}, {
 			input: "signal sqlstate value '45000' set class_origin = 'abc', subclass_origin = 'def', message_text = 'ghi', " +
-				"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
-				"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
+					"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
+					"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
 		}, {
 			input:  "alter ignore table a add foo int",
 			output: "alter table a add column (\n\tfoo int\n)",
@@ -1275,7 +1275,7 @@ end`,
 			output: "show create table t",
 		}, {
 			input:  "show create trigger t",
-			output: "show create trigger",
+			output: "show create trigger t",
 		}, {
 			input:  "show create user u",
 			output: "show create user",
@@ -1450,6 +1450,14 @@ end`,
 			input:  "show triggers",
 			output: "show triggers",
 		}, {
+			input:  "show triggers from dbname",
+		}, {
+			input:  "show triggers in dbname",
+			output: "show triggers from dbname",
+		}, {
+			input:  "show triggers like 'pattern'",
+		}, {
+			input:  "show triggers where v = 'x'",		}, {
 			input:  "show variables",
 			output: "show variables",
 		}, {
@@ -1706,7 +1714,8 @@ end`,
 		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
-		}}
+		},
+	}
 )
 
 func TestValid(t *testing.T) {
