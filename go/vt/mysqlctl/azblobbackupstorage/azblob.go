@@ -108,32 +108,25 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 		Log: pipeline.LogOptions{
 			Log: func(level pipeline.LogLevel, message string) {
 				switch level {
-				case pipeline.LogFatal:
-				case pipeline.LogPanic:
+				case pipeline.LogFatal, pipeline.LogPanic:
 					log.Fatal(message)
-					break
 				case pipeline.LogError:
 					log.Error(message)
-					break
 				case pipeline.LogWarning:
 					log.Warning(message)
-					break
-				case pipeline.LogInfo:
-				case pipeline.LogDebug:
+				case pipeline.LogInfo, pipeline.LogDebug:
 					log.Info(message)
 				}
 			},
 			ShouldLog: func(level pipeline.LogLevel) bool {
 				switch level {
-				case pipeline.LogFatal:
-				case pipeline.LogPanic:
+				case pipeline.LogFatal, pipeline.LogPanic:
 					return bool(log.V(3))
 				case pipeline.LogError:
 					return bool(log.V(3))
 				case pipeline.LogWarning:
 					return bool(log.V(2))
-				case pipeline.LogInfo:
-				case pipeline.LogDebug:
+				case pipeline.LogInfo, pipeline.LogDebug:
 					return bool(log.V(1))
 				}
 				return false
@@ -383,6 +376,9 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 		// Also refresh the client just for good measure
 		time.Sleep(10 * time.Second)
 		containerURL, err = bs.containerURL()
+		if err != nil {
+			return err
+		}
 
 		log.Infof("Removing backup directory: %v", strings.TrimSuffix(searchPrefix, "/"))
 		_, err = containerURL.NewBlobURL(strings.TrimSuffix(searchPrefix, "/")).Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
