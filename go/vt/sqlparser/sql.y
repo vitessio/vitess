@@ -3446,13 +3446,8 @@ value:
   }
 
 num_val:
-  sql_id
+  VALUE
   {
-    // TODO(sougou): Deprecate this construct.
-    if $1.Lowered() != "value" {
-      yylex.Error("expecting value after next")
-      return 1
-    }
     $$ = NewIntVal([]byte("1"))
   }
 | INTEGRAL VALUES

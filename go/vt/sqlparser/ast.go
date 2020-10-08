@@ -659,23 +659,6 @@ func (i *IfStatement) walkSubtree(visit Visit) error {
 	return nil
 }
 
-func (s *Signal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("signal sqlstate %v ", s.SqlStateValue)
-	if len(s.Info) > 0 {
-		buf.Myprintf("SET ")
-		for i, info := range s.Info {
-			if i > 0 {
-				buf.Myprintf(", ")
-			}
-			buf.Myprintf("%s = %s", info.Name, info.Value)
-		}
-	}
-}
-
-func (s *Signal) walkSubtree(visit Visit) error {
-	return nil
-}
-
 // Signal represents the SIGNAL statement
 type Signal struct {
 	SqlStateValue string // always a 5-character string
@@ -688,7 +671,22 @@ type SignalInfo struct {
 	Value *SQLVal
 }
 
+func (s *Signal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("signal sqlstate value '%s'", s.SqlStateValue)
+	if len(s.Info) > 0 {
+		buf.Myprintf(" set ")
+		for i, info := range s.Info {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%s = %v", info.Name, info.Value)
+		}
+	}
+}
 
+func (s *Signal) walkSubtree(visit Visit) error {
+	return nil
+}
 
 // Stream represents a SELECT statement.
 type Stream struct {
