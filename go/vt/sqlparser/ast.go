@@ -303,6 +303,7 @@ func (*OtherRead) iStatement()     {}
 func (*OtherAdmin) iStatement()    {}
 func (*BeginEndBlock) iStatement() {}
 func (*CaseStatement) iStatement() {}
+func (*IfStatement) iStatement()   {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement

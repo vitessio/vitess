@@ -1147,6 +1147,15 @@ else select true from dual; delete from x;
 end case;
 end`,
 		}, {
+			// TODO: this is a test of parsing if statements, not triggers. would be better to isolate it
+			input: `create trigger t1 before delete on foo for each row begin
+if old.y > 0 then select a + 1 from c; update b set c = 1;
+elseif old.y < 0 then delete from z;
+elseif new.foo > rand() then set @@autocommit = 1;
+else insert into z values (1, 2, 3);
+end if;
+end`,
+		}, {
 			input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
