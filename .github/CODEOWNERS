@@ -16,5 +16,6 @@
 /go/vt/vtctl @deepthi
 /go/vt/wrangler @deepthi @rohit-nayak-ps
 /go/vt/mysqlctl @deepthi
+/java/ @pH14
 /web/vtctld2 @rohit-nayak-ps
 /examples/local @rohit-nayak-ps
