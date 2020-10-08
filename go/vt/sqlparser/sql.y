@@ -124,6 +124,8 @@ func skipToEnd(yylex interface{}) {
   optLike       *OptLike
   caseStatementCases []CaseStatementCase
   caseStatementCase CaseStatementCase
+  ifStatementConditions []IfStatementCondition
+  ifStatementCondition IfStatementCondition
 }
 
 %token LEX_ERROR
@@ -148,7 +150,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> OR
 %left <bytes> AND
 %right <bytes> NOT '!'
-%left <bytes> BETWEEN CASE WHEN THEN ELSE END
+%left <bytes> BETWEEN CASE WHEN THEN ELSE ELSEIF END
 %left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
 %left <bytes> '|'
 %left <bytes> '&'
@@ -226,10 +228,12 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
-%type <statement> begin_end_block statement_list_statement case_statement
+%type <statement> begin_end_block statement_list_statement case_statement if_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
+%type <ifStatementConditions> elseif_list
+%type <ifStatementCondition> elseif_list_item
 %type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
@@ -741,27 +745,31 @@ case_statement_case:
 if_statement:
   IF expression THEN statement_list ';' elseif_list END IF
   {
-    $$ = &CaseStatement{Expr: $2, Cases: $3}
+    conds := $6
+    conds = append([]IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}, conds...)
+    $$ = &IfStatement{Conditions: conds}
   }
 | IF expression THEN statement_list ';' elseif_list ELSE statement_list ';' END IF
   {
-    $$ = &CaseStatement{Expr: $2, Cases: $3, Else: $5}
+    conds := $6
+    conds = append([]IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}, conds...)
+    $$ = &IfStatement{Conditions: conds, Else: $8}
   }
 
-case_statement_case_list:
-  case_statement_case
+elseif_list:
+  elseif_list_item
   {
-    $$ = []CaseStatementCase{$1}
+    $$ = []IfStatementCondition{$1}
   }
-| case_statement_case_list case_statement_case
+| elseif_list elseif_list_item
   {
     $$ = append($$, $2)
   }
 
-case_statement_case:
-  WHEN expression THEN statement_list ';'
+elseif_list_item:
+  ELSEIF expression THEN statement_list ';'
   {
-    $$ = CaseStatementCase{Case: $2, Statements: $4}
+    $$ = IfStatementCondition{Expr: $2, Statements: $4}
   }
 
 statement_list:
@@ -784,6 +792,7 @@ statement_list_statement:
 | delete_statement
 | set_statement
 | case_statement
+| if_statement
 | begin_end_block
 
 vindex_type_opt:
@@ -3763,6 +3772,7 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
+| ELSEIF
 | END
 | ESCAPE
 | EXISTS

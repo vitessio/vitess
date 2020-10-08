@@ -164,7 +164,7 @@ var keywords = map[string]int{
 	"duplicate":           DUPLICATE,
 	"each":                EACH,
 	"else":                ELSE,
-	"elseif":              UNUSED,
+	"elseif":              ELSEIF,
 	"enclosed":            UNUSED,
 	"end":                 END,
 	"engines":             ENGINES,
