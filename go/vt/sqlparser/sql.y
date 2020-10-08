@@ -786,13 +786,14 @@ table_column_list:
 column_definition:
   sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
-    $2.NotNull = $3
-    $2.Default = $4
-    $2.OnUpdate = $5
-    $2.Autoincrement = $6
-    $2.KeyOpt = $7
-    $2.Comment = $8
-    $$ = &ColumnDefinition{Name: $1, Type: $2}
+    columnType := $2
+    columnType.NotNull = $3
+    columnType.Default = $4
+    columnType.OnUpdate = $5
+    columnType.Autoincrement = $6
+    columnType.KeyOpt = $7
+    columnType.Comment = $8
+    $$ = &ColumnDefinition{Name: $1, Type: columnType}
   }
 column_type:
   numeric_type unsigned_opt zero_fill_opt
