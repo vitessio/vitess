@@ -743,7 +743,17 @@ case_statement_case:
   }
 
 if_statement:
-  IF expression THEN statement_list ';' elseif_list END IF
+  IF expression THEN statement_list ';' END IF
+  {
+    conds := []IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}
+    $$ = &IfStatement{Conditions: conds}
+  }
+| IF expression THEN statement_list ';' ELSE statement_list ';' END IF
+  {
+    conds := []IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}
+    $$ = &IfStatement{Conditions: conds, Else: $7}
+  }
+| IF expression THEN statement_list ';' elseif_list END IF
   {
     conds := $6
     conds = append([]IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}, conds...)
