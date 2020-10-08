@@ -658,6 +658,18 @@ func (i *IfStatement) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// SignalStatement represents the SIGNAL statement
+type SignalStatement struct {
+	SqlStateValue string // always a 5-character string
+	Info []SignalInfo
+}
+
+// SignalInfo represents a piece of information for a SIGNAL statement
+type SignalInfo struct {
+	Name string
+	Value *SQLVal
+}
+
 // Stream represents a SELECT statement.
 type Stream struct {
 	Comments   Comments
