@@ -1052,6 +1052,12 @@ var (
 	}, {
 		input: "create table a",
 	}, {
+		input:  "load data from s3 'x.txt'",
+		output: "AST node missing for Load type",
+	}, {
+		input:  "load data from s3 'x.txt' into table x",
+		output: "AST node missing for Load type",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {

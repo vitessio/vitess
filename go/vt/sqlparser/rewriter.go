@@ -1111,6 +1111,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Literal:
 
+	case *Load:
+
 	case *MatchExpr:
 		a.apply(node, n.Columns, replaceMatchExprColumns)
 		a.apply(node, n.Expr, replaceMatchExprExpr)
