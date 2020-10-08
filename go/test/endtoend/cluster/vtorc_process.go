@@ -28,9 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// OrchestratorProcess is a test struct for running
-// orchestrator as a separate process for testing
-type OrchestratorProcess struct {
+// VtorcProcess is a test struct for running
+// vtorc as a separate process for testing
+type VtorcProcess struct {
 	VtctlProcess
 	LogDir    string
 	ExtraArgs []string
@@ -40,10 +40,10 @@ type OrchestratorProcess struct {
 }
 
 // Setup starts orc process with required arguements
-func (orc *OrchestratorProcess) Setup() (err error) {
+func (orc *VtorcProcess) Setup() (err error) {
 
 	/* minimal command line arguments:
-	$ orchestrator -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
+	$ vtorc -topo_implementation etcd2 -topo_global_server_address localhost:2379 -topo_global_root /vitess/global
 	-config config/orchestrator/default.json -alsologtostderr http
 	*/
 	orc.proc = exec.Command(
@@ -82,8 +82,8 @@ func (orc *OrchestratorProcess) Setup() (err error) {
 	return nil
 }
 
-// TearDown shuts down the running orchestrator service
-func (orc *OrchestratorProcess) TearDown() error {
+// TearDown shuts down the running vtorc service
+func (orc *VtorcProcess) TearDown() error {
 	if orc.proc == nil || orc.exit == nil {
 		return nil
 	}

@@ -609,6 +609,10 @@ func replaceShowFilterFilter(newNode, parent SQLNode) {
 	parent.(*ShowFilter).Filter = newNode.(Expr)
 }
 
+func replaceShowTableStatusFilter(newNode, parent SQLNode) {
+	parent.(*ShowTableStatus).Filter = newNode.(*ShowFilter)
+}
+
 func replaceStarExprTableName(newNode, parent SQLNode) {
 	parent.(*StarExpr).TableName = newNode.(TableName)
 }
@@ -1246,6 +1250,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *ShowFilter:
 		a.apply(node, n.Filter, replaceShowFilterFilter)
+
+	case *ShowTableStatus:
+		a.apply(node, n.Filter, replaceShowTableStatusFilter)
 
 	case *StarExpr:
 		a.apply(node, n.TableName, replaceStarExprTableName)
