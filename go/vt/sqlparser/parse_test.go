@@ -1125,6 +1125,12 @@ var (
 		}, {
 			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
+			input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		}, {
+			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		}, {
 			// TODO: this is a test of parsing case statements, not triggers. would be better to isolate it
 			input: `create trigger t1 before delete on foo for each row begin
 case old.y
@@ -1166,12 +1172,6 @@ end`,
 if old.y > 0 then select a + 1 from c; update b set c = 1;
 end if;
 end`,
-		}, {
-			input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-		}, {
-			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
 			input:  "alter view a",
 			output: "alter table a",
