@@ -21,8 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPreview(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+
 	"github.com/dolthub/vitess/go/bytes2"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/vterrors"
@@ -29,6 +30,7 @@ const (
 	defaultBufSize = 4096
 	eofChar        = 0x100
 )
+
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
@@ -155,7 +157,7 @@ var keywords = map[string]int{
 	"decimal":             DECIMAL,
 	"declare":             UNUSED,
 	"default":             DEFAULT,
-	"definer":						 DEFINER,
+	"definer":             DEFINER,
 	"delayed":             UNUSED,
 	"delete":              DELETE,
 	"desc":                DESC,
@@ -189,7 +191,7 @@ var keywords = map[string]int{
 	"float4":              UNUSED,
 	"float8":              UNUSED,
 	"flush":               FLUSH,
-	"follows": 						 FOLLOWS,
+	"follows":             FOLLOWS,
 	"for":                 FOR,
 	"force":               FORCE,
 	"foreign":             FOREIGN,
@@ -335,7 +337,7 @@ var keywords = map[string]int{
 	"right":               RIGHT,
 	"rlike":               REGEXP,
 	"rollback":            ROLLBACK,
-	"row": 								 ROW,
+	"row":                 ROW,
 	"schema":              SCHEMA,
 	"schema_name":         SCHEMA_NAME,
 	"schemas":             SCHEMAS,
@@ -374,7 +376,7 @@ var keywords = map[string]int{
 	"substr":              SUBSTR,
 	"substring":           SUBSTRING,
 	"table":               TABLE,
-	"table_name":  				 TABLE_NAME,
+	"table_name":          TABLE_NAME,
 	"tables":              TABLES,
 	"terminated":          UNUSED,
 	"text":                TEXT,

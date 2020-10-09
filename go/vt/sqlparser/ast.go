@@ -539,14 +539,14 @@ func (b *BeginEndBlock) walkSubtree(visit Visit) error {
 
 // CaseStatement represents a CASE .. WHEN .. ELSE statement in a stored procedure / trigger
 type CaseStatement struct {
-	Expr  Expr // The case expression to switch on
+	Expr  Expr                // The case expression to switch on
 	Cases []CaseStatementCase // The set of WHEN values and attached statements
-	Else  Statements // The set of statements for the ELSE clause
+	Else  Statements          // The set of statements for the ELSE clause
 }
 
 // CaseStatementCase represents a single WHEN .. THEN clause in a CaseStatement
 type CaseStatementCase struct {
-	Case       Expr // The expression to match for this WHEN clause to match
+	Case       Expr       // The expression to match for this WHEN clause to match
 	Statements Statements // The list of statements to execute in the case of a match with Case
 }
 
@@ -599,12 +599,12 @@ func (c *CaseStatement) walkSubtree(visit Visit) error {
 // IfStatement represents an IF .. THEN .. ELSE statement in a stored procedure / trigger.
 type IfStatement struct {
 	Conditions []IfStatementCondition // The initial IF condition, followed by any ELSEIF conditions, in order.
-	Else  Statements // The statements of the ELSE clause, if any
+	Else       Statements             // The statements of the ELSE clause, if any
 }
 
 // IfStatementCondition represents a single IF / ELSEIF branch in an IfStatement
 type IfStatementCondition struct {
-	Expr  Expr
+	Expr       Expr
 	Statements Statements
 }
 
@@ -662,13 +662,13 @@ func (i *IfStatement) walkSubtree(visit Visit) error {
 // Signal represents the SIGNAL statement
 // TODO: right now we only support SQLSTATE VALUE with a string value, not the named_condition construct
 type Signal struct {
-	SqlStateValue string // Always a 5-character string
-	Info []SignalInfo // The list of name-value pairs of signal information provided
+	SqlStateValue string       // Always a 5-character string
+	Info          []SignalInfo // The list of name-value pairs of signal information provided
 }
 
 // SignalInfo represents a piece of information for a SIGNAL statement
 type SignalInfo struct {
-	Name string
+	Name  string
 	Value *SQLVal
 }
 
