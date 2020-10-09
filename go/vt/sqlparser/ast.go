@@ -546,8 +546,8 @@ type CaseStatement struct {
 
 // CaseStatementCase represents a single WHEN .. THEN clause in a CaseStatement
 type CaseStatementCase struct {
-	Case       Expr
-	Statements Statements
+	Case       Expr // The expression to match for this WHEN clause to match
+	Statements Statements // The list of statements to execute in the case of a match with Case
 }
 
 func (c *CaseStatement) Format(buf *TrackedBuffer) {
@@ -660,9 +660,10 @@ func (i *IfStatement) walkSubtree(visit Visit) error {
 }
 
 // Signal represents the SIGNAL statement
+// TODO: right now we only support SQLSTATE VALUE with a string value, not the named_condition construct
 type Signal struct {
-	SqlStateValue string // always a 5-character string
-	Info []SignalInfo
+	SqlStateValue string // Always a 5-character string
+	Info []SignalInfo // The list of name-value pairs of signal information provided
 }
 
 // SignalInfo represents a piece of information for a SIGNAL statement
