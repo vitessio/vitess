@@ -1142,55 +1142,6 @@ var (
 			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
 		}, {
-			// TODO: this is a test of parsing case statements, not triggers. would be better to isolate it
-			input: `create trigger t1 before delete on foo for each row begin
-case old.y
-when 1 then select a + 1 from c;
-when 0 then update a set b = 2; delete from z;
-end case;
-end`,
-		}, {
-			input: `create trigger t1 before delete on foo for each row begin
-case old.y
-when 1 then select a + 1 from c;
-end case;
-end`,
-		}, {
-			input: `create trigger t1 before delete on foo for each row begin
-case old.x
-when old.y then set @@var = 1;
-when 0 then update a set b = 2; delete from z;
-else select true from dual; delete from x;
-end case;
-end`,
-		}, {
-			// TODO: this is a test of parsing if statements, not triggers. would be better to isolate it
-			input: `create trigger t1 before delete on foo for each row begin
-if old.y > 0 then select a + 1 from c; update b set c = 1;
-elseif old.y < 0 then delete from z;
-elseif new.foo > rand() then set @@autocommit = 1;
-else insert into z values (1, 2, 3);
-end if;
-end`,
-		}, {
-			input: `create trigger t1 before delete on foo for each row begin
-if old.y > 0 then select a + 1 from c; update b set c = 1;
-elseif new.foo > rand() then set @@autocommit = 1;
-else insert into z values (1, 2, 3);
-end if;
-end`,
-		}, {
-			input: `create trigger t1 before delete on foo for each row begin
-if old.y > 0 then select a + 1 from c; update b set c = 1;
-else insert into z values (1, 2, 3);
-end if;
-end`,
-		}, {
-			input: `create trigger t1 before delete on foo for each row begin
-if old.y > 0 then select a + 1 from c; update b set c = 1;
-end if;
-end`,
-		}, {
 			input:  "alter view a",
 			output: "alter table a",
 		}, {
@@ -1742,6 +1693,7 @@ func TestValid(t *testing.T) {
 }
 
 var ignoreWhitespaceTests = []parseTest{
+	// TODO: this is a test of BEGIN .. END syntax, not triggers. Would be better to isolate it
 	{
 		input: `create trigger t1 before delete on foo for each row follows baz 
 							begin
@@ -1760,6 +1712,76 @@ var ignoreWhitespaceTests = []parseTest{
                 set @@bar = new.y;
                 update baz.t set a = @@foo + @@bar where z = old.x;
               end`,
+	},
+	{
+		// TODO: this is a test of parsing case statements, not triggers. would be better to isolate it
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								case old.y
+									when 1 then select a + 1 from c;
+									when 0 then update a set b = 2; delete from z;
+								end case;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								case old.y
+									when 1 then select a + 1 from c;
+								end case;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								case old.x
+									when old.y then set @@var = 1;
+									when 0 then update a set b = 2; delete from z;
+									else select true from dual; delete from x;
+								end case;
+							end`,
+	}, {
+		// TODO: this is a test of parsing if statements, not triggers. would be better to isolate it
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								if old.y > 0 then 
+									select a + 1 from c;
+									update b set c = 1;
+								elseif old.y < 0 then 
+									delete from z;
+								elseif new.foo > rand() then
+									set @@autocommit = 1;
+								else 
+									insert into z values (1, 2, 3);
+								end if;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row
+							begin
+								if old.y > 0 then 
+									select a + 1 from c;
+									update b set c = 1;
+								elseif new.foo > rand() then
+									set @@autocommit = 1;
+								else
+									insert into z values (1, 2, 3);
+								end if;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								if old.y > 0 then
+									select a + 1 from c;
+									update b set c = 1;
+								else 
+									insert into z values (1, 2, 3);
+								end if;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row
+							begin
+								if old.y > 0 then 
+									select a + 1 from c; update b set c = 1;
+								end if;
+							end`,
 	},
 }
 

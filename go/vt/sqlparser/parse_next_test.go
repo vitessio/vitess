@@ -26,9 +26,6 @@ import (
 // TestParseNextValid concatenates all the valid SQL test cases and check it can read
 // them as one long string.
 func TestParseNextValid(t *testing.T) {
-	t.Skip("broken by triggers and other compound statements that can have embedded semicolons. " +
-		"Need to be able to set the statement delimiter in the parser for some test cases.")
-	
 	var sql bytes.Buffer
 	for _, tcase := range validSQL {
 		sql.WriteString(strings.TrimSuffix(tcase.input, ";"))
