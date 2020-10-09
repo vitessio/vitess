@@ -171,18 +171,19 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 	w.Write(queryzHeader)
 
 	queryParams := r.URL.Query()
+
+	clearCacheQp, ok := queryParams["clear_cache"]
+	if ok && len(clearCacheQp) == 1 && clearCacheQp[0] == "true" {
+		queryzResetCacheHandler(qe, w, r)
+		return
+	}
+
 	sorterQp, ok := queryParams["sort"]
 	var sortQp string
 	if !ok || len(sorterQp) == 0 {
 		sortQp = "time_per_query"
 	} else {
 		sortQp = sorterQp[0]
-	}
-
-	clearCacheQp, ok := queryParams["clear_cache"]
-	if ok && len(clearCacheQp) == 1 && clearCacheQp[0] == "true" {
-		queryzResetCacheHandler(qe, w, r)
-		return
 	}
 
 	keys := qe.plans.Keys()
