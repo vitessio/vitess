@@ -89,6 +89,14 @@ func (qzs *queryzRow) timePQ() float64 {
 	return float64(qzs.tm) / (1e9 * float64(qzs.Count))
 }
 
+func (qzs *queryzRow) rowsPQ() float64 {
+	return float64(qzs.Rows) / float64(qzs.Count)
+}
+
+func (qzs *queryzRow) mysqlTimePQ() float64 {
+	return float64(qzs.mysqlTime) / (1e9 * float64(qzs.Count))
+}
+
 // TimePQ returns the time per query as a string.
 func (qzs *queryzRow) TimePQ() string {
 	return fmt.Sprintf("%.6f", qzs.timePQ())
@@ -101,14 +109,12 @@ func (qzs *queryzRow) MysqlTime() string {
 
 // MysqlTimePQ returns the time per query as a string.
 func (qzs *queryzRow) MysqlTimePQ() string {
-	val := float64(qzs.mysqlTime) / (1e9 * float64(qzs.Count))
-	return fmt.Sprintf("%.6f", val)
+	return fmt.Sprintf("%.6f", qzs.mysqlTimePQ())
 }
 
 // RowsPQ returns the row count per query as a string.
 func (qzs *queryzRow) RowsPQ() string {
-	val := float64(qzs.Rows) / float64(qzs.Count)
-	return fmt.Sprintf("%.6f", val)
+	return fmt.Sprintf("%.6f", qzs.rowsPQ())
 }
 
 // ErrorsPQ returns the error count per query as a string.
@@ -121,9 +127,39 @@ type queryzSorter struct {
 	less func(row1, row2 *queryzRow) bool
 }
 
+func (s *queryzSorter) SetLessFn(sorter string) {
+	switch sorter {
+	case "time_per_query":
+		s.less = func(row1, row2 *queryzRow) bool {
+			return row1.timePQ() > row2.timePQ()
+		}
+	case "counts_per_query":
+		s.less = func(row1, row2 *queryzRow) bool {
+			return row1.Count > row2.Count
+		}
+	case "mysql_time_per_query":
+		s.less = func(row1, row2 *queryzRow) bool {
+			return row1.MysqlTimePQ() > row2.MysqlTimePQ()
+		}
+	case "rows_per_query":
+		s.less = func(row1, row2 *queryzRow) bool {
+			return row1.rowsPQ() > row2.rowsPQ()
+		}
+	default:
+		s.less = func(row1, row2 *queryzRow) bool {
+			return row1.timePQ() > row2.timePQ()
+		}
+	}
+}
+
 func (s *queryzSorter) Len() int           { return len(s.rows) }
 func (s *queryzSorter) Swap(i, j int)      { s.rows[i], s.rows[j] = s.rows[j], s.rows[i] }
 func (s *queryzSorter) Less(i, j int) bool { return s.less(s.rows[i], s.rows[j]) }
+
+func queryzResetCacheHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
+	qe.plans.Clear()
+	fmt.Fprintf(w, "Query cache has been cleeared.\n")
+}
 
 func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
@@ -134,14 +170,28 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 	defer logz.EndHTMLTable(w)
 	w.Write(queryzHeader)
 
+	queryParams := r.URL.Query()
+	sorterQp, ok := queryParams["sort"]
+	var sortQp string
+	if !ok || len(sorterQp) == 0 {
+		sortQp = "time_per_query"
+	} else {
+		sortQp = sorterQp[0]
+	}
+
+	clearCacheQp, ok := queryParams["clear_cache"]
+	if ok && len(clearCacheQp) == 1 && clearCacheQp[0] == "true" {
+		queryzResetCacheHandler(qe, w, r)
+		return
+	}
+
 	keys := qe.plans.Keys()
 	sorter := queryzSorter{
 		rows: make([]*queryzRow, 0, len(keys)),
-		less: func(row1, row2 *queryzRow) bool {
-			return row1.timePQ() > row2.timePQ()
-		},
 	}
-	for _, v := range qe.plans.Keys() {
+	sorter.SetLessFn(sortQp)
+
+	for _, v := range keys {
 		plan := qe.peekQuery(v)
 		if plan == nil {
 			continue
