@@ -1593,6 +1593,10 @@ var (
 		input:  "drop database if exists test_db",
 		output: "drop database test_db",
 	}, {
+		input:  "drop trigger trigger1",
+	}, {
+		input:  "drop trigger if exists t2",
+	}, {
 		input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 	}, {

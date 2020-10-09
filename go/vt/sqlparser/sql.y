@@ -1836,9 +1836,9 @@ drop_statement:
 | DROP VIEW exists_opt view_name_list
   {
     var exists bool
-        if $3 != 0 {
-          exists = true
-        }
+    if $3 != 0 {
+      exists = true
+    }
     $$ = &DDL{Action: DropStr, FromViews: $4, IfExists: exists}
   }
 | DROP DATABASE exists_opt ID
@@ -1848,6 +1848,14 @@ drop_statement:
 | DROP SCHEMA exists_opt ID
   {
     $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+  }
+| DROP TRIGGER exists_opt ID
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{Name: string($4)}, IfExists: exists}
   }
 
 truncate_statement:

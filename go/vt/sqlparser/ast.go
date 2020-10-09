@@ -909,6 +909,12 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 		if len(node.FromViews) > 0 {
 			buf.Myprintf("%s view%s %v", node.Action, exists, node.FromViews)
+		} else if node.TriggerSpec != nil {
+			exists := ""
+			if node.IfExists {
+				exists = " if exists"
+			}
+			buf.Myprintf(fmt.Sprintf("%s trigger%s %v", node.Action, exists, node.TriggerSpec.Name))
 		} else {
 			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
 		}
