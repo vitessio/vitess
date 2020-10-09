@@ -2,9 +2,10 @@ package sqlparser
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestAlterCreateIndex(t *testing.T) {
@@ -43,7 +44,7 @@ func TestAlterCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "wxyzIndex"},
-				Type: "unique",
+				Type:   "unique",
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
@@ -60,7 +61,7 @@ func TestAlterCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{},
-				Type: "unique",
+				Type:   "unique",
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
@@ -77,7 +78,7 @@ func TestAlterCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{},
-				Type: "unique",
+				Type:   "unique",
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: AscScr},
@@ -94,11 +95,11 @@ func TestAlterCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "bestindex"},
-				Type: "spatial",
+				Type:   "spatial",
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "bestcol"}, Order: AscScr},
 				},
-				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
+				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type: StrVal, Val: []byte("hello world")}}},
 			},
 		},
 		{
@@ -109,7 +110,7 @@ func TestAlterCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "sOmEiNdEx"},
-				Using: ColIdent{val: "BTREE"},
+				Using:  ColIdent{val: "BTREE"},
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "ye"}, Order: DescScr},
 					{Column: ColIdent{val: "ne"}, Order: AscScr},
@@ -155,9 +156,9 @@ func TestAlterRenameIndex(t *testing.T) {
 				Name: TableIdent{"tbl_abc"},
 			},
 			&IndexSpec{
-				Action: RenameStr,
+				Action:   RenameStr,
 				FromName: ColIdent{val: "idx_w"},
-				ToName: ColIdent{val: "idx_v"},
+				ToName:   ColIdent{val: "idx_v"},
 			},
 		},
 		{
@@ -166,9 +167,9 @@ func TestAlterRenameIndex(t *testing.T) {
 				Name: TableIdent{"asdf"},
 			},
 			&IndexSpec{
-				Action: RenameStr,
+				Action:   RenameStr,
 				FromName: ColIdent{val: "wxyzIndex"},
-				ToName: ColIdent{val: "indexWXYZ"},
+				ToName:   ColIdent{val: "indexWXYZ"},
 			},
 		},
 	}
@@ -198,7 +199,7 @@ func TestCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "wxyzIndex"},
-				Type: "unique",
+				Type:   "unique",
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
 					{Column: ColIdent{val: "X"}, Order: DescScr},
@@ -215,11 +216,11 @@ func TestCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "bestindex"},
-				Type: "spatial",
+				Type:   "spatial",
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "bestcol"}, Order: AscScr},
 				},
-				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type:StrVal, Val: []byte("hello world")}}},
+				Options: []*IndexOption{{Name: "COMMENT", Value: &SQLVal{Type: StrVal, Val: []byte("hello world")}}},
 			},
 		},
 		{
@@ -230,7 +231,7 @@ func TestCreateIndex(t *testing.T) {
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{val: "sOmEiNdEx"},
-				Using: ColIdent{val: "BTREE"},
+				Using:  ColIdent{val: "BTREE"},
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "ye"}, Order: AscScr},
 					{Column: ColIdent{val: "ne"}, Order: DescScr},
@@ -247,7 +248,7 @@ func TestDropIndex(t *testing.T) {
 		{
 			"DROP INDEX idx_v ON tbl_abc",
 			TableName{
-				Name: TableIdent{"tbl_abc"},
+				Name:      TableIdent{"tbl_abc"},
 				Qualifier: TableIdent{},
 			},
 			&IndexSpec{
@@ -258,7 +259,7 @@ func TestDropIndex(t *testing.T) {
 		{
 			"DROP INDEX otherName ON tableYeah",
 			TableName{
-				Name: TableIdent{"tableYeah"},
+				Name:      TableIdent{"tableYeah"},
 				Qualifier: TableIdent{},
 			},
 			&IndexSpec{
@@ -340,11 +341,11 @@ func TestCreateForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: DefaultAction,
-						OnDelete: DefaultAction,
+						OnUpdate:          DefaultAction,
+						OnDelete:          DefaultAction,
 					},
 				},
 			},
@@ -362,11 +363,11 @@ func TestCreateForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: Restrict,
-						OnDelete: Cascade,
+						OnUpdate:          Restrict,
+						OnDelete:          Cascade,
 					},
 				},
 			},
@@ -384,11 +385,11 @@ func TestCreateForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: SetDefault,
-						OnDelete: NoAction,
+						OnUpdate:          SetDefault,
+						OnDelete:          NoAction,
 					},
 				},
 			},
@@ -406,11 +407,11 @@ func TestCreateForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: DefaultAction,
-						OnDelete: Cascade,
+						OnUpdate:          DefaultAction,
+						OnDelete:          Cascade,
 					},
 				},
 			},
@@ -428,11 +429,11 @@ func TestCreateForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: SetNull,
-						OnDelete: DefaultAction,
+						OnUpdate:          SetNull,
+						OnDelete:          DefaultAction,
 					},
 				},
 			},
@@ -450,11 +451,11 @@ func TestCreateForeignKey(t *testing.T) {
 				{
 					Name: "fk_parents",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parents_id"}, {val: "parents_sub_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parents"}},
+						Source:            Columns{{val: "parents_id"}, {val: "parents_sub_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parents"}},
 						ReferencedColumns: Columns{{val: "id"}, {val: "sub_id"}},
-						OnUpdate: DefaultAction,
-						OnDelete: DefaultAction,
+						OnUpdate:          DefaultAction,
+						OnDelete:          DefaultAction,
 					},
 				},
 			},
@@ -474,11 +475,11 @@ func TestAlterAddForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: DefaultAction,
-						OnDelete: DefaultAction,
+						OnUpdate:          DefaultAction,
+						OnDelete:          DefaultAction,
 					},
 				},
 			},
@@ -492,11 +493,11 @@ func TestAlterAddForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: Restrict,
-						OnDelete: Cascade,
+						OnUpdate:          Restrict,
+						OnDelete:          Cascade,
 					},
 				},
 			},
@@ -510,11 +511,11 @@ func TestAlterAddForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: SetDefault,
-						OnDelete: NoAction,
+						OnUpdate:          SetDefault,
+						OnDelete:          NoAction,
 					},
 				},
 			},
@@ -528,11 +529,11 @@ func TestAlterAddForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: DefaultAction,
-						OnDelete: Cascade,
+						OnUpdate:          DefaultAction,
+						OnDelete:          Cascade,
 					},
 				},
 			},
@@ -546,11 +547,11 @@ func TestAlterAddForeignKey(t *testing.T) {
 				{
 					Name: "",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parent_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parent"}},
+						Source:            Columns{{val: "parent_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parent"}},
 						ReferencedColumns: Columns{{val: "id"}},
-						OnUpdate: SetNull,
-						OnDelete: DefaultAction,
+						OnUpdate:          SetNull,
+						OnDelete:          DefaultAction,
 					},
 				},
 			},
@@ -563,11 +564,11 @@ func TestAlterAddForeignKey(t *testing.T) {
 				{
 					Name: "fk_parents",
 					Details: &ForeignKeyDefinition{
-						Source: Columns{{val: "parents_id"}, {val: "parents_sub_id"}},
-						ReferencedTable: TableName{Name: TableIdent{v: "parents"}},
+						Source:            Columns{{val: "parents_id"}, {val: "parents_sub_id"}},
+						ReferencedTable:   TableName{Name: TableIdent{v: "parents"}},
 						ReferencedColumns: Columns{{val: "id"}, {val: "sub_id"}},
-						OnUpdate: DefaultAction,
-						OnDelete: DefaultAction,
+						OnUpdate:          DefaultAction,
+						OnDelete:          DefaultAction,
 					},
 				},
 			},
@@ -584,11 +585,11 @@ func TestAlterDropForeignKey(t *testing.T) {
 			[]*ConstraintDefinition{{
 				Name: "fk_parent_id",
 				Details: &ForeignKeyDefinition{
-					Source: Columns{},
-					ReferencedTable: TableName{},
+					Source:            Columns{},
+					ReferencedTable:   TableName{},
 					ReferencedColumns: Columns{},
-					OnUpdate: DefaultAction,
-					OnDelete: DefaultAction,
+					OnUpdate:          DefaultAction,
+					OnDelete:          DefaultAction,
 				},
 			}},
 		},
@@ -597,11 +598,11 @@ func TestAlterDropForeignKey(t *testing.T) {
 			[]*ConstraintDefinition{{
 				Name: "random_foreign_key_name",
 				Details: &ForeignKeyDefinition{
-					Source: Columns{},
-					ReferencedTable: TableName{},
+					Source:            Columns{},
+					ReferencedTable:   TableName{},
 					ReferencedColumns: Columns{},
-					OnUpdate: DefaultAction,
-					OnDelete: DefaultAction,
+					OnUpdate:          DefaultAction,
+					OnDelete:          DefaultAction,
 				},
 			}},
 		},
@@ -643,6 +644,7 @@ type testIndexStruct struct {
 	resTable  TableName
 	res       *IndexSpec
 }
+
 func testIndex(t *testing.T, tests []testIndexStruct) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test.statement), func(t *testing.T) {
@@ -661,6 +663,7 @@ type testForeignKeyStruct struct {
 	statement string
 	res       []*ConstraintDefinition
 }
+
 func testForeignKey(t *testing.T, tests []testForeignKeyStruct, expectedConstraintAction string) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test.statement), func(t *testing.T) {

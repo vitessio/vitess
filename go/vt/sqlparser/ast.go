@@ -284,24 +284,27 @@ type Statement interface {
 
 type Statements []Statement
 
-func (*Union) iStatement()      {}
-func (*Select) iStatement()     {}
-func (*Stream) iStatement()     {}
-func (*Insert) iStatement()     {}
-func (*Update) iStatement()     {}
-func (*Delete) iStatement()     {}
-func (*Set) iStatement()        {}
-func (*DBDDL) iStatement()      {}
-func (*DDL) iStatement()        {}
-func (*Explain) iStatement()    {}
-func (*Show) iStatement()       {}
-func (*Use) iStatement()        {}
-func (*Begin) iStatement()      {}
-func (*Commit) iStatement()     {}
-func (*Rollback) iStatement()   {}
-func (*OtherRead) iStatement()  {}
-func (*OtherAdmin) iStatement() {}
+func (*Union) iStatement()         {}
+func (*Select) iStatement()        {}
+func (*Stream) iStatement()        {}
+func (*Insert) iStatement()        {}
+func (*Update) iStatement()        {}
+func (*Delete) iStatement()        {}
+func (*Set) iStatement()           {}
+func (*DBDDL) iStatement()         {}
+func (*DDL) iStatement()           {}
+func (*Explain) iStatement()       {}
+func (*Show) iStatement()          {}
+func (*Use) iStatement()           {}
+func (*Begin) iStatement()         {}
+func (*Commit) iStatement()        {}
+func (*Rollback) iStatement()      {}
+func (*OtherRead) iStatement()     {}
+func (*OtherAdmin) iStatement()    {}
 func (*BeginEndBlock) iStatement() {}
+func (*CaseStatement) iStatement() {}
+func (*IfStatement) iStatement()   {}
+func (*Signal) iStatement()        {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -534,6 +537,158 @@ func (b *BeginEndBlock) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// CaseStatement represents a CASE .. WHEN .. ELSE statement in a stored procedure / trigger
+type CaseStatement struct {
+	Expr  Expr                // The case expression to switch on
+	Cases []CaseStatementCase // The set of WHEN values and attached statements
+	Else  Statements          // The set of statements for the ELSE clause
+}
+
+// CaseStatementCase represents a single WHEN .. THEN clause in a CaseStatement
+type CaseStatementCase struct {
+	Case       Expr       // The expression to match for this WHEN clause to match
+	Statements Statements // The list of statements to execute in the case of a match with Case
+}
+
+func (c *CaseStatement) Format(buf *TrackedBuffer) {
+	buf.Myprintf("case %v\n", c.Expr)
+	for _, cas := range c.Cases {
+		buf.Myprintf("when %v then ", cas.Case)
+		for i, s := range cas.Statements {
+			if i != 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf(";\n")
+	}
+
+	if len(c.Else) > 0 {
+		buf.Myprintf("else ")
+		for i, s := range c.Else {
+			if i != 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf(";\n")
+	}
+
+	buf.Myprintf("end case")
+}
+
+func (c *CaseStatement) walkSubtree(visit Visit) error {
+	if c == nil {
+		return nil
+	}
+	for _, cas := range c.Cases {
+		for _, s := range cas.Statements {
+			if err := Walk(visit, s); err != nil {
+				return err
+			}
+		}
+	}
+	for _, s := range c.Else {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// IfStatement represents an IF .. THEN .. ELSE statement in a stored procedure / trigger.
+type IfStatement struct {
+	Conditions []IfStatementCondition // The initial IF condition, followed by any ELSEIF conditions, in order.
+	Else       Statements             // The statements of the ELSE clause, if any
+}
+
+// IfStatementCondition represents a single IF / ELSEIF branch in an IfStatement
+type IfStatementCondition struct {
+	Expr       Expr
+	Statements Statements
+}
+
+func (i *IfStatement) Format(buf *TrackedBuffer) {
+	for j, c := range i.Conditions {
+		if j == 0 {
+			buf.Myprintf("if %v then ", c.Expr)
+		} else {
+			buf.Myprintf("elseif %v then ", c.Expr)
+		}
+		for k, s := range c.Statements {
+			if k > 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf(";\n")
+	}
+
+	if len(i.Else) > 0 {
+		buf.Myprintf("else ")
+		for j, s := range i.Else {
+			if j > 0 {
+				buf.Myprintf("; ")
+			}
+			buf.Myprintf("%v", s)
+		}
+		buf.Myprintf(";\n")
+	}
+
+	buf.Myprintf("end if")
+}
+
+func (i *IfStatement) walkSubtree(visit Visit) error {
+	if i == nil {
+		return nil
+	}
+
+	for _, c := range i.Conditions {
+		for _, s := range c.Statements {
+			if err := Walk(visit, s); err != nil {
+				return err
+			}
+		}
+	}
+	for _, s := range i.Else {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Signal represents the SIGNAL statement
+// TODO: right now we only support SQLSTATE VALUE with a string value, not the named_condition construct
+type Signal struct {
+	SqlStateValue string       // Always a 5-character string
+	Info          []SignalInfo // The list of name-value pairs of signal information provided
+}
+
+// SignalInfo represents a piece of information for a SIGNAL statement
+type SignalInfo struct {
+	Name  string
+	Value *SQLVal
+}
+
+func (s *Signal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("signal sqlstate value '%s'", s.SqlStateValue)
+	if len(s.Info) > 0 {
+		buf.Myprintf(" set ")
+		for i, info := range s.Info {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%s = %v", info.Name, info.Value)
+		}
+	}
+}
+
+func (s *Signal) walkSubtree(visit Visit) error {
+	return nil
+}
+
 // Stream represents a SELECT statement.
 type Stream struct {
 	Comments   Comments
@@ -758,7 +913,7 @@ type TriggerSpec struct {
 
 type TriggerOrder struct {
 	PrecedesOrFollows string // PrecedesStr, FollowsStr
-	OtherTriggerName string
+	OtherTriggerName  string
 }
 
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
@@ -790,8 +945,8 @@ type DDL struct {
 	Table TableName
 
 	// View name.
-	View                    TableName
-	ViewExpr                SelectStatement
+	View     TableName
+	ViewExpr SelectStatement
 
 	// This exposes the start and end index of the string that makes up the sub statement of the query given.
 	// Meaning is specific to the different kinds of statements with sub statements, e.g. views, trigger definitions.
@@ -802,9 +957,9 @@ type DDL struct {
 	FromViews TableNames
 
 	// The following fields are set if a DDL was fully analyzed.
-	IfExists bool
+	IfExists    bool
 	IfNotExists bool
-	OrReplace bool
+	OrReplace   bool
 
 	// TableSpec contains the full table spec in case of a create, or a single column in case of an add, drop, or alter.
 	TableSpec     *TableSpec
@@ -1479,15 +1634,15 @@ func (ct *ColumnType) walkSubtree(visit Visit) error {
 // IndexSpec describes an index operation in an ALTER statement
 type IndexSpec struct {
 	// Action states whether it's a CREATE, DROP, or RENAME
-	Action   string
+	Action string
 	// FromName states the old name when renaming
 	FromName ColIdent
 	// ToName states the name to set when renaming or references the target table
-	ToName   ColIdent
+	ToName ColIdent
 	// Using states whether you're using BTREE, HASH, or none
-	Using    ColIdent
+	Using ColIdent
 	// Type specifies whether this is UNIQUE, FULLTEXT, SPATIAL, or normal (nothing)
-	Type     string
+	Type string
 	// Columns contains the column names when creating an index
 	Columns []*IndexColumn
 	// Options contains the index options when creating an index
@@ -1623,7 +1778,7 @@ func (ii *IndexInfo) walkSubtree(visit Visit) error {
 type IndexColumn struct {
 	Column ColIdent
 	Length *SQLVal
-	Order string
+	Order  string
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -1841,8 +1996,8 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 // Format strings for explain statements
 const (
 	TraditionalStr = "traditional"
-	TreeStr = "tree"
-	JsonStr = "json"
+	TreeStr        = "tree"
+	JsonStr        = "json"
 )
 
 // Explain represents an explain statement

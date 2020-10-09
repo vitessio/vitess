@@ -122,6 +122,12 @@ func skipToEnd(yylex interface{}) {
   vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  caseStatementCases []CaseStatementCase
+  caseStatementCase CaseStatementCase
+  ifStatementConditions []IfStatementCondition
+  ifStatementCondition IfStatementCondition
+  signalInfo SignalInfo
+  signalInfos []SignalInfo
 }
 
 %token LEX_ERROR
@@ -146,7 +152,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> OR
 %left <bytes> AND
 %right <bytes> NOT '!'
-%left <bytes> BETWEEN CASE WHEN THEN ELSE END
+%left <bytes> BETWEEN CASE WHEN THEN ELSE ELSEIF END
 %left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
 %left <bytes> '|'
 %left <bytes> '&'
@@ -176,6 +182,10 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER
+
+// SIGNAL Tokens
+%token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
+%token <bytes> CONSTRAINT_NAME CATALOG_NAME SCHEMA_NAME TABLE_NAME COLUMN_NAME CURSOR_NAME SIGNAL SQLSTATE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -224,8 +234,15 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
-%type <statement> begin_end_block statement_list_statement
+%type <statement> begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statements> statement_list
+%type <caseStatementCases> case_statement_case_list
+%type <caseStatementCase> case_statement_case
+%type <ifStatementConditions> elseif_list
+%type <ifStatementCondition> elseif_list_item
+%type <signalInfo> signal_information_item
+%type <signalInfos> signal_information_item_list
+%type <bytes> signal_information_name signal_condition_value
 %type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
@@ -373,6 +390,7 @@ command:
 | describe_statement
 | other_statement
 | flush_statement
+| signal_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -708,6 +726,125 @@ begin_end_block:
     $$ = &BeginEndBlock{Statements: $2}
   }
 
+case_statement:
+  CASE expression case_statement_case_list END CASE
+  {
+    $$ = &CaseStatement{Expr: $2, Cases: $3}
+  }
+| CASE expression case_statement_case_list ELSE statement_list ';' END CASE
+  {
+    $$ = &CaseStatement{Expr: $2, Cases: $3, Else: $5}
+  }
+
+case_statement_case_list:
+  case_statement_case
+  {
+    $$ = []CaseStatementCase{$1}
+  }
+| case_statement_case_list case_statement_case
+  {
+    $$ = append($$, $2)
+  }
+
+case_statement_case:
+  WHEN expression THEN statement_list ';'
+  {
+    $$ = CaseStatementCase{Case: $2, Statements: $4}
+  }
+
+if_statement:
+  IF expression THEN statement_list ';' END IF
+  {
+    conds := []IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}
+    $$ = &IfStatement{Conditions: conds}
+  }
+| IF expression THEN statement_list ';' ELSE statement_list ';' END IF
+  {
+    conds := []IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}
+    $$ = &IfStatement{Conditions: conds, Else: $7}
+  }
+| IF expression THEN statement_list ';' elseif_list END IF
+  {
+    conds := $6
+    conds = append([]IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}, conds...)
+    $$ = &IfStatement{Conditions: conds}
+  }
+| IF expression THEN statement_list ';' elseif_list ELSE statement_list ';' END IF
+  {
+    conds := $6
+    conds = append([]IfStatementCondition{IfStatementCondition{Expr: $2, Statements: $4}}, conds...)
+    $$ = &IfStatement{Conditions: conds, Else: $8}
+  }
+
+elseif_list:
+  elseif_list_item
+  {
+    $$ = []IfStatementCondition{$1}
+  }
+| elseif_list elseif_list_item
+  {
+    $$ = append($$, $2)
+  }
+
+elseif_list_item:
+  ELSEIF expression THEN statement_list ';'
+  {
+    $$ = IfStatementCondition{Expr: $2, Statements: $4}
+  }
+
+signal_statement:
+  SIGNAL signal_condition_value
+  {
+    $$ = &Signal{SqlStateValue: string($2)}
+  }
+| SIGNAL signal_condition_value SET signal_information_item_list
+  {
+    $$ = &Signal{SqlStateValue: string($2), Info: $4}
+  }
+
+signal_condition_value:
+  SQLSTATE STRING
+  {
+    $$ = $2
+  }
+| SQLSTATE VALUE STRING
+  {
+    $$ = $3
+  }
+
+signal_information_item_list:
+  signal_information_item
+  {
+    $$ = []SignalInfo{$1}
+  }
+| signal_information_item_list ',' signal_information_item
+  {
+    $$ = append($$, $3)
+  }
+
+signal_information_item:
+  signal_information_name '=' value
+  {
+    $$ = SignalInfo{Name: string($1), Value: $3.(*SQLVal)}
+  }
+
+signal_information_name:
+  CLASS_ORIGIN
+  {
+    $$ = $1
+  }
+| SUBCLASS_ORIGIN
+| MESSAGE_TEXT
+| MYSQL_ERRNO
+| CONSTRAINT_CATALOG
+| CONSTRAINT_SCHEMA
+| CONSTRAINT_NAME
+| CATALOG_NAME
+| SCHEMA_NAME
+| TABLE_NAME
+| COLUMN_NAME
+| CURSOR_NAME
+
 statement_list:
   statement_list_statement
   {
@@ -727,6 +864,9 @@ statement_list_statement:
 | update_statement
 | delete_statement
 | set_statement
+| case_statement
+| if_statement
+| signal_statement
 | begin_end_block
 
 vindex_type_opt:
@@ -3318,13 +3458,8 @@ value:
   }
 
 num_val:
-  sql_id
+  VALUE
   {
-    // TODO(sougou): Deprecate this construct.
-    if $1.Lowered() != "value" {
-      yylex.Error("expecting value after next")
-      return 1
-    }
     $$ = NewIntVal([]byte("1"))
   }
 | INTEGRAL VALUES
@@ -3718,6 +3853,7 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
+| ELSEIF
 | END
 | ESCAPE
 | EXISTS
@@ -3826,17 +3962,24 @@ non_reserved_keyword:
 | BOOLEAN
 | BUCKETS
 | CASCADE
+| CATALOG_NAME
 | CHAR
 | CHARACTER
 | CHARSET
 | CHECK
+| CLASS_ORIGIN
 | CLONE
 | COLLATION
 | COLUMNS
+| COLUMN_NAME
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
 | COMPONENT
+| CONSTRAINT_CATALOG
+| CONSTRAINT_NAME
+| CONSTRAINT_SCHEMA
+| CURSOR_NAME
 | DATE
 | DATETIME
 | DECIMAL
@@ -3849,8 +3992,8 @@ non_reserved_keyword:
 | ENUM
 | EXCLUDE
 | EXPANSION
-| FLOAT_TYPE
 | FIELDS
+| FLOAT_TYPE
 | FLUSH
 | FOLLOWING
 | FOREIGN
@@ -3868,8 +4011,8 @@ non_reserved_keyword:
 | INVISIBLE
 | ISOLATION
 | JSON
-| KEY_BLOCK_SIZE
 | KEYS
+| KEY_BLOCK_SIZE
 | LANGUAGE
 | LAST_INSERT_ID
 | LESS
@@ -3885,39 +4028,41 @@ non_reserved_keyword:
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
+| MESSAGE_TEXT
 | MODE
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
+| MYSQL_ERRNO
 | NAMES
 | NCHAR
 | NESTED
 | NETWORK_NAMESPACE
-| NOWAIT
 | NO
+| NOWAIT
 | NULLS
 | NUMERIC
 | OFFSET
 | OJ
 | OLD
+| ONLY
+| OPTIMIZE
 | OPTIONAL
 | ORDINALITY
 | ORGANIZATION
-| ONLY
-| OPTIMIZE
 | OTHERS
 | PARTITION
 | PATH
 | PERSIST
 | PERSIST_ONLY
-| PRECEDING
-| PRIVILEGE_CHECKS_USER
-| PROCESS
 | PLUGINS
 | POINT
 | POLYGON
+| PRECEDING
 | PRIMARY
+| PRIVILEGE_CHECKS_USER
 | PROCEDURE
+| PROCESS
 | QUERY
 | RANDOM
 | READ
@@ -3927,31 +4072,36 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
-| RESTRICT
 | REQUIRE_ROW_FORMAT
 | RESOURCE
 | RESPECT
 | RESTART
+| RESTRICT
 | RETAIN
 | REUSE
 | ROLE
 | ROLLBACK
+| SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
 | SEQUENCE
-| SESSION
 | SERIALIZABLE
+| SESSION
 | SHARE
+| SIGNAL
 | SIGNED
 | SKIP
 | SMALLINT
 | SPATIAL
+| SQLSTATE
 | SRID
 | START
 | STATUS
+| SUBCLASS_ORIGIN
 | TABLES
+| TABLE_NAME
 | TEXT
 | THAN
 | THREAD_PRIORITY

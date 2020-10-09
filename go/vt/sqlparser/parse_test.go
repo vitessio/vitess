@@ -26,6 +26,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type parseTest struct {
@@ -35,1627 +38,1640 @@ type parseTest struct {
 
 var (
 	validSQL = []parseTest{
-	   {
-		input:  "select 1",
-		output: "select 1 from dual",
-	}, {
-		input: "select 1 from t",
-	}, {
-		input:  "select * from information_schema.columns",
-		output: "select * from information_schema.`columns`",
-	}, {
-		input: "select .1 from t",
-	}, {
-		input: "select 1.2e1 from t",
-	}, {
-		input: "select 1.2e+1 from t",
-	}, {
-		input: "select 1.2e-1 from t",
-	}, {
-		input: "select 08.3 from t",
-	}, {
-		input: "select -1 from t where b = -2",
-	}, {
-		input:  "select - -1 from t",
-		output: "select 1 from t",
-	}, {
-		input:  "select 1 from t // aa\n",
-		output: "select 1 from t",
-	}, {
-		input:  "select 1 from t -- aa\n",
-		output: "select 1 from t",
-	}, {
-		input:  "select 1 from t # aa\n",
-		output: "select 1 from t",
-	}, {
-		input:  "select 1 --aa\nfrom t",
-		output: "select 1 from t",
-	}, {
-		input:  "select 1 #aa\nfrom t",
-		output: "select 1 from t",
-	}, {
-		input: "select /* simplest */ 1 from t",
-	}, {
-		input: "select /* double star **/ 1 from t",
-	}, {
-		input: "select /* double */ /* comment */ 1 from t",
-	}, {
-		input: "select /* back-quote keyword */ `By` from t",
-	}, {
-		input: "select /* back-quote num */ `2a` from t",
-	}, {
-		input: "select /* back-quote . */ `a.b` from t",
-	}, {
-		input: "select /* back-quote back-quote */ `a``b` from t",
-	}, {
-		input:  "select /* back-quote unnecessary */ 1 from `t`",
-		output: "select /* back-quote unnecessary */ 1 from t",
-	}, {
-		input:  "select /* back-quote idnum */ 1 from `a1`",
-		output: "select /* back-quote idnum */ 1 from a1",
-	}, {
-		input: "select /* @ */ @@a from b",
-	}, {
-		input: "select /* \\0 */ '\\0' from a",
-	}, {
-		input:  "select 1 /* drop this comment */ from t",
-		output: "select 1 from t",
-	}, {
-		input: "select /* union */ 1 from t union select 1 from t",
-	}, {
-		input: "select /* double union */ 1 from t union select 1 from t union select 1 from t",
-	}, {
-		input: "select /* union all */ 1 from t union all select 1 from t",
-	}, {
-		input: "select /* union distinct */ 1 from t union distinct select 1 from t",
-	}, {
-		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
-		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
-	}, {
-		input: "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
-	}, {
-		input:  "select /* union order by */ 1 from t union select 1 from t order by a",
-		output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
-	}, {
-		input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
-		output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
-	}, {
-		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
-	}, {
-		input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
-		output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
-	}, {
-		input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
-	}, {
-		input: "select * from t1 join (select * from t2 union select * from t3) as t",
-	}, {
-		// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
-		input: "select * from t1 join t2 on a = b join t3",
-	}, {
-		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
-	}, {
-		input: "select * from t1 where exists (select a from t2 union select b from t3)",
-	}, {
-		input: "select /* distinct */ distinct 1 from t",
-	}, {
-		input:  "select all col from t",
-		output: "select col from t",
-	}, {
-		input: "select /* straight_join */ straight_join 1 from t",
-	}, {
-		input: "select /* for update */ 1 from t for update",
-	}, {
-		input: "select /* lock in share mode */ 1 from t lock in share mode",
-	}, {
-		input: "select /* select list */ 1, 2 from t",
-	}, {
-		input: "select /* * */ * from t",
-	}, {
-		input: "select /* a.* */ a.* from t",
-	}, {
-		input: "select /* a.b.* */ a.b.* from t",
-	}, {
-		input:  "select /* column alias */ a b from t",
-		output: "select /* column alias */ a as b from t",
-	}, {
-		input:  "select t.Date as Date from t",
-		output: "select t.`Date` as `Date` from t",
-	}, {
-		input:  "select t.col as YeAr from t",
-		output: "select t.col as `YeAr` from t",
-	}, {
-		input: "select /* column alias with as */ a as b from t",
-	}, {
-		input: "select /* keyword column alias */ a as `By` from t",
-	}, {
-		input:  "select /* column alias as string */ a as \"b\" from t",
-		output: "select /* column alias as string */ a as b from t",
-	}, {
-		input:  "select /* column alias as string without as */ a \"b\" from t",
-		output: "select /* column alias as string without as */ a as b from t",
-	}, {
-		input: "select /* a.* */ a.* from t",
-	}, {
-		input:  "select next value for t",
-		output: "select next 1 values from t",
-	}, {
-		input:  "select next value from t",
-		output: "select next 1 values from t",
-	}, {
-		input: "select next 10 values from t",
-	}, {
-		input: "select next :a values from t",
-	}, {
-		input: "select /* `By`.* */ `By`.* from t",
-	}, {
-		input: "select /* select with bool expr */ a = b from t",
-	}, {
-		input: "select /* case_when */ case when a = b then c end from t",
-	}, {
-		input: "select /* case_when_else */ case when a = b then c else d end from t",
-	}, {
-		input: "select /* case_when_when_else */ case when a = b then c when b = d then d else d end from t",
-	}, {
-		input: "select /* case */ case aa when a = b then c end from t",
-	}, {
-		input: "select /* parenthesis */ 1 from (t)",
-	}, {
-		input: "select /* parenthesis multi-table */ 1 from (t1, t2)",
-	}, {
-		input: "select /* table list */ 1 from t1, t2",
-	}, {
-		input: "select /* parenthessis in table list 1 */ 1 from (t1), t2",
-	}, {
-		input: "select /* parenthessis in table list 2 */ 1 from t1, (t2)",
-	}, {
-		input: "select /* use */ 1 from t1 use index (a) where b = 1",
-	}, {
-		input: "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
-	}, {
-		input: "select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1",
-	}, {
-		input: "select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1",
-	}, {
-		input: "select /* force */ 1 from t1 as t2 force index (a), t3 force index (b) where b = 1",
-	}, {
-		input:  "select /* table alias */ 1 from t t1",
-		output: "select /* table alias */ 1 from t as t1",
-	}, {
-		input: "select /* table alias with as */ 1 from t as t1",
-	}, {
-		input:  "select /* string table alias */ 1 from t as 't1'",
-		output: "select /* string table alias */ 1 from t as t1",
-	}, {
-		input:  "select /* string table alias without as */ 1 from t 't1'",
-		output: "select /* string table alias without as */ 1 from t as t1",
-	}, {
-		input: "select /* keyword table alias */ 1 from t as `By`",
-	}, {
-		input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
-	}, {
-		input: "select /* keyword index */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
-	}, {
-		input: "select /* ignore */ 1 from t1 as of '2019-01-01' as t2 ignore index (a), t3 use index (b) where b = 1",
-	}, {
-		input: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
-	}, {
-		input: "select /* force */ 1 from t1 as of '2019-01-01' as t2 force index (a), t3 force index (b) where b = 1",
-	}, {
-		input:  "select /* table alias */ 1 from t as of '2019-01-01' t1",
-		output: "select /* table alias */ 1 from t as of '2019-01-01' as t1",
-	}, {
-		input: "select /* table alias with as */ 1 from t as of '2019-01-01' as t1",
-	}, {
-		input:  "select /* string table alias */ 1 from t as of '2019-01-01' as 't1'",
-		output: "select /* string table alias */ 1 from t as of '2019-01-01' as t1",
-	}, {
-		input:  "select /* string table alias without as */ 1 from t as of '2019-01-01' 't1'",
-		output: "select /* string table alias without as */ 1 from t as of '2019-01-01' as t1",
-	}, {
-		input: "select /* keyword table alias */ 1 from t as of '2019-01-01' as `By`",
-	}, {
-		input: "select /* join */ 1 from t1 join t2",
-	}, {
-		input: "select /* join on */ 1 from t1 join t2 on a = b",
-	}, {
-		input: "select /* join */ 1 from t1 as of '2019-01-01' as t3 join t2 as t4",
-	}, {
-		input: "select /* join on */ 1 from t1 as of '2019-01-01' as t3 join t2 as of '2019-01-01' as t4 on a = b",
-	}, {
-		input: "select /* join on */ 1 from t1 join t2 using (a)",
-	}, {
-		input:  "select /* inner join */ 1 from t1 inner join t2",
-		output: "select /* inner join */ 1 from t1 join t2",
-	}, {
-		input:  "select /* cross join */ 1 from t1 cross join t2",
-		output: "select /* cross join */ 1 from t1 join t2",
-	}, {
-		input: "select /* straight_join */ 1 from t1 straight_join t2",
-	}, {
-		input: "select /* straight_join on */ 1 from t1 straight_join t2 on a = b",
-	}, {
-		input: "select /* left join */ 1 from t1 left join t2 on a = b",
-	}, {
-		input: "select /* left join */ 1 from t1 left join t2 using (a)",
-	}, {
-		input:  "select /* left outer join */ 1 from t1 left outer join t2 on a = b",
-		output: "select /* left outer join */ 1 from t1 left join t2 on a = b",
-	}, {
-		input:  "select /* left outer join */ 1 from t1 left outer join t2 using (a)",
-		output: "select /* left outer join */ 1 from t1 left join t2 using (a)",
-	}, {
-		input: "select /* right join */ 1 from t1 right join t2 on a = b",
-	}, {
-		input: "select /* right join */ 1 from t1 right join t2 using (a)",
-	}, {
-		input:  "select /* right outer join */ 1 from t1 right outer join t2 on a = b",
-		output: "select /* right outer join */ 1 from t1 right join t2 on a = b",
-	}, {
-		input:  "select /* right outer join */ 1 from t1 right outer join t2 using (a)",
-		output: "select /* right outer join */ 1 from t1 right join t2 using (a)",
-	}, {
-		input: "select /* natural join */ 1 from t1 natural join t2",
-	}, {
-		input: "select /* natural left join */ 1 from t1 natural left join t2",
-	}, {
-		input:  "select /* natural left outer join */ 1 from t1 natural left join t2",
-		output: "select /* natural left outer join */ 1 from t1 natural left join t2",
-	}, {
-		input: "select /* natural right join */ 1 from t1 natural right join t2",
-	}, {
-		input:  "select /* natural right outer join */ 1 from t1 natural right join t2",
-		output: "select /* natural right outer join */ 1 from t1 natural right join t2",
-	}, {
-		input: "select /* join on */ 1 from t1 join t2 on a = b",
-	}, {
-		input: "select /* join using */ 1 from t1 join t2 using (a)",
-	}, {
-		input: "select /* join using (a, b, c) */ 1 from t1 join t2 using (a, b, c)",
-	}, {
-		input: "select /* s.t */ 1 from s.t",
-	}, {
-		input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
-	}, {
-		input: "select /* select in from */ 1 from (select 1 from t) as a",
-	}, {
-		input:  "select /* select in from with no as */ 1 from (select 1 from t) a",
-		output: "select /* select in from with no as */ 1 from (select 1 from t) as a",
-	}, {
-		input: "select /* where */ 1 from t where a = b",
-	}, {
-		input: "select /* and */ 1 from t where a = b and a = c",
-	}, {
-		input:  "select /* && */ 1 from t where a = b && a = c",
-		output: "select /* && */ 1 from t where a = b and a = c",
-	}, {
-		input: "select /* or */ 1 from t where a = b or a = c",
-	}, {
-		input:  "select /* || */ 1 from t where a = b || a = c",
-		output: "select /* || */ 1 from t where a = b or a = c",
-	}, {
-		input: "select /* not */ 1 from t where not a = b",
-	}, {
-		input: "select /* ! */ 1 from t where a = !1",
-	}, {
-		input: "select /* bool is */ 1 from t where a = b is null",
-	}, {
-		input: "select /* bool is not */ 1 from t where a = b is not false",
-	}, {
-		input: "select /* true */ 1 from t where true",
-	}, {
-		input: "select /* false */ 1 from t where false",
-	}, {
-		input: "select /* false on left */ 1 from t where false = 0",
-	}, {
-		input: "select /* exists */ 1 from t where exists (select 1 from t)",
-	}, {
-		input: "select /* (boolean) */ 1 from t where not (a = b)",
-	}, {
-		input: "select /* in value list */ 1 from t where a in (b, c)",
-	}, {
-		input: "select /* in select */ 1 from t where a in (select 1 from t)",
-	}, {
-		input: "select /* not in */ 1 from t where a not in (b, c)",
-	}, {
-		input: "select /* like */ 1 from t where a like b",
-	}, {
-		input: "select /* like escape */ 1 from t where a like b escape '!'",
-	}, {
-		input: "select /* not like */ 1 from t where a not like b",
-	}, {
-		input: "select /* not like escape */ 1 from t where a not like b escape '$'",
-	}, {
-		input: "select /* regexp */ 1 from t where a regexp b",
-	}, {
-		input: "select /* not regexp */ 1 from t where a not regexp b",
-	}, {
-		input:  "select /* rlike */ 1 from t where a rlike b",
-		output: "select /* rlike */ 1 from t where a regexp b",
-	}, {
-		input:  "select /* not rlike */ 1 from t where a not rlike b",
-		output: "select /* not rlike */ 1 from t where a not regexp b",
-	}, {
-		input: "select /* between */ 1 from t where a between b and c",
-	}, {
-		input: "select /* not between */ 1 from t where a not between b and c",
-	}, {
-		input: "select /* is null */ 1 from t where a is null",
-	}, {
-		input: "select /* is not null */ 1 from t where a is not null",
-	}, {
-		input: "select /* is true */ 1 from t where a is true",
-	}, {
-		input: "select /* is not true */ 1 from t where a is not true",
-	}, {
-		input: "select /* is false */ 1 from t where a is false",
-	}, {
-		input: "select /* is not false */ 1 from t where a is not false",
-	}, {
-		input: "select /* < */ 1 from t where a < b",
-	}, {
-		input: "select /* <= */ 1 from t where a <= b",
-	}, {
-		input: "select /* >= */ 1 from t where a >= b",
-	}, {
-		input: "select /* > */ 1 from t where a > b",
-	}, {
-		input: "select /* != */ 1 from t where a != b",
-	}, {
-		input:  "select /* <> */ 1 from t where a <> b",
-		output: "select /* <> */ 1 from t where a != b",
-	}, {
-		input: "select /* <=> */ 1 from t where a <=> b",
-	}, {
-		input: "select /* != */ 1 from t where a != b",
-	}, {
-		input: "select /* single value expre list */ 1 from t where a in (b)",
-	}, {
-		input: "select /* select as a value expression */ 1 from t where a = (select a from t)",
-	}, {
-		input: "select /* parenthesised value */ 1 from t where a = (b)",
-	}, {
-		input: "select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))",
-	}, {
-		input: "select /* dot-parenthesize */ (a.b) from t where (b.c) = 2",
-	}, {
-		input: "select /* & */ 1 from t where a = b & c",
-	}, {
-		input: "select /* & */ 1 from t where a = b & c",
-	}, {
-		input: "select /* | */ 1 from t where a = b | c",
-	}, {
-		input: "select /* ^ */ 1 from t where a = b ^ c",
-	}, {
-		input: "select /* + */ 1 from t where a = b + c",
-	}, {
-		input: "select /* - */ 1 from t where a = b - c",
-	}, {
-		input: "select /* * */ 1 from t where a = b * c",
-	}, {
-		input: "select /* / */ 1 from t where a = b / c",
-	}, {
-		input: "select /* % */ 1 from t where a = b % c",
-	}, {
-		input: "select /* div */ 1 from t where a = b div c",
-	}, {
-		input:  "select /* MOD */ 1 from t where a = b MOD c",
-		output: "select /* MOD */ 1 from t where a = b % c",
-	}, {
-		input: "select /* << */ 1 from t where a = b << c",
-	}, {
-		input: "select /* >> */ 1 from t where a = b >> c",
-	}, {
-		input:  "select /* % no space */ 1 from t where a = b%c",
-		output: "select /* % no space */ 1 from t where a = b % c",
-	}, {
-		input: "select /* u+ */ 1 from t where a = +b",
-	}, {
-		input: "select /* u- */ 1 from t where a = -b",
-	}, {
-		input: "select /* u~ */ 1 from t where a = ~b",
-	}, {
-		input: "select /* -> */ a.b -> 'ab' from t",
-	}, {
-		input: "select /* -> */ a.b ->> 'ab' from t",
-	}, {
-		input: "select /* empty function */ 1 from t where a = b()",
-	}, {
-		input: "select /* function with 1 param */ 1 from t where a = b(c)",
-	}, {
-		input: "select /* function with many params */ 1 from t where a = b(c, d)",
-	}, {
-		input: "select /* function with distinct */ count(distinct a) from t",
-	}, {
-		input: "select /* if as func */ 1 from t where a = if(b)",
-	}, {
-		input: "select /* current_timestamp */ current_timestamp() from t",
-	}, {
-		input: "select /* current_timestamp as func */ current_timestamp() from t",
-	}, {
-		input: "select /* current_timestamp with fsp */ current_timestamp(3) from t",
-	}, {
-		input: "select /* current_date */ current_date() from t",
-	}, {
-		input: "select /* current_date as func */ current_date() from t",
-	}, {
-		input: "select /* current_time */ current_time() from t",
-	}, {
-		input: "select /* current_time as func */ current_time() from t",
-	}, {
-		input: "select /* current_time with fsp */ current_time(1) from t",
-	}, {
-		input: "select /* utc_timestamp */ utc_timestamp() from t",
-	}, {
-		input: "select /* utc_timestamp as func */ utc_timestamp() from t",
-	}, {
-		input: "select /* utc_timestamp with fsp */ utc_timestamp(0) from t",
-	}, {
-		input: "select /* utc_time */ utc_time() from t",
-	}, {
-		input: "select /* utc_time as func */ utc_time() from t",
-	}, {
-		input: "select /* utc_time with fsp */ utc_time(4) from t",
-	}, {
-		input: "select /* utc_date */ utc_date() from t",
-	}, {
-		input: "select /* utc_date as func */ utc_date() from t",
-	}, {
-		input: "select /* localtime */ localtime() from t",
-	}, {
-		input: "select /* localtime as func */ localtime() from t",
-	}, {
-		input: "select /* localtime with fsp */ localtime(5) from t",
-	}, {
-		input: "select /* localtimestamp */ localtimestamp() from t",
-	}, {
-		input: "select /* localtimestamp as func */ localtimestamp() from t",
-	}, {
-		input: "select /* localtimestamp with fsp */ localtimestamp(7) from t",
-	}, {
-		input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
-	}, {
-		input: "select /* database as func no param */ database() from t",
-	}, {
-		input: "select /* database as func 1 param */ database(1) from t",
-	}, {
-		input: "select /* a */ a from t",
-	}, {
-		input: "select /* a.b */ a.b from t",
-	}, {
-		input: "select /* a.b.c */ a.b.c from t",
-	}, {
-		input: "select /* keyword a.b */ `By`.`bY` from t",
-	}, {
-		input: "select /* string */ 'a' from t",
-	}, {
-		input:  "select /* double quoted string */ \"a\" from t",
-		output: "select /* double quoted string */ 'a' from t",
-	}, {
-		input:  "select /* quote quote in string */ 'a''a' from t",
-		output: "select /* quote quote in string */ 'a\\'a' from t",
-	}, {
-		input:  "select /* double quote quote in string */ \"a\"\"a\" from t",
-		output: "select /* double quote quote in string */ 'a\\\"a' from t",
-	}, {
-		input:  "select /* quote in double quoted string */ \"a'a\" from t",
-		output: "select /* quote in double quoted string */ 'a\\'a' from t",
-	}, {
-		input: "select /* backslash quote in string */ 'a\\'a' from t",
-	}, {
-		input: "select /* literal backslash in string */ 'a\\\\na' from t",
-	}, {
-		input: "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
-	}, {
-		input:  "select /* non-escape */ '\\x' from t",
-		output: "select /* non-escape */ 'x' from t",
-	}, {
-		input: "select /* unescaped backslash */ '\\n' from t",
-	}, {
-		input: "select /* value argument */ :a from t",
-	}, {
-		input: "select /* value argument with digit */ :a1 from t",
-	}, {
-		input: "select /* value argument with dot */ :a.b from t",
-	}, {
-		input:  "select /* positional argument */ ? from t",
-		output: "select /* positional argument */ :v1 from t",
-	}, {
-		input:  "select /* multiple positional arguments */ ?, ? from t",
-		output: "select /* multiple positional arguments */ :v1, :v2 from t",
-	}, {
-		input: "select /* list arg */ * from t where a in ::list",
-	}, {
-		input: "select /* list arg not in */ * from t where a not in ::list",
-	}, {
-		input: "select /* null */ null from t",
-	}, {
-		input: "select /* octal */ 010 from t",
-	}, {
-		input:  "select /* hex */ x'f0A1' from t",
-		output: "select /* hex */ X'f0A1' from t",
-	}, {
-		input: "select /* hex caps */ X'F0a1' from t",
-	}, {
-		input:  "select /* bit literal */ b'0101' from t",
-		output: "select /* bit literal */ B'0101' from t",
-	}, {
-		input: "select /* bit literal caps */ B'010011011010' from t",
-	}, {
-		input: "select /* 0x */ 0xf0 from t",
-	}, {
-		input: "select /* float */ 0.1 from t",
-	}, {
-		input: "select /* group by */ 1 from t group by a",
-	}, {
-		input: "select /* having */ 1 from t having a = b",
-	}, {
-		input:  "select /* simple order by */ 1 from t order by a",
-		output: "select /* simple order by */ 1 from t order by a asc",
-	}, {
-		input: "select /* order by asc */ 1 from t order by a asc",
-	}, {
-		input: "select /* order by desc */ 1 from t order by a desc",
-	}, {
-		input: "select /* order by null */ 1 from t order by null",
-	}, {
-		input: "select /* limit a */ 1 from t limit a",
-	}, {
-		input: "select /* limit a,b */ 1 from t limit a, b",
-	}, {
-		input:  "select /* binary unary */ a- -b from t",
-		output: "select /* binary unary */ a - -b from t",
-	}, {
-		input: "select /* - - */ - -b from t",
-	}, {
-		input: "select /* binary binary */ binary  binary b from t",
-	}, {
-		input: "select /* binary ~ */ binary  ~b from t",
-	}, {
-		input: "select /* ~ binary */ ~ binary b from t",
-	}, {
-		input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
-	}, {
-		input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
-	}, {
-		input:  "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
-		output: "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
-	}, {
-		input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
-		output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
-	}, {
-		input: "select /* dual */ 1 from dual",
-	}, {
-		input:  "select /* Dual */ 1 from Dual",
-		output: "select /* Dual */ 1 from dual",
-	}, {
-		input:  "select /* DUAL */ 1 from Dual",
-		output: "select /* DUAL */ 1 from dual",
-	}, {
-		input: "select /* column as bool in where */ a from t where b",
-	}, {
-		input: "select /* OR of columns in where */ * from t where a or b",
-	}, {
-		input: "select /* OR of mixed columns in where */ * from t where a = 5 or b and c is not null",
-	}, {
-		input: "select /* OR in select columns */ (a or b) from t where c = 5",
-	}, {
-		input: "select /* bool as select value */ a, true from t",
-	}, {
-		input: "select /* bool column in ON clause */ * from t join s on t.id = s.id and s.foo where t.bar",
-	}, {
-		input: "select /* bool in order by */ * from t order by a is null or b asc",
-	}, {
-		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
-	}, {
-		input:  "/*!show databases*/",
-		output: "show databases",
-	}, {
-		input:  "select /*!40101 * from*/ t",
-		output: "select * from t",
-	}, {
-		input:  "select /*! * from*/ t",
-		output: "select * from t",
-	}, {
-		input:  "select /*!* from*/ t",
-		output: "select * from t",
-	}, {
-		input:  "select /*!401011 from*/ t",
-		output: "select 1 from t",
-	}, {
-		input: "select /* dual */ 1 from dual",
-	}, {
-		input:  "select * from (select 'tables') tables",
-		output: "select * from (select 'tables' from dual) as `tables`",
-	}, {
-		input: "insert /* simple */ into a values (1)",
-	}, {
-		input: "insert /* a.b */ into a.b values (1)",
-	}, {
-		input: "insert /* multi-value */ into a values (1, 2)",
-	}, {
-		input: "insert /* multi-value list */ into a values (1, 2), (3, 4)",
-	}, {
-		input: "insert /* no values */ into a values ()",
-	}, {
-		input:  "insert /* set */ into a set a = 1, b = 2",
-		output: "insert /* set */ into a(a, b) values (1, 2)",
-	}, {
-		input:  "insert /* set default */ into a set a = default, b = 2",
-		output: "insert /* set default */ into a(a, b) values (default, 2)",
-	}, {
-		input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
-	}, {
-		input: "insert /* default */ into a values (default, 2 * 3)",
-	}, {
-		input: "insert /* column list */ into a(a, b) values (1, 2)",
-	}, {
-		input: "insert into a(a, b) values (1, ifnull(null, default(b)))",
-	}, {
-		input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
-	}, {
-		input:  "insert /* qualified columns */ into t (t.a, t.b) values (1, 2)",
-		output: "insert /* qualified columns */ into t(a, b) values (1, 2)",
-	}, {
-		input: "insert /* select */ into a select b, c from d",
-	}, {
-		input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
-		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
-	}, {
-		input:  "insert /* no cols & paren select */ into a(select * from t)",
-		output: "insert /* no cols & paren select */ into a select * from t",
-	}, {
-		input:  "insert /* cols & paren select */ into a(a,b,c) (select * from t)",
-		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
-	}, {
-		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
-	}, {
-		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
-	}, {
-		input: "insert /* bool in insert value */ into a values (1, true, false)",
-	}, {
-		input: "insert /* bool in on duplicate */ into a values (1, 2) on duplicate key update b = false, c = d",
-	}, {
-		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(b), c = d",
-	}, {
-		input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
-	}, {
-		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
-	}, {
-		input: "insert into A(A, B) values (';', '''')",
-		output: "insert into A(A, B) values (';', '\\'')",
-	}, {
-		input:  "CREATE TABLE A (\n\t`A` int\n)",
-		output: "create table A (\n\tA int\n)",
-	}, {
-		input: "update /* simple */ a set b = 3",
-	}, {
-		input: "update /* a.b */ a.b set b = 3",
-	}, {
-		input: "update /* list */ a set b = 3, c = 4",
-	}, {
-		input: "update /* expression */ a set b = 3 + 4",
-	}, {
-		input: "update /* where */ a set b = 3 where a = b",
-	}, {
-		input: "update /* order */ a set b = 3 order by c desc",
-	}, {
-		input: "update /* limit */ a set b = 3 limit c",
-	}, {
-		input: "update /* bool in update */ a set b = true",
-	}, {
-		input: "update /* bool expr in update */ a set b = 5 > 2",
-	}, {
-		input: "update /* bool in update where */ a set b = 5 where c",
-	}, {
-		input: "update /* table qualifier */ a set a.b = 3",
-	}, {
-		input: "update /* table qualifier */ a set t.a.b = 3",
-	}, {
-		input:  "update /* table alias */ tt aa set aa.cc = 3",
-		output: "update /* table alias */ tt as aa set aa.cc = 3",
-	}, {
-		input:  "update (select id from foo) subqalias set id = 4",
-		output: "update (select id from foo) as subqalias set id = 4",
-	}, {
-		input:  "update foo f, bar b set f.id = b.id where b.name = 'test'",
-		output: "update foo as f, bar as b set f.id = b.id where b.name = 'test'",
-	}, {
-		input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
-		output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
-	}, {
-		input: "update /* ignore */ ignore a set b = 3",
-	}, {
-		input: "delete /* simple */ from a",
-	}, {
-		input: "delete /* a.b */ from a.b",
-	}, {
-		input: "delete /* where */ from a where a = b",
-	}, {
-		input: "delete /* order */ from a order by b desc",
-	}, {
-		input: "delete /* limit */ from a limit b",
-	}, {
-		input: "delete a from a join b on a.id = b.id where b.name = 'test'",
-	}, {
-		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
-	}, {
-		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
-		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
-	}, {
-		input: "set /* simple */ a = 3",
-	}, {
-		input: "set #simple\n b = 4",
-	}, {
-		input: "set character_set_results = utf8",
-	}, {
-		input: "set @@session.autocommit = true",
-	}, {
-		input: "set @@session.`autocommit` = true",
-	}, {
-		input: "set @@session.'autocommit' = true",
-	}, {
-		input: "set @@session.\"autocommit\" = true",
-	}, {
-		input:  "set @@session.autocommit = ON",
-		output: "set @@session.autocommit = 'on'",
-	}, {
-		input:  "set @@session.autocommit= OFF",
-		output: "set @@session.autocommit = 'off'",
-	}, {
-		input:  "set autocommit = on",
-		output: "set autocommit = 'on'",
-	}, {
-		input:  "set autocommit = off",
-		output: "set autocommit = 'off'",
-	}, {
-		input:  "set autocommit = off, foo = 1",
-		output: "set autocommit = 'off', foo = 1",
-	}, {
-		input:  "set names utf8 collate foo",
-		output: "set names 'utf8'",
-	}, {
-		input:  "set names utf8 collate 'foo'",
-		output: "set names 'utf8'",
-	}, {
-		input:  "set character set utf8",
-		output: "set charset 'utf8'",
-	}, {
-		input:  "set character set 'utf8'",
-		output: "set charset 'utf8'",
-	}, {
-		input:  "set character set \"utf8\"",
-		output: "set charset 'utf8'",
-	}, {
-		input:  "set charset default",
-		output: "set charset default",
-	}, {
-		input:  "set session wait_timeout = 3600",
-		output: "set session wait_timeout = 3600",
-	}, {
-		input: "set /* list */ a = 3, b = 4",
-	}, {
-		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
-	}, {
-		input: "set session transaction isolation level repeatable read",
-	}, {
-		input: "set transaction isolation level repeatable read",
-	}, {
-		input: "set global transaction isolation level repeatable read",
-	}, {
-		input: "set transaction isolation level repeatable read",
-	}, {
-		input: "set transaction isolation level read committed",
-	}, {
-		input: "set transaction isolation level read uncommitted",
-	}, {
-		input: "set transaction isolation level serializable",
-	}, {
-		input: "set transaction read write",
-	}, {
-		input: "set transaction read only",
-	}, {
-		input: "set tx_read_only = 1",
-	}, {
-		input: "set tx_read_only = 0",
-	}, {
-		input: "set tx_isolation = 'repeatable read'",
-	}, {
-		input: "set tx_isolation = 'read committed'",
-	}, {
-		input: "set tx_isolation = 'read uncommitted'",
-	}, {
-		input: "set tx_isolation = 'serializable'",
-	}, {
-		input: "set sql_safe_updates = 0",
-	}, {
-		input: "set sql_safe_updates = 1",
-	}, {
-		input:  "alter ignore table a add foo int",
-		output: "alter table a add column (\n\tfoo int\n)",
-	}, {
-		input:  "alter table a add foo int",
-		output: "alter table a add column (\n\tfoo int\n)",
-	}, {
-		input:  "alter table a add spatial key foo (column1)",
-		output: "alter table a add spatial index foo (column1)",
-	}, {
-		input:  "alter table a add unique key foo (column1)",
-		output: "alter table a add unique index foo (column1)",
-	}, {
-		input:  "alter table `By` add foo int",
-		output: "alter table `By` add column (\n\tfoo int\n)",
-	}, {
-		input:  "alter table a alter foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop foo",
-		output: "alter table a drop column foo",
-	}, {
-		input:  "alter table a disable foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a enable foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a order foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a default foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a discard foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a import foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a rename b",
-		output: "rename table a to b",
-	}, {
-		input:  "alter table `By` rename `bY`",
-		output: "rename table `By` to `bY`",
-	}, {
-		input:  "alter table a rename to b",
-		output: "rename table a to b",
-	}, {
-		input:  "alter table a rename as b",
-		output: "rename table a to b",
-	}, {
-		input:  "alter table a rename index foo to bar",
-		output: "alter table a rename index foo to bar",
-	}, {
-		input:  "alter table a rename key foo to bar",
-		output: "alter table a rename index foo to bar",
-	}, {
-		input:  "alter table e auto_increment = 20",
-		output: "alter table e",
-	}, {
-		input:  "alter table e character set = 'ascii'",
-		output: "alter table e",
-	}, {
-		input:  "alter table e default character set = 'ascii'",
-		output: "alter table e",
-	}, {
-		input:  "alter table e comment = 'hello'",
-		output: "alter table e",
-	}, {
-		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
-		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
-	}, {
-		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
-		output: "alter table a",
-	}, {
-		input:  "alter table a add column id int",
-		output: "alter table a add column (\n\tid int\n)",
-	}, {
-		input:  "alter table a add index idx (id)",
-		output: "alter table a add index idx (id)",
-	}, {
-		input:  "alter table a add fulltext index idx (id)",
-		output: "alter table a add fulltext index idx (id)",
-	}, {
-		input:  "alter table a add spatial index idx (id)",
-		output: "alter table a add spatial index idx (id)",
-	}, {
-		input:  "alter table a add foreign key (x) references y(z)",
-		output: "alter table a add foreign key (x) references y (z)",
-	}, {
-		input:  "alter table a add primary key",
-		output: "alter table a",
-	}, {
-		input:  "alter table a add constraint",
-		output: "alter table a",
-	}, {
-		input: "alter table a drop column id",
-	}, {
-		input:  "alter table a drop partition p2712",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop index idx",
-		output: "alter table a drop index idx",
-	}, {
-		input:  "alter table a add check ch_1",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop check ch_1",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop foreign key fk_something",
-		output: "alter table a drop foreign key fk_something",
-	}, {
-		input:  "alter table a drop primary key",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop constraint b",
-		output: "alter table a drop constraint b",
-	}, {
-		input:  "alter table a drop id",
-		output: "alter table a drop column id",
-	}, {
-		input: "create table a",
-	}, {
-		input:  "create table a (\n\t`a` int\n)",
-		output: "create table a (\n\ta int\n)",
-	}, {
-		input: "create table `by` (\n\t`by` char\n)",
-	}, {
-		input:  "create table if not exists a (\n\t`a` int\n)",
-		output: "create table if not exists a (\n\ta int\n)",
-	}, {
-		input:  "create table a ignore me this is garbage",
-		output: "create table a",
-	}, {
-		input:  "create table a (a int, b char, c garbage)",
-		output: "create table a",
-	}, {
-		input:  "alter table a rename column a to b",
-		output: "alter table a rename column a to b",
-	}, {
-		input:  "alter table a rename column a as b",
-		output: "alter table a rename column a to b",
-	}, {
-		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
-		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
-	}, {
-		input: "alter vschema create vindex hash_vdx using hash",
-	}, {
-		input: "alter vschema create vindex keyspace.hash_vdx using hash",
-	}, {
-		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
-	}, {
-		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
-	}, {
-		input: "alter vschema drop vindex hash_vdx",
-	}, {
-		input: "alter vschema drop vindex ks.hash_vdx",
-	}, {
-		input: "alter vschema add table a",
-	}, {
-		input: "alter vschema add table ks.a",
-	}, {
-		input: "alter vschema add sequence a_seq",
-	}, {
-		input: "alter vschema add sequence ks.a_seq",
-	}, {
-		input: "alter vschema on a add auto_increment id using a_seq",
-	}, {
-		input: "alter vschema on ks.a add auto_increment id using a_seq",
-	}, {
-		input: "alter vschema drop table a",
-	}, {
-		input: "alter vschema drop table ks.a",
-	}, {
-		input: "alter vschema on a add vindex hash (id)",
-	}, {
-		input: "alter vschema on ks.a add vindex hash (id)",
-	}, {
-		input:  "alter vschema on a add vindex `hash` (`id`)",
-		output: "alter vschema on a add vindex hash (id)",
-	}, {
-		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-		output: "alter vschema on ks.a add vindex hash (id)",
-	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
-	}, {
-		input: "alter vschema on a add vindex `add` (`add`)",
-	}, {
-		input: "alter vschema on a add vindex hash (id) using hash",
-	}, {
-		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
-	}, {
-		input: "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-	}, {
-		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
-	}, {
-		input: "alter vschema on a drop vindex hash",
-	}, {
-		input: "alter vschema on ks.a drop vindex hash",
-	}, {
-		input:  "alter vschema on a drop vindex `hash`",
-		output: "alter vschema on a drop vindex hash",
-	}, {
-		input:  "alter vschema on a drop vindex hash",
-		output: "alter vschema on a drop vindex hash",
-	}, {
-		input:  "alter vschema on a drop vindex `add`",
-		output: "alter vschema on a drop vindex `add`",
-	}, {
-		input:  "create index a on b (id)",
-		output: "alter table b add index a (id)",
-	}, {
-		input:  "create index a on b (foo(6) desc, foo asc)",
-		output: "alter table b add index a (foo(6) desc, foo)",
-	}, {
-		input:  "create unique index a on b (id)",
-		output: "alter table b add unique index a (id)",
-	}, {
-		input:  "create unique index a using btree on b (id)",
-		output: "alter table b add unique index a using btree (id)",
-	}, {
-		input:  "create fulltext index a using btree on b (id)",
-		output: "alter table b add fulltext index a using btree (id)",
-	}, {
-		input:  "create spatial index a using btree on b (id)",
-		output: "alter table b add spatial index a using btree (id)",
-	}, {
-		input:  "create view a as select current_timestamp()",
-		output: "create view a as select current_timestamp() from dual",
-	}, {
-		input:  "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
-		output: "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
-	}, {
-		input:  "create or replace view a as select current_timestamp()",
-		output: "create or replace view a as select current_timestamp() from dual",
-	}, {
-		input:  "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
-	}, {
-		input:  "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
-	}, {
-		input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
-	}, {
-		input:  "create trigger t1 before insert on foo for each row set new.x = new.x + 1",
-	}, {
-		input:  "create trigger t1 after insert on foo for each row update xxy set y = new.x",
-	}, {
-		input:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-	}, {
-		input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-		output:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-	}, {
-		input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-		output:  "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
-	}, {
-		input:  "alter view a",
-		output: "alter table a",
-	}, {
-		input:  "rename table a to b",
-		output: "rename table a to b",
-	}, {
-		input:  "rename table a to b, b to c",
-		output: "rename table a to b, b to c",
-	}, {
-		input:  "drop view a",
-		output: "drop view a",
-	}, {
-		input:  "drop table a",
-		output: "drop table a",
-	}, {
-		input:  "drop table a, b",
-		output: "drop table a, b",
-	}, {
-		input:  "drop table if exists a",
-		output: "drop table if exists a",
-	}, {
-		input:  "drop view if exists a",
-		output: "drop view if exists a",
-	}, {
-		input:  "drop index b on a",
-		output: "alter table a drop index b",
-	}, {
-		input:  "analyze table a",
-		output: "alter table a",
-	}, {
-		input:  "flush tables",
-		output: "flush",
-	}, {
-		input:  "flush tables with read lock",
-		output: "flush",
-	}, {
-		input:  "show binary logs",
-		output: "show binary logs",
-	}, {
-		input:  "show binlog events",
-		output: "show binlog",
-	}, {
-		input:  "show character set",
-		output: "show charset",
-	}, {
-		input:  "show character set like '%foo'",
-		output: "show charset",
-	}, {
-		input:  "show charset",
-		output: "show charset",
-	}, {
-		input:  "show charset like '%foo'",
-		output: "show charset",
-	}, {
-		input:  "show collation",
-		output: "show collation",
-	}, {
-		input:  "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
-		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
-	}, {
-		input:  "show collation like 'utf8%'",
-		output: "show collation where `collation` like 'utf8%'",
-	}, {
-		input:  "show create database d",
-	}, {
-		input:  "show create schema d",
-	}, {
-		input:  "show create database if not exists d",
-	}, {
-		input:  "show create schema if not exists d",
-	}, {
-		input:  "show create event e",
-		output: "show create event",
-	}, {
-		input:  "show create function f",
-		output: "show create function",
-	}, {
-		input:  "show create procedure p",
-		output: "show create procedure",
-	}, {
-		input:  "show create table t",
-		output: "show create table t",
-	}, {
-		input:  "show create trigger t",
-		output: "show create trigger t",
-	}, {
-		input:  "show create user u",
-		output: "show create user",
-	}, {
-		input:  "show create view v",
-		output: "show create view v",
-	}, {
-		input:  "show databases",
-		output: "show databases",
-	}, {
-		input:  "show schemas",
-		output: "show schemas",
-	}, {
-		input:  "show engine INNODB",
-		output: "show engine",
-	}, {
-		input:  "show engines",
-		output: "show engines",
-	}, {
-		input:  "show storage engines",
-		output: "show storage",
-	}, {
-		input:  "show errors",
-		output: "show errors",
-	}, {
-		input:  "show events",
-		output: "show events",
-	}, {
-		input:  "show function code func",
-		output: "show function",
-	}, {
-		input:  "show function status",
-		output: "show function",
-	}, {
-		input:  "show grants for 'root@localhost'",
-		output: "show grants",
-	}, {
-		input:  "show index from tbl",
-	}, {
-		input:  "show indexes from tbl",
-		output: "show index from tbl",
-	}, {
-		input:  "show keys from tbl",
-		output: "show index from tbl",
-	}, {
-		input:  "show index in tbl",
-		output: "show index from tbl",
-	}, {
-		input:  "show indexes in tbl",
-		output: "show index from tbl",
-	}, {
-		input:  "show keys in tbl",
-		output: "show index from tbl",
-	}, {
-		input:  "show index from tbl from db",
-	}, {
-		input:  "show indexes from tbl from db",
-		output: "show index from tbl from db",
-	}, {
-		input:  "show keys from tbl from db",
-		output: "show index from tbl from db",
-	}, {
-		input:  "show index in tbl in db",
-		output: "show index from tbl from db",
-	}, {
-		input:  "show indexes in tbl in db",
-		output: "show index from tbl from db",
-	}, {
-		input:  "show keys in tbl in db",
-		output: "show index from tbl from db",
-	}, {
-		input:  "show index from tbl where Key_name = 'key'",
-	}, {
-		input:  "show master status",
-		output: "show master",
-	}, {
-		input:  "show open tables",
-		output: "show open",
-	}, {
-		input:  "show plugins",
-		output: "show plugins",
-	}, {
-		input:  "show privileges",
-		output: "show privileges",
-	}, {
-		input:  "show procedure code p",
-		output: "show procedure",
-	}, {
-		input:  "show procedure status",
-		output: "show procedure",
-	}, {
-		input:  "show processlist",
-		output: "show processlist",
-	}, {
-		input:  "show full processlist",
-		output: "show processlist",
-	}, {
-		input:  "show profile cpu for query 1",
-		output: "show profile",
-	}, {
-		input:  "show profiles",
-		output: "show profiles",
-	}, {
-		input:  "show relaylog events",
-		output: "show relaylog",
-	}, {
-		input:  "show slave hosts",
-		output: "show slave",
-	}, {
-		input:  "show slave status",
-		output: "show slave",
-	}, {
-		input:  "show status",
-		output: "show status",
-	}, {
-		input:  "show global status",
-		output: "show global status",
-	}, {
-		input:  "show session status",
-		output: "show session status",
-	}, {
-		input:  "show table status",
-		output: "show table",
-	}, {
-		input: "show tables",
-	}, {
-		input: "show tables as of 123",
-	}, {
-		input: "show tables like '%keyspace%'",
-	}, {
-		input: "show tables as of 123 like '%keyspace%'",
-	}, {
-		input: "show tables where 1 = 0",
-	}, {
-		input: "show tables as of 'abc' where 1 = 0",
-	}, {
-		input: "show tables from a",
-	}, {
-		input: "show tables from a as of 'abc'",
-	}, {
-		input: "show tables from a where 1 = 0",
-	}, {
-		input: "show tables from a as of 123 where 1 = 0",
-	}, {
-		input: "show tables from a like '%keyspace%'",
-	}, {
-		input: "show tables from a as of 'abc' like '%keyspace%'",
-	}, {
-		input: "show full tables",
-	}, {
-		input: "show full tables from a",
-	}, {
-		input:  "show full tables in a",
-		output: "show full tables from a",
-	}, {
-		input: "show full tables from a like '%keyspace%'",
-	}, {
-		input: "show full tables from a where 1 = 0",
-	}, {
-		input: "show full tables like '%keyspace%'",
-	}, {
-		input: "show full tables where 1 = 0",
-	}, {
-		input: "show full columns from a like '%'",
-	}, {
-		input: "show full columns from messages from test_keyspace like '%'",
-	}, {
-		input: "show full fields from a like '%'",
-	}, {
-		input: "show fields from a like '%'",
-	}, {
-		input:  "show triggers",
-	}, {
-		input:  "show triggers from dbname",
-	}, {
-		input:  "show triggers in dbname",
-		output: "show triggers from dbname",
-	}, {
-		input:  "show triggers like 'pattern'",
-	}, {
-		input:  "show triggers where v = 'x'",
-	}, {
-		input:  "show variables",
-		output: "show variables",
-	}, {
-		input:  "show global variables",
-		output: "show global variables",
-	}, {
-		input:  "show session variables",
-		output: "show session variables",
-	}, {
-		input: "show vitess_keyspaces",
-	}, {
-		input: "show vitess_shards",
-	}, {
-		input: "show vitess_tablets",
-	}, {
-		input: "show vschema tables",
-	}, {
-		input: "show vschema vindexes",
-	}, {
-		input: "show vschema vindexes on t",
-	}, {
-		input:  "show warnings",
-		output: "show warnings",
-	}, {
-		input:  "select warnings from t",
-		output: "select `warnings` from t",
-	}, {
-		input:  "show foobar",
-		output: "show foobar",
-	}, {
-		input:  "show foobar like select * from table where syntax is 'ignored'",
-		output: "show foobar",
-	}, {
-		input:  "use db",
-		output: "use db",
-	}, {
-		input:  "use duplicate",
-		output: "use `duplicate`",
-	}, {
-		input:  "use `ks:-80@master`",
-		output: "use `ks:-80@master`",
-	}, {
-		input:  "describe foobar",
-		output: "show columns on foobar",
-	}, {
-		input:  "desc foobar",
-		output: "show columns on foobar",
-	}, {
-		input:  "explain select * from foobar",
-	}, {
-		input:  "explain format = tree select * from foobar",
-	}, {
-		input:  "explain analyze select * from foobar",
-	}, {
-		input:  "explain update foobar set foo = bar",
-	}, {
-		input:  "explain delete from foobar where foo = bar",
-	}, {
-		input:  "explain insert into foobar values (1, 2, 3)",
-	}, {
-		input:  "truncate table foo",
-		output: "truncate table foo",
-	}, {
-		input:  "truncate foo",
-		output: "truncate table foo",
-	}, {
-		input:  "repair foo",
-		output: "otheradmin",
-	}, {
-		input:  "optimize foo",
-		output: "otheradmin",
-	}, {
-		input:  "lock tables foo",
-		output: "otheradmin",
-	}, {
-		input:  "unlock tables foo",
-		output: "otheradmin",
-	}, {
-		input: "select /* EQ true */ 1 from t where a = true",
-	}, {
-		input: "select /* EQ false */ 1 from t where a = false",
-	}, {
-		input: "select /* NE true */ 1 from t where a != true",
-	}, {
-		input: "select /* NE false */ 1 from t where a != false",
-	}, {
-		input: "select /* LT true */ 1 from t where a < true",
-	}, {
-		input: "select /* LT false */ 1 from t where a < false",
-	}, {
-		input: "select /* GT true */ 1 from t where a > true",
-	}, {
-		input: "select /* GT false */ 1 from t where a > false",
-	}, {
-		input: "select /* LE true */ 1 from t where a <= true",
-	}, {
-		input: "select /* LE false */ 1 from t where a <= false",
-	}, {
-		input: "select /* GE true */ 1 from t where a >= true",
-	}, {
-		input: "select /* GE false */ 1 from t where a >= false",
-	}, {
-		input:  "select * from t order by a collate utf8_general_ci",
-		output: "select * from t order by a collate utf8_general_ci asc",
-	}, {
-		input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
-	}, {
-		input: "select * from t group by a collate utf8_general_ci",
-	}, {
-		input: "select MAX(k collate latin1_german2_ci) from t1",
-	}, {
-		input: "select distinct k collate latin1_german2_ci from t1",
-	}, {
-		input: "select * from t1 where 'Müller' collate latin1_german2_ci = k",
-	}, {
-		input: "select * from t1 where k like 'Müller' collate latin1_german2_ci",
-	}, {
-		input: "select k from t1 group by k having k = 'Müller' collate latin1_german2_ci",
-	}, {
-		input: "select k from t1 join t2 order by a collate latin1_german2_ci asc, b collate latin1_german2_ci asc",
-	}, {
-		input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
-		output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
-	}, {
-		input:  "select /* drop trailing semicolon */ 1 from dual;",
-		output: "select /* drop trailing semicolon */ 1 from dual",
-	}, {
-		input: "select /* cache directive */ sql_no_cache 'foo' from t",
-	}, {
-		input: "select binary 'a' = 'A' from t",
-	}, {
-		input: "select 1 from t where foo = _binary 'bar'",
-	}, {
-		input:  "select 1 from t where foo = _binary'bar'",
-		output: "select 1 from t where foo = _binary 'bar'",
-	}, {
-		input: "select 1 from t where foo = _utf8mb4 'bar'",
-	}, {
-		input:  "select 1 from t where foo = _utf8mb4'bar'",
-		output: "select 1 from t where foo = _utf8mb4 'bar'",
-	}, {
-		input: "select match(a) against ('foo') from t",
-	}, {
-		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
-	}, {
-		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
-	}, {
-		input: "select name, group_concat(score) from t group by name",
-	}, {
-		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
-	}, {
-		input: "select * from t partition (p0)",
-	}, {
-		input: "select * from t partition (p0, p1)",
-	}, {
-		input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
-	}, {
-		input: "select truncate(120.3333, 2) from dual",
-	}, {
-		input: "update t partition (p0) set a = 1",
-	}, {
-		input: "insert into t partition (p0) values (1, 'asdf')",
-	}, {
-		input: "insert into t1 select * from t2 partition (p0)",
-	}, {
-		input: "replace into t partition (p0) values (1, 'asdf')",
-	}, {
-		input: "delete from t partition (p0) where a = 1",
-	}, {
-		input: "stream * from t",
-	}, {
-		input: "stream /* comment */ * from t",
-	}, {
-		input: "begin",
-	}, {
-		input:  "start transaction",
-		output: "begin",
-	}, {
-		input: "commit",
-	}, {
-		input: "rollback",
-	}, {
-		input: "create database test_db",
-	}, {
-		input:  "create schema test_db",
-		output: "create database test_db",
-	}, {
-		input:  "create database if not exists test_db",
-		output: "create database test_db",
-	}, {
-		input: "drop database test_db",
-	}, {
-		input:  "drop schema test_db",
-		output: "drop database test_db",
-	}, {
-		input:  "drop database if exists test_db",
-		output: "drop database test_db",
-	}, {
-		input:  "drop trigger trigger1",
-	}, {
-		input:  "drop trigger if exists t2",
-	}, {
-		input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "create table t (c INT NOT NULL DEFAULT 0 ON UPDATE current_timestamp() AUTO_INCREMENT COMMENT 'a comment here' UNIQUE)",
-		output: "create table t (\n\tc INT not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		// Same input with options backwards.
-		input:  "create table t (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
-		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		// Transpose pairs in original
-		input:  "create table t (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
-		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		// Transpose pairs in reversed
-		input:  "create table t (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
-		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		// Those tests for ALTER TABLE ADD (...
-		input:  "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "alter table t add (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "alter table t add (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "alter table t add (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		// Those tests for ALTER TABLE ADD COLUMN name ...
-		input:  "alter table t add column c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after foo",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after foo",
-	}, {
-		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null first",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) first",
-	}, {
-		input:  "alter table t add column c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here'",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "alter table t add column c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0",
-		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-	}, {
-		input:  "alter table t change foo bar int not null auto_increment first",
-		output: "alter table t change column foo (\n\tbar int not null auto_increment\n) first",
-	}, {
-		input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
-		output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after bar",
-	}, {
-		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
-		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
-	}}
+		{
+			input:  "select 1",
+			output: "select 1 from dual",
+		}, {
+			input: "select 1 from t",
+		}, {
+			input:  "select * from information_schema.columns",
+			output: "select * from information_schema.`columns`",
+		}, {
+			input: "select .1 from t",
+		}, {
+			input: "select 1.2e1 from t",
+		}, {
+			input: "select 1.2e+1 from t",
+		}, {
+			input: "select 1.2e-1 from t",
+		}, {
+			input: "select 08.3 from t",
+		}, {
+			input: "select -1 from t where b = -2",
+		}, {
+			input:  "select - -1 from t",
+			output: "select 1 from t",
+		}, {
+			input:  "select 1 from t // aa\n",
+			output: "select 1 from t",
+		}, {
+			input:  "select 1 from t -- aa\n",
+			output: "select 1 from t",
+		}, {
+			input:  "select 1 from t # aa\n",
+			output: "select 1 from t",
+		}, {
+			input:  "select 1 --aa\nfrom t",
+			output: "select 1 from t",
+		}, {
+			input:  "select 1 #aa\nfrom t",
+			output: "select 1 from t",
+		}, {
+			input: "select /* simplest */ 1 from t",
+		}, {
+			input: "select /* double star **/ 1 from t",
+		}, {
+			input: "select /* double */ /* comment */ 1 from t",
+		}, {
+			input: "select /* back-quote keyword */ `By` from t",
+		}, {
+			input: "select /* back-quote num */ `2a` from t",
+		}, {
+			input: "select /* back-quote . */ `a.b` from t",
+		}, {
+			input: "select /* back-quote back-quote */ `a``b` from t",
+		}, {
+			input:  "select /* back-quote unnecessary */ 1 from `t`",
+			output: "select /* back-quote unnecessary */ 1 from t",
+		}, {
+			input:  "select /* back-quote idnum */ 1 from `a1`",
+			output: "select /* back-quote idnum */ 1 from a1",
+		}, {
+			input: "select /* @ */ @@a from b",
+		}, {
+			input: "select /* \\0 */ '\\0' from a",
+		}, {
+			input:  "select 1 /* drop this comment */ from t",
+			output: "select 1 from t",
+		}, {
+			input: "select /* union */ 1 from t union select 1 from t",
+		}, {
+			input: "select /* double union */ 1 from t union select 1 from t union select 1 from t",
+		}, {
+			input: "select /* union all */ 1 from t union all select 1 from t",
+		}, {
+			input: "select /* union distinct */ 1 from t union distinct select 1 from t",
+		}, {
+			input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
+			output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
+		}, {
+			input: "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
+		}, {
+			input:  "select /* union order by */ 1 from t union select 1 from t order by a",
+			output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
+		}, {
+			input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
+			output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
+		}, {
+			input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
+		}, {
+			input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
+			output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
+		}, {
+			input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
+		}, {
+			input: "select * from t1 join (select * from t2 union select * from t3) as t",
+		}, {
+			// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
+			input: "select * from t1 join t2 on a = b join t3",
+		}, {
+			input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
+		}, {
+			input: "select * from t1 where exists (select a from t2 union select b from t3)",
+		}, {
+			input: "select /* distinct */ distinct 1 from t",
+		}, {
+			input:  "select all col from t",
+			output: "select col from t",
+		}, {
+			input: "select /* straight_join */ straight_join 1 from t",
+		}, {
+			input: "select /* for update */ 1 from t for update",
+		}, {
+			input: "select /* lock in share mode */ 1 from t lock in share mode",
+		}, {
+			input: "select /* select list */ 1, 2 from t",
+		}, {
+			input: "select /* * */ * from t",
+		}, {
+			input: "select /* a.* */ a.* from t",
+		}, {
+			input: "select /* a.b.* */ a.b.* from t",
+		}, {
+			input:  "select /* column alias */ a b from t",
+			output: "select /* column alias */ a as b from t",
+		}, {
+			input:  "select t.Date as Date from t",
+			output: "select t.`Date` as `Date` from t",
+		}, {
+			input:  "select t.col as YeAr from t",
+			output: "select t.col as `YeAr` from t",
+		}, {
+			input: "select /* column alias with as */ a as b from t",
+		}, {
+			input: "select /* keyword column alias */ a as `By` from t",
+		}, {
+			input:  "select /* column alias as string */ a as \"b\" from t",
+			output: "select /* column alias as string */ a as b from t",
+		}, {
+			input:  "select /* column alias as string without as */ a \"b\" from t",
+			output: "select /* column alias as string without as */ a as b from t",
+		}, {
+			input: "select /* a.* */ a.* from t",
+		}, {
+			input:  "select next value for t",
+			output: "select next 1 values from t",
+		}, {
+			input:  "select next value from t",
+			output: "select next 1 values from t",
+		}, {
+			input: "select next 10 values from t",
+		}, {
+			input: "select next :a values from t",
+		}, {
+			input: "select /* `By`.* */ `By`.* from t",
+		}, {
+			input: "select /* select with bool expr */ a = b from t",
+		}, {
+			input: "select /* case_when */ case when a = b then c end from t",
+		}, {
+			input: "select /* case_when_else */ case when a = b then c else d end from t",
+		}, {
+			input: "select /* case_when_when_else */ case when a = b then c when b = d then d else d end from t",
+		}, {
+			input: "select /* case */ case aa when a = b then c end from t",
+		}, {
+			input: "select /* parenthesis */ 1 from (t)",
+		}, {
+			input: "select /* parenthesis multi-table */ 1 from (t1, t2)",
+		}, {
+			input: "select /* table list */ 1 from t1, t2",
+		}, {
+			input: "select /* parenthessis in table list 1 */ 1 from (t1), t2",
+		}, {
+			input: "select /* parenthessis in table list 2 */ 1 from t1, (t2)",
+		}, {
+			input: "select /* use */ 1 from t1 use index (a) where b = 1",
+		}, {
+			input: "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
+		}, {
+			input: "select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1",
+		}, {
+			input: "select /* force */ 1 from t1 as t2 force index (a), t3 force index (b) where b = 1",
+		}, {
+			input:  "select /* table alias */ 1 from t t1",
+			output: "select /* table alias */ 1 from t as t1",
+		}, {
+			input: "select /* table alias with as */ 1 from t as t1",
+		}, {
+			input:  "select /* string table alias */ 1 from t as 't1'",
+			output: "select /* string table alias */ 1 from t as t1",
+		}, {
+			input:  "select /* string table alias without as */ 1 from t 't1'",
+			output: "select /* string table alias without as */ 1 from t as t1",
+		}, {
+			input: "select /* keyword table alias */ 1 from t as `By`",
+		}, {
+			input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
+		}, {
+			input: "select /* keyword index */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
+		}, {
+			input: "select /* ignore */ 1 from t1 as of '2019-01-01' as t2 ignore index (a), t3 use index (b) where b = 1",
+		}, {
+			input: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+		}, {
+			input: "select /* force */ 1 from t1 as of '2019-01-01' as t2 force index (a), t3 force index (b) where b = 1",
+		}, {
+			input:  "select /* table alias */ 1 from t as of '2019-01-01' t1",
+			output: "select /* table alias */ 1 from t as of '2019-01-01' as t1",
+		}, {
+			input: "select /* table alias with as */ 1 from t as of '2019-01-01' as t1",
+		}, {
+			input:  "select /* string table alias */ 1 from t as of '2019-01-01' as 't1'",
+			output: "select /* string table alias */ 1 from t as of '2019-01-01' as t1",
+		}, {
+			input:  "select /* string table alias without as */ 1 from t as of '2019-01-01' 't1'",
+			output: "select /* string table alias without as */ 1 from t as of '2019-01-01' as t1",
+		}, {
+			input: "select /* keyword table alias */ 1 from t as of '2019-01-01' as `By`",
+		}, {
+			input: "select /* join */ 1 from t1 join t2",
+		}, {
+			input: "select /* join on */ 1 from t1 join t2 on a = b",
+		}, {
+			input: "select /* join */ 1 from t1 as of '2019-01-01' as t3 join t2 as t4",
+		}, {
+			input: "select /* join on */ 1 from t1 as of '2019-01-01' as t3 join t2 as of '2019-01-01' as t4 on a = b",
+		}, {
+			input: "select /* join on */ 1 from t1 join t2 using (a)",
+		}, {
+			input:  "select /* inner join */ 1 from t1 inner join t2",
+			output: "select /* inner join */ 1 from t1 join t2",
+		}, {
+			input:  "select /* cross join */ 1 from t1 cross join t2",
+			output: "select /* cross join */ 1 from t1 join t2",
+		}, {
+			input: "select /* straight_join */ 1 from t1 straight_join t2",
+		}, {
+			input: "select /* straight_join on */ 1 from t1 straight_join t2 on a = b",
+		}, {
+			input: "select /* left join */ 1 from t1 left join t2 on a = b",
+		}, {
+			input: "select /* left join */ 1 from t1 left join t2 using (a)",
+		}, {
+			input:  "select /* left outer join */ 1 from t1 left outer join t2 on a = b",
+			output: "select /* left outer join */ 1 from t1 left join t2 on a = b",
+		}, {
+			input:  "select /* left outer join */ 1 from t1 left outer join t2 using (a)",
+			output: "select /* left outer join */ 1 from t1 left join t2 using (a)",
+		}, {
+			input: "select /* right join */ 1 from t1 right join t2 on a = b",
+		}, {
+			input: "select /* right join */ 1 from t1 right join t2 using (a)",
+		}, {
+			input:  "select /* right outer join */ 1 from t1 right outer join t2 on a = b",
+			output: "select /* right outer join */ 1 from t1 right join t2 on a = b",
+		}, {
+			input:  "select /* right outer join */ 1 from t1 right outer join t2 using (a)",
+			output: "select /* right outer join */ 1 from t1 right join t2 using (a)",
+		}, {
+			input: "select /* natural join */ 1 from t1 natural join t2",
+		}, {
+			input: "select /* natural left join */ 1 from t1 natural left join t2",
+		}, {
+			input:  "select /* natural left outer join */ 1 from t1 natural left join t2",
+			output: "select /* natural left outer join */ 1 from t1 natural left join t2",
+		}, {
+			input: "select /* natural right join */ 1 from t1 natural right join t2",
+		}, {
+			input:  "select /* natural right outer join */ 1 from t1 natural right join t2",
+			output: "select /* natural right outer join */ 1 from t1 natural right join t2",
+		}, {
+			input: "select /* join on */ 1 from t1 join t2 on a = b",
+		}, {
+			input: "select /* join using */ 1 from t1 join t2 using (a)",
+		}, {
+			input: "select /* join using (a, b, c) */ 1 from t1 join t2 using (a, b, c)",
+		}, {
+			input: "select /* s.t */ 1 from s.t",
+		}, {
+			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
+		}, {
+			input: "select /* select in from */ 1 from (select 1 from t) as a",
+		}, {
+			input:  "select /* select in from with no as */ 1 from (select 1 from t) a",
+			output: "select /* select in from with no as */ 1 from (select 1 from t) as a",
+		}, {
+			input: "select /* where */ 1 from t where a = b",
+		}, {
+			input: "select /* and */ 1 from t where a = b and a = c",
+		}, {
+			input:  "select /* && */ 1 from t where a = b && a = c",
+			output: "select /* && */ 1 from t where a = b and a = c",
+		}, {
+			input: "select /* or */ 1 from t where a = b or a = c",
+		}, {
+			input:  "select /* || */ 1 from t where a = b || a = c",
+			output: "select /* || */ 1 from t where a = b or a = c",
+		}, {
+			input: "select /* not */ 1 from t where not a = b",
+		}, {
+			input: "select /* ! */ 1 from t where a = !1",
+		}, {
+			input: "select /* bool is */ 1 from t where a = b is null",
+		}, {
+			input: "select /* bool is not */ 1 from t where a = b is not false",
+		}, {
+			input: "select /* true */ 1 from t where true",
+		}, {
+			input: "select /* false */ 1 from t where false",
+		}, {
+			input: "select /* false on left */ 1 from t where false = 0",
+		}, {
+			input: "select /* exists */ 1 from t where exists (select 1 from t)",
+		}, {
+			input: "select /* (boolean) */ 1 from t where not (a = b)",
+		}, {
+			input: "select /* in value list */ 1 from t where a in (b, c)",
+		}, {
+			input: "select /* in select */ 1 from t where a in (select 1 from t)",
+		}, {
+			input: "select /* not in */ 1 from t where a not in (b, c)",
+		}, {
+			input: "select /* like */ 1 from t where a like b",
+		}, {
+			input: "select /* like escape */ 1 from t where a like b escape '!'",
+		}, {
+			input: "select /* not like */ 1 from t where a not like b",
+		}, {
+			input: "select /* not like escape */ 1 from t where a not like b escape '$'",
+		}, {
+			input: "select /* regexp */ 1 from t where a regexp b",
+		}, {
+			input: "select /* not regexp */ 1 from t where a not regexp b",
+		}, {
+			input:  "select /* rlike */ 1 from t where a rlike b",
+			output: "select /* rlike */ 1 from t where a regexp b",
+		}, {
+			input:  "select /* not rlike */ 1 from t where a not rlike b",
+			output: "select /* not rlike */ 1 from t where a not regexp b",
+		}, {
+			input: "select /* between */ 1 from t where a between b and c",
+		}, {
+			input: "select /* not between */ 1 from t where a not between b and c",
+		}, {
+			input: "select /* is null */ 1 from t where a is null",
+		}, {
+			input: "select /* is not null */ 1 from t where a is not null",
+		}, {
+			input: "select /* is true */ 1 from t where a is true",
+		}, {
+			input: "select /* is not true */ 1 from t where a is not true",
+		}, {
+			input: "select /* is false */ 1 from t where a is false",
+		}, {
+			input: "select /* is not false */ 1 from t where a is not false",
+		}, {
+			input: "select /* < */ 1 from t where a < b",
+		}, {
+			input: "select /* <= */ 1 from t where a <= b",
+		}, {
+			input: "select /* >= */ 1 from t where a >= b",
+		}, {
+			input: "select /* > */ 1 from t where a > b",
+		}, {
+			input: "select /* != */ 1 from t where a != b",
+		}, {
+			input:  "select /* <> */ 1 from t where a <> b",
+			output: "select /* <> */ 1 from t where a != b",
+		}, {
+			input: "select /* <=> */ 1 from t where a <=> b",
+		}, {
+			input: "select /* != */ 1 from t where a != b",
+		}, {
+			input: "select /* single value expre list */ 1 from t where a in (b)",
+		}, {
+			input: "select /* select as a value expression */ 1 from t where a = (select a from t)",
+		}, {
+			input: "select /* parenthesised value */ 1 from t where a = (b)",
+		}, {
+			input: "select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))",
+		}, {
+			input: "select /* dot-parenthesize */ (a.b) from t where (b.c) = 2",
+		}, {
+			input: "select /* & */ 1 from t where a = b & c",
+		}, {
+			input: "select /* & */ 1 from t where a = b & c",
+		}, {
+			input: "select /* | */ 1 from t where a = b | c",
+		}, {
+			input: "select /* ^ */ 1 from t where a = b ^ c",
+		}, {
+			input: "select /* + */ 1 from t where a = b + c",
+		}, {
+			input: "select /* - */ 1 from t where a = b - c",
+		}, {
+			input: "select /* * */ 1 from t where a = b * c",
+		}, {
+			input: "select /* / */ 1 from t where a = b / c",
+		}, {
+			input: "select /* % */ 1 from t where a = b % c",
+		}, {
+			input: "select /* div */ 1 from t where a = b div c",
+		}, {
+			input:  "select /* MOD */ 1 from t where a = b MOD c",
+			output: "select /* MOD */ 1 from t where a = b % c",
+		}, {
+			input: "select /* << */ 1 from t where a = b << c",
+		}, {
+			input: "select /* >> */ 1 from t where a = b >> c",
+		}, {
+			input:  "select /* % no space */ 1 from t where a = b%c",
+			output: "select /* % no space */ 1 from t where a = b % c",
+		}, {
+			input: "select /* u+ */ 1 from t where a = +b",
+		}, {
+			input: "select /* u- */ 1 from t where a = -b",
+		}, {
+			input: "select /* u~ */ 1 from t where a = ~b",
+		}, {
+			input: "select /* -> */ a.b -> 'ab' from t",
+		}, {
+			input: "select /* -> */ a.b ->> 'ab' from t",
+		}, {
+			input: "select /* empty function */ 1 from t where a = b()",
+		}, {
+			input: "select /* function with 1 param */ 1 from t where a = b(c)",
+		}, {
+			input: "select /* function with many params */ 1 from t where a = b(c, d)",
+		}, {
+			input: "select /* function with distinct */ count(distinct a) from t",
+		}, {
+			input: "select /* if as func */ 1 from t where a = if(b)",
+		}, {
+			input: "select /* current_timestamp */ current_timestamp() from t",
+		}, {
+			input: "select /* current_timestamp as func */ current_timestamp() from t",
+		}, {
+			input: "select /* current_timestamp with fsp */ current_timestamp(3) from t",
+		}, {
+			input: "select /* current_date */ current_date() from t",
+		}, {
+			input: "select /* current_date as func */ current_date() from t",
+		}, {
+			input: "select /* current_time */ current_time() from t",
+		}, {
+			input: "select /* current_time as func */ current_time() from t",
+		}, {
+			input: "select /* current_time with fsp */ current_time(1) from t",
+		}, {
+			input: "select /* utc_timestamp */ utc_timestamp() from t",
+		}, {
+			input: "select /* utc_timestamp as func */ utc_timestamp() from t",
+		}, {
+			input: "select /* utc_timestamp with fsp */ utc_timestamp(0) from t",
+		}, {
+			input: "select /* utc_time */ utc_time() from t",
+		}, {
+			input: "select /* utc_time as func */ utc_time() from t",
+		}, {
+			input: "select /* utc_time with fsp */ utc_time(4) from t",
+		}, {
+			input: "select /* utc_date */ utc_date() from t",
+		}, {
+			input: "select /* utc_date as func */ utc_date() from t",
+		}, {
+			input: "select /* localtime */ localtime() from t",
+		}, {
+			input: "select /* localtime as func */ localtime() from t",
+		}, {
+			input: "select /* localtime with fsp */ localtime(5) from t",
+		}, {
+			input: "select /* localtimestamp */ localtimestamp() from t",
+		}, {
+			input: "select /* localtimestamp as func */ localtimestamp() from t",
+		}, {
+			input: "select /* localtimestamp with fsp */ localtimestamp(7) from t",
+		}, {
+			input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
+		}, {
+			input: "select /* database as func no param */ database() from t",
+		}, {
+			input: "select /* database as func 1 param */ database(1) from t",
+		}, {
+			input: "select /* a */ a from t",
+		}, {
+			input: "select /* a.b */ a.b from t",
+		}, {
+			input: "select /* a.b.c */ a.b.c from t",
+		}, {
+			input: "select /* keyword a.b */ `By`.`bY` from t",
+		}, {
+			input: "select /* string */ 'a' from t",
+		}, {
+			input:  "select /* double quoted string */ \"a\" from t",
+			output: "select /* double quoted string */ 'a' from t",
+		}, {
+			input:  "select /* quote quote in string */ 'a''a' from t",
+			output: "select /* quote quote in string */ 'a\\'a' from t",
+		}, {
+			input:  "select /* double quote quote in string */ \"a\"\"a\" from t",
+			output: "select /* double quote quote in string */ 'a\\\"a' from t",
+		}, {
+			input:  "select /* quote in double quoted string */ \"a'a\" from t",
+			output: "select /* quote in double quoted string */ 'a\\'a' from t",
+		}, {
+			input: "select /* backslash quote in string */ 'a\\'a' from t",
+		}, {
+			input: "select /* literal backslash in string */ 'a\\\\na' from t",
+		}, {
+			input: "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
+		}, {
+			input:  "select /* non-escape */ '\\x' from t",
+			output: "select /* non-escape */ 'x' from t",
+		}, {
+			input: "select /* unescaped backslash */ '\\n' from t",
+		}, {
+			input: "select /* value argument */ :a from t",
+		}, {
+			input: "select /* value argument with digit */ :a1 from t",
+		}, {
+			input: "select /* value argument with dot */ :a.b from t",
+		}, {
+			input:  "select /* positional argument */ ? from t",
+			output: "select /* positional argument */ :v1 from t",
+		}, {
+			input:  "select /* multiple positional arguments */ ?, ? from t",
+			output: "select /* multiple positional arguments */ :v1, :v2 from t",
+		}, {
+			input: "select /* list arg */ * from t where a in ::list",
+		}, {
+			input: "select /* list arg not in */ * from t where a not in ::list",
+		}, {
+			input: "select /* null */ null from t",
+		}, {
+			input: "select /* octal */ 010 from t",
+		}, {
+			input:  "select /* hex */ x'f0A1' from t",
+			output: "select /* hex */ X'f0A1' from t",
+		}, {
+			input: "select /* hex caps */ X'F0a1' from t",
+		}, {
+			input:  "select /* bit literal */ b'0101' from t",
+			output: "select /* bit literal */ B'0101' from t",
+		}, {
+			input: "select /* bit literal caps */ B'010011011010' from t",
+		}, {
+			input: "select /* 0x */ 0xf0 from t",
+		}, {
+			input: "select /* float */ 0.1 from t",
+		}, {
+			input: "select /* group by */ 1 from t group by a",
+		}, {
+			input: "select /* having */ 1 from t having a = b",
+		}, {
+			input:  "select /* simple order by */ 1 from t order by a",
+			output: "select /* simple order by */ 1 from t order by a asc",
+		}, {
+			input: "select /* order by asc */ 1 from t order by a asc",
+		}, {
+			input: "select /* order by desc */ 1 from t order by a desc",
+		}, {
+			input: "select /* order by null */ 1 from t order by null",
+		}, {
+			input: "select /* limit a */ 1 from t limit a",
+		}, {
+			input: "select /* limit a,b */ 1 from t limit a, b",
+		}, {
+			input:  "select /* binary unary */ a- -b from t",
+			output: "select /* binary unary */ a - -b from t",
+		}, {
+			input: "select /* - - */ - -b from t",
+		}, {
+			input: "select /* binary binary */ binary  binary b from t",
+		}, {
+			input: "select /* binary ~ */ binary  ~b from t",
+		}, {
+			input: "select /* ~ binary */ ~ binary b from t",
+		}, {
+			input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
+		}, {
+			input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
+		}, {
+			input:  "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
+			output: "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
+		}, {
+			input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
+			output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
+		}, {
+			input: "select /* dual */ 1 from dual",
+		}, {
+			input:  "select /* Dual */ 1 from Dual",
+			output: "select /* Dual */ 1 from dual",
+		}, {
+			input:  "select /* DUAL */ 1 from Dual",
+			output: "select /* DUAL */ 1 from dual",
+		}, {
+			input: "select /* column as bool in where */ a from t where b",
+		}, {
+			input: "select /* OR of columns in where */ * from t where a or b",
+		}, {
+			input: "select /* OR of mixed columns in where */ * from t where a = 5 or b and c is not null",
+		}, {
+			input: "select /* OR in select columns */ (a or b) from t where c = 5",
+		}, {
+			input: "select /* bool as select value */ a, true from t",
+		}, {
+			input: "select /* bool column in ON clause */ * from t join s on t.id = s.id and s.foo where t.bar",
+		}, {
+			input: "select /* bool in order by */ * from t order by a is null or b asc",
+		}, {
+			input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
+		}, {
+			input:  "/*!show databases*/",
+			output: "show databases",
+		}, {
+			input:  "select /*!40101 * from*/ t",
+			output: "select * from t",
+		}, {
+			input:  "select /*! * from*/ t",
+			output: "select * from t",
+		}, {
+			input:  "select /*!* from*/ t",
+			output: "select * from t",
+		}, {
+			input:  "select /*!401011 from*/ t",
+			output: "select 1 from t",
+		}, {
+			input: "select /* dual */ 1 from dual",
+		}, {
+			input:  "select * from (select 'tables') tables",
+			output: "select * from (select 'tables' from dual) as `tables`",
+		}, {
+			input: "insert /* simple */ into a values (1)",
+		}, {
+			input: "insert /* a.b */ into a.b values (1)",
+		}, {
+			input: "insert /* multi-value */ into a values (1, 2)",
+		}, {
+			input: "insert /* multi-value list */ into a values (1, 2), (3, 4)",
+		}, {
+			input: "insert /* no values */ into a values ()",
+		}, {
+			input:  "insert /* set */ into a set a = 1, b = 2",
+			output: "insert /* set */ into a(a, b) values (1, 2)",
+		}, {
+			input:  "insert /* set default */ into a set a = default, b = 2",
+			output: "insert /* set default */ into a(a, b) values (default, 2)",
+		}, {
+			input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
+		}, {
+			input: "insert /* default */ into a values (default, 2 * 3)",
+		}, {
+			input: "insert /* column list */ into a(a, b) values (1, 2)",
+		}, {
+			input: "insert into a(a, b) values (1, ifnull(null, default(b)))",
+		}, {
+			input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
+		}, {
+			input:  "insert /* qualified columns */ into t (t.a, t.b) values (1, 2)",
+			output: "insert /* qualified columns */ into t(a, b) values (1, 2)",
+		}, {
+			input: "insert /* select */ into a select b, c from d",
+		}, {
+			input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
+			output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
+		}, {
+			input:  "insert /* no cols & paren select */ into a(select * from t)",
+			output: "insert /* no cols & paren select */ into a select * from t",
+		}, {
+			input:  "insert /* cols & paren select */ into a(a,b,c) (select * from t)",
+			output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
+		}, {
+			input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+		}, {
+			input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
+		}, {
+			input: "insert /* bool in insert value */ into a values (1, true, false)",
+		}, {
+			input: "insert /* bool in on duplicate */ into a values (1, 2) on duplicate key update b = false, c = d",
+		}, {
+			input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(b), c = d",
+		}, {
+			input: "insert /* bool in on duplicate */ into a values (1, 2, 3) on duplicate key update b = values(a.b), c = d",
+		}, {
+			input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
+		}, {
+			input:  "insert into A(A, B) values (';', '''')",
+			output: "insert into A(A, B) values (';', '\\'')",
+		}, {
+			input:  "CREATE TABLE A (\n\t`A` int\n)",
+			output: "create table A (\n\tA int\n)",
+		}, {
+			input: "update /* simple */ a set b = 3",
+		}, {
+			input: "update /* a.b */ a.b set b = 3",
+		}, {
+			input: "update /* list */ a set b = 3, c = 4",
+		}, {
+			input: "update /* expression */ a set b = 3 + 4",
+		}, {
+			input: "update /* where */ a set b = 3 where a = b",
+		}, {
+			input: "update /* order */ a set b = 3 order by c desc",
+		}, {
+			input: "update /* limit */ a set b = 3 limit c",
+		}, {
+			input: "update /* bool in update */ a set b = true",
+		}, {
+			input: "update /* bool expr in update */ a set b = 5 > 2",
+		}, {
+			input: "update /* bool in update where */ a set b = 5 where c",
+		}, {
+			input: "update /* table qualifier */ a set a.b = 3",
+		}, {
+			input: "update /* table qualifier */ a set t.a.b = 3",
+		}, {
+			input:  "update /* table alias */ tt aa set aa.cc = 3",
+			output: "update /* table alias */ tt as aa set aa.cc = 3",
+		}, {
+			input:  "update (select id from foo) subqalias set id = 4",
+			output: "update (select id from foo) as subqalias set id = 4",
+		}, {
+			input:  "update foo f, bar b set f.id = b.id where b.name = 'test'",
+			output: "update foo as f, bar as b set f.id = b.id where b.name = 'test'",
+		}, {
+			input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
+			output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
+		}, {
+			input: "update /* ignore */ ignore a set b = 3",
+		}, {
+			input: "delete /* simple */ from a",
+		}, {
+			input: "delete /* a.b */ from a.b",
+		}, {
+			input: "delete /* where */ from a where a = b",
+		}, {
+			input: "delete /* order */ from a order by b desc",
+		}, {
+			input: "delete /* limit */ from a limit b",
+		}, {
+			input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+		}, {
+			input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+		}, {
+			input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
+			output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
+		}, {
+			input: "set /* simple */ a = 3",
+		}, {
+			input: "set #simple\n b = 4",
+		}, {
+			input: "set character_set_results = utf8",
+		}, {
+			input: "set @@session.autocommit = true",
+		}, {
+			input: "set @@session.`autocommit` = true",
+		}, {
+			input: "set @@session.'autocommit' = true",
+		}, {
+			input: "set @@session.\"autocommit\" = true",
+		}, {
+			input:  "set @@session.autocommit = ON",
+			output: "set @@session.autocommit = 'on'",
+		}, {
+			input:  "set @@session.autocommit= OFF",
+			output: "set @@session.autocommit = 'off'",
+		}, {
+			input:  "set autocommit = on",
+			output: "set autocommit = 'on'",
+		}, {
+			input:  "set autocommit = off",
+			output: "set autocommit = 'off'",
+		}, {
+			input:  "set autocommit = off, foo = 1",
+			output: "set autocommit = 'off', foo = 1",
+		}, {
+			input:  "set names utf8 collate foo",
+			output: "set names 'utf8'",
+		}, {
+			input:  "set names utf8 collate 'foo'",
+			output: "set names 'utf8'",
+		}, {
+			input:  "set character set utf8",
+			output: "set charset 'utf8'",
+		}, {
+			input:  "set character set 'utf8'",
+			output: "set charset 'utf8'",
+		}, {
+			input:  "set character set \"utf8\"",
+			output: "set charset 'utf8'",
+		}, {
+			input:  "set charset default",
+			output: "set charset default",
+		}, {
+			input:  "set session wait_timeout = 3600",
+			output: "set session wait_timeout = 3600",
+		}, {
+			input: "set /* list */ a = 3, b = 4",
+		}, {
+			input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
+		}, {
+			input: "set session transaction isolation level repeatable read",
+		}, {
+			input: "set transaction isolation level repeatable read",
+		}, {
+			input: "set global transaction isolation level repeatable read",
+		}, {
+			input: "set transaction isolation level repeatable read",
+		}, {
+			input: "set transaction isolation level read committed",
+		}, {
+			input: "set transaction isolation level read uncommitted",
+		}, {
+			input: "set transaction isolation level serializable",
+		}, {
+			input: "set transaction read write",
+		}, {
+			input: "set transaction read only",
+		}, {
+			input: "set tx_read_only = 1",
+		}, {
+			input: "set tx_read_only = 0",
+		}, {
+			input: "set tx_isolation = 'repeatable read'",
+		}, {
+			input: "set tx_isolation = 'read committed'",
+		}, {
+			input: "set tx_isolation = 'read uncommitted'",
+		}, {
+			input: "set tx_isolation = 'serializable'",
+		}, {
+			input: "set sql_safe_updates = 0",
+		}, {
+			input: "set sql_safe_updates = 1",
+		}, {
+			input: "signal sqlstate value '45000'",
+		}, {
+			input:  "signal sqlstate '45000'",
+			output: "signal sqlstate value '45000'",
+		}, {
+			input: "signal sqlstate value '45000' set message_text = 'ouch!'",
+		}, {
+			input: "signal sqlstate value '45000' set class_origin = 'abc', subclass_origin = 'def', message_text = 'ghi', " +
+				"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
+				"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
+		}, {
+			input:  "alter ignore table a add foo int",
+			output: "alter table a add column (\n\tfoo int\n)",
+		}, {
+			input:  "alter table a add foo int",
+			output: "alter table a add column (\n\tfoo int\n)",
+		}, {
+			input:  "alter table a add spatial key foo (column1)",
+			output: "alter table a add spatial index foo (column1)",
+		}, {
+			input:  "alter table a add unique key foo (column1)",
+			output: "alter table a add unique index foo (column1)",
+		}, {
+			input:  "alter table `By` add foo int",
+			output: "alter table `By` add column (\n\tfoo int\n)",
+		}, {
+			input:  "alter table a alter foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table a drop foo",
+			output: "alter table a drop column foo",
+		}, {
+			input:  "alter table a disable foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table a enable foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table a order foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table a default foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table a discard foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table a import foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table a rename b",
+			output: "rename table a to b",
+		}, {
+			input:  "alter table `By` rename `bY`",
+			output: "rename table `By` to `bY`",
+		}, {
+			input:  "alter table a rename to b",
+			output: "rename table a to b",
+		}, {
+			input:  "alter table a rename as b",
+			output: "rename table a to b",
+		}, {
+			input:  "alter table a rename index foo to bar",
+			output: "alter table a rename index foo to bar",
+		}, {
+			input:  "alter table a rename key foo to bar",
+			output: "alter table a rename index foo to bar",
+		}, {
+			input:  "alter table e auto_increment = 20",
+			output: "alter table e",
+		}, {
+			input:  "alter table e character set = 'ascii'",
+			output: "alter table e",
+		}, {
+			input:  "alter table e default character set = 'ascii'",
+			output: "alter table e",
+		}, {
+			input:  "alter table e comment = 'hello'",
+			output: "alter table e",
+		}, {
+			input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
+			output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
+		}, {
+			input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
+			output: "alter table a",
+		}, {
+			input:  "alter table a add column id int",
+			output: "alter table a add column (\n\tid int\n)",
+		}, {
+			input:  "alter table a add index idx (id)",
+			output: "alter table a add index idx (id)",
+		}, {
+			input:  "alter table a add fulltext index idx (id)",
+			output: "alter table a add fulltext index idx (id)",
+		}, {
+			input:  "alter table a add spatial index idx (id)",
+			output: "alter table a add spatial index idx (id)",
+		}, {
+			input:  "alter table a add foreign key (x) references y(z)",
+			output: "alter table a add foreign key (x) references y (z)",
+		}, {
+			input:  "alter table a add primary key",
+			output: "alter table a",
+		}, {
+			input:  "alter table a add constraint",
+			output: "alter table a",
+		}, {
+			input: "alter table a drop column id",
+		}, {
+			input:  "alter table a drop partition p2712",
+			output: "alter table a",
+		}, {
+			input:  "alter table a drop index idx",
+			output: "alter table a drop index idx",
+		}, {
+			input:  "alter table a add check ch_1",
+			output: "alter table a",
+		}, {
+			input:  "alter table a drop check ch_1",
+			output: "alter table a",
+		}, {
+			input:  "alter table a drop foreign key fk_something",
+			output: "alter table a drop foreign key fk_something",
+		}, {
+			input:  "alter table a drop primary key",
+			output: "alter table a",
+		}, {
+			input:  "alter table a drop constraint b",
+			output: "alter table a drop constraint b",
+		}, {
+			input:  "alter table a drop id",
+			output: "alter table a drop column id",
+		}, {
+			input: "create table a",
+		}, {
+			input:  "create table a (\n\t`a` int\n)",
+			output: "create table a (\n\ta int\n)",
+		}, {
+			input: "create table `by` (\n\t`by` char\n)",
+		}, {
+			input:  "create table if not exists a (\n\t`a` int\n)",
+			output: "create table if not exists a (\n\ta int\n)",
+		}, {
+			input:  "create table a ignore me this is garbage",
+			output: "create table a",
+		}, {
+			input:  "create table a (a int, b char, c garbage)",
+			output: "create table a",
+		}, {
+			input:  "alter table a rename column a to b",
+			output: "alter table a rename column a to b",
+		}, {
+			input:  "alter table a rename column a as b",
+			output: "alter table a rename column a to b",
+		}, {
+			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
+			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
+		}, {
+			input: "alter vschema create vindex hash_vdx using hash",
+		}, {
+			input: "alter vschema create vindex keyspace.hash_vdx using hash",
+		}, {
+			input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
+		}, {
+			input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
+		}, {
+			input: "alter vschema drop vindex hash_vdx",
+		}, {
+			input: "alter vschema drop vindex ks.hash_vdx",
+		}, {
+			input: "alter vschema add table a",
+		}, {
+			input: "alter vschema add table ks.a",
+		}, {
+			input: "alter vschema add sequence a_seq",
+		}, {
+			input: "alter vschema add sequence ks.a_seq",
+		}, {
+			input: "alter vschema on a add auto_increment id using a_seq",
+		}, {
+			input: "alter vschema on ks.a add auto_increment id using a_seq",
+		}, {
+			input: "alter vschema drop table a",
+		}, {
+			input: "alter vschema drop table ks.a",
+		}, {
+			input: "alter vschema on a add vindex hash (id)",
+		}, {
+			input: "alter vschema on ks.a add vindex hash (id)",
+		}, {
+			input:  "alter vschema on a add vindex `hash` (`id`)",
+			output: "alter vschema on a add vindex hash (id)",
+		}, {
+			input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
+			output: "alter vschema on ks.a add vindex hash (id)",
+		}, {
+			input:  "alter vschema on a add vindex hash (id) using `hash`",
+			output: "alter vschema on a add vindex hash (id) using hash",
+		}, {
+			input: "alter vschema on a add vindex `add` (`add`)",
+		}, {
+			input: "alter vschema on a add vindex hash (id) using hash",
+		}, {
+			input:  "alter vschema on a add vindex hash (id) using `hash`",
+			output: "alter vschema on a add vindex hash (id) using hash",
+		}, {
+			input: "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		}, {
+			input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
+			output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		}, {
+			input: "alter vschema on a drop vindex hash",
+		}, {
+			input: "alter vschema on ks.a drop vindex hash",
+		}, {
+			input:  "alter vschema on a drop vindex `hash`",
+			output: "alter vschema on a drop vindex hash",
+		}, {
+			input:  "alter vschema on a drop vindex hash",
+			output: "alter vschema on a drop vindex hash",
+		}, {
+			input:  "alter vschema on a drop vindex `add`",
+			output: "alter vschema on a drop vindex `add`",
+		}, {
+			input:  "create index a on b (id)",
+			output: "alter table b add index a (id)",
+		}, {
+			input:  "create index a on b (foo(6) desc, foo asc)",
+			output: "alter table b add index a (foo(6) desc, foo)",
+		}, {
+			input:  "create unique index a on b (id)",
+			output: "alter table b add unique index a (id)",
+		}, {
+			input:  "create unique index a using btree on b (id)",
+			output: "alter table b add unique index a using btree (id)",
+		}, {
+			input:  "create fulltext index a using btree on b (id)",
+			output: "alter table b add fulltext index a using btree (id)",
+		}, {
+			input:  "create spatial index a using btree on b (id)",
+			output: "alter table b add spatial index a using btree (id)",
+		}, {
+			input:  "create view a as select current_timestamp()",
+			output: "create view a as select current_timestamp() from dual",
+		}, {
+			input:  "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
+			output: "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
+		}, {
+			input:  "create or replace view a as select current_timestamp()",
+			output: "create or replace view a as select current_timestamp() from dual",
+		}, {
+			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
+		}, {
+			input: "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
+		}, {
+			input: "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
+		}, {
+			input: "create trigger t1 before insert on foo for each row set new.x = new.x + 1",
+		}, {
+			input: "create trigger t1 after insert on foo for each row update xxy set y = new.x",
+		}, {
+			input: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		}, {
+			input:  "create definer = me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		}, {
+			input:  "create definer=me trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+			output: "create trigger t1 before delete on foo for each row follows baz update xxy set x = old.y",
+		}, {
+			input:  "alter view a",
+			output: "alter table a",
+		}, {
+			input:  "rename table a to b",
+			output: "rename table a to b",
+		}, {
+			input:  "rename table a to b, b to c",
+			output: "rename table a to b, b to c",
+		}, {
+			input:  "drop view a",
+			output: "drop view a",
+		}, {
+			input:  "drop table a",
+			output: "drop table a",
+		}, {
+			input:  "drop table a, b",
+			output: "drop table a, b",
+		}, {
+			input:  "drop table if exists a",
+			output: "drop table if exists a",
+		}, {
+			input:  "drop view if exists a",
+			output: "drop view if exists a",
+		}, {
+			input:  "drop index b on a",
+			output: "alter table a drop index b",
+		}, {
+			input:  "analyze table a",
+			output: "alter table a",
+		}, {
+			input:  "flush tables",
+			output: "flush",
+		}, {
+			input:  "flush tables with read lock",
+			output: "flush",
+		}, {
+			input:  "show binary logs",
+			output: "show binary logs",
+		}, {
+			input:  "show binlog events",
+			output: "show binlog",
+		}, {
+			input:  "show character set",
+			output: "show charset",
+		}, {
+			input:  "show character set like '%foo'",
+			output: "show charset",
+		}, {
+			input:  "show charset",
+			output: "show charset",
+		}, {
+			input:  "show charset like '%foo'",
+			output: "show charset",
+		}, {
+			input:  "show collation",
+			output: "show collation",
+		}, {
+			input:  "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+			output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+		}, {
+			input:  "show collation like 'utf8%'",
+			output: "show collation where `collation` like 'utf8%'",
+		}, {
+			input: "show create database d",
+		}, {
+			input: "show create schema d",
+		}, {
+			input: "show create database if not exists d",
+		}, {
+			input: "show create schema if not exists d",
+		}, {
+			input:  "show create event e",
+			output: "show create event",
+		}, {
+			input:  "show create function f",
+			output: "show create function",
+		}, {
+			input:  "show create procedure p",
+			output: "show create procedure",
+		}, {
+			input:  "show create table t",
+			output: "show create table t",
+		}, {
+			input:  "show create trigger t",
+			output: "show create trigger t",
+		}, {
+			input:  "show create user u",
+			output: "show create user",
+		}, {
+			input:  "show create view v",
+			output: "show create view v",
+		}, {
+			input:  "show databases",
+			output: "show databases",
+		}, {
+			input:  "show schemas",
+			output: "show schemas",
+		}, {
+			input:  "show engine INNODB",
+			output: "show engine",
+		}, {
+			input:  "show engines",
+			output: "show engines",
+		}, {
+			input:  "show storage engines",
+			output: "show storage",
+		}, {
+			input:  "show errors",
+			output: "show errors",
+		}, {
+			input:  "show events",
+			output: "show events",
+		}, {
+			input:  "show function code func",
+			output: "show function",
+		}, {
+			input:  "show function status",
+			output: "show function",
+		}, {
+			input:  "show grants for 'root@localhost'",
+			output: "show grants",
+		}, {
+			input: "show index from tbl",
+		}, {
+			input:  "show indexes from tbl",
+			output: "show index from tbl",
+		}, {
+			input:  "show keys from tbl",
+			output: "show index from tbl",
+		}, {
+			input:  "show index in tbl",
+			output: "show index from tbl",
+		}, {
+			input:  "show indexes in tbl",
+			output: "show index from tbl",
+		}, {
+			input:  "show keys in tbl",
+			output: "show index from tbl",
+		}, {
+			input: "show index from tbl from db",
+		}, {
+			input:  "show indexes from tbl from db",
+			output: "show index from tbl from db",
+		}, {
+			input:  "show keys from tbl from db",
+			output: "show index from tbl from db",
+		}, {
+			input:  "show index in tbl in db",
+			output: "show index from tbl from db",
+		}, {
+			input:  "show indexes in tbl in db",
+			output: "show index from tbl from db",
+		}, {
+			input:  "show keys in tbl in db",
+			output: "show index from tbl from db",
+		}, {
+			input: "show index from tbl where Key_name = 'key'",
+		}, {
+			input:  "show master status",
+			output: "show master",
+		}, {
+			input:  "show open tables",
+			output: "show open",
+		}, {
+			input:  "show plugins",
+			output: "show plugins",
+		}, {
+			input:  "show privileges",
+			output: "show privileges",
+		}, {
+			input:  "show procedure code p",
+			output: "show procedure",
+		}, {
+			input:  "show procedure status",
+			output: "show procedure",
+		}, {
+			input:  "show processlist",
+			output: "show processlist",
+		}, {
+			input:  "show full processlist",
+			output: "show processlist",
+		}, {
+			input:  "show profile cpu for query 1",
+			output: "show profile",
+		}, {
+			input:  "show profiles",
+			output: "show profiles",
+		}, {
+			input:  "show relaylog events",
+			output: "show relaylog",
+		}, {
+			input:  "show slave hosts",
+			output: "show slave",
+		}, {
+			input:  "show slave status",
+			output: "show slave",
+		}, {
+			input:  "show status",
+			output: "show status",
+		}, {
+			input:  "show global status",
+			output: "show global status",
+		}, {
+			input:  "show session status",
+			output: "show session status",
+		}, {
+			input:  "show table status",
+			output: "show table",
+		}, {
+			input: "show tables",
+		}, {
+			input: "show tables as of 123",
+		}, {
+			input: "show tables like '%keyspace%'",
+		}, {
+			input: "show tables as of 123 like '%keyspace%'",
+		}, {
+			input: "show tables where 1 = 0",
+		}, {
+			input: "show tables as of 'abc' where 1 = 0",
+		}, {
+			input: "show tables from a",
+		}, {
+			input: "show tables from a as of 'abc'",
+		}, {
+			input: "show tables from a where 1 = 0",
+		}, {
+			input: "show tables from a as of 123 where 1 = 0",
+		}, {
+			input: "show tables from a like '%keyspace%'",
+		}, {
+			input: "show tables from a as of 'abc' like '%keyspace%'",
+		}, {
+			input: "show full tables",
+		}, {
+			input: "show full tables from a",
+		}, {
+			input:  "show full tables in a",
+			output: "show full tables from a",
+		}, {
+			input: "show full tables from a like '%keyspace%'",
+		}, {
+			input: "show full tables from a where 1 = 0",
+		}, {
+			input: "show full tables like '%keyspace%'",
+		}, {
+			input: "show full tables where 1 = 0",
+		}, {
+			input: "show full columns from a like '%'",
+		}, {
+			input: "show full columns from messages from test_keyspace like '%'",
+		}, {
+			input: "show full fields from a like '%'",
+		}, {
+			input: "show fields from a like '%'",
+		}, {
+			input:  "show triggers",
+			output: "show triggers",
+		}, {
+			input: "show triggers from dbname",
+		}, {
+			input:  "show triggers in dbname",
+			output: "show triggers from dbname",
+		}, {
+			input: "show triggers like 'pattern'",
+		}, {
+			input: "show triggers where v = 'x'",
+		}, {
+			input:  "show variables",
+			output: "show variables",
+		}, {
+			input:  "show global variables",
+			output: "show global variables",
+		}, {
+			input:  "show session variables",
+			output: "show session variables",
+		}, {
+			input: "show vitess_keyspaces",
+		}, {
+			input: "show vitess_shards",
+		}, {
+			input: "show vitess_tablets",
+		}, {
+			input: "show vschema tables",
+		}, {
+			input: "show vschema vindexes",
+		}, {
+			input: "show vschema vindexes on t",
+		}, {
+			input:  "show warnings",
+			output: "show warnings",
+		}, {
+			input:  "select warnings from t",
+			output: "select `warnings` from t",
+		}, {
+			input:  "show foobar",
+			output: "show foobar",
+		}, {
+			input:  "show foobar like select * from table where syntax is 'ignored'",
+			output: "show foobar",
+		}, {
+			input:  "use db",
+			output: "use db",
+		}, {
+			input:  "use duplicate",
+			output: "use `duplicate`",
+		}, {
+			input:  "use `ks:-80@master`",
+			output: "use `ks:-80@master`",
+		}, {
+			input:  "describe foobar",
+			output: "show columns on foobar",
+		}, {
+			input:  "desc foobar",
+			output: "show columns on foobar",
+		}, {
+			input: "explain select * from foobar",
+		}, {
+			input: "explain format = tree select * from foobar",
+		}, {
+			input: "explain analyze select * from foobar",
+		}, {
+			input: "explain update foobar set foo = bar",
+		}, {
+			input: "explain delete from foobar where foo = bar",
+		}, {
+			input: "explain insert into foobar values (1, 2, 3)",
+		}, {
+			input:  "truncate table foo",
+			output: "truncate table foo",
+		}, {
+			input:  "truncate foo",
+			output: "truncate table foo",
+		}, {
+			input:  "repair foo",
+			output: "otheradmin",
+		}, {
+			input:  "optimize foo",
+			output: "otheradmin",
+		}, {
+			input:  "lock tables foo",
+			output: "otheradmin",
+		}, {
+			input:  "unlock tables foo",
+			output: "otheradmin",
+		}, {
+			input: "select /* EQ true */ 1 from t where a = true",
+		}, {
+			input: "select /* EQ false */ 1 from t where a = false",
+		}, {
+			input: "select /* NE true */ 1 from t where a != true",
+		}, {
+			input: "select /* NE false */ 1 from t where a != false",
+		}, {
+			input: "select /* LT true */ 1 from t where a < true",
+		}, {
+			input: "select /* LT false */ 1 from t where a < false",
+		}, {
+			input: "select /* GT true */ 1 from t where a > true",
+		}, {
+			input: "select /* GT false */ 1 from t where a > false",
+		}, {
+			input: "select /* LE true */ 1 from t where a <= true",
+		}, {
+			input: "select /* LE false */ 1 from t where a <= false",
+		}, {
+			input: "select /* GE true */ 1 from t where a >= true",
+		}, {
+			input: "select /* GE false */ 1 from t where a >= false",
+		}, {
+			input:  "select * from t order by a collate utf8_general_ci",
+			output: "select * from t order by a collate utf8_general_ci asc",
+		}, {
+			input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+		}, {
+			input: "select * from t group by a collate utf8_general_ci",
+		}, {
+			input: "select MAX(k collate latin1_german2_ci) from t1",
+		}, {
+			input: "select distinct k collate latin1_german2_ci from t1",
+		}, {
+			input: "select * from t1 where 'Müller' collate latin1_german2_ci = k",
+		}, {
+			input: "select * from t1 where k like 'Müller' collate latin1_german2_ci",
+		}, {
+			input: "select k from t1 group by k having k = 'Müller' collate latin1_german2_ci",
+		}, {
+			input: "select k from t1 join t2 order by a collate latin1_german2_ci asc, b collate latin1_german2_ci asc",
+		}, {
+			input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
+			output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+		}, {
+			input:  "select /* drop trailing semicolon */ 1 from dual;",
+			output: "select /* drop trailing semicolon */ 1 from dual",
+		}, {
+			input: "select /* cache directive */ sql_no_cache 'foo' from t",
+		}, {
+			input: "select binary 'a' = 'A' from t",
+		}, {
+			input: "select 1 from t where foo = _binary 'bar'",
+		}, {
+			input:  "select 1 from t where foo = _binary'bar'",
+			output: "select 1 from t where foo = _binary 'bar'",
+		}, {
+			input: "select 1 from t where foo = _utf8mb4 'bar'",
+		}, {
+			input:  "select 1 from t where foo = _utf8mb4'bar'",
+			output: "select 1 from t where foo = _utf8mb4 'bar'",
+		}, {
+			input: "select match(a) against ('foo') from t",
+		}, {
+			input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
+		}, {
+			input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
+		}, {
+			input: "select name, group_concat(score) from t group by name",
+		}, {
+			input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+		}, {
+			input: "select * from t partition (p0)",
+		}, {
+			input: "select * from t partition (p0, p1)",
+		}, {
+			input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
+		}, {
+			input: "select truncate(120.3333, 2) from dual",
+		}, {
+			input: "update t partition (p0) set a = 1",
+		}, {
+			input: "insert into t partition (p0) values (1, 'asdf')",
+		}, {
+			input: "insert into t1 select * from t2 partition (p0)",
+		}, {
+			input: "replace into t partition (p0) values (1, 'asdf')",
+		}, {
+			input: "delete from t partition (p0) where a = 1",
+		}, {
+			input: "stream * from t",
+		}, {
+			input: "stream /* comment */ * from t",
+		}, {
+			input: "begin",
+		}, {
+			input:  "start transaction",
+			output: "begin",
+		}, {
+			input: "commit",
+		}, {
+			input: "rollback",
+		}, {
+			input: "create database test_db",
+		}, {
+			input:  "create schema test_db",
+			output: "create database test_db",
+		}, {
+			input:  "create database if not exists test_db",
+			output: "create database test_db",
+		}, {
+			input: "drop database test_db",
+		}, {
+			input:  "drop schema test_db",
+			output: "drop database test_db",
+		}, {
+			input:  "drop database if exists test_db",
+			output: "drop database test_db",
+		}, {
+			input: "drop trigger trigger1",
+		}, {
+			input: "drop trigger if exists t2",
+		}, {
+			input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "create table t (c INT NOT NULL DEFAULT 0 ON UPDATE current_timestamp() AUTO_INCREMENT COMMENT 'a comment here' UNIQUE)",
+			output: "create table t (\n\tc INT not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			// Same input with options backwards.
+			input:  "create table t (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			// Transpose pairs in original
+			input:  "create table t (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			// Transpose pairs in reversed
+			input:  "create table t (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
+			output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			// Those tests for ALTER TABLE ADD (...
+			input:  "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "alter table t add (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "alter table t add (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "alter table t add (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			// Those tests for ALTER TABLE ADD COLUMN name ...
+			input:  "alter table t add column c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after foo",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after foo",
+		}, {
+			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null first",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) first",
+		}, {
+			input:  "alter table t add column c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here'",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "alter table t add column c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0",
+			output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+		}, {
+			input:  "alter table t change foo bar int not null auto_increment first",
+			output: "alter table t change column foo (\n\tbar int not null auto_increment\n) first",
+		}, {
+			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
+			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after bar",
+		}, {
+			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
+			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+		},
+	}
 )
 
 func TestValid(t *testing.T) {
@@ -1665,14 +1681,11 @@ func TestValid(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := Parse(tcase.input)
-			if err != nil {
-				t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-				return
-			}
+			require.NoError(t, err)
+
 			out := String(tree)
-			if out != tcase.output {
-				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-			}
+			assert.Equal(t, tcase.output, out)
+
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
 			// all its children. But we can examine code coverage and
@@ -1685,8 +1698,9 @@ func TestValid(t *testing.T) {
 }
 
 var ignoreWhitespaceTests = []parseTest{
+	// TODO: this is a test of BEGIN .. END syntax, not triggers. Would be better to isolate it
 	{
-		input:  `create trigger t1 before delete on foo for each row follows baz 
+		input: `create trigger t1 before delete on foo for each row follows baz 
 							begin
 								set @@foo = old.x;
                 set @@bar = new.y;
@@ -1694,7 +1708,7 @@ var ignoreWhitespaceTests = []parseTest{
               end`,
 	},
 	{
-		input:  `create trigger t1 before delete on foo for each row follows baz 
+		input: `create trigger t1 before delete on foo for each row follows baz 
 							begin
 								set @@foo = old.x;
 								begin
@@ -1703,6 +1717,76 @@ var ignoreWhitespaceTests = []parseTest{
                 set @@bar = new.y;
                 update baz.t set a = @@foo + @@bar where z = old.x;
               end`,
+	},
+	{
+		// TODO: this is a test of parsing case statements, not triggers. would be better to isolate it
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								case old.y
+									when 1 then select a + 1 from c;
+									when 0 then update a set b = 2; delete from z;
+								end case;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								case old.y
+									when 1 then select a + 1 from c;
+								end case;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								case old.x
+									when old.y then set @@var = 1;
+									when 0 then update a set b = 2; delete from z;
+									else select true from dual; delete from x;
+								end case;
+							end`,
+	}, {
+		// TODO: this is a test of parsing if statements, not triggers. would be better to isolate it
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								if old.y > 0 then 
+									select a + 1 from c;
+									update b set c = 1;
+								elseif old.y < 0 then 
+									delete from z;
+								elseif new.foo > rand() then
+									set @@autocommit = 1;
+								else 
+									insert into z values (1, 2, 3);
+								end if;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row
+							begin
+								if old.y > 0 then 
+									select a + 1 from c;
+									update b set c = 1;
+								elseif new.foo > rand() then
+									set @@autocommit = 1;
+								else
+									insert into z values (1, 2, 3);
+								end if;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row 
+							begin
+								if old.y > 0 then
+									select a + 1 from c;
+									update b set c = 1;
+								else 
+									insert into z values (1, 2, 3);
+								end if;
+							end`,
+	}, {
+		input: `create trigger t1 before delete on foo for each row
+							begin
+								if old.y > 0 then 
+									select a + 1 from c; update b set c = 1;
+								end if;
+							end`,
 	},
 }
 
@@ -1743,7 +1827,7 @@ func TestCreateViewSelectPosition(t *testing.T) {
 	}{{
 		query: "create view a as select current_timestamp()",
 		sel:   "select current_timestamp()",
-	},{
+	}, {
 		query: "create view a as select /* comment */ 2 + 2 from dual",
 		sel:   "select /* comment */ 2 + 2 from dual",
 	}}
@@ -1837,11 +1921,11 @@ func TestInvalid(t *testing.T) {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 129",
 	}, {
-		input:  "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err: "syntax error at position 22 near 'not'",
+		input: "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err:   "syntax error at position 22 near 'not'",
 	}, {
-		input:  "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err: "syntax error at position 26 near 'default'",
+		input: "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err:   "syntax error at position 26 near 'default'",
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique null)",
 		err:   "cannot include NULL / NOT NULL more than once at position 126 near 'null'",
@@ -1861,11 +1945,11 @@ func TestInvalid(t *testing.T) {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 132",
 	}, {
-		input:  "alter table t add (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err: "syntax error at position 25 near 'not'",
+		input: "alter table t add (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err:   "syntax error at position 25 near 'not'",
 	}, {
-		input:  "alter table t add (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
-		err: "syntax error at position 29 near 'default'",
+		input: "alter table t add (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err:   "syntax error at position 29 near 'default'",
 	}}
 	for _, tcase := range invalidDDL {
 		_, err := ParseStrictDDL(tcase.input)
@@ -1937,7 +2021,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select A(distinct B, C) from b",
 	}, {
-		input: "select A(ALL B, C) from b",
+		input:  "select A(ALL B, C) from b",
 		output: "select A(B, C) from b",
 	}, {
 		// IF is an exception. It's always lower-cased.
@@ -2810,7 +2894,7 @@ var (
 		output: "syntax error at position 37 near 'using'",
 	}, {
 		input:  "select next id from a",
-		output: "expecting value after next at position 15 near 'id'",
+		output: "syntax error at position 15 near 'id'",
 	}, {
 		input:  "select next 1+1 values from a",
 		output: "syntax error at position 15 near '1'",
