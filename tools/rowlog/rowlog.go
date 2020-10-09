@@ -51,7 +51,6 @@ func (rlc *RowLogConfig) Validate() bool {
 	return true
 }
 
-//TODO
 func usage() {
 	logger := logutil.NewConsoleLogger()
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
@@ -79,34 +78,61 @@ func main() {
 	sourceTablet := getTablet(ctx, ts, config.cells, config.sourceKeyspace)
 	targetTablet := getTablet(ctx, ts, config.cells, config.targetKeyspace)
 	log.Infof("Using tablets %s and %s to get positions", sourceTablet, targetTablet)
+
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
+	var stream = func(keyspace, tablet string) {
 		defer wg.Done()
-		startStreaming(ctx, config.vtgate, config.vtctld, config.sourceKeyspace, sourceTablet, config.table, config.pk, config.ids)
-		log.Infof("rowlog done streaming from source")
-	}()
+		var startPos, stopPos string
+		var i int
+		var done, fieldsPrinted bool
+		var err error
+		for {
+			i++
+			if i > 100 {
+				log.Errorf("returning without completion : Timing out for keyspace %s", keyspace)
+				return
+			}
+			log.Infof("%s Iteration:%d", keyspace, i)
+			startPos, stopPos, done, fieldsPrinted, err = startStreaming(ctx, config.vtgate, config.vtctld, keyspace, tablet, config.table, config.pk, config.ids, startPos, stopPos, fieldsPrinted)
+			if done {
+				log.Infof("Finished streaming all events for keyspace %s", keyspace)
+				fmt.Printf("Finished streaming all events for keyspace %s\n", keyspace)
+				return
+			}
+			if startPos != "" {
+				log.Infof("resuming streaming from %s, error received was %v", startPos, err)
+			} else {
+				log.Errorf("returning without completion of keyspace %s because of error %v", keyspace, err)
+				return
+			}
+		}
+	}
+
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		startStreaming(ctx, config.vtgate, config.vtctld, config.targetKeyspace, targetTablet, config.table, config.pk, config.ids)
-		log.Infof("rowlog done streaming from target")
-	}()
+	go stream(config.sourceKeyspace, sourceTablet)
+
+	wg.Add(1)
+	go stream(config.targetKeyspace, targetTablet)
+
 	wg.Wait()
+
 	log.Infof("rowlog done streaming from both source and target")
-	fmt.Printf("done\nIf the program worked you should see two log files with the related binlog entries: %s.log and %s.log\n",
+	fmt.Printf("\n\nRowlog completed\nIf the program worked you should see two log files with the related binlog entries: %s.log and %s.log\n",
 		config.sourceKeyspace, config.targetKeyspace)
-	//generateHtml(config)
 }
 
-func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table, pk string, ids []string) {
-	flavor := getFlavor(ctx, vtctld, keyspace)
-	if flavor == "" {
-		return
+func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table, pk string, ids []string, startPos, stopPos string, fieldsPrinted bool) (string, string, bool, bool, error) {
+	var err error
+	if startPos == "" {
+		flavor := getFlavor(ctx, vtctld, keyspace)
+		if flavor == "" {
+			log.Errorf("Invalid flavor for %s", keyspace)
+			return "", "", false, false, nil
+		}
+		startPos, stopPos, err = getPositions(ctx, vtctld, tablet)
+		startPos = flavor + "/" + startPos
+		stopPos = flavor + "/" + stopPos
 	}
-	startPos, stopPos, err := getPositions(ctx, vtctld, tablet)
-	startPos = flavor + "/" + startPos
-	stopPos = flavor + "/" + stopPos
 	log.Infof("Streaming keyspace %s from %s upto %s", keyspace, startPos, stopPos)
 	fmt.Printf("Streaming keyspace %s from %s upto %s\n", keyspace, startPos, stopPos)
 	vgtid := &binlogdatapb.VGtid{
@@ -133,7 +159,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	var gtid string
 	var plan *TablePlan
 	var lastLoggedAt int64
-	var numRows int
+	var totalRowsForTable, filteredRows int
 	for {
 		evs, err := reader.Recv()
 		//fmt.Printf("events received: %d\n",len(evs))
@@ -141,9 +167,10 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 		case nil:
 			for _, ev := range evs {
 				now := time.Now().Unix()
-				if now-lastLoggedAt > 60 && ev.Timestamp != 0 { // log progress every ten seconds
+				if now-lastLoggedAt > 60 && ev.Timestamp != 0 { //every minute
 					lastLoggedAt = now
-					log.Infof("%s Progress: %s: %s", keyspace, time.Unix(ev.Timestamp, 0).Format(time.RFC3339), gtid)
+					log.Infof("%s Progress: %d/%d rows, %s: %s", keyspace, filteredRows, totalRowsForTable,
+						time.Unix(ev.Timestamp, 0).Format(time.RFC3339), gtid)
 					fmt.Printf(".")
 				}
 				switch ev.Type {
@@ -154,12 +181,16 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 					fields = ev.FieldEvent.Fields
 					//fmt.Printf("field %s\n", fields)
 					plan = getTablePlan(keyspace, fields, ev.FieldEvent.TableName, pk, ids)
-					outputHeader(plan)
+					if !fieldsPrinted {
+						outputHeader(plan)
+						fieldsPrinted = true
+					}
 				case binlogdatapb.VEventType_ROW:
-					numRows += len(ev.RowEvent.RowChanges)
+					totalRowsForTable += len(ev.RowEvent.RowChanges)
 					rows := processRowEvent(plan, gtid, ev)
 					if len(rows) > 0 {
 						//fmt.Printf("#rows %d\n", len(rows))
+						filteredRows += len(rows)
 						outputRows(plan, rows)
 					}
 				default:
@@ -178,22 +209,20 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				fmt.Errorf("Error decoding position for %s:%vs\n", stopPos, err.Error())
 			}
 			if currentPosition.AtLeast(stopPosition) {
-				log.Infof("Finished streaming keyspace %s from %s upto %s, total rows seen %d", keyspace, startPos, stopPos, numRows)
-				return
-			} else {
-				//log.Infof("CurrentPosition is Not At Least stoppos %s, %s", currentPosition.String(), stopPosition.String())
+				log.Infof("Finished streaming keyspace %s from %s upto %s, total rows seen %d", keyspace, startPos, stopPos, totalRowsForTable)
+				return "", "", true, true, nil
 			}
+			// return gtid, stopPos, false, fieldsPrinted, nil //uncomment for testing resumability
 		case io.EOF:
-			log.Infof("stream ended before reaching stoppos")
-			fmt.Printf("stream ended before reaching stoppos\n")
-			return
+			log.Infof("stream ended before reaching stop pos")
+			fmt.Printf("stream ended before reaching stop pos\n")
+			return "", "", false, fieldsPrinted, nil
 		default:
-			log.Errorf("remote error: %s", err)
-			fmt.Printf("remote error: %s\n", err.Error())
-			return
+			log.Errorf("remote error: %s, returning gtid %s, stopPos %s", err, gtid, stopPos)
+			fmt.Printf("remote error: %s, returning gtid %s, stopPos %s\n", err.Error(), gtid, stopPos)
+			return gtid, stopPos, false, fieldsPrinted, err
 		}
 	}
-
 }
 
 func output(filename, s string) {
@@ -382,9 +411,9 @@ func processPositionResult(gtidset string) (string, string) {
 	id, err := strconv.Atoi(subs[0])
 	if err != nil {
 		fmt.Errorf(err.Error())
-		return "",""
+		return "", ""
 	}
-	firstPos := arr[0] + ":" + strconv.Itoa(id)//subs[0]
+	firstPos := arr[0] + ":" + strconv.Itoa(id) //subs[0]
 	lastPos := gtids
 	return firstPos, lastPos
 }
@@ -413,17 +442,17 @@ func getPositions(ctx context.Context, server, tablet string) (string, string, e
 		return "", "", err
 	}
 	//fmt.Printf("results are %v\n", results)
-	firstPos := parseExecOutput(strings.Join(results,""))
+	firstPos := parseExecOutput(strings.Join(results, ""))
 
 	query = "select @@GLOBAL.gtid_executed;"
-	results, err = execVtctl(ctx, server, []string{"ExecuteFetchAsDba","-json",  tablet, query})
+	results, err = execVtctl(ctx, server, []string{"ExecuteFetchAsDba", "-json", tablet, query})
 	if err != nil {
 		fmt.Println(err)
 		log.Errorf(err.Error())
 		return "", "", err
 	}
 	//fmt.Printf("results are %v\n", results)
-	lastPos := parseExecOutput(strings.Join(results,""))
+	lastPos := parseExecOutput(strings.Join(results, ""))
 	//fmt.Printf("firstPos %s, lastPos %s\n", firstPos, lastPos)
 	return firstPos, lastPos, nil
 }
@@ -471,24 +500,3 @@ func execVtctl(ctx context.Context, server string, args []string) ([]string, err
 		}
 	}
 }
-
-/*
-TODO: html export
-
-var tpl = `
-	<h2>Rowlog for {{.Keyspace}}.{{.Table}}</h2>
-
-`
-func generateHtml(config *RowLogConfig) {
-	var lines []string
-	for _, f := range []string{config.sourceKeyspace+".log",config.targetKeyspace+".log"} {
-		content, err := ioutil.ReadFile(f)
-		if err != nil {
-			log.Error(err.Error())
-			return
-		}
-		lines = strings.Split(string(content), "\n")
-	}
-
-}
-*/
