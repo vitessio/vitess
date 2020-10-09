@@ -94,6 +94,9 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
 		return "", err
 	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
 	return mysql.EncodePosition(mpos), nil
 }
 
