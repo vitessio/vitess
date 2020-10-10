@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -45,6 +46,10 @@ const (
 	builtinBackupEngineName = "builtin"
 	writerBufferSize        = 2 * 1024 * 1024
 	dataDictionaryFile      = "mysql.ibd"
+)
+
+var (
+	builtinBackupMysqldDeadline = flag.Duration("builtinbackup_mysqld_deadline", time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -182,7 +187,9 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	err = params.Mysqld.Shutdown(ctx, params.Cnf, true)
+	shutdownCtx, cancel := context.WithTimeout(ctx, *builtinBackupMysqldDeadline)
+	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
+	defer cancel()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't shutdown mysqld")
 	}
