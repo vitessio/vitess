@@ -177,9 +177,12 @@ func TestWorkflowListStreams(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
 	require.Nil(t, err)
-	want := `{
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	require.Nil(t, err)
+	want := `Workflows: wrWorkflow
+{
 	"Workflow": "wrWorkflow",
 	"SourceLocation": {
 		"Keyspace": "source",
