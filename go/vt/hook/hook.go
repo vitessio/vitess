@@ -18,6 +18,7 @@ package hook
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -90,8 +91,8 @@ func NewHookWithEnv(name string, params []string, env map[string]string) *Hook {
 	return &Hook{Name: name, Parameters: params, ExtraEnv: env}
 }
 
-// findHook trie to locate the hook, and returns the exec.Cmd for it.
-func (hook *Hook) findHook() (*exec.Cmd, int, error) {
+// findHook tries to locate the hook, and returns the exec.Cmd for it.
+func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	// Check the hook path.
 	if strings.Contains(hook.Name, "/") {
 		return nil, HOOK_INVALID_NAME, fmt.Errorf("hook cannot contain '/'")
@@ -116,7 +117,7 @@ func (hook *Hook) findHook() (*exec.Cmd, int, error) {
 
 	// Configure the command.
 	log.Infof("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " "))
-	cmd := exec.Command(vthook, hook.Parameters...)
+	cmd := exec.CommandContext(ctx, vthook, hook.Parameters...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
 		for key, value := range hook.ExtraEnv {
@@ -132,7 +133,7 @@ func (hook *Hook) Execute() (result *HookResult) {
 	result = &HookResult{}
 
 	// Find the hook.
-	cmd, status, err := hook.findHook()
+	cmd, status, err := hook.findHook(context.Background())
 	if err != nil {
 		result.ExitStatus = status
 		result.Stderr = err.Error() + "\n"
@@ -187,7 +188,7 @@ func (hook *Hook) ExecuteOptional() error {
 // - an error code and an error if anything fails.
 func (hook *Hook) ExecuteAsWritePipe(out io.Writer) (io.WriteCloser, WaitFunc, int, error) {
 	// Find the hook.
-	cmd, status, err := hook.findHook()
+	cmd, status, err := hook.findHook(context.Background())
 	if err != nil {
 		return nil, nil, status, err
 	}
@@ -226,7 +227,7 @@ func (hook *Hook) ExecuteAsWritePipe(out io.Writer) (io.WriteCloser, WaitFunc, i
 // - an error code and an error if anything fails.
 func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, error) {
 	// Find the hook.
-	cmd, status, err := hook.findHook()
+	cmd, status, err := hook.findHook(context.Background())
 	if err != nil {
 		return nil, nil, status, err
 	}
