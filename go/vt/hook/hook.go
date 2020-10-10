@@ -128,12 +128,12 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	return cmd, HOOK_SUCCESS, nil
 }
 
-// Execute tries to execute the Hook and returns a HookResult.
-func (hook *Hook) Execute() (result *HookResult) {
+// ExecuteContext tries to execute the Hook with the given context and returns a HookResult.
+func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	result = &HookResult{}
 
 	// Find the hook.
-	cmd, status, err := hook.findHook(context.Background())
+	cmd, status, err := hook.findHook(ctx)
 	if err != nil {
 		result.ExitStatus = status
 		result.Stderr = err.Error() + "\n"
@@ -161,6 +161,11 @@ func (hook *Hook) Execute() (result *HookResult) {
 	log.Infof("hook: result is %v", result.String())
 
 	return result
+}
+
+// Execute tries to execute the Hook and returns a HookResult.
+func (hook *Hook) Execute() (result *HookResult) {
+	return hook.ExecuteContext(context.Background())
 }
 
 // ExecuteOptional executes an optional hook, logs if it doesn't
