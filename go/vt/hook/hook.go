@@ -19,6 +19,7 @@ package hook
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"time"
 
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
@@ -70,6 +72,10 @@ const (
 
 	// HOOK_GENERIC_ERROR is returned for unknown errors.
 	HOOK_GENERIC_ERROR = -6
+
+	// HOOK_TIMEOUT_ERROR is returned when a CommandContext has its context
+	// become done before the command terminates.
+	HOOK_TIMEOUT_ERROR = -7
 )
 
 // WaitFunc is a return type for the Pipe methods.
@@ -144,21 +150,45 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+
+	start := time.Now()
 	err = cmd.Run()
+	duration := time.Since(start)
+
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
+
+	defer func() {
+		log.Infof("hook: result is %v", result.String())
+	}()
+
 	if err == nil {
 		result.ExitStatus = HOOK_SUCCESS
-	} else {
-		if cmd.ProcessState != nil && cmd.ProcessState.Sys() != nil {
-			result.ExitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
-		} else {
-			result.ExitStatus = HOOK_CANNOT_GET_EXIT_STATUS
-		}
-		result.Stderr += "ERROR: " + err.Error() + "\n"
+		return result
 	}
 
-	log.Infof("hook: result is %v", result.String())
+	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		// When (exec.Cmd).Run hits a context cancelled, the process is killed via SIGTERM.
+		// This means:
+		// 	1. cmd.ProcessState.Exited() is false.
+		//	2. cmd.ProcessState.ExitCode() is -1.
+		// [ref]: https://golang.org/pkg/os/#ProcessState.ExitCode
+		//
+		// Therefore, we need to catch this error specifically, and set result.ExitStatus to
+		// HOOK_TIMEOUT_ERROR, because just using ExitStatus will result in HOOK_DOES_NOT_EXIST,
+		// which would be wrong. Since we're already doing some custom handling, we'll also include
+		// the amount of time the command was running in the error string, in case that is helpful.
+		result.ExitStatus = HOOK_TIMEOUT_ERROR
+		result.Stderr += fmt.Sprintf("ERROR: (after %s) %s\n", duration, err)
+		return result
+	}
+
+	if cmd.ProcessState != nil && cmd.ProcessState.Sys() != nil {
+		result.ExitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
+	} else {
+		result.ExitStatus = HOOK_CANNOT_GET_EXIT_STATUS
+	}
+	result.Stderr += "ERROR: " + err.Error() + "\n"
 
 	return result
 }
