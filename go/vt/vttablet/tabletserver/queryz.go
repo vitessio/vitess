@@ -139,7 +139,7 @@ func (s *queryzSorter) SetLessFn(sorter string) {
 		}
 	case "mysql_time_per_query":
 		s.less = func(row1, row2 *queryzRow) bool {
-			return row1.MysqlTimePQ() > row2.MysqlTimePQ()
+			return row1.mysqlTimePQ() > row2.mysqlTimePQ()
 		}
 	case "rows_per_query":
 		s.less = func(row1, row2 *queryzRow) bool {
