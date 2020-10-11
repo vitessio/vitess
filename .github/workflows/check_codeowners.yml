@@ -1,0 +1,21 @@
+name: check_codeowners
+on: [pull_request]
+jobs:
+
+  build:
+    name: Check codeowners
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Run codeowners check
+      run: |
+        OUTPUT_FILE=/tmp/files-not-owned
+        tools/check_codeowners.sh > $OUTPUT_FILE
+        if [ -s "$OUTPUT_FILE" ] ; then
+          echo "# $(wc -l "$OUTPUT_FILE") files not covered by CODEOWNERS:"
+          cat "$OUTPUT_FILE"
+          exit 1
+        fi
