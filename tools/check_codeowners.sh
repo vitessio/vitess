@@ -12,4 +12,4 @@ find . -type f | grep -v '^./.git' | while read -r f ; do git check-ignore "$f" 
   done && exit 0
   # If we're stil here, then that means no CODEOWNER was found for file $f
   echo "$f" 
-done > /dev/null 
+done
