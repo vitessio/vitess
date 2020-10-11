@@ -15,7 +15,7 @@ jobs:
         OUTPUT_FILE=/tmp/files-not-owned
         tools/check_codeowners.sh > $OUTPUT_FILE
         if [ -s "$OUTPUT_FILE" ] ; then
-          echo "# $(wc -l "$OUTPUT_FILE") files not covered by CODEOWNERS:"
+          echo "# $(wc -l "$OUTPUT_FILE" | awk '{print $1}') files not covered by CODEOWNERS:"
           cat "$OUTPUT_FILE"
           exit 1
         fi
