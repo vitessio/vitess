@@ -59,16 +59,18 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
 		db:       true, liid: true,
 	}, {
+		// unnest database() call
 		in:       "select (select database()) from test",
-		expected: "select (select database() from dual) from test",
+		expected: "select database() as `(select database() from dual)` from test",
 		// no bindvar needs
 	}, {
+		// unnest database() call
 		in:       "select (select database() from dual) from test",
-		expected: "select (select database() from dual) from test",
+		expected: "select database() as `(select database() from dual)` from test",
 		// no bindvar needs
 	}, {
 		in:       "select (select database() from dual) from dual",
-		expected: "select (select :__vtdbname as `database()` from dual) as `(select database() from dual)` from dual",
+		expected: "select :__vtdbname as `(select database() from dual)` from dual",
 		db:       true,
 	}, {
 		in:       "select id from user where database()",
@@ -130,6 +132,19 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT @@workload",
 		expected: "SELECT :__vtworkload as `@@workload`",
 		workload: true,
+	}, {
+		in:       "select (select 42) from dual",
+		expected: "select 42 as `(select 42 from dual)` from dual",
+	}, {
+		in:       "select * from user where col = (select 42)",
+		expected: "select * from user where col = 42",
+	}, {
+		in:       "select * from (select 42) as t", // this is not an expression, and should not be rewritten
+		expected: "select * from (select 42) as t",
+	}, {
+		in:       `select (select (select (select (select (select last_insert_id()))))) as x`,
+		expected: "select :__lastInsertId as x from dual",
+		liid:     true,
 	}}
 
 	for _, tc := range tests {
