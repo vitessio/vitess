@@ -431,10 +431,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				}
 				warnings = packetOk.warnings
 				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
-				// TODO harshit: fix this
-				//if packetOk.sessionStateChangeValue != nil {
-				//	result.SessionStateChanges = "gtids"
-				//}
+				result.SessionStateChanges = packetOk.sessionStateData
 			}
 			return result, more, warnings, nil
 
@@ -491,7 +488,6 @@ func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
 	switch data[0] {
 	case OKPacket:
 		packetOk, err := c.parseOKPacket(data)
-		// TODO harshit : change this to return okpacket
 		return 0, packetOk, err
 	case ErrPacket:
 		// Error
