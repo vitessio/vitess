@@ -167,7 +167,7 @@ func main() {
 
 	// Now that we have fully initialized the tablets, rebuild the keyspace graph.
 	for _, ks := range tpb.Keyspaces {
-		err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells)
+		err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, ks.GetName(), tpb.Cells, false)
 		if err != nil {
 			if *startMysql {
 				mysqld.Shutdown(context.TODO(), cnf, true)
