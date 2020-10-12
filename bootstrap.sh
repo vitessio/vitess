@@ -119,7 +119,8 @@ function install_zookeeper() {
   local dist="$2"
 
   zk="zookeeper-$version"
-  wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
+  wget "https://apache.org/dist/zookeeper/$zk/apache-$zk.tar.gz"
+  zk="apache-$zk"
   tar -xzf "$zk.tar.gz"
   ant -f "$zk/build.xml" package
   ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
@@ -129,7 +130,7 @@ function install_zookeeper() {
   rm -rf "$zk" "$zk.tar.gz"
 }
 
-zk_ver=${ZK_VERSION:-3.4.14}
+zk_ver=${ZK_VERSION:-3.5.8}
 if [ "$BUILD_JAVA" == 1 ] ; then
   install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 fi
