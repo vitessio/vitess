@@ -242,8 +242,8 @@ type (
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
+	// Load represents a LOAD statement
 	Load struct {
-		InfileS3 string
 	}
 
 	// ParenSelect is a parenthesized SELECT statement.

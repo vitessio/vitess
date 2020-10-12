@@ -422,9 +422,9 @@ do_statement:
   }
 
 load_statement:
-  LOAD DATA FROM S3 STRING skip_to_end
+  LOAD DATA skip_to_end
   {
-	$$ = &Load{InfileS3 : string($5)}
+    $$ = &Load{}
   }
 
 select_statement:

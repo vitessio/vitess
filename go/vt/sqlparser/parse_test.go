@@ -1055,6 +1055,15 @@ var (
 		input:  "load data from s3 'x.txt'",
 		output: "AST node missing for Load type",
 	}, {
+		input:  "load data from s3 manifest 'x.txt'",
+		output: "AST node missing for Load type",
+	}, {
+		input:  "load data from s3 file 'x.txt'",
+		output: "AST node missing for Load type",
+	}, {
+		input:  "load data infile 'x.txt' into table 'c'",
+		output: "AST node missing for Load type",
+	}, {
 		input:  "load data from s3 'x.txt' into table x",
 		output: "AST node missing for Load type",
 	}, {

@@ -338,7 +338,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
 	case *sqlparser.Load:
-		return buildPlanForBypassUsingQuery(query, vschema)
+		return buildLoadPlan(query, vschema)
 	case *sqlparser.DBDDL:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
 	case *sqlparser.Show, *sqlparser.SetTransaction:
@@ -370,6 +370,29 @@ func buildShowTableStatusPlan(stmt *sqlparser.ShowTableStatus, vschema ContextVS
 		TargetDestination: destination,
 		Query:             sqlparser.String(stmt),
 		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	destination := vschema.Destination()
+	if destination == nil {
+		if keyspace.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "set bypass destination first for a sharded keyspace")
+		}
+		destination = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             query,
+		IsDML:             true,
 		SingleShardOnly:   true,
 	}, nil
 }

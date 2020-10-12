@@ -134,9 +134,9 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "IsDML": false,
+    "IsDML": true,
     "Query": "load data from s3 'x.txt' into table x",
-    "SingleShardOnly": false
+    "SingleShardOnly": true
   }
 }
 
@@ -151,8 +151,8 @@
       "Sharded": false
     },
     "TargetDestination": "Shard(-80)",
-    "IsDML": false,
+    "IsDML": true,
     "Query": "load data from s3 'x.txt'",
-    "SingleShardOnly": false
+    "SingleShardOnly": true
   }
 }
