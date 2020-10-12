@@ -996,7 +996,12 @@ func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warn
 		}
 	} else {
 		// This will flush too.
-		if err := c.writeOKPacketWithEOFHeader(affectedRows, lastInsertID, flags, warnings); err != nil {
+		if err := c.writeOKPacketWithEOFHeader(&PacketOK{
+			affectedRows: affectedRows,
+			lastInsertID: lastInsertID,
+			statusFlags:  flags,
+			warnings:     warnings,
+		}); err != nil {
 			return err
 		}
 	}

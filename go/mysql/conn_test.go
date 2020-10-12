@@ -246,8 +246,17 @@ func TestBasicPackets(t *testing.T) {
 	assert.EqualValues(78, packetOk.warnings)
 
 	// Write OK packet with affected GTIDs, read it, compare.
-	gtids := "foo-bar"
-	err = sConn.writeOKPacketWithGTIDs(23, 45, 67, 89, gtids)
+	sConn.Capabilities |= CapabilityClientSessionTrack
+	cConn.Capabilities |= CapabilityClientSessionTrack
+	ok := PacketOK{
+		affectedRows:     23,
+		lastInsertID:     45,
+		statusFlags:      67 | ServerSessionStateChanged,
+		warnings:         89,
+		info:             "",
+		sessionStateData: "foo-bar",
+	}
+	err = sConn.writeOKPacket(&ok)
 	require.NoError(err)
 
 	data, err = cConn.ReadPacket()
@@ -255,18 +264,22 @@ func TestBasicPackets(t *testing.T) {
 	require.NotEmpty(data)
 	assert.EqualValues(data[0], OKPacket, "OKPacket")
 
-	cConn.Capabilities = CapabilityFlags
 	packetOk, err = cConn.parseOKPacket(data)
 	require.NoError(err)
 	assert.EqualValues(23, packetOk.affectedRows)
 	assert.EqualValues(45, packetOk.lastInsertID)
-	assert.EqualValues(67|ServerSessionStateChanged, packetOk.statusFlags)
+	assert.EqualValues(ServerSessionStateChanged, packetOk.statusFlags&ServerSessionStateChanged)
 	assert.EqualValues(89, packetOk.warnings)
-	assert.EqualValues(SessionTrackGtids, packetOk.sessionStateChangeType)
-	// TODO harshit: fix this assert.EqualValues("SessionTrackGtids", packetOk.sessionStateChangeValue)
+	assert.EqualValues("foo-bar", packetOk.sessionStateData)
 
 	// Write OK packet with EOF header, read it, compare.
-	err = sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78)
+	ok = PacketOK{
+		affectedRows: 12,
+		lastInsertID: 34,
+		statusFlags:  56,
+		warnings:     78,
+	}
+	err = sConn.writeOKPacketWithEOFHeader(&ok)
 	require.NoError(err)
 
 	data, err = cConn.ReadPacket()
@@ -323,8 +336,9 @@ func TestOkPackets(t *testing.T) {
 	}()
 
 	testCases := []struct {
-		data string
-		cc   uint32
+		data        string
+		cc          uint32
+		expectedErr string
 	}{{
 		data: `
 00000000  00 00 00 02 00 00 00                              |.......|`,
@@ -341,18 +355,21 @@ func TestOkPackets(t *testing.T) {
 00000030  61 3a 32                                          |a:2|`,
 		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}, {
-		data: `00000000  00 00 00 02 40 00 00 00  07 01 05 04 74 65 73 74  |....@.......test|`,
-		cc:   CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		data:        `00000000  00 00 00 02 40 00 00 00  07 01 05 04 74 65 73 74  |....@.......test|`,
+		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		expectedErr: "invalid OK packet session state change type: 1",
 	}, {
 		data: `
 00000000  00 00 00 00 40 00 00 00  14 00 0f 0a 61 75 74 6f  |....@.......auto|
 00000010  63 6f 6d 6d 69 74 03 4f  46 46 02 01 31           |commit.OFF..1|`,
-		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		expectedErr: "invalid OK packet session state change type: 0",
 	}, {
 		data: `
 00000000  00 00 00 00 40 00 00 00  0a 01 05 04 74 65 73 74  |....@.......test|
 00000010  02 01 31                                          |..1|`,
-		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		expectedErr: "invalid OK packet session state change type: 1",
 	}}
 
 	for i, testCase := range testCases {
@@ -363,6 +380,11 @@ func TestOkPackets(t *testing.T) {
 			sConn.Capabilities = testCase.cc
 			// parse the packet
 			packetOk, err := cConn.parseOKPacket(data)
+			if testCase.expectedErr != "" {
+				require.Error(t, err)
+				require.Equal(t, testCase.expectedErr, err.Error())
+				return
+			}
 			require.NoError(t, err, "failed to parse OK packet")
 
 			// write the ok packet from server

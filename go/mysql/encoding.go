@@ -319,12 +319,6 @@ func (d *coder) readByte() (byte, bool) {
 	return res, ok
 }
 
-//func (d *coder) skipLenEncString() bool {
-//	newPos, ok := skipLenEncString(d.data, d.pos)
-//	d.pos = newPos
-//	return ok
-//}
-
 func (d *coder) readLenEncString() (string, bool) {
 	res, newPos, ok := readLenEncString(d.data, d.pos)
 	d.pos = newPos
@@ -357,4 +351,8 @@ func (d *coder) writeUint16(value uint16) {
 func (d *coder) writeLenEncString(value string) {
 	newPos := writeLenEncString(d.data, d.pos, value)
 	d.pos = newPos
+}
+
+func (d *coder) writeEOFString(value string) {
+	d.pos += copy(d.data[d.pos:], value)
 }
