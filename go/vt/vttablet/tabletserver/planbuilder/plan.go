@@ -207,6 +207,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 			PlanID:    PlanShowTables,
 			FullQuery: GenerateFullQuery(stmt),
 		}
+	case *sqlparser.Load:
+		plan, err = &Plan{PlanID: PlanDDL}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
