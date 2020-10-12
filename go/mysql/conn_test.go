@@ -221,6 +221,8 @@ func TestBasicPackets(t *testing.T) {
 		sConn.Close()
 		cConn.Close()
 	}()
+	sConn.Capabilities = CapabilityClientProtocol41
+	cConn.Capabilities = CapabilityClientProtocol41
 
 	// Write OK packet, read it, compare.
 	err := sConn.writeOKPacket(&PacketOK{
@@ -321,82 +323,75 @@ func TestOkPackets(t *testing.T) {
 	}()
 
 	testCases := []struct {
-		data []byte
+		data string
 		cc   uint32
 	}{{
-		data: StringToPacket(`
-07 00 00 02 00 00 00 02    00 00 00                   ...........
-`), cc: CapabilityClientProtocol41,
+		data: `
+00000000  00 00 00 02 00 00 00                              |.......|`,
+		cc: CapabilityClientProtocol41,
 	}, {
-		data: StringToPacket(`
-07 00 00 02 00 00 00 02    00                   ...........
-`), cc: CapabilityClientTransactions,
+		data: `
+00000000  00 00 00 02 00                                    |.....|`,
+		cc: CapabilityClientTransactions,
 	}, {
-		data: StringToPacket(`
-33 00 00 01 00 00 00 02 40 00 00 00 2a 03 28 00   3.......@...*.(.
-26 66 32 37 66 36 39 37 31 2d 30 33 65 37 2d 31   &f27f6971-03e7-1
-31 65 62 2d 38 35 63 35 2d 39 38 61 66 36 35 61   1eb-85c5-98af65a
-36 64 63 34 61 3a 32                              6dc4a:2
-		`), cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		data: `
+00000000  00 00 00 02 40 00 00 00  2a 03 28 00 26 66 32 37  |....@...*.(.&f27|
+00000010  66 36 39 37 31 2d 30 33  65 37 2d 31 31 65 62 2d  |f6971-03e7-11eb-|
+00000020  38 35 63 35 2d 39 38 61  66 36 35 61 36 64 63 34  |85c5-98af65a6dc4|
+00000030  61 3a 32                                          |a:2|`,
+		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}, {
-		data: StringToPacket(`
-10 00 00 02 00 00 00 02    40 00 00 00 07 01 05 04    ........@.......
-74 65 73 74                                           test
-`), cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		data: `00000000  00 00 00 02 40 00 00 00  07 01 05 04 74 65 73 74  |....@.......test|`,
+		cc:   CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}, {
-
-		data: StringToPacket(`
-1d 00 00 01 00 00 00 00    40 00 00 00 14 00 0f 0a    ........@.......
-61 75 74 6f 63 6f 6d 6d    69 74 03 4f 46 46 02 01    autocommit.OFF..
-31                                                    1
-`), cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		data: `
+00000000  00 00 00 00 40 00 00 00  14 00 0f 0a 61 75 74 6f  |....@.......auto|
+00000010  63 6f 6d 6d 69 74 03 4f  46 46 02 01 31           |commit.OFF..1|`,
+		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}, {
-
-		data: StringToPacket(`
-13 00 00 01 00 00 00 00    40 00 00 00 0a 01 05 04    ........@.......
-74 65 73 74 02 01 31                                  test..1
-`), cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		data: `
+00000000  00 00 00 00 40 00 00 00  0a 01 05 04 74 65 73 74  |....@.......test|
+00000010  02 01 31                                          |..1|`,
+		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}}
 
 	for i, testCase := range testCases {
 		t.Run("data packet:"+strconv.Itoa(i), func(t *testing.T) {
-			data := testCase.data
+			data := ReadHexDump(testCase.data)
+
 			cConn.Capabilities = testCase.cc
 			sConn.Capabilities = testCase.cc
 			// parse the packet
-			packetOk, err := cConn.parseOKPacket(data[4:])
-			require.NoError(t, err)
-			fmt.Printf("packetok: %v\n", packetOk)
+			packetOk, err := cConn.parseOKPacket(data)
+			require.NoError(t, err, "failed to parse OK packet")
 
 			// write the ok packet from server
 			err = sConn.writeOKPacket(packetOk)
-			require.NoError(t, err)
+			require.NoError(t, err, "failed to write OK packet")
 
 			// receive the ok packer on client
 			readData, err := cConn.ReadPacket()
-			require.NoError(t, err)
-			assert.Equal(t, data[4:], readData)
+			require.NoError(t, err, "failed to read packet that was written")
+			assert.Equal(t, data, readData, "data read and written does not match")
 		})
 	}
 }
 
-func StringToPacket(value string) (data []byte) {
+func ReadHexDump(value string) []byte {
 	lines := strings.Split(value, "\n")
-	data = make([]byte, 0, 16*len(lines))
-	var values []string
-
+	var data []byte
 	for _, line := range lines {
 		if len(line) == 0 {
 			continue
 		}
-		if len(line) < 51 {
-			values = strings.Split(line, " ")
-		} else {
-			values = strings.Split(line[:51], " ")
-		}
-		for _, val := range values {
-			i, _ := hex.DecodeString(val)
-			data = append(data, i...)
+		indexOfPipe := strings.Index(line, "|")
+		s := line[8:indexOfPipe]
+		hexValues := strings.Split(s, " ")
+		for _, val := range hexValues {
+			if val != "" {
+				i, _ := hex.DecodeString(val)
+				data = append(data, i...)
+			}
 		}
 	}
 
