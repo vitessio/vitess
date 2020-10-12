@@ -63,7 +63,7 @@ func initResolver(t *testing.T, name string) *Resolver {
 
 	// And rebuild both.
 	for _, keyspace := range []string{"sks", "uks"} {
-		if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, keyspace, []string{cell}); err != nil {
+		if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, keyspace, []string{cell}, false); err != nil {
 			t.Fatalf("RebuildKeyspace(%v) failed: %v", keyspace, err)
 		}
 	}

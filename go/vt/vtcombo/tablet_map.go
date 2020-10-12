@@ -280,7 +280,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 		// Rebuild the SrvKeyspace object, so we can support
 		// range-based sharding queries, and export the redirects.
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, false); err != nil {
 			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 		}
 	}
