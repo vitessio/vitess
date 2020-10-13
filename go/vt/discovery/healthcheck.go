@@ -313,10 +313,6 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
 func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
-	// check whether we should really add this tablet
-	if !hc.isIncluded(tablet) {
-		return
-	}
 	// check whether grpc port is present on tablet, if not return
 	if tablet.PortMap["grpc"] == 0 {
 		return
@@ -368,9 +364,6 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 // RemoveTablet removes the tablet, and stops the health check.
 // It does not block.
 func (hc *HealthCheckImpl) RemoveTablet(tablet *topodata.Tablet) {
-	if !hc.isIncluded(tablet) {
-		return
-	}
 	hc.deleteTablet(tablet)
 }
 
@@ -453,7 +446,10 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 			all := hc.healthData[targetKey]
 			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
-				allArray = append(allArray, s)
+				// only tablets in same cell / cellAlias are included in healthy list
+				if hc.isIncluded(shr) {
+					allArray = append(allArray, s)
+				}
 			}
 			hc.healthy[targetKey] = FilterStatsByReplicationLag(allArray)
 		}
@@ -462,7 +458,10 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 			all := hc.healthData[oldTargetKey]
 			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
-				allArray = append(allArray, s)
+				// only tablets in same cell / cellAlias are included in healthy list
+				if hc.isIncluded(shr) {
+					allArray = append(allArray, s)
+				}
 			}
 			hc.healthy[oldTargetKey] = FilterStatsByReplicationLag(allArray)
 		}
@@ -673,10 +672,8 @@ func (hc *HealthCheckImpl) keyFromTablet(tablet *topodata.Tablet) keyspaceShardT
 	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
 }
 
+// getAliasByCell should only be called while holding hc.mu
 func (hc *HealthCheckImpl) getAliasByCell(cell string) string {
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
 	if alias, ok := hc.cellAliases[cell]; ok {
 		return alias
 	}
@@ -689,14 +686,14 @@ func (hc *HealthCheckImpl) getAliasByCell(cell string) string {
 	return alias
 }
 
-func (hc *HealthCheckImpl) isIncluded(tablet *topodata.Tablet) bool {
-	if tablet.Type == topodata.TabletType_MASTER {
+func (hc *HealthCheckImpl) isIncluded(shr *query.StreamHealthResponse) bool {
+	if shr.Target.TabletType == topodata.TabletType_MASTER {
 		return true
 	}
-	if tablet.Alias.Cell == hc.cell {
+	if shr.TabletAlias.Cell == hc.cell {
 		return true
 	}
-	if hc.getAliasByCell(tablet.Alias.Cell) == hc.getAliasByCell(hc.cell) {
+	if hc.getAliasByCell(shr.TabletAlias.Cell) == hc.getAliasByCell(hc.cell) {
 		return true
 	}
 	return false
