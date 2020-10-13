@@ -322,15 +322,20 @@ func TestReplicationStatus(t *testing.T) {
 
 func TestSessionTrackGTIDs(t *testing.T) {
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &connParams)
+	params := connParams
+	params.Flags |= mysql.CapabilityClientSessionTrack
+	conn, err := mysql.Connect(ctx, &params)
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch(`set session session_track_gtids='own_gtid'`, 1000, false)
+	qr, err := conn.ExecuteFetch(`set session session_track_gtids='own_gtid'`, 1000, false)
 	require.NoError(t, err)
+	require.Empty(t, qr.SessionStateChanges)
 
-	_, err = conn.ExecuteFetch(`create table vttest.t1(id bigint primary key)`, 1000, false)
+	qr, err = conn.ExecuteFetch(`create table vttest.t1(id bigint primary key)`, 1000, false)
 	require.NoError(t, err)
+	require.NotEmpty(t, qr.SessionStateChanges)
 
-	_, err = conn.ExecuteFetch(`insert into vttest.t1 values (1)`, 1000, false)
+	qr, err = conn.ExecuteFetch(`insert into vttest.t1 values (1)`, 1000, false)
 	require.NoError(t, err)
+	require.NotEmpty(t, qr.SessionStateChanges)
 }

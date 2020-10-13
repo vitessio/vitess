@@ -706,11 +706,8 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 	length := 1 + // OKPacket
 		lenEncIntSize(packetOk.affectedRows) +
 		lenEncIntSize(packetOk.lastInsertID)
-	if c.Capabilities&CapabilityClientProtocol41 == CapabilityClientProtocol41 {
-		length += 4 // status_flags + warnings
-	} else if c.Capabilities&CapabilityClientTransactions == CapabilityClientTransactions {
-		length += 2 // status_flags
-	}
+	// assuming CapabilityClientProtocol41
+	length += 4 // status_flags + warnings
 
 	var gtidData []byte
 	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
@@ -732,12 +729,8 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 	data.writeByte(headerType) //header - OK or EOF
 	data.writeLenEncInt(packetOk.affectedRows)
 	data.writeLenEncInt(packetOk.lastInsertID)
-	if c.Capabilities&CapabilityClientProtocol41 == CapabilityClientProtocol41 {
-		data.writeUint16(packetOk.statusFlags)
-		data.writeUint16(packetOk.warnings)
-	} else if c.Capabilities&CapabilityClientTransactions == CapabilityClientTransactions {
-		data.writeUint16(packetOk.statusFlags)
-	}
+	data.writeUint16(packetOk.statusFlags)
+	data.writeUint16(packetOk.warnings)
 	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
 		data.writeLenEncString(packetOk.info)
 		if packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
@@ -1382,16 +1375,15 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	}
 	packetOK.statusFlags = statusFlags
 
-	if c.Capabilities&CapabilityClientProtocol41 == CapabilityClientProtocol41 {
-		// Warnings.
-		warnings, ok := data.readUint16()
-		if !ok {
-			return fail("invalid OK packet warnings: %v", data)
-		}
-		packetOK.warnings = warnings
+	// assuming CapabilityClientProtocol41
+	// Warnings.
+	warnings, ok := data.readUint16()
+	if !ok {
+		return fail("invalid OK packet warnings: %v", data)
 	}
+	packetOK.warnings = warnings
 
-	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// info
 		info, _ := data.readLenEncInfo()
 		packetOK.info = info

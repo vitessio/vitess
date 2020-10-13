@@ -355,8 +355,9 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 	if colNumber == 0 {
 		// OK packet, means no results. Just use the numbers.
 		return &sqltypes.Result{
-			RowsAffected: packetOk.affectedRows,
-			InsertID:     packetOk.lastInsertID,
+			RowsAffected:        packetOk.affectedRows,
+			InsertID:            packetOk.lastInsertID,
+			SessionStateChanges: packetOk.sessionStateData,
 		}, more, warnings, nil
 	}
 
