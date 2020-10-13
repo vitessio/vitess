@@ -83,7 +83,7 @@ type builder interface {
 	SetUpperLimit(count sqlparser.Expr)
 
 	// PushMisc pushes miscelleaneous constructs to all the primitives.
-	PushMisc(sel *sqlparser.Select)
+	PushMisc(sel *sqlparser.Select) error
 
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
@@ -169,8 +169,8 @@ func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
 	bc.input.SetUpperLimit(count)
 }
 
-func (bc *builderCommon) PushMisc(sel *sqlparser.Select) {
-	bc.input.PushMisc(sel)
+func (bc *builderCommon) PushMisc(sel *sqlparser.Select) error {
+	return bc.input.PushMisc(sel)
 }
 
 func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
