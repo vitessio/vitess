@@ -282,10 +282,6 @@
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
 
-# sharded insert subquery in insert value
-"insert into user(id, val) values((select 1), 1)"
-"unsupported: subquery in insert values"
-
 # sharded replace no vindex
 "replace into user(val) values(1, 'foo')"
 "unsupported: REPLACE INTO with sharded schema"
@@ -447,3 +443,9 @@
 # Multi shard query using into outfile s3
 "select * from user order by id limit 100 into outfile s3 'out_file_name'"
 "unsupported: non bypass query with into outfile s3"
+
+"load data from s3 'x.txt' into table x"
+"set bypass destination first"
+
+"load data from s3 'x.txt'"
+"set bypass destination first"

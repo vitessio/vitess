@@ -1052,6 +1052,12 @@ var (
 	}, {
 		input: "create table a",
 	}, {
+		input:  "load data from s3 'x.txt'",
+		output: "AST node missing for Load type",
+	}, {
+		input:  "load data from s3 'x.txt' into table x",
+		output: "AST node missing for Load type",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
@@ -1330,8 +1336,18 @@ var (
 		input:  "show session status",
 		output: "show session status",
 	}, {
-		input:  "show table status",
-		output: "show table",
+		input: "show table status",
+	}, {
+		input: "show table status from dbname",
+	}, {
+		input:  "show table status in dbname",
+		output: "show table status from dbname",
+	}, {
+		input:  "show table status in dbname LIKE '%' ",
+		output: "show table status from dbname like '%'",
+	}, {
+		input:  "show table status from dbname Where col=42 ",
+		output: "show table status from dbname where col = 42",
 	}, {
 		input: "show tables",
 	}, {
@@ -1360,13 +1376,16 @@ var (
 	}, {
 		input: "show full tables where 1 = 0",
 	}, {
-		input: "show full columns from a like '%'",
+		input:  "show full columns in a in b like '%'",
+		output: "show full columns from a from b like '%'",
 	}, {
 		input: "show full columns from messages from test_keyspace like '%'",
 	}, {
-		input: "show full fields from a like '%'",
+		input:  "show full fields from a like '%'",
+		output: "show full columns from a like '%'",
 	}, {
-		input: "show fields from a like '%'",
+		input:  "show fields from a where 1 = 1",
+		output: "show columns from a where 1 = 1",
 	}, {
 		input:  "show triggers",
 		output: "show triggers",

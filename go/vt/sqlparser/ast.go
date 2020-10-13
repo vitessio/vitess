@@ -242,6 +242,11 @@ type (
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
+	// Load is for s3 statement
+	Load struct {
+		InfileS3 string
+	}
+
 	// ParenSelect is a parenthesized SELECT statement.
 	ParenSelect struct {
 		Select SelectStatement
@@ -249,13 +254,7 @@ type (
 
 	// Show represents a show statement.
 	Show struct {
-		Extended               string
-		Type                   string
-		OnTable                TableName
-		Table                  TableName
-		ShowTablesOpt          *ShowTablesOpt
-		Scope                  Scope
-		ShowCollationFilterOpt Expr
+		Internal ShowInternal
 	}
 
 	// Use represents a use statement.
@@ -333,11 +332,47 @@ func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
+func (*Load) iStatement()              {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
+
+//ShowInternal will represent all the show statement types.
+type ShowInternal interface {
+	isShowInternal()
+	SQLNode
+}
+
+//ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
+type ShowLegacy struct {
+	Extended               string
+	Type                   string
+	OnTable                TableName
+	Table                  TableName
+	ShowTablesOpt          *ShowTablesOpt
+	Scope                  Scope
+	ShowCollationFilterOpt Expr
+}
+
+//ShowColumns is of ShowInternal type, holds the show columns statement.
+type ShowColumns struct {
+	Full   string
+	Table  TableName
+	DbName string
+	Filter *ShowFilter
+}
+
+// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
+type ShowTableStatus struct {
+	DatabaseName string
+	Filter       *ShowFilter
+}
+
+func (*ShowLegacy) isShowInternal()      {}
+func (*ShowColumns) isShowInternal()     {}
+func (*ShowTableStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -1389,6 +1424,22 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v", node.Internal)
+}
+
+// Format formats the node.
+func (node *ShowColumns) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s", node.Full)
+	buf.astPrintf(node, "columns from %v", node.Table)
+
+	buf.printIf(node.DbName != "", " from "+node.DbName)
+	if node.Filter != nil {
+		buf.astPrintf(node, "%v", node.Filter)
+	}
+}
+
+// Format formats the node.
+func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
 		nodeType == "databases" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
@@ -2055,4 +2106,19 @@ func (node AccessMode) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString(TxReadWrite)
 	}
+}
+
+// Format formats the node.
+func (node *Load) Format(buf *TrackedBuffer) {
+	buf.WriteString("AST node missing for Load type")
+}
+
+// Format formats the node.
+func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
+	buf.WriteString("show table status")
+	if node.DatabaseName != "" {
+		buf.WriteString(" from ")
+		buf.WriteString(node.DatabaseName)
+	}
+	buf.astPrintf(node, "%v", node.Filter)
 }

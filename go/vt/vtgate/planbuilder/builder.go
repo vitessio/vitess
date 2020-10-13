@@ -337,13 +337,17 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
+	case *sqlparser.Load:
+		return buildPlanForBypassUsingQuery(query, vschema)
 	case *sqlparser.DBDDL:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
-	case *sqlparser.Show, *sqlparser.SetTransaction:
+	case *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
+	case *sqlparser.Show:
+		return buildShowPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)

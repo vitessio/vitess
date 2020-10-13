@@ -183,15 +183,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		// We have to use the original query at the time of execution.
 		plan = &Plan{PlanID: PlanDDL}
 	case *sqlparser.Show:
-		if stmt.Type == sqlparser.KeywordString(sqlparser.TABLES) {
-			analyzeShowTables(stmt, dbName)
-			plan = &Plan{
-				PlanID:    PlanShowTables,
-				FullQuery: GenerateFullQuery(stmt),
-			}
-		} else {
-			plan, err = &Plan{PlanID: PlanOtherRead}, nil
-		}
+		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, *sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:

@@ -111,10 +111,10 @@ func createCluster(t *testing.T, numReplicas int, numRdonly int, orcExtraArgs []
 		require.NoError(t, err)
 	}
 
-	// Start orchestrator
-	clusterInstance.OrcProcess = clusterInstance.NewOrcProcess(path.Join(os.Getenv("PWD"), "test_config.json"))
-	clusterInstance.OrcProcess.ExtraArgs = orcExtraArgs
-	err = clusterInstance.OrcProcess.Setup()
+	// Start vtorc
+	clusterInstance.VtorcProcess = clusterInstance.NewOrcProcess(path.Join(os.Getenv("PWD"), "test_config.json"))
+	clusterInstance.VtorcProcess.ExtraArgs = orcExtraArgs
+	err = clusterInstance.VtorcProcess.Setup()
 	require.NoError(t, err)
 
 	return clusterInstance

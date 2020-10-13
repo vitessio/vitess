@@ -37,6 +37,10 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+ifndef VTROOT
+export VTROOT=${PWD}
+endif
+
 # We now have CGO code in the build which throws warnings with newer gcc builds.
 # See: https://github.com/mattn/go-sqlite3/issues/803
 # Work around by dropping optimization level from default -O2.
@@ -69,7 +73,7 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctld,orchestrator,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
 # Usage: make install PREFIX=/path/to/install/root

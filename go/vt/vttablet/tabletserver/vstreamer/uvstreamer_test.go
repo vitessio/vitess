@@ -308,8 +308,6 @@ func resetMetrics(t *testing.T) {
 	engine.resultStreamerNumRows.Reset()
 	engine.rowStreamerNumRows.Reset()
 	engine.vstreamerPhaseTimings.Reset()
-	engine.vstreamerPhaseTimings.Reset()
-	engine.vstreamerPhaseTimings.Reset()
 }
 
 func validateMetrics(t *testing.T) {

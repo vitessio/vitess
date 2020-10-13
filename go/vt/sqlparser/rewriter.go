@@ -593,20 +593,36 @@ func replaceSetTransactionComments(newNode, parent SQLNode) {
 	parent.(*SetTransaction).Comments = newNode.(Comments)
 }
 
-func replaceShowOnTable(newNode, parent SQLNode) {
-	parent.(*Show).OnTable = newNode.(TableName)
+func replaceShowInternal(newNode, parent SQLNode) {
+	parent.(*Show).Internal = newNode.(ShowInternal)
 }
 
-func replaceShowShowCollationFilterOpt(newNode, parent SQLNode) {
-	parent.(*Show).ShowCollationFilterOpt = newNode.(Expr)
+func replaceShowColumnsFilter(newNode, parent SQLNode) {
+	parent.(*ShowColumns).Filter = newNode.(*ShowFilter)
 }
 
-func replaceShowTable(newNode, parent SQLNode) {
-	parent.(*Show).Table = newNode.(TableName)
+func replaceShowColumnsTable(newNode, parent SQLNode) {
+	parent.(*ShowColumns).Table = newNode.(TableName)
 }
 
 func replaceShowFilterFilter(newNode, parent SQLNode) {
 	parent.(*ShowFilter).Filter = newNode.(Expr)
+}
+
+func replaceShowLegacyOnTable(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).OnTable = newNode.(TableName)
+}
+
+func replaceShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
+}
+
+func replaceShowLegacyTable(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).Table = newNode.(TableName)
+}
+
+func replaceShowTableStatusFilter(newNode, parent SQLNode) {
+	parent.(*ShowTableStatus).Filter = newNode.(*ShowFilter)
 }
 
 func replaceStarExprTableName(newNode, parent SQLNode) {
@@ -1107,6 +1123,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Literal:
 
+	case *Load:
+
 	case *MatchExpr:
 		a.apply(node, n.Columns, replaceMatchExprColumns)
 		a.apply(node, n.Expr, replaceMatchExprExpr)
@@ -1238,12 +1256,22 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Comments, replaceSetTransactionComments)
 
 	case *Show:
-		a.apply(node, n.OnTable, replaceShowOnTable)
-		a.apply(node, n.ShowCollationFilterOpt, replaceShowShowCollationFilterOpt)
-		a.apply(node, n.Table, replaceShowTable)
+		a.apply(node, n.Internal, replaceShowInternal)
+
+	case *ShowColumns:
+		a.apply(node, n.Filter, replaceShowColumnsFilter)
+		a.apply(node, n.Table, replaceShowColumnsTable)
 
 	case *ShowFilter:
 		a.apply(node, n.Filter, replaceShowFilterFilter)
+
+	case *ShowLegacy:
+		a.apply(node, n.OnTable, replaceShowLegacyOnTable)
+		a.apply(node, n.ShowCollationFilterOpt, replaceShowLegacyShowCollationFilterOpt)
+		a.apply(node, n.Table, replaceShowLegacyTable)
+
+	case *ShowTableStatus:
+		a.apply(node, n.Filter, replaceShowTableStatusFilter)
 
 	case *StarExpr:
 		a.apply(node, n.TableName, replaceStarExprTableName)

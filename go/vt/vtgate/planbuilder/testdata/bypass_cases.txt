@@ -122,3 +122,37 @@
     "SingleShardOnly": false
   }
 }
+
+"load data from s3 'x.txt' into table x"
+{
+  "QueryType": "OTHER",
+  "Original": "load data from s3 'x.txt' into table x",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": false,
+    "Query": "load data from s3 'x.txt' into table x",
+    "SingleShardOnly": false
+  }
+}
+
+"load data from s3 'x.txt'"
+{
+  "QueryType": "OTHER",
+  "Original": "load data from s3 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": false,
+    "Query": "load data from s3 'x.txt'",
+    "SingleShardOnly": false
+  }
+}
