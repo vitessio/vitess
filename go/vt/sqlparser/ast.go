@@ -2097,6 +2097,9 @@ func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SelectInto) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	buf.astPrintf(node, "%s'%s'", node.Type.ToString(), node.FileName)
 	if node.Charset != "" {
 		buf.astPrintf(node, " character set %s", node.Charset)
