@@ -181,7 +181,8 @@ func (vf *vindexFunc) SetUpperLimit(_ sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.
-func (vf *vindexFunc) PushMisc(sel *sqlparser.Select) {
+func (vf *vindexFunc) PushMisc(sel *sqlparser.Select) error {
+	return nil
 }
 
 // Wireup satisfies the builder interface.

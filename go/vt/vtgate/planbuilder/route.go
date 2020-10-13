@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -248,9 +251,16 @@ func (rb *route) SetUpperLimit(count sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.
-func (rb *route) PushMisc(sel *sqlparser.Select) {
+func (rb *route) PushMisc(sel *sqlparser.Select) error {
 	rb.Select.(*sqlparser.Select).Comments = sel.Comments
 	rb.Select.(*sqlparser.Select).Lock = sel.Lock
+	if sel.Into != nil {
+		if rb.eroute.Opcode != engine.SelectUnsharded {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: non bypass query for sharded keyspace with into")
+		}
+		rb.Select.(*sqlparser.Select).Into = sel.Into
+	}
+	return nil
 }
 
 // Wireup satisfies the builder interface.
