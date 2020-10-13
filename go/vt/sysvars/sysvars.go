@@ -53,6 +53,10 @@ var (
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 
+	ReadMyWrite        = SystemVariable{Name: "read_my_write"}
+	ReadMyWriteTimeOut = SystemVariable{Name: "read_my_write_timeout"}
+	SessionTrackGTIDs  = SystemVariable{Name: "session_track_gtids"}
+
 	VitessAware = []SystemVariable{
 		Autocommit,
 		ClientFoundRows,
@@ -64,6 +68,9 @@ var (
 		Workload,
 		Charset,
 		Names,
+		ReadMyWrite,
+		ReadMyWriteTimeOut,
+		SessionTrackGTIDs,
 	}
 
 	IgnoreThese = []SystemVariable{
@@ -210,7 +217,6 @@ var (
 		{Name: "net_read_timeout"},
 		{Name: "net_retry_count"},
 		{Name: "net_write_timeout"},
-		{Name: "session_track_gtids"},
 		{Name: "session_track_schema", IsBoolean: true},
 		{Name: "session_track_state_change", IsBoolean: true},
 		{Name: "session_track_system_variables"},

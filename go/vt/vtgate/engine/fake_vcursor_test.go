@@ -62,6 +62,10 @@ func (t noopVCursor) SetFoundRows(u uint64) {
 	panic("implement me")
 }
 
+func (t noopVCursor) SetMyGTID(string) error {
+	panic("implement me")
+}
+
 func (t noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
@@ -213,6 +217,10 @@ type loggingVCursor struct {
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) SetMyGTID(string) error {
 	panic("implement me")
 }
 

@@ -122,6 +122,9 @@ type (
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetFoundRows(uint64)
+
+		// SetMyGTID sets the GTID that the user expects a replica to have caught up with before answering a query
+		SetMyGTID(string) error
 	}
 
 	// Plan represents the execution strategy for a given query.
