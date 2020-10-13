@@ -307,7 +307,7 @@ func skipToEnd(yylex interface{}) {
 %type <OnlineDDLHint> online_hint_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt null_opt
+%type <boolean> exists_opt not_exists_opt null_opt enforced_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -329,7 +329,7 @@ func skipToEnd(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition
+%type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key index_symbols from_or_in
 %type <str> name_opt
 %type <str> equal_opt
@@ -341,7 +341,7 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list
-%type <constraintInfo> constraint_info
+%type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -777,9 +777,19 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddColumn($1)
   }
+| check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddConstraint($1)
+  }
 | table_column_list ',' column_definition
   {
     $$.AddColumn($3)
+  }
+| table_column_list ',' column_definition check_constraint_definition
+  {
+    $$.AddColumn($3)
+    $$.AddConstraint($4)
   }
 | table_column_list ',' index_definition
   {
@@ -1314,6 +1324,15 @@ constraint_definition:
     $$ = &ConstraintDefinition{Details: $1}
   }
 
+check_constraint_definition:
+  CONSTRAINT id_or_var check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+  }
+|  check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Details: $1}
+  }
 
 constraint_info:
   FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
@@ -1331,6 +1350,16 @@ constraint_info:
 | FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+  }
+| check_constraint_info
+  {
+    $$ = $1
+  }
+
+check_constraint_info:
+  CHECK '(' expression ')' enforced_opt
+  {
+    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
   }
 
 fk_on_delete:
@@ -1365,6 +1394,19 @@ fk_reference_action:
 | SET NULL
   {
     $$ = SetNull
+  }
+
+enforced_opt:
+  {
+    $$ = true
+  }
+| ENFORCED
+  {
+    $$ = true
+  }
+| NOT ENFORCED
+  {
+    $$ = false
   }
 
 table_option_list:

@@ -313,6 +313,10 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 
 func (f *ForeignKeyDefinition) iConstraintInfo() {}
 
+var _ ConstraintInfo = &CheckConstraintDefinition{}
+
+func (c *CheckConstraintDefinition) iConstraintInfo() {}
+
 // HasOnTable returns true if the show statement has an "on" clause
 func (node *ShowLegacy) HasOnTable() bool {
 	return node.OnTable.Name.v != ""
