@@ -282,10 +282,6 @@
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
 
-# sharded insert subquery in insert value
-"insert into user(id, val) values((select 1), 1)"
-"unsupported: subquery in insert values"
-
 # sharded replace no vindex
 "replace into user(val) values(1, 'foo')"
 "unsupported: REPLACE INTO with sharded schema"
