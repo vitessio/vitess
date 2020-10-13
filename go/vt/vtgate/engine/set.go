@@ -410,6 +410,15 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
 		}
+	case sysvars.ReadMyWrite.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		err = vcursor.Session().SetMyGTID(str)
+		if err != nil {
+			return err
+		}
 
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct %s", svss.Name)
