@@ -156,6 +156,11 @@ const (
 	NaturalLanguageModeWithQueryExpansionStr = " in natural language mode with query expansion"
 	QueryExpansionStr                        = " with query expansion"
 
+	// INTO OUTFILE
+	IntoOutfileStr   = " into outfile "
+	IntoOutfileS3Str = " into outfile s3 "
+	IntoDumpfileStr  = " into dumpfile "
+
 	// Order.Direction
 	AscScr  = "asc"
 	DescScr = "desc"
@@ -372,4 +377,11 @@ const (
 	VitessType
 	TraditionalType
 	AnalyzeType
+)
+
+// Constant for Enum Type - SelectIntoType
+const (
+	IntoOutfile SelectIntoType = iota
+	IntoOutfileS3
+	IntoDumpfile
 )

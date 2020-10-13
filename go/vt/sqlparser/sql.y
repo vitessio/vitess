@@ -131,6 +131,7 @@ func skipToEnd(yylex interface{}) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
+  selectInto	  *SelectInto
 }
 
 %token LEX_ERROR
@@ -138,7 +139,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
-%token <bytes> OUTFILE S3 DATA LOAD
+%token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
+%token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
@@ -288,7 +290,9 @@ func skipToEnd(yylex interface{}) {
 %type <order> order
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
-%type <str> into_outfile_s3_opt
+%type <selectInto> into_option
+%type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
@@ -428,13 +432,13 @@ load_statement:
   }
 
 select_statement:
-  base_select order_by_opt limit_opt lock_opt into_outfile_s3_opt
+  base_select order_by_opt limit_opt lock_opt into_option
   {
     sel := $1.(*Select)
     sel.OrderBy = $2
     sel.Limit = $3
     sel.Lock = $4
-    sel.IntoOutfileS3 = $5
+    sel.Into = $5
     $$ = sel
   }
 | openb select_statement closeb order_by_opt limit_opt lock_opt
@@ -3264,13 +3268,138 @@ lock_opt:
     $$ = ShareModeLock
   }
 
-into_outfile_s3_opt:
+into_option:
+  {
+    $$ = nil
+  }
+| INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
+  {
+    $$ = &SelectInto{Type:IntoOutfileS3, FileName:string($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+  }
+| INTO DUMPFILE STRING
+  {
+    $$ = &SelectInto{Type:IntoDumpfile, FileName:string($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+  }
+| INTO OUTFILE STRING charset_opt export_options
+  {
+    $$ = &SelectInto{Type:IntoOutfile, FileName:string($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+  }
+
+format_opt:
   {
     $$ = ""
   }
-| INTO OUTFILE S3 STRING
+| FORMAT CSV header_opt
   {
-    $$ = string($4)
+    $$ = " format csv" + $3
+  }
+| FORMAT TEXT header_opt
+  {
+    $$ = " format text" + $3
+  }
+
+header_opt:
+  {
+    $$ = ""
+  }
+| HEADER
+  {
+    $$ = " header"
+  }
+
+manifest_opt:
+  {
+    $$ = ""
+  }
+| MANIFEST ON
+  {
+    $$ = " manifest on"
+  }
+| MANIFEST OFF
+  {
+    $$ = " manifest off"
+  }
+
+overwrite_opt:
+  {
+    $$ = ""
+  }
+| OVERWRITE ON
+  {
+    $$ = " overwrite on"
+  }
+| OVERWRITE OFF
+  {
+    $$ = " overwrite off"
+  }
+
+export_options:
+  fields_opt lines_opt
+  {
+    $$ = $1 + $2
+  }
+
+lines_opt:
+  {
+    $$ = ""
+  }
+| LINES starting_by_opt terminated_by_opt
+  {
+    $$ = " lines" + $2 + $3
+  }
+
+starting_by_opt:
+  {
+    $$ = ""
+  }
+| STARTING BY STRING
+  {
+    $$ = " starting by '" + string($3) + "'"
+  }
+
+terminated_by_opt:
+  {
+    $$ = ""
+  }
+| TERMINATED BY STRING
+  {
+    $$ = " terminated by '" + string($3)  + "'"
+  }
+
+fields_opt:
+  {
+    $$ = ""
+  }
+| columns_or_fields terminated_by_opt enclosed_by_opt escaped_by_opt
+  {
+    $$ = " " + $1 + $2 + $3 + $4
+  }
+
+escaped_by_opt:
+  {
+    $$ = ""
+  }
+| ESCAPED BY STRING
+  {
+    $$ = " escaped by '" + string($3) + "'"
+  }
+
+enclosed_by_opt:
+  {
+    $$ = ""
+  }
+| optionally_opt ENCLOSED BY STRING
+  {
+    $$ = $1 + " enclosed by '" + string($4) + "'"
+  }
+
+optionally_opt:
+  {
+    $$ = ""
+  }
+| OPTIONALLY
+  {
+    $$ = " optionally"
   }
 
 // insert_data expands all combinations into a single rule.
@@ -3713,6 +3842,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| CSV
 | DATA
 | DATE
 | DATETIME
@@ -3720,10 +3850,13 @@ non_reserved_keyword:
 | DEFINITION
 | DESCRIPTION
 | DOUBLE
+| DUMPFILE
 | DUPLICATE
+| ENCLOSED
 | ENFORCED
 | ENGINES
 | ENUM
+| ESCAPED
 | EXCLUDE
 | EXPANSION
 | EXTENDED
@@ -3739,6 +3872,7 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| HEADER
 | HISTOGRAM
 | HISTORY
 | INACTIVE
@@ -3755,11 +3889,13 @@ non_reserved_keyword:
 | LAST_INSERT_ID
 | LESS
 | LEVEL
+| LINES
 | LINESTRING
 | LOAD
 | LOCKED
 | LONGBLOB
 | LONGTEXT
+| MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -3783,11 +3919,13 @@ non_reserved_keyword:
 | OJ
 | OLD
 | OPTIONAL
+| OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | ONLY
 | OPTIMIZE
 | OTHERS
+| OVERWRITE
 | PARTITION
 | PATH
 | PERSIST
@@ -3834,8 +3972,10 @@ non_reserved_keyword:
 | SPATIAL
 | SRID
 | START
+| STARTING
 | STATUS
 | TABLES
+| TERMINATED
 | TEXT
 | THAN
 | THREAD_PRIORITY

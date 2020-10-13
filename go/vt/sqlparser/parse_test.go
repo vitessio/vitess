@@ -26,6 +26,8 @@ import (
 	"sync"
 	"testing"
 
+	"gotest.tools/assert"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -2123,13 +2125,19 @@ func TestConvert(t *testing.T) {
 	}
 }
 
-func TestIntoOutfileS3(t *testing.T) {
+func TestSelectInto(t *testing.T) {
 	validSQL := []struct {
 		input  string
 		output string
 	}{{
 		input:  "select * from t order by name limit 100 into outfile s3 'out_file_name'",
 		output: "select * from t order by name asc limit 100 into outfile s3 'out_file_name'",
+	}, {
+		input: "select * from t into dumpfile 'out_file_name'",
+	}, {
+		input: "select * from t into outfile 'out_file_name' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+	}, {
+		input: "select * from t into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
 	}, {
 		input: "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
 	}, {
@@ -2149,9 +2157,7 @@ func TestIntoOutfileS3(t *testing.T) {
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equal(t, tcase.output, out)
 	}
 
 	invalidSQL := []struct {
