@@ -69,14 +69,23 @@ endif
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
 
 # install copies the files needed to run Vitess into the given directory tree.
+# This target is optimized for docker images. It only installs the files needed for running vitess in docker
 # Usage: make install PREFIX=/path/to/install/root
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
+	cp "$${VTROOT}/bin/"{mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+
+# Install local install the binaries needed to run vitess locally
+# Usage: make install-local PREFIX=/path/to/install/root
+install-local: build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
+
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
-# Usage: make install PREFIX=/path/to/install/root
+# Usage: make install-testing PREFIX=/path/to/install/root
 install-testing: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
