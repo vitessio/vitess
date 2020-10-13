@@ -292,6 +292,16 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	// Password encryption.
 	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
 
+	// Client Session Tracking Capability.
+	if params.Flags&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		// If client asked for ClientSessionTrack, but server doesn't support it,
+		// stop right here.
+		if capabilities&CapabilityClientSessionTrack == 0 {
+			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
+		}
+		c.Capabilities |= CapabilityClientSessionTrack
+	}
+
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
 	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, characterSet, params); err != nil {

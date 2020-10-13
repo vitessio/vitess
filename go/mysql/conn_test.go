@@ -221,8 +221,6 @@ func TestBasicPackets(t *testing.T) {
 		sConn.Close()
 		cConn.Close()
 	}()
-	sConn.Capabilities = CapabilityClientProtocol41
-	cConn.Capabilities = CapabilityClientProtocol41
 
 	// Write OK packet, read it, compare.
 	err := sConn.writeOKPacket(&PacketOK{
@@ -346,7 +344,8 @@ func TestOkPackets(t *testing.T) {
 	}, {
 		data: `
 00000000  00 00 00 02 00                                    |.....|`,
-		cc: CapabilityClientTransactions,
+		cc:          CapabilityClientTransactions,
+		expectedErr: "invalid OK packet warnings: &{[0 0 0 2 0] 0}",
 	}, {
 		data: `
 00000000  00 00 00 02 40 00 00 00  2a 03 28 00 26 66 32 37  |....@...*.(.&f27|
