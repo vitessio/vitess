@@ -89,6 +89,7 @@ type Stats struct {
 	QueryCount    *stats.CountersWithSingleLabel
 	CopyRowCount  *stats.Counter
 	CopyLoopCount *stats.Counter
+	ErrorCounts   *stats.CountersWithMultiLabels
 }
 
 // SetLastPosition sets the last replication position.
@@ -129,7 +130,7 @@ func NewStats() *Stats {
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")
-
+	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	return bps
 }
 

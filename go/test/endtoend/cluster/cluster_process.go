@@ -72,7 +72,7 @@ type LocalProcessCluster struct {
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
 	VtbackupProcess VtbackupProcess
-	OrcProcess      *OrchestratorProcess
+	VtorcProcess    *VtorcProcess
 
 	nextPortForProcess int
 
@@ -505,9 +505,9 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtgate teardown: %v", err)
 	}
 
-	if cluster.OrcProcess != nil {
-		if err := cluster.OrcProcess.TearDown(); err != nil {
-			log.Errorf("Error in orchestrator teardown: %v", err)
+	if cluster.VtorcProcess != nil {
+		if err := cluster.VtorcProcess.TearDown(); err != nil {
+			log.Errorf("Error in vtorc teardown: %v", err)
 		}
 	}
 
@@ -674,11 +674,11 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 	}
 }
 
-// NewOrcProcess creates a new OrchestratorProcess object
-func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *OrchestratorProcess {
+// NewOrcProcess creates a new VtorcProcess object
+func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProcess {
 	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
-	base.Binary = "orchestrator"
-	return &OrchestratorProcess{
+	base.Binary = "vtorc"
+	return &VtorcProcess{
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       configFile,

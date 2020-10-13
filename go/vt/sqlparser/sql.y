@@ -138,7 +138,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
-%token <bytes> OUTFILE S3
+%token <bytes> OUTFILE S3 DATA LOAD
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
@@ -240,7 +240,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
-%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
+%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
 %type <str> wild_opt
 %type <explainType> explain_format_opt
@@ -395,6 +395,7 @@ command:
 | other_statement
 | flush_statement
 | do_statement
+| load_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -418,6 +419,12 @@ do_statement:
   DO expression_list
   {
     $$ = &OtherAdmin{}
+  }
+
+load_statement:
+  LOAD DATA FROM S3 STRING skip_to_end
+  {
+	$$ = &Load{InfileS3 : string($5)}
   }
 
 select_statement:
@@ -1612,131 +1619,130 @@ analyze_statement:
 show_statement:
   SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
 | SHOW CHARACTER SET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW CHARSET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW CREATE TABLE table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW CREATE TRIGGER ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW CREATE VIEW ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW DATABASES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW KEYSPACES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW VITESS_KEYSPACES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW ENGINES
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}}
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
   }
-| SHOW TABLE ddl_skip_to_end
+| SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
   }
-| SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}
+    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
     // this is ugly, but I couldn't find a better way for now
     if $3 == "processlist" {
-      $$ = &Show{Type: $3, Scope: ImplicitScope}
+      $$ = &Show{&ShowLegacy{Type: $3, Scope: ImplicitScope}}
     } else {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
-      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+      $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
     }
   }
 | SHOW show_session_or_global VARIABLES ddl_skip_to_end
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
   }
 | SHOW COLLATION
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW COLLATION WHERE expression
   {
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
   }
 | SHOW VSCHEMA TABLES
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW VSCHEMA VINDEXES
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW VSCHEMA VINDEXES ON table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}}
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 /* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
 | SHOW vitess_topo like_or_where_opt
@@ -1744,7 +1750,7 @@ show_statement:
     // This should probably be a different type (ShowVitessTopoOpt), but
     // just getting the thing working for now
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: $2, ShowTablesOpt: showTablesOpt}
+    $$ = &Show{&ShowLegacy{Type: $2, ShowTablesOpt: showTablesOpt}}
   }
 /*
  * Catch-all for show statements without vitess keywords:
@@ -1755,7 +1761,7 @@ show_statement:
  */
 | SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2.String()), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2.String()), Scope: ImplicitScope}}
   }
 
 tables_or_processlist:
@@ -3706,6 +3712,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| DATA
 | DATE
 | DATETIME
 | DECIMAL
@@ -3748,6 +3755,7 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINESTRING
+| LOAD
 | LOCKED
 | LONGBLOB
 | LONGTEXT

@@ -875,8 +875,27 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded values ((select 1 from dual), 1)",
+    "Query": "insert into unsharded values (1, 1)",
     "TableName": "unsharded"
+  }
+}
+
+# sharded insert subquery in insert value
+"insert into user(id, val) values((select 1), 1)"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(id, val) values((select 1), 1)",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
+    "Query": "insert into user(id, val, Name, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
+    "TableName": "user"
   }
 }
 
