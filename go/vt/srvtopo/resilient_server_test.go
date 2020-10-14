@@ -308,7 +308,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	time.Sleep(*srvTopoCacheTTL)
 
-	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2)
+	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*3)
 	_, err = rs.GetSrvKeyspace(timeoutCtx, "test_cell", "test_ks")
 	wantErr := "timed out waiting for keyspace"
 	if err == nil || err.Error() != wantErr {
