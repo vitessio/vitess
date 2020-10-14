@@ -383,7 +383,7 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 	destination := vschema.Destination()
 	if destination == nil {
 		if keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "set bypass destination first for a sharded keyspace")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
 		}
 		destination = key.DestinationAnyShard{}
 	}

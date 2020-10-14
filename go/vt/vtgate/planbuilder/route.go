@@ -256,7 +256,7 @@ func (rb *route) PushMisc(sel *sqlparser.Select) error {
 	rb.Select.(*sqlparser.Select).Lock = sel.Lock
 	if sel.Into != nil {
 		if rb.eroute.Opcode != engine.SelectUnsharded {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: non bypass query for sharded keyspace with into")
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
 		}
 		rb.Select.(*sqlparser.Select).Into = sel.Into
 	}
