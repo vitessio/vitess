@@ -133,6 +133,8 @@ func TestUnion(t *testing.T) {
 	assertMatches(t, conn, `(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 }
 
+// TestCheckConstraint test check constraints on CREATE TABLE
+// This feature is supported from MySQL 8.0.16 and MariaDB 10.2.1.
 func TestCheckConstraint(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
