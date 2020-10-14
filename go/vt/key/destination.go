@@ -20,7 +20,10 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/rand"
+	"sort"
 	"strings"
+
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -148,7 +151,44 @@ func (d DestinationExactKeyRange) String() string {
 	return "DestinationExactKeyRange(" + KeyRangeString(d.KeyRange) + ")"
 }
 
+type shards struct {
+	s []*topodatapb.ShardReference
+}
+
+func (s *shards) Len() int {
+	return len(s.s)
+}
+
+func (s *shards) Less(i, j int) bool {
+	a := s.s[i].KeyRange
+	b := s.s[j].KeyRange
+	if a.Start == nil || len(a.Start) == 0 {
+		return true
+	}
+	if b.Start == nil || len(b.Start) == 0 {
+		return false
+	}
+	if len(a.Start) != len(b.Start) {
+		log.Errorf("ERROR: shard size should never diff: %s and %s", s.s[i].Name, s.s[j].Name)
+		return true
+	}
+	for idx, aTok := range a.Start {
+		bTok := b.Start[idx]
+		if aTok != bTok {
+			return aTok < bTok
+		}
+	}
+	return false
+}
+
+func (s *shards) Swap(i, j int) {
+	s.s[i], s.s[j] = s.s[j], s.s[i]
+}
+
+var _ sort.Interface = (*shards)(nil)
+
 func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
+	sort.Sort(&shards{allShards})
 	shardnum := 0
 	for shardnum < len(allShards) {
 		if KeyRangeStartEqual(kr, allShards[shardnum].KeyRange) {
