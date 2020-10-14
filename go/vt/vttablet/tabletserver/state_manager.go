@@ -654,7 +654,7 @@ func (sm *stateManager) isServingLocked() bool {
 	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck
 }
 
-func (sm *stateManager) ApppendDetails(details []*kv) []*kv {
+func (sm *stateManager) AppendDetails(details []*kv) []*kv {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
