@@ -1053,21 +1053,6 @@ var (
 	}, {
 		input: "create table a",
 	}, {
-		input:  "load data from s3 'x.txt'",
-		output: "AST node missing for Load type",
-	}, {
-		input:  "load data from s3 manifest 'x.txt'",
-		output: "AST node missing for Load type",
-	}, {
-		input:  "load data from s3 file 'x.txt'",
-		output: "AST node missing for Load type",
-	}, {
-		input:  "load data infile 'x.txt' into table 'c'",
-		output: "AST node missing for Load type",
-	}, {
-		input:  "load data from s3 'x.txt' into table x",
-		output: "AST node missing for Load type",
-	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
@@ -2270,6 +2255,22 @@ func TestSubStr(t *testing.T) {
 		out := String(tree)
 		if out != tcase.output {
 			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+}
+
+func TestLoadData(t *testing.T) {
+	validSQL := []string{
+		"load data from s3 'x.txt'",
+		"load data from s3 manifest 'x.txt'",
+		"load data from s3 file 'x.txt'",
+		"load data infile 'x.txt' into table 'c'",
+		"load data from s3 'x.txt' into table x"}
+	for _, tcase := range validSQL {
+		_, err := Parse(tcase)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase, err)
+			continue
 		}
 	}
 }
