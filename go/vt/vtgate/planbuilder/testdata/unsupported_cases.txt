@@ -432,15 +432,7 @@
 "set sql_mode = default"
 "DEFAULT not supported for @@sql_mode"
 
-# Union after storing result in outfile
-"select id from user into outfile s3 'out_file_name' union all select id from music"
-"Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
-
-# Into outfile s3 in sub-query
-"select id from (select id from user into outfile s3 'inner_outfile') as t2"
-"Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
-
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
-"unsupported: non bypass query for sharded keyspace with into"
+"unsupported: this construct is not supported on sharded keyspace"
 
