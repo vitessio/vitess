@@ -105,7 +105,9 @@ function install_protoc() {
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
-  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  # This is how we'd download directly from source:
+  # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  wget "https://github.com/vitessio/vitess-resources/raw/main/protoc/protoc-$version-$platform-${target}.zip"
   unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
