@@ -1,6 +1,6 @@
-insert into customer(cid, name) values(1, 'john');
-insert into customer(cid, name) values(2, 'paul');
-insert into customer(cid, name) values(3, 'ringo');
+insert into customer(cid, name, typ) values(1, 'john',1);
+insert into customer(cid, name, typ) values(2, 'paul','soho');
+insert into customer(cid, name, typ) values(3, 'ringo','enterprise');
 insert into merchant(mname, category) values('monoprice', 'electronics');
 insert into merchant(mname, category) values('newegg', 'electronics');
 insert into product(pid, description) values(1, 'keyboard');
