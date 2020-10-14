@@ -136,6 +136,9 @@ func TestUnion(t *testing.T) {
 // TestCheckConstraint test check constraints on CREATE TABLE
 // This feature is supported from MySQL 8.0.16 and MariaDB 10.2.1.
 func TestCheckConstraint(t *testing.T) {
+	// Skipping as tests are run against MySQL 5.7
+	t.Skip()
+
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
