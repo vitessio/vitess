@@ -38,7 +38,7 @@ BUILD_CHROME=${BUILD_CHROME:-1}
 # If the installation is successful, it puts the installed version string into
 # the $dist/.installed_version file. If the version has not changed, bootstrap
 # will skip future installations.
-function install_dep() {
+install_dep() {
   if [[ $# != 4 ]]; then
     fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
   fi
@@ -85,12 +85,12 @@ function install_dep() {
 # We should not use the arch command, since it is not reliably
 # available on macOS or some linuxes:
 # https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
-function get_arch() {
+get_arch() {
   uname -m
 }
 
 # Install protoc.
-function install_protoc() {
+install_protoc() {
   local version="$1"
   local dist="$2"
 
@@ -111,12 +111,10 @@ function install_protoc() {
   unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
-protoc_ver=3.6.1
-install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
 
 # Install Zookeeper.
-function install_zookeeper() {
+install_zookeeper() {
   local version="$1"
   local dist="$2"
 
@@ -133,13 +131,9 @@ function install_zookeeper() {
   rm -rf "$zk" "$zk.tar.gz"
 }
 
-zk_ver=${ZK_VERSION:-3.4.14}
-if [ "$BUILD_JAVA" == 1 ] ; then
-  install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
-fi
 
 # Download and install etcd, link etcd binary into our root.
-function install_etcd() {
+install_etcd() {
   local version="$1"
   local dist="$2"
 
@@ -154,10 +148,12 @@ function install_etcd() {
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
-  download_url=https://github.com/coreos/etcd/releases/download
   file="etcd-${version}-${platform}-${target}.${ext}"
 
-  wget "$download_url/$version/$file"
+  # This is how we'd download directly from source:
+  # download_url=https://github.com/etcd-io/etcd/releases/download
+  # wget "$download_url/$version/$file"
+  wget "https://github.com/vitessio/vitess-resources/raw/main/etcd/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -167,11 +163,10 @@ function install_etcd() {
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
-command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install k3s, link k3s binary into our root
-function install_k3s() {
+install_k3s() {
   local version="$1"
   local dist="$2"
 
@@ -194,10 +189,9 @@ function install_k3s() {
   chmod +x $dest
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
-command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
 
 # Download and install consul, link consul binary into our root.
-function install_consul() {
+install_consul() {
   local version="$1"
   local dist="$2"
 
@@ -218,12 +212,9 @@ function install_consul() {
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
-if [ "$BUILD_CONSUL" == 1 ] ; then
-  install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
-fi
 
 # Download chromedriver
-function install_chromedriver() {
+install_chromedriver() {
   local version="$1"
   local dist="$2"
 
@@ -253,9 +244,35 @@ function install_chromedriver() {
   fi
 }
 
-if [ "$BUILD_CHROME" == 1 ] ; then
-	install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
-fi
+install_all() {
+  # protoc
+  protoc_ver=3.6.1
+  install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
-echo
-echo "bootstrap finished - run 'make build' to compile"
+  # zk
+  zk_ver=${ZK_VERSION:-3.4.14}
+  if [ "$BUILD_JAVA" == 1 ] ; then
+    install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+  fi
+
+  # etcd
+  command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+
+  # k3s
+  command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
+
+  # consul
+  if [ "$BUILD_CONSUL" == 1 ] ; then
+    install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+  fi
+
+  # chromedriver
+  if [ "$BUILD_CHROME" == 1 ] ; then
+    install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
+  fi
+
+  echo
+  echo "bootstrap finished - run 'make build' to compile"
+}
+
+install_all
