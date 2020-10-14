@@ -331,6 +331,7 @@ func TestConnection(t *testing.T) {
 	_, err = stream.MessageStream(userKeyspace, "", nil, name)
 	require.Nil(t, err)
 	// validate client count of vttablet
+	time.Sleep(time.Second)
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 	// second connection with vtgate, secont connection
@@ -340,6 +341,7 @@ func TestConnection(t *testing.T) {
 	_, err = stream1.MessageStream(userKeyspace, "", nil, name)
 	require.Nil(t, err)
 	// validate client count of vttablet
+	time.Sleep(time.Second)
 	assert.Equal(t, 2, getClientCount(shard0Master))
 	assert.Equal(t, 2, getClientCount(shard1Master))
 
