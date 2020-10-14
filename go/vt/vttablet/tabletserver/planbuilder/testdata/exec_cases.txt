@@ -807,15 +807,13 @@ options:PassthroughDMLs
 # show table status #1
 "show table status like 'key%'"
 {
-  "PlanID": "ShowTables",
-  "TableName":"",
-  "FullQuery": "show table status like 'key%'"
+  "PlanID": "OtherRead",
+  "TableName": ""
 }
 
 # show table status #2
 "show table status where Name='apa'"
 {
-  "PlanID": "ShowTables",
-  "TableName":"",
-  "FullQuery": "show table status where Name = 'apa'"
+  "PlanID": "OtherRead",
+  "TableName": ""
 }

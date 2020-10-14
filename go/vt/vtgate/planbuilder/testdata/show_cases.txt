@@ -1,5 +1,3 @@
-# Test cases in this file are for SHOW commands.
-#
 # Show table status without database name or conditions.
 "SHOW table StatUs"
 {
@@ -17,6 +15,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a keyspace name
 "SHOW table StatUs from main"
 {
@@ -34,6 +33,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a keyspace name using IN
 "SHOW table StatUs In main"
 {
@@ -51,6 +51,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a keyspace name with a condition
 "SHOW table StatUs In user WHERE Rows > 70"
 {
@@ -68,6 +69,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a Like condition
 "SHOW table StatUs LIKe '%a'"
 {
@@ -85,3 +87,83 @@
     "SingleShardOnly": true
   }
 }
+
+# show columns from routed table
+"show full fields from `route1`"
+{
+  "QueryType": "SHOW",
+  "Original": "show full fields from `route1`",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from user",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns from user keyspace
+"show full columns from user_extra"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user_extra",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from user_extra",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns from main keyspace
+"show full columns from unsharded"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from unsharded",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from unsharded",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns pass as dbname in from clause supersedes the qualifier
+"show full columns from user.unsharded from main"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user.unsharded from main",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from unsharded",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns fails as table does not exists in user keyspace
+"show full columns from unsharded from user"
+"table unsharded not found"
+
+# show columns fails as table does not exists in user keyspace
+"show full columns from user.unsharded"
+"table unsharded not found"

@@ -314,13 +314,13 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 func (f *ForeignKeyDefinition) iConstraintInfo() {}
 
 // HasOnTable returns true if the show statement has an "on" clause
-func (node *Show) HasOnTable() bool {
+func (node *ShowLegacy) HasOnTable() bool {
 	return node.OnTable.Name.v != ""
 }
 
 // HasTable returns true if the show statement has a parsed table name.
 // Not all show statements parse table names.
-func (node *Show) HasTable() bool {
+func (node *ShowLegacy) HasTable() bool {
 	return node.Table.Name.v != ""
 }
 
