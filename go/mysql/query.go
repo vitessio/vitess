@@ -258,7 +258,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 	result := make([]sqltypes.Value, colNumber)
 	pos := 0
 	for i := 0; i < colNumber; i++ {
-		if data[pos] == 0xfb {
+		if data[pos] == NullValue {
 			pos++
 			continue
 		}
@@ -411,6 +411,9 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			return nil, false, 0, err
 		}
 
+		// TODO: harshit - the EOF packet is deprecated as of MySQL 5.7.5.
+		// https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
+		// It will be OK Packet with EOF Header. This needs to change in the code here.
 		if isEOFPacket(data) {
 			// Strip the partial Fields before returning.
 			if !wantfields {

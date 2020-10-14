@@ -572,8 +572,7 @@ const CapabilityFlags uint32 = CapabilityClientLongPassword |
 	CapabilityClientMultiStatements |
 	CapabilityClientMultiResults |
 	CapabilityClientPluginAuth |
-	CapabilityClientPluginAuthLenencClientData |
-	CapabilityClientSessionTrack
+	CapabilityClientPluginAuthLenencClientData
 
 // CapabilityFlagsSsl signals that we can handle SSL as well
 const CapabilityFlagsSsl = CapabilityFlags |
@@ -588,7 +587,10 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
 		// Pass-through ClientFoundRows flag.
-		CapabilityClientFoundRows&uint32(params.Flags)
+		CapabilityClientFoundRows&uint32(params.Flags) |
+		// If the server supported
+		// CapabilityClientSessionTrack, we also support it.
+		c.Capabilities&CapabilityClientSessionTrack
 
 	// FIXME(alainjobart) add multi statement.
 
