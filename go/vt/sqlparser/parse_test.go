@@ -2271,10 +2271,7 @@ func TestLoadData(t *testing.T) {
 		"load data from s3 'x.txt' into table x"}
 	for _, tcase := range validSQL {
 		_, err := Parse(tcase)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase, err)
-			continue
-		}
+		require.NoError(t, err)
 	}
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -128,6 +128,10 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	execAssertError(t, conn, `load data infile 'x.txt' into table t1`, "ERROR 1062 (23000): Duplicate entry '300' for key 'PRIMARY'")
 	exec(t, conn, `delete from t1`)
 	exec(t, conn, `load data infile 'x.txt' into table t1`)
+	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
+	exec(t, conn, `select * from t1 into dumpfile 'x1.txt'`)
+	exec(t, conn, `select * from t1 into outfile 'x2.txt' Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`)
+	exec(t, conn, `load data infile 'x.txt' into replace table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
