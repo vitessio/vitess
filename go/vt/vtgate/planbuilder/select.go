@@ -332,12 +332,17 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
 				if parent.Operator == sqlparser.EqualOp && shouldRewrite(parent.Right) {
-
 					evalExpr, err := sqlparser.Convert(parent.Right)
 					if err != nil {
+						if err == sqlparser.ErrExprNotSupported {
+							// This just means we can't rewrite this particular expression,
+							// not that we have to exit altogether
+							return true
+						}
 						r.err = err
 						return false
 					}
+
 					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
 					parent.Right = sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName))
 				}
