@@ -316,13 +316,19 @@ func TestSelectLastInsertId(t *testing.T) {
 }
 
 func TestSelectSystemVariables(t *testing.T) {
-	masterSession.LastInsertId = 52
+	masterSession.ReadAfterWrite = &vtgatepb.ReadAfterWrite{
+		ReadAfterWriteGtid:    "a fine gtid",
+		ReadAfterWriteTimeout: 13,
+		SessionTrackGtids:     true,
+	}
 	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@sql_select_limit, @@transaction_mode, @@workload"
+	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, " +
+		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
+		"@@read_after_write_timeout, @@session_track_gtids"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -332,6 +338,9 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64},
 			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
 			{Name: "@@workload", Type: sqltypes.VarBinary},
+			{Name: "@@read_after_write_gtid", Type: sqltypes.VarBinary},
+			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64},
+			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -342,6 +351,10 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewInt64(0),
 			sqltypes.NewVarBinary("UNSPECIFIED"),
 			sqltypes.NewVarBinary(""),
+			// these have been set at the beginning of the test
+			sqltypes.NewVarBinary("a fine gtid"),
+			sqltypes.NewFloat64(13),
+			sqltypes.NewVarBinary("own_gtid"),
 		}},
 	}
 	require.NoError(t, err)

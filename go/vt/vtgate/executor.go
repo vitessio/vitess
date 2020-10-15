@@ -54,6 +54,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -258,36 +259,57 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		}
 	}
 
-	for _, funcName := range bindVarNeeds.NeedSystemVariable {
-		switch funcName {
+	for _, sysVar := range bindVarNeeds.NeedSystemVariable {
+		key := bindVarPrefix + sysVar
+		switch sysVar {
 		case sysvars.Autocommit.Name:
-			bindVars[bindVarPrefix+sysvars.Autocommit.Name] = sqltypes.BoolBindVariable(session.Autocommit)
+			bindVars[key] = sqltypes.BoolBindVariable(session.Autocommit)
 		case sysvars.ClientFoundRows.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.ClientFoundRows
 			})
-			bindVars[bindVarPrefix+sysvars.ClientFoundRows.Name] = sqltypes.BoolBindVariable(v)
+			bindVars[key] = sqltypes.BoolBindVariable(v)
 		case sysvars.SkipQueryPlanCache.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.ClientFoundRows
 			})
-			bindVars[bindVarPrefix+sysvars.SkipQueryPlanCache.Name] = sqltypes.BoolBindVariable(v)
+			bindVars[key] = sqltypes.BoolBindVariable(v)
 		case sysvars.SQLSelectLimit.Name:
 			var v int64
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.SqlSelectLimit
 			})
-			bindVars[bindVarPrefix+sysvars.SQLSelectLimit.Name] = sqltypes.Int64BindVariable(v)
+			bindVars[key] = sqltypes.Int64BindVariable(v)
 		case sysvars.TransactionMode.Name:
-			bindVars[bindVarPrefix+sysvars.TransactionMode.Name] = sqltypes.StringBindVariable(session.TransactionMode.String())
+			bindVars[key] = sqltypes.StringBindVariable(session.TransactionMode.String())
 		case sysvars.Workload.Name:
 			var v string
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
 				v = options.GetWorkload().String()
 			})
-			bindVars[bindVarPrefix+sysvars.Workload.Name] = sqltypes.StringBindVariable(v)
+			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.ReadAfterWriteGTID.Name:
+			var v string
+			ifReadAfterWriteExist(session, func(raw *vtgatepb.ReadAfterWrite) {
+				v = raw.ReadAfterWriteGtid
+			})
+			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.ReadAfterWriteTimeOut.Name:
+			var v float64
+			ifReadAfterWriteExist(session, func(raw *vtgatepb.ReadAfterWrite) {
+				v = raw.ReadAfterWriteTimeout
+			})
+			bindVars[key] = sqltypes.Float64BindVariable(v)
+		case sysvars.SessionTrackGTIDs.Name:
+			v := "off"
+			ifReadAfterWriteExist(session, func(raw *vtgatepb.ReadAfterWrite) {
+				if raw.SessionTrackGtids {
+					v = "own_gtid"
+				}
+			})
+			bindVars[key] = sqltypes.StringBindVariable(v)
 		}
 	}
 
@@ -310,6 +332,13 @@ func ifOptionsExist(session *SafeSession, f func(*querypb.ExecuteOptions)) {
 	options := session.GetOptions()
 	if options != nil {
 		f(options)
+	}
+}
+
+func ifReadAfterWriteExist(session *SafeSession, f func(*vtgatepb.ReadAfterWrite)) {
+	raw := session.ReadAfterWrite
+	if raw != nil {
+		f(raw)
 	}
 }
 
