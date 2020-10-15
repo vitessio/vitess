@@ -684,20 +684,8 @@ func (c *Conn) IsClosed() bool {
 // writeOKPacket writes an OK packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
-	length := 1 + // OKPacket
-		lenEncIntSize(affectedRows) +
-		lenEncIntSize(lastInsertID) +
-		2 + // flags
-		2 // warnings
-	data, pos := c.startEphemeralPacketWithHeader(length)
-	pos = writeByte(data, pos, OKPacket)
-	pos = writeLenEncInt(data, pos, affectedRows)
-	pos = writeLenEncInt(data, pos, lastInsertID)
-	pos = writeUint16(data, pos, flags)
-	_ = writeUint16(data, pos, warnings)
-
-	return c.writeEphemeralPacket()
+func (c *Conn) writeOKPacket(packetOk *PacketOK) error {
+	return c.writeOKPacketWithHeader(packetOk, OKPacket)
 }
 
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
@@ -705,20 +693,86 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 // CapabilityClientDeprecateEOF is set.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
-	length := 1 + // EOFPacket
-		lenEncIntSize(affectedRows) +
-		lenEncIntSize(lastInsertID) +
-		2 + // flags
-		2 // warnings
-	data, pos := c.startEphemeralPacketWithHeader(length)
-	pos = writeByte(data, pos, EOFPacket)
-	pos = writeLenEncInt(data, pos, affectedRows)
-	pos = writeLenEncInt(data, pos, lastInsertID)
-	pos = writeUint16(data, pos, flags)
-	_ = writeUint16(data, pos, warnings)
+func (c *Conn) writeOKPacketWithEOFHeader(packetOk *PacketOK) error {
+	return c.writeOKPacketWithHeader(packetOk, EOFPacket)
+}
 
+// writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
+// This is used at the end of a result set if
+// CapabilityClientDeprecateEOF is set.
+// Server -> Client.
+// This method returns a generic error, not a SQLError.
+func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) error {
+	length := 1 + // OKPacket
+		lenEncIntSize(packetOk.affectedRows) +
+		lenEncIntSize(packetOk.lastInsertID)
+	// assuming CapabilityClientProtocol41
+	length += 4 // status_flags + warnings
+
+	var gtidData []byte
+	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		length += lenEncStringSize(packetOk.info) // info
+		if packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
+			gtidData = getLenEncString([]byte(packetOk.sessionStateData))
+			gtidData = append([]byte{0x00}, gtidData...)
+			gtidData = getLenEncString(gtidData)
+			gtidData = append([]byte{0x03}, gtidData...)
+			gtidData = append(getLenEncInt(uint64(len(gtidData))), gtidData...)
+			length += len(gtidData)
+		}
+	} else {
+		length += len(packetOk.info) // info
+	}
+
+	bytes, pos := c.startEphemeralPacketWithHeader(length)
+	data := &coder{data: bytes, pos: pos}
+	data.writeByte(headerType) //header - OK or EOF
+	data.writeLenEncInt(packetOk.affectedRows)
+	data.writeLenEncInt(packetOk.lastInsertID)
+	data.writeUint16(packetOk.statusFlags)
+	data.writeUint16(packetOk.warnings)
+	if c.Capabilities&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		data.writeLenEncString(packetOk.info)
+		if packetOk.statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
+			data.writeEOFString(string(gtidData))
+		}
+	} else {
+		data.writeEOFString(packetOk.info)
+	}
 	return c.writeEphemeralPacket()
+}
+
+func getLenEncString(value []byte) []byte {
+	data := getLenEncInt(uint64(len(value)))
+	return append(data, value...)
+}
+
+func getLenEncInt(i uint64) []byte {
+	var data []byte
+	switch {
+	case i < 251:
+		data = append(data, byte(i))
+	case i < 1<<16:
+		data = append(data, 0xfc)
+		data = append(data, byte(i))
+		data = append(data, byte(i>>8))
+	case i < 1<<24:
+		data = append(data, 0xfd)
+		data = append(data, byte(i))
+		data = append(data, byte(i>>8))
+		data = append(data, byte(i>>16))
+	default:
+		data = append(data, 0xfe)
+		data = append(data, byte(i))
+		data = append(data, byte(i>>8))
+		data = append(data, byte(i>>16))
+		data = append(data, byte(i>>24))
+		data = append(data, byte(i>>32))
+		data = append(data, byte(i>>40))
+		data = append(data, byte(i>>48))
+		data = append(data, byte(i>>56))
+	}
+	return data
 }
 
 func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...interface{}) bool {
@@ -845,7 +899,7 @@ func (c *Conn) handleComResetConnection(handler Handler) {
 	handler.ComResetConnection(c)
 	// Reset prepared statements
 	c.PrepareData = make(map[uint32]*PrepareData)
-	err := c.writeOKPacket(0, 0, 0, 0)
+	err := c.writeOKPacket(&PacketOK{})
 	if err != nil {
 		c.writeErrorPacketFromError(err)
 	}
@@ -875,7 +929,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 		}
 	}
 
-	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 		log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
 		return false
 	}
@@ -955,7 +1009,15 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			if len(qr.Fields) == 0 {
 				sendFinished = true
 				// We should not send any more packets after this.
-				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+				ok := PacketOK{
+					affectedRows:     qr.RowsAffected,
+					lastInsertID:     qr.InsertID,
+					statusFlags:      c.StatusFlags,
+					warnings:         0,
+					info:             "",
+					sessionStateData: qr.SessionStateChanges,
+				}
+				return c.writeOKPacket(&ok)
 			}
 			if err := c.writeFields(qr); err != nil {
 				return err
@@ -1105,7 +1167,7 @@ func (c *Conn) handleComPing() bool {
 			return false
 		}
 	} else {
-		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+		if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 			log.Errorf("Error writing ComPing result to %s: %v", c, err)
 			return false
 		}
@@ -1179,7 +1241,15 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 				// We should not send any more packets after this, but make sure
 				// to extract the affected rows and last insert id from the result
 				// struct here since clients expect it.
-				return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
+				ok := PacketOK{
+					affectedRows:     qr.RowsAffected,
+					lastInsertID:     qr.InsertID,
+					statusFlags:      flag,
+					warnings:         handler.WarningCount(c),
+					info:             "",
+					sessionStateData: qr.SessionStateChanges,
+				}
+				return c.writeOKPacket(&ok)
 			}
 			if err := c.writeFields(qr); err != nil {
 				return err
@@ -1261,35 +1331,96 @@ func parseEOFPacket(data []byte) (warnings uint16, more bool, err error) {
 	return warnings, (statusFlags & ServerMoreResultsExists) != 0, nil
 }
 
-func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
-	// We already read the type.
-	pos := 1
+// PacketOK contains the ok packet details
+type PacketOK struct {
+	affectedRows uint64
+	lastInsertID uint64
+	statusFlags  uint16
+	warnings     uint16
+	info         string
+
+	// at the moment, we only store GTID information in this field
+	sessionStateData string
+}
+
+func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
+	data := &coder{
+		data: in,
+		pos:  1, // We already read the type.
+	}
+	packetOK := &PacketOK{}
+
+	fail := func(format string, args ...interface{}) (*PacketOK, error) {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, format, args...)
+	}
 
 	// Affected rows.
-	affectedRows, pos, ok := readLenEncInt(data, pos)
+	affectedRows, ok := data.readLenEncInt()
 	if !ok {
-		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet affectedRows: %v", data)
+		return fail("invalid OK packet affectedRows: %v", data)
 	}
+	packetOK.affectedRows = affectedRows
 
 	// Last Insert ID.
-	lastInsertID, pos, ok := readLenEncInt(data, pos)
+	lastInsertID, ok := data.readLenEncInt()
 	if !ok {
-		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet lastInsertID: %v", data)
+		return fail("invalid OK packet lastInsertID: %v", data)
 	}
+	packetOK.lastInsertID = lastInsertID
 
 	// Status flags.
-	statusFlags, pos, ok := readUint16(data, pos)
+	statusFlags, ok := data.readUint16()
 	if !ok {
-		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet statusFlags: %v", data)
+		return fail("invalid OK packet statusFlags: %v", data)
 	}
+	packetOK.statusFlags = statusFlags
 
+	// assuming CapabilityClientProtocol41
 	// Warnings.
-	warnings, _, ok := readUint16(data, pos)
+	warnings, ok := data.readUint16()
 	if !ok {
-		return 0, 0, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid OK packet warnings: %v", data)
+		return fail("invalid OK packet warnings: %v", data)
+	}
+	packetOK.warnings = warnings
+
+	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
+		// info
+		info, _ := data.readLenEncInfo()
+		packetOK.info = info
+		// session tracking
+		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
+			_, ok := data.readLenEncInt()
+			if !ok {
+				return fail("invalid OK packet session state change length: %v", data)
+			}
+			sscType, ok := data.readByte()
+			if !ok || sscType != SessionTrackGtids {
+				return fail("invalid OK packet session state change type: %v", sscType)
+			}
+
+			// Move past the total length of the changed entity: 1 byte
+			_, ok = data.readByte()
+			if !ok {
+				return fail("invalid OK packet gtids length: %v", data)
+			}
+			// read (and ignore for now) the GTIDS encoding specification code: 1 byte
+			_, ok = data.readByte()
+			if !ok {
+				return fail("invalid OK packet gtids type: %v", data)
+			}
+			gtids, ok := data.readLenEncString()
+			if !ok {
+				return fail("invalid OK packet gtids: %v", data)
+			}
+			packetOK.sessionStateData = gtids
+		}
+	} else {
+		// info
+		info, _ := data.readLenEncInfo()
+		packetOK.info = info
 	}
 
-	return affectedRows, lastInsertID, statusFlags, warnings, nil
+	return packetOK, nil
 }
 
 // isErrorPacket determines whether or not the packet is an error packet. Mostly here for

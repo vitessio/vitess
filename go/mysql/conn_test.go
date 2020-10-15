@@ -19,14 +19,19 @@ package mysql
 import (
 	"bytes"
 	crypto_rand "crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"net"
-	"reflect"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
@@ -208,6 +213,8 @@ func TestPackets(t *testing.T) {
 }
 
 func TestBasicPackets(t *testing.T) {
+	require := require.New(t)
+	assert := assert.New(t)
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
 		listener.Close()
@@ -216,65 +223,200 @@ func TestBasicPackets(t *testing.T) {
 	}()
 
 	// Write OK packet, read it, compare.
-	if err := sConn.writeOKPacket(12, 34, 56, 78); err != nil {
-		t.Fatalf("writeOKPacket failed: %v", err)
-	}
+	err := sConn.writeOKPacket(&PacketOK{
+		affectedRows: 12,
+		lastInsertID: 34,
+		statusFlags:  56,
+		warnings:     78,
+	})
+	require.NoError(err)
+
 	data, err := cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != OKPacket {
-		t.Fatalf("cConn.ReadPacket - OKPacket failed: %v %v", data, err)
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], OKPacket, "OKPacket")
+
+	packetOk, err := cConn.parseOKPacket(data)
+	require.NoError(err)
+	assert.EqualValues(12, packetOk.affectedRows)
+	assert.EqualValues(34, packetOk.lastInsertID)
+	assert.EqualValues(56, packetOk.statusFlags)
+	assert.EqualValues(78, packetOk.warnings)
+
+	// Write OK packet with affected GTIDs, read it, compare.
+	sConn.Capabilities |= CapabilityClientSessionTrack
+	cConn.Capabilities |= CapabilityClientSessionTrack
+	ok := PacketOK{
+		affectedRows:     23,
+		lastInsertID:     45,
+		statusFlags:      67 | ServerSessionStateChanged,
+		warnings:         89,
+		info:             "",
+		sessionStateData: "foo-bar",
 	}
-	affectedRows, lastInsertID, statusFlags, warnings, err := parseOKPacket(data)
-	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
-		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
-	}
+	err = sConn.writeOKPacket(&ok)
+	require.NoError(err)
+
+	data, err = cConn.ReadPacket()
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], OKPacket, "OKPacket")
+
+	packetOk, err = cConn.parseOKPacket(data)
+	require.NoError(err)
+	assert.EqualValues(23, packetOk.affectedRows)
+	assert.EqualValues(45, packetOk.lastInsertID)
+	assert.EqualValues(ServerSessionStateChanged, packetOk.statusFlags&ServerSessionStateChanged)
+	assert.EqualValues(89, packetOk.warnings)
+	assert.EqualValues("foo-bar", packetOk.sessionStateData)
 
 	// Write OK packet with EOF header, read it, compare.
-	if err := sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78); err != nil {
-		t.Fatalf("writeOKPacketWithEOFHeader failed: %v", err)
+	ok = PacketOK{
+		affectedRows: 12,
+		lastInsertID: 34,
+		statusFlags:  56,
+		warnings:     78,
 	}
+	err = sConn.writeOKPacketWithEOFHeader(&ok)
+	require.NoError(err)
+
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || !isEOFPacket(data) {
-		t.Fatalf("cConn.ReadPacket - OKPacket with EOF header failed: %v %v", data, err)
-	}
-	affectedRows, lastInsertID, statusFlags, warnings, err = parseOKPacket(data)
-	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
-		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.True(isEOFPacket(data), "expected EOF")
+
+	packetOk, err = cConn.parseOKPacket(data)
+	require.NoError(err)
+	assert.EqualValues(12, packetOk.affectedRows)
+	assert.EqualValues(34, packetOk.lastInsertID)
+	assert.EqualValues(56, packetOk.statusFlags)
+	assert.EqualValues(78, packetOk.warnings)
 
 	// Write error packet, read it, compare.
-	if err := sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason"); err != nil {
-		t.Fatalf("writeErrorPacket failed: %v", err)
-	}
+	err = sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason")
+	require.NoError(err)
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ErrPacket {
-		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+
 	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason")) {
-		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
-	}
+	utils.MustMatch(t, err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason"), "")
 
 	// Write error packet from error, read it, compare.
-	if err := sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")); err != nil {
-		t.Fatalf("writeErrorPacketFromError failed: %v", err)
-	}
+	err = sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied"))
+	require.NoError(err)
+
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ErrPacket {
-		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
-	}
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+
 	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")) {
-		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
-	}
+	utils.MustMatch(t, err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied"), "")
 
 	// Write EOF packet, read it, compare first byte. Payload is always ignored.
-	if err := sConn.writeEOFPacket(0x8912, 0xabba); err != nil {
-		t.Fatalf("writeEOFPacket failed: %v", err)
-	}
+	err = sConn.writeEOFPacket(0x8912, 0xabba)
+	require.NoError(err)
+
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || !isEOFPacket(data) {
-		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)
+	require.NoError(err)
+	require.NotEmpty(data)
+	assert.True(isEOFPacket(data), "expected EOF")
+}
+
+func TestOkPackets(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	testCases := []struct {
+		data        string
+		cc          uint32
+		expectedErr string
+	}{{
+		data: `
+00000000  00 00 00 02 00 00 00                              |.......|`,
+		cc: CapabilityClientProtocol41,
+	}, {
+		data: `
+00000000  00 00 00 02 00                                    |.....|`,
+		cc:          CapabilityClientTransactions,
+		expectedErr: "invalid OK packet warnings: &{[0 0 0 2 0] 0}",
+	}, {
+		data: `
+00000000  00 00 00 02 40 00 00 00  2a 03 28 00 26 66 32 37  |....@...*.(.&f27|
+00000010  66 36 39 37 31 2d 30 33  65 37 2d 31 31 65 62 2d  |f6971-03e7-11eb-|
+00000020  38 35 63 35 2d 39 38 61  66 36 35 61 36 64 63 34  |85c5-98af65a6dc4|
+00000030  61 3a 32                                          |a:2|`,
+		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+	}, {
+		data:        `00000000  00 00 00 02 40 00 00 00  07 01 05 04 74 65 73 74  |....@.......test|`,
+		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		expectedErr: "invalid OK packet session state change type: 1",
+	}, {
+		data: `
+00000000  00 00 00 00 40 00 00 00  14 00 0f 0a 61 75 74 6f  |....@.......auto|
+00000010  63 6f 6d 6d 69 74 03 4f  46 46 02 01 31           |commit.OFF..1|`,
+		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		expectedErr: "invalid OK packet session state change type: 0",
+	}, {
+		data: `
+00000000  00 00 00 00 40 00 00 00  0a 01 05 04 74 65 73 74  |....@.......test|
+00000010  02 01 31                                          |..1|`,
+		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
+		expectedErr: "invalid OK packet session state change type: 1",
+	}}
+
+	for i, testCase := range testCases {
+		t.Run("data packet:"+strconv.Itoa(i), func(t *testing.T) {
+			data := ReadHexDump(testCase.data)
+
+			cConn.Capabilities = testCase.cc
+			sConn.Capabilities = testCase.cc
+			// parse the packet
+			packetOk, err := cConn.parseOKPacket(data)
+			if testCase.expectedErr != "" {
+				require.Error(t, err)
+				require.Equal(t, testCase.expectedErr, err.Error())
+				return
+			}
+			require.NoError(t, err, "failed to parse OK packet")
+
+			// write the ok packet from server
+			err = sConn.writeOKPacket(packetOk)
+			require.NoError(t, err, "failed to write OK packet")
+
+			// receive the ok packer on client
+			readData, err := cConn.ReadPacket()
+			require.NoError(t, err, "failed to read packet that was written")
+			assert.Equal(t, data, readData, "data read and written does not match")
+		})
 	}
+}
+
+func ReadHexDump(value string) []byte {
+	lines := strings.Split(value, "\n")
+	var data []byte
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		indexOfPipe := strings.Index(line, "|")
+		s := line[8:indexOfPipe]
+		hexValues := strings.Split(s, " ")
+		for _, val := range hexValues {
+			if val != "" {
+				i, _ := hex.DecodeString(val)
+				data = append(data, i...)
+			}
+		}
+	}
+
+	return data
 }
 
 // Mostly a sanity check.
