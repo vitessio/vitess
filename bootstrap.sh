@@ -107,7 +107,7 @@ install_protoc() {
 
   # This is how we'd download directly from source:
   # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  wget "https://github.com/vitessio/vitess-resources/raw/main/protoc/protoc-$version-$platform-${target}.zip"
+  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/protoc-$version-$platform-${target}.zip"
   unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
@@ -121,7 +121,7 @@ install_zookeeper() {
   zk="zookeeper-$version"
   # This is how we'd download directly from source:
   # wget "https://archive.apache.org/dist/zookeeper/$zk/$zk.tar.gz"
-  wget "https://github.com/vitessio/vitess-resources/raw/main/zk/${zk}.tar.gz"
+  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/${zk}.tar.gz"
   tar -xzf "$zk.tar.gz"
   ant -f "$zk/build.xml" package
   ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
@@ -153,7 +153,7 @@ install_etcd() {
   # This is how we'd download directly from source:
   # download_url=https://github.com/etcd-io/etcd/releases/download
   # wget "$download_url/$version/$file"
-  wget "https://github.com/vitessio/vitess-resources/raw/main/etcd/${file}"
+  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -181,14 +181,17 @@ install_k3s() {
       *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
   esac
 
-  download_url=https://github.com/rancher/k3s/releases/download
   file="k3s${target}"
 
   local dest="$dist/k3s${target}-${version}-${platform}"
-  wget -O  $dest "$download_url/$version/$file"
+  # This is how we'd download directly from source:
+  # download_url=https://github.com/rancher/k3s/releases/download
+  # wget -O  $dest "$download_url/$version/$file"
+  wget -O  $dest "https://github.com/vitessio/vitess-resources/releases/download/v1.0/$version/$file"
   chmod +x $dest
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
+
 
 # Download and install consul, link consul binary into our root.
 install_consul() {
