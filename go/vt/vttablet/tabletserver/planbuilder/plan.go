@@ -65,6 +65,8 @@ const (
 	PlanRelease
 	PlanSRollback
 	PlanShowTables
+	// PlanLoad is for Load data statements
+	PlanLoad
 	NumPlans
 )
 
@@ -195,7 +197,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 	case *sqlparser.SRollback:
 		plan, err = &Plan{PlanID: PlanSRollback}, nil
 	case *sqlparser.Load:
-		plan, err = &Plan{PlanID: PlanDDL}, nil
+		plan, err = &Plan{PlanID: PlanLoad}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}

@@ -141,7 +141,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execOther()
 	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
 		return qre.execOther()
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL, planbuilder.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
@@ -220,7 +220,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 			return nil, err
 		}
 		return qr, nil
-	case planbuilder.PlanDDL:
+	case planbuilder.PlanDDL, planbuilder.PlanLoad:
 		return qre.execDDL(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
