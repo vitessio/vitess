@@ -521,6 +521,12 @@ type (
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
 	}
+
+	// CheckConstraintDefinition describes a check constraint in a CREATE TABLE statement
+	CheckConstraintDefinition struct {
+		Expr     Expr
+		Enforced bool
+	}
 )
 
 // ShowFilter is show tables filter
@@ -1429,6 +1435,16 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 	}
 	if f.OnUpdate != DefaultAction {
 		buf.astPrintf(f, " on update %v", f.OnUpdate)
+	}
+}
+
+// Format formats the node.
+func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(c, "check constraint on expression %v", c.Expr)
+	if c.Enforced {
+		buf.astPrintf(c, " enforced")
+	} else {
+		buf.astPrintf(c, " not enforced")
 	}
 }
 

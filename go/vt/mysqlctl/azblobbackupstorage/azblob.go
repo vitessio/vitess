@@ -276,14 +276,19 @@ func (bs *AZBlobBackupStorage) containerURL() (*azblob.ContainerURL, error) {
 
 // ListBackups implements BackupStorage.
 func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	log.Infof("ListBackups: [azblob] container: %s, directory: %v", *containerName, objName(dir, ""))
+	var searchPrefix string
+	if dir == "/" {
+		searchPrefix = "/"
+	} else {
+		searchPrefix = objName(dir, "")
+	}
+
+	log.Infof("ListBackups: [azblob] container: %s, directory: %v", *containerName, searchPrefix)
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
 		return nil, err
 	}
-
-	searchPrefix := objName(dir, "")
 
 	result := make([]backupstorage.BackupHandle, 0)
 	var subdirs []string
