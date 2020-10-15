@@ -101,6 +101,7 @@ func skipToEnd(yylex interface{}) {
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
+  OnlineDDLHint *OnlineDDLHint
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
@@ -130,6 +131,7 @@ func skipToEnd(yylex interface{}) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
+  selectInto	  *SelectInto
 }
 
 %token LEX_ERROR
@@ -137,6 +139,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
+%token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
+%token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
@@ -238,7 +242,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
-%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
+%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
 %type <str> wild_opt
 %type <explainType> explain_format_opt
@@ -286,6 +290,9 @@ func skipToEnd(yylex interface{}) {
 %type <order> order
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
+%type <selectInto> into_option
+%type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
@@ -301,9 +308,10 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
+%type <OnlineDDLHint> online_hint_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt null_opt
+%type <boolean> exists_opt not_exists_opt null_opt enforced_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -325,7 +333,7 @@ func skipToEnd(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition
+%type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key index_symbols from_or_in
 %type <str> name_opt
 %type <str> equal_opt
@@ -337,7 +345,7 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list
-%type <constraintInfo> constraint_info
+%type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -391,6 +399,7 @@ command:
 | other_statement
 | flush_statement
 | do_statement
+| load_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -416,13 +425,20 @@ do_statement:
     $$ = &OtherAdmin{}
   }
 
+load_statement:
+  LOAD DATA skip_to_end
+  {
+    $$ = &Load{}
+  }
+
 select_statement:
-  base_select order_by_opt limit_opt lock_opt
+  base_select order_by_opt limit_opt lock_opt into_option
   {
     sel := $1.(*Select)
     sel.OrderBy = $2
     sel.Limit = $3
     sel.Lock = $4
+    sel.Into = $5
     $$ = sel
   }
 | openb select_statement closeb order_by_opt limit_opt lock_opt
@@ -541,21 +557,21 @@ update_statement:
   }
 
 delete_statement:
-  DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereClause, $6), OrderBy: $7, Limit: $8}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
   }
-| DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
+| DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
-| DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
+| DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereClause, $6)}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
   }
-|DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
+| DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereClause, $6)}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
   }
 
 from_or_using:
@@ -765,9 +781,19 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddColumn($1)
   }
+| check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddConstraint($1)
+  }
 | table_column_list ',' column_definition
   {
     $$.AddColumn($3)
+  }
+| table_column_list ',' column_definition check_constraint_definition
+  {
+    $$.AddColumn($3)
+    $$.AddConstraint($4)
   }
 | table_column_list ',' index_definition
   {
@@ -779,7 +805,7 @@ table_column_list:
   }
 
 column_definition:
-  id_or_var column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
@@ -1302,6 +1328,15 @@ constraint_definition:
     $$ = &ConstraintDefinition{Details: $1}
   }
 
+check_constraint_definition:
+  CONSTRAINT id_or_var check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+  }
+|  check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Details: $1}
+  }
 
 constraint_info:
   FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
@@ -1319,6 +1354,16 @@ constraint_info:
 | FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+  }
+| check_constraint_info
+  {
+    $$ = $1
+  }
+
+check_constraint_info:
+  CHECK '(' expression ')' enforced_opt
+  {
+    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
   }
 
 fk_on_delete:
@@ -1353,6 +1398,19 @@ fk_reference_action:
 | SET NULL
   {
     $$ = SetNull
+  }
+
+enforced_opt:
+  {
+    $$ = true
+  }
+| ENFORCED
+  {
+    $$ = true
+  }
+| NOT ENFORCED
+  {
+    $$ = false
   }
 
 table_option_list:
@@ -1399,35 +1457,35 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
+  ALTER online_hint_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
-    $$ = &DDL{Action: AlterDDLAction, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
+| ALTER online_hint_opt TABLE table_name ADD alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterDDLAction, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
+| ALTER online_hint_opt TABLE table_name DROP alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterDDLAction, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name RENAME to_opt table_name
+| ALTER online_hint_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
     $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
   }
-| ALTER ignore_opt TABLE table_name RENAME index_opt skip_to_end
+| ALTER online_hint_opt TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterDDLAction, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
 | ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
   }
-| ALTER ignore_opt TABLE table_name partition_operation
+| ALTER online_hint_opt TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: AlterDDLAction, Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4, PartitionSpec: $5}
   }
 | ALTER DATABASE id_or_var ddl_skip_to_end
   {
@@ -1607,131 +1665,130 @@ analyze_statement:
 show_statement:
   SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
 | SHOW CHARACTER SET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW CHARSET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW CREATE TABLE table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW CREATE TRIGGER ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW CREATE VIEW ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW DATABASES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW KEYSPACES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW VITESS_KEYSPACES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW ENGINES
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}}
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
   }
-| SHOW TABLE ddl_skip_to_end
+| SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
   }
-| SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}
+    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
     // this is ugly, but I couldn't find a better way for now
     if $3 == "processlist" {
-      $$ = &Show{Type: $3, Scope: ImplicitScope}
+      $$ = &Show{&ShowLegacy{Type: $3, Scope: ImplicitScope}}
     } else {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
-      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}
+      $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
     }
   }
 | SHOW show_session_or_global VARIABLES ddl_skip_to_end
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
   }
 | SHOW COLLATION
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW COLLATION WHERE expression
   {
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
   }
 | SHOW VSCHEMA TABLES
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW VSCHEMA VINDEXES
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW VSCHEMA VINDEXES ON table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}}
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{Type: string($2), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 /* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
 | SHOW vitess_topo like_or_where_opt
@@ -1739,7 +1796,7 @@ show_statement:
     // This should probably be a different type (ShowVitessTopoOpt), but
     // just getting the thing working for now
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: $2, ShowTablesOpt: showTablesOpt}
+    $$ = &Show{&ShowLegacy{Type: $2, ShowTablesOpt: showTablesOpt}}
   }
 /*
  * Catch-all for show statements without vitess keywords:
@@ -1750,7 +1807,7 @@ show_statement:
  */
 | SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2.String()), Scope: ImplicitScope}
+    $$ = &Show{&ShowLegacy{Type: string($2.String()), Scope: ImplicitScope}}
   }
 
 tables_or_processlist:
@@ -3252,6 +3309,140 @@ lock_opt:
     $$ = ShareModeLock
   }
 
+into_option:
+  {
+    $$ = nil
+  }
+| INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
+  {
+    $$ = &SelectInto{Type:IntoOutfileS3, FileName:string($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+  }
+| INTO DUMPFILE STRING
+  {
+    $$ = &SelectInto{Type:IntoDumpfile, FileName:string($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+  }
+| INTO OUTFILE STRING charset_opt export_options
+  {
+    $$ = &SelectInto{Type:IntoOutfile, FileName:string($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+  }
+
+format_opt:
+  {
+    $$ = ""
+  }
+| FORMAT CSV header_opt
+  {
+    $$ = " format csv" + $3
+  }
+| FORMAT TEXT header_opt
+  {
+    $$ = " format text" + $3
+  }
+
+header_opt:
+  {
+    $$ = ""
+  }
+| HEADER
+  {
+    $$ = " header"
+  }
+
+manifest_opt:
+  {
+    $$ = ""
+  }
+| MANIFEST ON
+  {
+    $$ = " manifest on"
+  }
+| MANIFEST OFF
+  {
+    $$ = " manifest off"
+  }
+
+overwrite_opt:
+  {
+    $$ = ""
+  }
+| OVERWRITE ON
+  {
+    $$ = " overwrite on"
+  }
+| OVERWRITE OFF
+  {
+    $$ = " overwrite off"
+  }
+
+export_options:
+  fields_opt lines_opt
+  {
+    $$ = $1 + $2
+  }
+
+lines_opt:
+  {
+    $$ = ""
+  }
+| LINES starting_by_opt terminated_by_opt
+  {
+    $$ = " lines" + $2 + $3
+  }
+
+starting_by_opt:
+  {
+    $$ = ""
+  }
+| STARTING BY STRING
+  {
+    $$ = " starting by '" + string($3) + "'"
+  }
+
+terminated_by_opt:
+  {
+    $$ = ""
+  }
+| TERMINATED BY STRING
+  {
+    $$ = " terminated by '" + string($3)  + "'"
+  }
+
+fields_opt:
+  {
+    $$ = ""
+  }
+| columns_or_fields terminated_by_opt enclosed_by_opt escaped_by_opt
+  {
+    $$ = " " + $1 + $2 + $3 + $4
+  }
+
+escaped_by_opt:
+  {
+    $$ = ""
+  }
+| ESCAPED BY STRING
+  {
+    $$ = " escaped by '" + string($3) + "'"
+  }
+
+enclosed_by_opt:
+  {
+    $$ = ""
+  }
+| optionally_opt ENCLOSED BY STRING
+  {
+    $$ = $1 + " enclosed by '" + string($4) + "'"
+  }
+
+optionally_opt:
+  {
+    $$ = ""
+  }
+| OPTIONALLY
+  {
+    $$ = " optionally"
+  }
+
 // insert_data expands all combinations into a single rule.
 // This avoids a shift/reduce conflict while encountering the
 // following two possible constructs:
@@ -3452,6 +3643,25 @@ non_add_drop_or_rename_operation:
 | id_or_var
   { $$ = struct{}{} }
 
+
+online_hint_opt:
+  {
+    $$ = &OnlineDDLHint{}
+  }
+| WITH STRING
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: DDLStrategy($2),
+    }
+  }
+| WITH STRING STRING
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: DDLStrategy($2),
+        Options: string($3),
+    }
+  }
+
 to_opt:
   { $$ = struct{}{} }
 | TO
@@ -3604,6 +3814,7 @@ reserved_keyword:
 | OR
 | ORDER
 | OUTER
+| OUTFILE
 | OVER
 | PERCENT_RANK
 | RANK
@@ -3672,16 +3883,21 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| CSV
+| DATA
 | DATE
 | DATETIME
 | DECIMAL
 | DEFINITION
 | DESCRIPTION
 | DOUBLE
+| DUMPFILE
 | DUPLICATE
+| ENCLOSED
 | ENFORCED
 | ENGINES
 | ENUM
+| ESCAPED
 | EXCLUDE
 | EXPANSION
 | EXTENDED
@@ -3697,6 +3913,7 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| HEADER
 | HISTOGRAM
 | HISTORY
 | INACTIVE
@@ -3713,10 +3930,13 @@ non_reserved_keyword:
 | LAST_INSERT_ID
 | LESS
 | LEVEL
+| LINES
 | LINESTRING
+| LOAD
 | LOCKED
 | LONGBLOB
 | LONGTEXT
+| MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -3740,11 +3960,13 @@ non_reserved_keyword:
 | OJ
 | OLD
 | OPTIONAL
+| OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | ONLY
 | OPTIMIZE
 | OTHERS
+| OVERWRITE
 | PARTITION
 | PATH
 | PERSIST
@@ -3776,6 +3998,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| S3
 | SECONDARY
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
@@ -3790,8 +4013,10 @@ non_reserved_keyword:
 | SPATIAL
 | SRID
 | START
+| STARTING
 | STATUS
 | TABLES
+| TERMINATED
 | TEXT
 | THAN
 | THREAD_PRIORITY

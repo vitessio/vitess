@@ -50,7 +50,8 @@ var (
 
 // ReplTracker tracks replication lag.
 type ReplTracker struct {
-	mode string
+	mode           string
+	forceHeartbeat bool
 
 	mu       sync.Mutex
 	isMaster bool
@@ -63,10 +64,11 @@ type ReplTracker struct {
 // NewReplTracker creates a new ReplTracker.
 func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
-		mode:   env.Config().ReplicationTracker.Mode,
-		hw:     newHeartbeatWriter(env, alias),
-		hr:     newHeartbeatReader(env),
-		poller: &poller{},
+		mode:           env.Config().ReplicationTracker.Mode,
+		forceHeartbeat: env.Config().EnableLagThrottler,
+		hw:             newHeartbeatWriter(env, alias),
+		hr:             newHeartbeatReader(env),
+		poller:         &poller{},
 	}
 }
 
@@ -88,6 +90,9 @@ func (rt *ReplTracker) MakeMaster() {
 		rt.hr.Close()
 		rt.hw.Open()
 	}
+	if rt.forceHeartbeat {
+		rt.hw.Open()
+	}
 }
 
 // MakeNonMaster must be called if the tablet type becomes non-MASTER.
@@ -104,6 +109,9 @@ func (rt *ReplTracker) MakeNonMaster() {
 	case tabletenv.Polling:
 		// Run the status once to pre-initialize values.
 		rt.poller.Status()
+	}
+	if rt.forceHeartbeat {
+		rt.hw.Close()
 	}
 }
 
@@ -127,4 +135,10 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	}
 	// rt.mode == tabletenv.Poller
 	return rt.poller.Status()
+}
+
+// EnableHeartbeat enables or disables writes of heartbeat. This functionality
+// is only used by tests.
+func (rt *ReplTracker) EnableHeartbeat(enable bool) {
+	rt.hw.enableWrites(enable)
 }

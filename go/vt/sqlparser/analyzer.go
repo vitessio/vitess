@@ -78,7 +78,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtDDL
 	case *Use:
 		return StmtUse
-	case *OtherRead, *OtherAdmin:
+	case *OtherRead, *OtherAdmin, *Load:
 		return StmtOther
 	case *Explain:
 		return StmtExplain
@@ -260,6 +260,17 @@ func IsVschemaDDL(ddl *DDL) bool {
 	switch ddl.Action {
 	case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
 		return true
+	}
+	return false
+}
+
+// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
+func IsOnlineSchemaDDL(ddl *DDL, sql string) bool {
+	switch ddl.Action {
+	case AlterDDLAction:
+		if ddl.OnlineHint != nil {
+			return ddl.OnlineHint.Strategy != ""
+		}
 	}
 	return false
 }

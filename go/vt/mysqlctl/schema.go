@@ -128,7 +128,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		go func() {
 			defer wg.Done()
 
-			log.Infof("mysqld GetSchema: GetPrimaryKeyColumns")
 			var err error
 			colMap, err = mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
 			if err != nil {
@@ -136,7 +135,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 				cancel()
 				return
 			}
-			log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done")
 		}()
 	}
 
@@ -145,11 +143,9 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		return nil, err
 	}
 
-	log.Infof("mysqld GetSchema: Collecting all table schemas")
 	for _, td := range tds {
 		td.PrimaryKeyColumns = colMap[td.Name]
 	}
-	log.Infof("mysqld GetSchema: Collecting all table schemas done")
 
 	sd.TableDefinitions = tds
 

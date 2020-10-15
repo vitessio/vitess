@@ -115,6 +115,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 		}
 	}
 
+	// Into is not supported in subquery.
+	if sel.Into != nil && (outer != nil || query == "") {
+		return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'INTO'")
+	}
+
 	if err := pb.processTableExprs(sel.From); err != nil {
 		return err
 	}
@@ -157,8 +162,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	if err := pb.pushLimit(sel.Limit); err != nil {
 		return err
 	}
-	pb.bldr.PushMisc(sel)
-	return nil
+	return pb.bldr.PushMisc(sel)
 }
 
 func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {

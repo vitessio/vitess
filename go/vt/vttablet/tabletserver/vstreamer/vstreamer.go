@@ -147,9 +147,12 @@ func (vs *vstreamer) Stream() error {
 	//defer vs.cancel()
 	ctx := context.Background()
 	defer ctx.Done()
+	vs.vse.vstreamersCreated.Add(1)
 	log.Infof("Starting Stream() with startPos %s", vs.startPos)
 	pos, err := mysql.DecodePosition(vs.startPos)
 	if err != nil {
+		vs.vse.errorCounts.Add("StreamRows", 1)
+		vs.vse.vstreamersEndedWithErrors.Add(1)
 		return err
 	}
 	vs.pos = pos
@@ -161,21 +164,21 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := vs.se.Open(); err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.pos, vs.vse)
 	}
 
 	conn, err := binlog.NewBinlogConnection(vs.cp)
 	if err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.pos, vs.vse)
 	}
 	defer conn.Close()
 
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.pos, vs.vse)
 	}
 	err = vs.parseEvents(vs.ctx, events)
-	return wrapError(err, vs.pos)
+	return wrapError(err, vs.pos, vs.vse)
 }
 
 // parseEvents parses and sends events.
@@ -252,6 +255,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_SAVEPOINT:
 			bufferedEvents = append(bufferedEvents, vevent)
 		default:
+			vs.vse.errorCounts.Add("BufferAndTransmit", 1)
 			return fmt.Errorf("unexpected event: %v", vevent)
 		}
 		return nil
@@ -280,6 +284,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			vevents, err := vs.parseEvent(ev)
 			if err != nil {
+				vs.vse.errorCounts.Add("ParseEvent", 1)
 				return err
 			}
 			for _, vevent := range vevents {
@@ -287,6 +292,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					if err == io.EOF {
 						return nil
 					}
+					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
 					return fmt.Errorf("error sending event: %v", err)
 				}
 			}
@@ -308,6 +314,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				if err == io.EOF {
 					return nil
 				}
+				vs.vse.errorCounts.Add("Send", 1)
 				return fmt.Errorf("error sending event: %v", err)
 			}
 		}
@@ -503,6 +510,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 
 		vevent, err := vs.buildTablePlan(id, tm)
 		if err != nil {
+			vs.vse.errorCounts.Add("TablePlan", 1)
 			return nil, err
 		}
 		if vevent != nil {
@@ -538,7 +546,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
-
 	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
@@ -807,8 +814,10 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	return plan.filter(values)
 }
 
-func wrapError(err error, stopPos mysql.Position) error {
+func wrapError(err error, stopPos mysql.Position, vse *Engine) error {
 	if err != nil {
+		vse.vstreamersEndedWithErrors.Add(1)
+		vse.errorCounts.Add("StreamEnded", 1)
 		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
 		log.Error(err)
 		return err

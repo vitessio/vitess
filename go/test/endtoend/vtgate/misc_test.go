@@ -133,6 +133,28 @@ func TestUnion(t *testing.T) {
 	assertMatches(t, conn, `(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 }
 
+// TestCheckConstraint test check constraints on CREATE TABLE
+// This feature is supported from MySQL 8.0.16 and MariaDB 10.2.1.
+func TestCheckConstraint(t *testing.T) {
+	// Skipping as tests are run against MySQL 5.7
+	t.Skip()
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := `CREATE TABLE t7 (CHECK (c1 <> c2), c1 INT CHECK (c1 > 10), c2 INT CONSTRAINT c2_positive CHECK (c2 > 0), c3 INT CHECK (c3 < 100), CONSTRAINT c1_nonzero CHECK (c1 <> 0), CHECK (c1 > c3));`
+	exec(t, conn, query)
+
+	checkQuery := `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = 't7';`
+	expected := `[[VARCHAR("t7_chk_1")] [VARCHAR("t7_chk_2")] [VARCHAR("c2_positive")] [VARCHAR("t7_chk_3")] [VARCHAR("c1_nonzero")] [VARCHAR("t7_chk_4")]]`
+
+	assertMatches(t, conn, checkQuery, expected)
+
+	cleanup := `DROP TABLE t7`
+	exec(t, conn, cleanup)
+}
+
 func TestSavepointInTx(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -369,6 +391,17 @@ func TestUseStmtInOLAP(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestInformationSchemaWithSubquery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result := exec(t, conn, "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = (SELECT SCHEMA()) AND TABLE_NAME = 'not_exists'")
+	assert.Empty(t, result.Rows)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

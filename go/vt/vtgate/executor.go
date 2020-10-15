@@ -555,10 +555,14 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	if err != nil {
 		return nil, err
 	}
-	show, ok := stmt.(*sqlparser.Show)
+	showOuter, ok := stmt.(*sqlparser.Show)
 	if !ok {
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized SHOW statement: %v", sql)
+	}
+	show, ok := showOuter.Internal.(*sqlparser.ShowLegacy)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: This should only be SHOW Legacy statement type: %v", sql)
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	execStart := time.Now()
@@ -714,7 +718,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: uint64(len(rows)),
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
-		showVitessShardsFilters := func(show *sqlparser.Show) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
+		showVitessShardsFilters := func(show *sqlparser.ShowLegacy) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
 			keyspaceFilters := []func(string) bool{}
 			shardFilters := []func(string, *topodatapb.ShardReference) bool{}
 
@@ -943,8 +947,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 // (tablet, servingState, mtst) -> bool
 type tabletFilter func(*topodatapb.Tablet, string, int64) bool
 
-func (e *Executor) showTablets(show *sqlparser.Show) (*sqltypes.Result, error) {
-	getTabletFilters := func(show *sqlparser.Show) []tabletFilter {
+func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
+	getTabletFilters := func(show *sqlparser.ShowLegacy) []tabletFilter {
 		filters := []tabletFilter{}
 
 		if show.ShowTablesOpt == nil || show.ShowTablesOpt.Filter == nil {
@@ -1111,7 +1115,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv)
 	vcursor.SetIgnoreMaxMemoryRows(true)
 	switch stmtType {
 	case sqlparser.StmtStream:
@@ -1614,7 +1618,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
