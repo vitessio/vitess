@@ -1691,6 +1691,18 @@ var (
 		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
 		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
 	}, {
+		input: "create table t1 ( check (c1 <> c2), c1 int check (c1 > 10), c2 int constraint c2_positive check (c2 > 0), c3 int check (c3 < 100), constraint c1_nonzero check (c1 <> 0), check (c1 > c3))",
+		output: "create table t1 (\n" +
+			"\tc1 int,\n" +
+			"\tc2 int,\n" +
+			"\tc3 int,\n" +
+			"\tcheck constraint on expression c1 != c2 enforced,\n" +
+			"\tcheck constraint on expression c1 > 10 enforced,\n" +
+			"\tconstraint c2_positive check constraint on expression c2 > 0 enforced,\n" +
+			"\tcheck constraint on expression c3 < 100 enforced,\n" +
+			"\tconstraint c1_nonzero check constraint on expression c1 != 0 enforced,\n" +
+			"\tcheck constraint on expression c1 > c3 enforced\n)",
+	}, {
 		input:  "SHOW INDEXES FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
 		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
 	}, {
