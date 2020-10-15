@@ -44,20 +44,3 @@ func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engin
 		SingleShardOnly:   false,
 	}, nil
 }
-
-func buildPlanForBypassUsingQuery(query string, vschema ContextVSchema) (engine.Primitive, error) {
-	if vschema.Destination() == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "set bypass destination first")
-	}
-	keyspace, err := vschema.DefaultKeyspace()
-	if err != nil {
-		return nil, err
-	}
-	return &engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: vschema.Destination(),
-		Query:             query,
-		IsDML:             false,
-		SingleShardOnly:   false,
-	}, nil
-}

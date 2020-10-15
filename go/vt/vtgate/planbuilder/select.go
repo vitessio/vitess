@@ -39,10 +39,6 @@ func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (en
 	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
 
-		if sel.IntoOutfileS3 != "" {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: non bypass query with into outfile s3")
-		}
-
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
 			return nil, err
@@ -118,9 +114,10 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 			return nil
 		}
 	}
-	// Into Outfile is not supported in subquery.
-	if sel.IntoOutfileS3 != "" && (outer != nil || query == "") {
-		return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'INTO OUTFILE S3'")
+
+	// Into is not supported in subquery.
+	if sel.Into != nil && (outer != nil || query == "") {
+		return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'INTO'")
 	}
 
 	if err := pb.processTableExprs(sel.From); err != nil {
@@ -165,8 +162,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	if err := pb.pushLimit(sel.Limit); err != nil {
 		return err
 	}
-	pb.bldr.PushMisc(sel)
-	return nil
+	return pb.bldr.PushMisc(sel)
 }
 
 func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {

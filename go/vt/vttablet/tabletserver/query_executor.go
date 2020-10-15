@@ -141,7 +141,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execOther()
 	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
 		return qre.execOther()
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL, planbuilder.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
@@ -195,7 +195,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanLoad:
 		return qre.txFetch(conn, true)
 	case planbuilder.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())

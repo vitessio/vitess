@@ -531,6 +531,10 @@ func replaceSelectHaving(newNode, parent SQLNode) {
 	parent.(*Select).Having = newNode.(*Where)
 }
 
+func replaceSelectInto(newNode, parent SQLNode) {
+	parent.(*Select).Into = newNode.(*SelectInto)
+}
+
 func replaceSelectLimit(newNode, parent SQLNode) {
 	parent.(*Select).Limit = newNode.(*Limit)
 }
@@ -1224,6 +1228,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.From, replaceSelectFrom)
 		a.apply(node, n.GroupBy, replaceSelectGroupBy)
 		a.apply(node, n.Having, replaceSelectHaving)
+		a.apply(node, n.Into, replaceSelectInto)
 		a.apply(node, n.Limit, replaceSelectLimit)
 		a.apply(node, n.OrderBy, replaceSelectOrderBy)
 		a.apply(node, n.SelectExprs, replaceSelectSelectExprs)
@@ -1236,6 +1241,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *SelectInto:
 
 	case *Set:
 		a.apply(node, n.Comments, replaceSetComments)
