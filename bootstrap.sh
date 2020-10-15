@@ -209,8 +209,10 @@ install_consul() {
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
-  download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  # This is how we'd download directly from source:
+  # download_url=https://releases.hashicorp.com/consul
+  # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/consul_${version}_${platform}_${target}.zip"
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
