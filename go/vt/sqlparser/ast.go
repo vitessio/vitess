@@ -69,8 +69,22 @@ type (
 		OrderBy          OrderBy
 		Limit            *Limit
 		Lock             Lock
-		IntoOutfileS3    string
+		Into             *SelectInto
 	}
+
+	// SelectInto is a struct that represent the INTO part of a select query
+	SelectInto struct {
+		Type         SelectIntoType
+		FileName     string
+		Charset      string
+		FormatOption string
+		ExportOption string
+		Manifest     string
+		Overwrite    string
+	}
+
+	// SelectIntoType is an enum for SelectInto.Type
+	SelectIntoType int8
 
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
@@ -242,9 +256,8 @@ type (
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
-	// Load is for s3 statement
+	// Load represents a LOAD statement
 	Load struct {
-		InfileS3 string
 	}
 
 	// ParenSelect is a parenthesized SELECT statement.
@@ -1014,14 +1027,11 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	addIf(node.StraightJoinHint, StraightJoinHint)
 	addIf(node.SQLCalcFoundRows, SQLCalcFoundRowsStr)
 
-	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s",
+	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s%v",
 		node.Comments, options, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
-		node.Limit, node.Lock.ToString())
-	if node.IntoOutfileS3 != "" {
-		buf.astPrintf(node, " into outfile s3 '%s'", node.IntoOutfileS3)
-	}
+		node.Limit, node.Lock.ToString(), node.Into)
 }
 
 // Format formats the node.
@@ -2137,4 +2147,16 @@ func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
 		buf.WriteString(node.DatabaseName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+}
+
+// Format formats the node.
+func (node *SelectInto) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.astPrintf(node, "%s'%s'", node.Type.ToString(), node.FileName)
+	if node.Charset != "" {
+		buf.astPrintf(node, " character set %s", node.Charset)
+	}
+	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
 }

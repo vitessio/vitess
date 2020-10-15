@@ -83,7 +83,7 @@ type builder interface {
 	SetUpperLimit(count sqlparser.Expr)
 
 	// PushMisc pushes miscelleaneous constructs to all the primitives.
-	PushMisc(sel *sqlparser.Select)
+	PushMisc(sel *sqlparser.Select) error
 
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
@@ -169,8 +169,8 @@ func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
 	bc.input.SetUpperLimit(count)
 }
 
-func (bc *builderCommon) PushMisc(sel *sqlparser.Select) {
-	bc.input.PushMisc(sel)
+func (bc *builderCommon) PushMisc(sel *sqlparser.Select) error {
+	return bc.input.PushMisc(sel)
 }
 
 func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
@@ -338,7 +338,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
 	case *sqlparser.Load:
-		return buildPlanForBypassUsingQuery(query, vschema)
+		return buildLoadPlan(query, vschema)
 	case *sqlparser.DBDDL:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
 	case *sqlparser.SetTransaction:
@@ -351,4 +351,27 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+}
+
+func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	destination := vschema.Destination()
+	if destination == nil {
+		if keyspace.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+		}
+		destination = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             query,
+		IsDML:             true,
+		SingleShardOnly:   true,
+	}, nil
 }

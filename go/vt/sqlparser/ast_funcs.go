@@ -1122,6 +1122,19 @@ func (ty ExplainType) ToString() string {
 	}
 }
 
+func (sel SelectIntoType) ToString() string {
+	switch sel {
+	case IntoOutfile:
+		return IntoOutfileStr
+	case IntoOutfileS3:
+		return IntoOutfileS3Str
+	case IntoDumpfile:
+		return IntoDumpfileStr
+	default:
+		return "Unknown Select Into Type"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

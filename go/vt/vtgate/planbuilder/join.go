@@ -286,9 +286,12 @@ func (jb *join) SetUpperLimit(_ sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.
-func (jb *join) PushMisc(sel *sqlparser.Select) {
-	jb.Left.PushMisc(sel)
-	jb.Right.PushMisc(sel)
+func (jb *join) PushMisc(sel *sqlparser.Select) error {
+	err := jb.Left.PushMisc(sel)
+	if err != nil {
+		return err
+	}
+	return jb.Right.PushMisc(sel)
 }
 
 // Wireup satisfies the builder interface.
