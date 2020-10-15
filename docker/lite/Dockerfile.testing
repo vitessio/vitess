@@ -30,7 +30,7 @@ USER vitess
 RUN make install-testing PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM debian:stretch-slim
+FROM debian:buster-slim
 
 # Install dependencies
 COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
