@@ -27,6 +27,9 @@ BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_CHROME=${BUILD_CHROME:-1}
 
+VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
+VITESS_RESOURCES_RELEASE="v1.0"
+VITESS_RESOURCES_DOWNLOAD_URL="${VITESS_RESOURCES_DOWNLOAD_BASE_URL}/${VITESS_RESOURCES_RELEASE}"
 #
 # 0. Initialization and helper methods.
 #
@@ -107,7 +110,7 @@ install_protoc() {
 
   # This is how we'd download directly from source:
   # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/protoc-$version-$platform-${target}.zip"
+  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
   unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
@@ -121,7 +124,7 @@ install_zookeeper() {
   zk="zookeeper-$version"
   # This is how we'd download directly from source:
   # wget "https://archive.apache.org/dist/zookeeper/$zk/$zk.tar.gz"
-  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/${zk}.tar.gz"
+  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/${zk}.tar.gz"
   tar -xzf "$zk.tar.gz"
   ant -f "$zk/build.xml" package
   ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
@@ -153,7 +156,7 @@ install_etcd() {
   # This is how we'd download directly from source:
   # download_url=https://github.com/etcd-io/etcd/releases/download
   # wget "$download_url/$version/$file"
-  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/${file}"
+  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -187,7 +190,7 @@ install_k3s() {
   # This is how we'd download directly from source:
   # download_url=https://github.com/rancher/k3s/releases/download
   # wget -O  $dest "$download_url/$version/$file"
-  wget -O  $dest "https://github.com/vitessio/vitess-resources/releases/download/v1.0/$file-$version"
+  wget -O  $dest "${VITESS_RESOURCES_DOWNLOAD_URL}/$file-$version"
   chmod +x $dest
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
@@ -212,7 +215,7 @@ install_consul() {
   # This is how we'd download directly from source:
   # download_url=https://releases.hashicorp.com/consul
   # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-  wget "https://github.com/vitessio/vitess-resources/releases/download/v1.0/consul_${version}_${platform}_${target}.zip"
+  wget "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
