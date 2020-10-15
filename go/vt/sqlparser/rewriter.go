@@ -82,6 +82,10 @@ func (r *replaceCaseExprWhens) inc() {
 	*r++
 }
 
+func replaceCheckConstraintDefinitionExpr(newNode, parent SQLNode) {
+	parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
+}
+
 func replaceColNameName(newNode, parent SQLNode) {
 	parent.(*ColName).Name = newNode.(ColIdent)
 }
@@ -953,6 +957,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerWhensB.replace)
 			replacerWhensB.inc()
 		}
+
+	case *CheckConstraintDefinition:
+		a.apply(node, n.Expr, replaceCheckConstraintDefinitionExpr)
 
 	case ColIdent:
 
