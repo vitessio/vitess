@@ -187,7 +187,7 @@ install_k3s() {
   # This is how we'd download directly from source:
   # download_url=https://github.com/rancher/k3s/releases/download
   # wget -O  $dest "$download_url/$version/$file"
-  wget -O  $dest "https://github.com/vitessio/vitess-resources/releases/download/v1.0/$version/$file"
+  wget -O  $dest "https://github.com/vitessio/vitess-resources/releases/download/v1.0/$file-$version"
   chmod +x $dest
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
@@ -229,12 +229,12 @@ install_chromedriver() {
   if [ "$(arch)" == "aarch64" ] ; then
       os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
       case $os in
-          ubuntu|debian)
-              sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
-	      ;;
-	  centos|fedora)
-	      sudo yum update -y && yum install -y libX11 unzip wget
-	      ;;
+        ubuntu|debian)
+          sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
+        ;;
+        centos|fedora)
+          sudo yum update -y && yum install -y libX11 unzip wget
+        ;;
       esac
       echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
       wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
