@@ -37,6 +37,7 @@ type SystemVariable struct {
 	Name string
 }
 
+// System Settings
 var (
 	on   = "1"
 	off  = "0"
@@ -53,9 +54,10 @@ var (
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 
-	ReadMyWrite        = SystemVariable{Name: "read_my_write"}
-	ReadMyWriteTimeOut = SystemVariable{Name: "read_my_write_timeout"}
-	SessionTrackGTIDs  = SystemVariable{Name: "session_track_gtids"}
+	// Read After Write settings
+	ReadAfterWriteGTID    = SystemVariable{Name: "read_after_write_gtid"}
+	ReadAfterWriteTimeOut = SystemVariable{Name: "read_after_write_timeout"}
+	SessionTrackGTIDs     = SystemVariable{Name: "session_track_gtids", IdentifierAsString: true}
 
 	VitessAware = []SystemVariable{
 		Autocommit,
@@ -68,8 +70,8 @@ var (
 		Workload,
 		Charset,
 		Names,
-		ReadMyWrite,
-		ReadMyWriteTimeOut,
+		ReadAfterWriteGTID,
+		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
 	}
 

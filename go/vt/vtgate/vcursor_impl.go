@@ -565,9 +565,19 @@ func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.foundRowsHandled = true
 }
 
-// SetMyGTID implements the SessionActions interface
-func (vc *vcursorImpl) SetMyGTID(string) error {
-	panic("implement me")
+// SetReadAfterWriteGTID implements the SessionActions interface
+func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
+	vc.safeSession.SetReadAfterWriteGTID(vtgtid)
+}
+
+//SetReadAfterWriteTimeout implements the SessionActions interface
+func (vc *vcursorImpl) SetReadAfterWriteTimeout(timeout float64) {
+	vc.safeSession.SetReadAfterWriteTimeout(timeout)
+}
+
+//SetSessionTrackGTIDs implements the SessionActions interface
+func (vc *vcursorImpl) SetSessionTrackGTIDs(enable bool) {
+	vc.safeSession.SetSessionTrackGtids(enable)
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
