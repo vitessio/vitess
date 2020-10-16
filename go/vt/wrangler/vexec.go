@@ -561,6 +561,9 @@ func dumpStreamListAsJSON(replStatus *ReplicationStatusResult, wr *Wrangler) err
 
 func (wr *Wrangler) printWorkflowList(workflows []string) {
 	list := strings.Join(workflows, ", ")
+	if list == "" {
+		return
+	}
 	wr.Logger().Printf("Workflows: %v", list)
 }
 
