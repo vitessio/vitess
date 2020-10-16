@@ -331,6 +331,11 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 
 					evalExpr, err := sqlparser.Convert(parent.Right)
 					if err != nil {
+						if err == sqlparser.ErrExprNotSupported {
+							// This just means we can't rewrite this particular expression,
+							// not that we have to exit altogether
+							return true
+						}
 						r.err = err
 						return false
 					}
