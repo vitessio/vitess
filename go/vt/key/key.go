@@ -185,6 +185,17 @@ func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 		bytes.Equal(left.End, right.End)
 }
 
+// KeyRangeStartEqual returns true if right's keyrange start is _after_ left's start
+func KeyRangeStartSmaller(left, right *topodatapb.KeyRange) bool {
+	if left == nil {
+		return right != nil
+	}
+	if right == nil {
+		return false
+	}
+	return bytes.Compare(left.Start, right.Start) < 0
+}
+
 // KeyRangeStartEqual returns true if both key ranges have the same start
 func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
