@@ -23,30 +23,18 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/spyzhov/ajson"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var jsonDebug = false //TODO remove this once JSON functionality has been proven in the field
-
-func jlog(s string, p ...interface{}) {
-	if jsonDebug {
-		log.Infof(s, p)
-		fmt.Printf(s+"\n", p)
-	}
-}
-
 // provides the single API function to convert json from binary format used in binlogs to a string representation
 func getJSONValue(data []byte) (string, error) {
-	jlog("In getJSONValue for %v", data)
 	var ast *ajson.Node
 	var err error
 	if len(data) == 0 {
 		ast = ajson.NullNode("")
 	} else {
-		ast, _, err = binaryJSON.parse(data)
+		ast, _, err = binlogJSON.parse(data)
 		if err != nil {
 			return "", err
 		}
@@ -58,43 +46,43 @@ func getJSONValue(data []byte) (string, error) {
 	return string(bytes), nil
 }
 
-var binaryJSON *BinaryJSON
+var binlogJSON *BinlogJSON
 
 func init() {
-	binaryJSON = &BinaryJSON{
-		handlers: make(map[jsonDataType]jsonHandler),
+	binlogJSON = &BinlogJSON{
+		plugins: make(map[jsonDataType]jsonPlugin),
 	}
-	newIntHandler()
-	newLiteralHandler()
-	newOpaqueHandler()
-	newStringHandler()
-	newArrayHandler()
-	newObjectHandler()
 }
 
-// BinaryJSON contains the handlers for all json types and methods for parsing the binary json representation from the binlog
-type BinaryJSON struct {
-	handlers map[jsonDataType]jsonHandler
+//region plugin manager
+
+// BinlogJSON contains the plugins for all json types and methods for parsing the binary json representation from the binlog
+type BinlogJSON struct {
+	plugins map[jsonDataType]jsonPlugin
 }
 
-func (jh *BinaryJSON) parse(data []byte) (node *ajson.Node, newPos int, err error) {
+func (jh *BinlogJSON) parse(data []byte) (node *ajson.Node, newPos int, err error) {
 	var pos int
 	typ := data[0]
 	pos++
 	return jh.getNode(jsonDataType(typ), data, pos)
 }
 
-func (jh *BinaryJSON) register(typ jsonDataType, handler jsonHandler) {
-	jh.handlers[typ] = handler
+func (jh *BinlogJSON) register(typ jsonDataType, Plugin jsonPlugin) {
+	jh.plugins[typ] = Plugin
 }
 
-func (jh *BinaryJSON) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
-	handler := jh.handlers[typ]
-	if handler == nil {
-		return nil, 0, fmt.Errorf("handler not found for type %d", typ)
+func (jh *BinlogJSON) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+	Plugin := jh.plugins[typ]
+	if Plugin == nil {
+		return nil, 0, fmt.Errorf("Plugin not found for type %d", typ)
 	}
-	return handler.getNode(typ, data, pos)
+	return Plugin.getNode(typ, data, pos)
 }
+
+//endregion
+
+//region enums
 
 // jsonDataType has the values used in the mysql json binary representation to denote types
 // we have string, literal(true/false/null), number, object or array types
@@ -128,7 +116,7 @@ const (
 )
 
 // in objects and arrays some values are inlined, others have offsets into the raw data
-var smallValueTypes = map[jsonDataType]bool{
+var inlineTypes = map[jsonDataType]bool{
 	jsonSmallObject: false,
 	jsonLargeObject: false,
 	jsonSmallArray:  false,
@@ -145,11 +133,15 @@ var smallValueTypes = map[jsonDataType]bool{
 	jsonOpaque:      false,
 }
 
+//endregion
+
+//region util funcs
+
 // readOffsetOrSize returns either the offset or size for a scalar data type, depending on the type of the
 // containing object. JSON documents stored are considered "large" if the size of the stored json document is
-// more than 64K bytes. For a large document all types which have their smallValueTypes entry as true
+// more than 64K bytes. For a large document all types which have their inlineTypes entry as true
 // are inlined. Others only store the offset in the document
-// (This design decision allows a fixed number of bytes to be used for representing objects keys and arrays entries)
+// (This design decision allows a fixed number of bytes to be used for representing object keys and array entries)
 func readOffsetOrSize(data []byte, pos int, large bool) (int, int) {
 	if large {
 		return int(data[pos]) +
@@ -184,23 +176,32 @@ func readVariableLength(data []byte, pos int) (int, int) {
 	return res, pos
 }
 
-type jsonHandler interface {
+//endregion
+
+// json sub-type interface
+type jsonPlugin interface {
 	getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error)
 }
 
-type handlerInfo struct {
+type jsonPluginInfo struct {
 	name  string
 	types []jsonDataType
 }
 
-type intHandler struct {
-	info  *handlerInfo
+//region int plugin
+
+func init() {
+	newIntPlugin()
+}
+
+type intPlugin struct {
+	info  *jsonPluginInfo
 	sizes map[jsonDataType]int
 }
 
-var _ jsonHandler = (*intHandler)(nil)
+var _ jsonPlugin = (*intPlugin)(nil)
 
-func (ih intHandler) getVal(typ jsonDataType, data []byte, pos int) (value float64, newPos int) {
+func (ih intPlugin) getVal(typ jsonDataType, data []byte, pos int) (value float64, newPos int) {
 	var val uint64
 	var val2 float64
 	size := ih.sizes[typ]
@@ -227,15 +228,15 @@ func (ih intHandler) getVal(typ jsonDataType, data []byte, pos int) (value float
 	return val2, pos
 }
 
-func (ih intHandler) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+func (ih intPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
 	val, pos := ih.getVal(typ, data, pos)
 	node = ajson.NumericNode("", val)
 	return node, pos, nil
 }
 
-func newIntHandler() *intHandler {
-	ih := &intHandler{
-		info: &handlerInfo{
+func newIntPlugin() *intPlugin {
+	ih := &intPlugin{
+		info: &jsonPluginInfo{
 			name:  "Int",
 			types: []jsonDataType{jsonInt64, jsonInt32, jsonInt16, jsonUint16, jsonUint32, jsonUint64, jsonDouble},
 		},
@@ -251,18 +252,26 @@ func newIntHandler() *intHandler {
 		jsonDouble: 8,
 	}
 	for _, typ := range ih.info.types {
-		binaryJSON.register(typ, ih)
+		binlogJSON.register(typ, ih)
 	}
 	return ih
 }
 
-type literalHandler struct {
-	info *handlerInfo
+//endregion
+
+//region literal
+
+func init() {
+	newLiteralPlugin()
 }
 
-var _ jsonHandler = (*literalHandler)(nil)
+type literalPlugin struct {
+	info *jsonPluginInfo
+}
 
-func (lh literalHandler) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+var _ jsonPlugin = (*literalPlugin)(nil)
+
+func (lh literalPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
 	val := jsonDataLiteral(data[pos])
 	pos++
 	switch val {
@@ -278,24 +287,32 @@ func (lh literalHandler) getNode(typ jsonDataType, data []byte, pos int) (node *
 	return node, pos, nil
 }
 
-func newLiteralHandler() *literalHandler {
-	lh := &literalHandler{
-		info: &handlerInfo{
+func newLiteralPlugin() *literalPlugin {
+	lh := &literalPlugin{
+		info: &jsonPluginInfo{
 			name:  "Literal",
 			types: []jsonDataType{jsonLiteral},
 		},
 	}
-	binaryJSON.register(jsonLiteral, lh)
+	binlogJSON.register(jsonLiteral, lh)
 	return lh
 }
 
-type opaqueHandler struct {
-	info *handlerInfo
+//endregion plugin
+
+//region opaque
+
+func init() {
+	newOpaquePlugin()
 }
 
-var _ jsonHandler = (*opaqueHandler)(nil)
+type opaquePlugin struct {
+	info *jsonPluginInfo
+}
 
-func (oh opaqueHandler) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+var _ jsonPlugin = (*opaquePlugin)(nil)
+
+func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
 	dataType := data[pos]
 	pos++
 	_, pos = readVariableLength(data, pos)
@@ -352,48 +369,64 @@ func (oh opaqueHandler) getNode(typ jsonDataType, data []byte, pos int) (node *a
 	return node, pos, nil
 }
 
-func newOpaqueHandler() *opaqueHandler {
-	oh := &opaqueHandler{
-		info: &handlerInfo{
+func newOpaquePlugin() *opaquePlugin {
+	oh := &opaquePlugin{
+		info: &jsonPluginInfo{
 			name:  "Opaque",
 			types: []jsonDataType{jsonOpaque},
 		},
 	}
-	binaryJSON.register(jsonOpaque, oh)
+	binlogJSON.register(jsonOpaque, oh)
 	return oh
 }
 
-type stringHandler struct {
-	info *handlerInfo
+//endregion plugin
+
+//region string
+
+func init() {
+	newStringPlugin()
 }
 
-var _ jsonHandler = (*stringHandler)(nil)
+type stringPlugin struct {
+	info *jsonPluginInfo
+}
 
-func (sh stringHandler) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+var _ jsonPlugin = (*stringPlugin)(nil)
+
+func (sh stringPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
 	size, pos := readVariableLength(data, pos)
 	node = ajson.StringNode("", string(data[pos:pos+size]))
 
 	return node, pos, nil
 }
 
-func newStringHandler() *stringHandler {
-	sh := &stringHandler{
-		info: &handlerInfo{
+func newStringPlugin() *stringPlugin {
+	sh := &stringPlugin{
+		info: &jsonPluginInfo{
 			name:  "String",
 			types: []jsonDataType{jsonString},
 		},
 	}
-	binaryJSON.register(jsonString, sh)
+	binlogJSON.register(jsonString, sh)
 	return sh
 }
 
-type arrayHandler struct {
-	info *handlerInfo
+//endregion plugin
+
+//region array
+
+func init() {
+	newArrayPlugin()
 }
 
-var _ jsonHandler = (*arrayHandler)(nil)
+type arrayPlugin struct {
+	info *jsonPluginInfo
+}
 
-func (ah arrayHandler) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+var _ jsonPlugin = (*arrayPlugin)(nil)
+
+func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
 	var nodes []*ajson.Node
 	var elem *ajson.Node
 	var elementCount, offset int
@@ -403,15 +436,15 @@ func (ah arrayHandler) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 	for i := 0; i < elementCount; i++ {
 		typ = jsonDataType(data[pos])
 		pos++
-		if smallValueTypes[typ] {
-			elem, pos, err = binaryJSON.getNode(typ, data, pos)
+		if inlineTypes[typ] {
+			elem, pos, err = binlogJSON.getNode(typ, data, pos)
 			if err != nil {
 				return nil, 0, err
 			}
 		} else {
 			offset, pos = readOffsetOrSize(data, pos, false)
 			newData := data[offset:]
-			elem, _, err = binaryJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
+			elem, _, err = binlogJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
 			if err != nil {
 				return nil, 0, err
 			}
@@ -422,24 +455,32 @@ func (ah arrayHandler) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 	return node, pos, nil
 }
 
-func newArrayHandler() *arrayHandler {
-	ah := &arrayHandler{
-		info: &handlerInfo{
+func newArrayPlugin() *arrayPlugin {
+	ah := &arrayPlugin{
+		info: &jsonPluginInfo{
 			name:  "Array",
 			types: []jsonDataType{jsonSmallArray},
 		},
 	}
-	binaryJSON.register(jsonSmallArray, ah)
+	binlogJSON.register(jsonSmallArray, ah)
 	return ah
 }
 
-type objectHandler struct {
-	info *handlerInfo
+//endregion plugin
+
+//region object
+
+func init() {
+	newObjectPlugin()
 }
 
-var _ jsonHandler = (*objectHandler)(nil)
+type objectPlugin struct {
+	info *jsonPluginInfo
+}
 
-func (oh objectHandler) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+var _ jsonPlugin = (*objectPlugin)(nil)
+
+func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
 	nodes := make(map[string]*ajson.Node)
 	var elem *ajson.Node
 	var elementCount, offset int
@@ -458,15 +499,15 @@ func (oh objectHandler) getNode(typ jsonDataType, data []byte, pos int) (node *a
 	for i := 0; i < elementCount; i++ {
 		typ = jsonDataType(data[pos])
 		pos++
-		if smallValueTypes[typ] {
-			elem, pos, err = binaryJSON.getNode(typ, data, pos)
+		if inlineTypes[typ] {
+			elem, pos, err = binlogJSON.getNode(typ, data, pos)
 			if err != nil {
 				return nil, 0, err
 			}
 		} else {
 			offset, pos = readOffsetOrSize(data, pos, false)
 			newData := data[offset:]
-			elem, _, err = binaryJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
+			elem, _, err = binlogJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
 			if err != nil {
 				return nil, 0, err
 			}
@@ -478,16 +519,18 @@ func (oh objectHandler) getNode(typ jsonDataType, data []byte, pos int) (node *a
 	return node, pos, nil
 }
 
-func newObjectHandler() *objectHandler {
-	oh := &objectHandler{
-		info: &handlerInfo{
+func newObjectPlugin() *objectPlugin {
+	oh := &objectPlugin{
+		info: &jsonPluginInfo{
 			name:  "Object",
 			types: []jsonDataType{jsonSmallObject},
 		},
 	}
-	binaryJSON.register(jsonSmallObject, oh)
+	binlogJSON.register(jsonSmallObject, oh)
 	return oh
 }
+
+//endregion plugin
 
 /*
 
