@@ -457,21 +457,30 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 func (session *SafeSession) SetReadAfterWriteGTID(vtgtid string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.Session.ReadAfterWrite.ReadAfterWriteGtid = vtgtid
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteGtid = vtgtid
 }
 
 // SetReadAfterWriteTimeout set the ReadAfterWriteTimeout setting.
 func (session *SafeSession) SetReadAfterWriteTimeout(timeout float64) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.Session.ReadAfterWrite.ReadAfterWriteTimeout = timeout
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteTimeout = timeout
 }
 
 // SetSessionTrackGtids set the SessionTrackGtids setting.
 func (session *SafeSession) SetSessionTrackGtids(enable bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.Session.ReadAfterWrite.SessionTrackGtids = enable
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.SessionTrackGtids = enable
 }
 
 func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
