@@ -313,14 +313,18 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 
 func (f *ForeignKeyDefinition) iConstraintInfo() {}
 
+var _ ConstraintInfo = &CheckConstraintDefinition{}
+
+func (c *CheckConstraintDefinition) iConstraintInfo() {}
+
 // HasOnTable returns true if the show statement has an "on" clause
-func (node *Show) HasOnTable() bool {
+func (node *ShowLegacy) HasOnTable() bool {
 	return node.OnTable.Name.v != ""
 }
 
 // HasTable returns true if the show statement has a parsed table name.
 // Not all show statements parse table names.
-func (node *Show) HasTable() bool {
+func (node *ShowLegacy) HasTable() bool {
 	return node.Table.Name.v != ""
 }
 
@@ -1115,6 +1119,19 @@ func (ty ExplainType) ToString() string {
 		return AnalyzeStr
 	default:
 		return "Unknown ExplainType"
+	}
+}
+
+func (sel SelectIntoType) ToString() string {
+	switch sel {
+	case IntoOutfile:
+		return IntoOutfileStr
+	case IntoOutfileS3:
+		return IntoOutfileS3Str
+	case IntoDumpfile:
+		return IntoDumpfileStr
+	default:
+		return "Unknown Select Into Type"
 	}
 }
 

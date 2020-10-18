@@ -506,8 +506,8 @@ func (oa *orderedAggregate) SetUpperLimit(count sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.
-func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
-	oa.input.PushMisc(sel)
+func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) error {
+	return oa.input.PushMisc(sel)
 }
 
 // Wireup satisfies the builder interface.

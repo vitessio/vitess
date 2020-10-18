@@ -580,6 +580,123 @@ func TestServer(t *testing.T) {
 	}}
 	defer authServer.close()
 	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	require.NoError(t, err)
+	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
+	defer l.Close()
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+
+	// Setup the right parameters.
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	// Run a 'select rows' command with results.
+	output, err := runMysqlWithErr(t, params, "select rows")
+	require.NoError(t, err)
+
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") {
+		t.Errorf("Unexpected output for 'select rows'")
+	}
+	assert.NotContains(t, output, "warnings")
+
+	// Run a 'select rows' command with warnings
+	th.SetWarnings(13)
+	output, err = runMysqlWithErr(t, params, "select rows")
+	require.NoError(t, err)
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") ||
+		!strings.Contains(output, "13 warnings") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+	th.SetWarnings(0)
+
+	// If there's an error after streaming has started,
+	// we should get a 2013
+	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
+	output, err = runMysqlWithErr(t, params, "error after send")
+	require.Error(t, err)
+	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
+		!strings.Contains(output, "Lost connection to MySQL server during query") {
+		t.Errorf("Unexpected output for 'panic'")
+	}
+
+	// Run an 'insert' command, no rows, but rows affected.
+	output, err = runMysqlWithErr(t, params, "insert")
+	require.NoError(t, err)
+	if !strings.Contains(output, "Query OK, 123 rows affected") {
+		t.Errorf("Unexpected output for 'insert'")
+	}
+
+	// Run a 'schema echo' command, to make sure db name is right.
+	params.DbName = "XXXfancyXXX"
+	output, err = runMysqlWithErr(t, params, "schema echo")
+	require.NoError(t, err)
+	if !strings.Contains(output, params.DbName) {
+		t.Errorf("Unexpected output for 'schema echo'")
+	}
+
+	// Sanity check: make sure this didn't go through SSL
+	output, err = runMysqlWithErr(t, params, "ssl echo")
+	require.NoError(t, err)
+	if !strings.Contains(output, "ssl_flag") ||
+		!strings.Contains(output, "OFF") ||
+		!strings.Contains(output, "1 row in set") {
+		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	}
+
+	// UserData check: checks the server user data is correct.
+	output, err = runMysqlWithErr(t, params, "userData echo")
+	require.NoError(t, err)
+	if !strings.Contains(output, "user1") ||
+		!strings.Contains(output, "user_data") ||
+		!strings.Contains(output, "userData1") {
+		t.Errorf("Unexpected output for 'userData echo': %v", output)
+	}
+
+	// Permissions check: check a bad password is rejected.
+	params.Pass = "bad"
+	output, err = runMysqlWithErr(t, params, "select rows")
+	require.Error(t, err)
+	if !strings.Contains(output, "1045") ||
+		!strings.Contains(output, "28000") ||
+		!strings.Contains(output, "Access denied") {
+		t.Errorf("Unexpected output for invalid password: %v", output)
+	}
+
+	// Permissions check: check an unknown user is rejected.
+	params.Pass = "password1"
+	params.Uname = "user2"
+	output, err = runMysqlWithErr(t, params, "select rows")
+	require.Error(t, err)
+	if !strings.Contains(output, "1045") ||
+		!strings.Contains(output, "28000") ||
+		!strings.Contains(output, "Access denied") {
+		t.Errorf("Unexpected output for invalid password: %v", output)
+	}
+
+	// Uncomment to leave setup up for a while, to run tests manually.
+	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
+	//	time.Sleep(60 * time.Minute)
+}
+
+func TestServerStats(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -597,10 +714,11 @@ func TestServer(t *testing.T) {
 		Pass:  "password1",
 	}
 
-	initialTimingCounts := timings.Counts()
-	initialConnAccept := connAccept.Get()
-	initialConnSlow := connSlow.Get()
-	initialconnRefuse := connRefuse.Get()
+	timings.Reset()
+	connAccept.Reset()
+	connCount.Reset()
+	connSlow.Reset()
+	connRefuse.Reset()
 
 	// Run an 'error' command.
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
@@ -612,18 +730,10 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "forced query error") {
 		t.Errorf("Unexpected output for 'error': %v", output)
 	}
-	if connCount.Get() != 0 {
-		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
-	}
-	if connAccept.Get()-initialConnAccept != 1 {
-		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
-	}
-	if connSlow.Get()-initialConnSlow != 1 {
-		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
-	}
-	if connRefuse.Get()-initialconnRefuse != 0 {
-		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
-	}
+	assert.EqualValues(t, 0, connCount.Get(), "connCount")
+	assert.EqualValues(t, 1, connAccept.Get(), "connAccept")
+	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
+	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
 
 	expectedTimingDeltas := map[string]int64{
 		"All":            2,
@@ -633,9 +743,8 @@ func TestServer(t *testing.T) {
 	gotTimingCounts := timings.Counts()
 	for key, got := range gotTimingCounts {
 		expected := expectedTimingDeltas[key]
-		delta := got - initialTimingCounts[key]
-		if delta < expected {
-			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, delta)
+		if got < expected {
+			t.Errorf("Expected Timing count delta %s should be >= %d, got %d", key, expected, got)
 		}
 	}
 
@@ -644,136 +753,17 @@ func TestServer(t *testing.T) {
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
-	output, ok = runMysql(t, params, "panic")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
-	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
-		!strings.Contains(output, "Lost connection to MySQL server during query") {
-		t.Errorf("Unexpected output for 'panic'")
-	}
-	if connCount.Get() != 0 {
-		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
-	}
-	if connAccept.Get()-initialConnAccept != 2 {
-		t.Errorf("Expected ConnAccept delta=2, got %d", connAccept.Get()-initialConnAccept)
-	}
-	if connSlow.Get()-initialConnSlow != 1 {
-		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
-	}
-	if connRefuse.Get()-initialconnRefuse != 0 {
-		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
-	}
-
-	// Run a 'select rows' command with results.
-	output, ok = runMysql(t, params, "select rows")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") {
-		t.Errorf("Unexpected output for 'select rows'")
-	}
-	if strings.Contains(output, "warnings") {
-		t.Errorf("Unexpected warnings in 'select rows'")
-	}
-
-	// Run a 'select rows' command with warnings
-	th.SetWarnings(13)
-	output, ok = runMysql(t, params, "select rows")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, "nice name") ||
-		!strings.Contains(output, "nicer name") ||
-		!strings.Contains(output, "2 rows in set") ||
-		!strings.Contains(output, "13 warnings") {
-		t.Errorf("Unexpected output for 'select rows': %v", output)
-	}
-	th.SetWarnings(0)
-
-	// If there's an error after streaming has started,
-	// we should get a 2013
-	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
-	output, ok = runMysql(t, params, "error after send")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
+	output, err = runMysqlWithErr(t, params, "panic")
+	require.Error(t, err)
 	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
 	}
 
-	// Run an 'insert' command, no rows, but rows affected.
-	output, ok = runMysql(t, params, "insert")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, "Query OK, 123 rows affected") {
-		t.Errorf("Unexpected output for 'insert'")
-	}
-
-	// Run a 'schema echo' command, to make sure db name is right.
-	params.DbName = "XXXfancyXXX"
-	output, ok = runMysql(t, params, "schema echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, params.DbName) {
-		t.Errorf("Unexpected output for 'schema echo'")
-	}
-
-	// Sanity check: make sure this didn't go through SSL
-	output, ok = runMysql(t, params, "ssl echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, "ssl_flag") ||
-		!strings.Contains(output, "OFF") ||
-		!strings.Contains(output, "1 row in set") {
-		t.Errorf("Unexpected output for 'ssl echo': %v", output)
-	}
-
-	// UserData check: checks the server user data is correct.
-	output, ok = runMysql(t, params, "userData echo")
-	if !ok {
-		t.Fatalf("mysql failed: %v", output)
-	}
-	if !strings.Contains(output, "user1") ||
-		!strings.Contains(output, "user_data") ||
-		!strings.Contains(output, "userData1") {
-		t.Errorf("Unexpected output for 'userData echo': %v", output)
-	}
-
-	// Permissions check: check a bad password is rejected.
-	params.Pass = "bad"
-	output, ok = runMysql(t, params, "select rows")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
-	if !strings.Contains(output, "1045") ||
-		!strings.Contains(output, "28000") ||
-		!strings.Contains(output, "Access denied") {
-		t.Errorf("Unexpected output for invalid password: %v", output)
-	}
-
-	// Permissions check: check an unknown user is rejected.
-	params.Pass = "password1"
-	params.Uname = "user2"
-	output, ok = runMysql(t, params, "select rows")
-	if ok {
-		t.Fatalf("mysql should have failed: %v", output)
-	}
-	if !strings.Contains(output, "1045") ||
-		!strings.Contains(output, "28000") ||
-		!strings.Contains(output, "Access denied") {
-		t.Errorf("Unexpected output for invalid password: %v", output)
-	}
-
-	// Uncomment to leave setup up for a while, to run tests manually.
-	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
-	//	time.Sleep(60 * time.Minute)
+	assert.EqualValues(t, 0, connCount.Get(), "connCount")
+	assert.EqualValues(t, 2, connAccept.Get(), "connAccept")
+	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
+	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
 }
 
 // TestClearTextServer creates a Server that needs clear text
@@ -1219,6 +1209,14 @@ const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
 
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
+	output, err := runMysqlWithErr(t, params, command)
+	if err != nil {
+		return output, false
+	}
+	return output, true
+
+}
+func runMysqlWithErr(t *testing.T, params *ConnParams, command string) (string, error) {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
@@ -1277,9 +1275,9 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 	out, err := cmd.CombinedOutput()
 	output := string(out)
 	if err != nil {
-		return output, false
+		return output, err
 	}
-	return output, true
+	return output, nil
 }
 
 // binaryPath does a limited path lookup for a command,

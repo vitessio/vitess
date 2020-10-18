@@ -93,11 +93,9 @@ func (rs *rowStreamer) Stream() error {
 	if err := rs.se.Open(); err != nil {
 		return err
 	}
-
 	if err := rs.buildPlan(); err != nil {
 		return err
 	}
-
 	conn, err := snapshotConnect(rs.ctx, rs.cp)
 	if err != nil {
 		return err
@@ -130,6 +128,7 @@ func (rs *rowStreamer) buildPlan() error {
 	// filtering will work.
 	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query)
 	if err != nil {
+		log.Errorf("%s", err.Error())
 		return err
 	}
 	rs.pkColumns, err = buildPKColumns(st)
@@ -140,7 +139,6 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("Rowstreamer, table plan %v, pkColumns %v, fields %v", rs.plan, rs.pkColumns, rs.plan.fields())
 	return err
 }
 

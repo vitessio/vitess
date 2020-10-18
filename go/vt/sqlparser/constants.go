@@ -64,6 +64,9 @@ const (
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 
+	// Online DDL hint
+	OnlineStr = "online"
+
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
 
@@ -152,6 +155,11 @@ const (
 	NaturalLanguageModeStr                   = " in natural language mode"
 	NaturalLanguageModeWithQueryExpansionStr = " in natural language mode with query expansion"
 	QueryExpansionStr                        = " with query expansion"
+
+	// INTO OUTFILE
+	IntoOutfileStr   = " into outfile "
+	IntoOutfileS3Str = " into outfile s3 "
+	IntoDumpfileStr  = " into dumpfile "
 
 	// Order.Direction
 	AscScr  = "asc"
@@ -369,4 +377,11 @@ const (
 	VitessType
 	TraditionalType
 	AnalyzeType
+)
+
+// Constant for Enum Type - SelectIntoType
+const (
+	IntoOutfile SelectIntoType = iota
+	IntoOutfileS3
+	IntoDumpfile
 )

@@ -84,7 +84,7 @@ type builder interface {
 	SetUpperLimit(count sqlparser.Expr)
 
 	// PushMisc pushes miscelleaneous constructs to all the primitives.
-	PushMisc(sel *sqlparser.Select)
+	PushMisc(sel *sqlparser.Select) error
 
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
@@ -170,8 +170,8 @@ func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
 	bc.input.SetUpperLimit(count)
 }
 
-func (bc *builderCommon) PushMisc(sel *sqlparser.Select) {
-	bc.input.PushMisc(sel)
+func (bc *builderCommon) PushMisc(sel *sqlparser.Select) error {
+	return bc.input.PushMisc(sel)
 }
 
 func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
@@ -321,6 +321,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		}
 		fmt.Printf("====== DDL: %s\n", sqlparser.String(stmt))
 		fmt.Printf("====== DDL comments: %v\n", stmt.Comments)
+		if sqlparser.IsOnlineSchemaDDL(stmt, query) {
+			return buildOnlineDDLPlan(query, stmt, vschema)
+		}
 		return buildDDLPlan(query, stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
@@ -337,14 +340,41 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
+	case *sqlparser.Load:
+		return buildLoadPlan(query, vschema)
 	case *sqlparser.DBDDL:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
-	case *sqlparser.Show, *sqlparser.SetTransaction:
+	case *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
+	case *sqlparser.Show:
+		return buildShowPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+}
+
+func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	destination := vschema.Destination()
+	if destination == nil {
+		if keyspace.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+		}
+		destination = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             query,
+		IsDML:             true,
+		SingleShardOnly:   true,
+	}, nil
 }

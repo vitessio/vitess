@@ -69,7 +69,22 @@ type (
 		OrderBy          OrderBy
 		Limit            *Limit
 		Lock             Lock
+		Into             *SelectInto
 	}
+
+	// SelectInto is a struct that represent the INTO part of a select query
+	SelectInto struct {
+		Type         SelectIntoType
+		FileName     string
+		Charset      string
+		FormatOption string
+		ExportOption string
+		Manifest     string
+		Overwrite    string
+	}
+
+	// SelectIntoType is an enum for SelectInto.Type
+	SelectIntoType int8
 
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
@@ -148,6 +163,7 @@ type (
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
+		Ignore     Ignore
 		Comments   Comments
 		Targets    TableNames
 		TableExprs TableExprs
@@ -196,6 +212,14 @@ type (
 		Charset     string
 	}
 
+	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
+	DDLStrategy string
+
+	// OnlineDDLHint indicates strategy and options for running an online DDL
+	OnlineDDLHint struct {
+		Strategy DDLStrategy
+		Options  string
+	}
 	// DBDDLAction is an enum for DBDDL Actions
 	DBDDLAction int8
 
@@ -219,6 +243,7 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
+		OnlineHint    *OnlineDDLHint
 
 		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
@@ -233,6 +258,10 @@ type (
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
+	// Load represents a LOAD statement
+	Load struct {
+	}
+
 	// ParenSelect is a parenthesized SELECT statement.
 	ParenSelect struct {
 		Select SelectStatement
@@ -240,13 +269,7 @@ type (
 
 	// Show represents a show statement.
 	Show struct {
-		Extended               string
-		Type                   string
-		OnTable                TableName
-		Table                  TableName
-		ShowTablesOpt          *ShowTablesOpt
-		Scope                  Scope
-		ShowCollationFilterOpt Expr
+		Internal ShowInternal
 	}
 
 	// Use represents a use statement.
@@ -324,11 +347,47 @@ func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
+func (*Load) iStatement()              {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
+
+//ShowInternal will represent all the show statement types.
+type ShowInternal interface {
+	isShowInternal()
+	SQLNode
+}
+
+//ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
+type ShowLegacy struct {
+	Extended               string
+	Type                   string
+	OnTable                TableName
+	Table                  TableName
+	ShowTablesOpt          *ShowTablesOpt
+	Scope                  Scope
+	ShowCollationFilterOpt Expr
+}
+
+//ShowColumns is of ShowInternal type, holds the show columns statement.
+type ShowColumns struct {
+	Full   string
+	Table  TableName
+	DbName string
+	Filter *ShowFilter
+}
+
+// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
+type ShowTableStatus struct {
+	DatabaseName string
+	Filter       *ShowFilter
+}
+
+func (*ShowLegacy) isShowInternal()      {}
+func (*ShowColumns) isShowInternal()     {}
+func (*ShowTableStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -463,6 +522,12 @@ type (
 		ReferencedColumns Columns
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
+	}
+
+	// CheckConstraintDefinition describes a check constraint in a CREATE TABLE statement
+	CheckConstraintDefinition struct {
+		Expr     Expr
+		Enforced bool
 	}
 )
 
@@ -964,11 +1029,11 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	addIf(node.StraightJoinHint, StraightJoinHint)
 	addIf(node.SQLCalcFoundRows, SQLCalcFoundRowsStr)
 
-	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s",
+	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s%v",
 		node.Comments, options, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
-		node.Limit, node.Lock.ToString())
+		node.Limit, node.Lock.ToString(), node.Into)
 }
 
 // Format formats the node.
@@ -1043,6 +1108,9 @@ func (node *Update) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "delete %v", node.Comments)
+	if node.Ignore {
+		buf.WriteString("ignore ")
+	}
 	if node.Targets != nil {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
@@ -1373,7 +1441,33 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(c, "check constraint on expression %v", c.Expr)
+	if c.Enforced {
+		buf.astPrintf(c, " enforced")
+	} else {
+		buf.astPrintf(c, " not enforced")
+	}
+}
+
+// Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v", node.Internal)
+}
+
+// Format formats the node.
+func (node *ShowColumns) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s", node.Full)
+	buf.astPrintf(node, "columns from %v", node.Table)
+
+	buf.printIf(node.DbName != "", " from "+node.DbName)
+	if node.Filter != nil {
+		buf.astPrintf(node, "%v", node.Filter)
+	}
+}
+
+// Format formats the node.
+func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
 		nodeType == "databases" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
@@ -2040,4 +2134,31 @@ func (node AccessMode) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString(TxReadWrite)
 	}
+}
+
+// Format formats the node.
+func (node *Load) Format(buf *TrackedBuffer) {
+	buf.WriteString("AST node missing for Load type")
+}
+
+// Format formats the node.
+func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
+	buf.WriteString("show table status")
+	if node.DatabaseName != "" {
+		buf.WriteString(" from ")
+		buf.WriteString(node.DatabaseName)
+	}
+	buf.astPrintf(node, "%v", node.Filter)
+}
+
+// Format formats the node.
+func (node *SelectInto) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.astPrintf(node, "%s'%s'", node.Type.ToString(), node.FileName)
+	if node.Charset != "" {
+		buf.astPrintf(node, " character set %s", node.Charset)
+	}
+	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
 }

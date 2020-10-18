@@ -119,7 +119,7 @@ function install_zookeeper() {
   local dist="$2"
 
   zk="zookeeper-$version"
-  wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
+  wget "https://archive.apache.org/dist/zookeeper/$zk/$zk.tar.gz"
   tar -xzf "$zk.tar.gz"
   ant -f "$zk/build.xml" package
   ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar

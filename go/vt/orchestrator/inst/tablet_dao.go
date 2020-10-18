@@ -139,14 +139,16 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	_, err := db.ExecOrchestrator(`
 		replace
 			into vitess_tablet (
-				hostname, port, cell, tablet_type, master_timestamp, info
+				hostname, port, cell, keyspace, shard, tablet_type, master_timestamp, info
 			) values (
-				?, ?, ?, ?, ?, ?
+				?, ?, ?, ?, ?, ?, ?, ?
 			)
 		`,
 		tablet.MysqlHostname,
 		int(tablet.MysqlPort),
 		tablet.Alias.Cell,
+		tablet.Keyspace,
+		tablet.Shard,
 		int(tablet.Type),
 		logutil.ProtoToTime(tablet.MasterTermStartTime),
 		proto.CompactTextString(tablet),
