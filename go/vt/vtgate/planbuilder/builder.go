@@ -321,6 +321,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		}
 		fmt.Printf("====== DDL: %s\n", sqlparser.String(stmt))
 		fmt.Printf("====== DDL comments: %v\n", stmt.Comments)
+		fmt.Printf("====== DDL comments: %v\n", sqlparser.String(stmt.Comments))
 		if sqlparser.IsOnlineSchemaDDL(stmt, query) {
 			return buildOnlineDDLPlan(query, stmt, vschema)
 		}
