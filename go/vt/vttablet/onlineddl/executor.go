@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -41,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -72,6 +74,7 @@ var vexecInsertTemplates = []string{
 		migration_uuid,
 		keyspace,
 		shard,
+		tablet,
 		mysql_schema,
 		mysql_table,
 		migration_statement,
@@ -80,7 +83,7 @@ var vexecInsertTemplates = []string{
 		requested_timestamp,
 		migration_status
 	) VALUES (
-		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
+		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
 	)`,
 }
 
@@ -109,6 +112,7 @@ type Executor struct {
 	pool           *connpool.Pool
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
+	tabletAlias    *topodatapb.TabletAlias
 
 	keyspace string
 	shard    string
@@ -119,8 +123,9 @@ type Executor struct {
 	migrationRunning  int64
 	lastMigrationUUID string
 
-	ticks  *timer.Timer
-	isOpen bool
+	ticks             *timer.Timer
+	isOpen            bool
+	schemaInitialized bool
 }
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
@@ -141,9 +146,10 @@ func PTOSCFileName() (fileName string, isOverride bool) {
 }
 
 // NewExecutor creates a new gh-ost executor.
-func NewExecutor(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
+func NewExecutor(env tabletenv.Env, tabletAlias topodatapb.TabletAlias, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
 	return &Executor{
-		env: env,
+		env:         env,
+		tabletAlias: &tabletAlias,
 
 		pool: connpool.NewPool(env, "ExecutorPool", tabletenv.ConnPoolConfig{
 			Size:               1,
@@ -167,6 +173,13 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 }
 
 func (e *Executor) initSchema(ctx context.Context) error {
+	e.initMutex.Lock()
+	defer e.initMutex.Unlock()
+
+	if e.schemaInitialized {
+		return nil
+	}
+
 	defer e.env.LogError()
 
 	conn, err := e.pool.Get(ctx)
@@ -174,9 +187,17 @@ func (e *Executor) initSchema(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
-	parsed := sqlparser.BuildParsedQuery(sqlValidationQuery, "_vt")
-	_, err = withDDL.Exec(ctx, parsed.Query, conn.Exec)
-	return err
+	for _, ddl := range applyDDL {
+		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
+		if mysql.IsSchemaApplyError(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+	}
+	e.schemaInitialized = true
+	return nil
 }
 
 // InitDBConfig initializes keysapce
@@ -194,7 +215,6 @@ func (e *Executor) Open() error {
 		return nil
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
-	e.initSchema(context.Background())
 	e.ticks.Start(e.onMigrationCheckTick)
 
 	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
@@ -1139,7 +1159,10 @@ func (e *Executor) onMigrationCheckTick() {
 		return
 	}
 	ctx := context.Background()
-
+	if err := e.initSchema(ctx); err != nil {
+		log.Error(err)
+		return
+	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
 		log.Error(err)
 	}
@@ -1314,6 +1337,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		// We can fill them in.
 		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
 		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
+		vx.ReplaceInsertColumnVal("tablet", vx.ToStringVal(topoproto.TabletAliasString(e.tabletAlias)))
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)

@@ -18,8 +18,6 @@ package onlineddl
 
 import (
 	"fmt"
-
-	"vitess.io/vitess/go/vt/withddl"
 )
 
 const (
@@ -52,7 +50,9 @@ const (
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	sqlValidationQuery         = `select 1 from %s.schema_migrations limit 1`
+	alterSchemaMigrationsTableRetries = "ALTER TABLE %s.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTablet  = "ALTER TABLE %s.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
 			migration_status='ready',
@@ -91,6 +91,7 @@ const (
 	sqlRetryMigration = `UPDATE %s.schema_migrations
 		SET
 			migration_status='queued',
+			retries=retries + 1,
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
@@ -201,7 +202,9 @@ var (
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
 )
 
-var withDDL = withddl.New([]string{
+var applyDDL = []string{
 	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
 	fmt.Sprintf(sqlCreateSchemaMigrationsTable, "_vt"),
-})
+	fmt.Sprintf(alterSchemaMigrationsTableRetries, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableTablet, "_vt"),
+}
