@@ -49,6 +49,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"github.com/google/shlex"
 )
 
 var (
@@ -474,7 +476,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
-		args = append(args, strings.Fields(onlineDDL.Options)...)
+		opts, _ := shlex.Split(onlineDDL.Options)
+		args = append(args, opts...)
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
@@ -701,7 +704,8 @@ export MYSQL_PWD
 				`--no-drop-old-table`,
 			)
 		}
-		args = append(args, strings.Fields(onlineDDL.Options)...)
+		opts, _ := shlex.Split(onlineDDL.Options)
+		args = append(args, opts...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
