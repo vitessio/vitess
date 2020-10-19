@@ -89,6 +89,7 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, tmClient tmcli
 		migration_uuid,
 		keyspace,
 		shard,
+		tablet,
 		mysql_schema,
 		mysql_table,
 		migration_statement,
@@ -97,12 +98,13 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, tmClient tmcli
 		requested_timestamp,
 		migration_status
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(%a), %a
 	)`
 	parsed := sqlparser.BuildParsedQuery(sqlInsertSchemaMigration, "_vt",
 		":migration_uuid",
 		":keyspace",
 		":shard",
+		":tablet",
 		":mysql_schema",
 		":mysql_table",
 		":migration_statement",
@@ -115,6 +117,7 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, tmClient tmcli
 		"migration_uuid":      sqltypes.StringBindVariable(onlineDDL.UUID),
 		"keyspace":            sqltypes.StringBindVariable(onlineDDL.Keyspace),
 		"shard":               sqltypes.StringBindVariable(""),
+		"tablet":              sqltypes.StringBindVariable(""),
 		"mysql_schema":        sqltypes.StringBindVariable(""),
 		"mysql_table":         sqltypes.StringBindVariable(onlineDDL.Table),
 		"migration_statement": sqltypes.StringBindVariable(onlineDDL.SQL),
