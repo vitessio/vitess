@@ -454,6 +454,8 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	tm.Stop()
 
+	// sleep for 1 second to allow deferred funcs to complete
+	time.Sleep(time.Second)
 	// 2. Update tablet record with tabletType RESTORE
 	_, err = ts.UpdateTabletFields(ctx, alias, func(t *topodatapb.Tablet) error {
 		t.Type = topodatapb.TabletType_RESTORE
