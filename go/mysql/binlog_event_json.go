@@ -19,6 +19,7 @@ package mysql
 import (
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"math"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -26,6 +27,32 @@ import (
 	"github.com/spyzhov/ajson"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+var jsonDebug = false
+
+func jlog(tpl string, vals ...interface{}) {
+	if !jsonDebug {
+		return
+	}
+	fmt.Printf(tpl+"\n", vals...)
+	_ = printASCIIBytes
+}
+
+func printASCIIBytes(data []byte) {
+	if !jsonDebug {
+		return
+	}
+	fmt.Printf("\n\n%v\n[", data)
+	for _, c := range data {
+		if c < 127 && c > 32 {
+			fmt.Printf("%c ", c)
+		} else {
+			fmt.Printf("%02d ", c)
+		}
+	}
+	fmt.Printf("]\n")
+	ioutil.WriteFile("largearray.bin", data, 0x777)
+}
 
 // provides the single API function to convert json from binary format used in binlogs to a string representation
 func getJSONValue(data []byte) (string, error) {
@@ -64,6 +91,7 @@ type BinlogJSON struct {
 func (jh *BinlogJSON) parse(data []byte) (node *ajson.Node, newPos int, err error) {
 	var pos int
 	typ := data[0]
+	fmt.Printf("Top level object is type %s\n", jsonDataTypeToString(uint(typ)))
 	pos++
 	return jh.getNode(jsonDataType(typ), data, pos)
 }
@@ -105,6 +133,41 @@ const (
 	jsonString      = 12 //0x0c a utf8mb4 string
 	jsonOpaque      = 15 //0x0f "custom" data
 )
+
+func jsonDataTypeToString(typ uint) string {
+	switch typ {
+	case jsonSmallObject:
+		return "sObject"
+	case jsonLargeObject:
+		return "lObject"
+	case jsonSmallArray:
+		return "sArray"
+	case jsonLargeArray:
+		return "lArray"
+	case jsonLiteral:
+		return "literal"
+	case jsonInt16:
+		return "int16"
+	case jsonUint16:
+		return "uint16"
+	case jsonInt32:
+		return "int32"
+	case jsonUint32:
+		return "uint32"
+	case jsonInt64:
+		return "int64"
+	case jsonUint64:
+		return "uint64"
+	case jsonDouble:
+		return "double"
+	case jsonString:
+		return "string"
+	case jsonOpaque:
+		return "opaque"
+	default:
+		return "undefined"
+	}
+}
 
 // literals in the binary json format can be one of three types: null, true, false
 type jsonDataLiteral byte
@@ -273,7 +336,7 @@ var _ jsonPlugin = (*literalPlugin)(nil)
 
 func (lh literalPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
 	val := jsonDataLiteral(data[pos])
-	pos++
+	pos += 2
 	switch val {
 	case jsonNullLiteral:
 		node = ajson.NullNode("")
@@ -427,12 +490,15 @@ type arrayPlugin struct {
 var _ jsonPlugin = (*arrayPlugin)(nil)
 
 func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+	//printAsciiBytes(data)
 	var nodes []*ajson.Node
 	var elem *ajson.Node
-	var elementCount, offset int
-	elementCount, pos = readOffsetOrSize(data, pos, false)
-	_, pos = readOffsetOrSize(data, pos, false)
-	_ = typ
+	var elementCount, offset, size int
+	large := typ == jsonLargeArray
+	elementCount, pos = readOffsetOrSize(data, pos, large)
+	jlog("Array(%t): elem count: %d\n", large, elementCount)
+	size, pos = readOffsetOrSize(data, pos, large)
+	jlog("Array(%t): elem count: %d, size:%d\n", large, elementCount, size)
 	for i := 0; i < elementCount; i++ {
 		typ = jsonDataType(data[pos])
 		pos++
@@ -442,7 +508,7 @@ func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajs
 				return nil, 0, err
 			}
 		} else {
-			offset, pos = readOffsetOrSize(data, pos, false)
+			offset, pos = readOffsetOrSize(data, pos, large)
 			newData := data[offset:]
 			elem, _, err = binlogJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
 			if err != nil {
@@ -450,6 +516,7 @@ func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajs
 			}
 		}
 		nodes = append(nodes, elem)
+		jlog("Index is %s:%s", i, jsonDataTypeToString(uint(typ)))
 	}
 	node = ajson.ArrayNode("", nodes)
 	return node, pos, nil
@@ -459,10 +526,11 @@ func newArrayPlugin() *arrayPlugin {
 	ah := &arrayPlugin{
 		info: &jsonPluginInfo{
 			name:  "Array",
-			types: []jsonDataType{jsonSmallArray},
+			types: []jsonDataType{jsonSmallArray, jsonLargeArray},
 		},
 	}
 	binlogJSON.register(jsonSmallArray, ah)
+	binlogJSON.register(jsonLargeArray, ah)
 	return ah
 }
 
@@ -481,13 +549,16 @@ type objectPlugin struct {
 var _ jsonPlugin = (*objectPlugin)(nil)
 
 func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajson.Node, newPos int, err error) {
+	jlog("JSON Type is %s", jsonDataTypeToString(uint(typ)))
+	//printAsciiBytes(data)
 	nodes := make(map[string]*ajson.Node)
 	var elem *ajson.Node
-	var elementCount, offset int
-	var large = false
-	_ = typ
+	var elementCount, offset, size int
+	var large = typ == jsonLargeObject
 	elementCount, pos = readOffsetOrSize(data, pos, large)
-	_, pos = readOffsetOrSize(data, pos, large)
+	jlog("Object: elem count: %d\n", elementCount)
+	size, pos = readOffsetOrSize(data, pos, large)
+	jlog("Object: elem count: %d, size %d\n", elementCount, size)
 	keys := make([]string, elementCount)
 	for i := 0; i < elementCount; i++ {
 		var keyOffset, keyLength int
@@ -505,7 +576,7 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 				return nil, 0, err
 			}
 		} else {
-			offset, pos = readOffsetOrSize(data, pos, false)
+			offset, pos = readOffsetOrSize(data, pos, large)
 			newData := data[offset:]
 			elem, _, err = binlogJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
 			if err != nil {
@@ -513,6 +584,7 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 			}
 		}
 		nodes[keys[i]] = elem
+		jlog("Key is %s:%s", keys[i], jsonDataTypeToString(uint(typ)))
 	}
 
 	node = ajson.ObjectNode("", nodes)
@@ -523,10 +595,11 @@ func newObjectPlugin() *objectPlugin {
 	oh := &objectPlugin{
 		info: &jsonPluginInfo{
 			name:  "Object",
-			types: []jsonDataType{jsonSmallObject},
+			types: []jsonDataType{jsonSmallObject, jsonLargeObject},
 		},
 	}
 	binlogJSON.register(jsonSmallObject, oh)
+	binlogJSON.register(jsonLargeObject, oh)
 	return oh
 }
 

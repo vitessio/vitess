@@ -19,10 +19,14 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spyzhov/ajson"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -2256,6 +2260,115 @@ func TestTimestamp(t *testing.T) {
 	})
 
 	expectData(t, "t1", [][]string{{"1", want, want}})
+}
+
+func TestPlayerJSON(t *testing.T) {
+	log.Errorf("TestPlayerJSON: flavor is %s", env.Flavor)
+	skipTest := false
+	if strings.Contains(env.Flavor, "mysql57") {
+		skipTest = false
+	}
+	if skipTest {
+		return
+	}
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table vitess_json(id int auto_increment, val json, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_json(id int, val json, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table vitess_json",
+		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
+	})
+
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+	type testcase struct {
+		name  string
+		input string
+		data  [][]string
+	}
+	var testcases []testcase
+	id := 0
+	var addTestCase = func(name, val string) {
+		id++
+		//s := strings.ReplaceAll(val, "\n", "")
+		//s = strings.ReplaceAll(s, "    ", "")
+		testcases = append(testcases, testcase{
+			name:  name,
+			input: fmt.Sprintf("insert into vitess_json(val) values (%s)", encodeString(val)),
+			data: [][]string{
+				{strconv.Itoa(id), val},
+			},
+		})
+	}
+	addTestCase("singleDoc", jsonDoc1)
+	addTestCase("multipleDocs", jsonDoc2)
+	addTestCase("largeDoc", jsonLarge)
+	id = 0
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			id++
+			execStatements(t, []string{tcase.input})
+			want := []string{
+				"begin",
+				"/insert into vitess_json",
+				"/update _vt.vreplication set pos=",
+				"commit",
+			}
+			expectDBClientQueries(t, want)
+			expectJSON(t, "vitess_json", tcase.data, id, env.Mysqld.FetchSuperQuery)
+		})
+	}
+}
+
+func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
+	t.Helper()
+
+	var query string
+	if len(strings.Split(table, ".")) == 1 {
+		query = fmt.Sprintf("select * from %s.%s where id=%d", vrepldb, table, id)
+	} else {
+		query = fmt.Sprintf("select * from %s where id=%d", table, id)
+	}
+	qr, err := exec(context.Background(), query)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if len(values) != len(qr.Rows) {
+		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))
+	}
+	for i, row := range values {
+		if len(row) != len(qr.Rows[i]) {
+			t.Fatalf("Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
+		}
+		if qr.Rows[i][0].ToString() != row[0] {
+			t.Fatalf("Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
+		}
+		got, err := ajson.Unmarshal([]byte(qr.Rows[i][1].ToString()))
+		require.NoError(t, err)
+		want, err := ajson.Unmarshal([]byte(row[1]))
+		require.NoError(t, err)
+		match, err := got.Eq(want)
+		require.NoError(t, err)
+		require.True(t, match)
+	}
 }
 
 func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {

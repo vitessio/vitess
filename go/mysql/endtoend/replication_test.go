@@ -866,7 +866,7 @@ func TestRowReplicationTypes(t *testing.T) {
 		}, {
 			name:       "json19",
 			createType: "JSON",
-			// FIXME: was "'18446744073709551615'", unsigned int representation differs from MySQL's
+			// FIXME: was "'18446744073709551615'", unsigned int representation differs from MySQL's which saves this as select 1.8446744073709552e19
 			// probably need to replace the json library: "github.com/spyzhov/ajson"
 			createValue: "'18446744073709551616'",
 		}, {
