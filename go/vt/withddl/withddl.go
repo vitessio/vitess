@@ -71,7 +71,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 		if merr == nil {
 			continue
 		}
-		if wd.isSchemaApplyError(merr) {
+		if mysql.IsSchemaApplyError(merr) {
 			continue
 		}
 		log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
@@ -125,18 +125,6 @@ func (wd *WithDDL) isSchemaError(err error) bool {
 	}
 	switch merr.Num {
 	case mysql.ERNoSuchTable, mysql.ERBadDb, mysql.ERWrongValueCountOnRow, mysql.ERBadFieldError:
-		return true
-	}
-	return false
-}
-
-func (wd *WithDDL) isSchemaApplyError(err error) bool {
-	merr, isSQLErr := err.(*mysql.SQLError)
-	if !isSQLErr {
-		return false
-	}
-	switch merr.Num {
-	case mysql.ERTableExists, mysql.ERDupFieldName:
 		return true
 	}
 	return false
