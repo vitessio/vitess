@@ -50,8 +50,9 @@ const (
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	alterSchemaMigrationsTableRetries = "ALTER TABLE %s.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTablet  = "ALTER TABLE %s.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRetries   = "ALTER TABLE %s.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTablet    = "ALTER TABLE %s.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableArtifacts = "ALTER TABLE %s.schema_migrations modify artifacts TEXT NOT NULL"
 
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
@@ -84,7 +85,7 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateArtifacts = `UPDATE %s.schema_migrations
-			SET artifacts=%a
+			SET artifacts=concat(%a, ',', artifacts)
 		WHERE
 			migration_uuid=%a
 	`
@@ -95,7 +96,8 @@ const (
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
-			completed_timestamp=NULL
+			completed_timestamp=NULL,
+			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
 			AND (%s)
@@ -207,4 +209,5 @@ var applyDDL = []string{
 	fmt.Sprintf(sqlCreateSchemaMigrationsTable, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableRetries, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableTablet, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableArtifacts, "_vt"),
 }
