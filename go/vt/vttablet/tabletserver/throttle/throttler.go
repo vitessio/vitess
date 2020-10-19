@@ -618,14 +618,28 @@ func (throttler *Throttler) UnthrottleApp(appName string) {
 // Assuming an app is throttled to some extend, it will randomize the result based
 // on the throttle ratio
 func (throttler *Throttler) IsAppThrottled(appName string) bool {
-	if object, found := throttler.throttledApps.Get(appName); found {
-		appThrottle := object.(*base.AppThrottle)
-		if appThrottle.ExpireAt.Before(time.Now()) {
-			// throttling cleanup hasn't purged yet, but it is expired
-			return false
+	isSingleAppNameThrottled := func(singleAppName string) bool {
+		if object, found := throttler.throttledApps.Get(singleAppName); found {
+			appThrottle := object.(*base.AppThrottle)
+			if appThrottle.ExpireAt.Before(time.Now()) {
+				// throttling cleanup hasn't purged yet, but it is expired
+				return false
+			}
+			// handle ratio
+			if rand.Float64() < appThrottle.Ratio {
+				return true
+			}
 		}
-		// handle ratio
-		if rand.Float64() < appThrottle.Ratio {
+		return false
+	}
+	if isSingleAppNameThrottled(appName) {
+		return true
+	}
+	for _, singleAppName := range strings.Split(appName, ":") {
+		if singleAppName == "" {
+			continue
+		}
+		if isSingleAppNameThrottled(singleAppName) {
 			return true
 		}
 	}
