@@ -2184,37 +2184,37 @@ func TestPositionedErr(t *testing.T) {
 		output PositionedErr
 	}{{
 		input:  "select convert('abc' as date) from t",
-		output: PositionedErr{"syntax error", 24, []byte("as")},
+		output: PositionedErr{"syntax error", 24, "as"},
 	}, {
 		input:  "select convert from t",
-		output: PositionedErr{"syntax error", 20, []byte("from")},
+		output: PositionedErr{"syntax error", 20, "from"},
 	}, {
 		input:  "select cast('foo', decimal) from t",
-		output: PositionedErr{"syntax error", 19, nil},
+		output: PositionedErr{"syntax error", 19, ""},
 	}, {
 		input:  "select convert('abc', datetime(4+9)) from t",
-		output: PositionedErr{"syntax error", 34, nil},
+		output: PositionedErr{"syntax error", 34, ""},
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
-		output: PositionedErr{"syntax error", 33, nil},
+		output: PositionedErr{"syntax error", 33, ""},
 	}, {
 		input:  "set transaction isolation level 12345",
-		output: PositionedErr{"syntax error", 38, []byte("12345")},
+		output: PositionedErr{"syntax error", 38, "12345"},
 	}, {
 		input:  "select * from a left join b",
-		output: PositionedErr{"syntax error", 28, nil},
+		output: PositionedErr{"syntax error", 28, ""},
 	}, {
 		input:  "select a from (select * from tbl)",
-		output: PositionedErr{"syntax error", 34, nil},
+		output: PositionedErr{"syntax error", 34, ""},
 	}}
 
 	for _, tcase := range invalidSQL {
-		tkn := NewStringTokenizer(tcase.input)
+		tkn := NewTokenizer(tcase.input)
 		_, err := ParseNext(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
 			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
-		} else if posErr.Pos != tcase.output.Pos || !bytes.Equal(posErr.Near, tcase.output.Near) || err.Error() != tcase.output.Error() {
+		} else if posErr.Pos != tcase.output.Pos || !(posErr.Near == tcase.output.Near) || err.Error() != tcase.output.Error() {
 			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
 		}
 	}

@@ -294,7 +294,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
-						Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+						Expr: sqlparser.NewIntLiteral("1"),
 					},
 				})
 			}

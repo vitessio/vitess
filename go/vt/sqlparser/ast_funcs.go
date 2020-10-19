@@ -426,44 +426,54 @@ func (node *ComparisonExpr) IsImpossible() bool {
 }
 
 // NewStrLiteral builds a new StrVal.
-func NewStrLiteral(in []byte) *Literal {
+func NewStrLiteral(in string) *Literal {
 	return &Literal{Type: StrVal, Val: in}
 }
 
 // NewIntLiteral builds a new IntVal.
-func NewIntLiteral(in []byte) *Literal {
+func NewIntLiteral(in string) *Literal {
 	return &Literal{Type: IntVal, Val: in}
 }
 
 // NewFloatLiteral builds a new FloatVal.
-func NewFloatLiteral(in []byte) *Literal {
+func NewFloatLiteral(in string) *Literal {
 	return &Literal{Type: FloatVal, Val: in}
 }
 
 // NewHexNumLiteral builds a new HexNum.
-func NewHexNumLiteral(in []byte) *Literal {
+func NewHexNumLiteral(in string) *Literal {
 	return &Literal{Type: HexNum, Val: in}
 }
 
 // NewHexLiteral builds a new HexVal.
-func NewHexLiteral(in []byte) *Literal {
+func NewHexLiteral(in string) *Literal {
 	return &Literal{Type: HexVal, Val: in}
 }
 
 // NewBitLiteral builds a new BitVal containing a bit literal.
-func NewBitLiteral(in []byte) *Literal {
+func NewBitLiteral(in string) *Literal {
 	return &Literal{Type: BitVal, Val: in}
 }
 
 // NewArgument builds a new ValArg.
-func NewArgument(in []byte) Argument {
-	return in
+func NewArgument(in string) Argument {
+	return Argument(in)
+}
+
+// Bytes returns the string in the literal as a byte array
+func (node *Literal) Bytes() []byte {
+	return []byte(node.Val)
+}
+
+// Len returns the length of the string in the literal
+func (node *Literal) Len() int {
+	return len(node.Val)
 }
 
 // HexDecode decodes the hexval into bytes.
 func (node *Literal) HexDecode() ([]byte, error) {
-	dst := make([]byte, hex.DecodedLen(len([]byte(node.Val))))
-	_, err := hex.Decode(dst, []byte(node.Val))
+	dst := make([]byte, hex.DecodedLen(node.Len()))
+	_, err := hex.Decode(dst, node.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -1122,6 +1132,7 @@ func (ty ExplainType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
 func (sel SelectIntoType) ToString() string {
 	switch sel {
 	case IntoOutfile:

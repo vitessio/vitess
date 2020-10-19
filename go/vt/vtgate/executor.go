@@ -429,7 +429,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	for _, expr := range set.Exprs {
 		// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
 		// it will remove backticks and double quotes that might surround the part after the first period
-		_, out := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
+		_, out := sqlparser.NewTokenizer(expr.Name.Lowered()).Scan()
 		name := string(out)
 		switch expr.Scope {
 		case sqlparser.VitessMetadataScope:

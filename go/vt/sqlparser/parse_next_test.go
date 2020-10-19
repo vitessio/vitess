@@ -32,7 +32,7 @@ func TestParseNextValid(t *testing.T) {
 		sql.WriteRune(';')
 	}
 
-	tokens := NewTokenizer(&sql)
+	tokens := NewTokenizer(sql.String())
 	for i, tcase := range validSQL {
 		input := tcase.input + ";"
 		want := tcase.output
@@ -60,7 +60,7 @@ func TestParseNextValid(t *testing.T) {
 func TestIgnoreSpecialComments(t *testing.T) {
 	input := `SELECT 1;/*! ALTER TABLE foo DISABLE KEYS */;SELECT 2;`
 
-	tokenizer := NewStringTokenizer(input)
+	tokenizer := NewTokenizer(input)
 	tokenizer.SkipSpecialComments = true
 	one, err := ParseNextStrictDDL(tokenizer)
 	if err != nil {
@@ -88,7 +88,7 @@ func TestParseNextErrors(t *testing.T) {
 		}
 
 		sql := tcase.input + "; select 1 from t"
-		tokens := NewStringTokenizer(sql)
+		tokens := NewTokenizer(sql)
 
 		// The first statement should be an error
 		_, err := ParseNext(tokens)
@@ -157,7 +157,7 @@ func TestParseNextEdgeCases(t *testing.T) {
 	}}
 
 	for _, test := range tests {
-		tokens := NewStringTokenizer(test.input)
+		tokens := NewTokenizer(test.input)
 
 		for i, want := range test.want {
 			tree, err := ParseNext(tokens)
@@ -190,7 +190,7 @@ func TestParseNextStrictNonStrict(t *testing.T) {
 	want := []string{"create table a", "select 1 from a"}
 
 	// First go through as expected with non-strict DDL parsing.
-	tokens := NewStringTokenizer(input)
+	tokens := NewTokenizer(input)
 	for i, want := range want {
 		tree, err := ParseNext(tokens)
 		if err != nil {
@@ -202,7 +202,7 @@ func TestParseNextStrictNonStrict(t *testing.T) {
 	}
 
 	// Now try again with strict parsing and observe the expected error.
-	tokens = NewStringTokenizer(input)
+	tokens = NewTokenizer(input)
 	_, err := ParseNextStrictDDL(tokens)
 	if err == nil || !strings.Contains(err.Error(), "ignore") {
 		t.Fatalf("ParseNext(%q) err = %q, want ignore", input, err)

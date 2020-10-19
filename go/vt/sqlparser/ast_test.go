@@ -269,7 +269,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("on"), v.Val) {
+		if !(v.Val == "on") {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -294,7 +294,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("on"), v.Val) {
+		if !(v.Val == "on") {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -321,7 +321,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("off"), v.Val) {
+		if !(v.Val != "off") {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -346,7 +346,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("off"), v.Val) {
+		if !(v.Val == "off") {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -390,8 +390,8 @@ func TestIsAggregate(t *testing.T) {
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
 		Operator: NotEqualOp,
-		Left:     newIntLiteral("1"),
-		Right:    newIntLiteral("1"),
+		Left:     NewIntLiteral("1"),
+		Right:    NewIntLiteral("1"),
 	}
 	if !f.IsImpossible() {
 		t.Error("IsImpossible: false, want true")
@@ -399,8 +399,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: EqualOp,
-		Left:     newIntLiteral("1"),
-		Right:    newIntLiteral("1"),
+		Left:     NewIntLiteral("1"),
+		Right:    NewIntLiteral("1"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -408,8 +408,8 @@ func TestIsImpossible(t *testing.T) {
 
 	f = ComparisonExpr{
 		Operator: NotEqualOp,
-		Left:     newIntLiteral("1"),
-		Right:    newIntLiteral("2"),
+		Left:     NewIntLiteral("1"),
+		Right:    NewIntLiteral("2"),
 	}
 	if f.IsImpossible() {
 		t.Error("IsImpossible: true, want false")
@@ -538,7 +538,7 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where case a when b then c when d then c else (select a from b) end",
 		out: "case a when b then c when d then c else :a end",
 	}}
-	to := NewArgument([]byte(":a"))
+	to := NewArgument(":a")
 	for _, tcase := range tcases {
 		tree, err := Parse(tcase.in)
 		if err != nil {
@@ -668,7 +668,7 @@ func TestHexDecode(t *testing.T) {
 		out: "encoding/hex: odd length hex string",
 	}}
 	for _, tc := range testcase {
-		out, err := newHexLiteral(tc.in).HexDecode()
+		out, err := NewHexLiteral(tc.in).HexDecode()
 		if err != nil {
 			if err.Error() != tc.out {
 				t.Errorf("Decode(%q): %v, want %s", tc.in, err, tc.out)

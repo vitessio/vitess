@@ -536,7 +536,7 @@ type ShowFilter struct {
 }
 
 // Comments represents a list of comments.
-type Comments [][]byte
+type Comments []string
 
 // SelectExprs represents SELECT expressions.
 type SelectExprs []SelectExpr
@@ -734,11 +734,11 @@ type (
 	// Literal represents a fixed value.
 	Literal struct {
 		Type ValType
-		Val  []byte
+		Val  string
 	}
 
 	// Argument represents bindvariable expression
-	Argument []byte
+	Argument string
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
@@ -765,7 +765,7 @@ type (
 	}
 
 	// ListArg represents a named list argument.
-	ListArg []byte
+	ListArg string
 
 	// ValTuple represents a tuple of actual values.
 	ValTuple Exprs
@@ -1783,7 +1783,7 @@ func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
 	case IntVal, FloatVal, HexNum:
 		buf.astPrintf(node, "%s", node.Val)
 	case HexVal:

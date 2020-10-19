@@ -42,7 +42,7 @@ func NewTabletVExec(workflow, keyspace string) *TabletVExec {
 func (e *TabletVExec) ToStringVal(val string) *sqlparser.Literal {
 	return &sqlparser.Literal{
 		Type: sqlparser.StrVal,
-		Val:  []byte(val),
+		Val:  val,
 	}
 }
 

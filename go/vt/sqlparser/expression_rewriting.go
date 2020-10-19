@@ -201,5 +201,5 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 }
 
 func bindVarExpression(name string) Expr {
-	return NewArgument([]byte(":" + name))
+	return NewArgument(":" + name)
 }

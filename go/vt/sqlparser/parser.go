@@ -81,7 +81,7 @@ func yyParsePooled(yylex yyLexer) int {
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
 func Parse(sql string) (Statement, error) {
-	tokenizer := NewStringTokenizer(sql)
+	tokenizer := NewTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
@@ -103,7 +103,7 @@ func Parse(sql string) (Statement, error) {
 // ParseStrictDDL is the same as Parse except it errors on
 // partially parsed DDL statements.
 func ParseStrictDDL(sql string) (Statement, error) {
-	tokenizer := NewStringTokenizer(sql)
+	tokenizer := NewTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
@@ -166,7 +166,7 @@ var ErrEmpty = errors.New("empty statement")
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
 func SplitStatement(blob string) (string, string, error) {
-	tokenizer := NewStringTokenizer(blob)
+	tokenizer := NewTokenizer(blob)
 	tkn := 0
 	for {
 		tkn, _ = tokenizer.Scan()
@@ -187,7 +187,7 @@ func SplitStatement(blob string) (string, string, error) {
 // returns the sql pieces blob contains; or error if sql cannot be parsed
 func SplitStatementToPieces(blob string) (pieces []string, err error) {
 	pieces = make([]string, 0, 16)
-	tokenizer := NewStringTokenizer(blob)
+	tokenizer := NewTokenizer(blob)
 
 	tkn := 0
 	var stmt string

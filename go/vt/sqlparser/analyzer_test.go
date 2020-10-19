@@ -241,7 +241,7 @@ func TestIsColName(t *testing.T) {
 		in:  &ColName{},
 		out: true,
 	}, {
-		in: newHexLiteral(""),
+		in: NewHexLiteral(""),
 	}}
 	for _, tc := range testcases {
 		out := IsColName(tc.in)
@@ -256,16 +256,16 @@ func TestIsValue(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  newStrLiteral("aa"),
+		in:  NewStrLiteral("aa"),
 		out: true,
 	}, {
-		in:  newHexLiteral("3131"),
+		in:  NewHexLiteral("3131"),
 		out: true,
 	}, {
-		in:  newIntLiteral("1"),
+		in:  NewIntLiteral("1"),
 		out: true,
 	}, {
-		in:  newArgument(":a"),
+		in:  NewArgument(":a"),
 		out: true,
 	}, {
 		in:  &NullVal{},
@@ -296,7 +296,7 @@ func TestIsNull(t *testing.T) {
 		in:  &NullVal{},
 		out: true,
 	}, {
-		in: newStrLiteral(""),
+		in: NewStrLiteral(""),
 	}}
 	for _, tc := range testcases {
 		out := IsNull(tc.in)
@@ -311,7 +311,7 @@ func TestIsSimpleTuple(t *testing.T) {
 		in  Expr
 		out bool
 	}{{
-		in:  ValTuple{newStrLiteral("aa")},
+		in:  ValTuple{NewStrLiteral("aa")},
 		out: true,
 	}, {
 		in: ValTuple{&ColName{}},
@@ -346,37 +346,37 @@ func TestNewPlanValue(t *testing.T) {
 	}, {
 		in: &Literal{
 			Type: IntVal,
-			Val:  []byte("10"),
+			Val:  "10",
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewInt64(10)},
 	}, {
 		in: &Literal{
 			Type: IntVal,
-			Val:  []byte("1111111111111111111111111111111111111111"),
+			Val:  "1111111111111111111111111111111111111111",
 		},
 		err: "value out of range",
 	}, {
 		in: &Literal{
 			Type: StrVal,
-			Val:  []byte("strval"),
+			Val:  "strval",
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &Literal{
 			Type: BitVal,
-			Val:  []byte("01100001"),
+			Val:  "01100001",
 		},
 		err: "expression is too complex",
 	}, {
 		in: &Literal{
 			Type: HexVal,
-			Val:  []byte("3131"),
+			Val:  "3131",
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("11")},
 	}, {
 		in: &Literal{
 			Type: HexVal,
-			Val:  []byte("313"),
+			Val:  "313",
 		},
 		err: "odd length hex string",
 	}, {
@@ -387,7 +387,7 @@ func TestNewPlanValue(t *testing.T) {
 			Argument(":valarg"),
 			&Literal{
 				Type: StrVal,
-				Val:  []byte("strval"),
+				Val:  "strval",
 			},
 		},
 		out: sqltypes.PlanValue{
@@ -408,7 +408,7 @@ func TestNewPlanValue(t *testing.T) {
 	}, {
 		in: &Literal{
 			Type: FloatVal,
-			Val:  []byte("2.1"),
+			Val:  "2.1",
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewFloat64(2.1)},
 	}, {
@@ -416,7 +416,7 @@ func TestNewPlanValue(t *testing.T) {
 			Operator: Latin1Op,
 			Expr: &Literal{
 				Type: StrVal,
-				Val:  []byte("strval"),
+				Val:  "strval",
 			},
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
@@ -425,7 +425,7 @@ func TestNewPlanValue(t *testing.T) {
 			Operator: UBinaryOp,
 			Expr: &Literal{
 				Type: StrVal,
-				Val:  []byte("strval"),
+				Val:  "strval",
 			},
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
@@ -434,7 +434,7 @@ func TestNewPlanValue(t *testing.T) {
 			Operator: Utf8mb4Op,
 			Expr: &Literal{
 				Type: StrVal,
-				Val:  []byte("strval"),
+				Val:  "strval",
 			},
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
@@ -443,7 +443,7 @@ func TestNewPlanValue(t *testing.T) {
 			Operator: Utf8Op,
 			Expr: &Literal{
 				Type: StrVal,
-				Val:  []byte("strval"),
+				Val:  "strval",
 			},
 		},
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
@@ -452,7 +452,7 @@ func TestNewPlanValue(t *testing.T) {
 			Operator: UMinusOp,
 			Expr: &Literal{
 				Type: FloatVal,
-				Val:  []byte("2.1"),
+				Val:  "2.1",
 			},
 		},
 		err: "expression is too complex",
@@ -478,19 +478,3 @@ var mustMatch = utils.MustMatchFn(
 	},
 	[]string{".Conn"}, // ignored fields
 )
-
-func newStrLiteral(in string) *Literal {
-	return NewStrLiteral([]byte(in))
-}
-
-func newIntLiteral(in string) *Literal {
-	return NewIntLiteral([]byte(in))
-}
-
-func newHexLiteral(in string) *Literal {
-	return NewHexLiteral([]byte(in))
-}
-
-func newArgument(in string) Expr {
-	return NewArgument([]byte(in))
-}

@@ -73,7 +73,7 @@ func TestLiteralID(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		tkn := NewStringTokenizer(tcase.in)
+		tkn := NewTokenizer(tcase.in)
 		id, out := tkn.Scan()
 		if tcase.id != id || string(out) != tcase.out {
 			t.Errorf("Scan(%s): %d, %s, want %d, %s", tcase.in, id, out, tcase.id, tcase.out)
@@ -146,7 +146,7 @@ func TestString(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		id, got := NewStringTokenizer(tcase.in).Scan()
+		id, got := NewTokenizer(tcase.in).Scan()
 		if tcase.id != id || string(got) != tcase.want {
 			t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(id), got, tokenName(tcase.id), tcase.want)
 		}

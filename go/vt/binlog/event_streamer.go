@@ -151,7 +151,7 @@ func (evs *EventStreamer) buildDMLStatement(stmt FullBinlogStatement, insertid i
 	dmlStatement := &querypb.StreamEvent_Statement{
 		Category: querypb.StreamEvent_Statement_DML,
 	}
-	tokenizer := sqlparser.NewStringTokenizer(dmlComment)
+	tokenizer := sqlparser.NewTokenizer(dmlComment)
 
 	// first parse the table name
 	typ, val := tokenizer.Scan()
@@ -298,7 +298,7 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 			}
 
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(val)))
-			numDecoded, err := base64.StdEncoding.Decode(decoded, val)
+			numDecoded, err := base64.StdEncoding.Decode(decoded, []byte(val))
 			if err != nil {
 				return nil, insertid, err
 			}

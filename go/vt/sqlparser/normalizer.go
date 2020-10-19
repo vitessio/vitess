@@ -123,9 +123,9 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 		// Prefixing strings with "'" ensures that a string
 		// and number that have the same representation don't
 		// collide.
-		key = "'" + string(node.Val)
+		key = "'" + node.Val
 	} else {
-		key = string(node.Val)
+		key = node.Val
 	}
 	bvname, ok := nz.vals[key]
 	if !ok {
@@ -136,7 +136,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Modify the AST node to a bindvar.
-	cursor.Replace(NewArgument([]byte(":" + bvname)))
+	cursor.Replace(NewArgument(":" + bvname))
 }
 
 // convertLiteral converts an Literal without the dedup.
@@ -149,7 +149,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 	bvname := nz.newName()
 	nz.bindVars[bvname] = bval
 
-	cursor.Replace(NewArgument([]byte(":" + bvname)))
+	cursor.Replace(NewArgument(":" + bvname))
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -192,11 +192,11 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 		var err error
 		switch node.Type {
 		case StrVal:
-			v, err = sqltypes.NewValue(sqltypes.VarBinary, node.Val)
+			v, err = sqltypes.NewValue(sqltypes.VarBinary, node.Bytes())
 		case IntVal:
-			v, err = sqltypes.NewValue(sqltypes.Int64, node.Val)
+			v, err = sqltypes.NewValue(sqltypes.Int64, node.Bytes())
 		case FloatVal:
-			v, err = sqltypes.NewValue(sqltypes.Float64, node.Val)
+			v, err = sqltypes.NewValue(sqltypes.Float64, node.Bytes())
 		default:
 			return nil
 		}

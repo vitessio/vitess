@@ -99,7 +99,7 @@ func (l *limit) SetLimit(limit *sqlparser.Limit) error {
 		l.elimit.Offset = pv
 	}
 
-	l.input.SetUpperLimit(sqlparser.NewArgument([]byte(":__upper_limit")))
+	l.input.SetUpperLimit(sqlparser.NewArgument(":__upper_limit"))
 	return nil
 }
 

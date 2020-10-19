@@ -77,9 +77,9 @@ func (e EvalResult) Value() sqltypes.Value {
 	return castFromNumeric(e, e.typ)
 }
 
-//NewLiteralIntFromBytes returns a literal expression
-func NewLiteralIntFromBytes(val []byte) (Expr, error) {
-	ival, err := strconv.ParseInt(string(val), 10, 64)
+//NewLiteralIntFromString returns a literal expression
+func NewLiteralIntFromString(val string) (Expr, error) {
+	ival, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return nil, err
 	}
@@ -92,15 +92,15 @@ func NewLiteralInt(i int64) Expr {
 }
 
 //NewLiteralFloat returns a literal expression
-func NewLiteralFloat(val []byte) (Expr, error) {
-	fval, err := strconv.ParseFloat(string(val), 64)
+func NewLiteralFloat(val string) (Expr, error) {
+	fval, err := strconv.ParseFloat(val, 64)
 	if err != nil {
 		return nil, err
 	}
 	return &Literal{EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
 }
 
-//NewLiteralFloat returns a literal expression
+//NewLiteralString returns a literal expression
 func NewLiteralString(val []byte) Expr {
 	return &Literal{EvalResult{typ: sqltypes.VarBinary, bytes: val}}
 }

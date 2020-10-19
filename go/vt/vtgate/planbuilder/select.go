@@ -340,7 +340,7 @@ func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 						return false
 					}
 					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
-					parent.Right = sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName))
+					parent.Right = sqlparser.NewArgument(":" + sqltypes.BvSchemaName)
 				}
 			}
 		}
