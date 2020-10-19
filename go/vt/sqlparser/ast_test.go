@@ -321,7 +321,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !(v.Val != "off") {
+		if !(v.Val == "off") {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
