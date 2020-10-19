@@ -49,10 +49,10 @@ const (
 )
 
 var (
-	// BuiltinBackupMysqldDeadline is how long ExecuteBackup should wait for response from mysqld.Shutdown.
+	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
-	BuiltinBackupMysqldDeadline = flag.Duration("builtinbackup_mysqld_deadline", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
+	BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -190,7 +190,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	shutdownCtx, cancel := context.WithTimeout(ctx, *BuiltinBackupMysqldDeadline)
+	shutdownCtx, cancel := context.WithTimeout(ctx, *BuiltinBackupMysqldTimeout)
 	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
 	defer cancel()
 	if err != nil {

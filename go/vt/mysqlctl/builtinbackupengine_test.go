@@ -27,8 +27,8 @@ import (
 )
 
 func setBuiltinBackupMysqldDeadline(t time.Duration) time.Duration {
-	old := *mysqlctl.BuiltinBackupMysqldDeadline
-	mysqlctl.BuiltinBackupMysqldDeadline = &t
+	old := *mysqlctl.BuiltinBackupMysqldTimeout
+	mysqlctl.BuiltinBackupMysqldTimeout = &t
 
 	return old
 }
