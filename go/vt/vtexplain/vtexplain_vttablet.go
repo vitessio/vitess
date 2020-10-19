@@ -514,7 +514,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 							for _, val := range values {
 								switch v := val.(type) {
 								case *sqlparser.Literal:
-									inVal = append(inVal, v.Val)
+									inVal = append(inVal, v.Bytes())
 								}
 							}
 							rowCount = len(inVal)
