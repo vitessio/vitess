@@ -569,7 +569,6 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 		t.Error(err)
 		return
 	}
-	log.Infof("%v!!!%v", values, qr.Rows)
 	if len(values) != len(qr.Rows) {
 		t.Fatalf("row counts don't match: %v, want %v", qr.Rows, values)
 	}

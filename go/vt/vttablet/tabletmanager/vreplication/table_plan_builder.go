@@ -22,7 +22,6 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -546,7 +545,6 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 			} else {
 				buf.Myprintf("%v", cexpr.expr)
 			}
-			log.Infof("generateValuesPart:%s, expr:%v", buf.String(), cexpr.expr)
 		case opCount:
 			buf.WriteString("1")
 		case opSum:
