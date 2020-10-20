@@ -98,6 +98,7 @@ type TabletServer struct {
 	stats                  *tabletenv.Stats
 	QueryTimeout           atomic.Int64
 	TerseErrors            bool
+	TruncateErrorLen       int
 	enableHotRowProtection bool
 	topoServer             *topo.Server
 
@@ -155,6 +156,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
 		TerseErrors:            config.TerseErrors,
+		TruncateErrorLen:       config.TruncateErrorLen,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
 		alias:                  proto.Clone(alias).(*topodatapb.TabletAlias),
@@ -1560,6 +1562,11 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 
 	if logStats != nil {
 		logStats.Error = err
+	}
+
+	errStr := err.Error()
+	if tsv.TruncateErrorLen > 0 && len(errStr) > tsv.TruncateErrorLen {
+		err = vterrors.New(vterrors.Code(err), errStr[:tsv.TruncateErrorLen])
 	}
 
 	return err

@@ -131,6 +131,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", defaultConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
 	fs.StringVar(&currentConfig.TableACLExemptACL, "queryserver-config-acl-exempt-acl", defaultConfig.TableACLExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	fs.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in client error messages")
+	fs.IntVar(&currentConfig.TruncateErrorLen, "queryserver-config-truncate-error-len", defaultConfig.TruncateErrorLen, "truncate errors sent to client if they are above this value (0 means do not truncate)")
 	fs.BoolVar(&currentConfig.AnnotateQueries, "queryserver-config-annotate-queries", defaultConfig.AnnotateQueries, "prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type")
 	fs.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
 	fs.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
@@ -297,6 +298,7 @@ type TabletConfig struct {
 	WatchReplication                        bool    `json:"watchReplication,omitempty"`
 	TrackSchemaVersions                     bool    `json:"trackSchemaVersions,omitempty"`
 	TerseErrors                             bool    `json:"terseErrors,omitempty"`
+	TruncateErrorLen                        int     `json:"truncateErrorLen,omitempty"`
 	AnnotateQueries                         bool    `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int     `json:"messagePostponeParallelism,omitempty"`
 	DeprecatedCacheResultFields             bool    `json:"cacheResultFields,omitempty"`
