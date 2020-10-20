@@ -1473,7 +1473,7 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 			acl.SendError(w, err)
 			return
 		}
-		if tsv.IsServingType() && !tsv.sm.IsServing() {
+		if tsv.sm.Target().TabletType != topodatapb.TabletType_SPARE && !tsv.sm.IsServing() {
 			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 			return
 		}
