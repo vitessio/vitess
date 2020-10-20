@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -103,7 +106,7 @@ func (rb *route) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (rb *route) PushLock(lock string) error {
+func (rb *route) PushLock(lock sqlparser.Lock) error {
 	rb.Select.SetLock(lock)
 	return nil
 }
@@ -224,7 +227,7 @@ func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 		}
 		ob := engine.OrderbyParams{
 			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescScr,
+			Desc: order.Direction == sqlparser.DescOrder,
 		}
 		rb.eroute.OrderBy = append(rb.eroute.OrderBy, ob)
 
@@ -248,9 +251,16 @@ func (rb *route) SetUpperLimit(count sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.
-func (rb *route) PushMisc(sel *sqlparser.Select) {
+func (rb *route) PushMisc(sel *sqlparser.Select) error {
 	rb.Select.(*sqlparser.Select).Comments = sel.Comments
 	rb.Select.(*sqlparser.Select).Lock = sel.Lock
+	if sel.Into != nil {
+		if rb.eroute.Opcode != engine.SelectUnsharded {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+		}
+		rb.Select.(*sqlparser.Select).Into = sel.Into
+	}
+	return nil
 }
 
 // Wireup satisfies the builder interface.
@@ -289,7 +299,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				})
 			}
 		case *sqlparser.ComparisonExpr:
-			if node.Operator == sqlparser.EqualStr {
+			if node.Operator == sqlparser.EqualOp {
 				if rb.exprIsValue(node.Left) && !rb.exprIsValue(node.Right) {
 					node.Left, node.Right = node.Right, node.Left
 				}
@@ -555,7 +565,7 @@ func (rb *route) canMergeOnFilter(pb *primitiveBuilder, rrb *route, filter sqlpa
 	if !ok {
 		return false
 	}
-	if comparison.Operator != sqlparser.EqualStr {
+	if comparison.Operator != sqlparser.EqualOp {
 		return false
 	}
 	left := comparison.Left
@@ -636,11 +646,11 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
-		case sqlparser.EqualStr:
+		case sqlparser.EqualOp:
 			return rb.computeEqualPlan(pb, node)
-		case sqlparser.InStr:
+		case sqlparser.InOp:
 			return rb.computeINPlan(pb, node)
-		case sqlparser.NotInStr:
+		case sqlparser.NotInOp:
 			return rb.computeNotInPlan(node.Right), nil, nil
 		}
 	case *sqlparser.IsExpr:
@@ -678,7 +688,7 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 // computeEqualPlan computes the plan for an equality constraint.
 func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
-	if comparison.Operator != sqlparser.IsNullStr {
+	if comparison.Operator != sqlparser.IsNullOp {
 		return engine.SelectScatter, nil, nil
 	}
 

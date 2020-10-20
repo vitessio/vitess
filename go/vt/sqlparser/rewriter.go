@@ -82,6 +82,10 @@ func (r *replaceCaseExprWhens) inc() {
 	*r++
 }
 
+func replaceCheckConstraintDefinitionExpr(newNode, parent SQLNode) {
+	parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
+}
+
 func replaceColNameName(newNode, parent SQLNode) {
 	parent.(*ColName).Name = newNode.(ColIdent)
 }
@@ -98,10 +102,6 @@ func replaceColumnDefinitionName(newNode, parent SQLNode) {
 	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
 
-func replaceColumnTypeAutoincrement(newNode, parent SQLNode) {
-	parent.(*ColumnType).Autoincrement = newNode.(BoolVal)
-}
-
 func replaceColumnTypeComment(newNode, parent SQLNode) {
 	parent.(*ColumnType).Comment = newNode.(*Literal)
 }
@@ -114,24 +114,12 @@ func replaceColumnTypeLength(newNode, parent SQLNode) {
 	parent.(*ColumnType).Length = newNode.(*Literal)
 }
 
-func replaceColumnTypeNotNull(newNode, parent SQLNode) {
-	parent.(*ColumnType).NotNull = newNode.(BoolVal)
-}
-
 func replaceColumnTypeOnUpdate(newNode, parent SQLNode) {
 	parent.(*ColumnType).OnUpdate = newNode.(Expr)
 }
 
 func replaceColumnTypeScale(newNode, parent SQLNode) {
 	parent.(*ColumnType).Scale = newNode.(*Literal)
-}
-
-func replaceColumnTypeUnsigned(newNode, parent SQLNode) {
-	parent.(*ColumnType).Unsigned = newNode.(BoolVal)
-}
-
-func replaceColumnTypeZerofill(newNode, parent SQLNode) {
-	parent.(*ColumnType).Zerofill = newNode.(BoolVal)
 }
 
 type replaceColumnsItems int
@@ -543,6 +531,10 @@ func replaceSelectHaving(newNode, parent SQLNode) {
 	parent.(*Select).Having = newNode.(*Where)
 }
 
+func replaceSelectInto(newNode, parent SQLNode) {
+	parent.(*Select).Into = newNode.(*SelectInto)
+}
+
 func replaceSelectLimit(newNode, parent SQLNode) {
 	parent.(*Select).Limit = newNode.(*Limit)
 }
@@ -609,20 +601,36 @@ func replaceSetTransactionComments(newNode, parent SQLNode) {
 	parent.(*SetTransaction).Comments = newNode.(Comments)
 }
 
-func replaceShowOnTable(newNode, parent SQLNode) {
-	parent.(*Show).OnTable = newNode.(TableName)
+func replaceShowInternal(newNode, parent SQLNode) {
+	parent.(*Show).Internal = newNode.(ShowInternal)
 }
 
-func replaceShowShowCollationFilterOpt(newNode, parent SQLNode) {
-	parent.(*Show).ShowCollationFilterOpt = newNode.(Expr)
+func replaceShowColumnsFilter(newNode, parent SQLNode) {
+	parent.(*ShowColumns).Filter = newNode.(*ShowFilter)
 }
 
-func replaceShowTable(newNode, parent SQLNode) {
-	parent.(*Show).Table = newNode.(TableName)
+func replaceShowColumnsTable(newNode, parent SQLNode) {
+	parent.(*ShowColumns).Table = newNode.(TableName)
 }
 
 func replaceShowFilterFilter(newNode, parent SQLNode) {
 	parent.(*ShowFilter).Filter = newNode.(Expr)
+}
+
+func replaceShowLegacyOnTable(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).OnTable = newNode.(TableName)
+}
+
+func replaceShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
+}
+
+func replaceShowLegacyTable(newNode, parent SQLNode) {
+	parent.(*ShowLegacy).Table = newNode.(TableName)
+}
+
+func replaceShowTableStatusFilter(newNode, parent SQLNode) {
+	parent.(*ShowTableStatus).Filter = newNode.(*ShowFilter)
 }
 
 func replaceStarExprTableName(newNode, parent SQLNode) {
@@ -914,7 +922,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	// (the order of the cases is alphabetical)
 	switch n := node.(type) {
 	case nil:
-	case *AccessMode:
+	case AccessMode:
 
 	case *AliasedExpr:
 		a.apply(node, n.As, replaceAliasedExprAs)
@@ -954,6 +962,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			replacerWhensB.inc()
 		}
 
+	case *CheckConstraintDefinition:
+		a.apply(node, n.Expr, replaceCheckConstraintDefinitionExpr)
+
 	case ColIdent:
 
 	case *ColName:
@@ -967,15 +978,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceColumnDefinitionName)
 
 	case *ColumnType:
-		a.apply(node, n.Autoincrement, replaceColumnTypeAutoincrement)
 		a.apply(node, n.Comment, replaceColumnTypeComment)
 		a.apply(node, n.Default, replaceColumnTypeDefault)
 		a.apply(node, n.Length, replaceColumnTypeLength)
-		a.apply(node, n.NotNull, replaceColumnTypeNotNull)
 		a.apply(node, n.OnUpdate, replaceColumnTypeOnUpdate)
 		a.apply(node, n.Scale, replaceColumnTypeScale)
-		a.apply(node, n.Unsigned, replaceColumnTypeUnsigned)
-		a.apply(node, n.Zerofill, replaceColumnTypeZerofill)
 
 	case Columns:
 		replacer := replaceColumnsItems(0)
@@ -1108,7 +1115,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *IsExpr:
 		a.apply(node, n.Expr, replaceIsExprExpr)
 
-	case *IsolationLevel:
+	case IsolationLevel:
 
 	case JoinCondition:
 		a.apply(node, n.On, replaceJoinConditionOn)
@@ -1126,6 +1133,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case ListArg:
 
 	case *Literal:
+
+	case *Load:
 
 	case *MatchExpr:
 		a.apply(node, n.Columns, replaceMatchExprColumns)
@@ -1219,6 +1228,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.From, replaceSelectFrom)
 		a.apply(node, n.GroupBy, replaceSelectGroupBy)
 		a.apply(node, n.Having, replaceSelectHaving)
+		a.apply(node, n.Into, replaceSelectInto)
 		a.apply(node, n.Limit, replaceSelectLimit)
 		a.apply(node, n.OrderBy, replaceSelectOrderBy)
 		a.apply(node, n.SelectExprs, replaceSelectSelectExprs)
@@ -1231,6 +1241,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *SelectInto:
 
 	case *Set:
 		a.apply(node, n.Comments, replaceSetComments)
@@ -1258,12 +1270,22 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Comments, replaceSetTransactionComments)
 
 	case *Show:
-		a.apply(node, n.OnTable, replaceShowOnTable)
-		a.apply(node, n.ShowCollationFilterOpt, replaceShowShowCollationFilterOpt)
-		a.apply(node, n.Table, replaceShowTable)
+		a.apply(node, n.Internal, replaceShowInternal)
+
+	case *ShowColumns:
+		a.apply(node, n.Filter, replaceShowColumnsFilter)
+		a.apply(node, n.Table, replaceShowColumnsTable)
 
 	case *ShowFilter:
 		a.apply(node, n.Filter, replaceShowFilterFilter)
+
+	case *ShowLegacy:
+		a.apply(node, n.OnTable, replaceShowLegacyOnTable)
+		a.apply(node, n.ShowCollationFilterOpt, replaceShowLegacyShowCollationFilterOpt)
+		a.apply(node, n.Table, replaceShowLegacyTable)
+
+	case *ShowTableStatus:
+		a.apply(node, n.Filter, replaceShowTableStatusFilter)
 
 	case *StarExpr:
 		a.apply(node, n.TableName, replaceStarExprTableName)

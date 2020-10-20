@@ -282,10 +282,6 @@
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
 
-# sharded insert subquery in insert value
-"insert into user(id, val) values((select 1), 1)"
-"unsupported: subquery in insert values"
-
 # sharded replace no vindex
 "replace into user(val) values(1, 'foo')"
 "unsupported: REPLACE INTO with sharded schema"
@@ -423,3 +419,20 @@
 # insert using select get_lock from table
 "insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
 "unsupported: insert into select"
+
+# union with SQL_CALC_FOUND_ROWS 
+"(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
+"SQL_CALC_FOUND_ROWS not supported with union"
+
+# set with DEFAULT - vitess aware
+"set workload = default"
+"DEFAULT not supported for @@workload"
+
+# set with DEFAULT - reserved connection
+"set sql_mode = default"
+"DEFAULT not supported for @@sql_mode"
+
+# Multi shard query using into outfile s3
+"select * from user into outfile s3 'out_file_name'"
+"unsupported: this construct is not supported on sharded keyspace"
+

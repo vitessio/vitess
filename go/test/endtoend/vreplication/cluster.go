@@ -22,6 +22,7 @@ import (
 )
 
 var (
+	debug              = false // set to true to always use local env vtdataroot for local debugging
 	originalVtdataroot string
 	vtdataroot         string
 )
@@ -91,7 +92,11 @@ func init() {
 func initGlobals() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	dirSuffix := 100000 + rand.Intn(999999-100000) // 6 digits
-	vtdataroot = path.Join(originalVtdataroot, fmt.Sprintf("vreple2e_%d", dirSuffix))
+	if debug {
+		vtdataroot = originalVtdataroot
+	} else {
+		vtdataroot = path.Join(originalVtdataroot, fmt.Sprintf("vreple2e_%d", dirSuffix))
+	}
 	globalConfig.tmpDir = vtdataroot + "/tmp"
 	if _, err := os.Stat(vtdataroot); os.IsNotExist(err) {
 		os.Mkdir(vtdataroot, 0700)

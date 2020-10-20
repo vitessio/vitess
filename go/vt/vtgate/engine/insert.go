@@ -273,6 +273,22 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	return result, nil
 }
 
+// shouldGenerate determines if a sequence value should be generated for a given value
+func shouldGenerate(v sqltypes.Value) bool {
+	if v.IsNull() {
+		return true
+	}
+
+	// Unless the NO_AUTO_VALUE_ON_ZERO sql mode is active in mysql, it also
+	// treats 0 as a value that should generate a new sequence.
+	n, err := evalengine.ToUint64(v)
+	if err == nil && n == 0 {
+		return true
+	}
+
+	return false
+}
+
 // processGenerate generates new values using a sequence if necessary.
 // If no value was generated, it returns 0. Values are generated only
 // for cases where none are supplied.
@@ -289,7 +305,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 	}
 	count := int64(0)
 	for _, val := range resolved {
-		if val.IsNull() {
+		if shouldGenerate(val) {
 			count++
 		}
 	}
@@ -319,7 +335,7 @@ func (ins *Insert) processGenerate(vcursor VCursor, bindVars map[string]*querypb
 	// Fill the holes where no value was supplied.
 	cur := insertID
 	for i, v := range resolved {
-		if v.IsNull() {
+		if shouldGenerate(v) {
 			bindVars[SeqVarName+strconv.Itoa(i)] = sqltypes.Int64BindVariable(cur)
 			cur++
 		} else {

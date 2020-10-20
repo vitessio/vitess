@@ -105,6 +105,9 @@ type stateManager struct {
 	txThrottler txThrottler
 	te          txEngine
 	messager    subComponent
+	ddle        onlineDDLExecutor
+	throttler   lagThrottler
+	tableGC     tableGarbageCollector
 
 	// hcticks starts on initialiazation and runs forever.
 	hcticks *timer.Timer
@@ -152,6 +155,21 @@ type (
 	}
 
 	txThrottler interface {
+		Open() error
+		Close()
+	}
+
+	onlineDDLExecutor interface {
+		Open() error
+		Close()
+	}
+
+	lagThrottler interface {
+		Open() error
+		Close()
+	}
+
+	tableGarbageCollector interface {
 		Open() error
 		Close()
 	}
@@ -403,6 +421,9 @@ func (sm *stateManager) serveMaster() error {
 		return err
 	}
 	sm.messager.Open()
+	sm.throttler.Open()
+	sm.tableGC.Open()
+	sm.ddle.Open()
 	sm.setState(topodatapb.TabletType_MASTER, StateServing)
 	return nil
 }
@@ -422,6 +443,9 @@ func (sm *stateManager) unserveMaster() error {
 }
 
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
+	sm.ddle.Close()
+	sm.tableGC.Close()
+	sm.throttler.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
 	sm.se.MakeNonMaster()
@@ -469,6 +493,9 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	sm.ddle.Close()
+	sm.tableGC.Close()
+	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
 	sm.qe.StopServing()
@@ -510,11 +537,12 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.Infof("TabletServer transition: %v -> %v", sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state))
+	log.Infof("TabletServer transition: %v -> %v for tablet %s:%s/%s",
+		sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state),
+		sm.target.Cell, sm.target.Keyspace, sm.target.Shard)
 	sm.handleGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
 	if sm.state == StateNotConnected {
@@ -626,7 +654,7 @@ func (sm *stateManager) isServingLocked() bool {
 	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck
 }
 
-func (sm *stateManager) ApppendDetails(details []*kv) []*kv {
+func (sm *stateManager) AppendDetails(details []*kv) []*kv {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 

@@ -47,12 +47,18 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 	return err
 }
 
-// ApplySchema applies SQL schema to the keyspace
-func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	return vtctlclient.ExecuteCommand(
+// ApplySchemaWithOutput applies SQL schema to the keyspace
+func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
 		"ApplySchema",
 		"-sql", SQL,
 		Keyspace)
+}
+
+// ApplySchema applies SQL schema to the keyspace
+func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
+	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL)
+	return err
 }
 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
@@ -64,22 +70,45 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 	)
 }
 
+// OnlineDDLShowRecent responds with recent schema migration list
+func (vtctlclient *VtctlClientProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"show",
+		"recent",
+	)
+}
+
+// OnlineDDLCancelMigration cancels a given migration uuid
+func (vtctlclient *VtctlClientProcess) OnlineDDLCancelMigration(Keyspace, uuid string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"cancel",
+		uuid,
+	)
+}
+
+// OnlineDDLRetryMigration retries a given migration uuid
+func (vtctlclient *VtctlClientProcess) OnlineDDLRetryMigration(Keyspace, uuid string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"retry",
+		uuid,
+	)
+}
+
 // ExecuteCommand executes any vtctlclient command
 func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
-	pArgs := []string{"-server", vtctlclient.Server}
-
-	if *isCoverage {
-		pArgs = append(pArgs, "-test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "-test.v")
-	}
-	pArgs = append(pArgs, args...)
-	tmpProcess := exec.Command(
-		vtctlclient.Binary,
-		pArgs...,
-	)
-	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
-	output, err := tmpProcess.Output()
-	if err != nil {
-		log.Errorf("Error executing %s: output %s, err %v", strings.Join(tmpProcess.Args, " "), output, err)
+	output, err := vtctlclient.ExecuteCommandWithOutput(args...)
+	if output != "" {
+		if err != nil {
+			log.Errorf("Output:\n%v", output)
+		} else {
+			log.Infof("Output:\n%v", output)
+		}
 	}
 	return err
 }

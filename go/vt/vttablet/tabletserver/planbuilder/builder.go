@@ -33,7 +33,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateLimitQuery(sel),
 	}
-	if sel.Lock != "" {
+	if sel.Lock != sqlparser.NoLock {
 		plan.PlanID = PlanSelectLock
 	}
 
@@ -127,23 +127,33 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 	return plan, nil
 }
 
-func analyzeShowTables(show *sqlparser.Show, dbName string) {
-	// rewrite WHERE clause if it exists
-	// `where Tables_in_Keyspace` => `where Tables_in_DbName`
-	if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
-		filter := show.ShowTablesOpt.Filter.Filter
-		if filter != nil {
-			sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
-				switch n := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
-						cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
-					}
+func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
+	switch showInternal := show.Internal.(type) {
+	case *sqlparser.ShowLegacy:
+		if showInternal.Type == sqlparser.KeywordString(sqlparser.TABLES) {
+			// rewrite WHERE clause if it exists
+			// `where Tables_in_Keyspace` => `where Tables_in_DbName`
+			if showInternal.ShowTablesOpt != nil && showInternal.ShowTablesOpt.Filter != nil {
+				filter := showInternal.ShowTablesOpt.Filter.Filter
+				if filter != nil {
+					sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+						switch n := cursor.Node().(type) {
+						case *sqlparser.ColName:
+							if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
+								cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
+							}
+						}
+						return true
+					}, nil)
 				}
-				return true
-			}, nil)
+			}
+			return &Plan{
+				PlanID:    PlanShowTables,
+				FullQuery: GenerateFullQuery(show),
+			}, nil
 		}
 	}
+	return &Plan{PlanID: PlanOtherRead}, nil
 }
 
 func analyzeSet(set *sqlparser.Set) (plan *Plan) {

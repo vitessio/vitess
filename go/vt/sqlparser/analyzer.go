@@ -78,7 +78,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtDDL
 	case *Use:
 		return StmtUse
-	case *OtherRead, *OtherAdmin:
+	case *OtherRead, *OtherAdmin, *Load:
 		return StmtOther
 	case *Explain:
 		return StmtExplain
@@ -258,8 +258,19 @@ func IsDMLStatement(stmt Statement) bool {
 //IsVschemaDDL returns true if the query is an Vschema alter ddl.
 func IsVschemaDDL(ddl *DDL) bool {
 	switch ddl.Action {
-	case CreateVindexStr, DropVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
+	case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
 		return true
+	}
+	return false
+}
+
+// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
+func IsOnlineSchemaDDL(ddl *DDL, sql string) bool {
+	switch ddl.Action {
+	case AlterDDLAction:
+		if ddl.OnlineHint != nil {
+			return ddl.OnlineHint.Strategy != ""
+		}
 	}
 	return false
 }
@@ -407,7 +418,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return sqltypes.PlanValue{}, nil
 	case *UnaryExpr:
 		switch node.Operator {
-		case UBinaryStr, Utf8mb4Str, Utf8Str, Latin1Str: // for some charset introducers, we can just ignore them
+		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
 			return NewPlanValue(node.Expr)
 		}
 	}

@@ -34,6 +34,64 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestRollup(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(20), primary key(id))",
+		fmt.Sprintf("create table %s.t1(rollupname varchar(20), kount int, primary key(rollupname))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select 'total' as rollupname, count(*) as kount from t1 group by rollupname",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		// Start with all nulls
+		input:  "insert into t1 values(1, 'a')",
+		output: "insert into t1(rollupname,kount) values ('total',1) on duplicate key update kount=kount+1",
+		table:  "t1",
+		data: [][]string{
+			{"total", "1"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			"begin",
+			tcases.output,
+			"/update _vt.vreplication set pos",
+			"commit",
+		}
+		expectDBClientQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
 func TestPlayerSavepoint(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
@@ -201,6 +259,8 @@ func TestPlayerFilters(t *testing.T) {
 		fmt.Sprintf("create table %s.dst4(id1 int, val varbinary(128), primary key(id1))", vrepldb),
 		"create table src5(id1 int, id2 int, val varbinary(128), primary key(id1))",
 		fmt.Sprintf("create table %s.dst5(id1 int, val varbinary(128), primary key(id1))", vrepldb),
+		"create table srcCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))",
+		fmt.Sprintf("create table %s.dstCharset(id1 int, val varchar(128) character set utf8mb4 collate utf8mb4_bin, primary key(id1))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src1",
@@ -218,6 +278,8 @@ func TestPlayerFilters(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst4", vrepldb),
 		"drop table src5",
 		fmt.Sprintf("drop table %s.dst5", vrepldb),
+		"drop table srcCharset",
+		fmt.Sprintf("drop table %s.dstCharset", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -241,6 +303,9 @@ func TestPlayerFilters(t *testing.T) {
 		}, {
 			Match:  "dst5",
 			Filter: "select id1, val from src5 where val = 'abc'",
+		}, {
+			Match:  "dstCharset",
+			Filter: "select id1, concat(substr(_utf8mb4 val collate utf8mb4_bin,1,1),'abcxyz') val from srcCharset",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -486,6 +551,17 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "dst5",
 		data:  [][]string{{"1", "abc"}, {"4", "abc"}},
+	}, {
+		// test collation + filter
+		input: "insert into srcCharset values (1,'木元')",
+		output: []string{
+			"begin",
+			"insert into dstCharset(id1,val) values (1,concat(substr(_utf8mb4 '木元' collate utf8mb4_bin, 1, 1), 'abcxyz'))",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "dstCharset",
+		data:  [][]string{{"1", "木abcxyz"}},
 	}}
 
 	for _, tcase := range testcases {

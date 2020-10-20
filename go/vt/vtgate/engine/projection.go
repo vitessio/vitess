@@ -38,7 +38,10 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 	}
 
 	if wantfields {
-		p.addFields(result, bindVars)
+		err := p.addFields(result, bindVars)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
@@ -67,7 +70,10 @@ func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	}
 
 	if wantields {
-		p.addFields(result, bindVars)
+		err = p.addFields(result, bindVars)
+		if err != nil {
+			return err
+		}
 	}
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
@@ -90,18 +96,26 @@ func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
-	p.addFields(qr, bindVars)
+	err = p.addFields(qr, bindVars)
+	if err != nil {
+		return nil, err
+	}
 	return qr, nil
 }
 
-func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) {
+func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) error {
 	env := evalengine.ExpressionEnv{BindVars: bindVars}
 	for i, col := range p.Cols {
+		q, err := p.Exprs[i].Type(env)
+		if err != nil {
+			return err
+		}
 		qr.Fields = append(qr.Fields, &querypb.Field{
 			Name: col,
-			Type: p.Exprs[i].Type(env),
+			Type: q,
 		})
 	}
+	return nil
 }
 
 func (p *Projection) Inputs() []Primitive {

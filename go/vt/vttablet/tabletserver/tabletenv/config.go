@@ -117,7 +117,7 @@ func init() {
 	flag.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
 	flag.StringVar(&deprecatedPoolNamePrefix, "pool-name-prefix", "", "Deprecated")
 	flag.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
-	flag.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", true, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
+	flag.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
 	flag.BoolVar(&deprecatedAutocommit, "enable-autocommit", true, "This flag is deprecated. Autocommit is always allowed.")
 	flag.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	flag.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
@@ -142,6 +142,7 @@ func init() {
 
 	flag.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
+	flag.BoolVar(&currentConfig.EnableLagThrottler, "enable-lag-throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
 
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
@@ -182,16 +183,21 @@ func Init() {
 		currentConfig.Consolidator = Disable
 	}
 
+	if heartbeatInterval == 0 {
+		heartbeatInterval = time.Duration(defaultConfig.ReplicationTracker.HeartbeatIntervalSeconds*1000) * time.Millisecond
+	}
+	if heartbeatInterval > time.Second {
+		heartbeatInterval = time.Second
+	}
+	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
+
 	switch {
 	case enableHeartbeat:
 		currentConfig.ReplicationTracker.Mode = Heartbeat
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
 	case enableReplicationReporter:
 		currentConfig.ReplicationTracker.Mode = Polling
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	default:
 		currentConfig.ReplicationTracker.Mode = Disable
-		currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	}
 
 	currentConfig.Healthcheck.IntervalSeconds.Set(healthCheckInterval)
@@ -255,6 +261,8 @@ type TabletConfig struct {
 	EnableTxThrottler           bool     `json:"-"`
 	TxThrottlerConfig           string   `json:"-"`
 	TxThrottlerHealthCheckCells []string `json:"-"`
+
+	EnableLagThrottler bool `json:"-"`
 
 	TransactionLimitConfig `json:"-"`
 
@@ -418,7 +426,8 @@ var defaultConfig = TabletConfig{
 		UnhealthyThresholdSeconds: 7200,
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
-		Mode: Disable,
+		Mode:                     Disable,
+		HeartbeatIntervalSeconds: 0.25,
 	},
 	HotRowProtection: HotRowProtectionConfig{
 		Mode: Disable,
@@ -445,6 +454,8 @@ var defaultConfig = TabletConfig{
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
 	TxThrottlerHealthCheckCells: []string{},
+
+	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 

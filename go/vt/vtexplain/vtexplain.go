@@ -144,7 +144,7 @@ type Explain struct {
 }
 
 // Init sets up the fake execution environment
-func Init(vSchemaStr, sqlSchema string, opts *Options) error {
+func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) error {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
@@ -160,7 +160,7 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 		return fmt.Errorf("initTabletEnvironment: %v", err)
 	}
 
-	err = initVtgateExecutor(vSchemaStr, opts)
+	err = initVtgateExecutor(vSchemaStr, ksShardMapStr, opts)
 	if err != nil {
 		return fmt.Errorf("initVtgateExecutor: %v", err)
 	}
@@ -215,8 +215,8 @@ func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 			log.Infof("ignoring non-DDL statement: %s", sql)
 			continue
 		}
-		if ddl.Action != sqlparser.CreateStr {
-			log.Infof("ignoring %s table statement", ddl.Action)
+		if ddl.Action != sqlparser.CreateDDLAction {
+			log.Infof("ignoring %s table statement", ddl.Action.ToString())
 			continue
 		}
 		if ddl.TableSpec == nil && ddl.OptLike == nil {

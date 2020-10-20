@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM vitess/k8s AS k8s
+ARG VT_BASE_VER=latest
 
-FROM debian:stretch-slim
+FROM vitess/k8s:${VT_BASE_VER} AS k8s
+
+FROM debian:buster-slim
 
 RUN apt-get update && \
    apt-get upgrade -qq && \

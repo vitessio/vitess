@@ -73,6 +73,7 @@ type Configuration struct {
 	ListenSocket                               string // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	HTTPAdvertise                              string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
 	AgentsServerPort                           string // port orchestrator agents talk back to
+	Durability                                 string // The type of durability to enforce. Default is "semi_sync". Other values are dictated by registered plugins
 	MySQLTopologyUser                          string
 	MySQLTopologyPassword                      string
 	MySQLReplicaUser                           string // If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
@@ -252,6 +253,8 @@ type Configuration struct {
 	KVClusterMasterPrefix                      string            // Prefix to use for clusters' masters entries in KV stores (internal, consul, ZK), default: "mysql/master"
 	WebMessage                                 string            // If provided, will be shown on all web pages below the title bar
 	MaxConcurrentReplicaOperations             int               // Maximum number of concurrent operations on replicas
+	InstanceDBExecContextTimeoutSeconds        int               // Timeout on context used while calling ExecContext on instance database
+	LockShardTimeoutSeconds                    int               // Timeout on context used to lock shard. Should be a small value because we should fail-fast
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -272,10 +275,11 @@ func newConfiguration() *Configuration {
 		ListenSocket:                               "",
 		HTTPAdvertise:                              "",
 		AgentsServerPort:                           ":3001",
+		Durability:                                 "none",
 		StatusEndpoint:                             DefaultStatusAPIEndpoint,
 		StatusOUVerify:                             false,
-		BackendDB:                                  "mysql",
-		SQLite3DataFile:                            "",
+		BackendDB:                                  "sqlite",
+		SQLite3DataFile:                            "file::memory:?mode=memory&cache=shared",
 		SkipOrchestratorDatabaseUpdate:             false,
 		PanicIfDifferentDatabaseDeploy:             false,
 		RaftBind:                                   "127.0.0.1:10008",
@@ -313,7 +317,7 @@ func newConfiguration() *Configuration {
 		DiscoverySeeds:                             []string{},
 		InstanceBulkOperationsWaitTimeoutSeconds:   10,
 		HostnameResolveMethod:                      "default",
-		MySQLHostnameResolveMethod:                 "@@hostname",
+		MySQLHostnameResolveMethod:                 "none",
 		SkipBinlogServerUnresolveCheck:             true,
 		ExpiryHostnameResolvesMinutes:              60,
 		RejectHostnameResolvePattern:               "",
@@ -381,7 +385,7 @@ func newConfiguration() *Configuration {
 		RecoveryPeriodBlockMinutes:                 60,
 		RecoveryPeriodBlockSeconds:                 3600,
 		RecoveryIgnoreHostnameFilters:              []string{},
-		RecoverMasterClusterFilters:                []string{},
+		RecoverMasterClusterFilters:                []string{"*"},
 		RecoverIntermediateMasterClusterFilters:    []string{},
 		ProcessesShellCommand:                      "bash",
 		OnFailureDetectionProcesses:                []string{},
@@ -402,7 +406,7 @@ func newConfiguration() *Configuration {
 		MasterFailoverDetachSlaveMasterHost:        false,
 		FailMasterPromotionOnLagMinutes:            0,
 		FailMasterPromotionIfSQLThreadNotUpToDate:  false,
-		DelayMasterPromotionIfSQLThreadNotUpToDate: false,
+		DelayMasterPromotionIfSQLThreadNotUpToDate: true,
 		PostponeSlaveRecoveryOnLagMinutes:          0,
 		OSCIgnoreHostnameFilters:                   []string{},
 		GraphiteAddr:                               "",
@@ -419,6 +423,8 @@ func newConfiguration() *Configuration {
 		KVClusterMasterPrefix:                      "mysql/master",
 		WebMessage:                                 "",
 		MaxConcurrentReplicaOperations:             5,
+		InstanceDBExecContextTimeoutSeconds:        30,
+		LockShardTimeoutSeconds:                    1,
 	}
 }
 

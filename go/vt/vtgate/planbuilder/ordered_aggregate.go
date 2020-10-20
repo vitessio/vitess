@@ -236,7 +236,7 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (oa *orderedAggregate) PushLock(lock string) error {
+func (oa *orderedAggregate) PushLock(lock sqlparser.Lock) error {
 	return oa.input.PushLock(lock)
 }
 
@@ -477,12 +477,12 @@ func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, err
 		if err != nil {
 			return nil, fmt.Errorf("generating order by clause: %v", err)
 		}
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscOrder})
 	}
 
 	// Append the distinct aggregate if any.
 	if oa.extraDistinct != nil {
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscScr})
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscOrder})
 	}
 
 	// Push down the order by.
@@ -506,8 +506,8 @@ func (oa *orderedAggregate) SetUpperLimit(count sqlparser.Expr) {
 }
 
 // PushMisc satisfies the builder interface.
-func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
-	oa.input.PushMisc(sel)
+func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) error {
+	return oa.input.PushMisc(sel)
 }
 
 // Wireup satisfies the builder interface.

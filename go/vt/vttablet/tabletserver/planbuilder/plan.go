@@ -65,6 +65,8 @@ const (
 	PlanRelease
 	PlanSRollback
 	PlanShowTables
+	// PlanLoad is for Load data statements
+	PlanLoad
 	NumPlans
 )
 
@@ -183,15 +185,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		// We have to use the original query at the time of execution.
 		plan = &Plan{PlanID: PlanDDL}
 	case *sqlparser.Show:
-		if stmt.Type == sqlparser.KeywordString(sqlparser.TABLES) {
-			analyzeShowTables(stmt, dbName)
-			plan = &Plan{
-				PlanID:    PlanShowTables,
-				FullQuery: GenerateFullQuery(stmt),
-			}
-		} else {
-			plan, err = &Plan{PlanID: PlanOtherRead}, nil
-		}
+		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, *sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
@@ -202,6 +196,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = &Plan{PlanID: PlanRelease}, nil
 	case *sqlparser.SRollback:
 		plan, err = &Plan{PlanID: PlanSRollback}, nil
+	case *sqlparser.Load:
+		plan, err = &Plan{PlanID: PlanLoad}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
@@ -234,7 +230,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
-		if stmt.Lock != "" {
+		if stmt.Lock != sqlparser.NoLock {
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		plan.Table = lookupTable(stmt.From, tables)

@@ -451,7 +451,6 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 		{querypb.Type_VARCHAR, "some string"},
 		{querypb.Type_CHAR, "some string"},
 		{querypb.Type_BIT, "some string"},
-		{querypb.Type_ENUM, "some string"},
 		{querypb.Type_SET, "some string"},
 		{querypb.Type_GEOMETRY, "some string"},
 		{querypb.Type_JSON, "some string"},
@@ -504,6 +503,10 @@ type loggingVCursor struct {
 	errors  []error
 	index   int
 	log     []string
+}
+
+func (vc *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_PRE
 }
 
 func (vc *loggingVCursor) InTransactionAndIsDML() bool {
