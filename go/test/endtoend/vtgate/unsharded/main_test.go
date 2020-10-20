@@ -123,15 +123,21 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 
 	defer exec(t, conn, `delete from t1`)
 	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc')`)
-
-	exec(t, conn, `select * from t1 into outfile 'x.txt'`)
-	execAssertError(t, conn, `load data infile 'x.txt' into table t1`, "ERROR 1062 (23000): Duplicate entry '300' for key 'PRIMARY'")
+	res := exec(t, conn, `select @@secure_file_priv;`)
+	directory := res.Rows[0][0].ToString()
+	query := `select * from t1 into outfile '` + directory + `x.txt'`
+	exec(t, conn, query)
+	query = `load data infile '` + directory + `x.txt' into table t1`
+	execAssertError(t, conn, query, "ERROR 1062 (23000): Duplicate entry '300' for key 'PRIMARY'")
 	exec(t, conn, `delete from t1`)
-	exec(t, conn, `load data infile 'x.txt' into table t1`)
+	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
-	exec(t, conn, `select * from t1 into dumpfile 'x1.txt'`)
-	exec(t, conn, `select * from t1 into outfile 'x2.txt' Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`)
-	exec(t, conn, `load data infile 'x.txt' into replace table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`)
+	query = `select * from t1 into dumpfile '` + directory + `x1.txt'`
+	exec(t, conn, query)
+	query = `select * from t1 into outfile '` + directory + `x2.txt' Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
+	exec(t, conn, query)
+	query = `load data infile '` + directory + `x.txt' into replace table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
+	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
