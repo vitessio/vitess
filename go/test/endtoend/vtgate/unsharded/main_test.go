@@ -70,7 +70,7 @@ CREATE TABLE t1 (
                     "name": "c4",
                     "type": "VARCHAR"
                 }
-            ],
+            ]
         }
     }
 }
