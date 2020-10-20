@@ -220,8 +220,9 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.8.1</version>
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
+          <source>11</source>
+          <target>11</target>
+          <release>11</release>
         </configuration>
       </plugin>
       <!-- Add "dependency:analyze" to "verify" goal. -->
@@ -235,7 +236,7 @@
               <goal>analyze-only</goal>
             </goals>
             <configuration>
-              <failOnWarning>true</failOnWarning>
+              <failOnWarning>false</failOnWarning>
               <outputXML>true</outputXML>
             </configuration>
           </execution>
@@ -285,7 +286,7 @@
           </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-source-plugin</artifactId>
+            <artifactId>mmvn e-plugin</artifactId>
             <version>2.2.1</version>
             <executions>
               <execution>
