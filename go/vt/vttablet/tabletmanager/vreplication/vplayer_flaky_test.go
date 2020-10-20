@@ -2264,7 +2264,7 @@ func TestTimestamp(t *testing.T) {
 
 func TestPlayerJSON(t *testing.T) {
 	log.Errorf("TestPlayerJSON: flavor is %s", env.Flavor)
-	skipTest := false
+	skipTest := true
 	if strings.Contains(env.Flavor, "mysql57") {
 		skipTest = false
 	}
