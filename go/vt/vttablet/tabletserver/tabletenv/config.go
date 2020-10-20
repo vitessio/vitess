@@ -119,6 +119,7 @@ func init() {
 	flag.BoolVar(&currentConfig.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", defaultConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
 	flag.StringVar(&currentConfig.TableACLExemptACL, "queryserver-config-acl-exempt-acl", defaultConfig.TableACLExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	flag.BoolVar(&currentConfig.TerseErrors, "queryserver-config-terse-errors", defaultConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
+	flag.IntVar(&currentConfig.TruncateErrorLen, "queryserver-config-truncate-error-len", defaultConfig.TruncateErrorLen, "truncate errors if they are above this value (0 means do not truncate)")
 	flag.StringVar(&deprecatedPoolNamePrefix, "pool-name-prefix", "", "Deprecated")
 	flag.BoolVar(&currentConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.")
 	flag.BoolVar(&currentConfig.TrackSchemaVersions, "track_schema_versions", false, "When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position")
@@ -254,6 +255,8 @@ type TabletConfig struct {
 	WatchReplication            bool    `json:"watchReplication,omitempty"`
 	TrackSchemaVersions         bool    `json:"trackSchemaVersions,omitempty"`
 	TerseErrors                 bool    `json:"terseErrors,omitempty"`
+	TruncateErrorLen            int     `json:"truncateErrorLen,omitempty"`
+
 	MessagePostponeParallelism  int     `json:"messagePostponeParallelism,omitempty"`
 	CacheResultFields           bool    `json:"cacheResultFields,omitempty"`
 

@@ -1741,6 +1741,28 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	}
 }
 
+func TestTruncateErrorLen(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	config.TruncateErrorLen = 8
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
+	tl := newTestLogger()
+	defer tl.Close()
+	err := tsv.convertAndLogError(
+		ctx,
+		"select 42 from dual",
+		nil,
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Looooooooooooooong error"),
+		nil,
+	)
+	want := "Looooooo"
+	require.Error(t, err)
+	assert.Equal(t, err.Error(), want)
+	want = "Sql: \"select 42 from dual\", BindVars: {}"
+	if !strings.Contains(tl.getLog(0), want) {
+		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
+	}
+}
+
 func TestTerseErrorsBindVars(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.TerseErrors = true
