@@ -172,6 +172,11 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 	return conn.Exec(ctx, query, math.MaxInt32, true)
 }
 
+// TabletAliasString returns tablet alias as string (duh)
+func (e *Executor) TabletAliasString() string {
+	return topoproto.TabletAliasString(e.tabletAlias)
+}
+
 func (e *Executor) initSchema(ctx context.Context) error {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
@@ -788,14 +793,16 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		return nil, ErrMigrationNotFound
 	}
 	onlineDDL = &schema.OnlineDDL{
-		Keyspace: row["keyspace"].ToString(),
-		Table:    row["mysql_table"].ToString(),
-		Schema:   row["mysql_schema"].ToString(),
-		SQL:      row["migration_statement"].ToString(),
-		UUID:     row["migration_uuid"].ToString(),
-		Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
-		Options:  row["options"].ToString(),
-		Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Keyspace:    row["keyspace"].ToString(),
+		Table:       row["mysql_table"].ToString(),
+		Schema:      row["mysql_schema"].ToString(),
+		SQL:         row["migration_statement"].ToString(),
+		UUID:        row["migration_uuid"].ToString(),
+		Strategy:    sqlparser.DDLStrategy(row["strategy"].ToString()),
+		Options:     row["options"].ToString(),
+		Status:      schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Retries:     row.AsInt64("retries", 0),
+		TabletAlias: row["tablet"].ToString(),
 	}
 	return onlineDDL, nil
 }
@@ -1089,6 +1096,12 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 				return err
 			}
 		}
+		if onlineDDL.TabletAlias != e.TabletAliasString() {
+			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. master failover)
+			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
+				return err
+			}
+		}
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
@@ -1246,6 +1259,22 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 	return err
 }
 
+// updateTabletFailure marks a given migration as "tablet_failed"
+func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateTabletFailure, "_vt",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_uuid": sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
 	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStatus, "_vt",
 		":migration_status",
@@ -1266,8 +1295,12 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, "_vt", whereExpr)
-	result, err = e.execQuery(ctx, parsed.Query)
+	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, "_vt", ":tablet", whereExpr)
+	bindVars := map[string]*querypb.BindVariable{
+		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	result, err = e.execQuery(ctx, bound)
 	return result, err
 }
 
@@ -1337,7 +1370,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		// We can fill them in.
 		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
 		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
-		vx.ReplaceInsertColumnVal("tablet", vx.ToStringVal(topoproto.TabletAliasString(e.tabletAlias)))
+		vx.ReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
