@@ -78,7 +78,7 @@
     </dependency>
 	<dependency>
 	  <groupId>org.powermock</groupId>
-	  <artifactId>powermock-api-mockito2-common</artifactId>
+	  <artifactId>powermock-api-mockito-common</artifactId>
 	  <version>1.7.4</version>
 	  <scope>test</scope>
 	</dependency>
