@@ -515,6 +515,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vtgate_unsharded": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/unsharded"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vtgate_vschema": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/vschema"],
