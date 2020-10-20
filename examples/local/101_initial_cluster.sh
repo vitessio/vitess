@@ -37,7 +37,7 @@ for i in 100 101 102; do
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-./scripts/orchestrator-up.sh
+./scripts/vtorc-up.sh
 
 # set one of the replicas to master
 vtctlclient InitShardMaster -force commerce/0 zone1-100
