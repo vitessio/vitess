@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
@@ -119,8 +120,9 @@ type Executor struct {
 	migrationRunning  int64
 	lastMigrationUUID string
 
-	ticks  *timer.Timer
-	isOpen bool
+	ticks             *timer.Timer
+	isOpen            bool
+	schemaInitialized bool
 }
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
@@ -167,6 +169,13 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 }
 
 func (e *Executor) initSchema(ctx context.Context) error {
+	e.initMutex.Lock()
+	defer e.initMutex.Unlock()
+
+	if e.schemaInitialized {
+		return nil
+	}
+
 	defer e.env.LogError()
 
 	conn, err := e.pool.Get(ctx)
@@ -174,9 +183,18 @@ func (e *Executor) initSchema(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
-	parsed := sqlparser.BuildParsedQuery(sqlValidationQuery, "_vt")
-	_, err = withDDL.Exec(ctx, parsed.Query, conn.Exec)
-	return err
+
+	for _, ddl := range applyDDL {
+		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
+		if mysql.IsSchemaApplyError(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+	}
+	e.schemaInitialized = true
+	return nil
 }
 
 // InitDBConfig initializes keysapce
@@ -194,7 +212,6 @@ func (e *Executor) Open() error {
 		return nil
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
-	e.initSchema(context.Background())
 	e.ticks.Start(e.onMigrationCheckTick)
 
 	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
@@ -1140,6 +1157,10 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	ctx := context.Background()
 
+	if err := e.initSchema(ctx); err != nil {
+		log.Error(err)
+		return
+	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
 		log.Error(err)
 	}
