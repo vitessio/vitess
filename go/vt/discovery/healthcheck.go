@@ -386,8 +386,8 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tabletAlias)
 		return
 	}
-	// calling this will end the context associated with th.checkConn
-	// which will call finalizeConn, which will close the connection
+	// Calling this will end the context associated with th.checkConn,
+	// which will call finalizeConn, which will close the connection.
 	th.cancelFunc()
 	delete(hc.healthByAlias, tabletAlias)
 	// delete from map by keyspace.shard.tabletType
@@ -442,14 +442,14 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 		}
 	}
 	if !trivialNonMasterUpdate {
-		// we re-sort the healthy tablet list whenever we get a health update for tablets we can route to
-		// tablets from other cells for non-master targets should not trigger a re-sort
-		// they should also be excluded from healthy list
+		// We re-sort the healthy tablet list whenever we get a health update for tablets we can route to.
+		// Tablets from other cells for non-master targets should not trigger a re-sort;
+		// they should also be excluded from healthy list.
 		if shr.Target.TabletType != topodata.TabletType_MASTER && hc.isIncluded(shr.Target.TabletType, shr.TabletAlias) {
 			all := hc.healthData[targetKey]
 			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
-				// only tablets in same cell / cellAlias are included in healthy list
+				// Only tablets in same cell / cellAlias are included in healthy list.
 				if hc.isIncluded(s.Tablet.Type, s.Tablet.Alias) {
 					allArray = append(allArray, s)
 				}
@@ -461,7 +461,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 			all := hc.healthData[oldTargetKey]
 			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
-				// only tablets in same cell / cellAlias are included in healthy list
+				// Only tablets in same cell / cellAlias are included in healthy list.
 				if hc.isIncluded(s.Tablet.Type, s.Tablet.Alias) {
 					allArray = append(allArray, s)
 				}
