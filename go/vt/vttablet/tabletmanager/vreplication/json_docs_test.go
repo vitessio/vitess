@@ -1,5 +1,7 @@
 package vreplication
 
+import "fmt"
+
 var jsonDoc1 = `
     {
         "_id": "5f882c85c74593afb7895a16",
@@ -21,20 +23,41 @@ var jsonDoc1 = `
     }
 `
 
-func repeatJSON(jsonDoc string, times int) string {
-	jsonDocs := "["
-	for times > 0 {
-		times--
-		jsonDocs += jsonDoc1
-		if times != 0 {
-			jsonDocs += ","
+type largeDocCollectionType string
+
+const (
+	largeJSONArrayCollection  largeDocCollectionType = "array"
+	largeJSONObjectCollection largeDocCollectionType = "object"
+)
+
+func repeatJSON(jsonDoc string, times int, typ largeDocCollectionType) string {
+	var jsonDocs string
+	switch typ {
+	case largeJSONArrayCollection:
+		jsonDocs = "["
+		for times > 0 {
+			times--
+			jsonDocs += jsonDoc1
+			if times != 0 {
+				jsonDocs += ","
+			}
 		}
+		jsonDocs += "]"
+	case largeJSONObjectCollection:
+		jsonDocs = "{"
+		for times > 0 {
+			times--
+			jsonDocs += fmt.Sprintf("\"%d\": %s", times, jsonDoc1)
+			if times != 0 {
+				jsonDocs += ","
+			}
+		}
+		jsonDocs += "}"
+
 	}
-	jsonDocs += "]"
 	return jsonDocs
 }
 
-var jsonLarge = repeatJSON(jsonDoc1, 140)
 var jsonDoc2 = `
 [
     {

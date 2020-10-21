@@ -2262,11 +2262,19 @@ func TestTimestamp(t *testing.T) {
 	expectData(t, "t1", [][]string{{"1", want, want}})
 }
 
-func TestPlayerJSON(t *testing.T) {
+// TestPlayerJSONDocs validates more complex and 'large' json docs. It only validates that the data in the table
+// TestPlayerTypes, above, also verifies the sql queries applied on the target. It is too painful to test the applied
+// sql for larger jsons because of the need to escape special characters, so we check larger jsons separately
+// in this test since we just need to do check for string equality
+func TestPlayerJSONDocs(t *testing.T) {
 	log.Errorf("TestPlayerJSON: flavor is %s", env.Flavor)
 	skipTest := true
-	if strings.Contains(env.Flavor, "mysql57") {
-		skipTest = false
+	flavors := []string{"mysql56", "mysql57"}
+	for _, flavor := range flavors {
+		if strings.EqualFold(env.Flavor, flavor) {
+			skipTest = false
+			break
+		}
 	}
 	if skipTest {
 		return
@@ -2319,7 +2327,8 @@ func TestPlayerJSON(t *testing.T) {
 	}
 	addTestCase("singleDoc", jsonDoc1)
 	addTestCase("multipleDocs", jsonDoc2)
-	addTestCase("largeDoc", jsonLarge)
+	addTestCase("largeArrayDoc", repeatJSON(jsonDoc1, 140, largeJSONArrayCollection))
+	addTestCase("largeObjectDoc", repeatJSON(jsonDoc1, 140, largeJSONObjectCollection))
 	id = 0
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
