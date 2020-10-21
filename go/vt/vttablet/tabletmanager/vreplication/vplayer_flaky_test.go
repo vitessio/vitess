@@ -2269,7 +2269,8 @@ func TestTimestamp(t *testing.T) {
 func TestPlayerJSONDocs(t *testing.T) {
 	log.Errorf("TestPlayerJSON: flavor is %s", env.Flavor)
 	skipTest := true
-	flavors := []string{"mysql56", "mysql57"}
+	flavors := []string{"mysql80", "mysql57"}
+	//flavors = append(flavors, "mysql56") // uncomment for local testing, in CI it fails on percona56
 	for _, flavor := range flavors {
 		if strings.EqualFold(env.Flavor, flavor) {
 			skipTest = false
