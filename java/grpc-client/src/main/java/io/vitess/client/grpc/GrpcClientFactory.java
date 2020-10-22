@@ -19,6 +19,8 @@ package io.vitess.client.grpc;
 import io.grpc.CallCredentials;
 import io.grpc.ClientInterceptor;
 import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancerProvider;
+import io.grpc.LoadBalancerRegistry;
 import io.grpc.NameResolver;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
@@ -55,7 +57,7 @@ public class GrpcClientFactory implements RpcClientFactory {
   private RetryingInterceptorConfig config;
   private final boolean useTracing;
   private CallCredentials callCredentials;
-  private LoadBalancer.Factory loadBalancerFactory;
+  private String loadBalancerPolicy;
   private NameResolver.Factory nameResolverFactory;
 
   public GrpcClientFactory() {
@@ -73,7 +75,11 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   public GrpcClientFactory setLoadBalancerFactory(LoadBalancer.Factory value) {
-    loadBalancerFactory = value;
+    VitessLoadBalancer provider = new VitessLoadBalancer(value);
+    LoadBalancerRegistry registry = LoadBalancerRegistry.getDefaultRegistry();
+    registry.deregister(provider);
+    registry.register(provider);
+    loadBalancerPolicy = "vitess_lb";
     return this;
   }
 
@@ -96,8 +102,8 @@ public class GrpcClientFactory implements RpcClientFactory {
     NettyChannelBuilder channel = channelBuilder(target)
         .negotiationType(NegotiationType.PLAINTEXT)
         .intercept(interceptors);
-    if (loadBalancerFactory != null) {
-      channel.loadBalancerFactory(loadBalancerFactory);
+    if (loadBalancerPolicy != null) {
+      channel.defaultLoadBalancingPolicy(loadBalancerPolicy);
     }
     if (nameResolverFactory != null) {
       channel.nameResolverFactory(nameResolverFactory);
@@ -416,5 +422,36 @@ public class GrpcClientFactory implements RpcClientFactory {
       return certificateChain;
     }
   }
+
+  private class VitessLoadBalancer extends LoadBalancerProvider {
+
+    private LoadBalancer.Factory base;
+
+    public VitessLoadBalancer(LoadBalancer.Factory base) {
+      base = base;
+    }
+
+    @Override
+    public LoadBalancer newLoadBalancer(LoadBalancer.Helper helper) {
+      return base.newLoadBalancer(helper);
+    }
+
+    @Override
+    public boolean isAvailable() {
+      return true;
+    }
+
+    @Override
+    public int getPriority() {
+      return 10;
+    }
+
+    @Override
+    public String getPolicyName() {
+      return "vitess_lb";
+    }
+
+  }
+
 
 }
