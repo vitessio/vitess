@@ -146,21 +146,21 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result { //nolint:golint,unused
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	return qr
 }
 
-func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString string) {
+func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString string) { //nolint:golint,unused
 	t.Helper()
 	_, err := conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errorString)
 }
 
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) { //nolint:golint,unused
 	t.Helper()
 	qr := exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)
