@@ -512,7 +512,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 
 	// try the mysqld shutdown hook, if any
 	h := hook.NewSimpleHook("mysqld_shutdown")
-	hr := h.Execute()
+	hr := h.ExecuteContext(ctx)
 	switch hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
