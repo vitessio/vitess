@@ -192,6 +192,7 @@ func (e *Executor) initSchema(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
+
 	for _, ddl := range applyDDL {
 		_, err := conn.Exec(ctx, ddl, math.MaxInt32, false)
 		if mysql.IsSchemaApplyError(err) {
