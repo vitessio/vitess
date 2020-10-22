@@ -952,7 +952,6 @@ func TestRowReplicationTypes(t *testing.T) {
 	for _, tcase := range testcases {
 		insert += fmt.Sprintf(", %v=%v", tcase.name, tcase.createValue)
 	}
-	t.Logf("First row insert is: %v", insert)
 
 	result, err := dConn.ExecuteFetch(insert, 0, false)
 	if err != nil {

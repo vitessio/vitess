@@ -19,7 +19,6 @@ package mysql
 import (
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"math"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -28,6 +27,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+//region debug-only
+//TODO remove once the json refactor is tested live
 var jsonDebug = false
 
 func jlog(tpl string, vals ...interface{}) {
@@ -51,10 +52,11 @@ func printASCIIBytes(data []byte) {
 		}
 	}
 	fmt.Printf("]\n")
-	ioutil.WriteFile("largearray.bin", data, 0x777)
 }
 
-// provides the single API function to convert json from binary format used in binlogs to a string representation
+//endregion
+
+// provides the single API function, used to convert json from binary format used in binlogs to a string representation
 func getJSONValue(data []byte) (string, error) {
 	var ast *ajson.Node
 	var err error
@@ -91,7 +93,7 @@ type BinlogJSON struct {
 func (jh *BinlogJSON) parse(data []byte) (node *ajson.Node, newPos int, err error) {
 	var pos int
 	typ := data[0]
-	fmt.Printf("Top level object is type %s\n", jsonDataTypeToString(uint(typ)))
+	jlog("Top level object is type %s\n", jsonDataTypeToString(uint(typ)))
 	pos++
 	return jh.getNode(jsonDataType(typ), data, pos)
 }
@@ -117,6 +119,7 @@ func (jh *BinlogJSON) getNode(typ jsonDataType, data []byte, pos int) (node *ajs
 // large object => doc size > 64K, you get pointers instead of inline values
 type jsonDataType byte
 
+// type mapping as defined by the mysql json representation
 const (
 	jsonSmallObject = 0
 	jsonLargeObject = 1
@@ -172,6 +175,7 @@ func jsonDataTypeToString(typ uint) string {
 // literals in the binary json format can be one of three types: null, true, false
 type jsonDataLiteral byte
 
+// this is how mysql maps the three literals (null, true and false) in the binlog
 const (
 	jsonNullLiteral  = '\x00'
 	jsonTrueLiteral  = '\x01'
@@ -200,12 +204,13 @@ var inlineTypes = map[jsonDataType]bool{
 
 //region util funcs
 
-// readOffsetOrSize returns either the offset or size for a scalar data type, depending on the type of the
-// containing object. JSON documents stored are considered "large" if the size of the stored json document is
+// readInt returns either 32-bit or a 16-bit int from the passed buffer. Which one it is, depends on whether the document is "large" or not
+// JSON documents stored are considered "large" if the size of the stored json document is
 // more than 64K bytes. For a large document all types which have their inlineTypes entry as true
 // are inlined. Others only store the offset in the document
+// This int is either an offset into the raw data, count of elements or size of the represented data structure
 // (This design decision allows a fixed number of bytes to be used for representing object keys and array entries)
-func readOffsetOrSize(data []byte, pos int, large bool) (int, int) {
+func readInt(data []byte, pos int, large bool) (int, int) {
 	if large {
 		return int(data[pos]) +
 				int(data[pos+1])<<8 +
@@ -322,7 +327,7 @@ func newIntPlugin() *intPlugin {
 
 //endregion
 
-//region literal
+//region literal plugin
 
 func init() {
 	newLiteralPlugin()
@@ -361,9 +366,9 @@ func newLiteralPlugin() *literalPlugin {
 	return lh
 }
 
-//endregion plugin
+//endregion
 
-//region opaque
+//region opaque plugin
 
 func init() {
 	newOpaquePlugin()
@@ -443,9 +448,9 @@ func newOpaquePlugin() *opaquePlugin {
 	return oh
 }
 
-//endregion plugin
+//endregion
 
-//region string
+//region string plugin
 
 func init() {
 	newStringPlugin()
@@ -475,9 +480,9 @@ func newStringPlugin() *stringPlugin {
 	return sh
 }
 
-//endregion plugin
+//endregion
 
-//region array
+//region array plugin
 
 func init() {
 	newArrayPlugin()
@@ -495,9 +500,9 @@ func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajs
 	var elem *ajson.Node
 	var elementCount, offset, size int
 	large := typ == jsonLargeArray
-	elementCount, pos = readOffsetOrSize(data, pos, large)
+	elementCount, pos = readInt(data, pos, large)
 	jlog("Array(%t): elem count: %d\n", large, elementCount)
-	size, pos = readOffsetOrSize(data, pos, large)
+	size, pos = readInt(data, pos, large)
 	jlog("Array(%t): elem count: %d, size:%d\n", large, elementCount, size)
 	for i := 0; i < elementCount; i++ {
 		typ = jsonDataType(data[pos])
@@ -508,7 +513,7 @@ func (ah arrayPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *ajs
 				return nil, 0, err
 			}
 		} else {
-			offset, pos = readOffsetOrSize(data, pos, large)
+			offset, pos = readInt(data, pos, large)
 			newData := data[offset:]
 			elem, _, err = binlogJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
 			if err != nil {
@@ -534,9 +539,9 @@ func newArrayPlugin() *arrayPlugin {
 	return ah
 }
 
-//endregion plugin
+//endregion
 
-//region object
+//region object plugin
 
 func init() {
 	newObjectPlugin()
@@ -555,15 +560,15 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 	var elem *ajson.Node
 	var elementCount, offset, size int
 	var large = typ == jsonLargeObject
-	elementCount, pos = readOffsetOrSize(data, pos, large)
+	elementCount, pos = readInt(data, pos, large)
 	jlog("Object: elem count: %d\n", elementCount)
-	size, pos = readOffsetOrSize(data, pos, large)
+	size, pos = readInt(data, pos, large)
 	jlog("Object: elem count: %d, size %d\n", elementCount, size)
 	keys := make([]string, elementCount)
 	for i := 0; i < elementCount; i++ {
 		var keyOffset, keyLength int
-		keyOffset, pos = readOffsetOrSize(data, pos, large)
-		keyLength, pos = readOffsetOrSize(data, pos, false) // always 16
+		keyOffset, pos = readInt(data, pos, large)
+		keyLength, pos = readInt(data, pos, false) // keyLength is always a 16-bit int
 		keys[i] = string(data[keyOffset+1 : keyOffset+keyLength+1])
 	}
 
@@ -576,7 +581,7 @@ func (oh objectPlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 				return nil, 0, err
 			}
 		} else {
-			offset, pos = readOffsetOrSize(data, pos, large)
+			offset, pos = readInt(data, pos, large)
 			newData := data[offset:]
 			elem, _, err = binlogJSON.getNode(typ, newData, 1) //newPos ignored because this is an offset into the "extra" section of the buffer
 			if err != nil {
@@ -603,7 +608,7 @@ func newObjectPlugin() *objectPlugin {
 	return oh
 }
 
-//endregion plugin
+//endregion
 
 /*
 
