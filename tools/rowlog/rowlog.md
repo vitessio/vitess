@@ -1,4 +1,4 @@
-###rowlog
+#rowlog
 
 `rowlog` is a diagnostic tool for researching issues reported by users in vreplication workflows. These are usually
 reported as data mismatches or loss and are not reproducible because of the huge amounts of data involved and 
