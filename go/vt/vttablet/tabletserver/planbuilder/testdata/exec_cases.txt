@@ -817,3 +817,10 @@ options:PassthroughDMLs
   "PlanID": "OtherRead",
   "TableName": ""
 }
+
+# load data
+"load data infile 'x.txt' into table a"
+{
+    "PlanID":"Load",
+    "TableName":""
+}
