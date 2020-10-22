@@ -111,6 +111,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestSelectIntoAndLoadFrom(t *testing.T) {
+	// Test is skipped because it requires secure-file-priv variable to be set to not NULL or empty.
+	t.Skip()
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
@@ -127,16 +129,19 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	directory := res.Rows[0][0].ToString()
 	query := `select * from t1 into outfile '` + directory + `x.txt'`
 	exec(t, conn, query)
+	defer os.Remove(directory + `x.txt`)
 	query = `load data infile '` + directory + `x.txt' into table t1`
-	execAssertError(t, conn, query, "ERROR 1062 (23000): Duplicate entry '300' for key 'PRIMARY'")
+	execAssertError(t, conn, query, "Duplicate entry '300' for key 'PRIMARY'")
 	exec(t, conn, `delete from t1`)
 	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 	query = `select * from t1 into dumpfile '` + directory + `x1.txt'`
 	exec(t, conn, query)
+	defer os.Remove(directory + `x1.txt`)
 	query = `select * from t1 into outfile '` + directory + `x2.txt' Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
 	exec(t, conn, query)
-	query = `load data infile '` + directory + `x.txt' into replace table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
+	defer os.Remove(directory + `x2.txt`)
+	query = `load data infile '` + directory + `x2.txt' replace into table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
 	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }

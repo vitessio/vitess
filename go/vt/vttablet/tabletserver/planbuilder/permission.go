@@ -55,7 +55,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		}
 	case *sqlparser.OtherAdmin:
 		// no op
-	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback:
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Load:
 		// no op
 	case *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback:
 		// no op
