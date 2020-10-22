@@ -353,8 +353,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	switch tsv.sm.Target().TabletType {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+	if tsv.IsServingType() {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -365,8 +364,18 @@ func (tsv *TabletServer) IsHealthy() error {
 			nil,
 		)
 		return err
+	}
+	return nil
+}
+
+// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
+// should not be serving in it's healthy state.
+func (tsv *TabletServer) IsServingType() bool {
+	switch tsv.sm.Target().TabletType {
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+		return true
 	default:
-		return nil
+		return false
 	}
 }
 
@@ -1464,7 +1473,7 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 			acl.SendError(w, err)
 			return
 		}
-		if !tsv.sm.IsServing() {
+		if tsv.sm.Target().TabletType != topodatapb.TabletType_SPARE && !tsv.sm.IsServing() {
 			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 			return
 		}
