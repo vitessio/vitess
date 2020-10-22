@@ -18,6 +18,7 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"flag"
 	"io/ioutil"
 
@@ -173,11 +174,19 @@ func extractOnlineDDL() error {
 	}
 
 	if binaryFileName, isOverride := onlineddl.GhostBinaryFileName(); !isOverride {
+		// there is no path override for gh-ost. We're expected to auto-extract gh-ost.
 		ghostBinary, err := riceBox.Bytes("gh-ost")
 		if err != nil {
 			return err
 		}
 		if err := ioutil.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
+			// One possibility of failure is that gh-ost is up and running. In that case,
+			// let's pause and check if running h-ost is exact same binary as the one we wish to extract.
+			foundBytes, _ := ioutil.ReadFile(binaryFileName)
+			if bytes.Equal(ghostBinary, foundBytes) {
+				// OK, it's the same binary, there is no need to extract the file anyway
+				return nil
+			}
 			return err
 		}
 	}
