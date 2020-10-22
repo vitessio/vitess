@@ -356,6 +356,14 @@ create table t7_xxhash_idx(
     }
   }
 }`
+	routingRules = `
+{"rules": [
+  {
+    "from_table": "t1000",
+	"to_tables": ["t1"]
+  }
+]}
+`
 )
 
 func TestMain(m *testing.M) {
@@ -379,6 +387,11 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.VtctlclientProcess.ApplyRoutingRules(routingRules)
 		if err != nil {
 			return 1
 		}
