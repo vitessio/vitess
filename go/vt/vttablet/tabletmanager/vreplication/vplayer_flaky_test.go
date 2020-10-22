@@ -2328,6 +2328,7 @@ func TestPlayerJSONDocs(t *testing.T) {
 	}
 	addTestCase("singleDoc", jsonDoc1)
 	addTestCase("multipleDocs", jsonDoc2)
+	// the json doc is repeated multiple times to hit the 64K threshold: 140 is got by trial and error
 	addTestCase("largeArrayDoc", repeatJSON(jsonDoc1, 140, largeJSONArrayCollection))
 	addTestCase("largeObjectDoc", repeatJSON(jsonDoc1, 140, largeJSONObjectCollection))
 	id = 0

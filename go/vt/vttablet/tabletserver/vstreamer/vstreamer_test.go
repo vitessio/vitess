@@ -1439,12 +1439,11 @@ func TestTypes(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	//t.Skip("This test is disabled because every flavor of mysql has a different behavior. We should test locally when json functionality is modified")
 	log.Errorf("TestJSON: flavor is %s", env.Flavor)
+	// JSON is supported only after mysql57.
 	if !strings.Contains(env.Flavor, "mysql57") {
 		return
 	}
-	// JSON is supported only after mysql57.
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
