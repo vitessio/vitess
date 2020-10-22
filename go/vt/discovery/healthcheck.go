@@ -442,24 +442,27 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 		}
 	}
 	if !trivialNonMasterUpdate {
-		if shr.Target.TabletType != topodata.TabletType_MASTER {
+		// we re-sort the healthy tablet list whenever we get a health update for tablets we can route to
+		// tablets from other cells for non-master targets should not trigger a re-sort
+		// they should also be excluded from healthy list
+		if shr.Target.TabletType != topodata.TabletType_MASTER && hc.isIncluded(shr.Target.TabletType, shr.TabletAlias) {
 			all := hc.healthData[targetKey]
 			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
 				// only tablets in same cell / cellAlias are included in healthy list
-				if hc.isIncluded(shr) {
+				if hc.isIncluded(s.Tablet.Type, s.Tablet.Alias) {
 					allArray = append(allArray, s)
 				}
 			}
 			hc.healthy[targetKey] = FilterStatsByReplicationLag(allArray)
 		}
-		if targetChanged && currentTarget.TabletType != topodata.TabletType_MASTER { // also recompute old target's healthy list
+		if targetChanged && currentTarget.TabletType != topodata.TabletType_MASTER && hc.isIncluded(shr.Target.TabletType, shr.TabletAlias) { // also recompute old target's healthy list
 			oldTargetKey := hc.keyFromTarget(currentTarget)
 			all := hc.healthData[oldTargetKey]
 			allArray := make([]*TabletHealth, 0, len(all))
 			for _, s := range all {
 				// only tablets in same cell / cellAlias are included in healthy list
-				if hc.isIncluded(shr) {
+				if hc.isIncluded(s.Tablet.Type, s.Tablet.Alias) {
 					allArray = append(allArray, s)
 				}
 			}
@@ -716,14 +719,14 @@ func (hc *HealthCheckImpl) getAliasByCell(cell string) string {
 	return alias
 }
 
-func (hc *HealthCheckImpl) isIncluded(shr *query.StreamHealthResponse) bool {
-	if shr.Target.TabletType == topodata.TabletType_MASTER {
+func (hc *HealthCheckImpl) isIncluded(tabletType topodata.TabletType, tabletAlias *topodata.TabletAlias) bool {
+	if tabletType == topodata.TabletType_MASTER {
 		return true
 	}
-	if shr.TabletAlias.Cell == hc.cell {
+	if tabletAlias.Cell == hc.cell {
 		return true
 	}
-	if hc.getAliasByCell(shr.TabletAlias.Cell) == hc.getAliasByCell(hc.cell) {
+	if hc.getAliasByCell(tabletAlias.Cell) == hc.getAliasByCell(hc.cell) {
 		return true
 	}
 	return false
