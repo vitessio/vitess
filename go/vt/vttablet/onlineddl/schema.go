@@ -50,10 +50,11 @@ const (
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	alterSchemaMigrationsTableRetries       = "ALTER TABLE %s.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTablet        = "ALTER TABLE %s.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableArtifacts     = "ALTER TABLE %s.schema_migrations modify artifacts TEXT NOT NULL"
-	alterSchemaMigrationsTableTabletFailure = "ALTER TABLE %s.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRetries            = "ALTER TABLE %s.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTablet             = "ALTER TABLE %s.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableArtifacts          = "ALTER TABLE %s.schema_migrations modify artifacts TEXT NOT NULL"
+	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE %s.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE %s.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
 
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
@@ -110,6 +111,11 @@ const (
 			migration_status IN ('failed', 'cancelled')
 			AND (%s)
 			LIMIT 1
+	`
+	sqlWhereTabletFailure = `
+		tablet_failure=1
+		AND migration_status='failed'
+		AND retries=0
 	`
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid
@@ -224,4 +230,5 @@ var applyDDL = []string{
 	fmt.Sprintf(alterSchemaMigrationsTableTablet, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableArtifacts, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableTabletFailure, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableTabletFailureIndex, "_vt"),
 }

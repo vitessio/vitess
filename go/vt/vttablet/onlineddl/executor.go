@@ -1052,7 +1052,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		return countRunnning, err
 	}
 	for _, row := range r.Named().Rows {
-		// A pt-osc UUID is found which claims to be 'running'. Is it?
 		uuid := row["migration_uuid"].ToString()
 		// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
 		// if the process is alive, we update the `liveness_timestamp` for this migration.
@@ -1108,6 +1107,13 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// retryTabletFailureMigrations looks for migrations failed by tablet failure (e.g. by failover)
+// and retry them (put them back in the queue)
+func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
+	_, err := e.retryMigration(ctx, sqlWhereTabletFailure)
+	return err
 }
 
 // gcArtifacts garbage-collects migration artifacts from completed/failed migrations
@@ -1175,6 +1181,9 @@ func (e *Executor) onMigrationCheckTick() {
 	if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
 		return
+	}
+	if err := e.retryTabletFailureMigrations(ctx); err != nil {
+		log.Error(err)
 	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
 		log.Error(err)
