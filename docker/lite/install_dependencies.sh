@@ -126,30 +126,30 @@ add_apt_key 9334A25F8507EFA5
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql56)
-    echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.6' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.6' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql57)
-    echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.7' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.7' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql80)
-    echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-8.0' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 mariadb)
-    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian buster main' > /etc/apt/sources.list.d/mariadb.list
+    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian stretch main' > /etc/apt/sources.list.d/mariadb.list
     ;;
 mariadb103)
-    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.3/debian buster main' > /etc/apt/sources.list.d/mariadb.list
+    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.3/debian stretch main' > /etc/apt/sources.list.d/mariadb.list
     ;;
 esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
 mysql56|mysql57|mysql80|percona|percona57)
-    echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
-    echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
-    echo 'deb http://repo.percona.com/ps-80/apt buster main' > /etc/apt/sources.list.d/percona80.list
+    echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list
+    echo 'deb http://repo.percona.com/ps-80/apt stretch main' > /etc/apt/sources.list.d/percona80.list
     ;;
 esac
 
