@@ -264,13 +264,45 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 		}
 		var s []byte
 		var ok bool
-		s, pos, ok = readLenEncStringAsBytesCopy(data, pos)
+
+		s, pos, ok = c.readLenEncStringUsingRowBuffer(data, pos)
 		if !ok {
 			return nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding string failed")
 		}
 		result[i] = sqltypes.MakeTrusted(fields[i].Type, s)
 	}
 	return result, nil
+}
+
+// readLenEncStringUsingRowBuffer reads a value from the data buffer and copies
+// it into the row buffer if it fits, or allocates a copy
+//
+// see readLenEncStringAsBytesCopy for reference
+func (c *Conn) readLenEncStringUsingRowBuffer(data []byte, pos int) ([]byte, int, bool) {
+	size, pos, ok := readLenEncInt(data, pos)
+	if !ok {
+		return nil, 0, false
+	}
+	s := int(size)
+	if pos+s-1 >= len(data) {
+		return nil, 0, false
+	}
+
+	var result []byte
+	if size > rowDataBufferSize {
+		result = make([]byte, size)
+	} else {
+		if c.rowDataBuffer == nil || s > (rowDataBufferSize-c.rowDataOffset) {
+			c.rowDataBuffer = make([]byte, rowDataBufferSize)
+			c.rowDataOffset = 0
+		}
+
+		result = c.rowDataBuffer[c.rowDataOffset : c.rowDataOffset+s]
+		c.rowDataOffset += s
+	}
+
+	copy(result, data[pos:pos+s])
+	return result, pos + s, true
 }
 
 // ExecuteFetch executes a query and returns the result.

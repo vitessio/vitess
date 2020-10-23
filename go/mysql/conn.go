@@ -48,6 +48,10 @@ const (
 	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
 
+	// rowDataBufferSize is how much space we allocate when reading
+	// field data.
+	rowDataBufferSize = 16 * 1024
+
 	// packetHeaderSize is the 4 bytes of header per MySQL packet
 	// sent over
 	packetHeaderSize = 4
@@ -172,6 +176,10 @@ type Conn struct {
 	// currentEphemeralBuffer for tracking allocated temporary buffer for writes and reads respectively.
 	// It can be allocated from bufPool or heap and should be recycled in the same manner.
 	currentEphemeralBuffer *[]byte
+	// rowDataBuffer is used to copy multiple fields into the same byte array
+	// to reduce gc pressure
+	rowDataBuffer []byte
+	rowDataOffset int
 
 	// StatementID is the prepared statement ID.
 	StatementID uint32
