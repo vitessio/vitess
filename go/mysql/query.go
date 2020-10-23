@@ -265,7 +265,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 		var s []byte
 		var ok bool
 
-		s, pos, ok = c.readLenEncStringUsingRowBuffer(data, pos)
+		s, pos, ok = c.readLenEncStringRowValue(data, pos)
 		if !ok {
 			return nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding string failed")
 		}
@@ -274,11 +274,11 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 	return result, nil
 }
 
-// readLenEncStringUsingRowBuffer reads a value from the data buffer and copies
-// it into the row buffer if it fits, or allocates a copy
+// readLenEncStringRowValue reads a value from the given data buffer and copies
+// it out into the row buffer
 //
 // see readLenEncStringAsBytesCopy for reference
-func (c *Conn) readLenEncStringUsingRowBuffer(data []byte, pos int) ([]byte, int, bool) {
+func (c *Conn) readLenEncStringRowValue(data []byte, pos int) ([]byte, int, bool) {
 	size, pos, ok := readLenEncInt(data, pos)
 	if !ok {
 		return nil, 0, false
@@ -289,9 +289,7 @@ func (c *Conn) readLenEncStringUsingRowBuffer(data []byte, pos int) ([]byte, int
 	}
 
 	var result []byte
-	if size > rowDataBufferSize {
-		result = make([]byte, size)
-	} else {
+	if size <= rowDataBufferSize {
 		if c.rowDataBuffer == nil || s > (rowDataBufferSize-c.rowDataOffset) {
 			c.rowDataBuffer = make([]byte, rowDataBufferSize)
 			c.rowDataOffset = 0
@@ -299,6 +297,9 @@ func (c *Conn) readLenEncStringUsingRowBuffer(data []byte, pos int) ([]byte, int
 
 		result = c.rowDataBuffer[c.rowDataOffset : c.rowDataOffset+s]
 		c.rowDataOffset += s
+	} else {
+		// size > rowDataBufferSize so allocate a new buffer just for this value
+		result = make([]byte, size)
 	}
 
 	copy(result, data[pos:pos+s])
