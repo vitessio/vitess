@@ -359,8 +359,8 @@ create table t7_xxhash_idx(
 	routingRules = `
 {"rules": [
   {
-    "from_table": "t1000",
-	"to_tables": ["t1"]
+    "from_table": "ks.t1000",
+	"to_tables": ["ks.t1"]
   }
 ]}
 `
@@ -392,6 +392,11 @@ func TestMain(m *testing.M) {
 		}
 
 		err = clusterInstance.VtctlclientProcess.ApplyRoutingRules(routingRules)
+		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}

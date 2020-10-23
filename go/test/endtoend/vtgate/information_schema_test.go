@@ -104,6 +104,6 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 	defer conn.Close()
 
 	_ = exec(t, conn, "SELECT * FROM t1000") // test that the routed table is available to us
-	result := exec(t, conn, "SELECT count(*) FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
+	result := exec(t, conn, "SELECT * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
 	assert.NotEmpty(t, result.Rows)
 }
