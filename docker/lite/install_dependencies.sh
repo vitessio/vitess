@@ -34,10 +34,9 @@ BASE_PACKAGES=(
     gnupg
     libaio1
     libatomic1
-    libcurl3
+    libcurl4
     libdbd-mysql-perl
     libev4
-    libjemalloc1
     libtcmalloc-minimal4
     procps
     rsync
