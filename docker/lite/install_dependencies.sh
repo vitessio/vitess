@@ -37,6 +37,7 @@ BASE_PACKAGES=(
     libcurl4
     libdbd-mysql-perl
     libev4
+    libjemalloc2
     libtcmalloc-minimal4
     procps
     rsync
