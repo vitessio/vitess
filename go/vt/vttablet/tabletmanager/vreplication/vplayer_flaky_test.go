@@ -36,7 +36,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-func TestVReplicationTimestampUpdate(t *testing.T) {
+func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))
 
@@ -79,9 +79,12 @@ func TestVReplicationTimestampUpdate(t *testing.T) {
 		require.NoError(t, err)
 		return timeUpdated, transactionTimestamp
 	}
+	expectNontxQueries(t, []string{
+		"insert into t1(id,val) values (1,'aaa')",
+	})
 	time.Sleep(1 * time.Second)
 	timeUpdated1, transactionTimestamp1 := getTimestamps()
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	timeUpdated2, _ := getTimestamps()
 	require.Greater(t, timeUpdated2, timeUpdated1, "time_updated not updated")
 	require.Greater(t, timeUpdated2, transactionTimestamp1, "transaction_timestamp should not be < time_updated")
@@ -2168,10 +2171,10 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	if err != nil {
 		t.Fatal(err)
 	}
-	//expectDBClientQueries(t, []string{
-	//	"/insert into _vt.vreplication",
-	//	"/update _vt.vreplication set state='Running'",
-	//})
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set state='Running'",
+	})
 
 	var once sync.Once
 	return func() {
@@ -2181,7 +2184,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			if _, err := playerEngine.Exec(query); err != nil {
 				t.Fatal(err)
 			}
-			//expectDeleteQueries(t)
+			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
 }
