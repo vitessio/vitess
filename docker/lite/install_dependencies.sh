@@ -60,10 +60,17 @@ mysql56)
     )
     ;;
 mysql57)
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_5.7.31-1debian10_amd64.deb -O /tmp/libmysqlclient20_5.7.31-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_5.7.31-1debian10_amd64.deb -O /tmp/mysql-community-client_5.7.31-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_5.7.31-1debian10_amd64.deb -O /tmp/mysql-client_5.7.31-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_5.7.31-1debian10_amd64.deb -O /tmp/mysql-community-server_5.7.31-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_5.7.31-1debian10_amd64.deb -O /tmp/mysql-server_5.7.31-1debian10_amd64.deb
     PACKAGES=(
-        libmysqlclient20
-        mysql-client
-        mysql-server
+        /tmp/libmysqlclient20_5.7.31-1debian10_amd64.deb
+        /tmp/mysql-community-client_5.7.31-1debian10_amd64.deb
+        /tmp/mysql-client_5.7.31-1debian10_amd64.deb
+        /tmp/mysql-community-server_5.7.31-1debian10_amd64.deb
+        /tmp/mysql-server_5.7.31-1debian10_amd64.deb
         percona-xtrabackup-24
     )
     ;;
