@@ -1445,7 +1445,7 @@ func ParseErrorPacket(data []byte) error {
 	pos++
 
 	// SQL state is 5 bytes
-	sqlState, pos, ok := readBytes(data, pos, 5)
+	sqlState, pos, ok := readBytesCopy(data, pos, 5)
 	if !ok {
 		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet sqlState: %v", data)
 	}
