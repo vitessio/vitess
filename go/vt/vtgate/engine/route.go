@@ -92,7 +92,7 @@ type Route struct {
 
 	// SysTableKeyspaceExpr contains the schema expressions
 	// It will be used to route the system table queries to a keyspace.
-	SysTableKeyspaceExpr []evalengine.Expr
+	SysTableKeyspaceExpr evalengine.Expr
 
 	// Route does not take inputs
 	noInputs
@@ -385,19 +385,14 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 
 	var keyspace string
 	schemaExists := false
-	for _, expr := range route.SysTableKeyspaceExpr {
-		result, err := expr.Evaluate(env)
-		if err != nil {
-			return nil, nil, err
-		}
-		if keyspace == "" {
-			keyspace = result.Value().ToString()
-			bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(keyspace)
-			schemaExists = true
-		} else if other := result.Value().ToString(); keyspace != other {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't use more than one keyspace per system table query - found both '%s' and '%s'", keyspace, other)
-		}
+
+	result, err := route.SysTableKeyspaceExpr.Evaluate(env)
+	if err != nil {
+		return nil, nil, err
 	}
+	keyspace = result.Value().ToString()
+	bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(keyspace)
+	schemaExists = true
 
 	if keyspace == "" {
 		keyspace = route.Keyspace.Name
@@ -627,12 +622,8 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.Values) > 0 {
 		other["Values"] = route.Values
 	}
-	if len(route.SysTableKeyspaceExpr) > 0 {
-		var exprs []string
-		for _, expr := range route.SysTableKeyspaceExpr {
-			exprs = append(exprs, expr.String())
-		}
-		other["SysTableKeyspaceExpr"] = exprs
+	if route.SysTableKeyspaceExpr != nil {
+		other["SysTableKeyspaceExpr"] = route.SysTableKeyspaceExpr.String()
 	}
 
 	return PrimitiveDescription{
