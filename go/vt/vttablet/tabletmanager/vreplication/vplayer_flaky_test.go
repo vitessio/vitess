@@ -37,6 +37,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+
 func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))
@@ -2461,7 +2462,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			if _, err := playerEngine.Exec(query); err != nil {
 				t.Fatal(err)
 			}
-			//expectDeleteQueries(t)
+			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
 }
