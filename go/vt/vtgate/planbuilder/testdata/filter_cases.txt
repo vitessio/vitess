@@ -1425,4 +1425,24 @@
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"
   }
 }
+
+# table_schema predicate the wrong way around
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
+    "SysTableKeyspaceExpr": [
+      "VARBINARY(\"ks\")"
+    ]
+  }
+}
                 

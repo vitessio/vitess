@@ -303,7 +303,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 			if r.err != nil {
 				return r.err
 			}
-			rut.eroute.SysTableKeyspaceExpr = append(rut.eroute.SysTableKeyspaceExpr, r.tableNameExpressions...)
+			rut.eroute.SysTableKeyspaceExpr = append(rut.eroute.SysTableKeyspaceExpr, r.tableSchemaExpressions...)
 		}
 		// The returned expression may be complex. Resplit before pushing.
 		for _, subexpr := range splitAndExpression(nil, expr) {
@@ -317,35 +317,56 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 }
 
 type rewriter struct {
-	tableNameExpressions []evalengine.Expr
-	err                  error
+	tableSchemaExpressions []evalengine.Expr
+	err                    error
 }
 
+// rewriteTableSchema looks for comparisons against the table_schema column in the information_schema.* tables
 func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.ColName:
 		if node.Name.EqualString("table_schema") {
 			switch parent := cursor.Parent().(type) {
 			case *sqlparser.ComparisonExpr:
-				if parent.Operator == sqlparser.EqualOp && shouldRewrite(parent.Right) {
-
-					evalExpr, err := sqlparser.Convert(parent.Right)
-					if err != nil {
-						if err == sqlparser.ErrExprNotSupported {
-							// This just means we can't rewrite this particular expression,
-							// not that we have to exit altogether
-							return true
+				if parent.Operator == sqlparser.EqualOp {
+					other, replaceOther := findOtherComparator(parent, node)
+					if shouldRewrite(other) {
+						evalExpr, err := sqlparser.Convert(other)
+						if err != nil {
+							if err == sqlparser.ErrExprNotSupported {
+								// This just means we can't rewrite this particular expression,
+								// not that we have to exit altogether
+								return true
+							}
+							r.err = err
+							return false
 						}
-						r.err = err
-						return false
+						r.tableSchemaExpressions = append(r.tableSchemaExpressions, evalExpr)
+						replaceOther(sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName)))
 					}
-					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
-					parent.Right = sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName))
 				}
 			}
 		}
 	}
 	return true
+}
+
+func findOtherComparator(parent *sqlparser.ComparisonExpr, node sqlparser.SQLNode) (sqlparser.Expr, func(arg sqlparser.Argument)) {
+	var other sqlparser.Expr
+	var replaceOther func(arg sqlparser.Argument)
+
+	if parent.Left == node {
+		other = parent.Right
+		replaceOther = func(arg sqlparser.Argument) {
+			parent.Right = arg
+		}
+	} else {
+		other = parent.Left
+		replaceOther = func(arg sqlparser.Argument) {
+			parent.Left = arg
+		}
+	}
+	return other, replaceOther
 }
 
 func shouldRewrite(e sqlparser.Expr) bool {
