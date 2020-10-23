@@ -87,6 +87,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -1995,8 +1996,8 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with")
 	tabletTypes := subFlags.String("tablet_types", "master,replica,rdonly", "Tablet types for source and target")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
 	format := subFlags.String("format", "", "Format of report") //"json" or ""
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2008,8 +2009,10 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if err != nil {
 		return err
 	}
-
-	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format)
+	if *maxRows <= 0 {
+		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
+	}
+	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)
 	}

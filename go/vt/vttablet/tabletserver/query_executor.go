@@ -195,7 +195,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanLoad:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete:
 		return qre.txFetch(conn, true)
 	case planbuilder.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
@@ -222,6 +222,8 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qr, nil
 	case planbuilder.PlanDDL:
 		return qre.execDDL(conn)
+	case planbuilder.PlanLoad:
+		return qre.execLoad(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -389,6 +391,14 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		if err != nil {
 			return nil, err
 		}
+	}
+	return result, nil
+}
+
+func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {
+	result, err := qre.execSQL(conn, qre.query, true)
+	if err != nil {
+		return nil, err
 	}
 	return result, nil
 }
@@ -655,8 +665,8 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
+	withoutComments := query
 	buf.WriteString(query)
-	withoutComments := buf.String()
 	buf.WriteString(qre.marginComments.Trailing)
 	fullSQL := buf.String()
 	return fullSQL, withoutComments, nil

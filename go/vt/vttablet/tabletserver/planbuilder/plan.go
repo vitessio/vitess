@@ -92,6 +92,7 @@ var planName = []string{
 	"Release",
 	"RollbackSavepoint",
 	"ShowTables",
+	"Load",
 }
 
 func (pt PlanType) String() string {

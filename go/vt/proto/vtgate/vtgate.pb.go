@@ -151,10 +151,12 @@ type Session struct {
 	// lock_session keep tracks of shard on which the lock query is sent.
 	LockSession *Session_ShardSession `protobuf:"bytes,18,opt,name=lock_session,json=lockSession,proto3" json:"lock_session,omitempty"`
 	// last_lock_heartbeat keep tracks of when last lock heartbeat was sent.
-	LastLockHeartbeat    int64    `protobuf:"varint,19,opt,name=last_lock_heartbeat,json=lastLockHeartbeat,proto3" json:"last_lock_heartbeat,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	LastLockHeartbeat int64 `protobuf:"varint,19,opt,name=last_lock_heartbeat,json=lastLockHeartbeat,proto3" json:"last_lock_heartbeat,omitempty"`
+	// read_after_write tracks the ReadAfterWrite settings for this session.
+	ReadAfterWrite       *ReadAfterWrite `protobuf:"bytes,20,opt,name=read_after_write,json=readAfterWrite,proto3" json:"read_after_write,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
 }
 
 func (m *Session) Reset()         { *m = Session{} }
@@ -307,6 +309,13 @@ func (m *Session) GetLastLockHeartbeat() int64 {
 	return 0
 }
 
+func (m *Session) GetReadAfterWrite() *ReadAfterWrite {
+	if m != nil {
+		return m.ReadAfterWrite
+	}
+	return nil
+}
+
 type Session_ShardSession struct {
 	Target        *query.Target         `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
 	TransactionId int64                 `protobuf:"varint,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
@@ -368,6 +377,63 @@ func (m *Session_ShardSession) GetReservedId() int64 {
 		return m.ReservedId
 	}
 	return 0
+}
+
+// ReadAfterWrite contains information regarding gtid set and timeout
+// Also if the gtid information needs to be passed to client.
+type ReadAfterWrite struct {
+	ReadAfterWriteGtid    string   `protobuf:"bytes,1,opt,name=read_after_write_gtid,json=readAfterWriteGtid,proto3" json:"read_after_write_gtid,omitempty"`
+	ReadAfterWriteTimeout float64  `protobuf:"fixed64,2,opt,name=read_after_write_timeout,json=readAfterWriteTimeout,proto3" json:"read_after_write_timeout,omitempty"`
+	SessionTrackGtids     bool     `protobuf:"varint,3,opt,name=session_track_gtids,json=sessionTrackGtids,proto3" json:"session_track_gtids,omitempty"`
+	XXX_NoUnkeyedLiteral  struct{} `json:"-"`
+	XXX_unrecognized      []byte   `json:"-"`
+	XXX_sizecache         int32    `json:"-"`
+}
+
+func (m *ReadAfterWrite) Reset()         { *m = ReadAfterWrite{} }
+func (m *ReadAfterWrite) String() string { return proto.CompactTextString(m) }
+func (*ReadAfterWrite) ProtoMessage()    {}
+func (*ReadAfterWrite) Descriptor() ([]byte, []int) {
+	return fileDescriptor_aab96496ceaf1ebb, []int{1}
+}
+
+func (m *ReadAfterWrite) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReadAfterWrite.Unmarshal(m, b)
+}
+func (m *ReadAfterWrite) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReadAfterWrite.Marshal(b, m, deterministic)
+}
+func (m *ReadAfterWrite) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReadAfterWrite.Merge(m, src)
+}
+func (m *ReadAfterWrite) XXX_Size() int {
+	return xxx_messageInfo_ReadAfterWrite.Size(m)
+}
+func (m *ReadAfterWrite) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReadAfterWrite.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ReadAfterWrite proto.InternalMessageInfo
+
+func (m *ReadAfterWrite) GetReadAfterWriteGtid() string {
+	if m != nil {
+		return m.ReadAfterWriteGtid
+	}
+	return ""
+}
+
+func (m *ReadAfterWrite) GetReadAfterWriteTimeout() float64 {
+	if m != nil {
+		return m.ReadAfterWriteTimeout
+	}
+	return 0
+}
+
+func (m *ReadAfterWrite) GetSessionTrackGtids() bool {
+	if m != nil {
+		return m.SessionTrackGtids
+	}
+	return false
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -988,6 +1054,7 @@ func init() {
 	proto.RegisterMapType((map[string]string)(nil), "vtgate.Session.SystemVariablesEntry")
 	proto.RegisterMapType((map[string]*query.BindVariable)(nil), "vtgate.Session.UserDefinedVariablesEntry")
 	proto.RegisterType((*Session_ShardSession)(nil), "vtgate.Session.ShardSession")
+	proto.RegisterType((*ReadAfterWrite)(nil), "vtgate.ReadAfterWrite")
 	proto.RegisterType((*ExecuteRequest)(nil), "vtgate.ExecuteRequest")
 	proto.RegisterType((*ExecuteResponse)(nil), "vtgate.ExecuteResponse")
 	proto.RegisterType((*ExecuteBatchRequest)(nil), "vtgate.ExecuteBatchRequest")

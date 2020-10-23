@@ -605,3 +605,20 @@ func IsConnErr(err error) bool {
 	}
 	return false
 }
+
+// IsSchemaApplyError returns true when given error is a MySQL error applying schema change
+func IsSchemaApplyError(err error) bool {
+	merr, isSQLErr := err.(*SQLError)
+	if !isSQLErr {
+		return false
+	}
+	switch merr.Num {
+	case
+		ERDupKeyName,
+		ERCantDropFieldOrKey,
+		ERTableExists,
+		ERDupFieldName:
+		return true
+	}
+	return false
+}

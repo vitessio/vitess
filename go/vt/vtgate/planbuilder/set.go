@@ -196,7 +196,6 @@ func buildSetOpVitessAware(s setting) planFunc {
 		_, isDefault := astExpr.Expr.(*sqlparser.Default)
 		if isDefault {
 			if s.defaultValue == nil {
-
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, defaultNotSupportedErrFmt, astExpr.Name)
 			}
 			runtimeExpr = s.defaultValue
