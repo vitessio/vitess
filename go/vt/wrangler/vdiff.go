@@ -188,9 +188,12 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	if err := df.selectTablets(ctx); err != nil {
 		return nil, vterrors.Wrap(err, "selectTablets")
 	}
+	skipRestart := false
 	defer func(ctx context.Context) {
-		if err := df.restartTargets(ctx); err != nil {
-			wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflow, err)
+		if !skipRestart {
+			if err := df.restartTargets(ctx); err != nil {
+				wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflow, err)
+			}
 		}
 	}(ctx)
 
@@ -205,6 +208,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
+		skipRestart = false
 		// Stop the targets and record their source positions.
 		if err := df.stopTargets(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stopTargets")
@@ -225,6 +229,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		if err := df.restartTargets(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "restartTargets")
 		}
+		skipRestart = true
 		// Perform the diff of source and target streams.
 		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
 		if err != nil {
