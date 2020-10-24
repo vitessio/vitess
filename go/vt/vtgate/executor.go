@@ -1196,21 +1196,22 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		return nil
 	})
 
-	// Send left-over rows.
-	if len(result.Rows) > 0 || !seenResults {
-		if err := callback(result); err != nil {
-			return err
+	// Send left-over rows if there is no error on execution.
+	if err == nil {
+		if len(result.Rows) > 0 || !seenResults {
+			if err := callback(result); err != nil {
+				return err
+			}
 		}
+		// save session stats for future queries
+		if !safeSession.foundRowsHandled {
+			safeSession.FoundRows = foundRows
+		}
+		safeSession.RowCount = -1
 	}
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
-
-	// save session stats for future queries
-	if !safeSession.foundRowsHandled {
-		safeSession.FoundRows = foundRows
-	}
-	safeSession.RowCount = -1
 
 	return err
 }
