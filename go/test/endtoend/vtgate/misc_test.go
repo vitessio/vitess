@@ -404,6 +404,19 @@ func TestInformationSchemaWithSubquery(t *testing.T) {
 	assert.Empty(t, result.Rows)
 }
 
+func TestInsertStmtInOLAP(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `set workload='olap'`)
+	_, err = conn.ExecuteFetch(`insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`, 1000, true)
+	require.Error(t, err)
+	assertMatches(t, conn, `select id1 from t1 order by id1`, `[]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
