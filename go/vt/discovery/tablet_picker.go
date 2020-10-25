@@ -106,13 +106,20 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
+
 		candidates := tp.getMatchingTablets(ctx)
 
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
 			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %d seconds",
 				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, int(GetTabletPickerRetryDelay()/1e9))
-			time.Sleep(GetTabletPickerRetryDelay())
+			timer := time.NewTimer(GetTabletPickerRetryDelay())
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+			case <-timer.C:
+			}
 			continue
 		}
 		// try at most len(candidate) times to find a healthy tablet
@@ -195,6 +202,7 @@ func (tp *TabletPicker) getMatchingTablets(ctx context.Context) []*topo.TabletIn
 	shortCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases)
+
 	if err != nil {
 		log.Warningf("error fetching tablets from topo: %v", err)
 		// If we get a partial result we can still use it, otherwise return
