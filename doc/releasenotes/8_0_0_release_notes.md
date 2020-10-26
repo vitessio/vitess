@@ -46,6 +46,7 @@ If a scatter query is attempting to collect and process too many rows in memory 
 * Fix error around breaking of multi statements #6824
 * Support SHOW TABLE STATUS FROM db type queries in vtgate #6354
 * SHOW FULL FIELDS doesn't follow routing rules #6803
+* Fix error handling in olap mode #6940
 
 ### Other
 * VReplication tablet_picker should keep trying to find a tablet until context expires #6546
