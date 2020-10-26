@@ -79,6 +79,9 @@ type Stats struct {
 	lastPositionMutex sync.Mutex
 	lastPosition      mysql.Position
 
+	heartbeatMutex sync.Mutex
+	heartbeat      int64
+
 	SecondsBehindMaster sync2.AtomicInt64
 	History             *history.History
 
@@ -90,6 +93,20 @@ type Stats struct {
 	CopyRowCount  *stats.Counter
 	CopyLoopCount *stats.Counter
 	ErrorCounts   *stats.CountersWithMultiLabels
+}
+
+// RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
+func (bps *Stats) RecordHeartbeat(tm int64) {
+	bps.heartbeatMutex.Lock()
+	defer bps.heartbeatMutex.Unlock()
+	bps.heartbeat = tm
+}
+
+// Heartbeat gets the time the last heartbeat from vstreamer was seen
+func (bps *Stats) Heartbeat() int64 {
+	bps.heartbeatMutex.Lock()
+	defer bps.heartbeatMutex.Unlock()
+	return bps.heartbeat
 }
 
 // SetLastPosition sets the last replication position.
