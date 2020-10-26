@@ -632,11 +632,10 @@ func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTime
 		encodeString(mysql.EncodePosition(pos)), timeUpdated, uid)
 }
 
-// GenerateUpdateTime returns a statement to update time_updated and transaction_timestamp in the
-// _vt.vreplication table.
+// GenerateUpdateTime returns a statement to update time_updated in the _vt.vreplication table.
 func GenerateUpdateTime(uid uint32, timeUpdated int64) (string, error) {
 	if timeUpdated == 0 {
-		return "", fmt.Errorf("invalid timeUpdated or txTimestamp supplied")
+		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v where id=%v", timeUpdated, uid), nil
 }
