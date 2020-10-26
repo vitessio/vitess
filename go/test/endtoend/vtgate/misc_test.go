@@ -350,6 +350,7 @@ func TestOffsetAndLimitWithOLAP(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	defer exec(t, conn, "set workload=oltp;delete from t1")
 
 	exec(t, conn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)")
 	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
@@ -402,6 +403,19 @@ func TestInformationSchemaWithSubquery(t *testing.T) {
 
 	result := exec(t, conn, "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = (SELECT SCHEMA()) AND TABLE_NAME = 'not_exists'")
 	assert.Empty(t, result.Rows)
+}
+
+func TestInsertStmtInOLAP(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `set workload='olap'`)
+	_, err = conn.ExecuteFetch(`insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`, 1000, true)
+	require.Error(t, err)
+	assertMatches(t, conn, `select id1 from t1 order by id1`, `[]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
