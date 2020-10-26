@@ -284,6 +284,20 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationHeartbeat",
+		"Time when last heartbeat was received from a vstreamer",
+		[]string{"source_keyspace", "source_shard", "workflow", "time"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.Heartbeat()
+			}
+			return result
+		})
+
 }
 
 func (st *vrStats) numControllers() int64 {
@@ -319,6 +333,7 @@ func (st *vrStats) status() *EngineStatus {
 			Source:              ct.source.String(),
 			StopPosition:        ct.stopPos,
 			LastPosition:        ct.blpStats.LastPosition().String(),
+			Heartbeat:           ct.blpStats.Heartbeat(),
 			SecondsBehindMaster: ct.blpStats.SecondsBehindMaster.Get(),
 			Counts:              ct.blpStats.Timings.Counts(),
 			Rates:               ct.blpStats.Rates.Get(),
@@ -349,6 +364,7 @@ type ControllerStatus struct {
 	SourceShard         string
 	StopPosition        string
 	LastPosition        string
+	Heartbeat           int64
 	SecondsBehindMaster int64
 	Counts              map[string]int64
 	Rates               map[string][]float64
