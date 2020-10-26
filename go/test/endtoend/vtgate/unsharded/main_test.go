@@ -146,6 +146,20 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
+func TestEmptyStatement(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;;`)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result { //nolint:golint,unused
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
