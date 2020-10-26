@@ -350,13 +350,12 @@ func TestOffsetAndLimitWithOLAP(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-	defer exec(t, conn, "delete from t1")
+	defer exec(t, conn, "set workload=oltp;delete from t1")
 
 	exec(t, conn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)")
 	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
 	exec(t, conn, "set workload='olap'")
 	assertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
-	exec(t, conn, "set workload='oltp'")
 }
 
 func TestSwitchBetweenOlapAndOltp(t *testing.T) {
