@@ -20,6 +20,9 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -71,6 +74,37 @@ func TestSelectUnsharded(t *testing.T) {
 		`StreamExecuteMulti dummy_select ks.0: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectInformationSchemaWithTableAndSchema(t *testing.T) {
+	sel := &Route{
+		Opcode: SelectDBA,
+		Keyspace: &vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: false,
+		},
+		Query:               "dummy_select",
+		FieldQuery:          "dummy_select_field",
+		SysTableTableSchema: evalengine.NewLiteralString([]byte("schema")),
+		SysTableTableName:   evalengine.NewLiteralString([]byte("table")),
+	}
+	vc := &loggingVCursor{
+		shards:  []string{"1"},
+		results: []*sqltypes.Result{defaultSelectResult},
+		tableRoutes: tableRoutes{
+			tbl: &vindexes.Table{
+				Name:     sqlparser.NewTableIdent("table2"),
+				Keyspace: &vindexes.Keyspace{Name: "schema2"},
+			}},
+	}
+	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		"FindTable(`schema`.`table`)",
+		`ResolveDestinations schema2 [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard schema2.1: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
 }
 
 func TestSelectScatter(t *testing.T) {

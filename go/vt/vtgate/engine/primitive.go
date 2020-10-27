@@ -21,10 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	"golang.org/x/sync/errgroup"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"golang.org/x/net/context"
@@ -96,7 +95,7 @@ type (
 
 		LookupRowLockShardSession() vtgatepb.CommitOrder
 
-		FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
+		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

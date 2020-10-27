@@ -496,7 +496,8 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	return table, nil
 }
 
-func (vschema *VSchema) findRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
+// FindRoutedTable finds a table checking the routing rules.
+func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
@@ -521,7 +522,7 @@ func (vschema *VSchema) findRoutedTable(keyspace, tablename string, tabletType t
 
 // FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
 func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*Table, Vindex, error) {
-	tables, err := vschema.findRoutedTable(keyspace, name, tabletType)
+	tables, err := vschema.FindRoutedTable(keyspace, name, tabletType)
 	if err != nil {
 		return nil, nil, err
 	}
