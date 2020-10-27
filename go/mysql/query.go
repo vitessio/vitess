@@ -253,9 +253,8 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 
 // parseRow parses an individual row.
 // Returns a SQLError.
-func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value, error) {
+func (c *Conn) parseRow(data []byte, fields []*querypb.Field, result []sqltypes.Value) ([]sqltypes.Value, error) {
 	colNumber := len(fields)
-	result := make([]sqltypes.Value, colNumber)
 	pos := 0
 	for i := 0; i < colNumber; i++ {
 		if data[pos] == NullValue {
@@ -443,6 +442,13 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		c.rowDataOffset = 0
 	}()
 
+	// instead of allocating a separate value array for each row,
+	// preallocate in chunks, doubling each time. that way a result
+	// with N rows results in only O(log(N)) allocations
+	rowResultsPerAllocation := 1
+	rowResultBufferOffset := 1
+	var rowResultBuffer []sqltypes.Value
+
 	// read each row until EOF or OK packet.
 	for {
 		data, err := c.readEphemeralPacket()
@@ -496,7 +502,17 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 
 		// Regular row.
-		row, err := c.parseRow(data, result.Fields)
+
+		// See if we need to expand the row result buffer
+		if rowResultBufferOffset >= rowResultsPerAllocation {
+			rowResultBuffer = make([]sqltypes.Value, rowResultsPerAllocation*colNumber)
+			rowResultBufferOffset = 0
+			rowResultsPerAllocation *= 2
+		}
+		row := rowResultBuffer[rowResultBufferOffset*colNumber : (rowResultBufferOffset+1)*colNumber]
+		rowResultBufferOffset++
+
+		row, err = c.parseRow(data, result.Fields, row)
 		if err != nil {
 			c.recycleReadPacket()
 			return nil, false, 0, err
