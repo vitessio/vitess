@@ -23,6 +23,9 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -90,9 +93,9 @@ type Route struct {
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
 
-	// SysTableKeyspaceExpr contains the schema expressions
-	// It will be used to route the system table queries to a keyspace.
-	SysTableKeyspaceExpr evalengine.Expr
+	// The following two fields are used when routing information_schema queries
+	SysTableTableSchema evalengine.Expr
+	SysTableTableName   evalengine.Expr
 
 	// Route does not take inputs
 	noInputs
@@ -378,40 +381,78 @@ func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*queryp
 }
 
 func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	destinations, schemaExists, err := route.routeInfoSchemaQuery(vcursor, bindVars)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if schemaExists {
+		bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+	}
+
+	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
+}
+
+func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks []*srvtopo.ResolvedShard, schemaExists bool, err error) {
+	defaultRoute := func() ([]*srvtopo.ResolvedShard, bool, error) {
+		ks := route.Keyspace.Name
+		destinations, _, err := vcursor.ResolveDestinations(ks, nil, []key.Destination{key.DestinationAnyShard{}})
+		return destinations, false, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
+	}
+
+	if route.SysTableTableName == nil && route.SysTableTableSchema == nil {
+		return defaultRoute()
+	}
+
 	env := evalengine.ExpressionEnv{
 		BindVars: bindVars,
 		Row:      []sqltypes.Value{},
 	}
 
-	var keyspace string
-	schemaExists := false
+	if route.SysTableTableName != nil {
+		return route.routeInfoSchemaTableGivenSchemaAndTable(vcursor, env, schemaExists)
+	}
 
-	result, err := route.SysTableKeyspaceExpr.Evaluate(env)
+	// we only have table_schema to work with
+	result, err := route.SysTableTableSchema.Evaluate(env)
 	if err != nil {
-		return nil, nil, err
+		return nil, false, err
 	}
-	keyspace = result.Value().ToString()
-	bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(keyspace)
-	schemaExists = true
-
-	if keyspace == "" {
-		keyspace = route.Keyspace.Name
+	destinations, _, err := vcursor.ResolveDestinations(result.Value().ToString(), nil, []key.Destination{key.DestinationAnyShard{}})
+	if err != nil {
+		log.Errorf("failed to route information_schema query to keyspace [%s]", result.Value().ToString())
+		return defaultRoute()
 	}
+	return destinations, true, nil
+}
 
-	destinations, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationAnyShard{}})
-	if err == nil {
-		// This is to indicate vttablet to replace the schema name.
-		if schemaExists {
-			bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
-		}
-	} else {
-		// Check with assigned route keyspace.
-		destinations, _, err = vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(
+	vcursor VCursor, env evalengine.ExpressionEnv, schemaExists bool) ([]*srvtopo.ResolvedShard, bool, error) {
+	val, err := route.SysTableTableName.Evaluate(env)
+	if err != nil {
+		return nil, false, err
+	}
+	tableName := val.Value().ToString()
+
+	var tableSchema string
+	if route.SysTableTableSchema != nil {
+		val, err := route.SysTableTableSchema.Evaluate(env)
 		if err != nil {
-			return nil, nil, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", keyspace)
+			return nil, false, err
 		}
+		tableSchema = val.Value().ToString()
 	}
-	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
+
+	tbl := sqlparser.TableName{
+		Name:      sqlparser.NewTableIdent(tableName),
+		Qualifier: sqlparser.NewTableIdent(tableSchema),
+	}
+	_, keyspace, _, destination, err := vcursor.FindTable(tbl)
+	if err != nil {
+		return nil, false, err
+	}
+	shards, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{destination})
+	return shards, schemaExists, err
 }
 
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -622,8 +663,11 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.Values) > 0 {
 		other["Values"] = route.Values
 	}
-	if route.SysTableKeyspaceExpr != nil {
-		other["SysTableKeyspaceExpr"] = route.SysTableKeyspaceExpr.String()
+	if route.SysTableTableSchema != nil {
+		other["SysTableTableSchema"] = route.SysTableTableSchema.String()
+	}
+	if route.SysTableTableName != nil {
+		other["SysTableTableName"] = route.SysTableTableName.String()
 	}
 
 	return PrimitiveDescription{

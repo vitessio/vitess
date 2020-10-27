@@ -554,10 +554,12 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
+// SysVarSetEnabled implements the SessionActions interface
 func (vc *vcursorImpl) SysVarSetEnabled() bool {
 	return *sysVarSetEnabled
 }
 
+// SetFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.FoundRows = foundRows
 	vc.safeSession.foundRowsHandled = true
