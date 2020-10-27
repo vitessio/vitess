@@ -443,11 +443,8 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 	}()
 
 	// instead of allocating a separate value array for each row,
-	// preallocate in chunks, doubling each time. that way a result
-	// with N rows results in only O(log(N)) allocations
-	rowResultsPerAllocation := 1
-	rowResultBufferOffset := 1
-	var rowResultBuffer []sqltypes.Value
+	// row array that is eventually appended to the Rows result
+	rowResultBuffer := make([]sqltypes.Value, colNumber)
 
 	// read each row until EOF or OK packet.
 	for {
@@ -502,17 +499,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 
 		// Regular row.
-
-		// See if we need to expand the row result buffer
-		if rowResultBufferOffset >= rowResultsPerAllocation {
-			rowResultBuffer = make([]sqltypes.Value, rowResultsPerAllocation*colNumber)
-			rowResultBufferOffset = 0
-			rowResultsPerAllocation *= 2
-		}
-		row := rowResultBuffer[rowResultBufferOffset*colNumber : (rowResultBufferOffset+1)*colNumber]
-		rowResultBufferOffset++
-
-		row, err = c.parseRow(data, result.Fields, row)
+		row, err := c.parseRow(data, result.Fields, rowResultBuffer)
 		if err != nil {
 			c.recycleReadPacket()
 			return nil, false, 0, err
