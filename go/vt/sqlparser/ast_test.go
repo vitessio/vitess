@@ -747,6 +747,9 @@ func TestSplitStatementToPieces(t *testing.T) {
 		input  string
 		output string
 	}{{
+		input:  "select * from table1; \t; \n; \n\t\t ;select * from table1;",
+		output: "select * from table1;select * from table1",
+	}, {
 		input: "select * from table",
 	}, {
 		input:  "select * from table1; select * from table2;",
@@ -770,20 +773,17 @@ func TestSplitStatementToPieces(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
 
-		stmtPieces, err := SplitStatementToPieces(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
+			stmtPieces, err := SplitStatementToPieces(tcase.input)
+			require.NoError(t, err)
 
-		out := strings.Join(stmtPieces, ";")
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+			out := strings.Join(stmtPieces, ";")
+			require.Equal(t, tcase.output, out)
+		})
 	}
 }
 
