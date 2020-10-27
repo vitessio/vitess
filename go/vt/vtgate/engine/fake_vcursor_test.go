@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"github.com/google/go-cmp/cmp"
 
 	"golang.org/x/sync/errgroup"
@@ -63,6 +65,10 @@ func (t noopVCursor) SetFoundRows(u uint64) {
 }
 
 func (t noopVCursor) InTransactionAndIsDML() bool {
+	panic("implement me")
+}
+
+func (f noopVCursor) FindTable(sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
 	panic("implement me")
 }
 
@@ -210,6 +216,15 @@ type loggingVCursor struct {
 	log []string
 
 	resolvedTargetTabletType topodatapb.TabletType
+
+	tableRoutes tableRoutes
+}
+
+type tableRoutes struct {
+	tbl      *vindexes.Table
+	keyspace string
+	typ      topodatapb.TabletType
+	dest     key.Destination
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
@@ -433,6 +448,11 @@ func (f *loggingVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
 
 func (f *loggingVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) FindTable(tbl sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
+	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(tbl)))
+	return f.tableRoutes.tbl, f.tableRoutes.keyspace, f.tableRoutes.typ, f.tableRoutes.dest, nil
 }
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {

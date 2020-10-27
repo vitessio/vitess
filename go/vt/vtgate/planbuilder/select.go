@@ -22,8 +22,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/key"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -295,15 +293,9 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		}
 		rut, isRoute := origin.(*route)
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
-			schemaNameExpr, err := rewriteTableSchema(expr)
+			err := pb.pushFilterToInfoSchema(expr, rut)
 			if err != nil {
 				return err
-			}
-			if schemaNameExpr != nil {
-				if rut.eroute.SysTableKeyspaceExpr != nil {
-					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_schema not supported")
-				}
-				rut.eroute.SysTableKeyspaceExpr = schemaNameExpr
 			}
 		}
 		// The returned expression may be complex. Resplit before pushing.
@@ -315,62 +307,6 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		pb.addPullouts(pullouts)
 	}
 	return nil
-}
-
-func findOtherComparator(cmp *sqlparser.ComparisonExpr) (sqlparser.Expr, sqlparser.Expr, func(arg sqlparser.Argument)) {
-	if isTableSchema(cmp.Left) {
-		return cmp.Left, cmp.Right, func(arg sqlparser.Argument) {
-			cmp.Left = arg
-		}
-	}
-	if isTableSchema(cmp.Right) {
-		return cmp.Right, cmp.Left, func(arg sqlparser.Argument) {
-			cmp.Right = arg
-		}
-	}
-
-	return nil, nil, nil
-}
-
-func isTableSchema(e sqlparser.Expr) bool {
-	col, ok := e.(*sqlparser.ColName)
-	if !ok {
-		return false
-	}
-	return col.Name.EqualString("table_schema")
-}
-
-func rewriteTableSchema(in sqlparser.Expr) (evalengine.Expr, error) {
-	switch cmp := in.(type) {
-	case *sqlparser.ComparisonExpr:
-		if cmp.Operator == sqlparser.EqualOp {
-			schemaName, other, replaceOther := findOtherComparator(cmp)
-
-			if schemaName != nil && shouldRewrite(other) {
-				evalExpr, err := sqlparser.Convert(other)
-				if err != nil {
-					if err == sqlparser.ErrExprNotSupported {
-						// This just means we can't rewrite this particular expression,
-						// not that we have to exit altogether
-						return nil, nil
-					}
-					return nil, err
-				}
-				replaceOther(sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName)))
-				return evalExpr, nil
-			}
-		}
-	}
-	return nil, nil
-}
-
-func shouldRewrite(e sqlparser.Expr) bool {
-	switch node := e.(type) {
-	case *sqlparser.FuncExpr:
-		// we should not rewrite database() calls against information_schema
-		return !(node.Name.EqualString("database") || node.Name.EqualString("schema"))
-	}
-	return true
 }
 
 // reorderBySubquery reorders the filters by pushing subqueries

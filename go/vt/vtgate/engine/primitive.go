@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -93,6 +95,8 @@ type (
 		InTransactionAndIsDML() bool
 
 		LookupRowLockShardSession() vtgatepb.CommitOrder
+
+		FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

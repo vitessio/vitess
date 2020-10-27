@@ -445,7 +445,7 @@ func (vschema *VSchema) findQualified(name string) (*Table, error) {
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
 // from that keyspace are searched. If the specified keyspace is unsharded
 // and no tables matched, it's considered valid: FindTable will construct a table
-// of that name and return it. If no kesypace is specified, then a table is returned
+// of that name and return it. If no keyspace is specified, then a table is returned
 // only if its name is unique across all keyspaces. If there is only one
 // keyspace in the vschema, and it's unsharded, then all table requests are considered
 // valid and belonging to that keyspace.
