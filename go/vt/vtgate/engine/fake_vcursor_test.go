@@ -68,7 +68,7 @@ func (t noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
 
-func (f noopVCursor) FindTable(sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
+func (t noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.Table, error) {
 	panic("implement me")
 }
 
@@ -221,10 +221,7 @@ type loggingVCursor struct {
 }
 
 type tableRoutes struct {
-	tbl      *vindexes.Table
-	keyspace string
-	typ      topodatapb.TabletType
-	dest     key.Destination
+	tbl *vindexes.Table
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
@@ -233,6 +230,10 @@ func (f *loggingVCursor) SetFoundRows(u uint64) {
 
 func (f *loggingVCursor) InTransactionAndIsDML() bool {
 	return false
+}
+
+func (f *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
@@ -450,9 +451,9 @@ func (f *loggingVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) FindTable(tbl sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
+func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Table, error) {
 	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(tbl)))
-	return f.tableRoutes.tbl, f.tableRoutes.keyspace, f.tableRoutes.typ, f.tableRoutes.dest, nil
+	return f.tableRoutes.tbl, nil
 }
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {

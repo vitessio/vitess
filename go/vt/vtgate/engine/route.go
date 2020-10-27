@@ -447,11 +447,12 @@ func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(
 		Name:      sqlparser.NewTableIdent(tableName),
 		Qualifier: sqlparser.NewTableIdent(tableSchema),
 	}
-	_, keyspace, _, destination, err := vcursor.FindTable(tbl)
+	destination, err := vcursor.FindRoutedTable(tbl)
 	if err != nil {
 		return nil, false, err
 	}
-	shards, _, err := vcursor.ResolveDestinations(keyspace, nil, []key.Destination{destination})
+
+	shards, _, err := vcursor.ResolveDestinations(destination.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	return shards, schemaExists, err
 }
 
