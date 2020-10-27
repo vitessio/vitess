@@ -169,6 +169,8 @@ https://vitess.io/docs/reference/features/tablet-throttler/
 * VTtablet two-phase commit design doc #6498
 
 ### VTorc - Orchestrator
+Following PRs are experimental version of Vitess-native Orchestrator 'vtorc' is ready for users to try out.
+
 * Orchestrator: initial import of Orchestrator #6582
 * Orchestrator: vitess mode #6613
 * Orchestrator: more changes #6714
