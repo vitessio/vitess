@@ -814,7 +814,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, err
 	advanceTarget := true
 	for {
 		if s := logSteps(int64(dr.ProcessedRows)); s != "" {
-			log.Infof("VDiff processed %s rows", s)
+			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, s)
 		}
 		if advanceSource {
 			sourceRow, err = sourceExecutor.next()
