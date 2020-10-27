@@ -46,7 +46,8 @@ If a scatter query is attempting to collect and process too many rows in memory 
 * Fix error around breaking of multi statements #6824
 * Support SHOW TABLE STATUS FROM db type queries in vtgate #6354
 * SHOW FULL FIELDS doesn't follow routing rules #6803
-* Fix error handling in olap mode #6940
+* VDiff/Tablet Picker: fix picker retry logic to handle canceled context #6954
+* Healthcheck: Use isIncluded correctly to fix replica/rdonly routing bug #6922
 
 ### Other
 * VReplication tablet_picker should keep trying to find a tablet until context expires #6546
@@ -102,6 +103,7 @@ If a scatter query is attempting to collect and process too many rows in memory 
 ### OLAP Functioanlity 
 * Allow switching between OLAP and OLTP #6691
 * Use statement support in olap mode #6692
+* Fix error handling in olap mode #6940
 
 
 ### Set Statement Support
@@ -223,6 +225,10 @@ https://vitess.io/docs/reference/features/tablet-throttler/
 * Fix build error on vcursor_impl tests on newer versions of go #6799
 * [java] bump java version to 8.0.0-SNAPSHOT for next release #6478
 * Helm/docker: fix Docker builds + tag 7.0.2 #6773
+* Docker: Upgrade to Debian Buster (release-8.0) #6888
+* Docker: Pin mysql 5.7 and 8.0 versions for xtrabackup compatibility
+* Docker: Revert "Docker - upgrade to Debian Buster (release-8.0)" #6929
+* Zookeper: Download zookeeper 3.4.14 from archive site #6867
 
 ## Functionality Neutral Changes
 
@@ -240,7 +246,7 @@ https://vitess.io/docs/reference/features/tablet-throttler/
 * Ensure tests for discoverygateway #6536
 * Convert syslog events to normal log events #6511
 * Add diagnostic logging to healthcheck. #6512
-* Healthcheck should receive healthcheck updates from all tablets in cells_to_watch #6852
+* Healthcheck should receive healthcheck updates from all tablets in cells_to_watch #6852 
 * Named columns and convenience SQL query interface #6543
 * Check http response code in vtctld API tests #6570
 * Reverting package-lock.json to the one pre-PR #6603 #6611
