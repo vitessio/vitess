@@ -1422,8 +1422,8 @@
       "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where 'ks' = :__vtschemaname",
-    "SysTableKeyspaceExpr": "VARBINARY(\"ks\")"
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
+    "SysTableTableSchema": "VARBINARY(\"ks\")"
   }
 }
 
@@ -1448,16 +1448,18 @@
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'"
 {
   "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectDBA",
     "Keyspace": {
-      "Name": "user",
-      "Sharded": true
+      "Name": "main",
+      "Sharded": false
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'"
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_NAME = :__vttablename",
+    "SysTableTableName": "VARBINARY(\"route1\")",
+    "SysTableTableSchema": "VARBINARY(\"ks\")"
   }
 }
                 

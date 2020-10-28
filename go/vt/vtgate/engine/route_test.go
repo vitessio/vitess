@@ -18,7 +18,6 @@ package engine
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -77,7 +76,7 @@ func TestSelectUnsharded(t *testing.T) {
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
-func TestSelectInformationSchemaWithTableAndSchema(t *testing.T) {
+func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 	stringToExpr := func(in string) evalengine.Expr {
 		var schema evalengine.Expr
 		if in != "" {
@@ -87,31 +86,39 @@ func TestSelectInformationSchemaWithTableAndSchema(t *testing.T) {
 	}
 
 	type testCase struct {
-		tableSchema, tableName string
-		expectedLog            []string
+		tableSchema, tableName, testName string
+		expectedLog                      []string
 	}
 	tests := []testCase{{
+		testName:    "both schema and table predicates",
 		tableSchema: "schema",
 		tableName:   "table",
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
-			"ResolveDestinations schema2 [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema2.1: dummy_select {} false false"},
+			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"routedTable\" } false false"},
 	}, {
+		testName:  "table name predicate",
 		tableName: "tableName",
 		expectedLog: []string{
 			"FindTable(tableName)",
-			"ResolveDestinations schema2 [] Destinations:DestinationAnyShard()",
-			"ExecuteMultiShard schema2.1: dummy_select {} false false"},
+			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vttablename: type:VARBINARY value:\"routedTable\" } false false"},
 	}, {
+		testName:    "schema predicate",
 		tableSchema: "myKeyspace",
 		expectedLog: []string{
 			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
 			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" } false false"},
+	}, {
+		testName: "no predicates",
+		expectedLog: []string{
+			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard ks.1: dummy_select {} false false"},
 	}}
 
 	for _, tc := range tests {
-		t.Run(fmt.Sprintf("WHERE table_schema='%s' AND table_name='%s'", tc.tableSchema, tc.tableName), func(t *testing.T) {
+		t.Run(tc.testName, func(t *testing.T) {
 			sel := &Route{
 				Opcode: SelectDBA,
 				Keyspace: &vindexes.Keyspace{
@@ -128,8 +135,8 @@ func TestSelectInformationSchemaWithTableAndSchema(t *testing.T) {
 				results: []*sqltypes.Result{defaultSelectResult},
 				tableRoutes: tableRoutes{
 					tbl: &vindexes.Table{
-						Name:     sqlparser.NewTableIdent("table2"),
-						Keyspace: &vindexes.Keyspace{Name: "schema2"},
+						Name:     sqlparser.NewTableIdent("routedTable"),
+						Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
 					}},
 			}
 			_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
@@ -137,7 +144,6 @@ func TestSelectInformationSchemaWithTableAndSchema(t *testing.T) {
 			vc.ExpectLog(t, tc.expectedLog)
 		})
 	}
-
 }
 
 func TestSelectScatter(t *testing.T) {

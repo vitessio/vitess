@@ -381,23 +381,19 @@ func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*queryp
 }
 
 func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	destinations, schemaExists, err := route.routeInfoSchemaQuery(vcursor, bindVars)
+	destinations, err := route.routeInfoSchemaQuery(vcursor, bindVars)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	if schemaExists {
-		bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
 	}
 
 	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }
 
-func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks []*srvtopo.ResolvedShard, schemaExists bool, err error) {
-	defaultRoute := func() ([]*srvtopo.ResolvedShard, bool, error) {
+func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks []*srvtopo.ResolvedShard, err error) {
+	defaultRoute := func() ([]*srvtopo.ResolvedShard, error) {
 		ks := route.Keyspace.Name
 		destinations, _, err := vcursor.ResolveDestinations(ks, nil, []key.Destination{key.DestinationAnyShard{}})
-		return destinations, false, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
+		return destinations, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
 	}
 
 	if route.SysTableTableName == nil && route.SysTableTableSchema == nil {
@@ -410,27 +406,27 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	}
 
 	if route.SysTableTableName != nil {
-		return route.routeInfoSchemaTableGivenSchemaAndTable(vcursor, env, schemaExists)
+		return route.routeInfoSchemaTableGivenSchemaAndTable(vcursor, env, bindVars)
 	}
 
 	// we only have table_schema to work with
 	result, err := route.SysTableTableSchema.Evaluate(env)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	destinations, _, err := vcursor.ResolveDestinations(result.Value().ToString(), nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		log.Errorf("failed to route information_schema query to keyspace [%s]", result.Value().ToString())
 		return defaultRoute()
 	}
-	return destinations, true, nil
+	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+	return destinations, nil
 }
 
-func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(
-	vcursor VCursor, env evalengine.ExpressionEnv, schemaExists bool) ([]*srvtopo.ResolvedShard, bool, error) {
+func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(vcursor VCursor, env evalengine.ExpressionEnv, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
 	val, err := route.SysTableTableName.Evaluate(env)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	tableName := val.Value().ToString()
 
@@ -438,7 +434,7 @@ func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(
 	if route.SysTableTableSchema != nil {
 		val, err := route.SysTableTableSchema.Evaluate(env)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		tableSchema = val.Value().ToString()
 	}
@@ -449,11 +445,15 @@ func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(
 	}
 	destination, err := vcursor.FindRoutedTable(tbl)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	shards, _, err := vcursor.ResolveDestinations(destination.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
-	return shards, schemaExists, err
+	bindVars[BvTableName] = sqltypes.StringBindVariable(destination.Name.String())
+	if tableSchema != "" {
+		bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+	}
+	return shards, err
 }
 
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
@@ -679,3 +679,6 @@ func (route *Route) description() PrimitiveDescription {
 		Other:             other,
 	}
 }
+
+// BvTableName is used to fill in the table name for information_schema queries with routed tables
+const BvTableName = "__vttablename"
