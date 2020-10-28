@@ -1219,10 +1219,10 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0','e','f','g','h','1','3')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d','e','f','g','h','1','3')",
 		table:  "vitess_strings",
 		data: [][]string{
-			{"a", "b", "c", "d\x00\x00\x00", "e", "f", "g", "h", "a", "a,b"},
+			{"a", "b", "c", "d\000\000\000", "e", "f", "g", "h", "a", "a,b"},
 		},
 	}, {
 		input:  "insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
@@ -1240,15 +1240,15 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into binary_pk values('a', 'aaa')",
-		output: "insert into binary_pk(b,val) values ('a\\0\\0\\0','aaa')",
+		output: "insert into binary_pk(b,val) values ('a','aaa')",
 		table:  "binary_pk",
 		data: [][]string{
-			{"a\x00\x00\x00", "aaa"},
+			{"a\000\000\000", "aaa"},
 		},
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
 		input:  "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
-		output: "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
+		output: "update binary_pk set val='bbb' where b=cast('a' as binary(4))",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\x00\x00\x00", "bbb"},
