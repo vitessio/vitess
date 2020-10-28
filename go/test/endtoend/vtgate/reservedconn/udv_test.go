@@ -96,6 +96,12 @@ func TestSetUDV(t *testing.T) {
 	}, {
 		query:        "select id, val1 from test where val1 = @tablet",
 		expectedRows: `[[INT64(42) VARCHAR("foobar")]]`, rowsAffected: 1,
+	}, {
+		query:        "set @foo = now(), @bar = now()",
+		expectedRows: `[]`, rowsAffected: 0,
+	}, {
+		query:        "select @foo = @bar",
+		expectedRows: `[[INT64(1)]]`, rowsAffected: 1,
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
