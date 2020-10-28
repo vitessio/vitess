@@ -34,6 +34,133 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestCharPK(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val binary(2), primary key(val))",
+		fmt.Sprintf("create table %s.t1(id int, val binary(2), primary key(val))", vrepldb),
+		"create table t2(id int, val char(2), primary key(val))",
+		fmt.Sprintf("create table %s.t2(id int, val char(2), primary key(val))", vrepldb),
+		"create table t3(id int, val varbinary(2), primary key(val))",
+		fmt.Sprintf("create table %s.t3(id int, val varbinary(2), primary key(val))", vrepldb),
+		"create table t4(id int, val varchar(2), primary key(val))",
+		fmt.Sprintf("create table %s.t4(id int, val varchar(2), primary key(val))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+		"drop table t3",
+		fmt.Sprintf("drop table %s.t3", vrepldb),
+		"drop table t4",
+		fmt.Sprintf("drop table %s.t4", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
+		}, {
+			Match:  "t3",
+			Filter: "select * from t3",
+		}, {
+			Match:  "t4",
+			Filter: "select * from t4",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{ //binary(2)
+		input:  "insert into t1 values(1, 'a')",
+		output: "insert into t1(id,val) values (1,'a')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "a\000"},
+		},
+	}, {
+		input:  "update t1 set id = 2 where val = 'a\000'",
+		output: "update t1 set id=2 where val=cast('a' as binary(2))",
+		table:  "t1",
+		data: [][]string{
+			{"2", "a\000"},
+		},
+	}, { //char(2)
+		input:  "insert into t2 values(1, 'a')",
+		output: "insert into t2(id,val) values (1,'a')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "a"},
+		},
+	}, {
+		input:  "update t2 set id = 2 where val = 'a'",
+		output: "update t2 set id=2 where val='a'",
+		table:  "t2",
+		data: [][]string{
+			{"2", "a"},
+		},
+	}, { //varbinary(2)
+		input:  "insert into t3 values(1, 'a')",
+		output: "insert into t3(id,val) values (1,'a')",
+		table:  "t3",
+		data: [][]string{
+			{"1", "a"},
+		},
+	}, {
+		input:  "update t3 set id = 2 where val = 'a'",
+		output: "update t3 set id=2 where val='a'",
+		table:  "t3",
+		data: [][]string{
+			{"2", "a"},
+		},
+	}, { //varchar(2)
+		input:  "insert into t4 values(1, 'a')",
+		output: "insert into t4(id,val) values (1,'a')",
+		table:  "t4",
+		data: [][]string{
+			{"1", "a"},
+		},
+	}, {
+		input:  "update t4 set id = 2 where val = 'a'",
+		output: "update t4 set id=2 where val='a'",
+		table:  "t4",
+		data: [][]string{
+			{"2", "a"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			"begin",
+			tcases.output,
+			"/update _vt.vreplication set pos",
+			"commit",
+		}
+		expectDBClientQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
 func TestRollup(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -1153,10 +1280,10 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d\\0\\0\\0','e','f','g','h','1','3')",
+		output: "insert into vitess_strings(vb,c,vc,b,tb,bl,ttx,tx,en,s) values ('a','b','c','d','e','f','g','h','1','3')",
 		table:  "vitess_strings",
 		data: [][]string{
-			{"a", "b", "c", "d\x00\x00\x00", "e", "f", "g", "h", "a", "a,b"},
+			{"a", "b", "c", "d\000\000\000", "e", "f", "g", "h", "a", "a,b"},
 		},
 	}, {
 		input:  "insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
@@ -1174,15 +1301,15 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into binary_pk values('a', 'aaa')",
-		output: "insert into binary_pk(b,val) values ('a\\0\\0\\0','aaa')",
+		output: "insert into binary_pk(b,val) values ('a','aaa')",
 		table:  "binary_pk",
 		data: [][]string{
-			{"a\x00\x00\x00", "aaa"},
+			{"a\000\000\000", "aaa"},
 		},
 	}, {
 		// Binary pk is a special case: https://github.com/vitessio/vitess/issues/3984
 		input:  "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
-		output: "update binary_pk set val='bbb' where b='a\\0\\0\\0'",
+		output: "update binary_pk set val='bbb' where b=cast('a' as binary(4))",
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\x00\x00\x00", "bbb"},
