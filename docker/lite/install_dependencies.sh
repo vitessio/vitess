@@ -113,13 +113,18 @@ percona57)
 percona80)
     PACKAGES=(
         libperconaserverclient21
-	    percona-server-rocksdb
+        percona-server-rocksdb
         percona-server-server
         percona-server-tokudb
         percona-xtrabackup-80
     )
     ;;
-mariadb|mariadb103)
+mariadb)
+    PACKAGES=(
+        mariadb-server-10.2
+    )
+    ;;
+mariadb103)
     PACKAGES=(
         mariadb-server
     )
