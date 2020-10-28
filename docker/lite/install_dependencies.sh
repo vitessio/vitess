@@ -44,6 +44,7 @@ BASE_PACKAGES=(
     strace
     sysstat
     wget
+    curl
 )
 
 apt-get update
