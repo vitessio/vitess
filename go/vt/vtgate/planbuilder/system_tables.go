@@ -21,6 +21,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -48,12 +49,12 @@ func (pb *primitiveBuilder) pushFilterToInfoSchema(expr sqlparser.Expr, rut *rou
 func findOtherComparator(cmp *sqlparser.ComparisonExpr) (bool, sqlparser.Expr, sqlparser.Expr, func(arg sqlparser.Argument)) {
 	if schema, table := isTableSchema(cmp.Left); schema || table {
 		return schema, cmp.Left, cmp.Right, func(arg sqlparser.Argument) {
-			cmp.Left = arg
+			cmp.Right = arg
 		}
 	}
 	if schema, table := isTableSchema(cmp.Right); schema || table {
 		return schema, cmp.Right, cmp.Left, func(arg sqlparser.Argument) {
-			cmp.Right = arg
+			cmp.Left = arg
 		}
 	}
 
@@ -83,7 +84,13 @@ func rewriteTableSchema(in sqlparser.Expr) (bool, evalengine.Expr, error) {
 					}
 					return false, nil, err
 				}
-				replaceOther(sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName)))
+				name := ":"
+				if isSchemaName {
+					name += sqltypes.BvSchemaName
+				} else {
+					name += engine.BvTableName
+				}
+				replaceOther(sqlparser.NewArgument([]byte(name)))
 				return isSchemaName, evalExpr, nil
 			}
 		}
