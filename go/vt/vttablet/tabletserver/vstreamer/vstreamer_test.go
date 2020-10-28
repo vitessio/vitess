@@ -53,6 +53,47 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
+func TestCellValuePadding(t *testing.T) {
+
+	execStatements(t, []string{
+		"create table t1(id int, val binary(4), primary key(val))",
+		"create table t2(id int, val char(4), primary key(val))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa')",
+		"insert into t1 values (2, 'bbb')",
+		"update t1 set id = 11 where val = 'aaa\000'",
+		"insert into t2 values (1, 'aaa')",
+		"insert into t2 values (2, 'bbb')",
+		"update t2 set id = 11 where val = 'aaa'",
+		"commit",
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:BINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:4 charset:63 > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:2 lengths:3 values:"11aaa" > > > `,
+			`type:FIELD field_event:<table_name:"t2" fields:<name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:CHAR table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:12 charset:33 > > `,
+			`type:ROW row_event:<table_name:"t2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`type:ROW row_event:<table_name:"t2" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`type:ROW row_event:<table_name:"t2" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:2 lengths:3 values:"11aaa" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func TestSetStatement(t *testing.T) {
 
 	if testing.Short() {
@@ -558,6 +599,7 @@ func TestSavepoint(t *testing.T) {
 	}}
 	runCases(t, nil, testcases, "current", nil)
 }
+
 func TestStatements(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1364,8 +1406,8 @@ func TestTypes(t *testing.T) {
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_strings" fields:<name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 > fields:<name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:48 charset:33 > fields:<name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:48 charset:33 > fields:<name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 > fields:<name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 > fields:<name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 > fields:<name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:765 charset:33 > fields:<name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:196605 charset:33 > fields:<name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:3 charset:33 > fields:<name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:9 charset:33 > > `,
-			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
-				`values:"abcd\000\000\000efgh13" > > > `,
+			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
+				`values:"abcdefgh13" > > > `,
 			`gtid`,
 			`commit`,
 		}},
