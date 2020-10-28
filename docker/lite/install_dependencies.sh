@@ -34,10 +34,10 @@ BASE_PACKAGES=(
     gnupg
     libaio1
     libatomic1
-    libcurl3
+    libcurl4
     libdbd-mysql-perl
     libev4
-    libjemalloc1
+    libjemalloc2
     libtcmalloc-minimal4
     procps
     rsync
@@ -56,29 +56,51 @@ mysql56)
         libmysqlclient18
         mysql-client
         mysql-server
-        percona-xtrabackup-24
+        libcurl3
+        percona-xtrabackup
     )
     ;;
 mysql57)
+    mysql57_version=5.7.31
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb -O /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-server_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
     PACKAGES=(
-        libmysqlclient20
-        mysql-client
-        mysql-server
+        /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
+        /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
+        /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
+        /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
+        /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
         percona-xtrabackup-24
     )
     ;;
 mysql80)
+    mysql8_version=8.0.21
+    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb -O /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-server_${mysql8_version}-1debian10_amd64.deb
+    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-server_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-server_${mysql8_version}-1debian10_amd64.deb
     PACKAGES=(
-        libmysqlclient21
-        mysql-client
-        mysql-server
+        /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-community-server_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-server_${mysql8_version}-1debian10_amd64.deb
         percona-xtrabackup-80
     )
     ;;
 percona)
     PACKAGES=(
+        libcurl3
         percona-server-server-5.6
-        percona-xtrabackup-24
+        percona-xtrabackup
     )
     ;;
 percona57)
@@ -126,7 +148,7 @@ add_apt_key 9334A25F8507EFA5
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql56)
-    echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.6' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.6' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql57)
     echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.7' > /etc/apt/sources.list.d/mysql.list
@@ -135,7 +157,7 @@ mysql80)
     echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 mariadb)
-    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian buster main' > /etc/apt/sources.list.d/mariadb.list
+    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian stretch main' > /etc/apt/sources.list.d/mariadb.list
     ;;
 mariadb103)
     echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.3/debian buster main' > /etc/apt/sources.list.d/mariadb.list
@@ -144,7 +166,12 @@ esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
-mysql56|mysql57|mysql80|percona|percona57)
+percona|mysql56)
+    # 5.6 is no longer supported on buster
+    echo 'deb http://deb.debian.org/debian stretch main' > /etc/apt/sources.list.d/stretch.list
+    echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list
+    ;;
+mysql57|mysql80|percona57)
     echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)
@@ -185,3 +212,4 @@ apt-get install -y --no-install-recommends "${PACKAGES[@]}"
 # Clean up files we won't need in the final image.
 rm -rf /var/lib/apt/lists/*
 rm -rf /var/lib/mysql/
+rm -rf /tmp/*.deb

@@ -532,7 +532,7 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
 }
 
-//SetAutocommit implements the SessionActions interface
+// SetAutocommit implements the SessionActions interface
 func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
 	if autocommit && vc.safeSession.InTransaction() {
 		if err := vc.executor.Commit(vc.ctx, vc.safeSession); err != nil {
@@ -543,30 +543,30 @@ func (vc *vcursorImpl) SetAutocommit(autocommit bool) error {
 	return nil
 }
 
-//SetClientFoundRows implements the SessionActions interface
+// SetClientFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetClientFoundRows(clientFoundRows bool) error {
 	vc.safeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
 	return nil
 }
 
-//SetSkipQueryPlanCache implements the SessionActions interface
+// SetSkipQueryPlanCache implements the SessionActions interface
 func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) error {
 	vc.safeSession.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
 	return nil
 }
 
-//SetSkipQueryPlanCache implements the SessionActions interface
+// SetSkipQueryPlanCache implements the SessionActions interface
 func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) error {
 	vc.safeSession.GetOrCreateOptions().SqlSelectLimit = limit
 	return nil
 }
 
-//SetSkipQueryPlanCache implements the SessionActions interface
+// SetSkipQueryPlanCache implements the SessionActions interface
 func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
 	vc.safeSession.TransactionMode = mode
 }
 
-//SetWorkload implements the SessionActions interface
+// SetWorkload implements the SessionActions interface
 func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
@@ -580,6 +580,21 @@ func (vc *vcursorImpl) SysVarSetEnabled() bool {
 func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.FoundRows = foundRows
 	vc.safeSession.foundRowsHandled = true
+}
+
+// SetReadAfterWriteGTID implements the SessionActions interface
+func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
+	vc.safeSession.SetReadAfterWriteGTID(vtgtid)
+}
+
+//SetReadAfterWriteTimeout implements the SessionActions interface
+func (vc *vcursorImpl) SetReadAfterWriteTimeout(timeout float64) {
+	vc.safeSession.SetReadAfterWriteTimeout(timeout)
+}
+
+//SetSessionTrackGTIDs implements the SessionActions interface
+func (vc *vcursorImpl) SetSessionTrackGTIDs(enable bool) {
+	vc.safeSession.SetSessionTrackGtids(enable)
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
