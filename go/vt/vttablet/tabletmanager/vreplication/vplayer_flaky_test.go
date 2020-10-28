@@ -40,10 +40,22 @@ func TestCharPK(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, val binary(2), primary key(val))",
 		fmt.Sprintf("create table %s.t1(id int, val binary(2), primary key(val))", vrepldb),
+		"create table t2(id int, val char(2), primary key(val))",
+		fmt.Sprintf("create table %s.t2(id int, val char(2), primary key(val))", vrepldb),
+		"create table t3(id int, val varbinary(2), primary key(val))",
+		fmt.Sprintf("create table %s.t3(id int, val varbinary(2), primary key(val))", vrepldb),
+		"create table t4(id int, val varchar(2), primary key(val))",
+		fmt.Sprintf("create table %s.t4(id int, val varchar(2), primary key(val))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
+		"drop table t2",
+		fmt.Sprintf("drop table %s.t2", vrepldb),
+		"drop table t3",
+		fmt.Sprintf("drop table %s.t3", vrepldb),
+		"drop table t4",
+		fmt.Sprintf("drop table %s.t4", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -51,6 +63,15 @@ func TestCharPK(t *testing.T) {
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",
 			Filter: "select * from t1",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t2",
+		}, {
+			Match:  "t3",
+			Filter: "select * from t3",
+		}, {
+			Match:  "t4",
+			Filter: "select * from t4",
 		}},
 	}
 	bls := &binlogdatapb.BinlogSource{
@@ -67,8 +88,7 @@ func TestCharPK(t *testing.T) {
 		output string
 		table  string
 		data   [][]string
-	}{{
-		// Start with all nulls
+	}{{ //binary(2)
 		input:  "insert into t1 values(1, 'a')",
 		output: "insert into t1(id,val) values (1,'a')",
 		table:  "t1",
@@ -76,12 +96,53 @@ func TestCharPK(t *testing.T) {
 			{"1", "a\000"},
 		},
 	}, {
-		// Start with all nulls
 		input:  "update t1 set id = 2 where val = 'a\000'",
 		output: "update t1 set id=2 where val=cast('a' as binary(2))",
 		table:  "t1",
 		data: [][]string{
 			{"2", "a\000"},
+		},
+	}, { //char(2)
+		input:  "insert into t2 values(1, 'a')",
+		output: "insert into t2(id,val) values (1,'a')",
+		table:  "t2",
+		data: [][]string{
+			{"1", "a"},
+		},
+	}, {
+		input:  "update t2 set id = 2 where val = 'a'",
+		output: "update t2 set id=2 where val='a'",
+		table:  "t2",
+		data: [][]string{
+			{"2", "a"},
+		},
+	}, { //varbinary(2)
+		input:  "insert into t3 values(1, 'a')",
+		output: "insert into t3(id,val) values (1,'a')",
+		table:  "t3",
+		data: [][]string{
+			{"1", "a"},
+		},
+	}, {
+		input:  "update t3 set id = 2 where val = 'a'",
+		output: "update t3 set id=2 where val='a'",
+		table:  "t3",
+		data: [][]string{
+			{"2", "a"},
+		},
+	}, { //varchar(2)
+		input:  "insert into t4 values(1, 'a')",
+		output: "insert into t4(id,val) values (1,'a')",
+		table:  "t4",
+		data: [][]string{
+			{"1", "a"},
+		},
+	}, {
+		input:  "update t4 set id = 2 where val = 'a'",
+		output: "update t4 set id=2 where val='a'",
+		table:  "t4",
+		data: [][]string{
+			{"2", "a"},
 		},
 	}}
 
