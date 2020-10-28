@@ -50,36 +50,38 @@ var sysVarPlanningFunc = map[string]planFunc{}
 
 func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
-	var setOp engine.SetOp
 	var err error
 
 	ec := new(expressionConverter)
 
 	for _, expr := range stmt.Exprs {
+		// AST struct has been prepared before getting here, so no scope here means that
+		// we have a UDV. If the original query didn't explicitly specify the scope, it
+		// would have been explictly set to sqlparser.SessionStr before reaching this
+		// phase of planning
 		switch expr.Scope {
 		case sqlparser.GlobalScope:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported global scope in set: %s", sqlparser.String(expr))
-			// AST struct has been prepared before getting here, so no scope here means that
-			// we have a UDV. If the original query didn't explicitly specify the scope, it
-			// would have been explictly set to sqlparser.SessionStr before reaching this
-			// phase of planning
+			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
+			if err != nil {
+				return nil, err
+			}
+			setOps = append(setOps, setOp)
 		case sqlparser.ImplicitScope:
 			evalExpr, err := ec.convert(expr.Expr /*boolean*/, false /*identifierAsString*/, false)
 			if err != nil {
 				return nil, err
 			}
-			setOp = &engine.UserDefinedVariable{
+			setOp := &engine.UserDefinedVariable{
 				Name: expr.Name.Lowered(),
 				Expr: evalExpr,
 			}
-
 			setOps = append(setOps, setOp)
 		case sqlparser.SessionScope:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct in set: %s", sqlparser.String(expr))
 			}
-			setOp, err = planFunc(expr, vschema, ec)
+			setOp, err := planFunc(expr, vschema, ec)
 			if err != nil {
 				return nil, err
 			}
