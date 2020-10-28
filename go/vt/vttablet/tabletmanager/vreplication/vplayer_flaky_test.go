@@ -34,6 +34,72 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestCharPK(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val binary(2), primary key(val))",
+		fmt.Sprintf("create table %s.t1(id int, val binary(2), primary key(val))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		// Start with all nulls
+		input:  "insert into t1 values(1, 'a')",
+		output: "insert into t1(id,val) values (1,'a')",
+		table:  "t1",
+		data: [][]string{
+			{"1", "a\000"},
+		},
+	}, {
+		// Start with all nulls
+		input:  "update t1 set id = 2 where val = 'a\000'",
+		output: "update t1 set id=2 where val=cast('a' as binary(2))",
+		table:  "t1",
+		data: [][]string{
+			{"2", "a\000"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			"begin",
+			tcases.output,
+			"/update _vt.vreplication set pos",
+			"commit",
+		}
+		expectDBClientQueries(t, output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
 func TestRollup(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
