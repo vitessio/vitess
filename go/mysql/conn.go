@@ -796,6 +796,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					return werr
 				}
 			}
+
+
 		} else {
 			queries = []string{query}
 		}
@@ -810,6 +812,32 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		timings.Record(queryTimingKey, queryStart)
+
+		if err := c.flush(); err != nil {
+			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+			return err
+		}
+
+	case ComFieldList:
+		// support for deprecated COM_FIELD_LIST command
+		// https://dev.mysql.com/doc/internals/en/com-field-list.html
+
+		// flush is called at the end of this block.
+		// We cannot encapsulate it with a defer inside a func because
+		// we have to return from this func if it fails.
+		c.startWriterBuffering()
+
+		//queryStart := time.Now()
+		table, wildcard, err := c.parseComFieldList(data)
+		c.recycleReadPacket()
+		if err != nil {
+			return err
+		}
+
+		if err := c.execFieldList(table, wildcard, handler); err != nil {
+			return err
+		}
+		//timings.Record(queryTimingKey, queryStart)
 
 		if err := c.flush(); err != nil {
 			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
@@ -1171,6 +1199,35 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 
 	return nil
 }
+
+// support for deprecated COM_FIELD_LIST command
+// https://dev.mysql.com/doc/internals/en/com-field-list.html
+// TODO: support wildcard param
+func (c *Conn) execFieldList(table string, wildcard string, handler Handler) error {
+	sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", table)
+
+	err := handler.ComQuery(c, sql, func(qr *sqltypes.Result) error {
+
+		if len(qr.Fields) == 0 {
+			return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
+		}
+
+		// only send meta data, no rows
+		return c.writeFields(qr)
+	})
+
+	if err != nil {
+		if werr := c.writeErrorPacketFromError(err); werr != nil {
+			// If we can't even write the error, we're done.
+			log.Errorf("Error writing query error to %s: %v", c, werr)
+			return werr
+		}
+	}
+	// EOF packet sent in c.writeFields()
+
+	return nil
+}
+
 
 //
 // Packet parsing methods, for generic packets.

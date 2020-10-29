@@ -509,6 +509,24 @@ func (c *Conn) parseComQuery(data []byte) string {
 	return string(data[1:])
 }
 
+// support for deprecated COM_FIELD_LIST command
+// https://dev.mysql.com/doc/internals/en/com-field-list.html
+func (c *Conn) parseComFieldList(data []byte) (table, wildcard string, err error) {
+	pos := 1
+	var ok bool
+	table, pos, ok = readNullString(data, pos)
+	if !ok {
+		err = NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter table failed")
+		return "", "", err
+	}
+	wildcard, pos, ok = readEOFString(data, pos)
+	if !ok {
+		err = NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter field wildcard failed")
+		return "", "", err
+	}
+	return table, wildcard, nil
+}
+
 func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
 	val, _, ok := readUint16(data, 1)
 	return val, ok
