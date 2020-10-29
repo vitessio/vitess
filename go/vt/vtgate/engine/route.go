@@ -389,7 +389,7 @@ func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*quer
 	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }
 
-func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (ks []*srvtopo.ResolvedShard, err error) {
+func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
 	defaultRoute := func() ([]*srvtopo.ResolvedShard, error) {
 		ks := route.Keyspace.Name
 		destinations, _, err := vcursor.ResolveDestinations(ks, nil, []key.Destination{key.DestinationAnyShard{}})
@@ -406,7 +406,18 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	}
 
 	if route.SysTableTableName != nil {
-		return route.routeInfoSchemaTableGivenSchemaAndTable(vcursor, env, bindVars)
+		// the use has specified a table_name - let's check if it's a routed table
+		rss, err := route.paramsRoutedTable(vcursor, env, bindVars)
+		if err != nil {
+			return nil, err
+		}
+		if rss != nil {
+			return rss, nil
+		}
+		// it was not a routed table, and we dont have a schema name to look up. give up
+		if route.SysTableTableSchema == nil {
+			return defaultRoute()
+		}
 	}
 
 	// we only have table_schema to work with
@@ -414,16 +425,18 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	if err != nil {
 		return nil, err
 	}
-	destinations, _, err := vcursor.ResolveDestinations(result.Value().ToString(), nil, []key.Destination{key.DestinationAnyShard{}})
+	specifiedKS := result.Value().ToString()
+	destinations, _, err := vcursor.ResolveDestinations(specifiedKS, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
-		log.Errorf("failed to route information_schema query to keyspace [%s]", result.Value().ToString())
+		log.Errorf("failed to route information_schema query to keyspace [%s]", specifiedKS)
+		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 		return defaultRoute()
 	}
 	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
 	return destinations, nil
 }
 
-func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(vcursor VCursor, env evalengine.ExpressionEnv, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
+func (route *Route) paramsRoutedTable(vcursor VCursor, env evalengine.ExpressionEnv, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
 	val, err := route.SysTableTableName.Evaluate(env)
 	if err != nil {
 		return nil, err
@@ -448,12 +461,19 @@ func (route *Route) routeInfoSchemaTableGivenSchemaAndTable(vcursor VCursor, env
 		return nil, err
 	}
 
-	shards, _, err := vcursor.ResolveDestinations(destination.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
-	bindVars[BvTableName] = sqltypes.StringBindVariable(destination.Name.String())
-	if tableSchema != "" {
-		bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+	if destination != nil {
+		// if we were able to find information about this table, let's use it
+		shards, _, err := vcursor.ResolveDestinations(destination.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		bindVars[BvTableName] = sqltypes.StringBindVariable(destination.Name.String())
+		if tableSchema != "" {
+			bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+		}
+		return shards, err
 	}
-	return shards, err
+
+	// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
+	bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
+	return nil, nil
 }
 
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {

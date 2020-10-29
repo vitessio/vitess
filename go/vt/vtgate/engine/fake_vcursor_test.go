@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/test/utils"
 
-	"github.com/google/go-cmp/cmp"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"golang.org/x/sync/errgroup"
 
@@ -415,14 +416,13 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if len(want) == 0 && len(f.log) == 0 {
-		// both are empty. no need to compare empty array with nil
+	if len(f.log) == 0 && len(want) == 0 {
 		return
 	}
-	diff := cmp.Diff(want, f.log)
-	if diff != "" {
-		t.Fatalf("log not what was expected: %s", diff)
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
+	utils.MustMatch(t, want, f.log, "")
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {
