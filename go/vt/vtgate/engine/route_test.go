@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
@@ -88,22 +89,42 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	type testCase struct {
 		tableSchema, tableName, testName string
 		expectedLog                      []string
+		routed                           bool
 	}
 	tests := []testCase{{
-		testName:    "both schema and table predicates",
+		testName:    "both schema and table predicates - routed table",
 		tableSchema: "schema",
 		tableName:   "table",
+		routed:      true,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
 			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"routedTable\" } false false"},
 	}, {
-		testName:  "table name predicate",
+		testName:    "both schema and table predicates - not routed",
+		tableSchema: "schema",
+		tableName:   "table",
+		routed:      false,
+		expectedLog: []string{
+			"FindTable(`schema`.`table`)",
+			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"table\" } false false"},
+	}, {
+		testName:  "table name predicate - routed table",
 		tableName: "tableName",
+		routed:    true,
 		expectedLog: []string{
 			"FindTable(tableName)",
 			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
 			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vttablename: type:VARBINARY value:\"routedTable\" } false false"},
+	}, {
+		testName:  "table name predicate - not routed",
+		tableName: "tableName",
+		routed:    false,
+		expectedLog: []string{
+			"FindTable(tableName)",
+			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard ks.1: dummy_select {__vttablename: type:VARBINARY value:\"tableName\" } false false"},
 	}, {
 		testName:    "schema predicate",
 		tableSchema: "myKeyspace",
@@ -133,11 +154,13 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			vc := &loggingVCursor{
 				shards:  []string{"1"},
 				results: []*sqltypes.Result{defaultSelectResult},
-				tableRoutes: tableRoutes{
+			}
+			if tc.routed {
+				vc.tableRoutes = tableRoutes{
 					tbl: &vindexes.Table{
 						Name:     sqlparser.NewTableIdent("routedTable"),
 						Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
-					}},
+					}}
 			}
 			_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
