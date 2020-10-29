@@ -822,26 +822,41 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		// support for deprecated COM_FIELD_LIST command
 		// https://dev.mysql.com/doc/internals/en/com-field-list.html
 
-		// flush is called at the end of this block.
-		// We cannot encapsulate it with a defer inside a func because
-		// we have to return from this func if it fails.
-
-		//c.startWriterBuffering()
-
-		table, wildcard, err := c.parseComFieldList(data)
+		// todo: support wildcard param
+		table, _, err := c.parseComFieldList(data)
 		c.recycleReadPacket()
 		if err != nil {
 			return err
 		}
 
-		if err := c.execFieldList(table, wildcard, handler); err != nil {
+		sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", table)
+		err = handler.ComQuery(c, sql, func(qr *sqltypes.Result) error {
+			// only send meta data, no rows
+			if len(qr.Fields) == 0 {
+				return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
+			}
+
+			// for COM_FIELD_LIST response, don't send the number of fields first.
+
+			for _, field := range qr.Fields {
+				if err := c.writeColumnDefinition(field, true); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+		}
+		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+			log.Errorf("Error writing result to %s: %v", c, err)
 			return err
 		}
-
-		//if err := c.flush(); err != nil {
-		//	log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-		//	return err
-		//}
 
 	case ComPing:
 		c.recycleReadPacket()
@@ -993,7 +1008,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					// We should not send any more packets after this.
 					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 				}
-				if err := c.writeFields(qr, false); err != nil {
+				if err := c.writeFields(qr); err != nil {
 					return err
 				}
 			}
@@ -1158,7 +1173,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
 				}
 			}
-			if err := c.writeFields(qr, false); err != nil {
+			if err := c.writeFields(qr); err != nil {
 				return err
 			}
 		}
@@ -1203,29 +1218,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 // https://dev.mysql.com/doc/internals/en/com-field-list.html
 // TODO: support wildcard param
 func (c *Conn) execFieldList(table string, wildcard string, handler Handler) error {
-	sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", table)
 
-	err := handler.ComQuery(c, sql, func(qr *sqltypes.Result) error {
-
-		if len(qr.Fields) == 0 {
-			return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
-		}
-
-		// only send meta data, no rows
-		return c.writeFields(qr, true)
-	})
-
-	if err != nil {
-		if werr := c.writeErrorPacketFromError(err); werr != nil {
-			// If we can't even write the error, we're done.
-			log.Errorf("Error writing query error to %s: %v", c, werr)
-			return werr
-		}
-	}
-	if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-		log.Errorf("Error writing result to %s: %v", c, err)
-		return err
-	}
 	return nil
 }
 

@@ -899,8 +899,10 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field, withDefaults bool) er
 		1 + // decimals
 		2 // filler
 
+	defaultVal := ""
 	if withDefaults {
-		length += lenEncStringSize("")
+		// defaults are only used to support deprecated COM_FIELD_LIST response
+		length += lenEncStringSize(defaultVal)
 	}
 
 	// Get the type and the flags back. If the Field contains
@@ -929,7 +931,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field, withDefaults bool) er
 	pos = writeUint16(data, pos, uint16(0x0000))
 
 	if withDefaults {
-		pos = writeLenEncString(data, pos, "")
+		pos = writeLenEncString(data, pos, defaultVal)
 	}
 
 	if pos != len(data) {
@@ -971,17 +973,15 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 
 // writeFields writes the fields of a Result. It should be called only
 // if there are valid columns in the result.
-func (c *Conn) writeFields(result *sqltypes.Result, withDefaults bool) error {
+func (c *Conn) writeFields(result *sqltypes.Result) error {
 	// Send the number of fields first.
-	if !withDefaults {
-		if err := c.sendColumnCount(uint64(len(result.Fields))); err != nil {
-			return err
-		}
+	if err := c.sendColumnCount(uint64(len(result.Fields))); err != nil {
+		return err
 	}
 
 	// Now send each Field.
 	for _, field := range result.Fields {
-		if err := c.writeColumnDefinition(field, withDefaults); err != nil {
+		if err := c.writeColumnDefinition(field, false); err != nil {
 			return err
 		}
 	}

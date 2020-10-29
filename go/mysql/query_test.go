@@ -646,7 +646,7 @@ func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)
 	}
-	if err := conn.writeFields(result, false); err != nil {
+	if err := conn.writeFields(result); err != nil {
 		return err
 	}
 	if err := conn.writeRows(result); err != nil {
