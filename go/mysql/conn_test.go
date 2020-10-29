@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -448,11 +447,12 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 		cConn.Close()
 	}()
 
-	err := cConn.WriteComQuery("select 1;select 2")
+	err := cConn.WriteComQuery("error;select 2")
 	require.NoError(t, err)
 
-	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection because of execution errors")
 
@@ -474,8 +474,8 @@ func TestMultiStatement(t *testing.T) {
 	err := cConn.WriteComQuery("select 1;select 2")
 	require.NoError(t, err)
 
-	// this handler will return results according to the query. In case the query is "error" it will return an error
-	// panic if the query is "panic" and it will return selectRowsResult in case of any other query
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
 	handler := &testRun{t: t, err: NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection in case of no errors")
@@ -520,8 +520,9 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 	err := cConn.WriteComQuery("select 1;select 2")
 	require.NoError(t, err)
 
-	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection because of execution errors")
 	data, err := cConn.ReadPacket()
@@ -539,10 +540,12 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 		cConn.Close()
 	}()
 
-	err := cConn.writeComInitDB("database")
+	err := cConn.writeComInitDB("error")
 	require.NoError(t, err)
 
-	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection because of execution errors")
 
@@ -551,47 +554,6 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 	require.NotEmpty(t, data)
 	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
 }
-
-type singleRun struct {
-	hasRun bool
-	t      *testing.T
-	err    error
-}
-
-func (h *singleRun) NewConnection(*Conn) {
-	panic("implement me")
-}
-
-func (h *singleRun) ConnectionClosed(*Conn) {
-	panic("implement me")
-}
-
-func (h *singleRun) ComQuery(*Conn, string, func(*sqltypes.Result) error) error {
-	if h.hasRun {
-		debug.PrintStack()
-		h.t.Fatal("don't do this!")
-	}
-	h.hasRun = true
-	return h.err
-}
-
-func (h *singleRun) ComPrepare(*Conn, string, map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	panic("implement me")
-}
-
-func (h *singleRun) ComStmtExecute(*Conn, *PrepareData, func(*sqltypes.Result) error) error {
-	panic("implement me")
-}
-
-func (h *singleRun) WarningCount(*Conn) uint16 {
-	return 0
-}
-
-func (h *singleRun) ComResetConnection(*Conn) {
-	panic("implement me")
-}
-
-var _ Handler = (*singleRun)(nil)
 
 type testRun struct {
 	t   *testing.T
@@ -607,14 +569,13 @@ func (t testRun) ConnectionClosed(c *Conn) {
 }
 
 func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
-	switch query {
-	case "error":
+	if strings.Contains(query, "error") {
 		return t.err
-	case "panic":
-		panic("test panic attack!")
-	default:
-		callback(selectRowsResult)
 	}
+	if strings.Contains(query, "panic") {
+		panic("test panic attack!")
+	}
+	callback(selectRowsResult)
 	return nil
 }
 
