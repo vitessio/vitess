@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/utils"
 
@@ -505,6 +507,9 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 	splitStatementFunction = func(blob string) (pieces []string, err error) {
 		return nil, fmt.Errorf("Error in split statements")
 	}
+	defer func() {
+		splitStatementFunction = sqlparser.SplitStatementToPieces
+	}()
 	sConn.Capabilities |= CapabilityClientMultiStatements
 	defer func() {
 		listener.Close()
