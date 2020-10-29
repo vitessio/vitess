@@ -732,6 +732,9 @@ var (
 		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
 		output: "insert into user(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
 	}, {
+		input:  "insert into customer () values ()",
+		output: "insert into customer values ()",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
