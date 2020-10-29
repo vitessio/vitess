@@ -157,26 +157,40 @@ func TestEmptyStatement(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 	defer exec(t, conn, `delete from t1`)
-	exec(t, conn, " \t;")
-	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');`)
+	execAssertError(t, conn, " \t;", "Query was empty")
+	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result { //nolint:golint,unused
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	return qr
 }
 
-func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString string) { //nolint:golint,unused
+func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {
+	t.Helper()
+	var res []*sqltypes.Result
+	qr, more, err := conn.ExecuteFetchMulti(query, 1000, true)
+	res = append(res, qr)
+	require.NoError(t, err)
+	for more == true {
+		qr, more, _, err = conn.ReadQueryResult(1000, true)
+		require.NoError(t, err)
+		res = append(res, qr)
+	}
+	return res
+}
+
+func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString string) {
 	t.Helper()
 	_, err := conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errorString)
 }
 
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) { //nolint:golint,unused
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)

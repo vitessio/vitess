@@ -180,6 +180,9 @@ type Conn struct {
 	PrepareData map[uint32]*PrepareData
 }
 
+// splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
+var splitStatementFunction func(blob string) (pieces []string, err error) = sqlparser.SplitStatementToPieces
+
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
 	StatementID uint32
@@ -947,14 +950,14 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	if prepare.BindVars == nil ||
 		prepare.ParamsCount == uint16(0) ||
 		paramID >= prepare.ParamsCount {
 		err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	chunk := make([]byte, len(chunkData))
@@ -990,7 +993,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	}
 
 	if err != nil {
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	fieldSent := false
@@ -1033,7 +1036,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
-		if !c.writeErrorPacketFromErrorAndLog(err) {
+		if c.writeErrorPacketFromErrorAndLog(err) {
 			return false
 		}
 	} else {
@@ -1065,14 +1068,14 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err := sqlparser.SplitStatementToPieces(query)
+		queries, err := splitStatementFunction(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			return !c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
 			log.Errorf("Conn %v: can not prepare multiple statements", c, err)
-			return !c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
 		queries = []string{query}
@@ -1088,7 +1091,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	statement, err := sqlparser.ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
-		if !c.writeErrorPacketFromErrorAndLog(err) {
+		if c.writeErrorPacketFromErrorAndLog(err) {
 			return false
 		}
 	}
@@ -1121,7 +1124,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	fld, err := handler.ComPrepare(c, queries[0], bindVars)
 
 	if err != nil {
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
@@ -1191,14 +1194,20 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = sqlparser.SplitStatementToPieces(query)
+		queries, err = splitStatementFunction(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			return !c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
 		queries = []string{query}
 	}
+
+	if len(queries) == 0 {
+		err := NewSQLError(EREmptyQuery, SSSyntaxErrorOrAccessViolation, "Query was empty")
+		return c.writeErrorPacketFromErrorAndLog(err)
+	}
+
 	for index, sql := range queries {
 		more := false
 		if index != len(queries)-1 {
