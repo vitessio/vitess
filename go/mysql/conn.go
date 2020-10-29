@@ -825,9 +825,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		// flush is called at the end of this block.
 		// We cannot encapsulate it with a defer inside a func because
 		// we have to return from this func if it fails.
-		c.startWriterBuffering()
 
-		//queryStart := time.Now()
+		//c.startWriterBuffering()
+
 		table, wildcard, err := c.parseComFieldList(data)
 		c.recycleReadPacket()
 		if err != nil {
@@ -837,12 +837,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		if err := c.execFieldList(table, wildcard, handler); err != nil {
 			return err
 		}
-		//timings.Record(queryTimingKey, queryStart)
 
-		if err := c.flush(); err != nil {
-			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-			return err
-		}
+		//if err := c.flush(); err != nil {
+		//	log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+		//	return err
+		//}
 
 	case ComPing:
 		c.recycleReadPacket()
@@ -994,7 +993,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					// We should not send any more packets after this.
 					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 				}
-				if err := c.writeFields(qr); err != nil {
+				if err := c.writeFields(qr, false); err != nil {
 					return err
 				}
 			}
@@ -1159,7 +1158,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, flag, handler.WarningCount(c))
 				}
 			}
-			if err := c.writeFields(qr); err != nil {
+			if err := c.writeFields(qr, false); err != nil {
 				return err
 			}
 		}
@@ -1213,7 +1212,7 @@ func (c *Conn) execFieldList(table string, wildcard string, handler Handler) err
 		}
 
 		// only send meta data, no rows
-		return c.writeFields(qr)
+		return c.writeFields(qr, true)
 	})
 
 	if err != nil {
@@ -1223,8 +1222,10 @@ func (c *Conn) execFieldList(table string, wildcard string, handler Handler) err
 			return werr
 		}
 	}
-	// EOF packet sent in c.writeFields()
-
+	if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+		log.Errorf("Error writing result to %s: %v", c, err)
+		return err
+	}
 	return nil
 }
 
