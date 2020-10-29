@@ -435,6 +435,14 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", str)
 		}
+	case sysvars.VtgateLog.Name:
+		err = svss.setBoolSysVar(env, func(b bool) error {
+			if b {
+				return vcursor.StartLogging()
+			}
+			vcursor.StopLogging()
+			return nil
+		})
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct %s", svss.Name)
 	}

@@ -93,6 +93,10 @@ type (
 		InTransactionAndIsDML() bool
 
 		LookupRowLockShardSession() vtgatepb.CommitOrder
+
+		StartLogging() error
+
+		StopLogging()
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

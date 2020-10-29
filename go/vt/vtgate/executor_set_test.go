@@ -243,6 +243,17 @@ func TestExecutorSet(t *testing.T) {
 	}
 }
 
+func TestGlobalSystemVariables(t *testing.T) {
+	executorEnv, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: true})
+	_, err := executorEnv.Execute(context.Background(), "TestGlobalSystemVariables", session, "set vtgate_log = true", nil)
+	require.NoError(t, err)
+	require.True(t, executorEnv.isLogging, "Logging should be started by setting the vtgate_log to true")
+	executorEnv.Execute(context.Background(), "TestGlobalSystemVariables", session, "set vtgate_log = false", nil)
+	require.False(t, executorEnv.isLogging, "Logging should be stopped by setting the vtgate_log to false")
+
+}
+
 func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	*sysVarSetEnabled = true

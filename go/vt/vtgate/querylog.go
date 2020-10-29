@@ -53,11 +53,12 @@ func initQueryLogger(vtg *VTGate) error {
 		queryzHandler(vtg.executor, w, r)
 	})
 
-	if *queryLogToFile != "" {
-		_, err := QueryLogger.LogToFile(*queryLogToFile, streamlog.GetFormatter(QueryLogger))
-		if err != nil {
-			return err
-		}
+	if *queryLogToFile == "" {
+		//TODO : Add a good name for the log file
+		str := "vtgate_query.log"
+		queryLogToFile = &str
+	} else {
+		return vtg.executor.StartLogging()
 	}
 
 	return nil

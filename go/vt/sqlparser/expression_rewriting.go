@@ -129,7 +129,8 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 		sysvars.Workload.Name,
 		sysvars.ReadAfterWriteGTID.Name,
 		sysvars.ReadAfterWriteTimeOut.Name,
-		sysvars.SessionTrackGTIDs.Name:
+		sysvars.SessionTrackGTIDs.Name,
+		sysvars.VtgateLog.Name:
 		cursor.Replace(bindVarExpression("__vt" + lowered))
 		er.bindVars.AddSysVar(lowered)
 	}

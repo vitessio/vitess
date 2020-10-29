@@ -68,6 +68,9 @@ type iExecute interface {
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
+
+	StartLogging() error
+	StopLogging()
 }
 
 //VSchemaOperator is an interface to Vschema Operations
@@ -611,4 +614,12 @@ func (vc *vcursorImpl) planPrefixKey() string {
 		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
 	}
 	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])
+}
+
+func (vc *vcursorImpl) StartLogging() error {
+	return vc.executor.StartLogging()
+}
+
+func (vc vcursorImpl) StopLogging() {
+	vc.executor.StopLogging()
 }

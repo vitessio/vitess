@@ -196,6 +196,14 @@ func (t noopVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
 	panic("unimplemented")
 }
 
+func (t noopVCursor) StartLogging() error {
+	panic("unimplemented")
+}
+
+func (t noopVCursor) StopLogging() {
+	panic("unimplemented")
+}
+
 var _ VCursor = (*loggingVCursor)(nil)
 var _ SessionActions = (*loggingVCursor)(nil)
 
@@ -458,6 +466,14 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 		return &sqltypes.Result{}, f.resultErr
 	}
 	return r, nil
+}
+
+func (f *loggingVCursor) StartLogging() error {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) StopLogging() {
+	panic("implement me")
 }
 
 func expectError(t *testing.T, msg string, err error, want string) {

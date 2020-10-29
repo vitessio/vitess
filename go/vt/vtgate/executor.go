@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/vt/sysvars"
 
 	"golang.org/x/net/context"
@@ -100,6 +102,9 @@ type Executor struct {
 	streamSize   int
 	plans        *cache.LRUCache
 	vschemaStats *VSchemaStats
+
+	logChan   chan interface{}
+	isLogging bool
 
 	vm *VSchemaManager
 }
@@ -310,6 +315,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				}
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.VtgateLog.Name:
+			bindVars[key] = sqltypes.BoolBindVariable(e.isLogging)
 		}
 	}
 
@@ -1693,4 +1700,26 @@ func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*
 //ExecuteLock implments the IExecutor interface
 func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
 	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
+}
+
+// StartLogging starts the logging in VTgate
+func (e *Executor) StartLogging() error {
+	if e.isLogging {
+		return nil
+	}
+	var err error
+	e.logChan, err = QueryLogger.LogToFile(*queryLogToFile, streamlog.GetFormatter(QueryLogger))
+	if err == nil {
+		e.isLogging = true
+	}
+	return err
+}
+
+// StopLogging stops the logging in VTgate
+func (e *Executor) StopLogging() {
+	if !e.isLogging {
+		return
+	}
+	QueryLogger.Unsubscribe(e.logChan)
+	e.isLogging = false
 }
