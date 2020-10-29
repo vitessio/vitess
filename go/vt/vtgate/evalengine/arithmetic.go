@@ -387,10 +387,9 @@ func newEvalResult(v sqltypes.Value) (EvalResult, error) {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
-	case v.IsDateTime():
-		return EvalResult{typ: sqltypes.Datetime, bytes: raw}, nil
+	default:
+		return EvalResult{typ: v.Type(), bytes: raw}, nil
 	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not be reached. got %s", v.String())
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
@@ -754,7 +753,7 @@ func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 			}
 			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64))
 		}
-	case resultType == sqltypes.VarChar || resultType == sqltypes.VarBinary || resultType == sqltypes.Binary || resultType == sqltypes.Text || resultType == sqltypes.Datetime:
+	default:
 		return sqltypes.MakeTrusted(resultType, v.bytes)
 	}
 	return sqltypes.NULL

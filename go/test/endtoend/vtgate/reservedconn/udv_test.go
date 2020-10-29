@@ -56,7 +56,7 @@ func TestSetUDV(t *testing.T) {
 		expectedRows: "", rowsAffected: 0,
 	}, { // This is handled at vtgate.
 		query:        "select @foo, @bar, @baz, @tablet",
-		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARCHAR("foobar")]]`, rowsAffected: 1,
+		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARBINARY("foobar")]]`, rowsAffected: 1,
 	}, { // Cannot really check a specific value for sql_mode as it will differ based on database selected to run these tests.
 		query:        "select @OLD_SQL_MODE = @@SQL_MODE",
 		expectedRows: `[[INT64(1)]]`, rowsAffected: 1,
@@ -142,5 +142,5 @@ func TestUserDefinedVariableResolvedAtTablet(t *testing.T) {
 	qr, err := exec(t, conn, "select @foo")
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", qr.Rows)
-	utils.MustMatch(t, `[[VARCHAR("AnyExpressionIsValid")]]`, got, "didnt match")
+	utils.MustMatch(t, `[[VARBINARY("AnyExpressionIsValid")]]`, got, "didnt match")
 }
