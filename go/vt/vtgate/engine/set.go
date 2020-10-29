@@ -182,6 +182,11 @@ func (u *UserDefinedVariable) VariableName() string {
 
 //Execute implements the SetOp interface method.
 func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+	col, ok := u.Expr.(*evalengine.Column)
+	if ok {
+		value := env.Row[col.Offset]
+		return vcursor.Session().SetUDV(u.Name, value)
+	}
 	value, err := u.Expr.Evaluate(env)
 	if err != nil {
 		return err
