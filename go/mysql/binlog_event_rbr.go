@@ -700,7 +700,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		// now the full digits, 32 bits each, 9 digits
 		for i := 0; i < intg0; i++ {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
-			fmt.Fprintf(txt, "%9d", val)
+			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
 		}
 
