@@ -763,16 +763,15 @@ func TestReplicaInOtherCell(t *testing.T) {
 	hc := NewHealthCheck(context.Background(), 1*time.Millisecond, time.Hour, ts, "cell1", "cell1, cell2")
 	defer hc.Close()
 
-	// add a tablet as replica in different cell
-	tablet := createTestTablet(1, "cell2", "host1")
-	tablet.Type = topodatapb.TabletType_REPLICA
+	// add a tablet as replica
+	local := createTestTablet(1, "cell1", "host1")
+	local.Type = topodatapb.TabletType_REPLICA
 	input := make(chan *querypb.StreamHealthResponse)
-	fc := createFakeConn(tablet, input)
+	fc := createFakeConn(local, input)
 	// create a channel and subscribe to healthcheck
 	resultChan := hc.Subscribe()
-	hc.AddTablet(tablet)
-	// should get a result, but this will hang if multi-cell logic is broken
-	// so wait and timeout
+	hc.AddTablet(local)
+
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
@@ -783,14 +782,14 @@ func TestReplicaInOtherCell(t *testing.T) {
 	}
 
 	shr := &querypb.StreamHealthResponse{
-		TabletAlias:                         tablet.Alias,
+		TabletAlias:                         local.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
 	}
 	want := &TabletHealth{
-		Tablet:              tablet,
+		Tablet:              local,
 		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:             true,
 		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
@@ -809,10 +808,56 @@ func TestReplicaInOtherCell(t *testing.T) {
 		require.Fail(t, "Timed out waiting for HealthCheck update")
 	}
 
-	// check that REPLICA tablet from other cell is NOT in healthy tablet list
-	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Empty(t, a)
+	// add a tablet as replica in different cell
+	remote := createTestTablet(2, "cell2", "host2")
+	remote.Type = topodatapb.TabletType_REPLICA
+	input2 := make(chan *querypb.StreamHealthResponse)
+	fc2 := createFakeConn(remote, input2)
+	// create a channel and subscribe to healthcheck
+	resultChan2 := hc.Subscribe()
+	hc.AddTablet(remote)
+	// should get a result, but this will hang if multi-cell logic is broken
+	// so wait and timeout
+	ticker = time.NewTicker(1 * time.Second)
+	select {
+	case err := <-fc2.cbErrCh:
+		require.Fail(t, "Unexpected error: %v", err)
+	case <-resultChan2:
+	case <-ticker.C:
+		require.Fail(t, "Timed out waiting for HealthCheck update")
+	}
 
+	shr2 := &querypb.StreamHealthResponse{
+		TabletAlias:                         remote.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+	}
+	want2 := &TabletHealth{
+		Tablet:              remote,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 10, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}
+
+	input2 <- shr2
+	ticker = time.NewTicker(1 * time.Second)
+	select {
+	case err := <-fc.cbErrCh:
+		require.Fail(t, "Unexpected error: %v", err)
+	case got := <-resultChan2:
+		// check that we DO receive health check update for REPLICA in other cell
+		mustMatch(t, want2, got, "Wrong TabletHealth data")
+	case <-ticker.C:
+		require.Fail(t, "Timed out waiting for HealthCheck update")
+	}
+
+	// check that only REPLICA tablet from cell1 is in healthy tablet list
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	require.Len(t, a, 1, "")
+	mustMatch(t, want, a[0], "Expecting healthy local replica")
 }
 
 func TestCellAliases(t *testing.T) {
