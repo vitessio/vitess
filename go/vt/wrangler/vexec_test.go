@@ -163,9 +163,11 @@ func TestVExec(t *testing.T) {
 }
 
 func TestWorkflowStatusUpdate(t *testing.T) {
-	require.Equal(t, "Error", updateState("master tablet not contactable", "Running", nil, 0))
+	require.Equal(t, "Running", updateState("for vdiff", "Running", nil, int64(time.Now().Second())))
+	require.Equal(t, "Running", updateState("", "Running", nil, int64(time.Now().Second())))
 	require.Equal(t, "Lagging", updateState("", "Running", nil, int64(time.Now().Second())-100))
 	require.Equal(t, "Copying", updateState("", "Running", []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
+	require.Equal(t, "Error", updateState("error: master tablet not contactable", "Running", nil, 0))
 }
 
 func TestWorkflowListStreams(t *testing.T) {
