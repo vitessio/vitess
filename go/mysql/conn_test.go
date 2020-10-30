@@ -340,6 +340,65 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
 }
 
+func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
+	// Set the conn for the server connection to the simulated connection which always returns an error on writing
+	sConn := newConn(testConn{
+		writeToPass: []bool{false, true},
+		pos:         -1,
+		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComQuery, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
+			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
+	})
+
+	// this handler will return an error on the first run, and fail the test if it's run more times
+	errorString := make([]byte, 17000)
+	handler := &singleRun{t: t, err: fmt.Errorf(string(errorString))}
+	res := sConn.handleNextCommand(handler)
+	require.False(t, res, "we should beak the connection in case of error writing error packet")
+}
+
+func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
+	// Set the conn for the server connection to the simulated connection which always returns an error on writing
+	sConn := newConn(testConn{
+		writeToPass: []bool{false, true},
+		pos:         -1,
+		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtSendLongData, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
+			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
+	})
+
+	// this handler will return an error on the first run, and fail the test if it's run more times
+	handler := &singleRun{t: t, err: fmt.Errorf("not used")}
+	res := sConn.handleNextCommand(handler)
+	require.False(t, res, "we should beak the connection in case of error writing error packet")
+}
+
+func TestConnectionErrorWhileWritingComPrepare(t *testing.T) {
+	// Set the conn for the server connection to the simulated connection which always returns an error on writing
+	sConn := newConn(testConn{
+		writeToPass: []bool{false},
+		pos:         -1,
+		queryPacket: []byte{0x01, 0x00, 0x00, 0x00, ComPrepare},
+	})
+	sConn.Capabilities = sConn.Capabilities | CapabilityClientMultiStatements
+	// this handler will return an error on the first run, and fail the test if it's run more times
+	handler := &singleRun{t: t, err: fmt.Errorf("not used")}
+	res := sConn.handleNextCommand(handler)
+	require.False(t, res, "we should beak the connection in case of error writing error packet")
+}
+
+func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
+	// Set the conn for the server connection to the simulated connection which always returns an error on writing
+	sConn := newConn(testConn{
+		writeToPass: []bool{false},
+		pos:         -1,
+		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtExecute, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
+			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
+	})
+	// this handler will return an error on the first run, and fail the test if it's run more times
+	handler := &singleRun{t: t, err: fmt.Errorf("not used")}
+	res := sConn.handleNextCommand(handler)
+	require.False(t, res, "we should beak the connection in case of error writing error packet")
+}
+
 type singleRun struct {
 	hasRun bool
 	t      *testing.T
@@ -380,3 +439,64 @@ func (h *singleRun) ComResetConnection(*Conn) {
 }
 
 var _ Handler = (*singleRun)(nil)
+
+type testConn struct {
+	writeToPass []bool
+	pos         int
+	queryPacket []byte
+}
+
+func (t testConn) Read(b []byte) (n int, err error) {
+	for j, i := range t.queryPacket {
+		b[j] = i
+	}
+	return len(b), nil
+}
+
+func (t testConn) Write(b []byte) (n int, err error) {
+	t.pos = t.pos + 1
+	if t.writeToPass[t.pos] {
+		return 0, nil
+	}
+	return 0, fmt.Errorf("error in writing to connection")
+}
+
+func (t testConn) Close() error {
+	panic("implement me")
+}
+
+func (t testConn) LocalAddr() net.Addr {
+	panic("implement me")
+}
+
+func (t testConn) RemoteAddr() net.Addr {
+	return mockAddress{s: "a"}
+}
+
+func (t testConn) SetDeadline(t1 time.Time) error {
+	panic("implement me")
+}
+
+func (t testConn) SetReadDeadline(t1 time.Time) error {
+	panic("implement me")
+}
+
+func (t testConn) SetWriteDeadline(t1 time.Time) error {
+	panic("implement me")
+}
+
+var _ net.Conn = (*testConn)(nil)
+
+type mockAddress struct {
+	s string
+}
+
+func (m mockAddress) Network() string {
+	return m.s
+}
+
+func (m mockAddress) String() string {
+	return m.s
+}
+
+var _ net.Addr = (*mockAddress)(nil)
