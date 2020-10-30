@@ -174,7 +174,7 @@ func TestInsertAllDefaults(t *testing.T) {
 	defer conn.Close()
 
 	exec(t, conn, `insert into allDefaults () values ()`)
-	assertMatches(t, conn, `select * from allDefaults`, `"[[INT64(1) NULL]]"`)
+	assertMatches(t, conn, `select * from allDefaults`, "[[INT64(1) NULL]]")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
