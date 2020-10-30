@@ -25,9 +25,9 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-    - name: Run make tools
+    - name: Run make minimaltools
       run: |
-        make tools
+        make minimaltools
 
     - name: unit_race
       run: |
