@@ -893,14 +893,14 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	if prepare.BindVars == nil ||
 		prepare.ParamsCount == uint16(0) ||
 		paramID >= prepare.ParamsCount {
 		err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	chunk := make([]byte, len(chunkData))
@@ -936,7 +936,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	}
 
 	if err != nil {
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	fieldSent := false
@@ -1003,14 +1003,15 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err := sqlparser.SplitStatementToPieces(query)
+		var err error
+		queries, err = sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			return !c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
 			log.Errorf("Conn %v: can not prepare multiple statements", c, err)
-			return !c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
 		queries = []string{query}
@@ -1059,7 +1060,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	fld, err := handler.ComPrepare(c, queries[0], bindVars)
 
 	if err != nil {
-		return !c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
@@ -1132,7 +1133,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 		queries, err = sqlparser.SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			return !c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
 		queries = []string{query}
@@ -1153,7 +1154,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 }
 
 func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
-	fieldSent := false
+	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
@@ -1167,8 +1168,8 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 			return io.EOF
 		}
 
-		if !fieldSent {
-			fieldSent = true
+		if !callbackCalled {
+			callbackCalled = true
 
 			if len(qr.Fields) == 0 {
 				sendFinished = true
@@ -1189,8 +1190,8 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return c.writeRows(qr)
 	})
 
-	// If no field was sent, we expect an error.
-	if !fieldSent {
+	// If callback was not called, we expect an error.
+	if !callbackCalled {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
