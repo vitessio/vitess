@@ -796,8 +796,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					return werr
 				}
 			}
-
-
 		} else {
 			queries = []string{query}
 		}
@@ -1213,15 +1211,6 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 
 	return nil
 }
-
-// support for deprecated COM_FIELD_LIST command
-// https://dev.mysql.com/doc/internals/en/com-field-list.html
-// TODO: support wildcard param
-func (c *Conn) execFieldList(table string, wildcard string, handler Handler) error {
-
-	return nil
-}
-
 
 //
 // Packet parsing methods, for generic packets.
