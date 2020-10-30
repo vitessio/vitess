@@ -509,6 +509,24 @@ func (c *Conn) parseComQuery(data []byte) string {
 	return string(data[1:])
 }
 
+// support for deprecated COM_FIELD_LIST command
+// https://dev.mysql.com/doc/internals/en/com-field-list.html
+func (c *Conn) parseComFieldList(data []byte) (table, wildcard string, err error) {
+	pos := 1
+	var ok bool
+	table, pos, ok = readNullString(data, pos)
+	if !ok {
+		err = NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter table failed")
+		return "", "", err
+	}
+	wildcard, pos, ok = readEOFString(data, pos)
+	if !ok {
+		err = NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading parameter field wildcard failed")
+		return "", "", err
+	}
+	return table, wildcard, nil
+}
+
 func (c *Conn) parseComSetOption(data []byte) (uint16, bool) {
 	val, _, ok := readUint16(data, 1)
 	return val, ok
@@ -866,7 +884,7 @@ func (c *Conn) sendColumnCount(count uint64) error {
 	return c.writeEphemeralPacket()
 }
 
-func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
+func (c *Conn) writeColumnDefinition(field *querypb.Field, withDefaults bool) error {
 	length := 4 + // lenEncStringSize("def")
 		lenEncStringSize(field.Database) +
 		lenEncStringSize(field.Table) +
@@ -880,6 +898,12 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		2 + // flags
 		1 + // decimals
 		2 // filler
+
+	defaultVal := ""
+	if withDefaults {
+		// defaults are only used to support deprecated COM_FIELD_LIST response
+		length += lenEncStringSize(defaultVal)
+	}
 
 	// Get the type and the flags back. If the Field contains
 	// non-zero flags, we use them. Otherwise use the flags we
@@ -905,6 +929,10 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	pos = writeUint16(data, pos, uint16(flags))
 	pos = writeByte(data, pos, byte(field.Decimals))
 	pos = writeUint16(data, pos, uint16(0x0000))
+
+	if withDefaults {
+		pos = writeLenEncString(data, pos, defaultVal)
+	}
 
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packing of column definition used %v bytes instead of %v", pos, len(data))
@@ -953,7 +981,7 @@ func (c *Conn) writeFields(result *sqltypes.Result) error {
 
 	// Now send each Field.
 	for _, field := range result.Fields {
-		if err := c.writeColumnDefinition(field); err != nil {
+		if err := c.writeColumnDefinition(field, false); err != nil {
 			return err
 		}
 	}
@@ -1031,7 +1059,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 			if err := c.writeColumnDefinition(&querypb.Field{
 				Name:    "?",
 				Type:    sqltypes.VarBinary,
-				Charset: 63}); err != nil {
+				Charset: 63}, false); err != nil {
 				return err
 			}
 		}
@@ -1048,7 +1076,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	for i, field := range fld {
 		field.Name = strings.Replace(field.Name, "'?'", "?", -1)
 		prepare.ColumnNames[i] = field.Name
-		if err := c.writeColumnDefinition(field); err != nil {
+		if err := c.writeColumnDefinition(field, false); err != nil {
 			return err
 		}
 	}

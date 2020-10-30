@@ -816,6 +816,46 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 
+	case ComFieldList:
+		// support for deprecated COM_FIELD_LIST command
+		// https://dev.mysql.com/doc/internals/en/com-field-list.html
+
+		// todo: support wildcard param
+		table, _, err := c.parseComFieldList(data)
+		c.recycleReadPacket()
+		if err != nil {
+			return err
+		}
+
+		sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", table)
+		err = handler.ComQuery(c, sql, func(qr *sqltypes.Result) error {
+			// only send meta data, no rows
+			if len(qr.Fields) == 0 {
+				return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
+			}
+
+			// for COM_FIELD_LIST response, don't send the number of fields first.
+
+			for _, field := range qr.Fields {
+				if err := c.writeColumnDefinition(field, true); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+		}
+		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+			log.Errorf("Error writing result to %s: %v", c, err)
+			return err
+		}
+
 	case ComPing:
 		c.recycleReadPacket()
 		// Return error if listener was shut down and OK otherwise
