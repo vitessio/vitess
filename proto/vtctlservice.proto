@@ -28,3 +28,9 @@ import "vtctldata.proto";
 service Vtctl {
   rpc ExecuteVtctlCommand (vtctldata.ExecuteVtctlCommandRequest) returns (stream vtctldata.ExecuteVtctlCommandResponse) {};
 }
+
+service Vtctld {
+  rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.Keyspace) {}; 
+  rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  rpc ShowAllKeyspaces(vtctldata.ShowAllKeyspacesRequest) returns (stream vtctldata.Keyspace) {};
+}
