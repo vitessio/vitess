@@ -21,6 +21,7 @@ of the remote execution of vtctl commands.
 package grpcvtctlserver
 
 import (
+	"context"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -80,4 +81,54 @@ func (s *VtctlServer) ExecuteVtctlCommand(args *vtctldatapb.ExecuteVtctlCommandR
 // StartServer registers the VtctlServer for RPCs
 func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctlServer(s, NewVtctlServer(ts))
+	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
+}
+
+type VtctldServer struct {
+	ts *topo.Server
+}
+
+func NewVtctldServer(ts *topo.Server) *VtctldServer {
+	return &VtctldServer{ts}
+}
+
+func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.Keyspace, error) {
+	keyspace, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.Keyspace{
+		Name:     req.Keyspace,
+		Keyspace: keyspace.Keyspace,
+	}, nil
+}
+
+func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest) (*vtctldatapb.GetKeyspacesResponse, error) {
+	keyspaces, err := s.ts.GetKeyspaces(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
+}
+
+func (s *VtctldServer) ShowAllKeyspaces(req *vtctldatapb.ShowAllKeyspacesRequest, stream vtctlservicepb.Vtctld_ShowAllKeyspacesServer) error {
+	ctx := stream.Context()
+
+	keyspaces, err := s.ts.GetKeyspaces(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, keyspace := range keyspaces {
+		ks, err := s.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: keyspace})
+		if err != nil {
+			return err
+		}
+
+		stream.Send(ks)
+	}
+
+	return nil
 }
