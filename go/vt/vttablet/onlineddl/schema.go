@@ -46,7 +46,7 @@ const (
 		artifacts varchar(1024) NOT NULL,
 		PRIMARY KEY (id),
 		UNIQUE KEY uuid_idx (migration_uuid),
-		KEY keyspace_shard_idx (keyspace,shard),
+		KEY keyspace_shard_idx (keyspace(64),shard(64)),
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
