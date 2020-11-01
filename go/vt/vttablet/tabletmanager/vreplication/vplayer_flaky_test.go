@@ -92,7 +92,6 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 	require.Greater(t, timeUpdated2, transactionTimestamp1, "transaction_timestamp should not be < time_updated")
 }
 
-
 func TestCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -105,6 +104,10 @@ func TestCharPK(t *testing.T) {
 		fmt.Sprintf("create table %s.t3(id int, val varbinary(2), primary key(val))", vrepldb),
 		"create table t4(id int, val varchar(2), primary key(val))",
 		fmt.Sprintf("create table %s.t4(id int, val varchar(2), primary key(val))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
 		"drop table t2",
 		fmt.Sprintf("drop table %s.t2", vrepldb),
 		"drop table t3",
@@ -215,7 +218,6 @@ func TestCharPK(t *testing.T) {
 		}
 	}
 }
-
 func TestRollup(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
