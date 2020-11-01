@@ -126,7 +126,10 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 		sysvars.SkipQueryPlanCache.Name,
 		sysvars.SQLSelectLimit.Name,
 		sysvars.TransactionMode.Name,
-		sysvars.Workload.Name:
+		sysvars.Workload.Name,
+		sysvars.ReadAfterWriteGTID.Name,
+		sysvars.ReadAfterWriteTimeOut.Name,
+		sysvars.SessionTrackGTIDs.Name:
 		cursor.Replace(bindVarExpression("__vt" + lowered))
 		er.bindVars.AddSysVar(lowered)
 	}

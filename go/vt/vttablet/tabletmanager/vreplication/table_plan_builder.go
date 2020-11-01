@@ -65,8 +65,10 @@ type colExpr struct {
 	// references contains all the column names referenced in the expression.
 	references map[string]bool
 
-	isGrouped bool
-	isPK      bool
+	isGrouped  bool
+	isPK       bool
+	dataType   string
+	columnType string
 }
 
 // operation is the opcode for the colExpr.
@@ -470,12 +472,14 @@ func (tpb *tablePlanBuilder) analyzePK(pkInfoMap map[string][]*PrimaryKeyInfo) e
 	for _, pkcol := range pkcols {
 		cexpr := tpb.findCol(sqlparser.NewColIdent(pkcol.Name))
 		if cexpr == nil {
-			return fmt.Errorf("primary key column %s not found in select list", pkcol)
+			return fmt.Errorf("primary key column %v not found in select list", pkcol)
 		}
 		if cexpr.operation != opExpr {
-			return fmt.Errorf("primary key column %s is not allowed to reference an aggregate expression", pkcol)
+			return fmt.Errorf("primary key column %v is not allowed to reference an aggregate expression", pkcol)
 		}
 		cexpr.isPK = true
+		cexpr.dataType = pkcol.DataType
+		cexpr.columnType = pkcol.ColumnType
 		tpb.pkCols = append(tpb.pkCols, cexpr)
 	}
 	return nil
@@ -662,16 +666,29 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
+// For binary(n) column types, the value in the where clause needs to be padded with nulls upto the length of the column
+// for MySQL comparison to work properly. This is achieved by casting it to the column type
+func castIfNecessary(buf *sqlparser.TrackedBuffer, cexpr *colExpr) {
+	if cexpr.dataType == "binary" {
+		buf.Myprintf("cast(%v as %s)", cexpr.expr, cexpr.columnType)
+		return
+	}
+	buf.Myprintf("%v", cexpr.expr)
+}
+
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
 	buf.WriteString(" where ")
 	bvf.mode = bvBefore
 	separator := ""
 	for _, cexpr := range tpb.pkCols {
 		if _, ok := cexpr.expr.(*sqlparser.ColName); ok {
-			buf.Myprintf("%s%v=%v", separator, cexpr.colName, cexpr.expr)
+			buf.Myprintf("%s%v=", separator, cexpr.colName)
+			castIfNecessary(buf, cexpr)
 		} else {
 			// Parenthesize non-trivial expressions.
-			buf.Myprintf("%s%v=(%v)", separator, cexpr.colName, cexpr.expr)
+			buf.Myprintf("%s%v=(", separator, cexpr.colName)
+			castIfNecessary(buf, cexpr)
+			buf.Myprintf(")")
 		}
 		separator = " and "
 	}

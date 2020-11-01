@@ -70,7 +70,7 @@ CREATE TABLE t1 (
                     "name": "c4",
                     "type": "VARCHAR"
                 }
-            ],
+            ]
         }
     }
 }
@@ -111,6 +111,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestSelectIntoAndLoadFrom(t *testing.T) {
+	// Test is skipped because it requires secure-file-priv variable to be set to not NULL or empty.
+	t.Skip()
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
@@ -123,33 +125,42 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 
 	defer exec(t, conn, `delete from t1`)
 	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc')`)
-
-	exec(t, conn, `select * from t1 into outfile 'x.txt'`)
-	execAssertError(t, conn, `load data infile 'x.txt' into table t1`, "ERROR 1062 (23000): Duplicate entry '300' for key 'PRIMARY'")
+	res := exec(t, conn, `select @@secure_file_priv;`)
+	directory := res.Rows[0][0].ToString()
+	query := `select * from t1 into outfile '` + directory + `x.txt'`
+	exec(t, conn, query)
+	defer os.Remove(directory + `x.txt`)
+	query = `load data infile '` + directory + `x.txt' into table t1`
+	execAssertError(t, conn, query, "Duplicate entry '300' for key 'PRIMARY'")
 	exec(t, conn, `delete from t1`)
-	exec(t, conn, `load data infile 'x.txt' into table t1`)
+	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
-	exec(t, conn, `select * from t1 into dumpfile 'x1.txt'`)
-	exec(t, conn, `select * from t1 into outfile 'x2.txt' Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`)
-	exec(t, conn, `load data infile 'x.txt' into replace table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`)
+	query = `select * from t1 into dumpfile '` + directory + `x1.txt'`
+	exec(t, conn, query)
+	defer os.Remove(directory + `x1.txt`)
+	query = `select * from t1 into outfile '` + directory + `x2.txt' Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
+	exec(t, conn, query)
+	defer os.Remove(directory + `x2.txt`)
+	query = `load data infile '` + directory + `x2.txt' replace into table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
+	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result { //nolint:golint,unused
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	return qr
 }
 
-func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString string) {
+func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString string) { //nolint:golint,unused
 	t.Helper()
 	_, err := conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errorString)
 }
 
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) { //nolint:golint,unused
 	t.Helper()
 	qr := exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)

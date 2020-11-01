@@ -37,6 +37,7 @@ type SystemVariable struct {
 	Name string
 }
 
+// System Settings
 var (
 	on   = "1"
 	off  = "0"
@@ -53,6 +54,11 @@ var (
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 
+	// Read After Write settings
+	ReadAfterWriteGTID    = SystemVariable{Name: "read_after_write_gtid"}
+	ReadAfterWriteTimeOut = SystemVariable{Name: "read_after_write_timeout"}
+	SessionTrackGTIDs     = SystemVariable{Name: "session_track_gtids", IdentifierAsString: true}
+
 	VitessAware = []SystemVariable{
 		Autocommit,
 		ClientFoundRows,
@@ -64,6 +70,9 @@ var (
 		Workload,
 		Charset,
 		Names,
+		ReadAfterWriteGTID,
+		ReadAfterWriteTimeOut,
+		SessionTrackGTIDs,
 	}
 
 	IgnoreThese = []SystemVariable{
@@ -210,7 +219,6 @@ var (
 		{Name: "net_read_timeout"},
 		{Name: "net_retry_count"},
 		{Name: "net_write_timeout"},
-		{Name: "session_track_gtids"},
 		{Name: "session_track_schema", IsBoolean: true},
 		{Name: "session_track_state_change", IsBoolean: true},
 		{Name: "session_track_system_variables"},
