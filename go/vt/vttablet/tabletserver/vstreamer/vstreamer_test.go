@@ -53,6 +53,75 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 	return false
 }
 
+type TestColumn struct {
+	name, dataType, colType string
+	len, charset            int64
+}
+
+type TestFieldEvent struct {
+	table, db string
+	cols      []*TestColumn
+}
+
+func (tfe *TestFieldEvent) String() string {
+	s := fmt.Sprintf("type:FIELD field_event:<table_name:\"%s\"", tfe.table)
+	fld := " "
+	for _, col := range tfe.cols {
+		fld += fmt.Sprintf("fields:<name:\"%s\" type:%s table:\"%s\" org_table:\"%s\" database:\"%s\" org_name:\"%s\" column_length:%d charset:%d",
+			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.charset)
+		if col.colType != "" {
+			fld += fmt.Sprintf(" column_type:\"%s\"", col.colType)
+		}
+		fld += " > "
+	}
+	s += fld
+	s += "> "
+	return s
+}
+
+func TestSetAndEnum(t *testing.T) {
+
+	execStatements(t, []string{
+		"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa', 'red,blue', 'S')",
+		"insert into t1 values (2, 'bbb', 'green', 'M')",
+		"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "", len: 11, charset: 63},
+			{name: "val", dataType: "BINARY", colType: "", len: 4, charset: 63},
+			{name: "color", dataType: "SET", colType: "set('red','green','blue')", len: 42, charset: 33},
+			{name: "size", dataType: "ENUM", colType: "enum('S','M','L')", len: 3, charset: 33},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"1aaa51" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"2bbb22" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"3ccc73" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func TestCellValuePadding(t *testing.T) {
 
 	execStatements(t, []string{

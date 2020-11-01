@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -688,7 +689,48 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 
 	// Columns should be truncated to match those in tm.
 	fields = st.Fields[:len(tm.Types)]
+	extColInfos, err := vs.getExtColInfos(tm.Name, tm.Database)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range fields {
+		typ := strings.ToLower(field.Type.String())
+		if typ == "enum" || typ == "set" {
+			if extColInfo, ok := extColInfos[field.Name]; ok {
+				field.ColumnType = extColInfo.columnType
+			}
+		}
+	}
 	return fields, nil
+}
+
+// additional column attributes from information_schema.columns. Currently only column_type is used, but
+// we expect to add more in the future
+type extColInfo struct {
+	columnType string
+}
+
+func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColInfo, error) {
+	log.Infof("in getExtColInfos for %s, %s", table, database)
+	extColInfos := make(map[string]*extColInfo)
+	conn, err := vs.cp.Connect(vs.ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	queryTemplate := "select column_name, data_type, column_type, column_comment, character_maximum_length, character_octet_length from information_schema.columns where table_schema='%s' and table_name='%s';"
+	query := fmt.Sprintf(queryTemplate, database, table)
+	qr, err := conn.ExecuteFetch(query, 10000, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range qr.Rows {
+		extColInfo := &extColInfo{
+			columnType: row[2].ToString(),
+		}
+		extColInfos[row[0].ToString()] = extColInfo
+	}
+	return extColInfos, nil
 }
 
 func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
