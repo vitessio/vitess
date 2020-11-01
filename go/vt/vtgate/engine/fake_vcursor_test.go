@@ -54,6 +54,18 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t noopVCursor) SetReadAfterWriteGTID(s string) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetReadAfterWriteTimeout(f float64) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetSessionTrackGTIDs(b bool) {
+	panic("implement me")
+}
+
 func (t noopVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 	panic("implement me")
 }

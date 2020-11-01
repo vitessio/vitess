@@ -251,7 +251,7 @@ func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
 	return modifyType(result, flags), nil
 }
 
-//TypeEquivalenceCheck returns whether two types are equivalent.
+// AreTypesEquivalent returns whether two types are equivalent.
 func AreTypesEquivalent(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) bool {
 	return (mysqlTypeFromBinlog == mysqlTypeFromSchema) ||
 		(mysqlTypeFromBinlog == VarChar && mysqlTypeFromSchema == VarBinary) ||

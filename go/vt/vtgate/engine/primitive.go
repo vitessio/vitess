@@ -122,6 +122,11 @@ type (
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetFoundRows(uint64)
+
+		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
+		SetReadAfterWriteGTID(string)
+		SetReadAfterWriteTimeout(float64)
+		SetSessionTrackGTIDs(bool)
 	}
 
 	// Plan represents the execution strategy for a given query.
