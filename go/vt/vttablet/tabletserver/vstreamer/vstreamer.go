@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -710,23 +711,28 @@ type extColInfo struct {
 	columnType string
 }
 
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
+}
+
 func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColInfo, error) {
-	log.Infof("in getExtColInfos for %s, %s", table, database)
 	extColInfos := make(map[string]*extColInfo)
 	conn, err := vs.cp.Connect(vs.ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	queryTemplate := "select column_name, data_type, column_type, column_comment, character_maximum_length, character_octet_length from information_schema.columns where table_schema='%s' and table_name='%s';"
-	query := fmt.Sprintf(queryTemplate, database, table)
+	queryTemplate := "select column_name, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	query := fmt.Sprintf(queryTemplate, encodeString(database), encodeString(table))
 	qr, err := conn.ExecuteFetch(query, 10000, false)
 	if err != nil {
 		return nil, err
 	}
 	for _, row := range qr.Rows {
 		extColInfo := &extColInfo{
-			columnType: row[2].ToString(),
+			columnType: row[1].ToString(),
 		}
 		extColInfos[row[0].ToString()] = extColInfo
 	}
