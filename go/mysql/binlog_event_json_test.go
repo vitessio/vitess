@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -104,6 +104,9 @@ func TestJSONTypes(t *testing.T) {
 	}, {
 		data:     []byte{7, 255, 255, 255, 127},
 		expected: `2.147483647e+09`,
+	}, {
+		data:     []byte{8, 0, 128, 0, 0},
+		expected: `32768`,
 	}, {
 		data:     []byte{9, 0, 0, 0, 128, 0, 0, 0, 0},
 		expected: `2.147483648e+09`,
