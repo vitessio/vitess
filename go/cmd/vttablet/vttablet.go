@@ -181,7 +181,7 @@ func extractOnlineDDL() error {
 		}
 		if err := ioutil.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
 			// One possibility of failure is that gh-ost is up and running. In that case,
-			// let's pause and check if running h-ost is exact same binary as the one we wish to extract.
+			// let's pause and check if the running gh-ost is exact same binary as the one we wish to extract.
 			foundBytes, _ := ioutil.ReadFile(binaryFileName)
 			if bytes.Equal(ghostBinary, foundBytes) {
 				// OK, it's the same binary, there is no need to extract the file anyway
