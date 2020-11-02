@@ -122,7 +122,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
 		log.Errorf("Replicate error: %s", err.Error())
-		if err := vr.setMessage(err.Error()); err != nil {
+		if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
 			log.Errorf("Failed to set error state: %v", err)
 		}
 	}

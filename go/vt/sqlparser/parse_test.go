@@ -1061,6 +1061,8 @@ var (
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
 	}, {
+		input: "create table test (\n\t__year year(4)\n)",
+	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {

@@ -924,9 +924,9 @@ time_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| YEAR
+| YEAR length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = ColumnType{Type: string($1), Length: $2}
   }
 
 char_type:
