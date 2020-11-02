@@ -445,7 +445,7 @@ func (vschema *VSchema) findQualified(name string) (*Table, error) {
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables
 // from that keyspace are searched. If the specified keyspace is unsharded
 // and no tables matched, it's considered valid: FindTable will construct a table
-// of that name and return it. If no kesypace is specified, then a table is returned
+// of that name and return it. If no keyspace is specified, then a table is returned
 // only if its name is unique across all keyspaces. If there is only one
 // keyspace in the vschema, and it's unsharded, then all table requests are considered
 // valid and belonging to that keyspace.
@@ -496,7 +496,8 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	return table, nil
 }
 
-func (vschema *VSchema) findRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
+// FindRoutedTable finds a table checking the routing rules.
+func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
 	qualified := tablename
 	if keyspace != "" {
 		qualified = keyspace + "." + tablename
@@ -521,7 +522,7 @@ func (vschema *VSchema) findRoutedTable(keyspace, tablename string, tabletType t
 
 // FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
 func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*Table, Vindex, error) {
-	tables, err := vschema.findRoutedTable(keyspace, name, tabletType)
+	tables, err := vschema.FindRoutedTable(keyspace, name, tabletType)
 	if err != nil {
 		return nil, nil, err
 	}

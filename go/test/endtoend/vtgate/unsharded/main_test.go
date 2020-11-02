@@ -47,7 +47,11 @@ CREATE TABLE t1 (
     UNIQUE KEY (c3),
     UNIQUE KEY (c4)
 ) ENGINE=Innodb;
-`
+
+CREATE TABLE allDefaults (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255)
+) ENGINE=Innodb;`
 	VSchema = `
 {
     "sharded": false,
@@ -68,6 +72,18 @@ CREATE TABLE t1 (
                 },
                 {
                     "name": "c4",
+                    "type": "VARCHAR"
+                }
+            ]
+        },
+        "allDefaults": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "INT64"
+                },
+                {
+                    "name": "name",
                     "type": "VARCHAR"
                 }
             ]
@@ -160,6 +176,21 @@ func TestEmptyStatement(t *testing.T) {
 	execAssertError(t, conn, " \t;", "Query was empty")
 	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+}
+
+func TestInsertAllDefaults(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `insert into allDefaults () values ()`)
+	assertMatches(t, conn, `select * from allDefaults`, "[[INT64(1) NULL]]")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
