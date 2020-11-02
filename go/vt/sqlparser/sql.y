@@ -3463,6 +3463,10 @@ insert_data:
   {
     $$ = &Insert{Columns: $2, Rows: $5}
   }
+| openb closeb VALUES tuple_list
+  {
+    $$ = &Insert{Rows: $4}
+  }
 | openb ins_column_list closeb select_statement
   {
     $$ = &Insert{Columns: $2, Rows: $4}

@@ -21,8 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	"golang.org/x/sync/errgroup"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"golang.org/x/net/context"
@@ -93,6 +94,8 @@ type (
 		InTransactionAndIsDML() bool
 
 		LookupRowLockShardSession() vtgatepb.CommitOrder
+
+		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
