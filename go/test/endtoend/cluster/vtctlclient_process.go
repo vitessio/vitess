@@ -70,6 +70,11 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 	)
 }
 
+// ApplyRoutingRules does it
+func (vtctlclient *VtctlClientProcess) ApplyRoutingRules(JSON string) (err error) {
+	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "-rules", JSON)
+}
+
 // OnlineDDLShowRecent responds with recent schema migration list
 func (vtctlclient *VtctlClientProcess) OnlineDDLShowRecent(Keyspace string) (result string, err error) {
 	return vtctlclient.ExecuteCommandWithOutput(
