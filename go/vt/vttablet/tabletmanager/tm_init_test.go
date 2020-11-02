@@ -149,7 +149,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	// srvKeyspace already created
 	_, err = ts.GetOrCreateShard(ctx, "ks2", "0")
 	require.NoError(t, err)
-	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "ks2", []string{cell})
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "ks2", []string{cell}, false)
 	require.NoError(t, err)
 	tm = newTestTM(t, ts, 3, "ks2", "0")
 	defer tm.Stop()
@@ -164,7 +164,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	// srvVSchema already created
 	_, err = ts.GetOrCreateShard(ctx, "ks3", "0")
 	require.NoError(t, err)
-	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "ks3", []string{cell})
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "ks3", []string{cell}, false)
 	require.NoError(t, err)
 	err = ts.RebuildSrvVSchema(ctx, []string{cell})
 	require.NoError(t, err)

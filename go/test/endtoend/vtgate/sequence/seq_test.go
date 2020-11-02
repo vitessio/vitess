@@ -106,7 +106,12 @@ CREATE TABLE lookup_vindex (
     keyspace_id BLOB,
     UNIQUE KEY (c1, c2)
 );
-`
+
+CREATE TABLE allDefaults (
+    id bigint NOT NULL,
+    foo varchar(255),
+    primary key (id)
+);`
 
 	shardedVSchema = `
 		{
@@ -137,6 +142,18 @@ CREATE TABLE lookup_vindex (
 				  "columns": [ "c1", "c2" ]
 				}
 			  ],
+			  "autoIncrement": {
+				"column": "id",
+				"sequence": "id_seq"
+			  }
+			},			
+			"allDefaults": {
+			  "columnVindexes": [
+				{
+				  "column": "id",
+				  "name": "hash"
+				}
+              ],
 			  "autoIncrement": {
 				"column": "id",
 				"sequence": "id_seq"
@@ -253,7 +270,6 @@ func TestSeq(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("wrong insert: %v, must contain %s", err, want)
 	}
-
 }
 
 func TestDotTableSeq(t *testing.T) {
@@ -277,4 +293,26 @@ func TestDotTableSeq(t *testing.T) {
 	assert.Equal(t, 1062, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
 	assert.Contains(t, mysqlErr.Message, "Duplicate entry")
+}
+
+func TestInsertAllDefaults(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host:   "localhost",
+		Port:   clusterInstance.VtgateMySQLPort,
+		DbName: shardedKeyspaceName,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// inserting into a table that has default values for all columns works well
+	exec(t, conn, `insert into allDefaults () values ()`)
+	result := exec(t, conn, `select * from uks.id_seq`)
+	assert.Equal(t, 1, len(result.Rows))
+
+	// inserting into a table that does not have default values for all columns fails
+	_, err = conn.ExecuteFetch("insert into lookup_vindex () values ()", 0, false)
+	require.Error(t, err)
 }

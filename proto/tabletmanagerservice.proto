@@ -189,4 +189,7 @@ service TabletManager {
 
   // Deprecated
   rpc SlaveWasRestarted(tabletmanagerdata.SlaveWasRestartedRequest) returns (tabletmanagerdata.SlaveWasRestartedResponse) {};
+
+  // Generic VExec request. Can be used for various purposes
+  rpc VExec(tabletmanagerdata.VExecRequest) returns(tabletmanagerdata.VExecResponse) {};
 }

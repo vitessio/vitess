@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG VT_BASE_VER
+ARG VT_BASE_VER=latest
 
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 

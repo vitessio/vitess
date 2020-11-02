@@ -93,7 +93,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				highestOrigin = newOrigin
 			}
 		case *sqlparser.ComparisonExpr:
-			if node.Operator == sqlparser.InStr || node.Operator == sqlparser.NotInStr {
+			if node.Operator == sqlparser.InOp || node.Operator == sqlparser.NotInOp {
 				if sq, ok := node.Right.(*sqlparser.Subquery); ok {
 					constructsMap[sq] = node
 				}
@@ -162,27 +162,39 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		}
 		switch construct := construct.(type) {
 		case *sqlparser.ComparisonExpr:
-			if construct.Operator == sqlparser.InStr {
+			if construct.Operator == sqlparser.InOp {
 				// a in (subquery) -> (:__sq_has_values = 1 and (a in ::__sq))
+				right := &sqlparser.ComparisonExpr{
+					Operator: construct.Operator,
+					Left:     construct.Left,
+					Right:    sqlparser.ListArg("::" + sqName),
+				}
+				left := &sqlparser.ComparisonExpr{
+					Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
+					Operator: sqlparser.EqualOp,
+					Right:    sqlparser.NewIntLiteral([]byte("1")),
+				}
 				newExpr := &sqlparser.AndExpr{
-					Left: &sqlparser.ComparisonExpr{
-						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
-						Operator: sqlparser.EqualStr,
-						Right:    sqlparser.NewIntLiteral([]byte("1")),
-					},
-					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
+					Left:  left,
+					Right: right,
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.bldr))
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
+				left := &sqlparser.ComparisonExpr{
+					Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
+					Operator: sqlparser.EqualOp,
+					Right:    sqlparser.NewIntLiteral([]byte("0")),
+				}
+				right := &sqlparser.ComparisonExpr{
+					Operator: construct.Operator,
+					Left:     construct.Left,
+					Right:    sqlparser.ListArg("::" + sqName),
+				}
 				newExpr := &sqlparser.OrExpr{
-					Left: &sqlparser.ComparisonExpr{
-						Left:     sqlparser.NewArgument([]byte(":" + hasValues)),
-						Operator: sqlparser.EqualStr,
-						Right:    sqlparser.NewIntLiteral([]byte("0")),
-					},
-					Right: sqlparser.ReplaceExpr(construct, sqi.ast, sqlparser.ListArg([]byte("::"+sqName))),
+					Left:  left,
+					Right: right,
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
 				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.bldr))

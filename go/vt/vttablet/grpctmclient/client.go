@@ -574,6 +574,19 @@ func (client *Client) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet
 	return response.Addrs, nil
 }
 
+func (client *Client) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer cc.Close()
+	response, err := c.VExec(ctx, &tabletmanagerdatapb.VExecRequest{Query: query, Workflow: workflow, Keyspace: keyspace})
+	if err != nil {
+		return nil, err
+	}
+	return response.Result, nil
+}
+
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	cc, c, err := client.dial(tablet)

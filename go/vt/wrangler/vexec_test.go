@@ -54,7 +54,8 @@ func TestVExec(t *testing.T) {
 	}
 	sort.Strings(shards)
 	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
-	plan, err := vx.buildVExecPlan()
+
+	plan, err := vx.parseAndPlan(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 
@@ -70,8 +71,8 @@ func TestVExec(t *testing.T) {
 	want := addWheres(query)
 	require.Equal(t, want, plan.parsedQuery.Query)
 
-	query = plan.parsedQuery.Query
-	vx.exec(query)
+	vx.plannedQuery = plan.parsedQuery.Query
+	vx.exec()
 
 	type TestCase struct {
 		name        string
@@ -118,7 +119,7 @@ func TestVExec(t *testing.T) {
 		errorString: errorString,
 	})
 
-	errorString = "invalid table name"
+	errorString = "table not supported by vexec"
 	testCases = append(testCases, &TestCase{
 		name:        "delete invalid-other-table",
 		query:       "delete from _vt.copy_state",
@@ -162,9 +163,11 @@ func TestVExec(t *testing.T) {
 }
 
 func TestWorkflowStatusUpdate(t *testing.T) {
-	require.Equal(t, "Error", updateState("master tablet not contactable", "Running", nil, 0))
+	require.Equal(t, "Running", updateState("for vdiff", "Running", nil, int64(time.Now().Second())))
+	require.Equal(t, "Running", updateState("", "Running", nil, int64(time.Now().Second())))
 	require.Equal(t, "Lagging", updateState("", "Running", nil, int64(time.Now().Second())-100))
 	require.Equal(t, "Copying", updateState("", "Running", []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
+	require.Equal(t, "Error", updateState("error: master tablet not contactable", "Running", nil, 0))
 }
 
 func TestWorkflowListStreams(t *testing.T) {
@@ -176,9 +179,12 @@ func TestWorkflowListStreams(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
 	require.Nil(t, err)
-	want := `{
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	require.Nil(t, err)
+	want := `Workflows: wrWorkflow
+{
 	"Workflow": "wrWorkflow",
 	"SourceLocation": {
 		"Keyspace": "source",
@@ -355,7 +361,7 @@ func TestVExecValidations(t *testing.T) {
 		{
 			name:        "incorrect table",
 			query:       "select * from _vt.vreplication2",
-			errorString: "invalid table name: _vt.vreplication2",
+			errorString: "table not supported by vexec: _vt.vreplication2",
 		},
 		{
 			name:        "unsupported query",
@@ -366,7 +372,7 @@ func TestVExecValidations(t *testing.T) {
 	for _, bq := range badQueries {
 		t.Run(bq.name, func(t *testing.T) {
 			vx.query = bq.query
-			plan, err := vx.buildVExecPlan()
+			plan, err := vx.parseAndPlan(ctx)
 			require.EqualError(t, err, bq.errorString)
 			require.Nil(t, plan)
 		})

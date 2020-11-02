@@ -4,11 +4,13 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.45.1
-	github.com/Azure/azure-storage-blob-go v0.8.0
-	github.com/Azure/go-autorest/autorest v0.10.0 // indirect
+	github.com/Azure/azure-pipeline-go v0.2.2
+	github.com/Azure/azure-sdk-for-go v46.4.0+incompatible
+	github.com/Azure/azure-storage-blob-go v0.10.0
+	github.com/Azure/go-autorest/autorest v0.10.0
+	github.com/Azure/go-autorest/autorest/validation v0.3.0 // indirect
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/PuerkitoBio/goquery v1.5.1
-	github.com/TylerBrock/colorjson v0.0.0-20180527164720-95ec53f28296
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
 	github.com/aws/aws-sdk-go v1.28.8
@@ -25,13 +27,15 @@ require (
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.4.0
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.2.0 // indirect
 	github.com/gorilla/websocket v1.4.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
@@ -52,7 +56,6 @@ require (
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/krishicks/yaml-patch v0.0.10
 	github.com/magiconair/properties v1.8.1
-	github.com/manifoldco/promptui v0.7.0
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8
 	github.com/martini-contrib/gzip v0.0.0-20151124214156-6c035326b43f
 	github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
@@ -72,15 +75,14 @@ require (
 	github.com/pborman/uuid v1.2.0
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.4.1
 	github.com/prometheus/common v0.9.1
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/samuel/go-zookeeper v0.0.0-20200724154423-2164a8ac840e
-	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/satori/go.uuid v1.2.0
 	github.com/sjmudd/stopwatch v0.0.0-20170613150411-f380bf8a9be1
 	github.com/smartystreets/goconvey v1.6.4 // indirect
-	github.com/spf13/cobra v0.0.5
 	github.com/stretchr/testify v1.4.0
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
 	github.com/tebeka/selenium v0.9.9

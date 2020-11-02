@@ -280,7 +280,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 		// Rebuild the SrvKeyspace object, so we can support
 		// range-based sharding queries, and export the redirects.
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, false); err != nil {
 			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 		}
 	}
@@ -696,6 +696,10 @@ func (itmc *internalTabletManagerClient) StartSlaveUntilAfter(ctx context.Contex
 
 // Deprecated
 func (itmc *internalTabletManagerClient) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

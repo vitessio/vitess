@@ -57,7 +57,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	newMaster.FakeMysqlDaemon.Replicating = true
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -393,7 +393,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *tes
 	defer newMaster.StopActionLoop(t)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"}, false)
 	assert.NoError(t, err, "RebuildKeyspaceLocked failed: %v", err)
 
 	// Reparent to new master

@@ -72,6 +72,7 @@ type LocalProcessCluster struct {
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
 	VtbackupProcess VtbackupProcess
+	VtorcProcess    *VtorcProcess
 
 	nextPortForProcess int
 
@@ -349,11 +350,11 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	return
 }
 
-// LaunchCluster creates the skeleton for a cluster by creating keyspace
+// SetupCluster creates the skeleton for a cluster by creating keyspace
 // shards and initializing tablets and mysqlctl processes.
 // This does not start any process and user have to explicitly start all
 // the required services (ex topo, vtgate, mysql and vttablet)
-func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []Shard) (err error) {
+func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Shard) (err error) {
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
@@ -502,6 +503,12 @@ func (cluster *LocalProcessCluster) Teardown() {
 	}
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown: %v", err)
+	}
+
+	if cluster.VtorcProcess != nil {
+		if err := cluster.VtorcProcess.TearDown(); err != nil {
+			log.Errorf("Error in vtorc teardown: %v", err)
+		}
 	}
 
 	var mysqlctlProcessList []*exec.Cmd
@@ -667,6 +674,17 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 	}
 }
 
+// NewOrcProcess creates a new VtorcProcess object
+func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProcess {
+	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
+	base.Binary = "vtorc"
+	return &VtorcProcess{
+		VtctlProcess: *base,
+		LogDir:       cluster.TmpDirectory,
+		Config:       configFile,
+	}
+}
+
 // VtprocessInstanceFromVttablet creates a new vttablet object
 func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
 	return VttabletProcessInstance(tablet.HTTPPort,
@@ -706,6 +724,10 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
 }
+
+//func (cluster *LocalProcessCluster) NewOrcInstance() OrchestratorProcess {
+//
+//}
 
 func getCoveragePath(fileName string) string {
 	covDir := os.Getenv("COV_DIR")

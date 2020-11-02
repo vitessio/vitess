@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -731,6 +732,9 @@ var (
 		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
 		output: "insert into user(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
 	}, {
+		input:  "insert into customer () values ()",
+		output: "insert into customer values ()",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
@@ -782,6 +786,12 @@ var (
 		input: "delete a from a join b on a.id = b.id where b.name = 'test'",
 	}, {
 		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+	}, {
+		input: "delete /* simple */ ignore from a",
+	}, {
+		input: "delete ignore from a",
+	}, {
+		input: "delete /* limit */ ignore from a",
 	}, {
 		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
@@ -884,9 +894,6 @@ var (
 		input: "set @variable = 42",
 	}, {
 		input: "set @period.variable = 42",
-	}, {
-		input:  "alter ignore table a add foo",
-		output: "alter table a",
 	}, {
 		input:  "alter table a add foo",
 		output: "alter table a",
@@ -1053,6 +1060,8 @@ var (
 		output: "create table a (\n\ta int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
+	}, {
+		input: "create table test (\n\t__year year(4)\n)",
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
@@ -1327,8 +1336,18 @@ var (
 		input:  "show session status",
 		output: "show session status",
 	}, {
-		input:  "show table status",
-		output: "show table",
+		input: "show table status",
+	}, {
+		input: "show table status from dbname",
+	}, {
+		input:  "show table status in dbname",
+		output: "show table status from dbname",
+	}, {
+		input:  "show table status in dbname LIKE '%' ",
+		output: "show table status from dbname like '%'",
+	}, {
+		input:  "show table status from dbname Where col=42 ",
+		output: "show table status from dbname where col = 42",
 	}, {
 		input: "show tables",
 	}, {
@@ -1357,13 +1376,16 @@ var (
 	}, {
 		input: "show full tables where 1 = 0",
 	}, {
-		input: "show full columns from a like '%'",
+		input:  "show full columns in a in b like '%'",
+		output: "show full columns from a from b like '%'",
 	}, {
 		input: "show full columns from messages from test_keyspace like '%'",
 	}, {
-		input: "show full fields from a like '%'",
+		input:  "show full fields from a like '%'",
+		output: "show full columns from a like '%'",
 	}, {
-		input: "show fields from a like '%'",
+		input:  "show fields from a where 1 = 1",
+		output: "show columns from a where 1 = 1",
 	}, {
 		input:  "show triggers",
 		output: "show triggers",
@@ -1379,9 +1401,17 @@ var (
 	}, {
 		input: "show vitess_keyspaces",
 	}, {
+		input: "show vitess_keyspaces like '%'",
+	}, {
 		input: "show vitess_shards",
 	}, {
+		input: "show vitess_shards like '%'",
+	}, {
 		input: "show vitess_tablets",
+	}, {
+		input: "show vitess_tablets like '%'",
+	}, {
+		input: "show vitess_tablets where hostname = 'some-tablet'",
 	}, {
 		input: "show vschema tables",
 	}, {
@@ -1660,6 +1690,18 @@ var (
 	}, {
 		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
 		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
+	}, {
+		input: "create table t1 ( check (c1 <> c2), c1 int check (c1 > 10), c2 int constraint c2_positive check (c2 > 0), c3 int check (c3 < 100), constraint c1_nonzero check (c1 <> 0), check (c1 > c3))",
+		output: "create table t1 (\n" +
+			"\tc1 int,\n" +
+			"\tc2 int,\n" +
+			"\tc3 int,\n" +
+			"\tcheck constraint on expression c1 != c2 enforced,\n" +
+			"\tcheck constraint on expression c1 > 10 enforced,\n" +
+			"\tconstraint c2_positive check constraint on expression c2 > 0 enforced,\n" +
+			"\tcheck constraint on expression c3 < 100 enforced,\n" +
+			"\tconstraint c1_nonzero check constraint on expression c1 != 0 enforced,\n" +
+			"\tcheck constraint on expression c1 > c3 enforced\n)",
 	}, {
 		input:  "SHOW INDEXES FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
 		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
@@ -2087,6 +2129,60 @@ func TestConvert(t *testing.T) {
 	}
 }
 
+func TestSelectInto(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select * from t order by name limit 100 into outfile s3 'out_file_name'",
+		output: "select * from t order by name asc limit 100 into outfile s3 'out_file_name'",
+	}, {
+		input: "select * from t into dumpfile 'out_file_name'",
+	}, {
+		input: "select * from t into outfile 'out_file_name' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+	}, {
+		input: "select * from t into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+	}, {
+		input: "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
+	}, {
+		// Invalid queries but these are parsed and errors caught in planbuilder
+		input: "select * from t limit 100 into outfile s3 'out_file_name' union select * from t2",
+	}, {
+		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		assert.Equal(t, tcase.output, out)
+	}
+
+	invalidSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select convert('abc' as date) from t",
+		output: "syntax error at position 24 near 'as'",
+	}, {
+		input:  "set transaction isolation level 12345",
+		output: "syntax error at position 38 near '12345'",
+	}}
+
+	for _, tcase := range invalidSQL {
+		_, err := Parse(tcase.input)
+		if err == nil || err.Error() != tcase.output {
+			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
 func TestPositionedErr(t *testing.T) {
 	invalidSQL := []struct {
 		input  string
@@ -2180,6 +2276,19 @@ func TestSubStr(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("out: %s, want %s", out, tcase.output)
 		}
+	}
+}
+
+func TestLoadData(t *testing.T) {
+	validSQL := []string{
+		"load data from s3 'x.txt'",
+		"load data from s3 manifest 'x.txt'",
+		"load data from s3 file 'x.txt'",
+		"load data infile 'x.txt' into table 'c'",
+		"load data from s3 'x.txt' into table x"}
+	for _, tcase := range validSQL {
+		_, err := Parse(tcase)
+		require.NoError(t, err)
 	}
 }
 
@@ -2437,9 +2546,17 @@ func TestCreateTable(t *testing.T) {
 			"	f1 float default 1.23,\n" +
 			"	s1 varchar default 'c',\n" +
 			"	s2 varchar default 'this is a string',\n" +
-			"	s3 varchar default null,\n" +
+			"	`s3` varchar default null,\n" +
 			"	s4 timestamp default current_timestamp(),\n" +
 			"	s5 bit(1) default B'0'\n" +
+			")",
+	}, {
+		// test non_reserved word in column name
+		input: "create table t (\n" +
+			"	repair int\n" +
+			")",
+		output: "create table t (\n" +
+			"	`repair` int\n" +
 			")",
 	}, {
 		// test key field options
@@ -2770,6 +2887,11 @@ var (
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",
 		excludeMulti: true,
+	}, {
+		// non_reserved keywords are currently not permitted everywhere
+		input:        "create database repair",
+		output:       "syntax error at position 23 near 'repair'",
+		excludeMulti: true,
 	}}
 )
 
@@ -2778,6 +2900,7 @@ func TestErrors(t *testing.T) {
 		t.Run(tcase.input, func(t *testing.T) {
 			_, err := Parse(tcase.input)
 			require.Error(t, err, tcase.output)
+			require.Equal(t, err.Error(), tcase.output)
 		})
 	}
 }

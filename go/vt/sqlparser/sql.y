@@ -101,6 +101,7 @@ func skipToEnd(yylex interface{}) {
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
+  OnlineDDLHint *OnlineDDLHint
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
@@ -118,6 +119,19 @@ func skipToEnd(yylex interface{}) {
   vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  isolationLevel IsolationLevel
+  unionType	UnionType
+  insertAction InsertAction
+  scope 	Scope
+  ignore 	Ignore
+  lock 		Lock
+  joinType  	JoinType
+  comparisonExprOperator ComparisonExprOperator
+  isExprOperator IsExprOperator
+  matchExprOption MatchExprOption
+  orderDirection  OrderDirection
+  explainType 	  ExplainType
+  selectInto	  *SelectInto
 }
 
 %token LEX_ERROR
@@ -125,6 +139,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
 %token <bytes> DISTINCTROW
+%token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
+%token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
@@ -189,6 +205,7 @@ func skipToEnd(yylex interface{}) {
 
 // Supported SHOW tokens
 %token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -225,11 +242,16 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
-%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement
+%type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
-%type <str> union_op insert_or_replace explain_format_opt wild_opt
+%type <str> wild_opt
+%type <explainType> explain_format_opt
+%type <insertAction> insert_or_replace
+%type <unionType> union_op
 %type <bytes> explain_synonyms
-%type <str> distinct_opt cache_opt match_option separator_opt
+%type <str> cache_opt separator_opt
+%type <matchExprOption> match_option
+%type <boolean> distinct_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
@@ -240,18 +262,18 @@ func skipToEnd(yylex interface{}) {
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list
-%type <str> inner_join outer_join straight_join natural_join
+%type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
 %type <boolVal> boolean_value
-%type <str> compare
+%type <comparisonExprOperator> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
-%type <str> is_suffix
+%type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list
 %type <values> tuple_list
@@ -266,9 +288,12 @@ func skipToEnd(yylex interface{}) {
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <order> order
-%type <str> asc_desc_opt
+%type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
-%type <str> lock_opt
+%type <selectInto> into_option
+%type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
+%type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
@@ -279,12 +304,14 @@ func skipToEnd(yylex interface{}) {
 %type <setExpr> set_expression
 %type <characteristic> transaction_char
 %type <characteristics> transaction_chars
-%type <str> isolation_level
+%type <isolationLevel> isolation_level
 %type <bytes> for_from
-%type <str> ignore_opt default_opt
+%type <str> default_opt
+%type <ignore> ignore_opt
+%type <OnlineDDLHint> online_hint_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt null_opt
+%type <boolean> exists_opt not_exists_opt null_opt enforced_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -293,7 +320,7 @@ func skipToEnd(yylex interface{}) {
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
-%type <str> set_session_or_global show_session_or_global
+%type <scope> set_session_or_global show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
@@ -306,7 +333,7 @@ func skipToEnd(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition
+%type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key index_symbols from_or_in
 %type <str> name_opt
 %type <str> equal_opt
@@ -318,7 +345,7 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list
-%type <constraintInfo> constraint_info
+%type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -327,6 +354,7 @@ func skipToEnd(yylex interface{}) {
 %type <colIdent> id_or_var vindex_type vindex_type_opt
 %type <bytes> alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <str> vitess_topo
 
 %start any_command
 
@@ -371,6 +399,7 @@ command:
 | other_statement
 | flush_statement
 | do_statement
+| load_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -396,13 +425,20 @@ do_statement:
     $$ = &OtherAdmin{}
   }
 
+load_statement:
+  LOAD DATA skip_to_end
+  {
+    $$ = &Load{}
+  }
+
 select_statement:
-  base_select order_by_opt limit_opt lock_opt
+  base_select order_by_opt limit_opt lock_opt into_option
   {
     sel := $1.(*Select)
     sel.OrderBy = $2
     sel.Limit = $3
     sel.Lock = $4
+    sel.Into = $5
     $$ = sel
   }
 | openb select_statement closeb order_by_opt limit_opt lock_opt
@@ -458,7 +494,7 @@ stream_statement:
 vstream_statement:
   VSTREAM comment_opt select_expression FROM table_name where_expression_opt limit_opt
   {
-    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereStr, $6), Limit: $7}
+    $$ = &VStream{Comments: Comments($2), SelectExpr: $3, Table: $5, Where: NewWhere(WhereClause, $6), Limit: $7}
   }
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
@@ -466,7 +502,7 @@ base_select:
 //  1         2            3              4                    5             6                7           8
   SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*from*/, NewWhere(WhereStr, $6), GroupBy($7), NewWhere(HavingStr, $8)) 
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8))
   }
 
 union_rhs:
@@ -507,35 +543,35 @@ insert_statement:
 insert_or_replace:
   INSERT
   {
-    $$ = InsertStr
+    $$ = InsertAct
   }
 | REPLACE
   {
-    $$ = ReplaceStr
+    $$ = ReplaceAct
   }
 
 update_statement:
   UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
+    $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
   }
 
 delete_statement:
-  DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
   }
-| DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
+| DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $4, TableExprs: $6, Where: NewWhere(WhereStr, $7)}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
-| DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
+| DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
   }
-|DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
+| DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
   }
 
 from_or_using:
@@ -584,7 +620,7 @@ set_transaction_statement:
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4}
+    $$ = &SetTransaction{Comments: Comments($2), Characteristics: $4, Scope: ImplicitScope}
   }
 
 transaction_chars:
@@ -600,15 +636,15 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &IsolationLevel{Level: string($3)}
+    $$ = $3
   }
 | READ WRITE
   {
-    $$ = &AccessMode{Mode: TxReadWrite}
+    $$ = ReadWrite
   }
 | READ ONLY
   {
-    $$ = &AccessMode{Mode: TxReadOnly}
+    $$ = ReadOnly
   }
 
 isolation_level:
@@ -632,11 +668,11 @@ isolation_level:
 set_session_or_global:
   SESSION
   {
-    $$ = SessionStr
+    $$ = SessionScope
   }
 | GLOBAL
   {
-    $$ = GlobalStr
+    $$ = GlobalScope
   }
 
 create_statement:
@@ -654,23 +690,23 @@ create_statement:
 | CREATE constraint_opt INDEX id_or_var using_opt ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $7}
+    $$ = &DDL{Action: AlterDDLAction, Table: $7}
   }
 | CREATE VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: CreateStr, Table: $3.ToViewName()}
+    $$ = &DDL{Action: CreateDDLAction, Table: $3.ToViewName()}
   }
 | CREATE OR REPLACE VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
+    $$ = &DDL{Action: CreateDDLAction, Table: $5.ToViewName()}
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: $3}
+    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
   }
 | CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4.String()), IfNotExists: $3}
+    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
   }
 
 vindex_type_opt:
@@ -718,7 +754,7 @@ vindex_param:
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateStr, Table: $4}
+    $$ = &DDL{Action: CreateDDLAction, Table: $4}
     setDDL(yylex, $$)
   }
 
@@ -745,9 +781,19 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddColumn($1)
   }
+| check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddConstraint($1)
+  }
 | table_column_list ',' column_definition
   {
     $$.AddColumn($3)
+  }
+| table_column_list ',' column_definition check_constraint_definition
+  {
+    $$.AddColumn($3)
+    $$.AddConstraint($4)
   }
 | table_column_list ',' index_definition
   {
@@ -759,7 +805,7 @@ table_column_list:
   }
 
 column_definition:
-  id_or_var column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
@@ -878,9 +924,9 @@ time_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| YEAR
+| YEAR length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = ColumnType{Type: string($1), Length: $2}
   }
 
 char_type:
@@ -1282,6 +1328,15 @@ constraint_definition:
     $$ = &ConstraintDefinition{Details: $1}
   }
 
+check_constraint_definition:
+  CONSTRAINT id_or_var check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+  }
+|  check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Details: $1}
+  }
 
 constraint_info:
   FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
@@ -1299,6 +1354,16 @@ constraint_info:
 | FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+  }
+| check_constraint_info
+  {
+    $$ = $1
+  }
+
+check_constraint_info:
+  CHECK '(' expression ')' enforced_opt
+  {
+    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
   }
 
 fk_on_delete:
@@ -1333,6 +1398,19 @@ fk_reference_action:
 | SET NULL
   {
     $$ = SetNull
+  }
+
+enforced_opt:
+  {
+    $$ = true
+  }
+| ENFORCED
+  {
+    $$ = true
+  }
+| NOT ENFORCED
+  {
+    $$ = false
   }
 
 table_option_list:
@@ -1379,48 +1457,48 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
+  ALTER online_hint_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
+| ALTER online_hint_opt TABLE table_name ADD alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
+| ALTER online_hint_opt TABLE table_name DROP alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name RENAME to_opt table_name
+| ALTER online_hint_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
+    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
   }
-| ALTER ignore_opt TABLE table_name RENAME index_opt skip_to_end
+| ALTER online_hint_opt TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
   }
 | ALTER VIEW table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
+    $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
   }
-| ALTER ignore_opt TABLE table_name partition_operation
+| ALTER online_hint_opt TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4, PartitionSpec: $5}
   }
 | ALTER DATABASE id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
+    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
   }
 | ALTER SCHEMA id_or_var ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
+    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
-        Action: CreateVindexStr,
+        Action: CreateVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
           Name: NewColIdent($5.Name.String()),
@@ -1432,7 +1510,7 @@ alter_statement:
 | ALTER VSCHEMA DROP VINDEX table_name
   {
     $$ = &DDL{
-        Action: DropVindexStr,
+        Action: DropVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
           Name: NewColIdent($5.Name.String()),
@@ -1441,16 +1519,16 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD TABLE table_name
   {
-    $$ = &DDL{Action: AddVschemaTableStr, Table: $5}
+    $$ = &DDL{Action: AddVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA DROP TABLE table_name
   {
-    $$ = &DDL{Action: DropVschemaTableStr, Table: $5}
+    $$ = &DDL{Action: DropVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
-        Action: AddColVindexStr,
+        Action: AddColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
             Name: $7,
@@ -1463,7 +1541,7 @@ alter_statement:
 | ALTER VSCHEMA ON table_name DROP VINDEX sql_id
   {
     $$ = &DDL{
-        Action: DropColVindexStr,
+        Action: DropColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
             Name: $7,
@@ -1472,12 +1550,12 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD SEQUENCE table_name
   {
-    $$ = &DDL{Action: AddSequenceStr, Table: $5}
+    $$ = &DDL{Action: AddSequenceDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &DDL{
-        Action: AddAutoIncStr,
+        Action: AddAutoIncDDLAction,
         Table: $4,
         AutoIncSpec: &AutoIncSpec{
             Column: $7,
@@ -1505,7 +1583,7 @@ alter_object_type:
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
   {
-    $$ = &PartitionSpec{Action: ReorganizeStr, Name: $3, Definitions: $6}
+    $$ = &PartitionSpec{Action: ReorganizeAction, Name: $3, Definitions: $6}
   }
 
 partition_definitions:
@@ -1537,7 +1615,7 @@ rename_statement:
 rename_list:
   table_name TO table_name
   {
-    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$1}, ToTables: TableNames{$3}}
+    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$1}, ToTables: TableNames{$3}}
   }
 | rename_list ',' table_name TO table_name
   {
@@ -1549,34 +1627,34 @@ rename_list:
 drop_statement:
   DROP TABLE exists_opt table_name_list
   {
-    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: $3}
+    $$ = &DDL{Action: DropDDLAction, FromTables: $4, IfExists: $3}
   }
 | DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $5}
+    $$ = &DDL{Action: AlterDDLAction, Table: $5}
   }
 | DROP VIEW exists_opt table_name ddl_skip_to_end
   {
-    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
+    $$ = &DDL{Action: DropDDLAction, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
   }
 | DROP DATABASE exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
+    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String()), IfExists: $3}
   }
 | DROP SCHEMA exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4.String()), IfExists: $3}
+    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String()), IfExists: $3}
   }
 
 truncate_statement:
   TRUNCATE TABLE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $3}
+    $$ = &DDL{Action: TruncateDDLAction, Table: $3}
   }
 | TRUNCATE table_name
   {
-    $$ = &DDL{Action: TruncateStr, Table: $2}
+    $$ = &DDL{Action: TruncateDDLAction, Table: $2}
   }
 analyze_statement:
   ANALYZE TABLE table_name
@@ -1587,134 +1665,149 @@ analyze_statement:
 show_statement:
   SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String())}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
 | SHOW CHARACTER SET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Type: CharsetStr, ShowTablesOpt: showTablesOpt}
+    $$ = &Show{&ShowLegacy{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW CHARSET like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3.String())}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW CREATE TABLE table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), Table: $4}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW CREATE TRIGGER ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW CREATE VIEW ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
-| SHOW DATABASES ddl_skip_to_end
+| SHOW DATABASES like_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+  }
+| SHOW KEYSPACES like_opt
+  {
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+  }
+| SHOW VITESS_KEYSPACES like_opt
+  {
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
   }
 | SHOW ENGINES
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
     showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    $$ = &Show{&ShowLegacy{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}}
   }
 | SHOW PLUGINS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW PROCEDURE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
   }
-| SHOW TABLE ddl_skip_to_end
+| SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
   }
-| SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$6, Filter:$7}
-    $$ = &Show{Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5}
+    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
     // this is ugly, but I couldn't find a better way for now
     if $3 == "processlist" {
-      $$ = &Show{Type: $3}
+      $$ = &Show{&ShowLegacy{Type: $3, Scope: ImplicitScope}}
     } else {
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
-      $$ = &Show{Type: $3, ShowTablesOpt: showTablesOpt}
+      $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
     }
   }
 | SHOW show_session_or_global VARIABLES ddl_skip_to_end
   {
-    $$ = &Show{Scope: $2, Type: string($3)}
+    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
   }
 | SHOW COLLATION
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 | SHOW COLLATION WHERE expression
   {
-    $$ = &Show{Type: string($2), ShowCollationFilterOpt: $4}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Scope: string($2), Type: string($3), ShowTablesOpt: showTablesOpt}
+    $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
   }
 | SHOW VSCHEMA TABLES
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW VSCHEMA VINDEXES
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW VSCHEMA VINDEXES ON table_name
   {
-    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}}
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+  }
+/* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
+| SHOW vitess_topo like_or_where_opt
+  {
+    // This should probably be a different type (ShowVitessTopoOpt), but
+    // just getting the thing working for now
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{&ShowLegacy{Type: $2, ShowTablesOpt: showTablesOpt}}
   }
 /*
  * Catch-all for show statements without vitess keywords:
  *
  *  SHOW BINARY LOGS
  *  SHOW INVALID
- *  SHOW VITESS_KEYSPACES
- *  SHOW VITESS_TABLETS
- *  SHOW VITESS_SHARDS
  *  SHOW VITESS_TARGET
  */
 | SHOW id_or_var ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2.String())}
+    $$ = &Show{&ShowLegacy{Type: string($2.String()), Scope: ImplicitScope}}
   }
 
 tables_or_processlist:
@@ -1723,6 +1816,16 @@ tables_or_processlist:
     $$ = string($1)
   }
 | PROCESSLIST
+  {
+    $$ = string($1)
+  }
+
+vitess_topo:
+  VITESS_TABLETS
+  {
+    $$ = string($1)
+  }
+| VITESS_SHARDS
   {
     $$ = string($1)
   }
@@ -1798,15 +1901,15 @@ like_opt:
 show_session_or_global:
   /* empty */
   {
-    $$ = ""
+    $$ = ImplicitScope
   }
 | SESSION
   {
-    $$ = SessionStr
+    $$ = SessionScope
   }
 | GLOBAL
   {
-    $$ = GlobalStr
+    $$ = GlobalScope
   }
 
 use_statement:
@@ -1870,27 +1973,27 @@ release_statement:
 
 explain_format_opt:
   {
-    $$ = ""
+    $$ = EmptyType
   }
 | FORMAT '=' JSON
   {
-    $$ = JSONStr
+    $$ = JSONType
   }
 | FORMAT '=' TREE
   {
-    $$ = TreeStr
+    $$ = TreeType
   }
 | FORMAT '=' VITESS
   {
-    $$ = VitessStr
+    $$ = VitessType
   }
 | FORMAT '=' TRADITIONAL
   {
-    $$ = TraditionalStr
+    $$ = TraditionalType
   }
 | ANALYZE
   {
-    $$ = AnalyzeStr
+    $$ = AnalyzeType
   }
 
 explain_synonyms:
@@ -1969,7 +2072,7 @@ other_statement:
 flush_statement:
   FLUSH skip_to_end
   {
-    $$ = &DDL{Action: FlushStr}
+    $$ = &DDL{Action: FlushDDLAction}
   }
 comment_opt:
   {
@@ -1993,15 +2096,15 @@ comment_list:
 union_op:
   UNION
   {
-    $$ = UnionStr
+    $$ = UnionBasic
   }
 | UNION ALL
   {
-    $$ = UnionAllStr
+    $$ = UnionAll
   }
 | UNION DISTINCT
   {
-    $$ = UnionDistinctStr
+    $$ = UnionDistinct
   }
 
 cache_opt:
@@ -2019,15 +2122,15 @@ cache_opt:
 
 distinct_opt:
   {
-    $$ = ""
+    $$ = false
   }
 | DISTINCT
   {
-    $$ = DistinctStr
+    $$ = true
   }
 | DISTINCTROW
   {
-    $$ = DistinctStr
+    $$ = true
   }
 
 select_expression_list_opt:
@@ -2278,52 +2381,52 @@ table_alias:
 inner_join:
   JOIN
   {
-    $$ = JoinStr
+    $$ = NormalJoinType
   }
 | INNER JOIN
   {
-    $$ = JoinStr
+    $$ = NormalJoinType
   }
 | CROSS JOIN
   {
-    $$ = JoinStr
+    $$ = NormalJoinType
   }
 
 straight_join:
   STRAIGHT_JOIN
   {
-    $$ = StraightJoinStr
+    $$ = StraightJoinType
   }
 
 outer_join:
   LEFT JOIN
   {
-    $$ = LeftJoinStr
+    $$ = LeftJoinType
   }
 | LEFT OUTER JOIN
   {
-    $$ = LeftJoinStr
+    $$ = LeftJoinType
   }
 | RIGHT JOIN
   {
-    $$ = RightJoinStr
+    $$ = RightJoinType
   }
 | RIGHT OUTER JOIN
   {
-    $$ = RightJoinStr
+    $$ = RightJoinType
   }
 
 natural_join:
  NATURAL JOIN
   {
-    $$ = NaturalJoinStr
+    $$ = NaturalJoinType
   }
 | NATURAL outer_join
   {
-    if $2 == LeftJoinStr {
-      $$ = NaturalLeftJoinStr
+    if $2 == LeftJoinType {
+      $$ = NaturalLeftJoinType
     } else {
-      $$ = NaturalRightJoinStr
+      $$ = NaturalRightJoinType
     }
   }
 
@@ -2359,19 +2462,19 @@ index_hint_list:
   }
 | USE INDEX openb column_list closeb
   {
-    $$ = &IndexHints{Type: UseStr, Indexes: $4}
+    $$ = &IndexHints{Type: UseOp, Indexes: $4}
   }
 | USE INDEX openb closeb
   {
-    $$ = &IndexHints{Type: UseStr}
+    $$ = &IndexHints{Type: UseOp}
   }
 | IGNORE INDEX openb column_list closeb
   {
-    $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
+    $$ = &IndexHints{Type: IgnoreOp, Indexes: $4}
   }
 | FORCE INDEX openb column_list closeb
   {
-    $$ = &IndexHints{Type: ForceStr, Indexes: $4}
+    $$ = &IndexHints{Type: ForceOp, Indexes: $4}
   }
 
 where_expression_opt:
@@ -2444,35 +2547,35 @@ condition:
   }
 | value_expression IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: InStr, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
   }
 | value_expression NOT IN col_tuple
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotInStr, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
   }
 | value_expression LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: LikeStr, Right: $3, Escape: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $4}
   }
 | value_expression NOT LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeStr, Right: $4, Escape: $5}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $5}
   }
 | value_expression REGEXP value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: RegexpStr, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
   }
 | value_expression NOT REGEXP value_expression
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpStr, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: BetweenStr, From: $3, To: $5}
+    $$ = &RangeCond{Left: $1, Operator: BetweenOp, From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: NotBetweenStr, From: $4, To: $6}
+    $$ = &RangeCond{Left: $1, Operator: NotBetweenOp, From: $4, To: $6}
   }
 | EXISTS subquery
   {
@@ -2482,57 +2585,57 @@ condition:
 is_suffix:
   NULL
   {
-    $$ = IsNullStr
+    $$ = IsNullOp
   }
 | NOT NULL
   {
-    $$ = IsNotNullStr
+    $$ = IsNotNullOp
   }
 | TRUE
   {
-    $$ = IsTrueStr
+    $$ = IsTrueOp
   }
 | NOT TRUE
   {
-    $$ = IsNotTrueStr
+    $$ = IsNotTrueOp
   }
 | FALSE
   {
-    $$ = IsFalseStr
+    $$ = IsFalseOp
   }
 | NOT FALSE
   {
-    $$ = IsNotFalseStr
+    $$ = IsNotFalseOp
   }
 
 compare:
   '='
   {
-    $$ = EqualStr
+    $$ = EqualOp
   }
 | '<'
   {
-    $$ = LessThanStr
+    $$ = LessThanOp
   }
 | '>'
   {
-    $$ = GreaterThanStr
+    $$ = GreaterThanOp
   }
 | LE
   {
-    $$ = LessEqualStr
+    $$ = LessEqualOp
   }
 | GE
   {
-    $$ = GreaterEqualStr
+    $$ = GreaterEqualOp
   }
 | NE
   {
-    $$ = NotEqualStr
+    $$ = NotEqualOp
   }
 | NULL_SAFE_EQUAL
   {
-    $$ = NullSafeEqualStr
+    $$ = NullSafeEqualOp
   }
 
 like_escape_opt:
@@ -2597,51 +2700,51 @@ value_expression:
   }
 | value_expression '&' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
   }
 | value_expression '|' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: BitOrStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
   }
 | value_expression '^' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: BitXorStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
   }
 | value_expression '+' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: PlusStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
   }
 | value_expression '-' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: MinusStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
   }
 | value_expression '*' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: MultStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
   }
 | value_expression '/' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: DivStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
   }
 | value_expression DIV value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: IntDivStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
   }
 | value_expression '%' value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
   }
 | value_expression MOD value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
   }
 | value_expression SHIFT_LEFT value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
   }
 | value_expression SHIFT_RIGHT value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
   }
 | column_name JSON_EXTRACT_OP value
   {
@@ -2657,30 +2760,30 @@ value_expression:
   }
 | BINARY value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BinaryStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: BinaryOp, Expr: $2}
   }
 | UNDERSCORE_BINARY value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: UBinaryStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: UBinaryOp, Expr: $2}
   }
 | UNDERSCORE_UTF8 value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: Utf8Str, Expr: $2}
+    $$ = &UnaryExpr{Operator: Utf8Op, Expr: $2}
   }
 | UNDERSCORE_UTF8MB4 value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: Utf8mb4Str, Expr: $2}
+    $$ = &UnaryExpr{Operator: Utf8mb4Op, Expr: $2}
   }
 | UNDERSCORE_LATIN1 value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: Latin1Str, Expr: $2}
+    $$ = &UnaryExpr{Operator: Latin1Op, Expr: $2}
   }
 | '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(*Literal); ok && num.Type == IntVal {
       $$ = num
     } else {
-      $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
+      $$ = &UnaryExpr{Operator: UPlusOp, Expr: $2}
     }
   }
 | '-'  value_expression %prec UNARY
@@ -2694,16 +2797,16 @@ value_expression:
         $$ = NewIntLiteral(append([]byte("-"), num.Val...))
       }
     } else {
-      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
+      $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
     }
   }
 | '~'  value_expression
   {
-    $$ = &UnaryExpr{Operator: TildaStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
   }
 | '!' value_expression %prec UNARY
   {
-    $$ = &UnaryExpr{Operator: BangStr, Expr: $2}
+    $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
   }
 | INTERVAL value_expression sql_id
   {
@@ -2925,23 +3028,23 @@ function_call_conflict:
 match_option:
 /*empty*/
   {
-    $$ = ""
+    $$ = NoOption
   }
 | IN BOOLEAN MODE
   {
-    $$ = BooleanModeStr
+    $$ = BooleanModeOpt
   }
 | IN NATURAL LANGUAGE MODE
  {
-    $$ = NaturalLanguageModeStr
+    $$ = NaturalLanguageModeOpt
  }
 | IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION
  {
-    $$ = NaturalLanguageModeWithQueryExpansionStr
+    $$ = NaturalLanguageModeWithQueryExpansionOpt
  }
 | WITH QUERY EXPANSION
  {
-    $$ = QueryExpansionStr
+    $$ = QueryExpansionOpt
  }
 
 charset:
@@ -2961,7 +3064,7 @@ convert_type:
   }
 | CHAR length_opt charset_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3, Operator: CharacterSetStr}
+    $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3, Operator: CharacterSetOp}
   }
 | CHAR length_opt id_or_var
   {
@@ -3165,15 +3268,15 @@ order:
 
 asc_desc_opt:
   {
-    $$ = AscScr
+    $$ = AscOrder
   }
 | ASC
   {
-    $$ = AscScr
+    $$ = AscOrder
   }
 | DESC
   {
-    $$ = DescScr
+    $$ = DescOrder
   }
 
 limit_opt:
@@ -3195,15 +3298,149 @@ limit_opt:
 
 lock_opt:
   {
-    $$ = ""
+    $$ = NoLock
   }
 | FOR UPDATE
   {
-    $$ = ForUpdateStr
+    $$ = ForUpdateLock
   }
 | LOCK IN SHARE MODE
   {
-    $$ = ShareModeStr
+    $$ = ShareModeLock
+  }
+
+into_option:
+  {
+    $$ = nil
+  }
+| INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
+  {
+    $$ = &SelectInto{Type:IntoOutfileS3, FileName:string($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+  }
+| INTO DUMPFILE STRING
+  {
+    $$ = &SelectInto{Type:IntoDumpfile, FileName:string($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+  }
+| INTO OUTFILE STRING charset_opt export_options
+  {
+    $$ = &SelectInto{Type:IntoOutfile, FileName:string($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+  }
+
+format_opt:
+  {
+    $$ = ""
+  }
+| FORMAT CSV header_opt
+  {
+    $$ = " format csv" + $3
+  }
+| FORMAT TEXT header_opt
+  {
+    $$ = " format text" + $3
+  }
+
+header_opt:
+  {
+    $$ = ""
+  }
+| HEADER
+  {
+    $$ = " header"
+  }
+
+manifest_opt:
+  {
+    $$ = ""
+  }
+| MANIFEST ON
+  {
+    $$ = " manifest on"
+  }
+| MANIFEST OFF
+  {
+    $$ = " manifest off"
+  }
+
+overwrite_opt:
+  {
+    $$ = ""
+  }
+| OVERWRITE ON
+  {
+    $$ = " overwrite on"
+  }
+| OVERWRITE OFF
+  {
+    $$ = " overwrite off"
+  }
+
+export_options:
+  fields_opt lines_opt
+  {
+    $$ = $1 + $2
+  }
+
+lines_opt:
+  {
+    $$ = ""
+  }
+| LINES starting_by_opt terminated_by_opt
+  {
+    $$ = " lines" + $2 + $3
+  }
+
+starting_by_opt:
+  {
+    $$ = ""
+  }
+| STARTING BY STRING
+  {
+    $$ = " starting by '" + string($3) + "'"
+  }
+
+terminated_by_opt:
+  {
+    $$ = ""
+  }
+| TERMINATED BY STRING
+  {
+    $$ = " terminated by '" + string($3)  + "'"
+  }
+
+fields_opt:
+  {
+    $$ = ""
+  }
+| columns_or_fields terminated_by_opt enclosed_by_opt escaped_by_opt
+  {
+    $$ = " " + $1 + $2 + $3 + $4
+  }
+
+escaped_by_opt:
+  {
+    $$ = ""
+  }
+| ESCAPED BY STRING
+  {
+    $$ = " escaped by '" + string($3) + "'"
+  }
+
+enclosed_by_opt:
+  {
+    $$ = ""
+  }
+| optionally_opt ENCLOSED BY STRING
+  {
+    $$ = $1 + " enclosed by '" + string($4) + "'"
+  }
+
+optionally_opt:
+  {
+    $$ = ""
+  }
+| OPTIONALLY
+  {
+    $$ = " optionally"
   }
 
 // insert_data expands all combinations into a single rule.
@@ -3225,6 +3462,10 @@ insert_data:
 | openb ins_column_list closeb VALUES tuple_list
   {
     $$ = &Insert{Columns: $2, Rows: $5}
+  }
+| openb closeb VALUES tuple_list
+  {
+    $$ = &Insert{Rows: $4}
   }
 | openb ins_column_list closeb select_statement
   {
@@ -3323,19 +3564,19 @@ set_list:
 set_expression:
   reserved_sql_id '=' ON
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrLiteral([]byte("on"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("on"))}
   }
 | reserved_sql_id '=' OFF
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrLiteral([]byte("off"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("off"))}
   }
 | reserved_sql_id '=' expression
   {
-    $$ = &SetExpr{Name: $1, Expr: $3}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: $3}
   }
 | charset_or_character_set charset_value collate_opt
   {
-    $$ = &SetExpr{Name: NewColIdent(string($1)), Expr: $2}
+    $$ = &SetExpr{Name: NewColIdent(string($1)), Scope: ImplicitScope, Expr: $2}
   }
 |  set_session_or_global set_expression
   {
@@ -3380,9 +3621,9 @@ not_exists_opt:
   { $$ = true }
 
 ignore_opt:
-  { $$ = "" }
+  { $$ = false }
 | IGNORE
-  { $$ = IgnoreStr }
+  { $$ = true }
 
 non_add_drop_or_rename_operation:
   ALTER
@@ -3405,6 +3646,25 @@ non_add_drop_or_rename_operation:
   { $$ = struct{}{} }
 | id_or_var
   { $$ = struct{}{} }
+
+
+online_hint_opt:
+  {
+    $$ = &OnlineDDLHint{}
+  }
+| WITH STRING
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: DDLStrategy($2),
+    }
+  }
+| WITH STRING STRING
+  {
+    $$ = &OnlineDDLHint{
+        Strategy: DDLStrategy($2),
+        Options: string($3),
+    }
+  }
 
 to_opt:
   { $$ = struct{}{} }
@@ -3558,6 +3818,7 @@ reserved_keyword:
 | OR
 | ORDER
 | OUTER
+| OUTFILE
 | OVER
 | PERCENT_RANK
 | RANK
@@ -3626,16 +3887,21 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| CSV
+| DATA
 | DATE
 | DATETIME
 | DECIMAL
 | DEFINITION
 | DESCRIPTION
 | DOUBLE
+| DUMPFILE
 | DUPLICATE
+| ENCLOSED
 | ENFORCED
 | ENGINES
 | ENUM
+| ESCAPED
 | EXCLUDE
 | EXPANSION
 | EXTENDED
@@ -3651,6 +3917,7 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| HEADER
 | HISTOGRAM
 | HISTORY
 | INACTIVE
@@ -3662,14 +3929,18 @@ non_reserved_keyword:
 | JSON
 | KEY_BLOCK_SIZE
 | KEYS
+| KEYSPACES
 | LANGUAGE
 | LAST_INSERT_ID
 | LESS
 | LEVEL
+| LINES
 | LINESTRING
+| LOAD
 | LOCKED
 | LONGBLOB
 | LONGTEXT
+| MANIFEST
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -3693,11 +3964,13 @@ non_reserved_keyword:
 | OJ
 | OLD
 | OPTIONAL
+| OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | ONLY
 | OPTIMIZE
 | OTHERS
+| OVERWRITE
 | PARTITION
 | PATH
 | PERSIST
@@ -3729,6 +4002,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| S3
 | SECONDARY
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
@@ -3743,8 +4017,10 @@ non_reserved_keyword:
 | SPATIAL
 | SRID
 | START
+| STARTING
 | STATUS
 | TABLES
+| TERMINATED
 | TEXT
 | THAN
 | THREAD_PRIORITY
@@ -3771,7 +4047,10 @@ non_reserved_keyword:
 | VINDEXES
 | VISIBLE
 | VITESS
+| VITESS_KEYSPACES
 | VITESS_METADATA
+| VITESS_SHARDS
+| VITESS_TABLETS
 | VSCHEMA
 | WARNINGS
 | WITH

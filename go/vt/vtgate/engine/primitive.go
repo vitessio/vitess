@@ -21,14 +21,16 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	"golang.org/x/sync/errgroup"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -83,6 +85,8 @@ type (
 
 		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
 
+		SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error
+
 		Session() SessionActions
 
 		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
@@ -90,6 +94,8 @@ type (
 		InTransactionAndIsDML() bool
 
 		LookupRowLockShardSession() vtgatepb.CommitOrder
+
+		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -119,6 +125,11 @@ type (
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetFoundRows(uint64)
+
+		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
+		SetReadAfterWriteGTID(string)
+		SetReadAfterWriteTimeout(float64)
+		SetSessionTrackGTIDs(bool)
 	}
 
 	// Plan represents the execution strategy for a given query.

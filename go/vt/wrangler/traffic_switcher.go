@@ -137,6 +137,17 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return nil, err
 	}
 
+	//If journals exist notify user and fail
+	journalsExist, _, err := ts.checkJournals(ctx)
+	if err != nil {
+		wr.Logger().Errorf("checkJournals failed: %v", err)
+		return nil, err
+	}
+	if journalsExist {
+		wr.Logger().Errorf("Found a previous journal entry for %d", ts.id)
+		return nil, fmt.Errorf("found an entry from a previous run for migration id %d in _vt.resharding_journal, please review and delete it before proceeding", ts.id)
+	}
+
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -235,6 +246,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 			sw.cancelMigration(ctx, sm)
 			return 0, sw.logs(), nil
 		}
+		ts.wr.Logger().Infof("Stopping streams")
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
 			ts.wr.Logger().Errorf("stopStreams failed: %v", err)
@@ -246,24 +258,28 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
+		ts.wr.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
 			ts.wr.Logger().Errorf("stopSourceWrites failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
+		ts.wr.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
 			ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
+		ts.wr.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
 			ts.wr.Logger().Errorf("migrateStreams failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
+		ts.wr.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
 			ts.wr.Logger().Errorf("createReverseVReplication failed: %v", err)
 			sw.cancelMigration(ctx, sm)
@@ -530,6 +546,7 @@ func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
 			expanded = append(expanded, fmt.Sprintf("%s:%d", shard, uid))
 		}
 	}
+
 	sort.Strings(expanded)
 	hasher := fnv.New64()
 	hasher.Write([]byte(targetKeyspace))
@@ -676,34 +693,48 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	return ts.wr.ts.MigrateServedType(ctx, ts.sourceKeyspace, toShards, fromShards, servedType, cells)
 }
 
+func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationID int64) (*binlogdatapb.Journal, bool, error) {
+	var exists bool
+	journal := &binlogdatapb.Journal{}
+	query := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", migrationID)
+	p3qr, err := wr.tmc.VReplicationExec(ctx, tablet, query)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(p3qr.Rows) != 0 {
+		qr := sqltypes.Proto3ToResult(p3qr)
+		if !exists {
+			if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
+				return nil, false, err
+			}
+			exists = true
+		}
+	}
+	return journal, exists, nil
+
+}
+
 // checkJournals returns true if at least one journal has been created.
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var mu sync.Mutex
-	journal := &binlogdatapb.Journal{}
-	var exists bool
 	err = ts.forAllSources(func(source *tsSource) error {
-		statement := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", ts.id)
-		p3qr, err := ts.wr.tmc.VReplicationExec(ctx, source.master.Tablet, statement)
+		mu.Lock()
+		defer mu.Unlock()
+		journal, exists, err := ts.wr.checkIfJournalExistsOnTablet(ctx, source.master.Tablet, ts.id)
 		if err != nil {
 			return err
 		}
-		if len(p3qr.Rows) != 0 {
-			qr := sqltypes.Proto3ToResult(p3qr)
-			mu.Lock()
-			defer mu.Unlock()
-
-			if !exists {
-				if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
-					return err
-				}
-				exists = true
+		if exists {
+			if journal.Id != 0 {
+				sourceWorkflows = journal.SourceWorkflows
 			}
 			source.journaled = true
+			journalsExist = true
 		}
 		return nil
 	})
-	return exists, journal.SourceWorkflows, err
+	return journalsExist, sourceWorkflows, err
 }
 
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
@@ -844,7 +875,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				if ts.sourceKSSchema.Keyspace.Sharded {
 					vtable, ok := ts.sourceKSSchema.Tables[rule.Match]
 					if !ok {
-						return fmt.Errorf("table %s not found in vschema", rule.Match)
+						return fmt.Errorf("table %s not found in vschema1", rule.Match)
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.

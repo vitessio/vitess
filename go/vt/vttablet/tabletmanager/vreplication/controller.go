@@ -150,6 +150,7 @@ func (ct *controller) run(ctx context.Context) {
 		default:
 		}
 		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
+		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		timer := time.NewTimer(*retryDelay)
 		select {
 		case <-ctx.Done():
@@ -192,6 +193,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
 		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
 		if err != nil {
+			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
 			return err
 		}
 		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
@@ -203,6 +205,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// Table names can have search patterns. Resolve them against the schema.
 		tables, err := mysqlctl.ResolveTables(ctx, ct.mysqld, dbClient.DBName(), ct.source.Tables)
 		if err != nil {
+			ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 			return vterrors.Wrap(err, "failed to resolve table names")
 		}
 
@@ -241,6 +244,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		return vr.Replicate(ctx)
 	}
+	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 	return fmt.Errorf("missing source")
 }
 

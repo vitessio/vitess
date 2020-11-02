@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG VT_BASE_VER
+ARG VT_BASE_VER=latest
 
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
@@ -21,7 +21,7 @@ FROM debian:buster-slim
 # TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \
    apt-get upgrade -qq && \
-   apt-get install wget default-mysql-client jq -qq --no-install-recommends && \
+   apt-get install wget default-mysql-client jq curl -qq --no-install-recommends && \
    apt-get autoremove && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/*

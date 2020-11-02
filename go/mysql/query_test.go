@@ -628,9 +628,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 
 	for i := 0; i < count; i++ {
-		err := sConn.handleNextCommand(&handler)
-		if err != nil {
-			t.Fatalf("error handling command: %v", err)
+		kontinue := sConn.handleNextCommand(&handler)
+		if !kontinue {
+			t.Fatalf("error handling command: %d", i)
 		}
 	}
 
@@ -644,7 +644,12 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 //nolint
 func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
-		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)
+		return conn.writeOKPacket(&PacketOK{
+			affectedRows: result.RowsAffected,
+			lastInsertID: result.InsertID,
+			statusFlags:  conn.StatusFlags,
+			warnings:     0,
+		})
 	}
 	if err := conn.writeFields(result); err != nil {
 		return err

@@ -2,6 +2,7 @@ This page lists all active maintainers and their areas of expertise. This can be
 
 The following is the full list, alphabetically ordered.
 
+* Alkin Tezuysal ([askdba](https://github.com/askdba)) alkin@planetscale.com
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Anthony Yeh ([enisoc](https://github.com/enisoc)) enisoc@planetscale.com
 * Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) koz@planetscale.com
@@ -15,6 +16,7 @@ The following is the full list, alphabetically ordered.
 * Morgan Tocker ([morgo](https://github.com/morgo)) morgan@planetscale.com
 * Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@slack-corp.com
+* Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
 * Sugu Sougoumarane ([sougou](https://github.com/sougou)) sougou@planetscale.com
 

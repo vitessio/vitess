@@ -75,11 +75,11 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValu
 			continue
 		}
 		switch comparison.Operator {
-		case sqlparser.EqualStr:
+		case sqlparser.EqualOp:
 			if !sqlparser.IsValue(comparison.Right) {
 				continue
 			}
-		case sqlparser.InStr:
+		case sqlparser.InOp:
 			if !sqlparser.IsSimpleTuple(comparison.Right) {
 				continue
 			}

@@ -103,6 +103,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 
 	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.pkInfoMap, vp.copyState)
 	if err != nil {
+		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
 	}
 	vp.replicatorPlan = plan
@@ -366,6 +367,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					}
 				}
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
+					vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
+					log.Errorf("Error applying event: %s", err.Error())
 					return err
 				}
 			}

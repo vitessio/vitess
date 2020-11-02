@@ -363,6 +363,9 @@ func (se *Engine) reload(ctx context.Context) error {
 		se.tables[k] = t
 	}
 	se.lastChange = curTime
+	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
+		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, dropped)
+	}
 	se.broadcast(created, altered, dropped)
 	return nil
 }
@@ -415,6 +418,7 @@ func (se *Engine) RegisterVersionEvent() error {
 func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
+		log.Infof("GetTableForPos returned error: %s", err.Error())
 		return nil, err
 	}
 	if mt != nil {
@@ -424,6 +428,7 @@ func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*
 	defer se.mu.Unlock()
 	st, ok := se.tables[tableName.String()]
 	if !ok {
+		log.Infof("table %v not found in vttablet schema: current tables", tableName.String(), se.tables)
 		return nil, fmt.Errorf("table %v not found in vttablet schema", tableName.String())
 	}
 	return newMinimalTable(st), nil

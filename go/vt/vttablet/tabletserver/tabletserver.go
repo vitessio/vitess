@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -51,13 +52,16 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
@@ -92,19 +96,22 @@ type TabletServer struct {
 	topoServer             *topo.Server
 
 	// These are sub-components of TabletServer.
-	se          *schema.Engine
-	rt          *repltracker.ReplTracker
-	vstreamer   *vstreamer.Engine
-	tracker     *schema.Tracker
-	watcher     *BinlogWatcher
-	qe          *QueryEngine
-	txThrottler *txthrottler.TxThrottler
-	te          *TxEngine
-	messager    *messager.Engine
-	hs          *healthStreamer
+	se           *schema.Engine
+	rt           *repltracker.ReplTracker
+	vstreamer    *vstreamer.Engine
+	tracker      *schema.Tracker
+	watcher      *BinlogWatcher
+	qe           *QueryEngine
+	txThrottler  *txthrottler.TxThrottler
+	te           *TxEngine
+	messager     *messager.Engine
+	hs           *healthStreamer
+	lagThrottler *throttle.Throttler
+	tableGC      *gc.TableGC
 
 	// sm manages state transitions.
-	sm *stateManager
+	sm                *stateManager
+	onlineDDLExecutor *onlineddl.Executor
 
 	// alias is used for identifying this tabletserver in healthcheck responses.
 	alias topodatapb.TabletAlias
@@ -155,6 +162,16 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
+	tabletTypeFunc := func() topodatapb.TabletType {
+		if tsv.sm == nil {
+			return topodatapb.TabletType_UNKNOWN
+		}
+		return tsv.sm.Target().TabletType
+	}
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer, tabletTypeFunc)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
+	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
+
 	tsv.sm = &stateManager{
 		hs:          tsv.hs,
 		se:          tsv.se,
@@ -166,6 +183,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		txThrottler: tsv.txThrottler,
 		te:          tsv.te,
 		messager:    tsv.messager,
+		ddle:        tsv.onlineDDLExecutor,
+		throttler:   tsv.lagThrottler,
+		tableGC:     tsv.tableGC,
 	}
 
 	tsv.exporter.NewGaugeFunc("TabletState", "Tablet server state", func() int64 { return int64(tsv.sm.State()) })
@@ -183,6 +203,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerQueryzHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
+	tsv.registerMigrationStatusHandler()
+	tsv.registerThrottlerHandlers()
+
 	return tsv
 }
 
@@ -201,6 +224,9 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.txThrottler.InitDBConfig(target)
 	tsv.vstreamer.InitDBConfig(target.Keyspace)
 	tsv.hs.InitDBConfig(target)
+	tsv.onlineDDLExecutor.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
+	tsv.lagThrottler.InitDBConfig(target.Keyspace, target.Shard)
+	tsv.tableGC.InitDBConfig(target.Keyspace, target.Shard, dbcfgs.DBName)
 	return nil
 }
 
@@ -327,8 +353,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	switch tsv.sm.Target().TabletType {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+	if tsv.IsServingType() {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -339,8 +364,18 @@ func (tsv *TabletServer) IsHealthy() error {
 			nil,
 		)
 		return err
+	}
+	return nil
+}
+
+// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
+// should not be serving in it's healthy state.
+func (tsv *TabletServer) IsServingType() bool {
+	switch tsv.sm.Target().TabletType {
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+		return true
 	default:
-		return nil
+		return false
 	}
 }
 
@@ -360,6 +395,21 @@ func (tsv *TabletServer) ClearQueryPlanCache() {
 // QueryService returns the QueryService part of TabletServer.
 func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
+}
+
+// OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
+func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
+	return tsv.onlineDDLExecutor
+}
+
+// LagThrottler returns the throttle.Throttler part of TabletServer.
+func (tsv *TabletServer) LagThrottler() *throttle.Throttler {
+	return tsv.lagThrottler
+}
+
+// TableGC returns the tableDropper part of TabletServer.
+func (tsv *TabletServer) TableGC() *gc.TableGC {
+	return tsv.tableGC
 }
 
 // SchemaEngine returns the SchemaEngine part of TabletServer.
@@ -643,6 +693,15 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				return err
 			}
 			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+
+			// Change database name in mysql output to the keyspace name
+			if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+				for _, f := range result.Fields {
+					if f.Database != "" {
+						f.Database = tsv.sm.target.Keyspace
+					}
+				}
+			}
 			return nil
 		},
 	)
@@ -678,7 +737,18 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				logStats:       logStats,
 				tsv:            tsv,
 			}
-			return qre.Stream(callback)
+			newCallback := func(result *sqltypes.Result) error {
+				if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+					// Change database name in mysql output to the keyspace name
+					for _, f := range result.Fields {
+						if f.Database != "" {
+							f.Database = tsv.sm.target.Keyspace
+						}
+					}
+				}
+				return callback(result)
+			}
+			return qre.Stream(newCallback)
 		},
 	)
 }
@@ -1403,7 +1473,7 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 			acl.SendError(w, err)
 			return
 		}
-		if !tsv.sm.IsServing() {
+		if tsv.sm.Target().TabletType != topodatapb.TabletType_SPARE && !tsv.sm.IsServing() {
 			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 			return
 		}
@@ -1453,6 +1523,70 @@ func (tsv *TabletServer) registerTwopczHandler() {
 		}
 		twopczHandler(txe, w, r)
 	})
+}
+
+func (tsv *TabletServer) registerMigrationStatusHandler() {
+	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
+		ctx := tabletenv.LocalContext()
+		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, r.URL.Query().Get("uuid"), r.URL.Query().Get("status"), r.URL.Query().Get("dryrun")); err != nil {
+			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Write([]byte("ok"))
+	})
+}
+
+// registerThrottlerCheckHandler registers a throttler "check" request
+func (tsv *TabletServer) registerThrottlerCheckHandler() {
+	tsv.exporter.HandleFunc("/throttler/check", func(w http.ResponseWriter, r *http.Request) {
+		ctx := tabletenv.LocalContext()
+		remoteAddr := r.Header.Get("X-Forwarded-For")
+		if remoteAddr == "" {
+			remoteAddr = r.RemoteAddr
+			remoteAddr = strings.Split(remoteAddr, ":")[0]
+		}
+		appName := r.URL.Query().Get("app")
+		if appName == "" {
+			appName = throttle.DefaultAppName
+		}
+		flags := &throttle.CheckFlags{
+			LowPriority: (r.URL.Query().Get("p") == "low"),
+		}
+		checkResult := tsv.lagThrottler.Check(ctx, appName, remoteAddr, flags)
+		if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
+			checkResult.StatusCode = http.StatusOK // 200
+		}
+
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+		}
+		w.WriteHeader(checkResult.StatusCode)
+		if r.Method == http.MethodGet {
+			json.NewEncoder(w).Encode(checkResult)
+		}
+	})
+}
+
+// registerThrottlerStatusHandler registers a throttler "status" request
+func (tsv *TabletServer) registerThrottlerStatusHandler() {
+	tsv.exporter.HandleFunc("/throttler/status", func(w http.ResponseWriter, r *http.Request) {
+		status := tsv.lagThrottler.Status()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+	})
+}
+
+// registerThrottlerHandlers registers all throttler handlers
+func (tsv *TabletServer) registerThrottlerHandlers() {
+	tsv.registerThrottlerCheckHandler()
+	tsv.registerThrottlerStatusHandler()
+}
+
+// EnableHeartbeat forces heartbeat to be on or off.
+// Only to be used for testing.
+func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
+	tsv.rt.EnableHeartbeat(enabled)
 }
 
 // SetTracking forces tracking to be on or off.

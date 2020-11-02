@@ -179,7 +179,8 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	if len(want) != len(gotDryRun) {
 		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
 	}
-	var match bool
+	var match, fail bool
+	fail = false
 	for i, w := range want {
 		w = strings.TrimSpace(w)
 		g := strings.TrimSpace(gotDryRun[i])
@@ -192,11 +193,11 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 			match = (g == w)
 		}
 		if !match {
-			match = false
+			fail = true
 			t.Logf("want %s, got %s\n", w, gotDryRun[i])
 		}
 	}
-	if !match {
+	if fail {
 		t.Fatal("Dry run results don't match")
 	}
 }

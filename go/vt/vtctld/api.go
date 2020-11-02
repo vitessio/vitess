@@ -628,7 +628,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		wr := wrangler.New(logger, ts, tmClient)
 
 		executor := schemamanager.NewTabletExecutor(
-			wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
+			wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second,
+		)
 
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)

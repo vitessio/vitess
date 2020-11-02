@@ -141,7 +141,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execOther()
 	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
 		return qre.execOther()
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL, planbuilder.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
@@ -222,6 +222,8 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qr, nil
 	case planbuilder.PlanDDL:
 		return qre.execDDL(conn)
+	case planbuilder.PlanLoad:
+		return qre.execLoad(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -389,6 +391,14 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		if err != nil {
 			return nil, err
 		}
+	}
+	return result, nil
+}
+
+func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {
+	result, err := qre.execSQL(conn, qre.query, true)
+	if err != nil {
+		return nil, err
 	}
 	return result, nil
 }
@@ -655,8 +665,8 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
+	withoutComments := query
 	buf.WriteString(query)
-	withoutComments := buf.String()
 	buf.WriteString(qre.marginComments.Trailing)
 	fullSQL := buf.String()
 	return fullSQL, withoutComments, nil

@@ -148,7 +148,7 @@ const (
 
 // AffectedTables returns the list table names affected by the DDL.
 func (node *DDL) AffectedTables() TableNames {
-	if node.Action == RenameStr || node.Action == DropStr {
+	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
 		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
 		list = append(list, node.FromTables...)
 		list = append(list, node.ToTables...)
@@ -313,14 +313,18 @@ var _ ConstraintInfo = &ForeignKeyDefinition{}
 
 func (f *ForeignKeyDefinition) iConstraintInfo() {}
 
+var _ ConstraintInfo = &CheckConstraintDefinition{}
+
+func (c *CheckConstraintDefinition) iConstraintInfo() {}
+
 // HasOnTable returns true if the show statement has an "on" clause
-func (node *Show) HasOnTable() bool {
+func (node *ShowLegacy) HasOnTable() bool {
 	return node.OnTable.Name.v != ""
 }
 
 // HasTable returns true if the show statement has a parsed table name.
 // Not all show statements parse table names.
-func (node *Show) HasTable() bool {
+func (node *ShowLegacy) HasTable() bool {
 	return node.Table.Name.v != ""
 }
 
@@ -360,7 +364,7 @@ func (node TableName) ToViewName() TableName {
 
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
-func NewWhere(typ string, expr Expr) *Where {
+func NewWhere(typ WhereType, expr Expr) *Where {
 	if expr == nil {
 		return nil
 	}
@@ -406,7 +410,7 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	if right, ok = node.Right.(*Literal); !ok {
 		return false
 	}
-	if node.Operator == NotEqualStr && left.Type == right.Type {
+	if node.Operator == NotEqualOp && left.Type == right.Type {
 		if len(left.Val) != len(right.Val) {
 			return false
 		}
@@ -724,7 +728,7 @@ func (node *Select) SetLimit(limit *Limit) {
 }
 
 // SetLock sets the lock clause
-func (node *Select) SetLock(lock string) {
+func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
@@ -733,7 +737,7 @@ func (node *Select) SetLock(lock string) {
 func (node *Select) AddWhere(expr Expr) {
 	if node.Where == nil {
 		node.Where = &Where{
-			Type: WhereStr,
+			Type: WhereClause,
 			Expr: expr,
 		}
 		return
@@ -749,7 +753,7 @@ func (node *Select) AddWhere(expr Expr) {
 func (node *Select) AddHaving(expr Expr) {
 	if node.Having == nil {
 		node.Having = &Where{
-			Type: HavingStr,
+			Type: HavingClause,
 			Expr: expr,
 		}
 		return
@@ -771,7 +775,7 @@ func (node *ParenSelect) SetLimit(limit *Limit) {
 }
 
 // SetLock sets the lock clause
-func (node *ParenSelect) SetLock(lock string) {
+func (node *ParenSelect) SetLock(lock Lock) {
 	node.Select.SetLock(lock)
 }
 
@@ -786,12 +790,12 @@ func (node *Union) SetLimit(limit *Limit) {
 }
 
 // SetLock sets the lock clause
-func (node *Union) SetLock(lock string) {
+func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, typ string, by OrderBy, limit *Limit, lock string) *Union {
+func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit, lock Lock) *Union {
 	union, isUnion := lhs.(*Union)
 	if isUnion {
 		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Type: typ, Statement: rhs})
@@ -802,6 +806,333 @@ func Unionize(lhs, rhs SelectStatement, typ string, by OrderBy, limit *Limit, lo
 	}
 
 	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Type: typ, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+}
+
+// ToString returns the string associated with the DDLAction Enum
+func (action DDLAction) ToString() string {
+	switch action {
+	case CreateDDLAction:
+		return CreateStr
+	case AlterDDLAction:
+		return AlterStr
+	case DropDDLAction:
+		return DropStr
+	case RenameDDLAction:
+		return RenameStr
+	case TruncateDDLAction:
+		return TruncateStr
+	case FlushDDLAction:
+		return FlushStr
+	case CreateVindexDDLAction:
+		return CreateVindexStr
+	case DropVindexDDLAction:
+		return DropVindexStr
+	case AddVschemaTableDDLAction:
+		return AddVschemaTableStr
+	case DropVschemaTableDDLAction:
+		return DropVschemaTableStr
+	case AddColVindexDDLAction:
+		return AddColVindexStr
+	case DropColVindexDDLAction:
+		return DropColVindexStr
+	case AddSequenceDDLAction:
+		return AddSequenceStr
+	case AddAutoIncDDLAction:
+		return AddAutoIncStr
+	default:
+		return "Unknown DDL Action"
+	}
+}
+
+// ToString returns the string associated with the Scope enum
+func (scope Scope) ToString() string {
+	switch scope {
+	case SessionScope:
+		return SessionStr
+	case GlobalScope:
+		return GlobalStr
+	case VitessMetadataScope:
+		return VitessMetadataStr
+	case VariableScope:
+		return VariableStr
+	case LocalScope:
+		return LocalStr
+	case ImplicitScope:
+		return ImplicitStr
+	default:
+		return "Unknown Scope"
+	}
+}
+
+// ToString returns the IgnoreStr if ignore is true.
+func (ignore Ignore) ToString() string {
+	if ignore {
+		return IgnoreStr
+	}
+	return ""
+}
+
+// ToString returns the string associated with the type of lock
+func (lock Lock) ToString() string {
+	switch lock {
+	case NoLock:
+		return NoLockStr
+	case ForUpdateLock:
+		return ForUpdateStr
+	case ShareModeLock:
+		return ShareModeStr
+	default:
+		return "Unknown lock"
+	}
+}
+
+// ToString returns the string associated with WhereType
+func (whereType WhereType) ToString() string {
+	switch whereType {
+	case WhereClause:
+		return WhereStr
+	case HavingClause:
+		return HavingStr
+	default:
+		return "Unknown where type"
+	}
+}
+
+// ToString returns the string associated with JoinType
+func (joinType JoinType) ToString() string {
+	switch joinType {
+	case NormalJoinType:
+		return JoinStr
+	case StraightJoinType:
+		return StraightJoinStr
+	case LeftJoinType:
+		return LeftJoinStr
+	case RightJoinType:
+		return RightJoinStr
+	case NaturalJoinType:
+		return NaturalJoinStr
+	case NaturalLeftJoinType:
+		return NaturalLeftJoinStr
+	case NaturalRightJoinType:
+		return NaturalRightJoinStr
+	default:
+		return "Unknown join type"
+	}
+}
+
+// ToString returns the operator as a string
+func (op ComparisonExprOperator) ToString() string {
+	switch op {
+	case EqualOp:
+		return EqualStr
+	case LessThanOp:
+		return LessThanStr
+	case GreaterThanOp:
+		return GreaterThanStr
+	case LessEqualOp:
+		return LessEqualStr
+	case GreaterEqualOp:
+		return GreaterEqualStr
+	case NotEqualOp:
+		return NotEqualStr
+	case NullSafeEqualOp:
+		return NullSafeEqualStr
+	case InOp:
+		return InStr
+	case NotInOp:
+		return NotInStr
+	case LikeOp:
+		return LikeStr
+	case NotLikeOp:
+		return NotLikeStr
+	case RegexpOp:
+		return RegexpStr
+	case NotRegexpOp:
+		return NotRegexpStr
+	default:
+		return "Unknown ComparisonExpOperator"
+	}
+}
+
+// ToString returns the operator as a string
+func (op RangeCondOperator) ToString() string {
+	switch op {
+	case BetweenOp:
+		return BetweenStr
+	case NotBetweenOp:
+		return NotBetweenStr
+	default:
+		return "Unknown RangeCondOperator"
+	}
+}
+
+// ToString returns the operator as a string
+func (op IsExprOperator) ToString() string {
+	switch op {
+	case IsNullOp:
+		return IsNullStr
+	case IsNotNullOp:
+		return IsNotNullStr
+	case IsTrueOp:
+		return IsTrueStr
+	case IsNotTrueOp:
+		return IsNotTrueStr
+	case IsFalseOp:
+		return IsFalseStr
+	case IsNotFalseOp:
+		return IsNotFalseStr
+	default:
+		return "Unknown IsExprOperator"
+	}
+}
+
+// ToString returns the operator as a string
+func (op BinaryExprOperator) ToString() string {
+	switch op {
+	case BitAndOp:
+		return BitAndStr
+	case BitOrOp:
+		return BitOrStr
+	case BitXorOp:
+		return BitXorStr
+	case PlusOp:
+		return PlusStr
+	case MinusOp:
+		return MinusStr
+	case MultOp:
+		return MultStr
+	case DivOp:
+		return DivStr
+	case IntDivOp:
+		return IntDivStr
+	case ModOp:
+		return ModStr
+	case ShiftLeftOp:
+		return ShiftLeftStr
+	case ShiftRightOp:
+		return ShiftRightStr
+	case JSONExtractOp:
+		return JSONExtractOpStr
+	case JSONUnquoteExtractOp:
+		return JSONUnquoteExtractOpStr
+	default:
+		return "Unknown BinaryExprOperator"
+	}
+}
+
+// ToString returns the operator as a string
+func (op UnaryExprOperator) ToString() string {
+	switch op {
+	case UPlusOp:
+		return UPlusStr
+	case UMinusOp:
+		return UMinusStr
+	case TildaOp:
+		return TildaStr
+	case BangOp:
+		return BangStr
+	case BinaryOp:
+		return BinaryStr
+	case UBinaryOp:
+		return UBinaryStr
+	case Utf8mb4Op:
+		return Utf8mb4Str
+	case Utf8Op:
+		return Utf8Str
+	case Latin1Op:
+		return Latin1Str
+	default:
+		return "Unknown UnaryExprOperator"
+	}
+}
+
+// ToString returns the option as a string
+func (option MatchExprOption) ToString() string {
+	switch option {
+	case NoOption:
+		return NoOptionStr
+	case BooleanModeOpt:
+		return BooleanModeStr
+	case NaturalLanguageModeOpt:
+		return NaturalLanguageModeStr
+	case NaturalLanguageModeWithQueryExpansionOpt:
+		return NaturalLanguageModeWithQueryExpansionStr
+	case QueryExpansionOpt:
+		return QueryExpansionStr
+	default:
+		return "Unknown MatchExprOption"
+	}
+}
+
+// ToString returns the direction as a string
+func (dir OrderDirection) ToString() string {
+	switch dir {
+	case AscOrder:
+		return AscScr
+	case DescOrder:
+		return DescScr
+	default:
+		return "Unknown OrderDirection"
+	}
+}
+
+// ToString returns the operator as a string
+func (op ConvertTypeOperator) ToString() string {
+	switch op {
+	case NoOperator:
+		return NoOperatorStr
+	case CharacterSetOp:
+		return CharacterSetStr
+	default:
+		return "Unknown ConvertTypeOperator"
+	}
+}
+
+// ToString returns the type as a string
+func (ty IndexHintsType) ToString() string {
+	switch ty {
+	case UseOp:
+		return UseStr
+	case IgnoreOp:
+		return IgnoreStr
+	case ForceOp:
+		return ForceStr
+	default:
+		return "Unknown IndexHintsType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty ExplainType) ToString() string {
+	switch ty {
+	case EmptyType:
+		return EmptyStr
+	case TreeType:
+		return TreeStr
+	case JSONType:
+		return JSONStr
+	case VitessType:
+		return VitessStr
+	case TraditionalType:
+		return TraditionalStr
+	case AnalyzeType:
+		return AnalyzeStr
+	default:
+		return "Unknown ExplainType"
+	}
+}
+
+func (sel SelectIntoType) ToString() string {
+	switch sel {
+	case IntoOutfile:
+		return IntoOutfileStr
+	case IntoOutfileS3:
+		return IntoOutfileS3Str
+	case IntoDumpfile:
+		return IntoDumpfileStr
+	default:
+		return "Unknown Select Into Type"
+	}
 }
 
 // AtCount represents the '@' count in ColIdent

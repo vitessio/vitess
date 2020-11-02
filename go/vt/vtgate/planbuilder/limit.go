@@ -51,7 +51,7 @@ func (l *limit) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (l *limit) PushLock(lock string) error {
+func (l *limit) PushLock(lock sqlparser.Lock) error {
 	return l.input.PushLock(lock)
 }
 

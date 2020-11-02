@@ -87,15 +87,12 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -108,7 +105,9 @@ import (
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -307,7 +306,7 @@ var commands = []commandGroup{
 				"[-source=<source keyspace name>] [-remove] [-cells=c1,c2,...] <keyspace name> <tablet type>",
 				"Changes the ServedFromMap manually. This command is intended for emergency fixes. This field is automatically set when you call the *MigrateServedFrom* command. This command does not rebuild the serving graph."},
 			{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=c1,c2,...] <keyspace> ...",
+				"[-cells=c1,c2,...] [-allow_partial] <keyspace> ...",
 				"Rebuilds the serving data for the keyspace. This command may trigger an update to all connected clients."},
 			{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
@@ -378,6 +377,9 @@ var commands = []commandGroup{
 			{"ListTablets", commandListTablets,
 				"<tablet alias> ...",
 				"Lists specified tablets in an awk-friendly way."},
+			{"GenerateShardRanges", commandGenerateShardRanges,
+				"<num shards>",
+				"Generates shard ranges assuming a keyspace with N shards."},
 			{"Panic", commandPanic,
 				"",
 				"HIDDEN Triggers a panic on the server side, to test the handling."},
@@ -409,6 +411,17 @@ var commands = []commandGroup{
 			{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] [-skip-verify] [-wait_replicas_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
 				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
+			{"OnlineDDL", commandOnlineDDL,
+				"<keyspace> <command> [<migration_uuid>]",
+				"Operates on online DDL (migrations). Examples:" +
+					" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace show all" +
+					" \nvtctl OnlineDDL test_keyspace show running" +
+					" \nvtctl OnlineDDL test_keyspace show complete" +
+					" \nvtctl OnlineDDL test_keyspace show failed" +
+					" \nvtctl OnlineDDL test_keyspace retry 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+			},
 
 			{"ValidateVersionShard", commandValidateVersionShard,
 				"<keyspace/shard>",
@@ -1835,6 +1848,7 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 
 func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	allowPartial := subFlags.Bool("allow_partial", false, "Specifies whether a SNAPSHOT keyspace is allowed to serve with an incomplete set of shards. Ignored for all other types of keyspaces")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1852,7 +1866,7 @@ func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray, *allowPartial); err != nil {
 			return err
 		}
 	}
@@ -1982,8 +1996,8 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with")
 	tabletTypes := subFlags.String("tablet_types", "master,replica,rdonly", "Tablet types for source and target")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
 	format := subFlags.String("format", "", "Format of report") //"json" or ""
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1995,8 +2009,10 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if err != nil {
 		return err
 	}
-
-	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format)
+	if *maxRows <= 0 {
+		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
+	}
+	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)
 	}
@@ -2429,6 +2445,77 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		schemamanager.NewPlainController(change, keyspace),
 		executor,
 	)
+}
+
+func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() < 1 {
+		return fmt.Errorf("the <keyspace> argument is required for the OnlineDDL command")
+	}
+	keyspace := subFlags.Args()[0]
+	if subFlags.NArg() < 2 {
+		return fmt.Errorf("the <command> argument is required for the OnlineDDL command")
+	}
+	command := subFlags.Args()[1]
+	arg := ""
+	if subFlags.NArg() >= 3 {
+		arg = subFlags.Args()[2]
+	}
+	query := ""
+	uuid := ""
+	switch command {
+	case "show":
+		{
+			condition := ""
+			switch arg {
+			case "", "all":
+				condition = "migration_uuid like '%'"
+			case "recent":
+				condition = "requested_timestamp > now() - interval 1 week"
+			case
+				string(schema.OnlineDDLStatusCancelled),
+				string(schema.OnlineDDLStatusQueued),
+				string(schema.OnlineDDLStatusReady),
+				string(schema.OnlineDDLStatusRunning),
+				string(schema.OnlineDDLStatusComplete),
+				string(schema.OnlineDDLStatusFailed):
+				condition = fmt.Sprintf("migration_status='%s'", arg)
+			default:
+				uuid = arg
+				condition = fmt.Sprintf("migration_uuid='%s'", uuid)
+			}
+			query = fmt.Sprintf(`select
+				shard, mysql_schema, mysql_table, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status 
+				from _vt.schema_migrations where %s`, condition)
+		}
+	case "retry":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='retry' where migration_uuid='%s'`, uuid)
+		}
+	case "cancel":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid='%s'`, uuid)
+		}
+	default:
+		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
+	}
+
+	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
+	if err != nil {
+		return err
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
 }
 
 func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2871,29 +2958,15 @@ func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	}
 	query := subFlags.Arg(1)
 
-	results, err := wr.VExec(ctx, workflow, keyspace, query, *dryRun)
+	qr, err := wr.VExecResult(ctx, workflow, keyspace, query, *dryRun)
 	if err != nil {
 		return err
 	}
 	if *dryRun {
 		return nil
 	}
-	if len(results) == 0 {
+	if qr == nil {
 		wr.Logger().Printf("no result returned\n")
-	}
-	var qr *sqltypes.Result
-	var numFields int
-	for _, result := range results {
-		numFields = len(result.Fields)
-		break
-	}
-	if numFields != 0 {
-		qr = queryResultForTabletResults(results)
-	} else {
-		qr = queryResultForRowsAffected(results)
-	}
-	if len(qr.Rows) == 0 {
-		return nil
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
@@ -2902,56 +2975,13 @@ func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	return nil
 }
 
-// called for workflow stop/start/delete. Only rows affected are reported per tablet
-func queryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
-	qr.Fields = []*querypb.Field{{
-		Name: "Tablet",
-		Type: sqltypes.VarBinary,
-	}, {
-		Name: "RowsAffected",
-		Type: sqltypes.Uint64,
-	}}
-	var row2 []sqltypes.Value
-	for tablet, result := range results {
-		row2 = nil
-		row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
-		row2 = append(row2, sqltypes.NewUint64(result.RowsAffected))
-		qr.Rows = append(qr.Rows, row2)
-	}
-	return qr
-}
-
-func queryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
-	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
-	qr.Fields = []*querypb.Field{{
-		Name: "Tablet",
-		Type: sqltypes.VarBinary,
-	}}
-	var row2 []sqltypes.Value
-	for tablet, result := range results {
-		for _, row := range result.Rows {
-			if len(qr.Fields) == 1 {
-				qr.Fields = append(qr.Fields, result.Fields...)
-			}
-			row2 = nil
-			row2 = append(row2, sqltypes.NewVarBinary(tablet.AliasString()))
-			row2 = append(row2, row...)
-			qr.Rows = append(qr.Rows, row2)
-		}
-	}
-	return qr
-}
-
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of masters on which the operation will be applied")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("usage: Workflow --dry-run keyspace.workflow start/stop/delete/list/list-all")
+		return fmt.Errorf("usage: Workflow --dry-run keyspace.workflow start/stop/delete/list/listall")
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
@@ -2983,11 +3013,95 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		wr.Logger().Printf("no result returned\n")
 		return nil
 	}
-	qr := queryResultForRowsAffected(results)
+	qr := wr.QueryResultForRowsAffected(results)
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
+}
 
+func commandGenerateShardRanges(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	numShards := subFlags.Int("num_shards", 2, "Number of shards to generate shard ranges for.")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+
+	shardRanges, err := generateShardRanges(*numShards)
+	if err != nil {
+		return err
+	}
+
+	return printJSON(wr.Logger(), shardRanges)
+}
+
+func generateShardRanges(shards int) ([]string, error) {
+	var format string
+	var maxShards int
+
+	switch {
+	case shards <= 0:
+		return nil, errors.New("shards must be greater than zero")
+	case shards <= 256:
+		format = "%02x"
+		maxShards = 256
+	case shards <= 65536:
+		format = "%04x"
+		maxShards = 65536
+	default:
+		return nil, errors.New("this tool does not support more than 65336 shards in a single keyspace")
+	}
+
+	rangeFormatter := func(start, end int) string {
+		var (
+			startKid string
+			endKid   string
+		)
+
+		if start != 0 {
+			startKid = fmt.Sprintf(format, start)
+		}
+
+		if end != maxShards {
+			endKid = fmt.Sprintf(format, end)
+		}
+
+		return fmt.Sprintf("%s-%s", startKid, endKid)
+	}
+
+	start := 0
+	end := 0
+
+	// If shards does not divide evenly into maxShards, then there is some lossiness,
+	// where each shard is smaller than it should technically be (if, for example, size == 25.6).
+	// If we choose to keep everything in ints, then we have two choices:
+	// 	- Have every shard in #numshards be a uniform size, tack on an additional shard
+	//	  at the end of the range to account for the loss. This is bad because if you ask for
+	//	  7 shards, you'll actually get 7 uniform shards with 1 small shard, for 8 total shards.
+	//	  It's also bad because one shard will have much different data distribution than the rest.
+	//	- Expand the final shard to include whatever is left in the keyrange. This will give the
+	//	  correct number of shards, which is good, but depending on how lossy each individual shard is,
+	//	  you could end with that final shard being significantly larger than the rest of the shards,
+	//	  so this doesn't solve the data distribution problem.
+	//
+	// By tracking the "real" end (both in the real number sense, and in the truthfulness of the value sense),
+	// we can re-truncate the integer end on each iteration, which spreads the lossiness more
+	// evenly across the shards.
+	//
+	// This implementation has no impact on shard numbers that are powers of 2, even at large numbers,
+	// which you can see in the tests.
+	size := float64(maxShards) / float64(shards)
+	realEnd := float64(0)
+	shardRanges := make([]string, 0, shards)
+
+	for i := 1; i <= shards; i++ {
+		realEnd = float64(i) * size
+
+		end = int(realEnd)
+		shardRanges = append(shardRanges, rangeFormatter(start, end))
+		start = end
+	}
+
+	return shardRanges, nil
 }
 
 func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

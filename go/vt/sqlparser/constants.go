@@ -23,6 +23,7 @@ const (
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
 
 	// Select.Lock
+	NoLockStr    = ""
 	ForUpdateStr = " for update"
 	ShareModeStr = " lock in share mode"
 
@@ -44,6 +45,7 @@ const (
 	GlobalStr         = "global"
 	VitessMetadataStr = "vitess_metadata"
 	VariableStr       = "variable"
+	LocalStr          = "local"
 	ImplicitStr       = ""
 
 	// DDL strings.
@@ -61,6 +63,9 @@ const (
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
+
+	// Online DDL hint
+	OnlineStr = "online"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -87,21 +92,19 @@ const (
 	HavingStr = "having"
 
 	// ComparisonExpr.Operator
-	EqualStr             = "="
-	LessThanStr          = "<"
-	GreaterThanStr       = ">"
-	LessEqualStr         = "<="
-	GreaterEqualStr      = ">="
-	NotEqualStr          = "!="
-	NullSafeEqualStr     = "<=>"
-	InStr                = "in"
-	NotInStr             = "not in"
-	LikeStr              = "like"
-	NotLikeStr           = "not like"
-	RegexpStr            = "regexp"
-	NotRegexpStr         = "not regexp"
-	JSONExtractOp        = "->"
-	JSONUnquoteExtractOp = "->>"
+	EqualStr         = "="
+	LessThanStr      = "<"
+	GreaterThanStr   = ">"
+	LessEqualStr     = "<="
+	GreaterEqualStr  = ">="
+	NotEqualStr      = "!="
+	NullSafeEqualStr = "<=>"
+	InStr            = "in"
+	NotInStr         = "not in"
+	LikeStr          = "like"
+	NotLikeStr       = "not like"
+	RegexpStr        = "regexp"
+	NotRegexpStr     = "not regexp"
 
 	// RangeCond.Operator
 	BetweenStr    = "between"
@@ -116,17 +119,19 @@ const (
 	IsNotFalseStr = "is not false"
 
 	// BinaryExpr.Operator
-	BitAndStr     = "&"
-	BitOrStr      = "|"
-	BitXorStr     = "^"
-	PlusStr       = "+"
-	MinusStr      = "-"
-	MultStr       = "*"
-	DivStr        = "/"
-	IntDivStr     = "div"
-	ModStr        = "%"
-	ShiftLeftStr  = "<<"
-	ShiftRightStr = ">>"
+	BitAndStr               = "&"
+	BitOrStr                = "|"
+	BitXorStr               = "^"
+	PlusStr                 = "+"
+	MinusStr                = "-"
+	MultStr                 = "*"
+	DivStr                  = "/"
+	IntDivStr               = "div"
+	ModStr                  = "%"
+	ShiftLeftStr            = "<<"
+	ShiftRightStr           = ">>"
+	JSONExtractOpStr        = "->"
+	JSONUnquoteExtractOpStr = "->>"
 
 	// UnaryExpr.Operator
 	UPlusStr   = "+"
@@ -139,15 +144,22 @@ const (
 	Utf8Str    = "_utf8 "
 	Latin1Str  = "_latin1 "
 
-	// this string is "character set" and this comment is required
+	// ConvertType.Operator
 	CharacterSetStr = " character set"
+	NoOperatorStr   = ""
 	CharsetStr      = "charset"
 
 	// MatchExpr.Option
+	NoOptionStr                              = ""
 	BooleanModeStr                           = " in boolean mode"
 	NaturalLanguageModeStr                   = " in natural language mode"
 	NaturalLanguageModeWithQueryExpansionStr = " in natural language mode with query expansion"
 	QueryExpansionStr                        = " with query expansion"
+
+	// INTO OUTFILE
+	IntoOutfileStr   = " into outfile "
+	IntoOutfileS3Str = " into outfile s3 "
+	IntoDumpfileStr  = " into dumpfile "
 
 	// Order.Direction
 	AscScr  = "asc"
@@ -158,18 +170,218 @@ const (
 	TransactionStr = "transaction"
 
 	// Transaction isolation levels
-	ReadUncommitted = "read uncommitted"
-	ReadCommitted   = "read committed"
-	RepeatableRead  = "repeatable read"
-	Serializable    = "serializable"
+	ReadUncommittedStr = "read uncommitted"
+	ReadCommittedStr   = "read committed"
+	RepeatableReadStr  = "repeatable read"
+	SerializableStr    = "serializable"
 
 	TxReadOnly  = "read only"
 	TxReadWrite = "read write"
 
 	// Explain formats
+	EmptyStr       = ""
 	TreeStr        = "tree"
 	JSONStr        = "json"
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
+)
+
+// Constants for Enum type - AccessMode
+const (
+	ReadOnly AccessMode = iota
+	ReadWrite
+)
+
+//Constants for Enum type - IsolationLevel
+const (
+	ReadUncommitted IsolationLevel = iota
+	ReadCommitted
+	RepeatableRead
+	Serializable
+)
+
+// Constants for Union.Type
+const (
+	UnionBasic UnionType = iota
+	UnionAll
+	UnionDistinct
+)
+
+// Constants for Enum Type - Insert.Action
+const (
+	InsertAct InsertAction = iota
+	ReplaceAct
+)
+
+// Constants for Enum Type - DBDDL.Action
+const (
+	CreateDBDDLAction DBDDLAction = iota
+	AlterDBDDLAction
+	DropDBDDLAction
+)
+
+// Constants for Enum Type - DDL.Action
+const (
+	CreateDDLAction DDLAction = iota
+	AlterDDLAction
+	DropDDLAction
+	RenameDDLAction
+	TruncateDDLAction
+	FlushDDLAction
+	CreateVindexDDLAction
+	DropVindexDDLAction
+	AddVschemaTableDDLAction
+	DropVschemaTableDDLAction
+	AddColVindexDDLAction
+	DropColVindexDDLAction
+	AddSequenceDDLAction
+	AddAutoIncDDLAction
+)
+
+// Constants for Enum Type - Scope
+const (
+	ImplicitScope Scope = iota
+	SessionScope
+	GlobalScope
+	VitessMetadataScope
+	VariableScope
+	LocalScope
+)
+
+// Constants for Enum Type - Lock
+const (
+	NoLock Lock = iota
+	ForUpdateLock
+	ShareModeLock
+)
+
+// Constants for Enum Type - WhereType
+const (
+	WhereClause WhereType = iota
+	HavingClause
+)
+
+// Constants for Enum Type - JoinType
+const (
+	NormalJoinType JoinType = iota
+	StraightJoinType
+	LeftJoinType
+	RightJoinType
+	NaturalJoinType
+	NaturalLeftJoinType
+	NaturalRightJoinType
+)
+
+// Constants for Enum Type - ComparisonExprOperator
+const (
+	EqualOp ComparisonExprOperator = iota
+	LessThanOp
+	GreaterThanOp
+	LessEqualOp
+	GreaterEqualOp
+	NotEqualOp
+	NullSafeEqualOp
+	InOp
+	NotInOp
+	LikeOp
+	NotLikeOp
+	RegexpOp
+	NotRegexpOp
+)
+
+// Constant for Enum Type - RangeCondOperator
+const (
+	BetweenOp RangeCondOperator = iota
+	NotBetweenOp
+)
+
+// Constant for Enum Type - IsExprOperator
+const (
+	IsNullOp IsExprOperator = iota
+	IsNotNullOp
+	IsTrueOp
+	IsNotTrueOp
+	IsFalseOp
+	IsNotFalseOp
+)
+
+// Constant for Enum Type - BinaryExprOperator
+const (
+	BitAndOp BinaryExprOperator = iota
+	BitOrOp
+	BitXorOp
+	PlusOp
+	MinusOp
+	MultOp
+	DivOp
+	IntDivOp
+	ModOp
+	ShiftLeftOp
+	ShiftRightOp
+	JSONExtractOp
+	JSONUnquoteExtractOp
+)
+
+// Constant for Enum Type - UnaryExprOperator
+const (
+	UPlusOp UnaryExprOperator = iota
+	UMinusOp
+	TildaOp
+	BangOp
+	BinaryOp
+	UBinaryOp
+	Utf8mb4Op
+	Utf8Op
+	Latin1Op
+)
+
+// Constant for Enum Type - MatchExprOption
+const (
+	NoOption MatchExprOption = iota
+	BooleanModeOpt
+	NaturalLanguageModeOpt
+	NaturalLanguageModeWithQueryExpansionOpt
+	QueryExpansionOpt
+)
+
+// Constant for Enum Type - OrderDirection
+const (
+	AscOrder OrderDirection = iota
+	DescOrder
+)
+
+// Constant for Enum Type - ConvertTypeOperator
+const (
+	NoOperator ConvertTypeOperator = iota
+	CharacterSetOp
+)
+
+// Constant for Enum Type - IndexHintsType
+const (
+	UseOp IndexHintsType = iota
+	IgnoreOp
+	ForceOp
+)
+
+// Constant for Enum Type - PartitionSpecAction
+const (
+	ReorganizeAction PartitionSpecAction = iota
+)
+
+// Constant for Enum Type - ExplainType
+const (
+	EmptyType ExplainType = iota
+	TreeType
+	JSONType
+	VitessType
+	TraditionalType
+	AnalyzeType
+)
+
+// Constant for Enum Type - SelectIntoType
+const (
+	IntoOutfile SelectIntoType = iota
+	IntoOutfileS3
+	IntoDumpfile
 )

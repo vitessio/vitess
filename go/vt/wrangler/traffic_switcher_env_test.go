@@ -153,11 +153,11 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"})
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"})
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks", nil)
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks", nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,6 +396,13 @@ func (tme *testMigraterEnv) setMasterPositions() {
 	}
 }
 
+func (tme *testMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
+}
+
 func (tme *testShardMigraterEnv) forAllStreams(f func(i, j int)) {
 	for i := range tme.targetShards {
 		for j := range tme.sourceShards {
@@ -493,4 +500,11 @@ func (tme *testShardMigraterEnv) expectCancelMigration() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
 	tme.expectDeleteReverseVReplication()
+}
+
+func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
 }

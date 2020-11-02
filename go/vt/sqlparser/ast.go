@@ -50,7 +50,7 @@ type (
 		iInsertRows()
 		AddOrder(*Order)
 		SetLimit(*Limit)
-		SetLock(lock string)
+		SetLock(lock Lock)
 		SQLNode
 	}
 
@@ -68,14 +68,35 @@ type (
 		Having           *Where
 		OrderBy          OrderBy
 		Limit            *Limit
-		Lock             string
+		Lock             Lock
+		Into             *SelectInto
 	}
+
+	// SelectInto is a struct that represent the INTO part of a select query
+	SelectInto struct {
+		Type         SelectIntoType
+		FileName     string
+		Charset      string
+		FormatOption string
+		ExportOption string
+		Manifest     string
+		Overwrite    string
+	}
+
+	// SelectIntoType is an enum for SelectInto.Type
+	SelectIntoType int8
+
+	// Lock is an enum for the type of lock in the statement
+	Lock int8
 
 	// UnionSelect represents union type and select statement after first select statement.
 	UnionSelect struct {
-		Type      string
+		Type      UnionType
 		Statement SelectStatement
 	}
+
+	// UnionType is the type of union
+	UnionType int8
 
 	// Union represents a UNION statement.
 	Union struct {
@@ -83,7 +104,7 @@ type (
 		UnionSelects   []*UnionSelect
 		OrderBy        OrderBy
 		Limit          *Limit
-		Lock           string
+		Lock           Lock
 	}
 
 	// VStream represents a VSTREAM statement.
@@ -111,9 +132,9 @@ type (
 	// of the implications the deletion part may have on vindexes.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Insert struct {
-		Action     string
+		Action     InsertAction
 		Comments   Comments
-		Ignore     string
+		Ignore     Ignore
 		Table      TableName
 		Partitions Partitions
 		Columns    Columns
@@ -121,11 +142,17 @@ type (
 		OnDup      OnDup
 	}
 
+	// Ignore represents whether ignore was specified or not
+	Ignore bool
+
+	// InsertAction is the action for insert.
+	InsertAction int8
+
 	// Update represents an UPDATE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
 		Comments   Comments
-		Ignore     string
+		Ignore     Ignore
 		TableExprs TableExprs
 		Exprs      UpdateExprs
 		Where      *Where
@@ -136,6 +163,7 @@ type (
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
+		Ignore     Ignore
 		Comments   Comments
 		Targets    TableNames
 		TableExprs TableExprs
@@ -155,9 +183,12 @@ type (
 	SetTransaction struct {
 		SQLNode
 		Comments        Comments
-		Scope           string
+		Scope           Scope
 		Characteristics []Characteristic
 	}
+
+	// Scope is an enum for scope of query
+	Scope int8
 
 	// Characteristic is a transaction related change
 	Characteristic interface {
@@ -165,19 +196,15 @@ type (
 		iChar()
 	}
 
-	// IsolationLevel is self-explanatory in this context
-	IsolationLevel struct {
-		Level string
-	}
+	// IsolationLevel is an enum for isolation levels
+	IsolationLevel int8
 
-	// AccessMode is ReadOnly/ReadWrite
-	AccessMode struct {
-		Mode string
-	}
+	// AccessMode is enum for the mode - ReadOnly or ReadWrite
+	AccessMode int8
 
 	// DBDDL represents a CREATE, DROP, or ALTER database statement.
 	DBDDL struct {
-		Action      string
+		Action      DBDDLAction
 		DBName      string
 		IfExists    bool
 		IfNotExists bool
@@ -185,17 +212,28 @@ type (
 		Charset     string
 	}
 
+	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
+	DDLStrategy string
+
+	// OnlineDDLHint indicates strategy and options for running an online DDL
+	OnlineDDLHint struct {
+		Strategy DDLStrategy
+		Options  string
+	}
+	// DBDDLAction is an enum for DBDDL Actions
+	DBDDLAction int8
+
 	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 	DDL struct {
-		Action string
+		Action DDLAction
 
-		// FromTables is set if Action is RenameStr or DropStr.
+		// FromTables is set if Action is RenameDDLAction or DropDDLAction.
 		FromTables TableNames
 
-		// ToTables is set if Action is RenameStr.
+		// ToTables is set if Action is RenameDDLAction.
 		ToTables TableNames
 
-		// Table is set if Action is other than RenameStr or DropStr.
+		// Table is set if Action is other than RenameDDLAction or DropDDLAction.
 		Table TableName
 
 		// The following fields are set if a DDL was fully analyzed.
@@ -203,15 +241,23 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
+		OnlineHint    *OnlineDDLHint
 
-		// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
+		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
 
-		// VindexCols is set for AddColVindexStr.
+		// VindexCols is set for AddColVindexDDLAction.
 		VindexCols []ColIdent
 
-		// AutoIncSpec is set for AddAutoIncStr.
+		// AutoIncSpec is set for AddAutoIncDDLAction.
 		AutoIncSpec *AutoIncSpec
+	}
+
+	// DDLAction is an enum for DDL.Action
+	DDLAction int8
+
+	// Load represents a LOAD statement
+	Load struct {
 	}
 
 	// ParenSelect is a parenthesized SELECT statement.
@@ -221,13 +267,7 @@ type (
 
 	// Show represents a show statement.
 	Show struct {
-		Extended               string
-		Type                   string
-		OnTable                TableName
-		Table                  TableName
-		ShowTablesOpt          *ShowTablesOpt
-		Scope                  string
-		ShowCollationFilterOpt Expr
+		Internal ShowInternal
 	}
 
 	// Use represents a use statement.
@@ -261,9 +301,12 @@ type (
 
 	// Explain represents an EXPLAIN statement
 	Explain struct {
-		Type      string
+		Type      ExplainType
 		Statement Statement
 	}
+
+	// ExplainType is an enum for Explain.Type
+	ExplainType int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -302,11 +345,47 @@ func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
+func (*Load) iStatement()              {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
+
+//ShowInternal will represent all the show statement types.
+type ShowInternal interface {
+	isShowInternal()
+	SQLNode
+}
+
+//ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
+type ShowLegacy struct {
+	Extended               string
+	Type                   string
+	OnTable                TableName
+	Table                  TableName
+	ShowTablesOpt          *ShowTablesOpt
+	Scope                  Scope
+	ShowCollationFilterOpt Expr
+}
+
+//ShowColumns is of ShowInternal type, holds the show columns statement.
+type ShowColumns struct {
+	Full   string
+	Table  TableName
+	DbName string
+	Filter *ShowFilter
+}
+
+// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
+type ShowTableStatus struct {
+	DatabaseName string
+	Filter       *ShowFilter
+}
+
+func (*ShowLegacy) isShowInternal()      {}
+func (*ShowColumns) isShowInternal()     {}
+func (*ShowTableStatus) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -326,10 +405,13 @@ type OptLike struct {
 
 // PartitionSpec describe partition actions (for alter and create)
 type PartitionSpec struct {
-	Action      string
+	Action      PartitionSpecAction
 	Name        ColIdent
 	Definitions []*PartitionDefinition
 }
+
+// PartitionSpecAction is an enum for PartitionSpec.Action
+type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
@@ -439,6 +521,12 @@ type (
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
 	}
+
+	// CheckConstraintDefinition describes a check constraint in a CREATE TABLE statement
+	CheckConstraintDefinition struct {
+		Expr     Expr
+		Enforced bool
+	}
 )
 
 // ShowFilter is show tables filter
@@ -510,10 +598,13 @@ type (
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.
 	JoinTableExpr struct {
 		LeftExpr  TableExpr
-		Join      string
+		Join      JoinType
 		RightExpr TableExpr
 		Condition JoinCondition
 	}
+
+	// JoinType represents the type of Join for JoinTableExpr
+	JoinType int8
 
 	// ParenTableExpr represents a parenthesized list of TableExpr.
 	ParenTableExpr struct {
@@ -562,15 +653,21 @@ type JoinCondition struct {
 
 // IndexHints represents a list of index hints.
 type IndexHints struct {
-	Type    string
+	Type    IndexHintsType
 	Indexes []ColIdent
 }
 
+// IndexHintsType is an enum for IndexHints.Type
+type IndexHintsType int8
+
 // Where represents a WHERE or HAVING clause.
 type Where struct {
-	Type string
+	Type WhereType
 	Expr Expr
 }
+
+// WhereType is an enum for Where.Type
+type WhereType int8
 
 // *********** Expressions
 type (
@@ -602,23 +699,32 @@ type (
 
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
-		Operator    string
+		Operator    ComparisonExprOperator
 		Left, Right Expr
 		Escape      Expr
 	}
 
+	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
+	ComparisonExprOperator int8
+
 	// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
 	RangeCond struct {
-		Operator string
+		Operator RangeCondOperator
 		Left     Expr
 		From, To Expr
 	}
 
+	// RangeCondOperator is an enum for RangeCond.Operator
+	RangeCondOperator int8
+
 	// IsExpr represents an IS ... or an IS NOT ... expression.
 	IsExpr struct {
-		Operator string
+		Operator IsExprOperator
 		Expr     Expr
 	}
+
+	// IsExprOperator is an enum for IsExpr.Operator
+	IsExprOperator int8
 
 	// ExistsExpr represents an EXISTS expression.
 	ExistsExpr struct {
@@ -666,15 +772,21 @@ type (
 
 	// BinaryExpr represents a binary value expression.
 	BinaryExpr struct {
-		Operator    string
+		Operator    BinaryExprOperator
 		Left, Right Expr
 	}
 
+	// BinaryExprOperator is an enum for BinaryExpr.Operator
+	BinaryExprOperator int8
+
 	// UnaryExpr represents a unary value expression.
 	UnaryExpr struct {
-		Operator string
+		Operator UnaryExprOperator
 		Expr     Expr
 	}
+
+	// UnaryExprOperator is an enum for UnaryExpr.Operator
+	UnaryExprOperator int8
 
 	// IntervalExpr represents a date-time INTERVAL expression.
 	IntervalExpr struct {
@@ -706,7 +818,7 @@ type (
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
-		Distinct  string
+		Distinct  bool
 		Exprs     SelectExprs
 		OrderBy   OrderBy
 		Separator string
@@ -747,8 +859,11 @@ type (
 	MatchExpr struct {
 		Columns SelectExprs
 		Expr    Expr
-		Option  string
+		Option  MatchExprOption
 	}
+
+	// MatchExprOption is an enum for MatchExpr.Option
+	MatchExprOption int8
 
 	// CaseExpr represents a CASE expression.
 	CaseExpr struct {
@@ -822,9 +937,12 @@ type ConvertType struct {
 	Type     string
 	Length   *Literal
 	Scale    *Literal
-	Operator string
+	Operator ConvertTypeOperator
 	Charset  string
 }
+
+// ConvertTypeOperator is an enum for ConvertType.Operator
+type ConvertTypeOperator int8
 
 // GroupBy represents a GROUP BY clause.
 type GroupBy []Expr
@@ -835,8 +953,11 @@ type OrderBy []*Order
 // Order represents an ordering expression.
 type Order struct {
 	Expr      Expr
-	Direction string
+	Direction OrderDirection
 }
+
+// OrderDirection is an enum for Order.Direction
+type OrderDirection int8
 
 // Limit represents a LIMIT clause.
 type Limit struct {
@@ -860,7 +981,7 @@ type SetExprs []*SetExpr
 
 // SetExpr represents a set expression.
 type SetExpr struct {
-	Scope string
+	Scope Scope
 	Name  ColIdent
 	Expr  Expr
 }
@@ -906,11 +1027,11 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	addIf(node.StraightJoinHint, StraightJoinHint)
 	addIf(node.SQLCalcFoundRows, SQLCalcFoundRowsStr)
 
-	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s",
+	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s%v",
 		node.Comments, options, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
-		node.Limit, node.Lock)
+		node.Limit, node.Lock.ToString(), node.Into)
 }
 
 // Format formats the node.
@@ -924,12 +1045,21 @@ func (node *Union) Format(buf *TrackedBuffer) {
 	for _, us := range node.UnionSelects {
 		buf.astPrintf(node, "%v", us)
 	}
-	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock)
+	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock.ToString())
 }
 
 // Format formats the node.
 func (node *UnionSelect) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %s %v", node.Type, node.Statement)
+	switch node.Type {
+	case UnionBasic:
+		buf.astPrintf(node, " %s %v", UnionStr, node.Statement)
+	case UnionAll:
+		buf.astPrintf(node, " %s %v", UnionAllStr, node.Statement)
+	case UnionDistinct:
+		buf.astPrintf(node, " %s %v", UnionDistinctStr, node.Statement)
+	default:
+		buf.astPrintf(node, " %s %v", "Unknown Union Type", node.Statement)
+	}
 }
 
 // Format formats the node.
@@ -946,22 +1076,39 @@ func (node *Stream) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
-		node.Action,
-		node.Comments, node.Ignore,
-		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	switch node.Action {
+	case InsertAct:
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+			InsertStr,
+			node.Comments, node.Ignore.ToString(),
+			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	case ReplaceAct:
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+			ReplaceStr,
+			node.Comments, node.Ignore.ToString(),
+			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	default:
+		buf.astPrintf(node, "%s %v%sinto %v%v%v %v%v",
+			"Unkown Insert Action",
+			node.Comments, node.Ignore.ToString(),
+			node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
+	}
+
 }
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
-		node.Comments, node.Ignore, node.TableExprs,
+		node.Comments, node.Ignore.ToString(), node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "delete %v", node.Comments)
+	if node.Ignore {
+		buf.WriteString("ignore ")
+	}
 	if node.Targets != nil {
 		buf.astPrintf(node, "%v ", node.Targets)
 	}
@@ -975,10 +1122,10 @@ func (node *Set) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetTransaction) Format(buf *TrackedBuffer) {
-	if node.Scope == "" {
+	if node.Scope == ImplicitScope {
 		buf.astPrintf(node, "set %vtransaction ", node.Comments)
 	} else {
-		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope)
+		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.ToString())
 	}
 
 	for i, char := range node.Characteristics {
@@ -992,62 +1139,62 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateStr:
+	case CreateDBDDLAction:
 		notExists := ""
 		if node.IfNotExists {
 			notExists = " if not exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, notExists, node.DBName))
-	case AlterStr:
-		buf.WriteString(fmt.Sprintf("%s database %s", node.Action, node.DBName))
-	case DropStr:
+		buf.WriteString(fmt.Sprintf("%s database%s %v", CreateStr, notExists, node.DBName))
+	case AlterDBDDLAction:
+		buf.WriteString(fmt.Sprintf("%s database %s", AlterStr, node.DBName))
+	case DropDBDDLAction:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", node.Action, exists, node.DBName))
+		buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
 	}
 }
 
 // Format formats the node.
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateStr:
+	case CreateDDLAction:
 		if node.OptLike != nil {
-			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.OptLike)
+			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.OptLike)
 		} else if node.TableSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.TableSpec)
+			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.TableSpec)
 		} else {
-			buf.astPrintf(node, "%s table %v", node.Action, node.Table)
+			buf.astPrintf(node, "%s table %v", CreateStr, node.Table)
 		}
-	case DropStr:
+	case DropDDLAction:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.astPrintf(node, "%s table%s %v", node.Action, exists, node.FromTables)
-	case RenameStr:
-		buf.astPrintf(node, "%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
+		buf.astPrintf(node, "%s table%s %v", DropStr, exists, node.FromTables)
+	case RenameDDLAction:
+		buf.astPrintf(node, "%s table %v to %v", RenameStr, node.FromTables[0], node.ToTables[0])
 		for i := 1; i < len(node.FromTables); i++ {
 			buf.astPrintf(node, ", %v to %v", node.FromTables[i], node.ToTables[i])
 		}
-	case AlterStr:
+	case AlterDDLAction:
 		if node.PartitionSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+			buf.astPrintf(node, "%s table %v %v", AlterStr, node.Table, node.PartitionSpec)
 		} else {
-			buf.astPrintf(node, "%s table %v", node.Action, node.Table)
+			buf.astPrintf(node, "%s table %v", AlterStr, node.Table)
 		}
-	case FlushStr:
-		buf.astPrintf(node, "%s", node.Action)
-	case CreateVindexStr:
+	case FlushDDLAction:
+		buf.astPrintf(node, "%s", FlushStr)
+	case CreateVindexDDLAction:
 		buf.astPrintf(node, "alter vschema create vindex %v %v", node.Table, node.VindexSpec)
-	case DropVindexStr:
+	case DropVindexDDLAction:
 		buf.astPrintf(node, "alter vschema drop vindex %v", node.Table)
-	case AddVschemaTableStr:
+	case AddVschemaTableDDLAction:
 		buf.astPrintf(node, "alter vschema add table %v", node.Table)
-	case DropVschemaTableStr:
+	case DropVschemaTableDDLAction:
 		buf.astPrintf(node, "alter vschema drop table %v", node.Table)
-	case AddColVindexStr:
+	case AddColVindexDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
 		for i, col := range node.VindexCols {
 			if i != 0 {
@@ -1060,14 +1207,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.VindexSpec.Type.String() != "" {
 			buf.astPrintf(node, " %v", node.VindexSpec)
 		}
-	case DropColVindexStr:
+	case DropColVindexDDLAction:
 		buf.astPrintf(node, "alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
-	case AddSequenceStr:
+	case AddSequenceDDLAction:
 		buf.astPrintf(node, "alter vschema add sequence %v", node.Table)
-	case AddAutoIncStr:
+	case AddAutoIncDDLAction:
 		buf.astPrintf(node, "alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
-		buf.astPrintf(node, "%s table %v", node.Action, node.Table)
+		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}
 }
 
@@ -1079,8 +1226,8 @@ func (node *OptLike) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case ReorganizeStr:
-		buf.astPrintf(node, "%s %v into (", node.Action, node.Name)
+	case ReorganizeAction:
+		buf.astPrintf(node, "%s %v into (", ReorganizeStr, node.Name)
 		var prefix string
 		for _, pd := range node.Definitions {
 			buf.astPrintf(node, "%s%v", prefix, pd)
@@ -1292,9 +1439,36 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(c, "check constraint on expression %v", c.Expr)
+	if c.Enforced {
+		buf.astPrintf(c, " enforced")
+	} else {
+		buf.astPrintf(c, " not enforced")
+	}
+}
+
+// Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v", node.Internal)
+}
+
+// Format formats the node.
+func (node *ShowColumns) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show %s", node.Full)
+	buf.astPrintf(node, "columns from %v", node.Table)
+
+	buf.printIf(node.DbName != "", " from "+node.DbName)
+	if node.Filter != nil {
+		buf.astPrintf(node, "%v", node.Filter)
+	}
+}
+
+// Format formats the node.
+func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
-	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes") && node.ShowTablesOpt != nil {
+	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
+		nodeType == "databases" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
@@ -1313,10 +1487,10 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%v", opt.Filter)
 		return
 	}
-	if node.Scope == "" {
+	if node.Scope == ImplicitScope {
 		buf.astPrintf(node, "show %s", nodeType)
 	} else {
-		buf.astPrintf(node, "show %s %s", node.Scope, nodeType)
+		buf.astPrintf(node, "show %s %s", node.Scope.ToString(), nodeType)
 	}
 	if node.HasOnTable() {
 		buf.astPrintf(node, " on %v", node.OnTable)
@@ -1387,11 +1561,11 @@ func (node *Release) Format(buf *TrackedBuffer) {
 func (node *Explain) Format(buf *TrackedBuffer) {
 	format := ""
 	switch node.Type {
-	case "": // do nothing
-	case AnalyzeStr:
+	case EmptyType: // do nothing
+	case AnalyzeType:
 		format = AnalyzeStr + " "
 	default:
-		format = "format = " + node.Type + " "
+		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
 }
@@ -1527,12 +1701,12 @@ func (node JoinCondition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join, node.RightExpr, node.Condition)
+	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join.ToString(), node.RightExpr, node.Condition)
 }
 
 // Format formats the node.
 func (node *IndexHints) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, " %sindex ", node.Type)
+	buf.astPrintf(node, " %sindex ", node.Type.ToString())
 	if len(node.Indexes) == 0 {
 		buf.astPrintf(node, "()")
 	} else {
@@ -1550,7 +1724,7 @@ func (node *Where) Format(buf *TrackedBuffer) {
 	if node == nil || node.Expr == nil {
 		return
 	}
-	buf.astPrintf(node, " %s %v", node.Type, node.Expr)
+	buf.astPrintf(node, " %s %v", node.Type.ToString(), node.Expr)
 }
 
 // Format formats the node.
@@ -1584,7 +1758,7 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.ToString(), node.Right)
 	if node.Escape != nil {
 		buf.astPrintf(node, " escape %v", node.Escape)
 	}
@@ -1592,12 +1766,12 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator, node.From, node.To)
+	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator.ToString(), node.From, node.To)
 }
 
 // Format formats the node.
 func (node *IsExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s", node.Expr, node.Operator)
+	buf.astPrintf(node, "%v %s", node.Expr, node.Operator.ToString())
 }
 
 // Format formats the node.
@@ -1665,17 +1839,17 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator, node.Right)
+	buf.astPrintf(node, "%l %s %r", node.Left, node.Operator.ToString(), node.Right)
 }
 
 // Format formats the node.
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 	if _, unary := node.Expr.(*UnaryExpr); unary {
 		// They have same precedence so parenthesis is not required.
-		buf.astPrintf(node, "%s %v", node.Operator, node.Expr)
+		buf.astPrintf(node, "%s %v", node.Operator.ToString(), node.Expr)
 		return
 	}
-	buf.astPrintf(node, "%s%v", node.Operator, node.Expr)
+	buf.astPrintf(node, "%s%v", node.Operator.ToString(), node.Expr)
 }
 
 // Format formats the node.
@@ -1721,7 +1895,11 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "group_concat(%s%v%v%s%v)", node.Distinct, node.Exprs, node.OrderBy, node.Separator, node.Limit)
+	if node.Distinct {
+		buf.astPrintf(node, "group_concat(%s%v%v%s%v)", DistinctStr, node.Exprs, node.OrderBy, node.Separator, node.Limit)
+	} else {
+		buf.astPrintf(node, "group_concat(%v%v%s%v)", node.Exprs, node.OrderBy, node.Separator, node.Limit)
+	}
 }
 
 // Format formats the node.
@@ -1766,13 +1944,13 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ")")
 	}
 	if node.Charset != "" {
-		buf.astPrintf(node, "%s %s", node.Operator, node.Charset)
+		buf.astPrintf(node, "%s %s", node.Operator.ToString(), node.Charset)
 	}
 }
 
 // Format formats the node
 func (node *MatchExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option)
+	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option.ToString())
 }
 
 // Format formats the node.
@@ -1836,7 +2014,7 @@ func (node *Order) Format(buf *TrackedBuffer) {
 		}
 	}
 
-	buf.astPrintf(node, "%v %s", node.Expr, node.Direction)
+	buf.astPrintf(node, "%v %s", node.Expr, node.Direction.ToString())
 }
 
 // Format formats the node.
@@ -1885,8 +2063,8 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
-	if node.Scope != "" {
-		buf.WriteString(node.Scope)
+	if node.Scope != ImplicitScope {
+		buf.WriteString(node.Scope.ToString())
 		buf.WriteString(" ")
 	}
 	// We don't have to backtick set variable names.
@@ -1927,15 +2105,58 @@ func (node ColIdent) AtCount() AtCount {
 	return node.at
 }
 
-func (*IsolationLevel) iChar() {}
-func (*AccessMode) iChar()     {}
+func (IsolationLevel) iChar() {}
+func (AccessMode) iChar()     {}
 
 // Format formats the node.
-func (node *IsolationLevel) Format(buf *TrackedBuffer) {
-	buf.WriteString("isolation level " + node.Level)
+func (node IsolationLevel) Format(buf *TrackedBuffer) {
+	buf.WriteString("isolation level ")
+	switch node {
+	case ReadUncommitted:
+		buf.WriteString(ReadUncommittedStr)
+	case ReadCommitted:
+		buf.WriteString(ReadCommittedStr)
+	case RepeatableRead:
+		buf.WriteString(RepeatableReadStr)
+	case Serializable:
+		buf.WriteString(SerializableStr)
+	default:
+		buf.WriteString("Unknown Isolation level value")
+	}
 }
 
 // Format formats the node.
-func (node *AccessMode) Format(buf *TrackedBuffer) {
-	buf.WriteString(node.Mode)
+func (node AccessMode) Format(buf *TrackedBuffer) {
+	if node == ReadOnly {
+		buf.WriteString(TxReadOnly)
+	} else {
+		buf.WriteString(TxReadWrite)
+	}
+}
+
+// Format formats the node.
+func (node *Load) Format(buf *TrackedBuffer) {
+	buf.WriteString("AST node missing for Load type")
+}
+
+// Format formats the node.
+func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
+	buf.WriteString("show table status")
+	if node.DatabaseName != "" {
+		buf.WriteString(" from ")
+		buf.WriteString(node.DatabaseName)
+	}
+	buf.astPrintf(node, "%v", node.Filter)
+}
+
+// Format formats the node.
+func (node *SelectInto) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.astPrintf(node, "%s'%s'", node.Type.ToString(), node.FileName)
+	if node.Charset != "" {
+		buf.astPrintf(node, " character set %s", node.Charset)
+	}
+	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
 }

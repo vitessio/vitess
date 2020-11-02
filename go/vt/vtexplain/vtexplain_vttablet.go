@@ -506,7 +506,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		if selStmt.Where != nil {
 			switch v := selStmt.Where.Expr.(type) {
 			case *sqlparser.ComparisonExpr:
-				if v.Operator == sqlparser.InStr {
+				if v.Operator == sqlparser.InOp {
 					switch c := v.Left.(type) {
 					case *sqlparser.ColName:
 						switch values := v.Right.(type) {
@@ -614,6 +614,9 @@ func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Typ
 	case *sqlparser.NullVal:
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_NULL_TYPE)
+	case *sqlparser.ComparisonExpr:
+		colNames = append(colNames, sqlparser.String(node))
+		colTypes = append(colTypes, querypb.Type_INT64)
 	default:
 		log.Errorf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node))
 	}

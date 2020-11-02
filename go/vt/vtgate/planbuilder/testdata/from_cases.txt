@@ -2115,3 +2115,20 @@
 # non-existent table on right of join
 "select c from user join t"
 "table t not found"
+
+# information schema query that uses table_schema
+"select column_name from information_schema.columns where table_schema = (select schema())"
+{
+  "QueryType": "SELECT",
+  "Original": "select column_name from information_schema.columns where table_schema = (select schema())",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select column_name from information_schema.`columns` where 1 != 1",
+    "Query": "select column_name from information_schema.`columns` where table_schema = schema()"
+  }
+}

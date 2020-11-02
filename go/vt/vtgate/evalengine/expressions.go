@@ -74,7 +74,7 @@ type (
 
 //Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
-	return castFromNumeric(e, e.typ)
+	return e.toSQLValue(e.typ)
 }
 
 //NewLiteralIntFromBytes returns a literal expression

@@ -21,38 +21,9 @@ import (
 
 	"vitess.io/vitess/go/vt/sysvars"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-// PrepareAST will normalize the query
-func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool) (*RewriteASTResult, error) {
-	if parameterize {
-		Normalize(in, bindVars, prefix)
-	}
-	return RewriteAST(in)
-}
-
-// RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
-func RewriteAST(in Statement) (*RewriteASTResult, error) {
-	er := newExpressionRewriter()
-	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	setRewriter := &setNormalizer{}
-	out, ok := Rewrite(in, er.goingDown, setRewriter.rewriteSetComingUp).(Statement)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
-	}
-	if setRewriter.err != nil {
-		return nil, setRewriter.err
-	}
-
-	r := &RewriteASTResult{
-		AST:          out,
-		BindVarNeeds: er.bindVars,
-	}
-	return r, nil
-}
 
 func shouldRewriteDatabaseFunc(in Statement) bool {
 	selct, ok := in.(*Select)
@@ -71,12 +42,6 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 		return false
 	}
 	return tableName.Name.String() == "dual"
-}
-
-// RewriteASTResult contains the rewritten ast and meta information about it
-type RewriteASTResult struct {
-	*BindVarNeeds
-	AST Statement // The rewritten AST
 }
 
 type expressionRewriter struct {
@@ -106,10 +71,10 @@ const (
 	UserDefinedVariableName = "__vtudv"
 )
 
-func (er *expressionRewriter) rewriteAliasedExpr(cursor *Cursor, node *AliasedExpr) (*BindVarNeeds, error) {
+func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
 	inner := newExpressionRewriter()
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-	tmp := Rewrite(node.Expr, inner.goingDown, nil)
+	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
@@ -118,7 +83,7 @@ func (er *expressionRewriter) rewriteAliasedExpr(cursor *Cursor, node *AliasedEx
 	return inner.bindVars, nil
 }
 
-func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
+func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *Select:
@@ -127,7 +92,7 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			if ok && aliasedExpr.As.IsEmpty() {
 				buf := NewTrackedBuffer(nil)
 				aliasedExpr.Expr.Format(buf)
-				innerBindVarNeeds, err := er.rewriteAliasedExpr(cursor, aliasedExpr)
+				innerBindVarNeeds, err := er.rewriteAliasedExpr(aliasedExpr)
 				if err != nil {
 					er.err = err
 					return false
@@ -147,6 +112,8 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 		case DoubleAt:
 			er.sysVarRewrite(cursor, node)
 		}
+	case *Subquery:
+		er.unnestSubQueries(cursor, node)
 	}
 	return true
 }
@@ -159,7 +126,10 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 		sysvars.SkipQueryPlanCache.Name,
 		sysvars.SQLSelectLimit.Name,
 		sysvars.TransactionMode.Name,
-		sysvars.Workload.Name:
+		sysvars.Workload.Name,
+		sysvars.ReadAfterWriteGTID.Name,
+		sysvars.ReadAfterWriteTimeOut.Name,
+		sysvars.SessionTrackGTIDs.Name:
 		cursor.Replace(bindVarExpression("__vt" + lowered))
 		er.bindVars.AddSysVar(lowered)
 	}
@@ -171,43 +141,66 @@ func (er *expressionRewriter) udvRewrite(cursor *Cursor, node *ColName) {
 	er.bindVars.AddUserDefVar(udv)
 }
 
+var funcRewrites = map[string]string{
+	"last_insert_id": LastInsertIDName,
+	"database":       DBVarName,
+	"schema":         DBVarName,
+	"found_rows":     FoundRowsName,
+	"row_count":      RowCountName,
+}
+
 func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
-	switch {
-	// last_insert_id() -> :__lastInsertId
-	case node.Name.EqualString("last_insert_id"):
-		if len(node.Exprs) > 0 { //last_insert_id(x)
-			er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
-		} else {
-			cursor.Replace(bindVarExpression(LastInsertIDName))
-			er.bindVars.AddFuncResult(LastInsertIDName)
+	bindVar, found := funcRewrites[node.Name.Lowered()]
+	if found {
+		if bindVar == DBVarName && !er.shouldRewriteDatabaseFunc {
+			return
 		}
-	// database() -> :__vtdbname
-	case er.shouldRewriteDatabaseFunc &&
-		(node.Name.EqualString("database") ||
-			node.Name.EqualString("schema")):
 		if len(node.Exprs) > 0 {
-			er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
-		} else {
-			cursor.Replace(bindVarExpression(DBVarName))
-			er.bindVars.AddFuncResult(DBVarName)
+			er.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Argument to %s() not supported", node.Name.Lowered())
+			return
 		}
-	// found_rows() -> :__vtfrows
-	case node.Name.EqualString("found_rows"):
-		if len(node.Exprs) > 0 {
-			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to FOUND_ROWS() not supported")
-		} else {
-			cursor.Replace(bindVarExpression(FoundRowsName))
-			er.bindVars.AddFuncResult(FoundRowsName)
-		}
-	// row_count() -> :__vtrcount
-	case node.Name.EqualString("row_count"):
-		if len(node.Exprs) > 0 {
-			er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Arguments to ROW_COUNT() not supported")
-		} else {
-			cursor.Replace(bindVarExpression(RowCountName))
-			er.bindVars.AddFuncResult(RowCountName)
-		}
+		cursor.Replace(bindVarExpression(bindVar))
+		er.bindVars.AddFuncResult(bindVar)
 	}
+}
+
+func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
+	sel, isSimpleSelect := subquery.Select.(*Select)
+	// Today, subqueries and derived tables use the same AST struct,
+	// so we have to check what the parent is so we don't accidentally
+	// rewrite a FROM clause instead of an expression
+	_, isDerivedTable := cursor.Parent().(*AliasedTableExpr)
+
+	if isDerivedTable || !isSimpleSelect {
+		return
+	}
+
+	if !(len(sel.SelectExprs) != 1 ||
+		len(sel.OrderBy) != 0 ||
+		len(sel.GroupBy) != 0 ||
+		len(sel.From) != 1 ||
+		sel.Where == nil ||
+		sel.Having == nil ||
+		sel.Limit == nil) && sel.Lock == NoLock {
+		return
+	}
+	aliasedTable, ok := sel.From[0].(*AliasedTableExpr)
+	if !ok {
+		return
+	}
+	table, ok := aliasedTable.Expr.(TableName)
+	if !ok || table.Name.String() != "dual" {
+		return
+	}
+	expr, ok := sel.SelectExprs[0].(*AliasedExpr)
+	if !ok {
+		return
+	}
+	er.bindVars.NoteRewrite()
+	// we need to make sure that the inner expression also gets rewritten,
+	// so we fire off another rewriter traversal here
+	rewrittenExpr := Rewrite(expr.Expr, er.rewrite, nil)
+	cursor.Replace(rewrittenExpr)
 }
 
 func bindVarExpression(name string) Expr {

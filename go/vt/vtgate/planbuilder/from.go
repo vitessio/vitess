@@ -263,11 +263,11 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 // then it's a route. Otherwise, it's a join.
 func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
 	switch ajoin.Join {
-	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
-	case sqlparser.RightJoinStr:
+	case sqlparser.NormalJoinType, sqlparser.StraightJoinType, sqlparser.LeftJoinType:
+	case sqlparser.RightJoinType:
 		convertToLeftJoin(ajoin)
 	default:
-		return fmt.Errorf("unsupported: %s", ajoin.Join)
+		return fmt.Errorf("unsupported: %s", ajoin.Join.ToString())
 	}
 	if err := pb.processTableExpr(ajoin.LeftExpr); err != nil {
 		return err
@@ -290,7 +290,7 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 		}
 	}
 	ajoin.LeftExpr, ajoin.RightExpr = ajoin.RightExpr, newRHS
-	ajoin.Join = sqlparser.LeftJoinStr
+	ajoin.Join = sqlparser.LeftJoinType
 }
 
 func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {

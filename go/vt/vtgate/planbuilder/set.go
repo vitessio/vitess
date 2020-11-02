@@ -50,36 +50,38 @@ var sysVarPlanningFunc = map[string]planFunc{}
 
 func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
-	var setOp engine.SetOp
 	var err error
 
 	ec := new(expressionConverter)
 
 	for _, expr := range stmt.Exprs {
+		// AST struct has been prepared before getting here, so no scope here means that
+		// we have a UDV. If the original query didn't explicitly specify the scope, it
+		// would have been explictly set to sqlparser.SessionStr before reaching this
+		// phase of planning
 		switch expr.Scope {
-		case sqlparser.GlobalStr:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported global scope in set: %s", sqlparser.String(expr))
-			// AST struct has been prepared before getting here, so no scope here means that
-			// we have a UDV. If the original query didn't explicitly specify the scope, it
-			// would have been explictly set to sqlparser.SessionStr before reaching this
-			// phase of planning
-		case "":
+		case sqlparser.GlobalScope:
+			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
+			if err != nil {
+				return nil, err
+			}
+			setOps = append(setOps, setOp)
+		case sqlparser.ImplicitScope:
 			evalExpr, err := ec.convert(expr.Expr /*boolean*/, false /*identifierAsString*/, false)
 			if err != nil {
 				return nil, err
 			}
-			setOp = &engine.UserDefinedVariable{
+			setOp := &engine.UserDefinedVariable{
 				Name: expr.Name.Lowered(),
 				Expr: evalExpr,
 			}
-
 			setOps = append(setOps, setOp)
-		case sqlparser.SessionStr:
+		case sqlparser.SessionScope:
 			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct in set: %s", sqlparser.String(expr))
 			}
-			setOp, err = planFunc(expr, vschema, ec)
+			setOp, err := planFunc(expr, vschema, ec)
 			if err != nil {
 				return nil, err
 			}
@@ -143,26 +145,6 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema ContextVSchema, boole
 	}, nil
 }
 
-func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
-	valid := true
-	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
-		switch n := cursor.Node().(type) {
-		case *sqlparser.Subquery, *sqlparser.TimestampFuncExpr, *sqlparser.CurTimeFuncExpr:
-			valid = false
-			return false
-		case *sqlparser.FuncExpr:
-			_, ok := validFuncs[n.Name.Lowered()]
-			valid = ok
-			return ok
-		case *sqlparser.ColName:
-			valid = n.Name.AtCount() == 2
-			return false
-		}
-		return true
-	})
-	return valid
-}
-
 func buildSetOpReservedConn(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
@@ -196,7 +178,6 @@ func buildSetOpVitessAware(s setting) planFunc {
 		_, isDefault := astExpr.Expr.(*sqlparser.Default)
 		if isDefault {
 			if s.defaultValue == nil {
-
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, defaultNotSupportedErrFmt, astExpr.Name)
 			}
 			runtimeExpr = s.defaultValue
@@ -255,138 +236,4 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	}
 
 	return sqlparser.String(expr.Expr), nil
-}
-
-// whitelist of functions knows to be safe to pass through to mysql for evaluation
-// this list tries to not include functions that might return different results on different tablets
-var validFuncs = map[string]interface{}{
-	"if":               nil,
-	"ifnull":           nil,
-	"nullif":           nil,
-	"abs":              nil,
-	"acos":             nil,
-	"asin":             nil,
-	"atan2":            nil,
-	"atan":             nil,
-	"ceil":             nil,
-	"ceiling":          nil,
-	"conv":             nil,
-	"cos":              nil,
-	"cot":              nil,
-	"crc32":            nil,
-	"degrees":          nil,
-	"div":              nil,
-	"exp":              nil,
-	"floor":            nil,
-	"ln":               nil,
-	"log":              nil,
-	"log10":            nil,
-	"log2":             nil,
-	"mod":              nil,
-	"pi":               nil,
-	"pow":              nil,
-	"power":            nil,
-	"radians":          nil,
-	"rand":             nil,
-	"round":            nil,
-	"sign":             nil,
-	"sin":              nil,
-	"sqrt":             nil,
-	"tan":              nil,
-	"truncate":         nil,
-	"adddate":          nil,
-	"addtime":          nil,
-	"convert_tz":       nil,
-	"date":             nil,
-	"date_add":         nil,
-	"date_format":      nil,
-	"date_sub":         nil,
-	"datediff":         nil,
-	"day":              nil,
-	"dayname":          nil,
-	"dayofmonth":       nil,
-	"dayofweek":        nil,
-	"dayofyear":        nil,
-	"extract":          nil,
-	"from_days":        nil,
-	"from_unixtime":    nil,
-	"get_format":       nil,
-	"hour":             nil,
-	"last_day":         nil,
-	"makedate":         nil,
-	"maketime":         nil,
-	"microsecond":      nil,
-	"minute":           nil,
-	"month":            nil,
-	"monthname":        nil,
-	"period_add":       nil,
-	"period_diff":      nil,
-	"quarter":          nil,
-	"sec_to_time":      nil,
-	"second":           nil,
-	"str_to_date":      nil,
-	"subdate":          nil,
-	"subtime":          nil,
-	"time_format":      nil,
-	"time_to_sec":      nil,
-	"timediff":         nil,
-	"timestampadd":     nil,
-	"timestampdiff":    nil,
-	"to_days":          nil,
-	"to_seconds":       nil,
-	"week":             nil,
-	"weekday":          nil,
-	"weekofyear":       nil,
-	"year":             nil,
-	"yearweek":         nil,
-	"ascii":            nil,
-	"bin":              nil,
-	"bit_length":       nil,
-	"char":             nil,
-	"char_length":      nil,
-	"character_length": nil,
-	"concat":           nil,
-	"concat_ws":        nil,
-	"elt":              nil,
-	"export_set":       nil,
-	"field":            nil,
-	"find_in_set":      nil,
-	"format":           nil,
-	"from_base64":      nil,
-	"hex":              nil,
-	"insert":           nil,
-	"instr":            nil,
-	"lcase":            nil,
-	"left":             nil,
-	"length":           nil,
-	"load_file":        nil,
-	"locate":           nil,
-	"lower":            nil,
-	"lpad":             nil,
-	"ltrim":            nil,
-	"make_set":         nil,
-	"mid":              nil,
-	"oct":              nil,
-	"octet_length":     nil,
-	"ord":              nil,
-	"position":         nil,
-	"quote":            nil,
-	"repeat":           nil,
-	"replace":          nil,
-	"reverse":          nil,
-	"right":            nil,
-	"rpad":             nil,
-	"rtrim":            nil,
-	"soundex":          nil,
-	"space":            nil,
-	"strcmp":           nil,
-	"substr":           nil,
-	"substring":        nil,
-	"substring_index":  nil,
-	"to_base64":        nil,
-	"trim":             nil,
-	"ucase":            nil,
-	"unhex":            nil,
-	"upper":            nil,
-	"weight_string":    nil,
 }

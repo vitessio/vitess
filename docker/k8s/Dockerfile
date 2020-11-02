@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG VT_BASE_VER
+ARG VT_BASE_VER=latest
 
 FROM vitess/base:${VT_BASE_VER} AS base
 

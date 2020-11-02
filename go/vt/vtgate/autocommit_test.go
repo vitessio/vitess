@@ -84,8 +84,8 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 func TestAutocommitUpdateVindexChange(t *testing.T) {
 	executor, sbc, _, sbclookup := createLegacyExecutorEnv()
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
-		"1|1|foo",
+		sqltypes.MakeTestFields("id|name|lastname|name_lastname_keyspace_id_map", "int64|int32|varchar|int64"),
+		"1|1|foo|0",
 	),
 	})
 
@@ -110,7 +110,7 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	testQueries(t, "sbc", sbc, []*querypb.BoundQuery{{
-		Sql:           "select id, name, lastname from user2 where id = 1 for update",
+		Sql:           "select id, name, lastname, name = 'myname' and lastname = 'mylastname' from user2 where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "update user2 set name = 'myname', lastname = 'mylastname' where id = 1",

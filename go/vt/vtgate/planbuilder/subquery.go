@@ -75,7 +75,7 @@ func (sq *subquery) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (sq *subquery) PushLock(lock string) error {
+func (sq *subquery) PushLock(lock sqlparser.Lock) error {
 	return sq.input.PushLock(lock)
 }
 

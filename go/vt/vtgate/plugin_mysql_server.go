@@ -225,9 +225,9 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 	if session.InTransaction {
-		c.StatusFlags |= mysql.ServerStatusInTransaction
+		c.StatusFlags |= mysql.ServerStatusInTrans
 	} else {
-		c.StatusFlags &= mysql.NoServerStatusInTransaction
+		c.StatusFlags &= mysql.NoServerStatusInTrans
 	}
 	if session.Autocommit {
 		c.StatusFlags |= mysql.ServerStatusAutocommit

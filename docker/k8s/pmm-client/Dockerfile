@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG VT_BASE_VER
-ARG PMM_CLIENT_VER
-
+ARG VT_BASE_VER=latest
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
 FROM debian:buster-slim
+ARG PMM_CLIENT_VER='1.17.4'
 
 RUN apt-get update && \
    apt-get upgrade -qq && \

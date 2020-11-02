@@ -26,11 +26,11 @@ import (
 )
 
 type myTestCase struct {
-	in, expected                                    string
-	liid, db, foundRows, rowCount                   bool
-	udv                                             int
-	autocommit, clientFoundRows, skipQueryPlanCache bool
-	sqlSelectLimit, transactionMode, workload       bool
+	in, expected                                                      string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID bool
+	udv                                                               int
+	autocommit, clientFoundRows, skipQueryPlanCache                   bool
+	sqlSelectLimit, transactionMode, workload                         bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -59,16 +59,18 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
 		db:       true, liid: true,
 	}, {
+		// unnest database() call
 		in:       "select (select database()) from test",
-		expected: "select (select database() from dual) from test",
+		expected: "select database() as `(select database() from dual)` from test",
 		// no bindvar needs
 	}, {
+		// unnest database() call
 		in:       "select (select database() from dual) from test",
-		expected: "select (select database() from dual) from test",
+		expected: "select database() as `(select database() from dual)` from test",
 		// no bindvar needs
 	}, {
 		in:       "select (select database() from dual) from dual",
-		expected: "select (select :__vtdbname as `database()` from dual) as `(select database() from dual)` from dual",
+		expected: "select :__vtdbname as `(select database() from dual)` from dual",
 		db:       true,
 	}, {
 		in:       "select id from user where database()",
@@ -130,6 +132,23 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT @@workload",
 		expected: "SELECT :__vtworkload as `@@workload`",
 		workload: true,
+	}, {
+		in:       "select (select 42) from dual",
+		expected: "select 42 as `(select 42 from dual)` from dual",
+	}, {
+		in:       "select * from user where col = (select 42)",
+		expected: "select * from user where col = 42",
+	}, {
+		in:       "select * from (select 42) as t", // this is not an expression, and should not be rewritten
+		expected: "select * from (select 42) as t",
+	}, {
+		in:       `select (select (select (select (select (select last_insert_id()))))) as x`,
+		expected: "select :__lastInsertId as x from dual",
+		liid:     true,
+	}, {
+		in:       `select * from user where col = @@read_after_write_gtid OR col = @@read_after_write_timeout OR col = @@session_track_gtids`,
+		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
+		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
 	}}
 
 	for _, tc := range tests {
@@ -158,6 +177,9 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
 			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
+			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
+			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
+			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
 		})
 	}
 }

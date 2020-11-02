@@ -147,9 +147,12 @@ func (vs *vstreamer) Stream() error {
 	//defer vs.cancel()
 	ctx := context.Background()
 	defer ctx.Done()
+	vs.vse.vstreamersCreated.Add(1)
 	log.Infof("Starting Stream() with startPos %s", vs.startPos)
 	pos, err := mysql.DecodePosition(vs.startPos)
 	if err != nil {
+		vs.vse.errorCounts.Add("StreamRows", 1)
+		vs.vse.vstreamersEndedWithErrors.Add(1)
 		return err
 	}
 	vs.pos = pos
@@ -161,21 +164,20 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := vs.se.Open(); err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.pos, vs.vse)
 	}
 
 	conn, err := binlog.NewBinlogConnection(vs.cp)
 	if err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.pos, vs.vse)
 	}
 	defer conn.Close()
-
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.pos, vs.vse)
 	}
 	err = vs.parseEvents(vs.ctx, events)
-	return wrapError(err, vs.pos)
+	return wrapError(err, vs.pos, vs.vse)
 }
 
 // parseEvents parses and sends events.
@@ -252,6 +254,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_SAVEPOINT:
 			bufferedEvents = append(bufferedEvents, vevent)
 		default:
+			vs.vse.errorCounts.Add("BufferAndTransmit", 1)
 			return fmt.Errorf("unexpected event: %v", vevent)
 		}
 		return nil
@@ -280,6 +283,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			vevents, err := vs.parseEvent(ev)
 			if err != nil {
+				vs.vse.errorCounts.Add("ParseEvent", 1)
 				return err
 			}
 			for _, vevent := range vevents {
@@ -287,6 +291,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					if err == io.EOF {
 						return nil
 					}
+					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
 					return fmt.Errorf("error sending event: %v", err)
 				}
 			}
@@ -308,6 +313,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				if err == io.EOF {
 					return nil
 				}
+				vs.vse.errorCounts.Add("Send", 1)
 				return fmt.Errorf("error sending event: %v", err)
 			}
 		}
@@ -316,7 +322,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 
 // parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
-
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
@@ -383,6 +388,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		}
 		// Insert/Delete/Update are supported only to be used in the context of external mysql streams where source databases
 		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
+
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
 			mustSend := mustSendStmt(q, params.DbName)
@@ -455,7 +461,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Statement: q.SQL,
 				})
 			}
-		case sqlparser.StmtOther, sqlparser.StmtPriv:
+		case sqlparser.StmtOther, sqlparser.StmtPriv, sqlparser.StmtSet:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
 			// 2) Privilege-altering statements like GRANT/REVOKE
@@ -497,9 +503,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
+		if !ruleMatches(tm.Name, vs.filter) {
+			return nil, nil
+		}
 
 		vevent, err := vs.buildTablePlan(id, tm)
 		if err != nil {
+			vs.vse.errorCounts.Add("TablePlan", 1)
 			return nil, err
 		}
 		if vevent != nil {
@@ -652,10 +662,10 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 			Type: t,
 		})
 	}
-
 	st, err := vs.se.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+			log.Infof("No schema found for table %s", tm.Name)
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
 		return fields, nil
@@ -663,6 +673,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 
 	if len(st.Fields) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+			log.Infof("Cannot determine columns for table %s", tm.Name)
 			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Fields)
 		}
 		return fields, nil
@@ -765,6 +776,9 @@ func (vs *vstreamer) rebuildPlans() error {
 		if err != nil {
 			return err
 		}
+		if newPlan == nil {
+			continue
+		}
 		vs.plans[id] = &streamerPlan{
 			Plan:     newPlan,
 			TableMap: plan.TableMap,
@@ -799,8 +813,10 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	return plan.filter(values)
 }
 
-func wrapError(err error, stopPos mysql.Position) error {
+func wrapError(err error, stopPos mysql.Position, vse *Engine) error {
 	if err != nil {
+		vse.vstreamersEndedWithErrors.Add(1)
+		vse.errorCounts.Add("StreamEnded", 1)
 		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
 		log.Error(err)
 		return err

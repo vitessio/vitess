@@ -61,7 +61,7 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (ms *mergeSort) PushLock(lock string) error {
+func (ms *mergeSort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 

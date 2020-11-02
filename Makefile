@@ -37,12 +37,17 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+ifndef VTROOT
+export VTROOT=${PWD}
+endif
+
 # We now have CGO code in the build which throws warnings with newer gcc builds.
 # See: https://github.com/mattn/go-sqlite3/issues/803
 # Work around by dropping optimization level from default -O2.
 # Safe, since this code isn't performance critical.
 export CGO_CFLAGS := -O1
 
+# regenerate rice-box.go when any of the .cnf files change
 embed_config:
 	cd go/vt/mysqlctl
 	go run github.com/GeertJohan/go.rice/rice embed-go
@@ -53,7 +58,8 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/... && \
+		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
 
 debug:
 ifndef NOBANNER
@@ -63,14 +69,23 @@ endif
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
 
 # install copies the files needed to run Vitess into the given directory tree.
+# This target is optimized for docker images. It only installs the files needed for running vitess in docker
 # Usage: make install PREFIX=/path/to/install/root
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctld,orchestrator,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+
+# Install local install the binaries needed to run vitess locally
+# Usage: make install-local PREFIX=/path/to/install/root
+install-local: build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
-# Usage: make install PREFIX=/path/to/install/root
+# Usage: make install-testing PREFIX=/path/to/install/root
 install-testing: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"

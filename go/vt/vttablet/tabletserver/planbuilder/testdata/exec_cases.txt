@@ -803,3 +803,24 @@ options:PassthroughDMLs
   "TableName":"",
   "FullQuery": "show tables where Tables_in_dbName = 'apa'"
 }
+
+# show table status #1
+"show table status like 'key%'"
+{
+  "PlanID": "OtherRead",
+  "TableName": ""
+}
+
+# show table status #2
+"show table status where Name='apa'"
+{
+  "PlanID": "OtherRead",
+  "TableName": ""
+}
+
+# load data
+"load data infile 'x.txt' into table a"
+{
+    "PlanID":"Load",
+    "TableName":""
+}

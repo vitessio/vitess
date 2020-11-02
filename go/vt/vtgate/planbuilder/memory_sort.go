@@ -70,7 +70,7 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 		}
 		ob := engine.OrderbyParams{
 			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescScr,
+			Desc: order.Direction == sqlparser.DescOrder,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}
@@ -84,7 +84,7 @@ func (ms *memorySort) Primitive() engine.Primitive {
 }
 
 // PushLock satisfies the builder interface.
-func (ms *memorySort) PushLock(lock string) error {
+func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 

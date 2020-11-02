@@ -18,6 +18,7 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"flag"
 	"io/ioutil"
 
@@ -32,11 +33,14 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
+
+	rice "github.com/GeertJohan/go.rice"
 )
 
 var (
@@ -76,6 +80,10 @@ func main() {
 
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
+
+	if err := extractOnlineDDL(); err != nil {
+		log.Exitf("failed to extract online DDL binaries: %v", err)
+	}
 
 	// Initialize and start tm.
 	gRPCPort := int32(0)
@@ -155,6 +163,35 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 		cfg.InitWithSocket("")
 	}
 	return config, mycnf
+}
+
+// extractOnlineDDL extracts the gh-ost binary from this executable. gh-ost is appended
+// to vttablet executable by `make build` and via ricebox
+func extractOnlineDDL() error {
+	riceBox, err := rice.FindBox("../../../resources/bin")
+	if err != nil {
+		return err
+	}
+
+	if binaryFileName, isOverride := onlineddl.GhostBinaryFileName(); !isOverride {
+		// there is no path override for gh-ost. We're expected to auto-extract gh-ost.
+		ghostBinary, err := riceBox.Bytes("gh-ost")
+		if err != nil {
+			return err
+		}
+		if err := ioutil.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
+			// One possibility of failure is that gh-ost is up and running. In that case,
+			// let's pause and check if the running gh-ost is exact same binary as the one we wish to extract.
+			foundBytes, _ := ioutil.ReadFile(binaryFileName)
+			if bytes.Equal(ghostBinary, foundBytes) {
+				// OK, it's the same binary, there is no need to extract the file anyway
+				return nil
+			}
+			return err
+		}
+	}
+
+	return nil
 }
 
 func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) *tabletserver.TabletServer {

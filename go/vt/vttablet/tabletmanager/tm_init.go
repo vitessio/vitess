@@ -429,7 +429,7 @@ func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Dur
 				return
 			}
 		}
-		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell})
+		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell}, false)
 		if err == nil {
 			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
 			if err == nil {

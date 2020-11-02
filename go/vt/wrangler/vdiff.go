@@ -116,8 +116,7 @@ type shardStreamer struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
-	filteredReplicationWaitTime time.Duration,
-	format string) (map[string]*DiffReport, error) {
+	filteredReplicationWaitTime time.Duration, format string, maxRows int64) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
@@ -202,6 +201,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	defer cancel()
 
 	// TODO(sougou): parallelize
+	rowsToCompare := maxRows
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
@@ -226,7 +226,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 			return nil, vterrors.Wrap(err, "restartTargets")
 		}
 		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, df.ts.wr)
+		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
@@ -305,7 +305,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 		}
 		orderby = append(orderby, &sqlparser.Order{
 			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
-			Direction: sqlparser.AscScr,
+			Direction: sqlparser.AscOrder,
 		})
 	}
 	return orderby, nil
@@ -804,7 +804,7 @@ func logSteps(n int64) string {
 //-----------------------------------------------------------------
 // tableDiffer
 
-func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *int64) (*DiffReport, error) {
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
 	dr := &DiffReport{}
@@ -814,7 +814,12 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, err
 	advanceTarget := true
 	for {
 		if s := logSteps(int64(dr.ProcessedRows)); s != "" {
-			log.Infof("VDiff processed %s rows", s)
+			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, s)
+		}
+		*rowsToCompare--
+		if *rowsToCompare < 0 {
+			log.Infof("Stopping vdiff, specified limit reached")
+			return dr, nil
 		}
 		if advanceSource {
 			sourceRow, err = sourceExecutor.next()
