@@ -22,8 +22,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/key"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -295,15 +293,10 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		}
 		rut, isRoute := origin.(*route)
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
-			r := &rewriter{}
-			sqlparser.Rewrite(expr, r.rewriteTableSchema, nil)
-			if r.err == sqlparser.ErrExprNotSupported {
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparison with `table_schema` column not supported")
+			err := pb.findSysInfoRoutingPredicates(expr, rut)
+			if err != nil {
+				return err
 			}
-			if r.err != nil {
-				return r.err
-			}
-			rut.eroute.SysTableKeyspaceExpr = append(rut.eroute.SysTableKeyspaceExpr, r.tableNameExpressions...)
 		}
 		// The returned expression may be complex. Resplit before pushing.
 		for _, subexpr := range splitAndExpression(nil, expr) {
@@ -314,47 +307,6 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		pb.addPullouts(pullouts)
 	}
 	return nil
-}
-
-type rewriter struct {
-	tableNameExpressions []evalengine.Expr
-	err                  error
-}
-
-func (r *rewriter) rewriteTableSchema(cursor *sqlparser.Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.ColName:
-		if node.Name.EqualString("table_schema") {
-			switch parent := cursor.Parent().(type) {
-			case *sqlparser.ComparisonExpr:
-				if parent.Operator == sqlparser.EqualOp && shouldRewrite(parent.Right) {
-
-					evalExpr, err := sqlparser.Convert(parent.Right)
-					if err != nil {
-						if err == sqlparser.ErrExprNotSupported {
-							// This just means we can't rewrite this particular expression,
-							// not that we have to exit altogether
-							return true
-						}
-						r.err = err
-						return false
-					}
-					r.tableNameExpressions = append(r.tableNameExpressions, evalExpr)
-					parent.Right = sqlparser.NewArgument([]byte(":" + sqltypes.BvSchemaName))
-				}
-			}
-		}
-	}
-	return true
-}
-
-func shouldRewrite(e sqlparser.Expr) bool {
-	switch node := e.(type) {
-	case *sqlparser.FuncExpr:
-		// we should not rewrite database() calls against information_schema
-		return !(node.Name.EqualString("database") || node.Name.EqualString("schema"))
-	}
-	return true
 }
 
 // reorderBySubquery reorders the filters by pushing subqueries
