@@ -27,8 +27,12 @@ import (
 
 func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route) error {
 	isTableSchema, out, err := extractInfoSchemaRoutingPredicate(expr)
-	if err != nil || out == nil {
+	if err != nil {
 		return err
+	}
+	if out == nil {
+		// we didn't find a predicate to use for routing, so we just exit early
+		return nil
 	}
 
 	if isTableSchema {
