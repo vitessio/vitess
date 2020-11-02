@@ -1101,7 +1101,7 @@ func TestPrioritize(t *testing.T) {
 	}
 }
 
-func TestCastFromNumeric(t *testing.T) {
+func TestToSqlValue(t *testing.T) {
 	tcases := []struct {
 		typ querypb.Type
 		v   EvalResult
@@ -1158,10 +1158,10 @@ func TestCastFromNumeric(t *testing.T) {
 		out: sqltypes.TestValue(querypb.Type_DECIMAL, "0.00000000000000012"),
 	}}
 	for _, tcase := range tcases {
-		got := castFromNumeric(tcase.v, tcase.typ)
+		got := tcase.v.toSQLValue(tcase.typ)
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("castFromNumeric(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
+			t.Errorf("toSQLValue(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
 		}
 	}
 }

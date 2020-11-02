@@ -540,7 +540,7 @@ func (wr *Wrangler) ShowWorkflow(ctx context.Context, workflow, keyspace string)
 }
 
 func updateState(message, state string, cs []copyState, timeUpdated int64) string {
-	if message != "" {
+	if strings.Contains(strings.ToLower(message), "error") {
 		state = "Error"
 	} else if state == "Running" && len(cs) > 0 {
 		state = "Copying"

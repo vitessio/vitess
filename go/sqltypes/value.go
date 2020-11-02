@@ -335,6 +335,12 @@ func (v Value) IsBinary() bool {
 	return IsBinary(v.typ)
 }
 
+// IsDateTime returns true if Value is datetime.
+func (v Value) IsDateTime() bool {
+	dt := int(querypb.Type_DATETIME)
+	return int(v.typ)&dt == dt
+}
+
 // MarshalJSON should only be used for testing.
 // It's not a complete implementation.
 func (v Value) MarshalJSON() ([]byte, error) {

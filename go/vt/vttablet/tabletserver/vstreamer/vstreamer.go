@@ -172,7 +172,6 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 		return wrapError(err, vs.pos, vs.vse)
 	}
 	defer conn.Close()
-
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
 		return wrapError(err, vs.pos, vs.vse)

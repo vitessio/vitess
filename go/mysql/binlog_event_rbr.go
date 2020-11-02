@@ -700,7 +700,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		// now the full digits, 32 bits each, 9 digits
 		for i := 0; i < intg0; i++ {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
-			fmt.Fprintf(txt, "%9d", val)
+			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
 		}
 
@@ -872,12 +872,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		l := int(data[pos])
 		mdata := data[pos+1 : pos+1+l]
 		if sqltypes.IsBinary(styp) {
-			// Fixed length binaries have to be padded with zeroes
-			// up to the length of the field. Otherwise, equality checks
-			// fail against saved data. See https://github.com/vitessio/vitess/issues/3984.
-			ret := make([]byte, max)
-			copy(ret, mdata)
-			return sqltypes.MakeTrusted(querypb.Type_BINARY, ret), l + 1, nil
+			return sqltypes.MakeTrusted(querypb.Type_BINARY, mdata), l + 1, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_VARCHAR, mdata), l + 1, nil
 
