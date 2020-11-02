@@ -127,8 +127,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	if len(ins.Columns) == 0 {
 		if table.ColumnListAuthoritative {
 			populateInsertColumnlist(ins, table)
-		} else {
-			return nil, errors.New("no column list")
 		}
 	}
 
