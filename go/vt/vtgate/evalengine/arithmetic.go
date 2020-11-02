@@ -55,7 +55,7 @@ func Add(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, err
 	}
 
-	return castFromNumeric(lresult, lresult.typ), nil
+	return lresult.toSQLValue(lresult.typ), nil
 }
 
 // Subtract takes two values and subtracts them
@@ -79,7 +79,7 @@ func Subtract(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, err
 	}
 
-	return castFromNumeric(lresult, lresult.typ), nil
+	return lresult.toSQLValue(lresult.typ), nil
 }
 
 // Multiply takes two values and multiplies it together
@@ -101,7 +101,7 @@ func Multiply(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, err
 	}
 
-	return castFromNumeric(lresult, lresult.typ), nil
+	return lresult.toSQLValue(lresult.typ), nil
 }
 
 // Divide (Float) for MySQL. Replicates behavior of "/" operator
@@ -132,7 +132,7 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 		return sqltypes.NULL, err
 	}
 
-	return castFromNumeric(lresult, lresult.typ), nil
+	return lresult.toSQLValue(lresult.typ), nil
 }
 
 // NullsafeAdd adds two Values in a null-safe manner. A null value
@@ -164,7 +164,7 @@ func NullsafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) sqltypes.Value 
 	}
 	lresult := addNumeric(lv1, lv2)
 
-	return castFromNumeric(lresult, resultType)
+	return lresult.toSQLValue(resultType)
 }
 
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
@@ -387,8 +387,9 @@ func newEvalResult(v sqltypes.Value) (EvalResult, error) {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
+	default:
+		return EvalResult{typ: v.Type(), bytes: raw}, nil
 	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not be reached. got %s", v.String())
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
@@ -719,7 +720,7 @@ func anyMinusFloat(v1 EvalResult, v2 float64) EvalResult {
 	return EvalResult{typ: sqltypes.Float64, fval: v1.fval - v2}
 }
 
-func castFromNumeric(v EvalResult, resultType querypb.Type) sqltypes.Value {
+func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 	switch {
 	case sqltypes.IsSigned(resultType):
 		switch v.typ {
@@ -752,7 +753,7 @@ func castFromNumeric(v EvalResult, resultType querypb.Type) sqltypes.Value {
 			}
 			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64))
 		}
-	case resultType == sqltypes.VarChar || resultType == sqltypes.VarBinary || resultType == sqltypes.Binary || resultType == sqltypes.Text:
+	default:
 		return sqltypes.MakeTrusted(resultType, v.bytes)
 	}
 	return sqltypes.NULL

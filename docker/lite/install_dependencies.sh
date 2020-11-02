@@ -44,6 +44,7 @@ BASE_PACKAGES=(
     strace
     sysstat
     wget
+    curl
 )
 
 apt-get update
@@ -56,7 +57,8 @@ mysql56)
         libmysqlclient18
         mysql-client
         mysql-server
-        percona-xtrabackup-24
+        libcurl3
+        percona-xtrabackup
     )
     ;;
 mysql57)
@@ -97,8 +99,9 @@ mysql80)
     ;;
 percona)
     PACKAGES=(
+        libcurl3
         percona-server-server-5.6
-        percona-xtrabackup-24
+        percona-xtrabackup
     )
     ;;
 percona57)
@@ -111,13 +114,18 @@ percona57)
 percona80)
     PACKAGES=(
         libperconaserverclient21
-	    percona-server-rocksdb
+        percona-server-rocksdb
         percona-server-server
         percona-server-tokudb
         percona-xtrabackup-80
     )
     ;;
-mariadb|mariadb103)
+mariadb)
+    PACKAGES=(
+        mariadb-server-10.2
+    )
+    ;;
+mariadb103)
     PACKAGES=(
         mariadb-server
     )
@@ -146,7 +154,7 @@ add_apt_key 9334A25F8507EFA5
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
 mysql56)
-    echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.6' > /etc/apt/sources.list.d/mysql.list
+    echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.6' > /etc/apt/sources.list.d/mysql.list
     ;;
 mysql57)
     echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.7' > /etc/apt/sources.list.d/mysql.list
@@ -155,7 +163,7 @@ mysql80)
     echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-8.0' > /etc/apt/sources.list.d/mysql.list
     ;;
 mariadb)
-    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian buster main' > /etc/apt/sources.list.d/mariadb.list
+    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian stretch main' > /etc/apt/sources.list.d/mariadb.list
     ;;
 mariadb103)
     echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.3/debian buster main' > /etc/apt/sources.list.d/mariadb.list
@@ -164,7 +172,12 @@ esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
-mysql56|mysql57|mysql80|percona|percona57)
+percona|mysql56)
+    # 5.6 is no longer supported on buster
+    echo 'deb http://deb.debian.org/debian stretch main' > /etc/apt/sources.list.d/stretch.list
+    echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list
+    ;;
+mysql57|mysql80|percona57)
     echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
     ;;
 percona80)

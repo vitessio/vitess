@@ -1036,7 +1036,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
-		if c.writeErrorPacketFromErrorAndLog(err) {
+		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return false
 		}
 	} else {
@@ -1068,7 +1068,8 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err := splitStatementFunction(query)
+		var err error
+		queries, err = splitStatementFunction(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1091,7 +1092,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	statement, err := sqlparser.ParseStrictDDL(query)
 	if err != nil {
 		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
-		if c.writeErrorPacketFromErrorAndLog(err) {
+		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return false
 		}
 	}
@@ -1224,7 +1225,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 }
 
 func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
-	fieldSent := false
+	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
@@ -1238,8 +1239,8 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 			return io.EOF
 		}
 
-		if !fieldSent {
-			fieldSent = true
+		if !callbackCalled {
+			callbackCalled = true
 
 			if len(qr.Fields) == 0 {
 				sendFinished = true
@@ -1268,8 +1269,8 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return c.writeRows(qr)
 	})
 
-	// If no field was sent, we expect an error.
-	if !fieldSent {
+	// If callback was not called, we expect an error.
+	if !callbackCalled {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))

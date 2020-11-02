@@ -122,7 +122,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
 		log.Errorf("Replicate error: %s", err.Error())
-		if err := vr.setMessage(err.Error()); err != nil {
+		if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
 			log.Errorf("Failed to set error state: %v", err)
 		}
 	}
@@ -193,9 +193,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 
 // PrimaryKeyInfo is used to store charset and collation for primary keys where applicable
 type PrimaryKeyInfo struct {
-	Name      string
-	CharSet   string
-	Collation string
+	Name       string
+	CharSet    string
+	Collation  string
+	DataType   string
+	ColumnType string
 }
 
 func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*PrimaryKeyInfo, error) {
@@ -203,7 +205,7 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 	if err != nil {
 		return nil, err
 	}
-	queryTemplate := "select character_set_name, collation_name,column_name,data_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
 	pkInfoMap := make(map[string][]*PrimaryKeyInfo)
 	for _, td := range schema.TableDefinitions {
 
@@ -212,8 +214,8 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 		if err != nil {
 			return nil, err
 		}
-		if len(qr.Rows) > 0 && len(qr.Fields) != 4 {
-			return nil, fmt.Errorf("incorrect result returned for collation query")
+		if len(qr.Rows) == 0 {
+			return nil, fmt.Errorf("no data returned from information_schema.columns")
 		}
 
 		var pks []string
@@ -226,6 +228,7 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 		for _, pk := range pks {
 			charSet := ""
 			collation := ""
+			var dataType, columnType string
 			for _, row := range qr.Rows {
 				columnName := row[2].ToString()
 				if strings.EqualFold(columnName, pk) {
@@ -236,17 +239,27 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 							break
 						}
 					}
-					if currentField != nil && sqltypes.IsText(currentField.Type) {
+					if currentField == nil {
+						continue
+					}
+					dataType = row[3].ToString()
+					columnType = row[4].ToString()
+					if sqltypes.IsText(currentField.Type) {
 						charSet = row[0].ToString()
 						collation = row[1].ToString()
 					}
 					break
 				}
 			}
+			if dataType == "" || columnType == "" {
+				return nil, fmt.Errorf("no dataType/columnType found in information_schema.columns for table %s, column %s", td.Name, pk)
+			}
 			pkInfos = append(pkInfos, &PrimaryKeyInfo{
-				Name:      pk,
-				CharSet:   charSet,
-				Collation: collation,
+				Name:       pk,
+				CharSet:    charSet,
+				Collation:  collation,
+				DataType:   dataType,
+				ColumnType: columnType,
 			})
 		}
 		pkInfoMap[td.Name] = pkInfos
