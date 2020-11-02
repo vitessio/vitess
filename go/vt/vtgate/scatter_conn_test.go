@@ -295,7 +295,10 @@ func TestReservedConnFail(t *testing.T) {
 	destinations := []key.Destination{key.DestinationShard("0")}
 	executeOnShards(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 1, len(session.ShardSessions))
-	sbc0.ShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "lost connection")
+	oldRId := session.Session.ShardSessions[0].ReservedId
+	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "lost connection")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
-	assert.Zero(t, len(session.ShardSessions))
+	assert.Equal(t, 3, len(sbc0.Queries), "1 for the successful run, one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 }
