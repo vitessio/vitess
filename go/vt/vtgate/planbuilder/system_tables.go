@@ -25,34 +25,34 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func (pb *primitiveBuilder) pushFilterToInfoSchema(expr sqlparser.Expr, rut *route) error {
-	isTableSchema, out, err := rewriteTableSchema(expr)
-	if err != nil {
+func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route) error {
+	isTableSchema, out, err := extractInfoSchemaRoutingPredicate(expr)
+	if err != nil || out == nil {
 		return err
 	}
-	if expr != nil {
-		if isTableSchema {
-			if rut.eroute.SysTableTableSchema != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_schema not supported")
-			}
-			rut.eroute.SysTableTableSchema = out
-		} else {
-			if rut.eroute.SysTableTableName != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_name not supported")
-			}
-			rut.eroute.SysTableTableName = out
+
+	if isTableSchema {
+		if rut.eroute.SysTableTableSchema != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_schema not supported")
 		}
+		rut.eroute.SysTableTableSchema = out
+	} else {
+		if rut.eroute.SysTableTableName != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_name not supported")
+		}
+		rut.eroute.SysTableTableName = out
 	}
+
 	return nil
 }
 
 func findOtherComparator(cmp *sqlparser.ComparisonExpr) (bool, sqlparser.Expr, sqlparser.Expr, func(arg sqlparser.Argument)) {
-	if schema, table := isTableSchema(cmp.Left); schema || table {
+	if schema, table := isTableSchemaOrName(cmp.Left); schema || table {
 		return schema, cmp.Left, cmp.Right, func(arg sqlparser.Argument) {
 			cmp.Right = arg
 		}
 	}
-	if schema, table := isTableSchema(cmp.Right); schema || table {
+	if schema, table := isTableSchemaOrName(cmp.Right); schema || table {
 		return schema, cmp.Right, cmp.Left, func(arg sqlparser.Argument) {
 			cmp.Left = arg
 		}
@@ -61,7 +61,7 @@ func findOtherComparator(cmp *sqlparser.ComparisonExpr) (bool, sqlparser.Expr, s
 	return false, nil, nil, nil
 }
 
-func isTableSchema(e sqlparser.Expr) (isTableSchema bool, isTableName bool) {
+func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
 		return false, false
@@ -69,7 +69,7 @@ func isTableSchema(e sqlparser.Expr) (isTableSchema bool, isTableName bool) {
 	return col.Name.EqualString("table_schema"), col.Name.EqualString("table_name")
 }
 
-func rewriteTableSchema(in sqlparser.Expr) (bool, evalengine.Expr, error) {
+func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr, error) {
 	switch cmp := in.(type) {
 	case *sqlparser.ComparisonExpr:
 		if cmp.Operator == sqlparser.EqualOp {

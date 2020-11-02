@@ -293,7 +293,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		}
 		rut, isRoute := origin.(*route)
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
-			err := pb.pushFilterToInfoSchema(expr, rut)
+			err := pb.findSysInfoRoutingPredicates(expr, rut)
 			if err != nil {
 				return err
 			}
