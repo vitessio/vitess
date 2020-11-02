@@ -47,7 +47,11 @@ CREATE TABLE t1 (
     UNIQUE KEY (c3),
     UNIQUE KEY (c4)
 ) ENGINE=Innodb;
-`
+
+CREATE TABLE allDefaults (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255)
+) ENGINE=Innodb;`
 	VSchema = `
 {
     "sharded": false,
@@ -68,6 +72,18 @@ CREATE TABLE t1 (
                 },
                 {
                     "name": "c4",
+                    "type": "VARCHAR"
+                }
+            ]
+        },
+        "allDefaults": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "INT64"
+                },
+                {
+                    "name": "name",
                     "type": "VARCHAR"
                 }
             ]
@@ -146,7 +162,22 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result { //nolint:golint,unused
+func TestInsertAllDefaults(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `insert into allDefaults () values ()`)
+	assertMatches(t, conn, `select * from allDefaults`, "[[INT64(1) NULL]]")
+}
+
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
@@ -160,7 +191,7 @@ func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString s
 	assert.Contains(t, err.Error(), errorString)
 }
 
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) { //nolint:golint,unused
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)

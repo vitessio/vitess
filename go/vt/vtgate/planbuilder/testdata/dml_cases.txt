@@ -943,7 +943,22 @@
 
 # insert sharded, no values
 "insert into user values()"
-"no column list"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user values()",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
+    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "TableName": "user"
+  }
+}
 
 # insert with one vindex
 "insert into user(id) values (1)"
