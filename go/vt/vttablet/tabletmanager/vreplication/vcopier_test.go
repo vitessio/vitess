@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
-func TestPlayerCopyTablesWithInvalidDates(t *testing.T) {
+func TestCopyTablesWithInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{

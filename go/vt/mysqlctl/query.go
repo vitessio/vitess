@@ -80,7 +80,7 @@ func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbcon
 	for _, query := range queryList {
 		log.Infof("exec %s", limitString(redactMasterPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			log.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
+			log.Warningf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
 		}
 	}

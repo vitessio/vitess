@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"strconv"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -37,6 +38,81 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
+func TestPlayerInvalidDates(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, dt date, primary key(id))",
+		fmt.Sprintf("create table %s.dst1(id int, dt date, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	pos := masterPosition(t)
+	execStatements(t, []string{"set sql_mode='';insert into src1 values(1, '0000-00-00');set sql_mode='STRICT_TRANS_TABLES';"})
+	env.SchemaEngine.Reload(context.Background())
+
+	// default mysql flavor allows invalid dates: so disallow explicitly for this test
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=CONCAT(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE')"); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
+	defer func() {
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+		}
+	}()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, pos)
+	defer cancel()
+	testcases := []struct {
+		input  string
+		output string
+		table  string
+		data   [][]string
+	}{{
+		input:  "select 1 from dual",
+		output: "insert into dst1(id,dt) values (1,'0000-00-00')",
+		table:  "dst1",
+		data: [][]string{
+			{"1", "0000-00-00"},
+		},
+	}, {
+		input:  "insert into src1 values (2, '2020-01-01')",
+		output: "insert into dst1(id,dt) values (2,'2020-01-01')",
+		table:  "dst1",
+		data: [][]string{
+			{"1", "0000-00-00"},
+			{"2", "2020-01-01"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		output := []string{
+			tcases.output,
+		}
+		expectNontxQueries(t, output)
+
+		if tcases.table != "" {
+			// without the sleep there is a flakiness where row inserted by vreplication is not visible to vdbclient
+			time.Sleep(100 * time.Millisecond)
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
 
 func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()

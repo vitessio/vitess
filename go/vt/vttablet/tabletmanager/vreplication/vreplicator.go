@@ -166,8 +166,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 
 		switch {
 		case numTablesToCopy != 0:
-			if err := vr.setTemporaryConnectionSettings(); err != nil {
-				log.Warningf("Unable to set temporary connection settings %v", err)
+			if err := vr.setTemporaryConnectionSettingsWhileCopying(); err != nil {
+				log.Warningf("Unable to set temporary connection settings for copy state %v", err)
 				return err
 			}
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
@@ -186,6 +186,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			}
 			if vr.source.StopAfterCopy {
 				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
+			}
+			if err := vr.setTemporaryConnectionSettingsWhileReplicating(); err != nil {
+				log.Warningf("Unable to set temporary connection settings for replication %v", err)
+				return err
 			}
 			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
@@ -326,18 +330,30 @@ func encodeString(in string) string {
 	return buf.String()
 }
 
-func (vr *vreplicator) setTemporaryConnectionSettings() error {
+func (vr *vreplicator) resetFKChecks() error {
 	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
-	if err != nil {
-		return err
-	}
+	return err
+}
+
+func (vr *vreplicator) resetSQLMode() error {
 	sqlMode := strings.ToUpper(vr.originalSettings.sqlMode)
 	sqlMode = strings.Replace(sqlMode, "TRADITIONAL", "", -1)
 	sqlMode = strings.Replace(sqlMode, "NO_ZERO_DATE", "", -1)
 	sqlMode = strings.Replace(sqlMode, "NO_ZERO_IN_DATE", "", -1)
 	sqlMode += ",ALLOW_INVALID_DATES"
-	_, err = vr.dbClient.Execute(fmt.Sprintf("set sql_mode = '%s';", sqlMode))
+	_, err := vr.dbClient.Execute(fmt.Sprintf("set sql_mode = '%s';", sqlMode))
 	return err
+}
+
+func (vr *vreplicator) setTemporaryConnectionSettingsWhileCopying() error {
+	if err := vr.resetFKChecks(); err != nil {
+		return err
+	}
+	return vr.resetSQLMode()
+}
+
+func (vr *vreplicator) setTemporaryConnectionSettingsWhileReplicating() error {
+	return vr.resetSQLMode()
 }
 
 func (vr *vreplicator) getConnectionSettings() error {
