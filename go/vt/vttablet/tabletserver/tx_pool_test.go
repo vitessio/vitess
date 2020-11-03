@@ -48,7 +48,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
-	id := conn.ID()
+	id := conn.ReservedID()
 	conn.Unlock()
 
 	// get the connection and execute a query on it
@@ -127,7 +127,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Trying to get back to conn2 should not work since the transaction has been rolled back
-	_, err = txPool.GetAndLock(conn2.ID(), "")
+	_, err = txPool.GetAndLock(conn2.ReservedID(), "")
 	require.Error(t, err)
 
 	conn1.Release(tx.TxCommit)
@@ -319,7 +319,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	db, txPool, _, _ := setup(t)
 	defer db.Close()
 	conn1, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	id := conn1.ID()
+	id := conn1.ReservedID()
 	conn1.Unlock()
 	txPool.Close()
 
@@ -341,7 +341,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	id = conn1.ID()
+	id = conn1.ReservedID()
 	_, err := txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 
@@ -356,7 +356,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	conn1.Unlock()
-	id = conn1.ID()
+	id = conn1.ReservedID()
 	time.Sleep(20 * time.Millisecond)
 
 	assertErrorMatch(id, "exceeded timeout: 1ms")
