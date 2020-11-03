@@ -124,6 +124,8 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	tm := newTestTM(t, ts, 1, "ks", "0")
 	defer tm.Stop()
 
+	assert.Equal(t, "replica", statsTabletType.Get())
+
 	_, err := ts.GetShard(ctx, "ks", "0")
 	require.NoError(t, err)
 
@@ -235,6 +237,7 @@ func TestCheckMastership(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	ter0 := ti.GetMasterTermStartTime()
 	assert.Equal(t, now, ter0)
+	assert.Equal(t, "master", statsTabletType.Get())
 	tm.Stop()
 
 	// 3. Delete the tablet record. The shard record still says that we are the
