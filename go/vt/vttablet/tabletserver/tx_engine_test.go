@@ -102,7 +102,7 @@ func TestTxEngineClose(t *testing.T) {
 	c.Unlock()
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		_, err := te.txPool.GetAndLock(c.ID(), "return")
+		_, err := te.txPool.GetAndLock(c.ReservedID(), "return")
 		assert.NoError(t, err)
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()

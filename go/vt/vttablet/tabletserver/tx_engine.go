@@ -248,7 +248,7 @@ func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID i
 		return 0, "", err
 	}
 	defer conn.UnlockUpdateTime()
-	return conn.ID(), beginSQL, err
+	return conn.ReservedID(), beginSQL, err
 }
 
 // Commit commits the specified transaction and renews connection id if one exists.
@@ -577,7 +577,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		conn.Release(tx.ConnInitFail)
 		return 0, err
 	}
-	return conn.ID(), nil
+	return conn.ReservedID(), nil
 }
 
 //Reserve creates a reserved connection and returns the id to it
@@ -590,7 +590,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 			return 0, vterrors.Wrap(err, "TxEngine.Reserve")
 		}
 		defer conn.Unlock()
-		return conn.ID(), nil
+		return conn.ReservedID(), nil
 	}
 
 	conn, err := te.txPool.GetAndLock(txID, "to reserve")
@@ -603,7 +603,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	if err != nil {
 		return 0, vterrors.Wrap(err, "TxEngine.Reserve")
 	}
-	return conn.ID(), nil
+	return conn.ReservedID(), nil
 }
 
 //Reserve creates a reserved connection and returns the id to it

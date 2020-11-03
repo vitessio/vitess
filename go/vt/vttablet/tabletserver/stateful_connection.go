@@ -175,32 +175,32 @@ func (sc *StatefulConnection) String() string {
 	)
 }
 
-//TxProperties returns the transactional properties of the connection
+// TxProperties returns the transactional properties of the connection
 func (sc *StatefulConnection) TxProperties() *tx.Properties {
 	return sc.txProps
 }
 
-//ID returns the identifier for this connection
-func (sc *StatefulConnection) ID() tx.ConnID {
+// ReservedID returns the identifier for this connection
+func (sc *StatefulConnection) ReservedID() tx.ConnID {
 	return sc.ConnID
 }
 
-//UnderlyingDBConn returns the underlying database connection
+// UnderlyingDBConn returns the underlying database connection
 func (sc *StatefulConnection) UnderlyingDBConn() *connpool.DBConn {
 	return sc.dbConn
 }
 
-//CleanTxState cleans out the current transaction state
+// CleanTxState cleans out the current transaction state
 func (sc *StatefulConnection) CleanTxState() {
 	sc.txProps = nil
 }
 
-//Stats implements the tx.IStatefulConnection interface
+// Stats implements the tx.IStatefulConnection interface
 func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 	return sc.env.Stats()
 }
 
-//Taint taints the existing connection.
+// Taint taints the existing connection.
 func (sc *StatefulConnection) Taint(ctx context.Context, stats *servenv.TimingsWrapper) error {
 	if sc.dbConn == nil {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "connection is closed")
@@ -223,12 +223,12 @@ func (sc *StatefulConnection) Taint(ctx context.Context, stats *servenv.TimingsW
 	return nil
 }
 
-//IsTainted tells us whether this connection is tainted
+// IsTainted tells us whether this connection is tainted
 func (sc *StatefulConnection) IsTainted() bool {
 	return sc.tainted
 }
 
-//LogTransaction logs transaction related stats
+// LogTransaction logs transaction related stats
 func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	if sc.txProps == nil {
 		return //Nothing to log as no transaction exists on this connection.
@@ -250,7 +250,7 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	tabletenv.TxLogger.Send(sc)
 }
 
-//logReservedConn logs reserved connection related stats.
+// logReservedConn logs reserved connection related stats.
 func (sc *StatefulConnection) logReservedConn() {
 	if sc.reservedProps == nil {
 		return //Nothing to log as this connection is not reserved.
