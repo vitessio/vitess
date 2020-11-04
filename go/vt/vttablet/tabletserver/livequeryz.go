@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	streamqueryzHeader = []byte(`<thead>
+	livequeryzHeader = []byte(`<thead>
 		<tr>
 			<th>Query</th>
 			<th>Context</th>
@@ -40,20 +40,19 @@ var (
 		</tr>
         </thead>
 	`)
-	// TODO(sougou): livequeryz in the URL should be parameterized.
-	streamqueryzTmpl = template.Must(template.New("example").Parse(`
+	livequeryzTmpl = template.Must(template.New("example").Parse(`
 		<tr>
 			<td>{{.Query}}</td>
 			<td>{{.ContextHTML}}</td>
 			<td>{{.Duration}}</td>
 			<td>{{.Start}}</td>
 			<td>{{.ConnID}}</td>
-			<td><a href='/livequeryz/terminate?connID={{.ConnID}}'>Terminate</a></td>
+			<td><a href='terminate?connID={{.ConnID}}'>Terminate</a></td>
 		</tr>
 	`))
 )
 
-func streamQueryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
+func livequeryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -76,15 +75,15 @@ func streamQueryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Re
 	}
 	logz.StartHTMLTable(w)
 	defer logz.EndHTMLTable(w)
-	w.Write(streamqueryzHeader)
+	w.Write(livequeryzHeader)
 	for i := range rows {
-		if err := streamqueryzTmpl.Execute(w, rows[i]); err != nil {
-			log.Errorf("streamlogz: couldn't execute template: %v", err)
+		if err := livequeryzTmpl.Execute(w, rows[i]); err != nil {
+			log.Errorf("livequeryz: couldn't execute template: %v", err)
 		}
 	}
 }
 
-func streamQueryzTerminateHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
+func livequeryzTerminateHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 		acl.SendError(w, err)
 		return
@@ -103,5 +102,5 @@ func streamQueryzTerminateHandler(queryList *QueryList, w http.ResponseWriter, r
 		http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
 		return
 	}
-	streamQueryzHandler(queryList, w, r)
+	livequeryzHandler(queryList, w, r)
 }
