@@ -192,21 +192,29 @@ func SplitStatementToPieces(blob string) (pieces []string, err error) {
 	tkn := 0
 	var stmt string
 	stmtBegin := 0
+	emptyStatement := true
+loop:
 	for {
 		tkn, _ = tokenizer.Scan()
-		if tkn == ';' {
+		switch tkn {
+		case ';':
 			stmt = blob[stmtBegin : tokenizer.Position-2]
-			pieces = append(pieces, stmt)
+			if !emptyStatement {
+				pieces = append(pieces, stmt)
+				emptyStatement = true
+			}
 			stmtBegin = tokenizer.Position - 1
-
-		} else if tkn == 0 || tkn == eofChar {
+		case 0, eofChar:
 			blobTail := tokenizer.Position - 2
-
 			if stmtBegin < blobTail {
 				stmt = blob[stmtBegin : blobTail+1]
-				pieces = append(pieces, stmt)
+				if !emptyStatement {
+					pieces = append(pieces, stmt)
+				}
 			}
-			break
+			break loop
+		default:
+			emptyStatement = false
 		}
 	}
 

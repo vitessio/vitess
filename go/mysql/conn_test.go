@@ -23,12 +23,13 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/utils"
@@ -446,14 +447,100 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 		cConn.Close()
 	}()
 
+	err := cConn.WriteComQuery("error;select 2")
+	require.NoError(t, err)
+
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
+	res := sConn.handleNextCommand(handler)
+	// Execution error will occur in this case becuase the query sent is error and testRun will throw an error.
+	// We shuold send an error packet but not close the connection.
+	require.True(t, res, "we should not break the connection because of execution errors")
+
+	data, err := cConn.ReadPacket()
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+}
+
+func TestMultiStatement(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
 	err := cConn.WriteComQuery("select 1;select 2")
 	require.NoError(t, err)
 
-	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+	handler := &testRun{t: t, err: NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")}
 	res := sConn.handleNextCommand(handler)
-	require.True(t, res, res, "we should not break the connection because of execution errors")
+	//The queries run will be select 1; and select 2; These queries do not return any errors, so the connnection should still be open
+	require.True(t, res, "we should not break the connection in case of no errors")
+	// Read the result of the query and assert that it is indeed what we want. This will contain the result of the first query.
+	data, more, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	// Since we executed 2 queries, there should be more results to be read
+	require.True(t, more)
+	require.True(t, data.Equal(selectRowsResult))
 
+	// Read the results for the second query and verify the correctness
+	data, more, _, err = cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	// This was the final query run, so we expect that more should be false as there are no more queries.
+	require.False(t, more)
+	require.True(t, data.Equal(selectRowsResult))
+
+	// This time we run two queries fist of which will return an error
+	err = cConn.WriteComQuery("error;select 2")
+	require.NoError(t, err)
+
+	res = sConn.handleNextCommand(handler)
+	// Even if the query returns an error we should not close the connection as it is an execution error
+	require.True(t, res, "we should not break the connection because of execution errors")
+
+	// Read the result and assert that we indeed see the error that testRun throws.
+	data, more, _, err = cConn.ReadQueryResult(100, true)
+	require.EqualError(t, err, "cannot get column number (errno 2027) (sqlstate HY000)")
+	// In case of errors in a multi-statement, the following statements are not executed, therefore we want that more should be false
+	require.False(t, more)
+	require.Nil(t, data)
+}
+
+func TestMultiStatementOnSplitError(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	// Set the splitStatementFunction to return an error.
+	splitStatementFunction = func(blob string) (pieces []string, err error) {
+		return nil, fmt.Errorf("Error in split statements")
+	}
+	defer func() {
+		// Set the splitStatementFunction to the correct function back
+		splitStatementFunction = sqlparser.SplitStatementToPieces
+	}()
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	err := cConn.WriteComQuery("select 1;select 2")
+	require.NoError(t, err)
+
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
+
+	// We will encounter an error in split statement when this multi statement is processed.
+	res := sConn.handleNextCommand(handler)
+	// Since this is an execution error, we should not be closing the connection.
+	require.True(t, res, "we should not break the connection because of execution errors")
+	// Assert that the returned packet is an error packet.
 	data, err := cConn.ReadPacket()
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
@@ -469,10 +556,12 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 		cConn.Close()
 	}()
 
-	err := cConn.writeComInitDB("database")
+	err := cConn.writeComInitDB("error")
 	require.NoError(t, err)
 
-	handler := &singleRun{t: t, err: fmt.Errorf("execution failed")}
+	// this handler will return results according to the query. In case the query contains "error" it will return an error
+	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection because of execution errors")
 
@@ -493,7 +582,7 @@ func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	errorString := make([]byte, 17000)
-	handler := &singleRun{t: t, err: fmt.Errorf(string(errorString))}
+	handler := &testRun{t: t, err: fmt.Errorf(string(errorString))}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -508,7 +597,7 @@ func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
 	})
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &singleRun{t: t, err: fmt.Errorf("not used")}
+	handler := &testRun{t: t, err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -522,7 +611,7 @@ func TestConnectionErrorWhileWritingComPrepare(t *testing.T) {
 	})
 	sConn.Capabilities = sConn.Capabilities | CapabilityClientMultiStatements
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &singleRun{t: t, err: fmt.Errorf("not used")}
+	handler := &testRun{t: t, err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -536,51 +625,52 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
 	})
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &singleRun{t: t, err: fmt.Errorf("not used")}
+	handler := &testRun{t: t, err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
 
-type singleRun struct {
-	hasRun bool
-	t      *testing.T
-	err    error
+type testRun struct {
+	t   *testing.T
+	err error
 }
 
-func (h *singleRun) NewConnection(*Conn) {
+func (t testRun) NewConnection(c *Conn) {
 	panic("implement me")
 }
 
-func (h *singleRun) ConnectionClosed(*Conn) {
+func (t testRun) ConnectionClosed(c *Conn) {
 	panic("implement me")
 }
 
-func (h *singleRun) ComQuery(*Conn, string, func(*sqltypes.Result) error) error {
-	if h.hasRun {
-		debug.PrintStack()
-		h.t.Fatal("don't do this!")
+func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if strings.Contains(query, "error") {
+		return t.err
 	}
-	h.hasRun = true
-	return h.err
+	if strings.Contains(query, "panic") {
+		panic("test panic attack!")
+	}
+	callback(selectRowsResult)
+	return nil
 }
 
-func (h *singleRun) ComPrepare(*Conn, string, map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func (t testRun) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	panic("implement me")
 }
 
-func (h *singleRun) ComStmtExecute(*Conn, *PrepareData, func(*sqltypes.Result) error) error {
+func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	panic("implement me")
 }
 
-func (h *singleRun) WarningCount(*Conn) uint16 {
+func (t testRun) WarningCount(c *Conn) uint16 {
 	return 0
 }
 
-func (h *singleRun) ComResetConnection(*Conn) {
+func (t testRun) ComResetConnection(c *Conn) {
 	panic("implement me")
 }
 
-var _ Handler = (*singleRun)(nil)
+var _ Handler = (*testRun)(nil)
 
 type testConn struct {
 	writeToPass []bool

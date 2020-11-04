@@ -100,7 +100,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	}
 	if sel.SQLCalcFoundRows {
 		if outer != nil || query == "" {
-			return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+			return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSSyntaxErrorOrAccessViolation, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
 		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
@@ -115,7 +115,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 
 	// Into is not supported in subquery.
 	if sel.Into != nil && (outer != nil || query == "") {
-		return mysql.NewSQLError(mysql.ERCantUseOptionHere, "42000", "Incorrect usage/placement of 'INTO'")
+		return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSSyntaxErrorOrAccessViolation, "Incorrect usage/placement of 'INTO'")
 	}
 
 	if err := pb.processTableExprs(sel.From); err != nil {

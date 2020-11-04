@@ -180,6 +180,9 @@ type Conn struct {
 	PrepareData map[uint32]*PrepareData
 }
 
+// splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
+var splitStatementFunction func(blob string) (pieces []string, err error) = sqlparser.SplitStatementToPieces
+
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
 	StatementID uint32
@@ -1066,7 +1069,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		var err error
-		queries, err = sqlparser.SplitStatementToPieces(query)
+		queries, err = splitStatementFunction(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1192,7 +1195,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	var queries []string
 	var err error
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		queries, err = sqlparser.SplitStatementToPieces(query)
+		queries, err = splitStatementFunction(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1200,6 +1203,12 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	} else {
 		queries = []string{query}
 	}
+
+	if len(queries) == 0 {
+		err := NewSQLError(EREmptyQuery, SSSyntaxErrorOrAccessViolation, "Query was empty")
+		return c.writeErrorPacketFromErrorAndLog(err)
+	}
+
 	for index, sql := range queries {
 		more := false
 		if index != len(queries)-1 {

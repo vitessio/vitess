@@ -1822,7 +1822,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
-		mysql.NewSQLError(1227, "42000", "failover in progress"),
+		mysql.NewSQLError(1227, mysql.SSSyntaxErrorOrAccessViolation, "failover in progress"),
 		nil,
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; !strings.HasPrefix(got, want) {
