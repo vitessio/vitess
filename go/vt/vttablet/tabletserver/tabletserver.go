@@ -96,7 +96,8 @@ type TabletServer struct {
 	topoServer             *topo.Server
 
 	// These are sub-components of TabletServer.
-	ql           *QueryList
+	oltpql       *QueryList
+	olapql       *QueryList
 	se           *schema.Engine
 	rt           *repltracker.ReplTracker
 	vstreamer    *vstreamer.Engine
@@ -152,7 +153,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
-	tsv.ql = NewQueryList()
+	tsv.oltpql = NewQueryList()
+	tsv.olapql = NewQueryList()
 	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
@@ -175,7 +177,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
-		ql:          tsv.ql,
+		oltpql:      tsv.oltpql,
+		olapql:      tsv.olapql,
 		hs:          tsv.hs,
 		se:          tsv.se,
 		rt:          tsv.rt,
@@ -1510,19 +1513,19 @@ func (tsv *TabletServer) registerQueryzHandler() {
 
 func (tsv *TabletServer) registerStreamQueryzHandlers() {
 	tsv.exporter.HandleFunc("/olapqueryz/", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzHandler(tsv.qe.streamQList, w, r)
+		livequeryzHandler(tsv.olapql, w, r)
 	})
 	tsv.exporter.HandleFunc("/olapqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzTerminateHandler(tsv.qe.streamQList, w, r)
+		livequeryzTerminateHandler(tsv.olapql, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerQueryListHandlers() {
 	tsv.exporter.HandleFunc("/oltpqueryz/", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzHandler(tsv.ql, w, r)
+		livequeryzHandler(tsv.oltpql, w, r)
 	})
 	tsv.exporter.HandleFunc("/oltpqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzTerminateHandler(tsv.ql, w, r)
+		livequeryzTerminateHandler(tsv.oltpql, w, r)
 	})
 }
 
