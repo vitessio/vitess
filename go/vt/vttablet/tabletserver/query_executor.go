@@ -684,6 +684,9 @@ func (qre *QueryExecutor) getSelectLimit() int64 {
 // executor is an abstraction for reusing code in execSQL.
 type executor interface {
 	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
+	Current() string
+	ID() int64
+	Kill(message string, elapsed time.Duration) error
 }
 
 func (qre *QueryExecutor) execSQL(conn executor, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -691,6 +694,11 @@ func (qre *QueryExecutor) execSQL(conn executor, sql string, wantfields bool) (*
 	defer span.Finish()
 
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
+
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	qre.tsv.ql.Add(qd)
+	defer qre.tsv.ql.Remove(qd)
+
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
@@ -701,6 +709,10 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 		defer span.Finish()
 		return callback(result)
 	}
+
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	qre.tsv.ql.Add(qd)
+	defer qre.tsv.ql.Remove(qd)
 
 	start := time.Now()
 	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))

@@ -92,6 +92,9 @@ type stateManager struct {
 
 	requests sync.WaitGroup
 
+	// ql does not have an Open or Close.
+	ql *QueryList
+
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
 	// All Close functions must be called before Open.
