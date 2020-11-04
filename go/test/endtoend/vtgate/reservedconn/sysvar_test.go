@@ -183,14 +183,9 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 	// Connection timeout.
 	time.Sleep(10 * time.Second)
 
-	// first query will fail
+	// connection has timed out, but vtgate will recreate the connection for us
 	_, err = exec(t, conn, `select @@sql_safe_updates from test where id = 80`)
-	require.Error(t, err)
-
-	// this query is able to succeed.
-	newQR := checkedExec(t, conn, `select @@sql_safe_updates, connection_id() from test where id = 80`)
-	require.Equal(t, qr.Rows[0][0], newQR.Rows[0][0])
-	require.NotEqual(t, qr.Rows[0][1], newQR.Rows[0][1])
+	require.NoError(t, err)
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
@@ -286,9 +281,9 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 	// first query to 80- shard should pass
 	assertMatches(t, conn, "select id, val1 from test where id = 4", "[[INT64(4) NULL]]")
 
-	// first query to -80 shard will fail
+	// first query to -80 shard will fail, but vtgate should retry once and succeed the second time
 	_, err = exec(t, conn, "insert into test (id, val1) values (2, null)")
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	// subsequent queries on -80 will pass
 	assertMatches(t, conn, "select id from test where id = 2", "[]")
@@ -324,9 +319,9 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 	checkedExec(t, conn, "rollback")
 	assertMatches(t, conn, "select id, val1 from test where id = 2", "[]")
 
-	// first query to 80- shard will fail
+	// first query to -80 shard will fail, but vtgate should retry once and succeed the second time
 	_, err = exec(t, conn, "select @@sql_safe_updates from test where id = 4")
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	// subsequent queries on 80- will pass
 	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")
