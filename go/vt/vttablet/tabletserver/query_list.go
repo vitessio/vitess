@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // QueryDetail is a simple wrapper for Query, Context and a killable conn.
@@ -114,8 +116,12 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 	ql.mu.Lock()
 	rows := []QueryDetailzRow{}
 	for _, qd := range ql.queryDetails {
+		query := qd.conn.Current()
+		if *streamlog.RedactDebugUIQueries {
+			query, _ = sqlparser.RedactSQLQuery(query)
+		}
 		row := QueryDetailzRow{
-			Query:       qd.conn.Current(),
+			Query:       query,
 			ContextHTML: callinfo.HTMLFromContext(qd.ctx),
 			Start:       qd.start,
 			Duration:    time.Since(qd.start),
