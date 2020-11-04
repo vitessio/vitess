@@ -175,6 +175,21 @@ func (sc *StatefulConnection) String() string {
 	)
 }
 
+// Current returns the currently executing query
+func (sc *StatefulConnection) Current() string {
+	return sc.dbConn.Current()
+}
+
+// ID returns the mysql connection ID
+func (sc *StatefulConnection) ID() int64 {
+	return sc.dbConn.ID()
+}
+
+// Kill kills the currently executing query and connection
+func (sc *StatefulConnection) Kill(reason string, elapsed time.Duration) error {
+	return sc.dbConn.Kill(reason, elapsed)
+}
+
 // TxProperties returns the transactional properties of the connection
 func (sc *StatefulConnection) TxProperties() *tx.Properties {
 	return sc.txProps

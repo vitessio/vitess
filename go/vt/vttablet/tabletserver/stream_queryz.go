@@ -40,6 +40,7 @@ var (
 		</tr>
         </thead>
 	`)
+	// TODO(sougou): livequeryz in the URL should be parameterized.
 	streamqueryzTmpl = template.Must(template.New("example").Parse(`
 		<tr>
 			<td>{{.Query}}</td>
@@ -47,7 +48,7 @@ var (
 			<td>{{.Duration}}</td>
 			<td>{{.Start}}</td>
 			<td>{{.ConnID}}</td>
-			<td><a href='/streamqueryz/terminate?connID={{.ConnID}}'>Terminate</a></td>
+			<td><a href='/livequeryz/terminate?connID={{.ConnID}}'>Terminate</a></td>
 		</tr>
 	`))
 )
