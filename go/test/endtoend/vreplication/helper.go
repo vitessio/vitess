@@ -10,12 +10,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/buger/jsonparser"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -25,11 +26,10 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 	for _, query := range queries {
 		execVtgateQuery(t, conn, database, string(query))
 	}
-
 }
 func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, false)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	return qr
 }
 
@@ -41,7 +41,7 @@ func getConnection(t *testing.T, port int) *mysql.Conn {
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	return conn
 }
 
@@ -58,48 +58,37 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 
 func checkHealth(t *testing.T, url string) bool {
 	resp, err := http.Get(url)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	if err != nil || resp.StatusCode != 200 {
 		return false
 	}
 	return true
 }
 
-func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) string {
+func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
 	qr := execVtgateQuery(t, conn, database, fmt.Sprintf("select count(*) from %s", table))
-	assert.NotNil(t, qr)
-	assert.NotNil(t, qr.Rows)
-	if got, want := fmt.Sprintf("%v", qr.Rows), fmt.Sprintf("[[INT64(%d)]]", want); got != want {
-		return fmt.Sprintf("select:\n%v want\n%v", got, want)
-	}
-	return ""
+	require.NotNil(t, qr)
+	require.NotNil(t, qr.Rows)
+	require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
 }
 
-func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string, want string) string {
+func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
 	qr := execVtgateQuery(t, conn, database, query)
-	assert.NotNil(t, qr)
-	if got, want := fmt.Sprintf("%v", qr.Rows), want; got != want {
-		return fmt.Sprintf("got:\n%v want\n%v", got, want)
-	}
-	return ""
+	require.NotNil(t, qr)
+	require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
 }
 
-func validateCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) string {
+func validateCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
 	query := fmt.Sprintf("select count(*) from %s", table)
 	qr, err := vttablet.QueryTablet(query, database, true)
-	if err != nil {
-		return err.Error()
-	}
-	if got, want := fmt.Sprintf("%v", qr.Rows), fmt.Sprintf("[[INT64(%d)]]", want); got != want {
-		return fmt.Sprintf("want\n%v,got\n%v", want, got)
-	}
-	return ""
+	require.NoError(t, err)
+	require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
 }
 
 func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) bool {
 	count := getQueryCount(tablet.QueryzURL, matchQuery)
 	qr := execVtgateQuery(t, conn, ksName, query)
-	assert.NotNil(t, qr)
+	require.NotNil(t, qr)
 	newCount := getQueryCount(tablet.QueryzURL, matchQuery)
 	return newCount == count+1
 }
@@ -171,10 +160,10 @@ func getQueryCount(url string, query string) int {
 
 func validateDryRunResults(t *testing.T, output string, want []string) {
 	t.Helper()
-	assert.NotEmpty(t, output)
+	require.NotEmpty(t, output)
 
 	gotDryRun := strings.Split(output, "\n")
-	assert.True(t, len(gotDryRun) > 3)
+	require.True(t, len(gotDryRun) > 3)
 	gotDryRun = gotDryRun[3 : len(gotDryRun)-1]
 	if len(want) != len(gotDryRun) {
 		t.Fatalf("want and got: lengths don't match, \nwant\n%s\n\ngot\n%s", strings.Join(want, "\n"), strings.Join(gotDryRun, "\n"))
@@ -190,7 +179,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 			match = result
 			//t.Logf("Partial match |%v|%v|%v\n", w, g, match)
 		} else {
-			match = (g == w)
+			match = g == w
 		}
 		if !match {
 			fail = true
@@ -237,10 +226,7 @@ func checkIfBlacklistExists(t *testing.T, vc *VitessCluster, ksShard string, tab
 
 func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
 	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
-	result := validateQuery(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
-	if result != "" {
-		t.Fatalf("Incorrect streams found for %s: %s\n", name, result)
-	}
+	validateQuery(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {
