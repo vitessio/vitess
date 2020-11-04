@@ -412,7 +412,7 @@ export ONLINE_DDL_PASSWORD
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"
+curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"
 		`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
@@ -1302,6 +1302,29 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 	return err
 }
 
+func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, progress float64) error {
+	if progress <= 0 {
+		// progress starts at 0, and can only increase.
+		// A value of "0" either means "This is the actual current progress" or "No information"
+		// In both cases there's nothing to update
+		return nil
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationProgress, "_vt",
+		":migration_progress",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_progress": sqltypes.Float64BindVariable(progress),
+		"migration_uuid":     sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
 func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -1315,9 +1338,13 @@ func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result
 }
 
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
-func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam string) (err error) {
+func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam, progressParam string) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
 	dryRun := (dryrunParam == "true")
+	var progressPct float64
+	if pct, err := strconv.ParseFloat(progressParam, 32); err == nil {
+		progressPct = pct
+	}
 
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
@@ -1348,6 +1375,9 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 		return err
 	}
 	if err = e.updateMigrationStatus(ctx, uuidParam, status); err != nil {
+		return err
+	}
+	if err = e.updateMigrationProgress(ctx, uuidParam, progressPct); err != nil {
 		return err
 	}
 

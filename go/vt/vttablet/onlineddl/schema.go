@@ -72,6 +72,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateMigrationProgress = `UPDATE %s.schema_migrations
+			SET progress=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE %s.schema_migrations
 			SET started_timestamp=IFNULL(started_timestamp, NOW())
 		WHERE
