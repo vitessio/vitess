@@ -94,6 +94,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		colName := sqlparser.NewColIdent(field.Name)
 		cexpr := &colExpr{
 			colName: colName,
+			colType: field.Type,
 			expr: &sqlparser.ColName{
 				Name: colName,
 			},

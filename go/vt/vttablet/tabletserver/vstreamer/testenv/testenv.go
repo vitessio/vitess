@@ -51,6 +51,7 @@ type Env struct {
 	Dbcfgs       *dbconfigs.DBConfigs
 	Mysqld       *mysqlctl.Mysqld
 	SchemaEngine *schema.Engine
+	Flavor       string
 }
 
 // Init initializes an Env.
@@ -99,6 +100,9 @@ func Init() (*Env, error) {
 	config.DB = te.Dbcfgs
 	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
+	pos, _ := te.Mysqld.MasterPosition()
+	te.Flavor = pos.GTIDSet.Flavor()
+
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
 	if err := te.SchemaEngine.Open(); err != nil {

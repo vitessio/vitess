@@ -68,10 +68,19 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
 
+func limitString(s string, limit int) string {
+	if len(s) > limit {
+		return s[:limit]
+	}
+	return s
+}
+
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
+	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Infof("exec %v", redactMasterPassword(query))
+		log.Infof("exec %s", limitString(redactMasterPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
+			log.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
 		}
 	}
