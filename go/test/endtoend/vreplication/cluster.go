@@ -14,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -114,11 +113,11 @@ func NewVitessCluster(name string) (cluster *VitessCluster, err error) {
 func InitCluster(t *testing.T, cellNames []string) *VitessCluster {
 	initGlobals()
 	vc, _ := NewVitessCluster("Vdemo")
-	assert.NotNil(t, vc)
+	require.NotNil(t, vc)
 	topo := cluster.TopoProcessInstance(globalConfig.topoPort, globalConfig.topoPort*10, globalConfig.hostname, "etcd2", "global")
 
-	assert.NotNil(t, topo)
-	assert.Nil(t, topo.Setup("etcd2", nil))
+	require.NotNil(t, topo)
+	require.Nil(t, topo.Setup("etcd2", nil))
 	topo.ManageTopoDir("mkdir", "/vitess/global")
 	vc.Topo = topo
 	for _, cellName := range cellNames {
@@ -128,21 +127,21 @@ func InitCluster(t *testing.T, cellNames []string) *VitessCluster {
 	vtctld := cluster.VtctldProcessInstance(globalConfig.vtctldPort, globalConfig.vtctldGrpcPort,
 		globalConfig.topoPort, globalConfig.hostname, globalConfig.tmpDir)
 	vc.Vtctld = vtctld
-	assert.NotNil(t, vc.Vtctld)
+	require.NotNil(t, vc.Vtctld)
 	// use first cell as `-cell`
 	vc.Vtctld.Setup(cellNames[0])
 
 	vc.Vtctl = cluster.VtctlProcessInstance(globalConfig.topoPort, globalConfig.hostname)
-	assert.NotNil(t, vc.Vtctl)
+	require.NotNil(t, vc.Vtctl)
 	for _, cellName := range cellNames {
 		vc.Vtctl.AddCellInfo(cellName)
 		cell, err := vc.AddCell(t, cellName)
-		assert.Nil(t, err)
-		assert.NotNil(t, cell)
+		require.NoError(t, err)
+		require.NotNil(t, cell)
 	}
 
 	vc.VtctlClient = cluster.VtctlClientProcessInstance(globalConfig.hostname, vc.Vtctld.GrpcPort, globalConfig.tmpDir)
-	assert.NotNil(t, vc.VtctlClient)
+	require.NotNil(t, vc.VtctlClient)
 
 	return vc
 }
@@ -207,17 +206,17 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 		globalConfig.tmpDir,
 		[]string{"-queryserver-config-schema-reload-time", "5"}, //FIXME: for multi-cell initial schema doesn't seem to load without this
 		false)
-	assert.NotNil(t, vttablet)
+	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
 
 	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, tabletMysqlPortBase+tabletID, globalConfig.tmpDir)
-	assert.NotNil(t, tablet.DbServer)
+	require.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	assert.NotNil(t, proc)
+	require.NotNil(t, proc)
 	tablet.Name = fmt.Sprintf("%s-%d", cell.Name, tabletID)
 	vttablet.Name = tablet.Name
 	tablet.Vttablet = vttablet
@@ -252,10 +251,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				// only add master tablet for first cell, so first time CreateShard is called
 				fmt.Println("Adding Master tablet")
 				master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
-				if err != nil {
-					t.Fatalf(err.Error())
-				}
-				assert.NotNil(t, master)
+				require.NoError(t, err)
+				require.NotNil(t, master)
 				tabletIndex++
 				master.Vttablet.VreplicationTabletType = "MASTER"
 				tablets = append(tablets, master)
@@ -266,10 +263,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			for i := 0; i < numReplicas; i++ {
 				fmt.Println("Adding Replica tablet")
 				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
-				if err != nil {
-					t.Fatalf(err.Error())
-				}
-				assert.NotNil(t, tablet)
+				require.NoError(t, err)
+				require.NotNil(t, tablet)
 				tabletIndex++
 				tablets = append(tablets, tablet)
 				dbProcesses = append(dbProcesses, proc)
@@ -277,10 +272,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			for i := 0; i < numRdonly; i++ {
 				fmt.Println("Adding RdOnly tablet")
 				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
-				if err != nil {
-					t.Fatalf(err.Error())
-				}
-				assert.NotNil(t, tablet)
+				require.NoError(t, err)
+				require.NotNil(t, tablet)
 				tabletIndex++
 				tablets = append(tablets, tablet)
 				dbProcesses = append(dbProcesses, proc)
@@ -315,7 +308,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 // DeleteShard deletes a shard
 func (vc *VitessCluster) DeleteShard(t *testing.T, cellName string, ksName string, shardName string) {
 	shard := vc.Cells[cellName].Keyspaces[ksName].Shards[shardName]
-	assert.NotNil(t, shard)
+	require.NotNil(t, shard)
 	for _, tab := range shard.Tablets {
 		fmt.Printf("Shutting down tablet %s\n", tab.Name)
 		tab.Vttablet.TearDown()
@@ -341,7 +334,7 @@ func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell, cellsToWatch stri
 		globalConfig.topoPort,
 		globalConfig.tmpDir,
 		[]string{"-tablet_refresh_interval", "10ms"})
-	assert.NotNil(t, vtgate)
+	require.NotNil(t, vtgate)
 	if err := vtgate.Setup(); err != nil {
 		t.Fatalf(err.Error())
 	}
