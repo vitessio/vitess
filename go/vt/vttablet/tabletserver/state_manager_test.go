@@ -86,7 +86,6 @@ func TestStateManagerServeMaster(t *testing.T) {
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonMaster)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
-	assert.False(t, sm.qe.(*testQueryEngine).stopServing)
 
 	assert.Equal(t, topodatapb.TabletType_MASTER, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -128,7 +127,6 @@ func TestStateManagerUnserveMaster(t *testing.T) {
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 4, sm.messager, testStateClosed)
 	verifySubcomponent(t, 5, sm.te, testStateClosed)
-	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 
 	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
 	verifySubcomponent(t, 7, sm.watcher, testStateClosed)
@@ -154,7 +152,6 @@ func TestStateManagerUnserveNonmaster(t *testing.T) {
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 4, sm.messager, testStateClosed)
 	verifySubcomponent(t, 5, sm.te, testStateClosed)
-	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 
 	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
@@ -182,7 +179,6 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
 	verifySubcomponent(t, 4, sm.messager, testStateClosed)
 	verifySubcomponent(t, 5, sm.te, testStateClosed)
-	assert.True(t, sm.qe.(*testQueryEngine).stopServing)
 	verifySubcomponent(t, 6, sm.tracker, testStateClosed)
 
 	verifySubcomponent(t, 7, sm.txThrottler, testStateClosed)
@@ -598,6 +594,8 @@ func newTestStateManager(t *testing.T) *stateManager {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, "StateManagerTest")
 	sm := &stateManager{
+		oltpql:      NewQueryList(),
+		olapql:      NewQueryList(),
 		hs:          newHealthStreamer(env, topodatapb.TabletAlias{}),
 		se:          &testSchemaEngine{},
 		rt:          &testReplTracker{lag: 1 * time.Second},
@@ -715,7 +713,6 @@ func (te *testReplTracker) Status() (time.Duration, error) {
 
 type testQueryEngine struct {
 	testOrderState
-	stopServing bool
 
 	failMySQL bool
 }
@@ -732,10 +729,6 @@ func (te *testQueryEngine) IsMySQLReachable() error {
 		return errors.New("intentional error")
 	}
 	return nil
-}
-
-func (te *testQueryEngine) StopServing() {
-	te.stopServing = true
 }
 
 func (te *testQueryEngine) Close() {

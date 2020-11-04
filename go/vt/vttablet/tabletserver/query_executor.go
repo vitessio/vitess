@@ -259,10 +259,6 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 		conn = dbConn
 	}
 
-	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.qe.streamQList.Add(qd)
-	defer qre.tsv.qe.streamQList.Remove(qd)
-
 	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, callback)
 }
 
@@ -696,8 +692,8 @@ func (qre *QueryExecutor) execSQL(conn executor, sql string, wantfields bool) (*
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.ql.Add(qd)
-	defer qre.tsv.ql.Remove(qd)
+	qre.tsv.oltpql.Add(qd)
+	defer qre.tsv.oltpql.Remove(qd)
 
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
@@ -709,6 +705,10 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 		defer span.Finish()
 		return callback(result)
 	}
+
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	qre.tsv.olapql.Add(qd)
+	defer qre.tsv.olapql.Remove(qd)
 
 	start := time.Now()
 	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))

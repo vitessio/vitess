@@ -92,8 +92,9 @@ type stateManager struct {
 
 	requests sync.WaitGroup
 
-	// ql does not have an Open or Close.
-	ql *QueryList
+	// QueryList does not have an Open or Close.
+	oltpql *QueryList
+	olapql *QueryList
 
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
@@ -142,7 +143,6 @@ type (
 	queryEngine interface {
 		Open() error
 		IsMySQLReachable() error
-		StopServing()
 		Close()
 	}
 
@@ -501,7 +501,8 @@ func (sm *stateManager) unserveCommon() {
 	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
-	sm.qe.StopServing()
+	log.Info("Killing all OLAP queries")
+	sm.olapql.TerminateAll()
 	sm.tracker.Close()
 	sm.requests.Wait()
 }
