@@ -710,10 +710,6 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 		return callback(result)
 	}
 
-	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.ql.Add(qd)
-	defer qre.tsv.ql.Remove(qd)
-
 	start := time.Now()
 	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	qre.logStats.AddRewrittenSQL(sql, start)

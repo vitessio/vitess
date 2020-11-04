@@ -1509,20 +1509,20 @@ func (tsv *TabletServer) registerQueryzHandler() {
 }
 
 func (tsv *TabletServer) registerStreamQueryzHandlers() {
-	tsv.exporter.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzHandler(tsv.qe.streamQList, w, r)
+	tsv.exporter.HandleFunc("/olapqueryz/", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzHandler(tsv.qe.streamQList, w, r)
 	})
-	tsv.exporter.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzTerminateHandler(tsv.qe.streamQList, w, r)
+	tsv.exporter.HandleFunc("/olapqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzTerminateHandler(tsv.qe.streamQList, w, r)
 	})
 }
 
 func (tsv *TabletServer) registerQueryListHandlers() {
-	tsv.exporter.HandleFunc("/livequeryz", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzHandler(tsv.ql, w, r)
+	tsv.exporter.HandleFunc("/oltpqueryz/", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzHandler(tsv.ql, w, r)
 	})
-	tsv.exporter.HandleFunc("/livequeryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzTerminateHandler(tsv.ql, w, r)
+	tsv.exporter.HandleFunc("/oltpqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzTerminateHandler(tsv.ql, w, r)
 	})
 }
 
