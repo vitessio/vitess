@@ -183,6 +183,7 @@ var (
 		{Name: "sql_quote_show_create", IsBoolean: true},
 		{Name: "sql_safe_updates", IsBoolean: true},
 		{Name: "sql_warnings", IsBoolean: true},
+		{Name: "time_zone"},
 		{Name: "tmp_table_size"},
 		{Name: "transaction_prealloc_size"},
 		{Name: "unique_checks", IsBoolean: true},
@@ -224,7 +225,6 @@ var (
 		{Name: "session_track_system_variables"},
 		{Name: "session_track_transaction_info"},
 		{Name: "sql_auto_is_null", IsBoolean: true},
-		{Name: "time_zone"},
 		{Name: "version_tokens_session"},
 	}
 )
