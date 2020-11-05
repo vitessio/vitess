@@ -4506,14 +4506,14 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:757
 		{
-			conds := []IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
+			conds := []IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
 			yyVAL.statement = &IfStatement{Conditions: conds}
 		}
 	case 101:
 		yyDollar = yyS[yypt-10 : yypt+1]
 //line sql.y:762
 		{
-			conds := []IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
+			conds := []IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
 			yyVAL.statement = &IfStatement{Conditions: conds, Else: yyDollar[7].statements}
 		}
 	case 102:
@@ -4521,7 +4521,7 @@ yydefault:
 //line sql.y:767
 		{
 			conds := yyDollar[6].ifStatementConditions
-			conds = append([]IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
+			conds = append([]IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
 			yyVAL.statement = &IfStatement{Conditions: conds}
 		}
 	case 103:
@@ -4529,7 +4529,7 @@ yydefault:
 //line sql.y:773
 		{
 			conds := yyDollar[6].ifStatementConditions
-			conds = append([]IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
+			conds = append([]IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
 			yyVAL.statement = &IfStatement{Conditions: conds, Else: yyDollar[8].statements}
 		}
 	case 104:
@@ -5773,7 +5773,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1776
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[7].bytes)}}}}
+			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[7].bytes)}}}}
 		}
 	case 323:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -5822,7 +5822,7 @@ yydefault:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:1812
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[8].bytes), Details: &ForeignKeyDefinition{}}}}}
+			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[8].bytes), Details: &ForeignKeyDefinition{}}}}}
 		}
 	case 330:
 		yyDollar = yyS[yypt-7 : yypt+1]
