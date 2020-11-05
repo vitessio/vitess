@@ -547,6 +547,10 @@ func newIntVal(in string) *SQLVal {
 	return NewIntVal([]byte(in))
 }
 
+func newFloatVal(in string) *SQLVal {
+	return NewFloatVal([]byte(in))
+}
+
 func newHexVal(in string) *SQLVal {
 	return NewHexVal([]byte(in))
 }

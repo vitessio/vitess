@@ -1813,6 +1813,10 @@ alter_table_statement:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: $4, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($8), Details: &ForeignKeyDefinition{}}}}}
   }
+| ALTER ignore_opt TABLE table_name AUTO_INCREMENT equal_opt expression
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, AutoIncSpec: &AutoIncSpec{Value: $7}}
+  }
 
 column_order_opt:
   {
@@ -3726,8 +3730,6 @@ ignore_opt:
 
 non_add_drop_or_rename_operation:
   ALTER
-  { $$ = struct{}{} }
-| AUTO_INCREMENT
   { $$ = struct{}{} }
 | CHARACTER
   { $$ = struct{}{} }
