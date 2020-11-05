@@ -870,7 +870,6 @@ var yyToknames = [...]string{
 	"VISIBLE",
 	"';'",
 }
-
 var yyStatenames = [...]string{}
 
 const yyEofCode = 1
@@ -1014,6 +1013,7 @@ const yyPrivate = 57344
 const yyLast = 18093
 
 var yyAct = [...]int{
+
 	386, 56, 1736, 1792, 1770, 1761, 1731, 1745, 1732, 1691,
 	1498, 1740, 7, 1675, 1114, 1616, 1739, 6, 1445, 1735,
 	1547, 1368, 708, 1738, 5, 1582, 1741, 8, 1412, 355,
@@ -2825,8 +2825,8 @@ var yyAct = [...]int{
 	233, 234, 237, 238, 239, 240, 247, 251, 259, 260,
 	270, 277, 281,
 }
-
 var yyPact = [...]int{
+
 	519, -1000, -265, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
 	-1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
 	-1000, -1000, -1000, -1000, -1000, 1336, 1369, -1000, -1000, -1000,
@@ -3010,8 +3010,8 @@ var yyPact = [...]int{
 	-1000, 539, -1000, 532, -1000, -278, 305, 149, 228, -280,
 	-1000, 142, 305, -1000,
 }
-
 var yyPgo = [...]int{
+
 	0, 1654, 164, 645, 1650, 1649, 1648, 23, 16, 11,
 	26, 1645, 1644, 1643, 1642, 1638, 1637, 7, 2, 1636,
 	1635, 1407, 19, 1634, 4, 1633, 3, 68, 1632, 1629,
@@ -3037,8 +3037,8 @@ var yyPgo = [...]int{
 	25, 1414, 10, 1413, 21, 72, 5, 6, 8, 1412,
 	1409, 1404, 0, 365, 102, 1398, 1395, 103,
 }
-
 var yyR1 = [...]int{
+
 	0, 230, 231, 231, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 2, 2, 2,
@@ -3149,8 +3149,8 @@ var yyR1 = [...]int{
 	158, 158, 158, 158, 158, 158, 232, 233, 155, 156,
 	156, 156,
 }
-
 var yyR2 = [...]int{
+
 	0, 2, 0, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 0, 4, 6, 7,
@@ -3261,8 +3261,8 @@ var yyR2 = [...]int{
 	1, 1, 1, 1, 1, 1, 1, 1, 0, 0,
 	1, 1,
 }
-
 var yyChk = [...]int{
+
 	-1000, -230, -1, -2, -6, -7, -8, -9, -10, -12,
 	-33, -13, -14, -15, -39, -40, -41, -46, -47, -48,
 	-44, -43, -42, -16, -21, -3, -4, 6, 7, -52,
@@ -3446,8 +3446,8 @@ var yyChk = [...]int{
 	-26, -63, 79, 384, 134, -22, 81, 84, 384, -22,
 	134, 84, 384, 134,
 }
-
 var yyDef = [...]int{
+
 	26, -2, 2, -2, 5, 6, 7, 8, 9, 10,
 	11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 	21, 22, 23, 24, 25, 690, 0, 441, 441, 441,
@@ -3631,8 +3631,8 @@ var yyDef = [...]int{
 	105, 0, 96, 0, 102, 0, 0, 0, 0, 0,
 	101, 0, 106, 103,
 }
-
 var yyTok1 = [...]int{
+
 	1, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 	3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 	3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -3647,8 +3647,8 @@ var yyTok1 = [...]int{
 	3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 	3, 3, 3, 3, 96, 3, 108,
 }
-
 var yyTok2 = [...]int{
+
 	2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 	12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
 	22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
@@ -3676,7 +3676,6 @@ var yyTok2 = [...]int{
 	259, 260, 261, 262, 263, 264, 265, 266, 267, 268,
 	269, 270, 271, 272, 273, 274,
 }
-
 var yyTok3 = [...]int{
 	57600, 275, 57601, 276, 57602, 277, 57603, 278, 57604, 279,
 	57605, 280, 57606, 281, 57607, 282, 57608, 283, 57609, 284,
@@ -4507,14 +4506,14 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:757
 		{
-			conds := []IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
+			conds := []IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
 			yyVAL.statement = &IfStatement{Conditions: conds}
 		}
 	case 101:
 		yyDollar = yyS[yypt-10 : yypt+1]
 //line sql.y:762
 		{
-			conds := []IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
+			conds := []IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}
 			yyVAL.statement = &IfStatement{Conditions: conds, Else: yyDollar[7].statements}
 		}
 	case 102:
@@ -4522,7 +4521,7 @@ yydefault:
 //line sql.y:767
 		{
 			conds := yyDollar[6].ifStatementConditions
-			conds = append([]IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
+			conds = append([]IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
 			yyVAL.statement = &IfStatement{Conditions: conds}
 		}
 	case 103:
@@ -4530,7 +4529,7 @@ yydefault:
 //line sql.y:773
 		{
 			conds := yyDollar[6].ifStatementConditions
-			conds = append([]IfStatementCondition{IfStatementCondition{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
+			conds = append([]IfStatementCondition{{Expr: yyDollar[2].expr, Statements: yyDollar[4].statements}}, conds...)
 			yyVAL.statement = &IfStatement{Conditions: conds, Else: yyDollar[8].statements}
 		}
 	case 104:
@@ -5774,7 +5773,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1776
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[7].bytes)}}}}
+			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[7].bytes)}}}}
 		}
 	case 323:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -5823,7 +5822,7 @@ yydefault:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:1812
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[8].bytes), Details: &ForeignKeyDefinition{}}}}}
+			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{{Name: string(yyDollar[8].bytes), Details: &ForeignKeyDefinition{}}}}}
 		}
 	case 330:
 		yyDollar = yyS[yypt-7 : yypt+1]
