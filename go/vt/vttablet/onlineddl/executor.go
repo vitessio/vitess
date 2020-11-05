@@ -74,7 +74,6 @@ var vexecInsertTemplates = []string{
 		migration_uuid,
 		keyspace,
 		shard,
-		tablet,
 		mysql_schema,
 		mysql_table,
 		migration_statement,
@@ -83,7 +82,7 @@ var vexecInsertTemplates = []string{
 		requested_timestamp,
 		migration_status
 	) VALUES (
-		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
+		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
 	)`,
 }
 
@@ -1410,7 +1409,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		// We can fill them in.
 		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
 		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
-		vx.ReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
+		vx.AddOrReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)

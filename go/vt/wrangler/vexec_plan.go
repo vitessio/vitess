@@ -130,7 +130,6 @@ func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 					migration_uuid,
 					keyspace,
 					shard,
-					tablet,
 					mysql_schema,
 					mysql_table,
 					migration_statement,
@@ -139,7 +138,7 @@ func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 					requested_timestamp,
 					migration_status
 				) VALUES (
-					'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
+					'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
 				)`,
 			},
 		},
