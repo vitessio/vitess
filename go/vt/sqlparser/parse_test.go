@@ -944,6 +944,15 @@ var (
 			input:  "alter table e auto_increment = 20",
 			output: "alter table e",
 		}, {
+			input:  "alter table e auto_increment 20",
+			output: "alter table e",
+		}, {
+			input:  "alter table e auto_increment = 20.0",
+			output: "alter table e",
+		}, {
+			input:  "alter table e auto_increment 20.0",
+			output: "alter table e",
+		}, {
 			input:  "alter table e character set = 'ascii'",
 			output: "alter table e",
 		}, {
