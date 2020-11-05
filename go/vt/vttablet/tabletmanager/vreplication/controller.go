@@ -194,8 +194,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
 		if err != nil {
 			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+			ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
 			return err
 		}
+		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
 		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
 		ct.sourceTablet.Set(tablet.Alias.String())
 	}
@@ -242,12 +244,24 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+
 		return vr.Replicate(ctx)
 	}
 	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 	return fmt.Errorf("missing source")
 }
 
+func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {
+	ct.blpStats.History.Add(&binlogplayer.StatsHistoryRecord{
+		Time:    time.Now(),
+		Message: message,
+	})
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set message: %v: %v", query, err)
+	}
+	return nil
+}
 func (ct *controller) Stop() {
 	ct.cancel()
 	<-ct.done
