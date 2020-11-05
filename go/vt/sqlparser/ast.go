@@ -1815,10 +1815,11 @@ type VindexSpec struct {
 	Params []VindexParam
 }
 
-// AutoIncSpec defines and autoincrement value for a ADD AUTO_INCREMENT statement
+// AutoIncSpec defines an autoincrement value for a ADD AUTO_INCREMENT statement
 type AutoIncSpec struct {
 	Column   ColIdent
 	Sequence TableName
+	Value    Expr
 }
 
 // Format formats the node.
