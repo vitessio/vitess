@@ -107,7 +107,7 @@ func NewTxEngine(env tabletenv.Env) *TxEngine {
 	config := env.Config()
 	te := &TxEngine{
 		env:                 env,
-		shutdownGracePeriod: config.GracePeriods.TransactionShutdownSeconds.Get(),
+		shutdownGracePeriod: config.GracePeriods.ShutdownSeconds.Get(),
 		reservedConnStats:   env.Exporter().NewTimings("ReservedConnections", "Reserved connections stats", "operation"),
 	}
 	limiter := txlimiter.New(env)
