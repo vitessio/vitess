@@ -30,22 +30,21 @@ services:
       - consul1
 
   vtctld:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15000:$WEB_PORT"
       - "$GRPC_PORT"
-    command: ["sh", "-c", " $$VTROOT/bin/vtctld \
+    command: ["sh", "-c", " /vt/bin/vtctld \
         $TOPOLOGY_FLAGS \
         -cell $CELL \
         -workflow_manager_init \
         -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \
         -backup_storage_implementation file \
-        -file_backup_storage_root $$VTDATAROOT/backups \
+        -file_backup_storage_root /vt/backups \
         -logtostderr=true \
         -port $WEB_PORT \
-        -grpc_port $GRPC_PORT \
-        -pid_file $$VTDATAROOT/tmp/vtctld.pid
+        -grpc_port $GRPC_PORT
         "]
     depends_on:
       - consul1
@@ -53,12 +52,12 @@ services:
       - consul3
 
   vtgate:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15099:$WEB_PORT"
       - "$GRPC_PORT"
       - "15306:$MYSQL_PORT"
-    command: ["sh", "-c", "$$VTROOT/bin/vtgate \
+    command: ["sh", "-c", "/vt/bin/vtgate \
         $TOPOLOGY_FLAGS \
         -logtostderr=true \
         -port $WEB_PORT \
@@ -68,9 +67,8 @@ services:
         -cell $CELL \
         -cells_to_watch $CELL \
         -tablet_types_to_wait MASTER,REPLICA \
-        -gateway_implementation discoverygateway \
         -service_map 'grpc-vtgateservice' \
-        -pid_file $$VTDATAROOT/tmp/vtgate.pid \
+        -enable_system_settings=true \
         "]
     volumes:
       - ".:/script"
@@ -84,7 +82,7 @@ services:
         condition: service_healthy
 
   schemaload:
-    image: vitess/base
+    image: vitess/lite
     command:
     - sh
     - -c
@@ -108,7 +106,7 @@ services:
         condition: service_healthy
 
   vttablet101:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15101:$WEB_PORT"
       - "$GRPC_PORT"
@@ -134,13 +132,13 @@ services:
     depends_on:
       - vtctld
     healthcheck:
-      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
       interval: 30s
       timeout: 10s
       retries: 15
 
   vttablet102:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15102:$WEB_PORT"
       - "$GRPC_PORT"
@@ -164,13 +162,13 @@ services:
       - vtctld
       - vttablet101
     healthcheck:
-      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
       interval: 30s
       timeout: 10s
       retries: 15
 
   vttablet103:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15103:$WEB_PORT"
       - "$GRPC_PORT"
@@ -194,7 +192,7 @@ services:
       - vtctld
       - vttablet101
     healthcheck:
-      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
       interval: 30s
       timeout: 10s
       retries: 15
