@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Vitess Authors.
+ * Copyright 2020 The Vitess Authors.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -504,8 +504,8 @@ func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo,
 - op: add
   path: /services/init_shard_master%[2]d
   value:
-    image: vitess/base
-    command: ["sh", "-c", "$$VTROOT/bin/vtctl %[5]s InitShardMaster -force %[4]s/%[3]s %[6]s-%[2]d "]
+    image: vitess/lite
+    command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardMaster -force %[4]s/%[3]s %[6]s-%[2]d "]
     %[1]s
 `, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
 }
@@ -539,7 +539,7 @@ func generateDefaultTablet(tabAlias int, shard, role, keyspace string, dbInfo ex
 - op: add
   path: /services/vttablet%[1]d
   value:
-    image: vitess/base
+    image: vitess/lite
     ports:
     - "15%[1]d:%[4]d"
     - "%[5]d"
@@ -565,7 +565,7 @@ func generateDefaultTablet(tabAlias int, shard, role, keyspace string, dbInfo ex
     depends_on:
       - vtctld
     healthcheck:
-        test: ["CMD-SHELL","curl localhost:%[4]d/debug/health"]
+        test: ["CMD-SHELL","curl -s --fail --show-error localhost:%[4]d/debug/health"]
         interval: 30s
         timeout: 10s
         retries: 15
@@ -577,22 +577,21 @@ func generateVtctld(opts vtOptions) string {
 - op: add
   path: /services/vtctld
   value:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15000:%[1]d"
       - "%[2]d"
-    command: ["sh", "-c", " $$VTROOT/bin/vtctld \
+    command: ["sh", "-c", " /vt/bin/vtctld \
         %[3]s \
         -cell %[4]s \
         -workflow_manager_init \
         -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \
         -backup_storage_implementation file \
-        -file_backup_storage_root $$VTDATAROOT/backups \
+        -file_backup_storage_root /vt/vtdataroot/backups \
         -logtostderr=true \
         -port %[1]d \
         -grpc_port %[2]d \
-        -pid_file $$VTDATAROOT/tmp/vtctld.pid
         "]
     volumes:
       - .:/script
@@ -608,12 +607,12 @@ func generateVtgate(opts vtOptions) string {
 - op: add
   path: /services/vtgate
   value:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15099:%[1]d"
       - "%[2]d"
       - "15306:%[3]d"
-    command: ["sh", "-c", "/script/run-forever.sh $$VTROOT/bin/vtgate \
+    command: ["sh", "-c", "/script/run-forever.sh /vt/bin/vtgate \
         %[4]s \
         -logtostderr=true \
         -port %[1]d \
@@ -623,9 +622,7 @@ func generateVtgate(opts vtOptions) string {
         -cell %[5]s \
         -cells_to_watch %[5]s \
         -tablet_types_to_wait MASTER,REPLICA,RDONLY \
-        -gateway_implementation discoverygateway \
         -service_map 'grpc-vtgateservice' \
-        -pid_file $$VTDATAROOT/tmp/vtgate.pid \
         -normalize_queries=true \
         "]
     volumes:
@@ -640,11 +637,11 @@ func generateVtwork(opts vtOptions) string {
 - op: add
   path: /services/vtwork
   value:
-    image: vitess/base
+    image: vitess/lite
     ports:
       - "15100:%[1]d"
       - "%[2]d"
-    command: ["sh", "-c", "$$VTROOT/bin/vtworker \
+    command: ["sh", "-c", "/vt/bin/vtworker \
         %[3]s \
         -cell %[4]s \
         -logtostderr=true \
@@ -652,7 +649,6 @@ func generateVtwork(opts vtOptions) string {
         -port %[1]d \
         -grpc_port %[2]d \
         -use_v3_resharding_mode=true \
-        -pid_file $$VTDATAROOT/tmp/vtwork.pid \
         "]
     depends_on:
       - vtctld
@@ -685,7 +681,7 @@ func generateSchemaload(
 - op: add
   path: /services/schemaload_%[7]s
   value:
-    image: vitess/base
+    image: vitess/lite
     volumes:
       - ".:/script"
     environment:
