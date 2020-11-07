@@ -41,7 +41,7 @@ services:
         -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \
         -backup_storage_implementation file \
-        -file_backup_storage_root /vt/backups \
+        -file_backup_storage_root /vt/vtdataroot/backups \
         -logtostderr=true \
         -port $WEB_PORT \
         -grpc_port $GRPC_PORT
