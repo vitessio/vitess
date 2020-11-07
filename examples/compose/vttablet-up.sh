@@ -96,17 +96,21 @@ export DB_PORT=${DB_PORT:-3306}
 export DB_HOST=${DB_HOST:-""}
 export DB_NAME=$db_name
 
+# Delete socket files before running mysqlctld if exists.
+# This is the primary reason for unhealthy state on restart.
+# https://github.com/vitessio/vitess/pull/5115/files
+echo "Removing $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}..."
+rm -rf $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}
+
 # Create mysql instances
 # Do not create mysql instance for master if connecting to external mysql database
 if [[ $role != "master" || $external = 0 ]]; then
   echo "Initing mysql for tablet: $uid.. "
-  $VTROOT/bin/mysqlctl \
-  -log_dir $VTDATAROOT/tmp \
-  -tablet_uid $uid \
-  -mysql_port 3306 \
-  $action &
-
-  wait
+  $VTROOT/bin/mysqlctld \
+  --init_db_sql_file=$init_db_sql_file \
+  --logtostderr=true \
+  --tablet_uid=$uid \
+  &
 fi
 
 sleep $sleeptime
@@ -123,10 +127,11 @@ sleep $sleeptime
 
 # fi
 
-$VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo -root vitess/$CELL -server_address consul1:8500 $CELL || true
+$VTROOT/bin/vtctlclient -server vtctld:$GRPC_PORT AddCellInfo -root vitess/$CELL -server_address consul1:8500 $CELL || true
+$VTROOT/bin/vtctlclient -server vtctld:$GRPC_PORT CreateKeyspace $keyspace || true
+$VTROOT/bin/vtctlclient -server vtctld:$GRPC_PORT CreateShard $keyspace/$shard || true
+$VTROOT/bin/vtctlclient -server vtctld:$GRPC_PORT InitTablet -parent -shard $shard -keyspace $keyspace -grpc_port $grpc_port -port $web_port -allow_master_override $alias $tablet_role
 
-$VTROOT/bin/vtctl $TOPOLOGY_FLAGS CreateKeyspace $keyspace || true
-$VTROOT/bin/vtctl $TOPOLOGY_FLAGS CreateShard $keyspace/$shard || true
 
 #Populate external db conditional args
 if [ "$external" = "1" ]; then
