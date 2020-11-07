@@ -101,6 +101,7 @@ const (
 	colKeyNone ColumnKeyOption = iota
 	colKeyPrimary
 	colKeySpatialKey
+	colKeyFulltextKey
 	colKeyUnique
 	colKeyUniqueKey
 	colKey

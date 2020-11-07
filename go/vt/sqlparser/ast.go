@@ -474,11 +474,12 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Spatial bool
-	Unique  bool
+	Type     string
+	Name     ColIdent
+	Primary  bool
+	Spatial  bool
+	Fulltext bool
+	Unique   bool
 }
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
@@ -1327,6 +1328,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.KeyOpt == colKeySpatialKey {
 		opts = append(opts, keywordStrings[SPATIAL], keywordStrings[KEY])
+	}
+	if ct.KeyOpt == colKeyFulltextKey {
+		opts = append(opts, keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
 	if ct.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])

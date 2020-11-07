@@ -901,6 +901,9 @@ var (
 		input:  "alter table a add spatial key foo (column1)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add fulltext key foo (column1)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a",
 	}, {
@@ -985,6 +988,9 @@ var (
 		input:  "alter table a add spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add fulltext index idx (id)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add foreign key",
 		output: "alter table a",
 	}, {
@@ -1010,6 +1016,9 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a drop spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop fulltext index idx (id)",
 		output: "alter table a",
 	}, {
 		input:  "alter table a add check ch_1",
@@ -1154,6 +1163,9 @@ var (
 		output: "alter table b",
 	}, {
 		input:  "create spatial index a using foo on b",
+		output: "alter table b",
+	}, {
+		input:  "create fulltext index a using foo on b",
 		output: "alter table b",
 	}, {
 		input:  "create view a",
@@ -2381,6 +2393,7 @@ func TestCreateTable(t *testing.T) {
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
 			"	spatial key geom (geom),\n" +
+			"	fulltext key fts (full_name),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +
