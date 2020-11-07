@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 # limitations under the License.
 
 set -u
+export VTROOT=/vt
+export VTDATAROOT=/vt/vtdataroot
 
 keyspace=${KEYSPACE:-'test_keyspace'}
 shard=${SHARD:-'0'}
@@ -46,8 +48,13 @@ if (( $uid % 100 % 3 == 0 )) ; then
     tablet_type='rdonly'
 fi
 
+# Copy config directory
+cp -R /script/config $VTROOT
 init_db_sql_file="$VTROOT/config/init_db.sql"
+# Clear in-place edits of init_db_sql_file if any exist
+sed -i '/##\[CUSTOM_SQL/{:a;N;/END\]##/!ba};//d' $init_db_sql_file
 
+echo "##[CUSTOM_SQL_START]##" >> $init_db_sql_file
 # Create database on master
 if [ $tablet_role = "master" ]; then
     echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
@@ -67,6 +74,7 @@ if [ $tablet_role != "master" ]; then
         echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
     fi
 fi
+echo "##[CUSTOM_SQL_END]##" >> $init_db_sql_file
 
 mkdir -p $VTDATAROOT/backups
 
