@@ -122,6 +122,7 @@ type stateManager struct {
 
 	timebombDuration      time.Duration
 	unhealthyThreshold    time.Duration
+	shutdownGracePeriod   time.Duration
 	transitionGracePeriod time.Duration
 }
 
@@ -186,6 +187,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
 	sm.unhealthyThreshold = env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()
+	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
 }
 
@@ -420,6 +422,10 @@ func (sm *stateManager) serveMaster() error {
 
 	sm.rt.MakeMaster()
 	sm.tracker.Open()
+	// TODO(sougou): we don't kill queries in this case because we assume
+	// that most workloads don't use read-only transactions. If this becomes
+	// a common use case, we'll have to seperate out the transaction
+	// queries from oltpql and kill them here for a faster transition.
 	if err := sm.te.AcceptReadWrite(); err != nil {
 		return err
 	}
@@ -446,6 +452,11 @@ func (sm *stateManager) unserveMaster() error {
 }
 
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
+	// We are likely transitioning from master. We have to honor
+	// the shutdown grace period.
+	cancel := sm.handleShutdownGracePeriod()
+	defer cancel()
+
 	sm.ddle.Close()
 	sm.tableGC.Close()
 	sm.throttler.Close()
@@ -496,15 +507,33 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	cancel := sm.handleShutdownGracePeriod()
+	defer cancel()
+
 	sm.ddle.Close()
 	sm.tableGC.Close()
 	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
-	log.Info("Killing all OLAP queries")
+	log.Info("Killing all OLAP queries.")
 	sm.olapql.TerminateAll()
 	sm.tracker.Close()
 	sm.requests.Wait()
+}
+
+func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
+	if sm.shutdownGracePeriod == 0 {
+		return func() {}
+	}
+	ctx, cancel := context.WithCancel(context.TODO())
+	go func() {
+		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
+			return
+		}
+		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
+		sm.oltpql.TerminateAll()
+	}()
+	return cancel
 }
 
 func (sm *stateManager) closeAll() {

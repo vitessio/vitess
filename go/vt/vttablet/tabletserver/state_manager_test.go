@@ -359,6 +359,78 @@ func TestStateManagerNotConnectedType(t *testing.T) {
 	assert.Equal(t, StateNotConnected, sm.state)
 }
 
+type delayedTxEngine struct {
+}
+
+func (te *delayedTxEngine) AcceptReadWrite() error {
+	return nil
+}
+
+func (te *delayedTxEngine) AcceptReadOnly() error {
+	time.Sleep(50 * time.Millisecond)
+	return nil
+}
+
+func (te *delayedTxEngine) Close() {
+	time.Sleep(50 * time.Millisecond)
+}
+
+type killableConn struct {
+	id     int64
+	killed bool
+}
+
+func (k *killableConn) Current() string {
+	return ""
+}
+
+func (k *killableConn) ID() int64 {
+	return k.id
+}
+
+func (k *killableConn) Kill(message string, elapsed time.Duration) error {
+	k.killed = true
+	return nil
+}
+
+func TestStateManagerShutdownGracePeriod(t *testing.T) {
+	sm := newTestStateManager(t)
+	defer sm.StopService()
+
+	sm.te = &delayedTxEngine{}
+	kconn := &killableConn{id: 1}
+	sm.oltpql.Add(&QueryDetail{
+		conn:   kconn,
+		connID: kconn.id,
+	})
+
+	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	require.NoError(t, err)
+	assert.False(t, kconn.killed)
+
+	// Transition to replica with no shutdown grace period should not kill the conn.
+	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	require.NoError(t, err)
+	assert.False(t, kconn.killed)
+
+	// Transition to replica with a short shutdown grace period should kill the conn.
+	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	require.NoError(t, err)
+	sm.shutdownGracePeriod = 10 * time.Millisecond
+	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
+	require.NoError(t, err)
+	assert.True(t, kconn.killed)
+
+	// Master non-serving should also kill the conn.
+	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
+	require.NoError(t, err)
+	sm.shutdownGracePeriod = 10 * time.Millisecond
+	kconn.killed = false
+	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
+	require.NoError(t, err)
+	assert.True(t, kconn.killed)
+}
+
 func TestStateManagerCheckMySQL(t *testing.T) {
 	defer func(saved time.Duration) { transitionRetryInterval = saved }(transitionRetryInterval)
 	transitionRetryInterval = 10 * time.Millisecond
