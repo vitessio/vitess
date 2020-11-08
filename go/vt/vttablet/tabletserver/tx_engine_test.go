@@ -51,13 +51,13 @@ func TestTxEngineClose(t *testing.T) {
 	te := NewTxEngine(tabletenv.NewEnv(config, "TabletServerTest"))
 
 	// Normal close.
-	te.open()
+	te.AcceptReadWrite()
 	start := time.Now()
-	te.shutdown(false)
+	te.Close()
 	assert.Greater(t, int64(50*time.Millisecond), int64(time.Since(start)))
 
 	// Normal close with timeout wait.
-	te.open()
+	te.AcceptReadWrite()
 	c, beginSQL, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
@@ -67,36 +67,36 @@ func TestTxEngineClose(t *testing.T) {
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
 	start = time.Now()
-	te.shutdown(false)
+	te.Close()
 	assert.Less(t, int64(50*time.Millisecond), int64(time.Since(start)))
 	assert.EqualValues(t, 2, te.txPool.env.Stats().KillCounters.Counts()["Transactions"])
 	te.txPool.env.Stats().KillCounters.ResetAll()
 
 	// Immediate close.
-	te.open()
+	te.AcceptReadOnly()
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.Unlock()
 	start = time.Now()
-	te.shutdown(true)
+	te.Close()
 	assert.Greater(t, int64(50*time.Millisecond), int64(time.Since(start)))
 
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 25 * time.Millisecond
-	te.open()
+	te.AcceptReadWrite()
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
-	te.shutdown(false)
+	te.Close()
 	assert.Less(t, int64(1*time.Millisecond), int64(time.Since(start)))
 	assert.Greater(t, int64(50*time.Millisecond), int64(time.Since(start)))
 
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 25 * time.Millisecond
-	te.open()
+	te.AcceptReadWrite()
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	c.Unlock()
@@ -107,12 +107,12 @@ func TestTxEngineClose(t *testing.T) {
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
-	te.shutdown(false)
+	te.Close()
 	assert.Less(t, int64(10*time.Millisecond), int64(time.Since(start)))
 	assert.Greater(t, int64(25*time.Millisecond), int64(time.Since(start)))
 
 	// Immediate close, but connection is in use.
-	te.open()
+	te.AcceptReadOnly()
 	c, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	go func() {
@@ -120,7 +120,7 @@ func TestTxEngineClose(t *testing.T) {
 		te.txPool.RollbackAndRelease(ctx, c)
 	}()
 	start = time.Now()
-	te.shutdown(true)
+	te.Close()
 	if diff := time.Since(start); diff > 250*time.Millisecond {
 		t.Errorf("Close time: %v, must be under 0.25s", diff)
 	}
@@ -130,14 +130,14 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with Reserved connection timeout wait.
 	te.shutdownGracePeriod = 0 * time.Millisecond
-	te.open()
+	te.AcceptReadWrite()
 	te.AcceptReadWrite()
 	_, err = te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, nil)
 	require.NoError(t, err)
 	_, err = te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
 	start = time.Now()
-	te.shutdown(false)
+	te.Close()
 	assert.Less(t, int64(50*time.Millisecond), int64(time.Since(start)))
 	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["Transactions"])
 	assert.EqualValues(t, 2, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
@@ -245,17 +245,14 @@ func (test TestCase) String() string {
 	return sb.String()
 }
 
-func changeState(te *TxEngine, state txEngineState) error {
+func changeState(te *TxEngine, state txEngineState) {
 	switch state {
 	case AcceptingReadAndWrite:
-		return te.AcceptReadWrite()
+		te.AcceptReadWrite()
 	case AcceptingReadOnly:
-		return te.AcceptReadOnly()
+		te.AcceptReadOnly()
 	case NotServing:
 		te.Close()
-		return nil
-	default:
-		return fmt.Errorf("don't know how to do that: %v", state)
 	}
 }
 
@@ -465,8 +462,7 @@ func TestWithInnerTests(outerT *testing.T) {
 			defer db.Close()
 			te := setupTxEngine(db)
 
-			require.NoError(t,
-				changeState(te, test.startState))
+			changeState(te, test.startState)
 
 			switch test.tx {
 			case NoTx:
@@ -493,8 +489,7 @@ func TestWithInnerTests(outerT *testing.T) {
 				go func(s txEngineState) {
 					defer wg.Done()
 
-					require.NoError(t,
-						changeState(te, s))
+					changeState(te, s)
 				}(newState)
 
 				// We give the state changes a chance to get started
