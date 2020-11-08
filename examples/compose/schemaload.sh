@@ -43,12 +43,6 @@ if [ ! -f schema_run ]; then
   
   echo "List All Tablets"
   vtctlclient -server vtctld:$GRPC_PORT ListAllTablets
-  echo "Get Master Tablets"
-  master_tablets=$(vtctlclient -server vtctld:$GRPC_PORT ListAllTablets | awk '$4 == "master" { print $1 }')
-  for master_tablet in $master_tablets; do
-    echo "Setting ReadWrite on master tablet ${master_tablet}"
-    vtctlclient -server vtctld:$GRPC_PORT SetReadWrite ${master_tablet}
-  done
     
   if [ -n "$load_file" ]; then
     # vtgate can take a REALLY long time to come up fully
