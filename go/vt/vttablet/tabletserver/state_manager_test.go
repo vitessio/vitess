@@ -362,13 +362,11 @@ func TestStateManagerNotConnectedType(t *testing.T) {
 type delayedTxEngine struct {
 }
 
-func (te *delayedTxEngine) AcceptReadWrite() error {
-	return nil
+func (te *delayedTxEngine) AcceptReadWrite() {
 }
 
-func (te *delayedTxEngine) AcceptReadOnly() error {
+func (te *delayedTxEngine) AcceptReadOnly() {
 	time.Sleep(50 * time.Millisecond)
-	return nil
 }
 
 func (te *delayedTxEngine) Close() {
@@ -812,16 +810,14 @@ type testTxEngine struct {
 	testOrderState
 }
 
-func (te *testTxEngine) AcceptReadWrite() error {
+func (te *testTxEngine) AcceptReadWrite() {
 	te.order = order.Add(1)
 	te.state = testStateMaster
-	return nil
 }
 
-func (te *testTxEngine) AcceptReadOnly() error {
+func (te *testTxEngine) AcceptReadOnly() {
 	te.order = order.Add(1)
 	te.state = testStateNonMaster
-	return nil
 }
 
 func (te *testTxEngine) Close() {

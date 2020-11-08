@@ -148,8 +148,8 @@ type (
 	}
 
 	txEngine interface {
-		AcceptReadWrite() error
-		AcceptReadOnly() error
+		AcceptReadWrite()
+		AcceptReadOnly()
 		Close()
 	}
 
@@ -426,9 +426,7 @@ func (sm *stateManager) serveMaster() error {
 	// that most workloads don't use read-only transactions. If this becomes
 	// a common use case, we'll have to seperate out the transaction
 	// queries from oltpql and kill them here for a faster transition.
-	if err := sm.te.AcceptReadWrite(); err != nil {
-		return err
-	}
+	sm.te.AcceptReadWrite()
 	sm.messager.Open()
 	sm.throttler.Open()
 	sm.tableGC.Open()
@@ -468,9 +466,7 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 		return err
 	}
 
-	if err := sm.te.AcceptReadOnly(); err != nil {
-		return err
-	}
+	sm.te.AcceptReadOnly()
 	sm.rt.MakeNonMaster()
 	sm.watcher.Open()
 	sm.setState(wantTabletType, StateServing)
