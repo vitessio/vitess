@@ -33,10 +33,7 @@ tablet_hostname=''
 
 # Use IPs to simplify connections when testing in docker.
 # Otherwise, blank hostname means the tablet auto-detects FQDN.
-if [ $external = 1 ]; then
-  vthost=`hostname -i`
-fi
-
+vthost=`hostname -i`
 printf -v alias '%s-%010d' $CELL $uid
 printf -v tablet_dir 'vt_%010d' $uid
 
