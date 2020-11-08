@@ -60,43 +60,25 @@ init_db_sql_file="$VTROOT/config/init_db.sql"
 sed -i '/##\[CUSTOM_SQL/{:a;N;/END\]##/!ba};//d' $init_db_sql_file
 
 echo "##[CUSTOM_SQL_START]##" >> $init_db_sql_file
-# Create database on master
-if [ $tablet_role = "master" ]; then
-    echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
+
+if [ "$external" = "1" ]; then
+  # We need a common user for the unmanaged and managed tablets else tools like orchestrator will not function correctly
+  echo "Creating matching user for managed tablets..."
+  echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
+  echo "GRANT ALL ON *.* TO '$DB_USER'@'%';FLUSH PRIVILEGES;" >> $init_db_sql_file
 fi
-# Create database on replicas
-if [ $tablet_role != "master" ]; then
-    echo "Add create database statement for replicas tablet:  $uid..."
-    if [ "$external" = "1" ]; then
-        # Add master character set and collation to avoid replication errors
-        # Example:CREATE DATABASE IF NOT EXISTS $keyspace CHARACTER SET latin1 COLLATE latin1_swedish_ci
-        echo "CREATE DATABASE IF NOT EXISTS $db_name $db_charset;" >> $init_db_sql_file
-        echo "Creating matching user for replicas..."
-        echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
-        echo "GRANT ALL ON *.* TO '$DB_USER'@'%';FLUSH PRIVILEGES;" >> $init_db_sql_file
-        # Prevent replication failures in case external db server has multiple databases which have not been created here
-    else
-        echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
-    fi
-fi
+
 echo "##[CUSTOM_SQL_END]##" >> $init_db_sql_file
 
 mkdir -p $VTDATAROOT/backups
 
-echo "Starting MySQL for tablet..."
-action="init -init_db_sql_file $init_db_sql_file"
-if [ -d $VTDATAROOT/$tablet_dir ]; then
-  echo "Resuming from existing vttablet dir:"
-  echo "    $VTDATAROOT/$tablet_dir"
-  action='start'
-fi
 
 export KEYSPACE=$keyspace
 export SHARD=$shard
 export TABLET_ID=$alias
 export TABLET_DIR=$tablet_dir
 export MYSQL_PORT=3306
-export TABLET_TYPE=$tablet_role
+export TABLET_ROLE=$tablet_role
 export DB_PORT=${DB_PORT:-3306}
 export DB_HOST=${DB_HOST:-""}
 export DB_NAME=$db_name
