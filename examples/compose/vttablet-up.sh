@@ -147,19 +147,15 @@ exec $VTROOT/bin/vttablet \
   -tablet-path $alias \
   -tablet_hostname "$vthost" \
   -health_check_interval 5s \
-  -enable_semi_sync \
-  -enable_replication_reporter \
-  -heartbeat_enable \
-  -heartbeat_interval 250ms \
+  -enable_semi_sync=false \
+  -disable_active_reparents=true \
   -port $web_port \
   -grpc_port $grpc_port \
   -binlog_use_v3_resharding_mode=true \
   -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
-  -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
   -vtctld_addr "http://vtctld:$WEB_PORT/" \
   -init_keyspace $keyspace \
   -init_shard $shard \
-  -init_tablet_type $tablet_type \
   -backup_storage_implementation file \
   -file_backup_storage_root $VTDATAROOT/backups \
   -queryserver-config-schema-reload-time 60 \
