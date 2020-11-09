@@ -330,9 +330,13 @@ func TestWorkflowListAll(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	workflows, err := wr.ListAllWorkflows(ctx, keyspace)
+	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
 	require.Nil(t, err)
 	require.Equal(t, []string{workflow}, workflows)
+
+	workflows, err = wr.ListAllWorkflows(ctx, keyspace, false)
+	require.Nil(t, err)
+	require.Equal(t, []string{workflow, "wrWorkflow2"}, workflows)
 }
 
 func TestVExecValidations(t *testing.T) {
