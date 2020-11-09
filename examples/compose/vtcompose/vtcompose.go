@@ -473,7 +473,7 @@ func applyDefaultDockerPatches(
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork(opts))
-       dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(opts))
+       dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
        dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
 	return dockerComposeFile
 }
@@ -765,7 +765,11 @@ func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
 `, opts.topologyFlags, externalDb, dbInfo.dbUser, dbInfo.dbPass)
 }
 
-func generateVreplication(opts vtOptions) string {
+func generateVreplication(dbInfo externalDbInfo, opts vtOptions) string {
+  externalDb := "0"
+	if dbInfo.dbName != "" {
+		externalDb = "1"
+	}
 	return fmt.Sprintf(`
 - op: add
   path: /services/vreplication
@@ -775,10 +779,11 @@ func generateVreplication(opts vtOptions) string {
       - ".:/script"
     environment:
       - TOPOLOGY_FLAGS=%[1]s
+      - EXTERNAL_DB=%[2]s
     command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0"]
     depends_on:
       - vtctld
-`, opts.topologyFlags)
+`, opts.topologyFlags, externalDb)
 }
 
 func generateSchemaload(
