@@ -664,8 +664,8 @@ func newTestStateManager(t *testing.T) *stateManager {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, "StateManagerTest")
 	sm := &stateManager{
-		oltpql:      NewQueryList(),
-		olapql:      NewQueryList(),
+		oltpql:      NewQueryList("oltp"),
+		olapql:      NewQueryList("olap"),
 		hs:          newHealthStreamer(env, topodatapb.TabletAlias{}),
 		se:          &testSchemaEngine{},
 		rt:          &testReplTracker{lag: 1 * time.Second},

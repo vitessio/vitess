@@ -31,6 +31,7 @@ import (
 var (
 	livequeryzHeader = []byte(`<thead>
 		<tr>
+			<th>Type</th>
 			<th>Query</th>
 			<th>Context</th>
 			<th>Duration</th>
@@ -42,22 +43,26 @@ var (
 	`)
 	livequeryzTmpl = template.Must(template.New("example").Parse(`
 		<tr>
+			<td>{{.Type}}</td>
 			<td>{{.Query}}</td>
 			<td>{{.ContextHTML}}</td>
 			<td>{{.Duration}}</td>
 			<td>{{.Start}}</td>
 			<td>{{.ConnID}}</td>
-			<td><a href='terminate?connID={{.ConnID}}'>Terminate</a></td>
+			<td><a href='/livequeryz/terminate?connID={{.ConnID}}'>Terminate</a></td>
 		</tr>
 	`))
 )
 
-func livequeryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
+func livequeryzHandler(queryLists []*QueryList, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
 	}
-	rows := queryList.GetQueryzRows()
+	var rows []QueryDetailzRow
+	for _, ql := range queryLists {
+		rows = ql.AppendQueryzRows(rows)
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, fmt.Sprintf("cannot parse form: %s", err), http.StatusInternalServerError)
 		return
@@ -83,7 +88,7 @@ func livequeryzHandler(queryList *QueryList, w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func livequeryzTerminateHandler(queryList *QueryList, w http.ResponseWriter, r *http.Request) {
+func livequeryzTerminateHandler(queryLists []*QueryList, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 		acl.SendError(w, err)
 		return
@@ -98,9 +103,10 @@ func livequeryzTerminateHandler(queryList *QueryList, w http.ResponseWriter, r *
 		http.Error(w, "invalid connID", http.StatusInternalServerError)
 		return
 	}
-	if err = queryList.Terminate(int64(c)); err != nil {
-		http.Error(w, fmt.Sprintf("error: %v", err), http.StatusInternalServerError)
-		return
+	for _, ql := range queryLists {
+		if ql.Terminate(int64(c)) {
+			break
+		}
 	}
-	livequeryzHandler(queryList, w, r)
+	livequeryzHandler(queryLists, w, r)
 }

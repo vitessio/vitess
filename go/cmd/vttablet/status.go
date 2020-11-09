@@ -75,8 +75,7 @@ var (
     <td width="25%" border="">
       <a href="/healthz">Health Check</a></br>
       <a href="/debug/health">Query Service Health Check</a></br>
-      <a href="/oltpqueryz/">Real-time OLTP Queries</a></br>
-      <a href="/olapqueryz/">Real-time OLAP Queries</a></br>
+      <a href="/livequeryz/">Real-time Queries</a></br>
       <a href="/debug/status_details">JSON Status Details</a></br>
     </td>
   </tr>

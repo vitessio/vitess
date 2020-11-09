@@ -25,6 +25,7 @@ import (
 
 // OLAPQuery contains the streaming query info.
 type OLAPQuery struct {
+	Type              string
 	Query             string
 	ContextHTML       string
 	Start             time.Time
@@ -34,11 +35,11 @@ type OLAPQuery struct {
 	ShowTerminateLink bool
 }
 
-// OLAPQueryz returns the contents of /olapqueryz?format=json.
+// OLAPQueryz returns the contents of /livequeryz?format=json.
 // as a []OLAPQuery. The function returns an empty list on error.
 func OLAPQueryz() []OLAPQuery {
 	var out []OLAPQuery
-	response, err := http.Get(fmt.Sprintf("%s/olapqueryz?format=json", ServerAddress))
+	response, err := http.Get(fmt.Sprintf("%s/livequeryz?format=json", ServerAddress))
 	if err != nil {
 		return out
 	}
@@ -49,7 +50,7 @@ func OLAPQueryz() []OLAPQuery {
 
 // StreamTerminate terminates the specified streaming query.
 func StreamTerminate(connID int) error {
-	response, err := http.Get(fmt.Sprintf("%s/olapqueryz/terminate?format=json&connID=%d", ServerAddress, connID))
+	response, err := http.Get(fmt.Sprintf("%s/livequeryz/terminate?format=json&connID=%d", ServerAddress, connID))
 	if err != nil {
 		return err
 	}
