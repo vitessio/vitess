@@ -560,6 +560,10 @@ func generateExternalmaster(
   path: /services/vttablet%[1]d
   value:
     image: vitess/lite
+    ports:
+      - "15%[1]d:%[3]d"
+      - "%[4]d"
+      - "3306"
     volumes:
       - ".:/script"
     environment:
@@ -720,7 +724,7 @@ func generateVtwork(opts vtOptions) string {
   value:
     image: vitess/lite
     ports:
-      - "15100:%[1]d"
+      - "%[1]d"
       - "%[2]d"
     command: ["sh", "-c", "/vt/bin/vtworker \
         %[3]s \
