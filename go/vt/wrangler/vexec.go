@@ -286,7 +286,7 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		err = dumpStreamListAsJSON(replStatus, wr)
 		return nil, err
 	} else if action == "listall" {
-		workflows, err := wr.ListAllWorkflows(ctx, keyspace)
+		workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
 		if err != nil {
 			return nil, err
 		}
@@ -502,9 +502,18 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	return &rsr, nil
 }
 
-// ListAllWorkflows will return a list of all active workflows for the given keyspace.
-func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string) ([]string, error) {
-	query := "select distinct workflow from _vt.vreplication where state <> 'Stopped'"
+// ListActiveWorkflows will return a list of all active workflows for the given keyspace.
+func (wr *Wrangler) ListActiveWorkflows(ctx context.Context, keyspace string) ([]string, error) {
+	return wr.ListAllWorkflows(ctx, keyspace, true)
+}
+
+// ListAllWorkflows will return a list of all workflows (Running and Stopped) for the given keyspace.
+func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, active bool) ([]string, error) {
+	where := ""
+	if active {
+		where = " where state <> 'Stopped'"
+	}
+	query := "select distinct workflow from _vt.vreplication" + where
 	results, err := wr.runVexec(ctx, "", keyspace, query, false)
 	if err != nil {
 		return nil, err

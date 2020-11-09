@@ -166,6 +166,13 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		env.tmc.setVRResults(master.tablet, "select distinct workflow from _vt.vreplication where state != 'Stopped' and db_name = 'vt_target'", result)
 
 		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"workflow",
+			"varchar"),
+			"wrWorkflow", "wrWorkflow2",
+		)
+		env.tmc.setVRResults(master.tablet, "select distinct workflow from _vt.vreplication where db_name = 'vt_target'", result)
+
+		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"table|lastpk",
 			"varchar|varchar"),
 			"t1|pk1",
