@@ -23,7 +23,7 @@ shard=${SHARD:-'0'}
 grpc_port=${GRPC_PORT:-'15999'}
 web_port=${WEB_PORT:-'8080'}
 role=${ROLE:-'replica'}
-vthost=${VTHOST:-''}
+vthost=${VTHOST:-`hostname -i`}
 sleeptime=${SLEEPTIME:-'0'}
 uid=$1
 external=${EXTERNAL_DB:-0}
@@ -33,7 +33,8 @@ tablet_hostname=''
 
 # Use IPs to simplify connections when testing in docker.
 # Otherwise, blank hostname means the tablet auto-detects FQDN.
-[ $vthost = '' ] && vthost=`hostname -i`
+# This is now set further up
+
 printf -v alias '%s-%010d' $CELL $uid
 printf -v tablet_dir 'vt_%010d' $uid
 
