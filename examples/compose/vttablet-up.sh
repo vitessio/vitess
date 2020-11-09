@@ -27,6 +27,9 @@ vthost=${VTHOST:-`hostname -i`}
 sleeptime=${SLEEPTIME:-'0'}
 uid=$1
 external=${EXTERNAL_DB:-0}
+
+# If DB is not explicitly set, we default to behaviour of prefixing with vt_
+# If there is an external db, the db_nmae will always match the keyspace name
 [ $external = 0 ] && db_name=${DB:-"vt_$keyspace"} ||  db_name=${DB:-"$keyspace"}
 db_charset=${DB_CHARSET:-''}
 tablet_hostname=''
