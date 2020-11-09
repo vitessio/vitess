@@ -141,7 +141,8 @@ func unionRouteMerge(left, right builder, us *sqlparser.UnionSelect) error {
 	if !ok {
 		return errors.New("unsupported: SELECT of UNION is non-trivial")
 	}
-	if !lroute.MergeUnion(rroute) {
+	mergeSuccess := lroute.MergeUnion(rroute, us.Type != sqlparser.UnionAll)
+	if !mergeSuccess {
 		return errors.New("unsupported: UNION cannot be executed as a single route")
 	}
 

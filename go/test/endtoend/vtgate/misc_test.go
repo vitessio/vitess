@@ -104,6 +104,10 @@ func TestUnionAll(t *testing.T) {
 		"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
 
 	// union all between two different tables
+	result := exec(t, conn, "(select id1,id2 from t1) union all (select id3,id4 from t2)")
+	assert.Equal(t, 4, len(result.Rows))
+
+	// union all between two different tables
 	assertMatches(t, conn, "select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
 		"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
 
