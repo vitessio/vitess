@@ -279,12 +279,9 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 	// first query to 80- shard should pass
 	assertMatches(t, conn, "select id, val1 from test where id = 4", "[[INT64(4) NULL]]")
 
-	// first query to -80 shard will fail, but vtgate should retry once and succeed the second time
+	// first query to -80 shard will fail, but vtgate will auto-retry for us
 	checkedExec(t, conn, "insert into test (id, val1) values (2, null)")
-
-	// subsequent queries on -80 will pass
-	assertMatches(t, conn, "select id from test where id = 2", "[]")
-	assertMatches(t, conn, "insert into test (id, val1) values (2, null)", "[]")
+	assertMatches(t, conn, "select id from test where id = 2", "[[INT64(2)]]")
 	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 2", "[[INT64(2) INT64(1)]]")
 }
 
