@@ -107,13 +107,12 @@ func TestUnionCanMerge(t *testing.T) {
 		{false, false, false, false, false, false, false, false, false},
 		{false, false, false, false, false, false, false, false, false},
 		{false, false, false, false, false, false, false, false, false},
-		{false, false, false, false, false, false, false, false, false},
+		{false, false, false, false, true, false, false, false, false},
 		{false, false, false, false, false, false, false, false, false},
 		{false, false, false, false, false, false, true, false, false},
 		{false, false, false, false, false, false, false, true, false},
 		{false, false, false, false, false, false, false, false, false},
 	}
-
 	ks := &vindexes.Keyspace{}
 	lRoute := &route{}
 	rRoute := &route{}
@@ -121,7 +120,7 @@ func TestUnionCanMerge(t *testing.T) {
 		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
 			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
-			assert.Equal(t, val, lRoute.unionCanMerge(rRoute, false), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
+			assert.Equal(t, val, lRoute.unionCanMerge(rRoute, false), fmt.Sprintf("can't create a single route from these two inputs %v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}
 }
