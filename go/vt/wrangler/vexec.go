@@ -278,6 +278,7 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 
 // WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+
 	if action == "show" {
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
 		if err != nil {
@@ -464,6 +465,9 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	for master, result := range results {
 		var rsrStatus []*ReplicationStatus
 		qr := sqltypes.Proto3ToResult(result)
+		if len(qr.Rows) == 0 {
+			continue
+		}
 		for _, row := range qr.Rows {
 			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, master)
 			if err != nil {
