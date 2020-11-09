@@ -224,7 +224,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					if shouldRetry {
 						// we seem to have lost our connection. if it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
-						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
+						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
 					}
 					if err != nil {
 						return nil, err
