@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"fmt"
 	"html/template"
 	"sort"
 	"sync"
@@ -50,13 +49,18 @@ func NewQueryDetail(ctx context.Context, conn killable) *QueryDetail {
 
 // QueryList holds a thread safe list of QueryDetails
 type QueryList struct {
+	name string
+
 	mu           sync.Mutex
 	queryDetails map[int64]*QueryDetail
 }
 
 // NewQueryList creates a new QueryList
-func NewQueryList() *QueryList {
-	return &QueryList{queryDetails: make(map[int64]*QueryDetail)}
+func NewQueryList(name string) *QueryList {
+	return &QueryList{
+		name:         name,
+		queryDetails: make(map[int64]*QueryDetail),
+	}
 }
 
 // Add adds a QueryDetail to QueryList
@@ -74,15 +78,15 @@ func (ql *QueryList) Remove(qd *QueryDetail) {
 }
 
 // Terminate updates the query status and kills the connection
-func (ql *QueryList) Terminate(connID int64) error {
+func (ql *QueryList) Terminate(connID int64) bool {
 	ql.mu.Lock()
 	defer ql.mu.Unlock()
 	qd := ql.queryDetails[connID]
 	if qd == nil {
-		return fmt.Errorf("query %v not found; %+v", connID, ql)
+		return false
 	}
 	qd.conn.Kill("QueryList.Terminate()", time.Since(qd.start))
-	return nil
+	return true
 }
 
 // TerminateAll terminates all queries and kills the MySQL connections
@@ -96,6 +100,7 @@ func (ql *QueryList) TerminateAll() {
 
 // QueryDetailzRow is used for rendering QueryDetail in a template
 type QueryDetailzRow struct {
+	Type              string
 	Query             string
 	ContextHTML       template.HTML
 	Start             time.Time
@@ -111,16 +116,16 @@ func (a byStartTime) Len() int           { return len(a) }
 func (a byStartTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byStartTime) Less(i, j int) bool { return a[i].Start.Before(a[j].Start) }
 
-// GetQueryzRows returns a list of QueryDetailzRow sorted by start time
-func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
+// AppendQueryzRows returns a list of QueryDetailzRow sorted by start time
+func (ql *QueryList) AppendQueryzRows(rows []QueryDetailzRow) []QueryDetailzRow {
 	ql.mu.Lock()
-	rows := []QueryDetailzRow{}
 	for _, qd := range ql.queryDetails {
 		query := qd.conn.Current()
 		if *streamlog.RedactDebugUIQueries {
 			query, _ = sqlparser.RedactSQLQuery(query)
 		}
 		row := QueryDetailzRow{
+			Type:        ql.name,
 			Query:       query,
 			ContextHTML: callinfo.HTMLFromContext(qd.ctx),
 			Start:       qd.start,

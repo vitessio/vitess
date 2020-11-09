@@ -153,8 +153,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
-	tsv.oltpql = NewQueryList()
-	tsv.olapql = NewQueryList()
+	tsv.oltpql = NewQueryList("oltp")
+	tsv.olapql = NewQueryList("olap")
 	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
@@ -207,8 +207,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
-	tsv.registerStreamQueryzHandlers()
-	tsv.registerQueryListHandlers()
+	tsv.registerQueryListHandlers([]*QueryList{tsv.oltpql, tsv.olapql})
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
@@ -1511,21 +1510,12 @@ func (tsv *TabletServer) registerQueryzHandler() {
 	})
 }
 
-func (tsv *TabletServer) registerStreamQueryzHandlers() {
-	tsv.exporter.HandleFunc("/olapqueryz/", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzHandler(tsv.olapql, w, r)
+func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
+	tsv.exporter.HandleFunc("/livequeryz/", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzHandler(queryLists, w, r)
 	})
-	tsv.exporter.HandleFunc("/olapqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzTerminateHandler(tsv.olapql, w, r)
-	})
-}
-
-func (tsv *TabletServer) registerQueryListHandlers() {
-	tsv.exporter.HandleFunc("/oltpqueryz/", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzHandler(tsv.oltpql, w, r)
-	})
-	tsv.exporter.HandleFunc("/oltpqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		livequeryzTerminateHandler(tsv.oltpql, w, r)
+	tsv.exporter.HandleFunc("/livequeryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzTerminateHandler(queryLists, w, r)
 	})
 }
 
