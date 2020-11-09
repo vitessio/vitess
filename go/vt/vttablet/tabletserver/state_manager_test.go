@@ -396,37 +396,49 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	defer sm.StopService()
 
 	sm.te = &delayedTxEngine{}
-	kconn := &killableConn{id: 1}
-	sm.oltpql.Add(&QueryDetail{
-		conn:   kconn,
-		connID: kconn.id,
+	kconn1 := &killableConn{id: 1}
+	sm.statelessql.Add(&QueryDetail{
+		conn:   kconn1,
+		connID: kconn1.id,
+	})
+	kconn2 := &killableConn{id: 2}
+	sm.statefulql.Add(&QueryDetail{
+		conn:   kconn2,
+		connID: kconn2.id,
 	})
 
+	// Transition to replica with no shutdown grace period should kill kconn2 but not kconn1.
 	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.False(t, kconn.killed)
+	assert.False(t, kconn1.killed)
+	assert.True(t, kconn2.killed)
 
-	// Transition to replica with no shutdown grace period should not kill the conn.
+	// Transition without grace period. No conns should be killed.
+	kconn2.killed = false
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.False(t, kconn.killed)
+	assert.False(t, kconn1.killed)
+	assert.False(t, kconn2.killed)
 
-	// Transition to replica with a short shutdown grace period should kill the conn.
+	// Transition to master with a short shutdown grace period should kill both conns.
 	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, kconn.killed)
+	assert.True(t, kconn1.killed)
+	assert.True(t, kconn2.killed)
 
 	// Master non-serving should also kill the conn.
 	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
-	kconn.killed = false
+	kconn1.killed = false
+	kconn2.killed = false
 	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
 	require.NoError(t, err)
-	assert.True(t, kconn.killed)
+	assert.True(t, kconn1.killed)
+	assert.True(t, kconn2.killed)
 }
 
 func TestStateManagerCheckMySQL(t *testing.T) {
@@ -664,7 +676,8 @@ func newTestStateManager(t *testing.T) *stateManager {
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, "StateManagerTest")
 	sm := &stateManager{
-		oltpql:      NewQueryList("oltp"),
+		statelessql: NewQueryList("stateless"),
+		statefulql:  NewQueryList("stateful"),
 		olapql:      NewQueryList("olap"),
 		hs:          newHealthStreamer(env, topodatapb.TabletAlias{}),
 		se:          &testSchemaEngine{},

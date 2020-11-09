@@ -93,8 +93,9 @@ type stateManager struct {
 	requests sync.WaitGroup
 
 	// QueryList does not have an Open or Close.
-	oltpql *QueryList
-	olapql *QueryList
+	statelessql *QueryList
+	statefulql  *QueryList
+	olapql      *QueryList
 
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
@@ -422,10 +423,10 @@ func (sm *stateManager) serveMaster() error {
 
 	sm.rt.MakeMaster()
 	sm.tracker.Open()
-	// TODO(sougou): we don't kill queries in this case because we assume
-	// that most workloads don't use read-only transactions. If this becomes
-	// a common use case, we'll have to seperate out the transaction
-	// queries from oltpql and kill them here for a faster transition.
+	// We instantly kill all stateful queries to allow for
+	// te to quickly transition into RW, but olap and stateless
+	// queries can continue serving.
+	sm.statefulql.TerminateAll()
 	sm.te.AcceptReadWrite()
 	sm.messager.Open()
 	sm.throttler.Open()
@@ -527,7 +528,8 @@ func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
 			return
 		}
 		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
-		sm.oltpql.TerminateAll()
+		sm.statelessql.TerminateAll()
+		sm.statefulql.TerminateAll()
 	}()
 	return cancel
 }

@@ -96,7 +96,8 @@ type TabletServer struct {
 	topoServer             *topo.Server
 
 	// These are sub-components of TabletServer.
-	oltpql       *QueryList
+	statelessql  *QueryList
+	statefulql   *QueryList
 	olapql       *QueryList
 	se           *schema.Engine
 	rt           *repltracker.ReplTracker
@@ -153,7 +154,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
-	tsv.oltpql = NewQueryList("oltp")
+	tsv.statelessql = NewQueryList("oltp-stateless")
+	tsv.statefulql = NewQueryList("oltp-stateful")
 	tsv.olapql = NewQueryList("olap")
 	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
@@ -177,7 +179,8 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
-		oltpql:      tsv.oltpql,
+		statelessql: tsv.statelessql,
+		statefulql:  tsv.statefulql,
 		olapql:      tsv.olapql,
 		hs:          tsv.hs,
 		se:          tsv.se,
@@ -207,7 +210,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
-	tsv.registerQueryListHandlers([]*QueryList{tsv.oltpql, tsv.olapql})
+	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
