@@ -180,9 +180,10 @@ func TestWorkflowListStreams(t *testing.T) {
 	wr := New(logger, env.topoServ, env.tmc)
 
 	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
-	require.Nil(t, err)
+	require.NoError(t, err)
+
 	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	want := `Workflows: wrWorkflow
 {
 	"Workflow": "wrWorkflow",
