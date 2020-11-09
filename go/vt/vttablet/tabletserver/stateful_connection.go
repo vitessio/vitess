@@ -53,7 +53,7 @@ type StatefulConnection struct {
 	enforceTimeout bool
 }
 
-//Properties contains meta information about the connection
+// Properties contains meta information about the connection
 type Properties struct {
 	EffectiveCaller *vtrpcpb.CallerID
 	ImmediateCaller *querypb.VTGateCallerID
@@ -68,12 +68,12 @@ func (sc *StatefulConnection) Close() {
 	}
 }
 
-//IsClosed returns true when the connection is still operational
+// IsClosed returns true when the connection is still operational
 func (sc *StatefulConnection) IsClosed() bool {
 	return sc.dbConn == nil || sc.dbConn.IsClosed()
 }
 
-//IsInTransaction returns true when the connection has tx state
+// IsInTransaction returns true when the connection has tx state
 func (sc *StatefulConnection) IsInTransaction() bool {
 	return sc.txProps != nil
 }
@@ -134,18 +134,18 @@ func (sc *StatefulConnection) unlock(updateTime bool) {
 	if sc.dbConn.IsClosed() {
 		sc.Releasef("unlocked closed connection")
 	} else {
-		sc.pool.markAsNotInUse(sc.ConnID, updateTime)
+		sc.pool.markAsNotInUse(sc, updateTime)
 	}
 }
 
-//Release is used when the connection will not be used ever again.
-//The underlying dbConn is removed so that this connection cannot be used by mistake.
+// Release is used when the connection will not be used ever again.
+// The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
 	sc.Releasef(reason.String())
 }
 
-//Releasef is used when the connection will not be used ever again.
-//The underlying dbConn is removed so that this connection cannot be used by mistake.
+// Releasef is used when the connection will not be used ever again.
+// The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	if sc.dbConn == nil {
 		return
@@ -156,7 +156,7 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	sc.logReservedConn()
 }
 
-//Renew the existing connection with new connection id.
+// Renew the existing connection with new connection id.
 func (sc *StatefulConnection) Renew() error {
 	err := sc.pool.renewConn(sc)
 	if err != nil {
