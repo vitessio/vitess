@@ -146,6 +146,7 @@ func (ct *controller) run(ctx context.Context) {
 		// Sometimes, canceled contexts get wrapped as errors.
 		select {
 		case <-ctx.Done():
+			log.Warningf("context canceled: %s", err.Error())
 			return
 		default:
 		}
@@ -154,6 +155,7 @@ func (ct *controller) run(ctx context.Context) {
 		timer := time.NewTimer(*retryDelay)
 		select {
 		case <-ctx.Done():
+			log.Warningf("context canceleld: %s", err.Error())
 			timer.Stop()
 			return
 		case <-timer.C:
@@ -193,8 +195,12 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
 		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
 		if err != nil {
-			ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
-			ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
+			select {
+			case <-ctx.Done():
+			default:
+				ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+				ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
+			}
 			return err
 		}
 		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
