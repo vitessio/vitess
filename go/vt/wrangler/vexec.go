@@ -286,11 +286,11 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		err = dumpStreamListAsJSON(replStatus, wr)
 		return nil, err
 	} else if action == "listall" {
-		workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
+		workflows, err := wr.ListAllWorkflows(ctx, keyspace, false)
 		if err != nil {
 			return nil, err
 		}
-		wr.printWorkflowList(workflows)
+		wr.printWorkflowList(keyspace, workflows)
 		return nil, err
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
@@ -568,12 +568,13 @@ func dumpStreamListAsJSON(replStatus *ReplicationStatusResult, wr *Wrangler) err
 	return nil
 }
 
-func (wr *Wrangler) printWorkflowList(workflows []string) {
+func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	list := strings.Join(workflows, ", ")
 	if list == "" {
+		wr.Logger().Printf("No workflows found in keyspace %s", keyspace)
 		return
 	}
-	wr.Logger().Printf("Workflows: %v", list)
+	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)
 }
 
 func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
