@@ -335,12 +335,29 @@ func (vr *vreplicator) resetFKChecks() error {
 	return err
 }
 
+func filterOptions(currentOptions string, optionsToRemove, optionsToAdd []string) string {
+	options := strings.Split(currentOptions, ",")
+	var newOptions []string
+	for _, option := range options {
+		found := false
+		for _, remove := range append(optionsToRemove, optionsToAdd...) {
+			if option == remove {
+				found = true
+				break
+			}
+		}
+		if !found {
+			newOptions = append(newOptions, option)
+		}
+	}
+	newOptions = append(newOptions, optionsToAdd...)
+	return strings.Join(newOptions, ",")
+}
+
 func (vr *vreplicator) resetSQLMode() error {
-	sqlMode := strings.ToUpper(vr.originalSettings.sqlMode)
-	sqlMode = strings.Replace(sqlMode, "TRADITIONAL", "", -1)
-	sqlMode = strings.Replace(sqlMode, "NO_ZERO_DATE", "", -1)
-	sqlMode = strings.Replace(sqlMode, "NO_ZERO_IN_DATE", "", -1)
-	sqlMode += ",ALLOW_INVALID_DATES"
+	sqlMode := filterOptions(vr.originalSettings.sqlMode,
+		[]string{"TRADITIONAL", "NO_ZERO_DATE", "NO_ZERO_IN_DATE"},
+		[]string{"ALLOW_INVALID_DATES"})
 	_, err := vr.dbClient.Execute(fmt.Sprintf("set sql_mode = '%s';", sqlMode))
 	return err
 }
