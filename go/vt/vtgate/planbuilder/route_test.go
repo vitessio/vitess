@@ -121,7 +121,7 @@ func TestUnionCanMerge(t *testing.T) {
 		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
 			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
-			assert.Equal(t, val, lRoute.UnionCanMerge(rRoute), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
+			assert.Equal(t, val, lRoute.unionCanMerge(rRoute, false), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}
 }
