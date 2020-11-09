@@ -140,8 +140,7 @@ func TestTxEngineClose(t *testing.T) {
 	te.Close()
 	assert.Less(t, int64(50*time.Millisecond), int64(time.Since(start)))
 	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["Transactions"])
-	assert.EqualValues(t, 2, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
-
+	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
 }
 
 func TestTxEngineBegin(t *testing.T) {

@@ -120,7 +120,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	conn2.Unlock() // this marks conn2 as NonBusy
 
 	// This should rollback only txid2.
-	txPool.RollbackNonBusy(ctx)
+	txPool.Shutdown(ctx)
 
 	// committing tx1 should not be an issue
 	_, err = txPool.Commit(ctx, conn1)
@@ -220,8 +220,8 @@ func TestTxPoolBeginWithError(t *testing.T) {
 		Principal: "principle",
 	}
 
-	ctxWithCallerId := callerid.NewContext(ctx, ef, im)
-	_, _, err := txPool.Begin(ctxWithCallerId, &querypb.ExecuteOptions{}, false, 0, nil)
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+	_, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "error: rejected")
 	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
@@ -395,10 +395,10 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 		Principal: "principle",
 	}
 
-	ctxWithCallerId := callerid.NewContext(ctx, ef, im)
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
 
 	// Start transaction.
-	conn, _, err := txPool.Begin(ctxWithCallerId, &querypb.ExecuteOptions{}, false, 0, nil)
+	conn, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 

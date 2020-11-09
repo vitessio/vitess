@@ -304,11 +304,20 @@ func (te *TxEngine) shutdownLocked() {
 		if immediate {
 			// Immediately rollback everything and return.
 			log.Info("Immediate shutdown: rolling back now.")
-			te.rollbackTransactions()
+			te.txPool.scp.ShutdownNonTx()
+			te.shutdownTransactions()
 			return
 		}
+		// If not immediate, we start with shutting down non-tx (reserved)
+		// connections.
+		te.txPool.scp.ShutdownNonTx()
 		if te.shutdownGracePeriod <= 0 {
-			// No grace period was specified. Never rollback.
+			// No grace period was specified. Wait indefinitely for transactions to be concluded.
+			// TODO(sougou): invoking rollbackPrepared is incorrect here. Prepared statements should
+			// actually be rolled back last. But this will cause the shutdown to hang because the
+			// tx pool will never become empty, because the prepared pool is holding on to connections
+			// from the tx pool. But we plan to deprecate this approach to 2PC. So, this
+			// should eventually be deleted.
 			te.rollbackPrepared()
 			log.Info("No grace period specified: performing normal wait.")
 			return
@@ -318,7 +327,7 @@ func (te *TxEngine) shutdownLocked() {
 		select {
 		case <-tmr.C:
 			log.Info("Grace period exceeded: rolling back now.")
-			te.rollbackTransactions()
+			te.shutdownTransactions()
 		case <-poolEmpty:
 			// The pool cleared before the timer kicked in. Just return.
 			log.Info("Transactions completed before grace period: shutting down.")
@@ -393,18 +402,18 @@ outer:
 	return allErr.Error()
 }
 
-// rollbackTransactions rolls back all open transactions
+// shutdownTransactions rolls back all open transactions
 // including the prepared ones.
 // This is used for transitioning from a master to a non-master
 // serving type.
-func (te *TxEngine) rollbackTransactions() {
+func (te *TxEngine) shutdownTransactions() {
 	te.rollbackPrepared()
 	ctx := tabletenv.LocalContext()
 	// The order of rollbacks is currently not material because
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
 	// have to be revisited.
-	te.txPool.RollbackNonBusy(ctx)
+	te.txPool.Shutdown(ctx)
 }
 
 func (te *TxEngine) rollbackPrepared() {
@@ -470,7 +479,7 @@ func (te *TxEngine) stopWatchdog() {
 	te.ticks.Stop()
 }
 
-//ReserveBegin creates a reserved connection, and in it opens a transaction
+// ReserveBegin creates a reserved connection, and in it opens a transaction
 func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
@@ -488,7 +497,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	return conn.ReservedID(), nil
 }
 
-//Reserve creates a reserved connection and returns the id to it
+// Reserve creates a reserved connection and returns the id to it
 func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions, txID int64, preQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Reserve")
 	defer span.Finish()
@@ -514,7 +523,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	return conn.ReservedID(), nil
 }
 
-//Reserve creates a reserved connection and returns the id to it
+// Reserve creates a reserved connection and returns the id to it
 func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (*StatefulConnection, error) {
 	te.stateLock.Lock()
 
@@ -554,7 +563,7 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 	return nil
 }
 
-//Release closes the underlying connection.
+// Release closes the underlying connection.
 func (te *TxEngine) Release(connID int64) error {
 	conn, err := te.txPool.GetAndLock(connID, "for release")
 	if err != nil {

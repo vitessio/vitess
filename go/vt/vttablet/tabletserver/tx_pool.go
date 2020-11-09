@@ -112,11 +112,10 @@ func (tp *TxPool) AdjustLastID(id int64) {
 	tp.scp.AdjustLastID(id)
 }
 
-// RollbackNonBusy rolls back all transactions that are not in use.
-// Transactions can be in use for situations like executing statements
-// or in prepared state.
-func (tp *TxPool) RollbackNonBusy(ctx context.Context) {
-	for _, v := range tp.scp.GetOutdated(time.Duration(0), "for transition") {
+// Shutdown immediately rolls back all transactions that are not in use.
+// In-use connections will be closed when they are unlocked (not in use).
+func (tp *TxPool) Shutdown(ctx context.Context) {
+	for _, v := range tp.scp.ShutdownAll() {
 		tp.RollbackAndRelease(ctx, v)
 	}
 }
