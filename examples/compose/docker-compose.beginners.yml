@@ -105,6 +105,38 @@ services:
       vttablet101:
         condition: service_healthy
 
+  vttablet100:
+    image: vitess/lite
+    ports:
+      - "15100:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+      - ROLE=master
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/vttablet-up.sh 100 || exit 0"]
+    depends_on:
+      - vtctld
+    healthcheck:
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+
   vttablet101:
     image: vitess/lite
     ports:
