@@ -677,6 +677,9 @@ func generateVtctld(opts vtOptions) string {
       - consul1
       - consul2
       - consul3
+    depends_on:
+      external_db_host:
+        condition: service_healthy
 `, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 

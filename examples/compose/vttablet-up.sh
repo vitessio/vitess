@@ -46,7 +46,6 @@ if (( $uid % 100 % 3 == 0 )) ; then
 fi
 
 # Consider every tablet with %d00 as external master
-# if (( $uid % 100 == 0 )) ; then
 if [ $external = 1 ] && (( $uid % 100 == 0 )) ; then
     tablet_type='replica'
     tablet_role='externalmaster'
