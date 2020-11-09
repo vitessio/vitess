@@ -585,7 +585,7 @@ func generateExternalmaster(
     depends_on:
       - vtctld
     healthcheck:
-        test: ["CMD-SHELL","curl -s --fail --show-error localhost:%[4]d/debug/health"]
+        test: ["CMD-SHELL","curl -s --fail --show-error localhost:%[3]d/debug/health"]
         interval: 30s
         timeout: 10s
         retries: 15
