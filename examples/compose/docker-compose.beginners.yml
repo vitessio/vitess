@@ -270,6 +270,6 @@ services:
       - DB_USER
       - DB_PASS
       - DB_CHARSET
-    command: ["sh", "-c", "/script/externaldb_vreplication.sh"]
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0"]
     depends_on:
       - vtctld
