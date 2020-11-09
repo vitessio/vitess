@@ -499,6 +499,9 @@ const (
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
 
+	//SSSyntaxErrorOrAccessViolation is the state on syntax errors or access violations
+	SSSyntaxErrorOrAccessViolation = "42000"
+
 	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
 	SSUnknownComError = "08S01"
 
