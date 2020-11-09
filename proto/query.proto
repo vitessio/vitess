@@ -22,7 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/query";
 
 package query;
 
-option java_package="io.vitess.proto";
+option java_package = "io.vitess.proto";
 
 import "topodata.proto";
 import "vtrpc.proto";
@@ -326,6 +326,9 @@ message Field {
 
   // flags is actually a uint16. Only the lower 16 bits are used.
   uint32 flags = 10;
+
+  // column_type is optionally populated from information_schema.columns
+  string column_type = 11;
 }
 
 // Row is a database row.

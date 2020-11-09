@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -304,7 +305,8 @@ func (dbc *DBConn) Taint() {
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	dbc.stats.KillCounters.Add("Queries", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.Current())
+	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed,
+		dbc.conn.ID(), sqlparser.TruncateForLog(dbc.Current()))
 	killConn, err := dbc.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
@@ -314,7 +316,8 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
-		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(), dbc.Current(), err)
+		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(),
+			sqlparser.TruncateForLog(dbc.Current()), err)
 		return err
 	}
 	return nil
@@ -370,7 +373,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		select {
 		case <-tmr2.C:
 			dbc.stats.InternalErrors.Add("HungQuery", 1)
-			log.Warningf("Query may be hung: %s", dbc.Current())
+			log.Warningf("Query may be hung: %s", sqlparser.TruncateForLog(dbc.Current()))
 		case <-done:
 			return
 		}
