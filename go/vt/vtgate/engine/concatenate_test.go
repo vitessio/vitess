@@ -76,8 +76,10 @@ func TestConcatenate_NoErrors(t *testing.T) {
 	for _, tc := range testCases {
 		require.Equal(t, 2, len(tc.inputs))
 		concatenate := &Concatenate{
-			LHS: &fakePrimitive{results: []*sqltypes.Result{tc.inputs[0], tc.inputs[0]}, sendErr: errors.New("abc")},
-			RHS: &fakePrimitive{results: []*sqltypes.Result{tc.inputs[1], tc.inputs[1]}, sendErr: errors.New("abc")},
+			Sources: []Primitive{
+				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[0], tc.inputs[0]}, sendErr: errors.New("abc")},
+				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[1], tc.inputs[1]}, sendErr: errors.New("abc")},
+			},
 		}
 
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
@@ -110,8 +112,10 @@ func TestConcatenate_WithErrors(t *testing.T) {
 
 	fake := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2")
 	concatenate := &Concatenate{
-		LHS: &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
-		RHS: &fakePrimitive{results: []*sqltypes.Result{fake, fake}},
+		Sources: []Primitive{
+			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
+		},
 	}
 	ctx := context.Background()
 	_, err := concatenate.Execute(&noopVCursor{ctx: ctx}, nil, true)
@@ -121,8 +125,10 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	require.EqualError(t, err, strFailed)
 
 	concatenate = &Concatenate{
-		LHS: &fakePrimitive{results: []*sqltypes.Result{fake, fake}},
-		RHS: &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
+		Sources: []Primitive{
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
+			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
+		},
 	}
 	_, err = concatenate.Execute(&noopVCursor{ctx: ctx}, nil, true)
 	require.EqualError(t, err, errString)

@@ -109,8 +109,7 @@ func (c *concatenate) Primitive() engine.Primitive {
 	rhs := c.rhs.Primitive()
 
 	return &engine.Concatenate{
-		LHS: lhs,
-		RHS: rhs,
+		Sources: []engine.Primitive{lhs, rhs},
 	}
 }
 
