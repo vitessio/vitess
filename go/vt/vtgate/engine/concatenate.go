@@ -178,12 +178,7 @@ func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 //NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
-	for _, source := range c.sources() {
-		if source.NeedsTransaction() {
-			return true
-		}
-	}
-	return false
+	return c.LHS.NeedsTransaction() || c.RHS.NeedsTransaction()
 }
 
 // Inputs returns the input primitives for this
