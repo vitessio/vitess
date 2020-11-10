@@ -474,6 +474,36 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestSmallerTimeout(t *testing.T) {
+	testcases := []struct {
+		t1, t2, want time.Duration
+	}{{
+		t1:   0,
+		t2:   0,
+		want: 0,
+	}, {
+		t1:   0,
+		t2:   1 * time.Millisecond,
+		want: 1 * time.Millisecond,
+	}, {
+		t1:   1 * time.Millisecond,
+		t2:   0,
+		want: 1 * time.Millisecond,
+	}, {
+		t1:   1 * time.Millisecond,
+		t2:   2 * time.Millisecond,
+		want: 1 * time.Millisecond,
+	}, {
+		t1:   2 * time.Millisecond,
+		t2:   1 * time.Millisecond,
+		want: 1 * time.Millisecond,
+	}}
+	for _, tcase := range testcases {
+		got := smallerTimeout(tcase.t1, tcase.t2)
+		assert.Equal(t, tcase.want, got, tcase.t1, tcase.t2)
+	}
+}
+
 func TestTabletServerReserveConnection(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
 	defer tsv.StopService()
