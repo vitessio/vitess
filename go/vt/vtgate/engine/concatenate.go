@@ -63,39 +63,68 @@ func formatTwoOptionsNicely(a, b string) string {
 
 // Execute performs a non-streaming exec.
 func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result := &sqltypes.Result{}
-	var wg sync.WaitGroup
-	qrs := make([]*sqltypes.Result, 2)
-	errs := make([]error, 2)
-	for i, source := range c.sources() {
-		wg.Add(1)
-		go func(i int, source Primitive) {
-			defer wg.Done()
-			qrs[i], errs[i] = source.Execute(vcursor, bindVars, wantfields)
-		}(i, source)
+	lhs, rhs, err := c.execSources(vcursor, bindVars, wantfields)
+	if err != nil {
+		return nil, err
 	}
-	wg.Wait()
-	for i := 0; i < 2; i++ {
-		if errs[i] != nil {
-			return nil, vterrors.Wrap(errs[i], "Concatenate.Execute")
-		}
-		qr := qrs[i]
-		if result.Fields == nil {
-			result.Fields = qr.Fields
-		}
-		err := compareFields(result.Fields, qr.Fields)
+
+	fields, err := c.getFields(lhs.Fields, rhs.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(lhs.Rows) > 0 &&
+		len(rhs.Rows) > 0 &&
+		len(lhs.Rows[0]) != len(rhs.Rows[0]) {
+		return nil, mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
+	}
+
+	return &sqltypes.Result{
+		Fields:       fields,
+		RowsAffected: lhs.RowsAffected + rhs.RowsAffected,
+		Rows:         append(lhs.Rows, rhs.Rows...),
+	}, nil
+}
+
+func (c *Concatenate) getFields(a, b []*querypb.Field) ([]*querypb.Field, error) {
+	switch {
+	case a != nil && b != nil:
+		err := compareFields(a, b)
 		if err != nil {
 			return nil, err
 		}
-		if len(qr.Rows) > 0 {
-			result.Rows = append(result.Rows, qr.Rows...)
-			if len(result.Rows[0]) != len(qr.Rows[0]) {
-				return nil, mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
-			}
-			result.RowsAffected += qr.RowsAffected
-		}
+		return a, nil
+	case a != nil:
+		return a, nil
+	case b != nil:
+		return b, nil
 	}
-	return result, nil
+
+	return nil, nil
+}
+func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, *sqltypes.Result, error) {
+	var lhs, rhs *sqltypes.Result
+	g := vcursor.ErrorGroupCancellableContext()
+	g.Go(func() error {
+		result, err := c.LHS.Execute(vcursor, bindVars, wantfields)
+		if err != nil {
+			return err
+		}
+		lhs = result
+		return nil
+	})
+	g.Go(func() error {
+		result, err := c.RHS.Execute(vcursor, bindVars, wantfields)
+		if err != nil {
+			return err
+		}
+		rhs = result
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, nil, vterrors.Wrap(err, "Concatenate.Execute")
+	}
+	return lhs, rhs, nil
 }
 
 // StreamExecute performs a streaming exec.
