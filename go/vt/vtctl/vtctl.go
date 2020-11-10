@@ -2015,6 +2015,9 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)
+		if strings.Contains(err.Error(), "context deadline exceeded") {
+			return fmt.Errorf("vdiff timed out: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>")
+		}
 	}
 	return err
 }
