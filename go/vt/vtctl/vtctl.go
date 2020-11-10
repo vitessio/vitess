@@ -1998,6 +1998,8 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
 	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
 	format := subFlags.String("format", "", "Format of report") //"json" or ""
+	tables := subFlags.String("tables", "", "Only run vdiff for these tables in the workflow")
+	parallel := subFlags.Int64("parallel", int64(1), "Max number of tables to vdiff in parallel")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2012,7 +2014,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if *maxRows <= 0 {
 		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
 	}
-	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows)
+	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime, *format, *maxRows, *tables, *parallel)
 	if err != nil {
 		log.Errorf("vdiff returning with error: %v", err)
 		if strings.Contains(err.Error(), "context deadline exceeded") {

@@ -75,6 +75,8 @@ type vdiff struct {
 
 	workflow       string
 	targetKeyspace string
+	tables         []string
+	parallel       int64
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -116,7 +118,7 @@ type shardStreamer struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
-	filteredReplicationWaitTime time.Duration, format string, maxRows int64) (map[string]*DiffReport, error) {
+	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, parallel int64) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
@@ -149,8 +151,12 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		ts.wr.Logger().Errorf("validate: %v", err)
 		return nil, err
 	}
-
-	// Initialize vdiff.
+	tables = strings.TrimSpace(tables)
+	var includeTables []string
+	if tables != "" {
+		includeTables = strings.Split(tables, ",")
+	}
+	// Initialize vdiff
 	df := &vdiff{
 		ts:             ts,
 		sourceCell:     sourceCell,
@@ -160,6 +166,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		targets:        make(map[string]*shardStreamer),
 		workflow:       workflow,
 		targetKeyspace: targetKeyspace,
+		tables:         includeTables,
+		parallel:       parallel,
 	}
 	for shard, source := range ts.sources {
 		df.sources[shard] = &shardStreamer{
@@ -182,9 +190,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
-	if err = df.buildVDiffPlan(ctx, oneFilter, schm); err != nil {
+	if err = df.buildVDiffPlan(ctx, oneFilter, schm, df.tables); err != nil {
 		return nil, vterrors.Wrap(err, "buildVDiffPlan")
 	}
+
 	if err := df.selectTablets(ctx); err != nil {
 		return nil, vterrors.Wrap(err, "selectTablets")
 	}
@@ -279,7 +288,7 @@ func (df *vdiff) streamTable(ctx context.Context, wr *Wrangler, table string, td
 }
 
 // buildVDiffPlan builds all the differs.
-func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) error {
+func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition, tablesToInclude []string) error {
 	df.differs = make(map[string]*tableDiffer)
 	for _, table := range schm.TableDefinitions {
 		rule, err := vreplication.MatchTable(table.Name, filter)
@@ -295,10 +304,26 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
 			query = buf.String()
 		}
-		df.differs[table.Name], err = df.buildTablePlan(table, query)
-		if err != nil {
-			return err
+		include := true
+		if len(tablesToInclude) > 0 {
+			include = false
+			for _, t := range tablesToInclude {
+				if t == table.Name {
+					include = true
+					break
+				}
+			}
 		}
+		if include {
+			df.differs[table.Name], err = df.buildTablePlan(table, query)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if len(tablesToInclude) > 0 && len(tablesToInclude) != len(df.differs) {
+		log.Errorf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs)
+		return fmt.Errorf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs)
 	}
 	return nil
 }
