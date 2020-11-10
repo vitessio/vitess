@@ -135,7 +135,14 @@ func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
 		tokens := strings.Split(v, ":")
 		shards, _ := strconv.Atoi(tokens[1])
 		replicaTablets, _ := strconv.Atoi(tokens[2])
-		schemaFileNames := strings.Split(tokens[3], ",")
+		schemaFileNames := []string{}
+    // Make schemafiles argument optional
+    if len(tokens) > 3 {
+        f := func(c rune) bool {
+          return c == ','
+        }
+        schemaFileNames = strings.FieldsFunc(tokens[3], f)
+    }
 
 		if len(tokens) > 4 {
 			keyspaceInfoMap[tokens[0]] = newKeyspaceInfo(tokens[0], shards, replicaTablets, schemaFileNames, tokens[4])
