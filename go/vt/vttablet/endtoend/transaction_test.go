@@ -352,7 +352,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	start := time.Now()
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 10*time.Second, time.Since(start))
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
 	client.Rollback()
 
 	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
@@ -377,6 +377,20 @@ func TestShutdownGracePeriod(t *testing.T) {
 	err = client.SetServingType(topodatapb.TabletType_MASTER)
 	require.NoError(t, err)
 	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	client.Rollback()
+}
+
+func TestShortTxTimeout(t *testing.T) {
+	client := framework.NewClient()
+	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
+	framework.Server.SetTxTimeout(10 * time.Millisecond)
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	start := time.Now()
+	_, err = client.Execute("select sleep(10) from dual", nil)
+	assert.Error(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
 	client.Rollback()
 }
 
