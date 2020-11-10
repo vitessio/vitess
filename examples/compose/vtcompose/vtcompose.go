@@ -136,13 +136,13 @@ func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
 		shards, _ := strconv.Atoi(tokens[1])
 		replicaTablets, _ := strconv.Atoi(tokens[2])
 		schemaFileNames := []string{}
-    // Make schemafiles argument optional
-    if len(tokens) > 3 {
-        f := func(c rune) bool {
-          return c == ','
-        }
-        schemaFileNames = strings.FieldsFunc(tokens[3], f)
-    }
+		// Make schemafiles argument optional
+		if len(tokens) > 3 {
+			f := func(c rune) bool {
+				return c == ','
+			}
+			schemaFileNames = strings.FieldsFunc(tokens[3], f)
+		}
 
 		if len(tokens) > 4 {
 			keyspaceInfoMap[tokens[0]] = newKeyspaceInfo(tokens[0], shards, replicaTablets, schemaFileNames, tokens[4])
@@ -435,7 +435,7 @@ func applyKeyspaceDependentPatches(
 	}
 
 	schemaLoad := generateSchemaload(masterTablets, "", keyspaceData.keyspace, externalDbInfo, opts)
-       dockerComposeFile = applyInMemoryPatch(dockerComposeFile, schemaLoad)
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, schemaLoad)
 
 	// Append Master and Replica Tablets
 	if keyspaceData.shards < 2 {
@@ -463,25 +463,25 @@ func applyKeyspaceDependentPatches(
 }
 
 func applyDefaultDockerPatches(
-  dockerComposeFile []byte,
-  keyspaceInfoMap map[string]keyspaceInfo,
-  externalDbInfoMap map[string]externalDbInfo,
-  opts vtOptions,
+	dockerComposeFile []byte,
+	keyspaceInfoMap map[string]keyspaceInfo,
+	externalDbInfoMap map[string]externalDbInfo,
+	opts vtOptions,
 ) []byte {
 
-  var dbInfo externalDbInfo
-  // This is a workaround to check if there are any externalDBs defined
-  for _, keyspaceData := range keyspaceInfoMap {
-    if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
-      dbInfo = val
-    }
+	var dbInfo externalDbInfo
+	// This is a workaround to check if there are any externalDBs defined
+	for _, keyspaceData := range keyspaceInfoMap {
+		if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
+			dbInfo = val
+		}
 	}
 
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork(opts))
-       dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
-       dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
 	return dockerComposeFile
 }
 
@@ -505,10 +505,10 @@ func applyShardPatches(
 	tabAlias int,
 	shard string,
 	keyspaceData keyspaceInfo,
-       externalDbInfoMap map[string]externalDbInfo,
+	externalDbInfoMap map[string]externalDbInfo,
 	opts vtOptions,
 ) []byte {
-  var dbInfo externalDbInfo
+	var dbInfo externalDbInfo
 	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		dbInfo = val
 	}
@@ -538,29 +538,27 @@ func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo,
 `, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
 }
 
-
-
 func generateExternalmaster(
-  tabAlias int,
-  shard string,
-  keyspaceData keyspaceInfo,
+	tabAlias int,
+	shard string,
+	keyspaceData keyspaceInfo,
 	dbInfo externalDbInfo,
 	opts vtOptions,
 ) string {
 
-  aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	aliases := []int{tabAlias + 1} // master alias, e.g. 201
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}
 
-  externalmasterTab := tabAlias
+	externalmasterTab := tabAlias
 	externalDb := "0"
 
 	if dbInfo.dbName != "" {
 		externalDb = "1"
 	} else {
-     return fmt.Sprintf(``)
-  }
+		return fmt.Sprintf(``)
+	}
 
 	return fmt.Sprintf(`
 - op: add
@@ -748,7 +746,7 @@ func generateVtwork(opts vtOptions) string {
 }
 
 func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
-  externalDb := "0"
+	externalDb := "0"
 	if dbInfo.dbName != "" {
 		externalDb = "1"
 	}
@@ -773,7 +771,7 @@ func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
 }
 
 func generateVreplication(dbInfo externalDbInfo, opts vtOptions) string {
-  externalDb := "0"
+	externalDb := "0"
 	if dbInfo.dbName != "" {
 		externalDb = "1"
 	}
