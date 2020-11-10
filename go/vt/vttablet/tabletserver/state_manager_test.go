@@ -375,7 +375,7 @@ func (te *delayedTxEngine) Close() {
 
 type killableConn struct {
 	id     int64
-	killed bool
+	killed sync2.AtomicBool
 }
 
 func (k *killableConn) Current() string {
@@ -387,7 +387,7 @@ func (k *killableConn) ID() int64 {
 }
 
 func (k *killableConn) Kill(message string, elapsed time.Duration) error {
-	k.killed = true
+	k.killed.Set(true)
 	return nil
 }
 
@@ -410,15 +410,15 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	// Transition to replica with no shutdown grace period should kill kconn2 but not kconn1.
 	err := sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.False(t, kconn1.killed)
-	assert.True(t, kconn2.killed)
+	assert.False(t, kconn1.killed.Get())
+	assert.True(t, kconn2.killed.Get())
 
 	// Transition without grace period. No conns should be killed.
-	kconn2.killed = false
+	kconn2.killed.Set(false)
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.False(t, kconn1.killed)
-	assert.False(t, kconn2.killed)
+	assert.False(t, kconn1.killed.Get())
+	assert.False(t, kconn2.killed.Get())
 
 	// Transition to master with a short shutdown grace period should kill both conns.
 	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
@@ -426,19 +426,19 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	sm.shutdownGracePeriod = 10 * time.Millisecond
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, kconn1.killed)
-	assert.True(t, kconn2.killed)
+	assert.True(t, kconn1.killed.Get())
+	assert.True(t, kconn2.killed.Get())
 
 	// Master non-serving should also kill the conn.
 	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
-	kconn1.killed = false
-	kconn2.killed = false
+	kconn1.killed.Set(false)
+	kconn2.killed.Set(false)
 	err = sm.SetServingType(topodatapb.TabletType_MASTER, testNow, StateNotServing, "")
 	require.NoError(t, err)
-	assert.True(t, kconn1.killed)
-	assert.True(t, kconn2.killed)
+	assert.True(t, kconn1.killed.Get())
+	assert.True(t, kconn2.killed.Get())
 }
 
 func TestStateManagerCheckMySQL(t *testing.T) {
