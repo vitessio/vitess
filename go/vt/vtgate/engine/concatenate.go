@@ -160,24 +160,20 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	firstQr, err := c.sources()[0].GetFields(vcursor, bindVars)
+	lhs, err := c.LHS.GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	for i, source := range c.sources() {
-		if i == 0 {
-			continue
-		}
-		qr, err := source.GetFields(vcursor, bindVars)
-		if err != nil {
-			return nil, err
-		}
-		err = compareFields(firstQr.Fields, qr.Fields)
-		if err != nil {
-			return nil, err
-		}
+	rhs, err := c.RHS.GetFields(vcursor, bindVars)
+	if err != nil {
+		return nil, err
 	}
-	return firstQr, nil
+	err = compareFields(lhs.Fields, rhs.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	return lhs, nil
 }
 
 //NeedsTransaction returns whether a transaction is needed for this primitive
