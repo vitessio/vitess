@@ -19,6 +19,8 @@ package engine
 import (
 	"sync"
 
+	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -100,7 +102,7 @@ func (c *Concatenate) getFields(a, b []*querypb.Field) ([]*querypb.Field, error)
 }
 func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, *sqltypes.Result, error) {
 	var lhs, rhs *sqltypes.Result
-	g := vcursor.ErrorGroupCancellableContext()
+	g, _ := errgroup.WithContext(vcursor.Context())
 	g.Go(func() error {
 		result, err := c.LHS.Execute(vcursor, bindVars, wantfields)
 		if err != nil {
