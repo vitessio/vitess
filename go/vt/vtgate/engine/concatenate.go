@@ -35,10 +35,6 @@ type Concatenate struct {
 	LHS, RHS Primitive
 }
 
-func (c *Concatenate) sources() []Primitive {
-	return []Primitive{c.LHS, c.RHS}
-}
-
 //RouteType returns a description of the query routing type used by the primitive
 func (c *Concatenate) RouteType() string {
 	return "Concatenate"
@@ -131,48 +127,60 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var fieldset sync.WaitGroup
-	fieldsSent := false
 
 	g := vcursor.ErrorGroupCancellableContext()
 	fieldset.Add(1)
 	var mu sync.Mutex
-	for i, source := range c.sources() {
-		i, source := i, source
-		g.Go(func() error {
-			err := source.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
-				// if we have fields to compare, make sure all the fields are all the same
-				if i == 0 && !fieldsSent {
-					defer fieldset.Done()
-					seenFields = resultChunk.Fields
-					fieldsSent = true
-					// No other call can happen before this call.
-					return callback(resultChunk)
-				}
-				fieldset.Wait()
-				if resultChunk.Fields != nil {
-					err := compareFields(seenFields, resultChunk.Fields)
-					if err != nil {
-						return err
-					}
-				}
-				// This to ensure only one send happens back to the client.
-				mu.Lock()
-				defer mu.Unlock()
-				select {
-				case <-vcursor.Context().Done():
-					return nil
-				default:
-					return callback(resultChunk)
-				}
-			})
-			// This is to ensure other streams complete if the first stream failed to unlock the wait.
-			if i == 0 && !fieldsSent {
-				fieldset.Done()
-			}
-			return err
-		})
 
-	}
+	fieldsSent := false
+	g.Go(func() error {
+		err := c.LHS.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			if !fieldsSent {
+				defer fieldset.Done()
+				seenFields = resultChunk.Fields
+				fieldsSent = true
+				// No other call can happen before this call.
+				return callback(resultChunk)
+			}
+			// This to ensure only one send happens back to the client.
+			mu.Lock()
+			defer mu.Unlock()
+			select {
+			case <-vcursor.Context().Done():
+				return nil
+			default:
+				return callback(resultChunk)
+			}
+		})
+		// This is to ensure other streams complete if the first stream failed to unlock the wait.
+		if !fieldsSent {
+			fieldset.Done()
+		}
+		return err
+	})
+	g.Go(func() error {
+		err := c.RHS.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			fieldset.Wait()
+
+			if resultChunk.Fields != nil {
+				err := compareFields(seenFields, resultChunk.Fields)
+				if err != nil {
+					return err
+				}
+			}
+
+			// This to ensure only one send happens back to the client.
+			mu.Lock()
+			defer mu.Unlock()
+			select {
+			case <-vcursor.Context().Done():
+				return nil
+			default:
+				return callback(resultChunk)
+			}
+		})
+		return err
+	})
 	if err := g.Wait(); err != nil {
 		return err
 	}
