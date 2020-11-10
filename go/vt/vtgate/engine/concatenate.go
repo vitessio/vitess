@@ -130,56 +130,49 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 
 	g := vcursor.ErrorGroupCancellableContext()
 	fieldset.Add(1)
-	var mu sync.Mutex
+	var cbMu, visitFieldsMu sync.Mutex
 
-	fieldsSent := false
-	g.Go(func() error {
-		err := c.LHS.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
-			if !fieldsSent {
-				defer fieldset.Done()
-				seenFields = resultChunk.Fields
-				fieldsSent = true
-				// No other call can happen before this call.
-				return callback(resultChunk)
-			}
-			// This to ensure only one send happens back to the client.
-			mu.Lock()
-			defer mu.Unlock()
-			select {
-			case <-vcursor.Context().Done():
-				return nil
-			default:
-				return callback(resultChunk)
-			}
-		})
-		// This is to ensure other streams complete if the first stream failed to unlock the wait.
-		if !fieldsSent {
-			fieldset.Done()
+	visitFields := func(fields []*querypb.Field) (unlocked bool, err error) {
+		visitFieldsMu.Lock()
+		defer visitFieldsMu.Unlock()
+		if seenFields == nil {
+			seenFields = fields
+			return true, nil
 		}
-		return err
+		return false, compareFields(fields, seenFields)
+	}
+
+	visitor := func(resultChunk *sqltypes.Result) error {
+		if resultChunk.Fields != nil {
+			var err error
+			unlocked, err := visitFields(resultChunk.Fields)
+			if err != nil {
+				return err
+			}
+			if unlocked {
+				defer fieldset.Done()
+				// nothing else will be sent to the client until we send out this first one
+				return callback(resultChunk)
+			}
+		}
+		fieldset.Wait()
+
+		// This to ensure only one send happens back to the client.
+		cbMu.Lock()
+		defer cbMu.Unlock()
+
+		select {
+		case <-vcursor.Context().Done():
+			return nil
+		default:
+			return callback(resultChunk)
+		}
+	}
+	g.Go(func() error {
+		return c.LHS.StreamExecute(vcursor, bindVars, wantfields, visitor)
 	})
 	g.Go(func() error {
-		err := c.RHS.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
-			fieldset.Wait()
-
-			if resultChunk.Fields != nil {
-				err := compareFields(seenFields, resultChunk.Fields)
-				if err != nil {
-					return err
-				}
-			}
-
-			// This to ensure only one send happens back to the client.
-			mu.Lock()
-			defer mu.Unlock()
-			select {
-			case <-vcursor.Context().Done():
-				return nil
-			default:
-				return callback(resultChunk)
-			}
-		})
-		return err
+		return c.RHS.StreamExecute(vcursor, bindVars, wantfields, visitor)
 	})
 	if err := g.Wait(); err != nil {
 		return err
