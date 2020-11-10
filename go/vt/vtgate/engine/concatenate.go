@@ -19,8 +19,6 @@ package engine
 import (
 	"sync"
 
-	"golang.org/x/sync/errgroup"
-
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -34,7 +32,7 @@ var _ Primitive = (*Concatenate)(nil)
 
 //Concatenate specified the parameter for concatenate primitive
 type Concatenate struct {
-	LHS, RHS Primitive
+	Sources []Primitive
 }
 
 //RouteType returns a description of the query routing type used by the primitive
@@ -44,12 +42,12 @@ func (c *Concatenate) RouteType() string {
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to
 func (c *Concatenate) GetKeyspaceName() string {
-	return formatTwoOptionsNicely(c.LHS.GetKeyspaceName(), c.RHS.GetKeyspaceName())
+	return formatTwoOptionsNicely(c.Sources[0].GetKeyspaceName(), c.Sources[1].GetKeyspaceName())
 }
 
 // GetTableName specifies the table that this primitive routes to.
 func (c *Concatenate) GetTableName() string {
-	return formatTwoOptionsNicely(c.LHS.GetTableName(), c.RHS.GetTableName())
+	return formatTwoOptionsNicely(c.Sources[0].GetTableName(), c.Sources[1].GetTableName())
 }
 
 func formatTwoOptionsNicely(a, b string) string {
@@ -101,81 +99,76 @@ func (c *Concatenate) getFields(a, b []*querypb.Field) ([]*querypb.Field, error)
 	return nil, nil
 }
 func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, *sqltypes.Result, error) {
-	var lhs, rhs *sqltypes.Result
-	g, _ := errgroup.WithContext(vcursor.Context())
-	g.Go(func() error {
-		result, err := c.LHS.Execute(vcursor, bindVars, wantfields)
-		if err != nil {
-			return err
-		}
-		lhs = result
-		return nil
-	})
-	g.Go(func() error {
-		result, err := c.RHS.Execute(vcursor, bindVars, wantfields)
-		if err != nil {
-			return err
-		}
-		rhs = result
-		return nil
-	})
+	results := make([]*sqltypes.Result, 2)
+	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
+	defer restoreCtx()
+	for i, source := range c.Sources {
+		currIndex, currSource := i, source
+		g.Go(func() error {
+			result, err := currSource.Execute(vcursor, bindVars, wantfields)
+			if err != nil {
+				return err
+			}
+			results[currIndex] = result
+			return nil
+		})
+	}
+
 	if err := g.Wait(); err != nil {
 		return nil, nil, vterrors.Wrap(err, "Concatenate.Execute")
 	}
-	return lhs, rhs, nil
+	return results[0], results[1], nil
 }
 
 // StreamExecute performs a streaming exec.
 func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var fieldset sync.WaitGroup
+	var cbMu sync.Mutex
 
-	g := vcursor.ErrorGroupCancellableContext()
+	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
+	defer restoreCtx()
+	fieldsSent := false
 	fieldset.Add(1)
-	var cbMu, visitFieldsMu sync.Mutex
 
-	visitFields := func(fields []*querypb.Field) (unlocked bool, err error) {
-		visitFieldsMu.Lock()
-		defer visitFieldsMu.Unlock()
-		if seenFields == nil {
-			seenFields = fields
-			return true, nil
-		}
-		return false, compareFields(fields, seenFields)
-	}
+	for i, source := range c.Sources {
+		currIndex, currSource := i, source
 
-	visitor := func(resultChunk *sqltypes.Result) error {
-		if resultChunk.Fields != nil {
-			var err error
-			unlocked, err := visitFields(resultChunk.Fields)
-			if err != nil {
-				return err
+		g.Go(func() error {
+			err := currSource.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+				// if we have fields to compare, make sure all the fields are all the same
+				if currIndex == 0 && !fieldsSent {
+					defer fieldset.Done()
+					seenFields = resultChunk.Fields
+					fieldsSent = true
+					// No other call can happen before this call.
+					return callback(resultChunk)
+				}
+				fieldset.Wait()
+				if resultChunk.Fields != nil {
+					err := compareFields(seenFields, resultChunk.Fields)
+					if err != nil {
+						return err
+					}
+				}
+				// This to ensure only one send happens back to the client.
+				cbMu.Lock()
+				defer cbMu.Unlock()
+				select {
+				case <-vcursor.Context().Done():
+					return nil
+				default:
+					return callback(resultChunk)
+				}
+			})
+			// This is to ensure other streams complete if the first stream failed to unlock the wait.
+			if currIndex == 0 && !fieldsSent {
+				fieldset.Done()
 			}
-			if unlocked {
-				defer fieldset.Done()
-				// nothing else will be sent to the client until we send out this first one
-				return callback(resultChunk)
-			}
-		}
-		fieldset.Wait()
+			return err
+		})
 
-		// This to ensure only one send happens back to the client.
-		cbMu.Lock()
-		defer cbMu.Unlock()
-
-		select {
-		case <-vcursor.Context().Done():
-			return nil
-		default:
-			return callback(resultChunk)
-		}
 	}
-	g.Go(func() error {
-		return c.LHS.StreamExecute(vcursor, bindVars, wantfields, visitor)
-	})
-	g.Go(func() error {
-		return c.RHS.StreamExecute(vcursor, bindVars, wantfields, visitor)
-	})
 	if err := g.Wait(); err != nil {
 		return err
 	}
@@ -184,11 +177,11 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	lhs, err := c.LHS.GetFields(vcursor, bindVars)
+	lhs, err := c.Sources[0].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := c.RHS.GetFields(vcursor, bindVars)
+	rhs, err := c.Sources[1].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -202,12 +195,12 @@ func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 //NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
-	return c.LHS.NeedsTransaction() || c.RHS.NeedsTransaction()
+	return c.Sources[0].NeedsTransaction() || c.Sources[1].NeedsTransaction()
 }
 
 // Inputs returns the input primitives for this
 func (c *Concatenate) Inputs() []Primitive {
-	return []Primitive{c.LHS, c.RHS}
+	return c.Sources
 }
 
 func (c *Concatenate) description() PrimitiveDescription {
