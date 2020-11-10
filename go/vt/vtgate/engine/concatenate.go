@@ -34,7 +34,11 @@ var _ Primitive = (*Concatenate)(nil)
 
 //Concatenate specified the parameter for concatenate primitive
 type Concatenate struct {
-	Sources []Primitive
+	LHS, RHS Primitive
+}
+
+func (c *Concatenate) sources() []Primitive {
+	return []Primitive{c.LHS, c.RHS}
 }
 
 //RouteType returns a description of the query routing type used by the primitive
@@ -45,7 +49,7 @@ func (c *Concatenate) RouteType() string {
 // GetKeyspaceName specifies the Keyspace that this primitive routes to
 func (c *Concatenate) GetKeyspaceName() string {
 	ksMap := map[string]interface{}{}
-	for _, source := range c.Sources {
+	for _, source := range c.sources() {
 		ksMap[source.GetKeyspaceName()] = nil
 	}
 	var ksArr []string
@@ -59,7 +63,7 @@ func (c *Concatenate) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (c *Concatenate) GetTableName() string {
 	var tabArr []string
-	for _, source := range c.Sources {
+	for _, source := range c.sources() {
 		tabArr = append(tabArr, source.GetTableName())
 	}
 	return strings.Join(tabArr, "_")
@@ -69,9 +73,9 @@ func (c *Concatenate) GetTableName() string {
 func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
 	var wg sync.WaitGroup
-	qrs := make([]*sqltypes.Result, len(c.Sources))
-	errs := make([]error, len(c.Sources))
-	for i, source := range c.Sources {
+	qrs := make([]*sqltypes.Result, 2)
+	errs := make([]error, 2)
+	for i, source := range c.sources() {
 		wg.Add(1)
 		go func(i int, source Primitive) {
 			defer wg.Done()
@@ -79,7 +83,7 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		}(i, source)
 	}
 	wg.Wait()
-	for i := 0; i < len(c.Sources); i++ {
+	for i := 0; i < 2; i++ {
 		if errs[i] != nil {
 			return nil, vterrors.Wrap(errs[i], "Concatenate.Execute")
 		}
@@ -111,7 +115,7 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	g := vcursor.ErrorGroupCancellableContext()
 	fieldset.Add(1)
 	var mu sync.Mutex
-	for i, source := range c.Sources {
+	for i, source := range c.sources() {
 		i, source := i, source
 		g.Go(func() error {
 			err := source.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
@@ -156,11 +160,11 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	firstQr, err := c.Sources[0].GetFields(vcursor, bindVars)
+	firstQr, err := c.sources()[0].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	for i, source := range c.Sources {
+	for i, source := range c.sources() {
 		if i == 0 {
 			continue
 		}
@@ -178,7 +182,7 @@ func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 //NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
-	for _, source := range c.Sources {
+	for _, source := range c.sources() {
 		if source.NeedsTransaction() {
 			return true
 		}
@@ -188,7 +192,7 @@ func (c *Concatenate) NeedsTransaction() bool {
 
 // Inputs returns the input primitives for this
 func (c *Concatenate) Inputs() []Primitive {
-	return c.Sources
+	return c.sources()
 }
 
 func (c *Concatenate) description() PrimitiveDescription {
