@@ -138,7 +138,7 @@ if [ $tablet_role = "externalmaster" ]; then
 else
     external_db_args="-init_db_name_override $DB_NAME \
                       -init_tablet_type $tablet_type \
-                      -enable_replication_reporter=true
+                      -enable_replication_reporter=true \
                       -restore_from_backup"
 fi
 
