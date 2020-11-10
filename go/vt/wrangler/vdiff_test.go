@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -910,7 +911,8 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100)
-	require.EqualError(t, err, "startQueryStreams(sources): VDiff timed out for tablet cell-0000000101: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>")
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "context deadline exceeded"))
 }
 
 func TestVDiffFindPKs(t *testing.T) {
