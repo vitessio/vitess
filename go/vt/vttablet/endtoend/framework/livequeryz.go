@@ -23,8 +23,8 @@ import (
 	"time"
 )
 
-// OLAPQuery contains the streaming query info.
-type OLAPQuery struct {
+// LiveQuery contains the streaming query info.
+type LiveQuery struct {
 	Type              string
 	Query             string
 	ContextHTML       string
@@ -36,9 +36,9 @@ type OLAPQuery struct {
 }
 
 // OLAPQueryz returns the contents of /livequeryz?format=json.
-// as a []OLAPQuery. The function returns an empty list on error.
-func OLAPQueryz() []OLAPQuery {
-	var out []OLAPQuery
+// as a []LiveQuery. The function returns an empty list on error.
+func LiveQueryz() []LiveQuery {
+	var out []LiveQuery
 	response, err := http.Get(fmt.Sprintf("%s/livequeryz?format=json", ServerAddress))
 	if err != nil {
 		return out

@@ -675,8 +675,8 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfiel
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.statefulql.Add(qd)
-	defer qre.tsv.statefulql.Remove(qd)
+	qre.tsv.statelessql.Add(qd)
+	defer qre.tsv.statelessql.Remove(qd)
 
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
@@ -688,8 +688,8 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.statelessql.Add(qd)
-	defer qre.tsv.statelessql.Remove(qd)
+	qre.tsv.statefulql.Add(qd)
+	defer qre.tsv.statefulql.Remove(qd)
 
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
