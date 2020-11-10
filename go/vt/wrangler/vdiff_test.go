@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
@@ -858,6 +860,7 @@ func TestVDiffDefaults(t *testing.T) {
 	require.NoError(t, err)
 	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "", 100)
 	require.NoError(t, err)
+
 	var df map[string]*DiffReport
 	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 100)
 	require.NoError(t, err)
@@ -868,6 +871,13 @@ func TestVDiffDefaults(t *testing.T) {
 	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 0)
 	require.NoError(t, err)
 	require.Equal(t, df["t1"].ProcessedRows, 0)
+
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100)
+	require.Error(t, err)
+	err = topo.CheckKeyspaceLocked(context.Background(), "target")
+	require.EqualErrorf(t, err, "keyspace target is not locked (no locksInfo)", "")
+	err = topo.CheckKeyspaceLocked(context.Background(), "source")
+	require.EqualErrorf(t, err, "keyspace source is not locked (no locksInfo)", "")
 }
 
 func TestVDiffReplicationWait(t *testing.T) {

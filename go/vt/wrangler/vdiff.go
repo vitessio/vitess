@@ -205,25 +205,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
-		// Stop the targets and record their source positions.
-		if err := df.stopTargets(ctx); err != nil {
-			return nil, vterrors.Wrap(err, "stopTargets")
-		}
-		// Make sure all sources are past the target's positions and start a query stream that records the current source positions.
-		if err := df.startQueryStreams(ctx, df.ts.sourceKeyspace, df.sources, td.sourceExpression, filteredReplicationWaitTime); err != nil {
-			return nil, vterrors.Wrap(err, "startQueryStreams(sources)")
-		}
-		// Fast forward the targets to the newly recorded source positions.
-		if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
-			return nil, vterrors.Wrap(err, "syncTargets")
-		}
-		// Sources and targets are in sync. Start query streams on the targets.
-		if err := df.startQueryStreams(ctx, df.ts.targetKeyspace, df.targets, td.targetExpression, filteredReplicationWaitTime); err != nil {
-			return nil, vterrors.Wrap(err, "startQueryStreams(targets)")
-		}
-		// Now that queries are running, target vreplication streams can be restarted.
-		if err := df.restartTargets(ctx); err != nil {
-			return nil, vterrors.Wrap(err, "restartTargets")
+		if err := df.streamTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
+			return nil, err
 		}
 		// Perform the diff of source and target streams.
 		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
@@ -248,6 +231,51 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		wr.logger.Printf(`[ %s ]`, jsonOutput)
 	}
 	return diffReports, nil
+}
+
+func (df *vdiff) streamTable(ctx context.Context, wr *Wrangler, table string, td *tableDiffer, filteredReplicationWaitTime time.Duration) error {
+	log.Infof("Starting vdiff for table %s", table)
+
+	log.Infof("Locking target keyspace %s", df.targetKeyspace)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, df.targetKeyspace, "vdiff")
+	if lockErr != nil {
+		log.Errorf("LockKeyspace failed: %v", lockErr)
+		wr.Logger().Errorf("LockKeyspace %s failed: %v", df.targetKeyspace)
+		return lockErr
+	}
+
+	var err error
+	defer func() {
+		unlock(&err)
+		if err != nil {
+			log.Errorf("UnlockKeyspace %s failed: %v", df.targetKeyspace, lockErr)
+		}
+	}()
+
+	defer func() {
+		log.Errorf("restarting targets for workflow %s in keyspace %s", df.workflow, df.targetKeyspace)
+		if err := df.restartTargets(ctx); err != nil {
+			log.Errorf("Error restarting targets for workflow %s in keyspace %s", df.workflow, df.targetKeyspace)
+		}
+	}()
+	// Stop the targets and record their source positions.
+	if err := df.stopTargets(ctx); err != nil {
+		return vterrors.Wrap(err, "stopTargets")
+	}
+	// Make sure all sources are past the target's positions and start a query stream that records the current source positions.
+	if err := df.startQueryStreams(ctx, df.ts.sourceKeyspace, df.sources, td.sourceExpression, filteredReplicationWaitTime); err != nil {
+		return vterrors.Wrap(err, "startQueryStreams(sources)")
+	}
+	// Fast forward the targets to the newly recorded source positions.
+	if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
+		return vterrors.Wrap(err, "syncTargets")
+	}
+	// Sources and targets are in sync. Start query streams on the targets.
+	if err := df.startQueryStreams(ctx, df.ts.targetKeyspace, df.targets, td.targetExpression, filteredReplicationWaitTime); err != nil {
+		return vterrors.Wrap(err, "startQueryStreams(targets)")
+	}
+	// Now that queries are running, target vreplication streams can be restarted.
+	return nil
 }
 
 // buildVDiffPlan builds all the differs.
@@ -558,9 +586,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 		}
 		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), mysql.EncodePosition(participant.position))
 		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
-			if err.Error() == "context deadline exceeded" {
-				return fmt.Errorf("VDiff timed out for tablet %v: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>", topoproto.TabletAliasString(participant.tablet.Alias))
-			}
+			log.Errorf("WaitForPosition error: %s", err)
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
