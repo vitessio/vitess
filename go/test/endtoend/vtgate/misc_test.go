@@ -90,8 +90,11 @@ func TestUnionAll(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	// clean up before & after
 	exec(t, conn, "delete from t1")
 	exec(t, conn, "delete from t2")
+	defer exec(t, conn, "delete from t1")
+	defer exec(t, conn, "delete from t2")
 
 	exec(t, conn, "insert into t1(id1, id2) values(1, 1), (2, 2)")
 	exec(t, conn, "insert into t2(id3, id4) values(3, 3), (4, 4)")
@@ -117,10 +120,6 @@ func TestUnionAll(t *testing.T) {
 	qr := exec(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)")
 	expected := utils.SortString("[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
 	assert.Equal(t, expected, utils.SortString(fmt.Sprintf("%v", qr.Rows)))
-
-	// clean up
-	exec(t, conn, "delete from t1")
-	exec(t, conn, "delete from t2")
 }
 
 func TestUnion(t *testing.T) {
