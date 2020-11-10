@@ -19,8 +19,8 @@ package vreplication
 import (
 	"flag"
 	"fmt"
-	"strconv"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
