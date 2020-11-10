@@ -17,8 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"sort"
-	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
@@ -48,25 +46,19 @@ func (c *Concatenate) RouteType() string {
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to
 func (c *Concatenate) GetKeyspaceName() string {
-	ksMap := map[string]interface{}{}
-	for _, source := range c.sources() {
-		ksMap[source.GetKeyspaceName()] = nil
-	}
-	var ksArr []string
-	for ks := range ksMap {
-		ksArr = append(ksArr, ks)
-	}
-	sort.Strings(ksArr)
-	return strings.Join(ksArr, "_")
+	return formatTwoOptionsNicely(c.LHS.GetKeyspaceName(), c.RHS.GetKeyspaceName())
 }
 
 // GetTableName specifies the table that this primitive routes to.
 func (c *Concatenate) GetTableName() string {
-	var tabArr []string
-	for _, source := range c.sources() {
-		tabArr = append(tabArr, source.GetTableName())
+	return formatTwoOptionsNicely(c.LHS.GetTableName(), c.RHS.GetTableName())
+}
+
+func formatTwoOptionsNicely(a, b string) string {
+	if a == b {
+		return a
 	}
-	return strings.Join(tabArr, "_")
+	return a + "_" + b
 }
 
 // Execute performs a non-streaming exec.
@@ -183,7 +175,7 @@ func (c *Concatenate) NeedsTransaction() bool {
 
 // Inputs returns the input primitives for this
 func (c *Concatenate) Inputs() []Primitive {
-	return c.sources()
+	return []Primitive{c.LHS, c.RHS}
 }
 
 func (c *Concatenate) description() PrimitiveDescription {
