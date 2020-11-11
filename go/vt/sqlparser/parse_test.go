@@ -115,7 +115,8 @@ var (
 	}, {
 		input: "select /* union all */ 1 from t union all select 1 from t",
 	}, {
-		input: "select /* union distinct */ 1 from t union distinct select 1 from t",
+		input:  "select /* union distinct */ 1 from t union distinct select 1 from t",
+		output: "select /* union distinct */ 1 from t union select 1 from t",
 	}, {
 		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
 		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
