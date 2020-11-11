@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1176,133 +1177,43 @@ func TestToSqlValue(t *testing.T) {
 }
 
 func TestCompareNumeric(t *testing.T) {
-	tcases := []struct {
-		v1, v2 EvalResult
-		out    int
-	}{{
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 1,
-	}, {
-		// Special case.
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: -1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 1,
-	}, {
-		// Special case.
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: -1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 1,
-	}}
-	for _, tcase := range tcases {
-		got, err := compareNumeric(tcase.v1, tcase.v2)
-		require.NoError(t, err)
-		if got != tcase.out {
-			t.Errorf("equalNumeric(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
+	values := []EvalResult{
+		{typ: querypb.Type_INT64, ival: 1},
+		{typ: querypb.Type_INT64, ival: -1},
+		{typ: querypb.Type_INT64, ival: 0},
+		{typ: querypb.Type_INT64, ival: 2},
+		{typ: querypb.Type_UINT64, uval: 1},
+		{typ: querypb.Type_UINT64, uval: 0},
+		{typ: querypb.Type_UINT64, uval: 2},
+		{typ: querypb.Type_FLOAT64, fval: 1},
+		{typ: querypb.Type_FLOAT64, fval: -1},
+		{typ: querypb.Type_FLOAT64, fval: 0},
+		{typ: querypb.Type_FLOAT64, fval: 2},
+	}
+
+	// cmpResults is a 2D array with the comparison expectations if we compare all values with each other
+	cmpResults := [][]int{
+		// LHS ->  1  -1   0  2  u1  u0 u2 1.0 -1.0 0.0  2.0
+		/*RHS 1*/ {0, 1, 1, -1, 0, 1, -1, 0, 1, 1, -1},
+		/*   -1*/ {-1, 0, -1, -1, -1, -1, -1, -1, 0, -1, -1},
+		/*    0*/ {-1, 1, 0, -1, -1, 0, -1, -1, 1, 0, -1},
+		/*    2*/ {1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0},
+		/*   u1*/ {0, 1, 1, -1, 0, 1, -1, 0, 1, 1, -1},
+		/*   u0*/ {-1, 1, 0, -1, -1, 0, -1, -1, 1, 0, -1},
+		/*   u2*/ {1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0},
+		/*  1.0*/ {0, 1, 1, -1, 0, 1, -1, 0, 1, 1, -1},
+		/* -1.0*/ {-1, 0, -1, -1, -1, -1, -1, -1, 0, -1, -1},
+		/*  0.0*/ {-1, 1, 0, -1, -1, 0, -1, -1, 1, 0, -1},
+		/*  2.0*/ {1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0},
+	}
+
+	for aIdx, aVal := range values {
+		for bIdx, bVal := range values {
+			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, aVal.debugString(), bVal.debugString()), func(t *testing.T) {
+				result, err := compareNumeric(aVal, bVal)
+				require.NoError(t, err)
+				assert.Equal(t, cmpResults[aIdx][bIdx], result)
+			})
 		}
 	}
 }
