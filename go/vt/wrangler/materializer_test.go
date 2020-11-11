@@ -75,6 +75,40 @@ func TestMigrateTables(t *testing.T) {
 	}
 }
 
+func TestMissingTables(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t2",
+		}, {
+			TargetTable:      "t3",
+			SourceExpression: "select * from t3",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+	ctx := context.Background()
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "")
+	require.EqualError(t, err, "tables not found in source keyspace sourceks: tyt")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "")
+	require.EqualError(t, err, "tables not found in source keyspace sourceks: tyt,txt")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "")
+	require.NoError(t, err)
+}
+
 func TestMigrateVSchema(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",

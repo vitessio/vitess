@@ -86,6 +86,29 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		}
 	} else {
 		tables = strings.Split(tableSpecs, ",")
+
+		// validate that tables provided are present in the source keyspace
+		var missingTables []string
+		ksTables, err := wr.getKeyspaceTables(ctx, sourceKeyspace)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			found := false
+			for _, ksTable := range ksTables {
+				if table == ksTable {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missingTables = append(missingTables, table)
+			}
+		}
+		if len(missingTables) > 0 {
+			return fmt.Errorf("tables not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
+		}
+
 		if !vschema.Sharded {
 			if vschema.Tables == nil {
 				vschema.Tables = make(map[string]*vschemapb.Table)
@@ -162,6 +185,33 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return fmt.Errorf(msg)
 	}
 	return mz.startStreams(ctx)
+}
+
+func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string) ([]string, error) {
+	shards, err := wr.ts.GetServingShards(ctx, ks)
+	if err != nil {
+		return nil, err
+	}
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("keyspace %s has no shards", ks)
+	}
+	master := shards[0].MasterAlias
+	if master == nil {
+		return nil, fmt.Errorf("shard does not have a master: %v", shards[0].ShardName())
+	}
+	allTables := []string{"/.*/"}
+
+	schema, err := wr.GetSchema(ctx, master, allTables, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("got table schemas from source master %v.", master)
+
+	var sourceTables []string
+	for _, td := range schema.TableDefinitions {
+		sourceTables = append(sourceTables, td.Name)
+	}
+	return sourceTables, nil
 }
 
 func (wr *Wrangler) checkIfPreviousJournalExists(ctx context.Context, mz *materializer, migrationID int64) (bool, []string, error) {
