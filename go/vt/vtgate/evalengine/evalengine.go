@@ -235,6 +235,23 @@ func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 	return sqltypes.NULL
 }
 
+func hashCode(v EvalResult) int64 {
+	// we cast all numerical values to float64 and return the hashcode for that
+	var val float64
+	switch v.typ {
+	case sqltypes.Int64:
+		val = float64(v.ival)
+	case sqltypes.Uint64:
+		val = float64(v.uval)
+	case sqltypes.Float64:
+		val = v.fval
+	}
+
+	// this will not work for ±0, NaN and ±Inf,
+	// so one must still check using `compareNumeric` which will not be fooled
+	return int64(val)
+}
+
 func compareNumeric(v1, v2 EvalResult) (int, error) {
 	// Equalize the types.
 	switch v1.typ {

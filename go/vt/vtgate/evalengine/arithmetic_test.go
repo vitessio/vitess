@@ -1213,6 +1213,13 @@ func TestCompareNumeric(t *testing.T) {
 				result, err := compareNumeric(aVal, bVal)
 				require.NoError(t, err)
 				assert.Equal(t, cmpResults[aIdx][bIdx], result)
+
+				// if two values are considered equal, they must also produce the same hashcode
+				if result == 0 {
+					aHash := hashCode(aVal)
+					bHash := hashCode(bVal)
+					assert.Equal(t, aHash, bHash, "hash code does not match")
+				}
 			})
 		}
 	}
