@@ -42,7 +42,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASS:-external_db_password}
     volumes:
       - ./external_db/mysql/:/docker-entrypoint-initdb.d/
-      - ./external_db/mysql/master_mysql57.cnf:/etc/mysql/conf.d/master_mysql57.cnf
+      - ./external_db/mysql/master_mysql57.cnf:/etc/mysql/conf.d/master_mysql57.cnf:ro
       - ./external_db/mysql/log:/var/log/mysql
     healthcheck:
       test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
