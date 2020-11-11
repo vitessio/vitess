@@ -62,7 +62,7 @@ until /vt/bin/vtctlclient --server $VTCTLD_SERVER GetSchema $dest_alias; do
 done
 
 # Copy schema from source to destination shard
-/vt/bin/vtctlclient --server $VTCTLD_SERVER CopySchemaShard $source_tablet $dest_tablet
+/vt/bin/vtctlclient --server $VTCTLD_SERVER CopySchemaShard $source_tablet $dest_tablet || true
 
 # Verify schema
 /vt/bin/vtctlclient --server $VTCTLD_SERVER GetSchema $dest_alias
