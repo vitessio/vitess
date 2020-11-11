@@ -43,7 +43,13 @@ services:
     volumes:
       - ./external_db/mysql/:/docker-entrypoint-initdb.d/
       - ./external_db/mysql/log:/var/log/mysql
-    command: "--server-id=1 --log-bin=mysql-bin --general_log=1 --slow_query_log=1"
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --gtid_mode=ON
+      - --enforce_gtid_consistency
+      - --general_log=1
+      - --slow_query_log=1
     healthcheck:
       test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
       timeout: 10s
