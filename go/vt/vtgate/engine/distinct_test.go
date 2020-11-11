@@ -18,7 +18,10 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
@@ -41,6 +44,10 @@ func TestDistinct(t *testing.T) {
 		inputs:         r("myid", "int64", "0", "1", "1", "null", "null"),
 		expectedResult: r("myid", "int64", "0", "1", "null"),
 	}, {
+		testName:       "int64 numbers, two columns",
+		inputs:         r("a|b", "int64|int64", "0|0", "1|1", "1|1", "null|null", "null|null", "1|2"),
+		expectedResult: r("a|b", "int64|int64", "0|0", "1|1", "null|null", "1|2"),
+	}, {
 		testName:      "varchar columns",
 		inputs:        r("myid", "varchar", "monkey", "horse"),
 		expectedError: "types does not support hashcode yet",
@@ -53,7 +60,9 @@ func TestDistinct(t *testing.T) {
 			qr, err := distinct.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
-				require.Equal(t, tc.expectedResult, qr)
+				got := fmt.Sprintf("%v", qr.Rows)
+				expected := fmt.Sprintf("%v", tc.expectedResult.Rows)
+				utils.MustMatch(t, expected, got, "result not what correct")
 			} else {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.expectedError)

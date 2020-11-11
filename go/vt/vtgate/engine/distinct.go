@@ -37,14 +37,20 @@ type probeTable struct {
 }
 
 func (pt *probeTable) exists(r row) (bool, error) {
-	hashcode, err := evalengine.NullsafeHashcode(r[0])
-	if err != nil {
-		return false, err
+
+	code := int64(17)
+
+	for _, value := range r {
+		hashcode, err := evalengine.NullsafeHashcode(value)
+		if err != nil {
+			return false, err
+		}
+		code = code*31 + hashcode
 	}
 
-	existingRows, found := pt.m[hashcode]
+	existingRows, found := pt.m[code]
 	if !found {
-		pt.m[hashcode] = []row{r}
+		pt.m[code] = []row{r}
 		return false, nil
 	}
 
@@ -58,7 +64,7 @@ func (pt *probeTable) exists(r row) (bool, error) {
 		}
 	}
 
-	pt.m[hashcode] = append(existingRows, r)
+	pt.m[code] = append(existingRows, r)
 
 	return false, nil
 }
