@@ -48,6 +48,10 @@ func TestDistinct(t *testing.T) {
 		inputs:         r("a|b", "int64|int64", "0|0", "1|1", "1|1", "null|null", "null|null", "1|2"),
 		expectedResult: r("a|b", "int64|int64", "0|0", "1|1", "null|null", "1|2"),
 	}, {
+		testName:       "float64 columns designed to produce the same hashcode but not be equal",
+		inputs:         r("a", "float64", "0.1", "0.2", "0.3", "0.4"),
+		expectedResult: r("a", "float64", "0.1", "0.2", "0.3", "0.4"),
+	}, {
 		testName:      "varchar columns",
 		inputs:        r("myid", "varchar", "monkey", "horse"),
 		expectedError: "types does not support hashcode yet",
