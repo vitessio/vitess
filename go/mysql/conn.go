@@ -923,7 +923,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				log.Errorf("Error writing query error to %s: %v", c, werr)
 				return werr
 			}
-			return err
+			return nil
 		}
 
 		// Popoulate PrepareData
@@ -940,7 +940,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				log.Errorf("Error writing query error to %s: %v", c, werr)
 				return werr
 			}
-			return err
+			return nil
 		}
 
 		paramsCount := uint16(0)
