@@ -62,7 +62,9 @@ const (
 )
 
 // MoveTables initiates moving table(s) over to another keyspace
-func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
+func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
+	cell, tabletTypes string, allTables bool, excludeTables string) error {
+	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var err error
 
@@ -85,29 +87,46 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			tables = append(tables, table)
 		}
 	} else {
-		tables = strings.Split(tableSpecs, ",")
-
-		// validate that tables provided are present in the source keyspace
-		var missingTables []string
+		if len(strings.TrimSpace(tableSpecs)) > 0 {
+			tables = strings.Split(tableSpecs, ",")
+		}
 		ksTables, err := wr.getKeyspaceTables(ctx, sourceKeyspace)
 		if err != nil {
 			return err
 		}
-		for _, table := range tables {
-			found := false
-			for _, ksTable := range ksTables {
-				if table == ksTable {
-					found = true
-					break
+		if len(tables) > 0 {
+			err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, tables)
+			if err != nil {
+				return err
+			}
+		} else {
+			if allTables {
+				var excludeTablesList []string
+				excludeTables = strings.TrimSpace(excludeTables)
+				if excludeTables != "" {
+					excludeTablesList = strings.Split(excludeTables, ",")
 				}
-			}
-			if !found {
-				missingTables = append(missingTables, table)
+				if len(excludeTablesList) > 0 {
+					for _, ksTable := range ksTables {
+						exclude := false
+						for _, table := range excludeTablesList {
+							if ksTable == table {
+								exclude = true
+								break
+							}
+						}
+						if !exclude {
+							tables = append(tables, ksTable)
+						}
+					}
+				} else {
+					tables = ksTables
+				}
+			} else {
+				return fmt.Errorf("no tables to move")
 			}
 		}
-		if len(missingTables) > 0 {
-			return fmt.Errorf("tables not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
-		}
+		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 		if !vschema.Sharded {
 			if vschema.Tables == nil {
@@ -185,6 +204,27 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return fmt.Errorf(msg)
 	}
 	return mz.startStreams(ctx)
+}
+
+func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
+	// validate that tables provided are present in the source keyspace
+	var missingTables []string
+	for _, table := range tables {
+		found := false
+		for _, ksTable := range ksTables {
+			if table == ksTable {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingTables = append(missingTables, table)
+		}
+	}
+	if len(missingTables) > 0 {
+		return fmt.Errorf("tables not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
+	}
+	return nil
 }
 
 func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string) ([]string, error) {
