@@ -19,6 +19,7 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // Distinct Primitive is used to uniqueify results
@@ -29,9 +30,71 @@ type Distinct struct {
 	Source Primitive
 }
 
+type row = []sqltypes.Value
+
+type probeTable struct {
+	m map[int64][]row
+}
+
+func (pt *probeTable) exists(r row) (bool, error) {
+	hashcode, err := evalengine.NullsafeHashcode(r[0])
+	if err != nil {
+		return false, err
+	}
+
+	existingRows, found := pt.m[hashcode]
+	if !found {
+		pt.m[hashcode] = []row{r}
+		return false, nil
+	}
+
+	for _, existingRow := range existingRows {
+		cmp, err := evalengine.NullsafeCompare(r[0], existingRow[0])
+		if err != nil {
+			return false, err
+		}
+		if cmp == 0 /*equal*/ {
+			return true, nil
+		}
+	}
+
+	pt.m[hashcode] = append(existingRows, r)
+
+	return false, nil
+}
+
+func newProbetable() *probeTable {
+	return &probeTable{m: map[int64][]row{}}
+}
+
 // Execute implements the Primitive interface
 func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	panic("implement me")
+	input, err := d.Source.Execute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &sqltypes.Result{
+		Fields:              input.Fields,
+		InsertID:            input.InsertID,
+		SessionStateChanges: input.SessionStateChanges,
+	}
+
+	pt := newProbetable()
+
+	for _, row := range input.Rows {
+		exists, err := pt.exists(row)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			result.Rows = append(result.Rows, row)
+		}
+	}
+
+	result.RowsAffected = uint64(len(result.Rows))
+
+	return result, err
 }
 
 // StreamExecute implements the Primitive interface
