@@ -17,8 +17,8 @@ services:
     volumes:
       - vol-db:/var/lib/mysql
       - ./mysql/:/docker-entrypoint-initdb.d/
-      - ./mysql/master_mysql57.cnf:/etc/mysql/conf.d/master_mysql57.cnf:ro
       - ./mysql/log:/var/log/mysql
+    command: "--server-id=1 --log-bin=mysql-bin --general_log=1 --slow_query_log=1"
     healthcheck:
       test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
       timeout: 10s
