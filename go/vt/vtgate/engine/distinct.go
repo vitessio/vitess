@@ -69,7 +69,7 @@ func (pt *probeTable) exists(r row) (bool, error) {
 	return false, nil
 }
 
-func newProbetable() *probeTable {
+func newProbeTable() *probeTable {
 	return &probeTable{m: map[int64][]row{}}
 }
 
@@ -86,7 +86,7 @@ func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		SessionStateChanges: input.SessionStateChanges,
 	}
 
-	pt := newProbetable()
+	pt := newProbeTable()
 
 	for _, row := range input.Rows {
 		exists, err := pt.exists(row)
