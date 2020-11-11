@@ -917,7 +917,13 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		if len(queries) != 1 {
-			return fmt.Errorf("can not prepare multiple statements")
+			err := fmt.Errorf("can not prepare multiple statements")
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+			return err
 		}
 
 		// Popoulate PrepareData
@@ -929,6 +935,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		statement, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
 			return err
 		}
 
