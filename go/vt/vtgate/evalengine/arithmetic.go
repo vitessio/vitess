@@ -19,6 +19,7 @@ package evalengine
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -201,6 +202,25 @@ func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
 	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
+}
+
+// NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
+// for two values that are considered equal by `NullsafeCompare`.
+// TODO: should be extended to support all possible types
+func NullsafeHashcode(v sqltypes.Value) (int64, error) {
+	if v.IsNull() {
+		return math.MaxInt64, nil
+	}
+
+	if sqltypes.IsNumber(v.Type()) {
+		result, err := newEvalResult(v)
+		if err != nil {
+			return 0, err
+		}
+		return hashCode(result), nil
+	}
+
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", v.Type())
 }
 
 // isByteComparable returns true if the type is binary or date/time.
