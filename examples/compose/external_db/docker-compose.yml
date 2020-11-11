@@ -17,7 +17,7 @@ services:
     volumes:
       - vol-db:/var/lib/mysql
       - ./mysql/:/docker-entrypoint-initdb.d/
-      - ./mysql/master_mysql57.cnf:/etc/mysql/conf.d/master_mysql57.cnf
+      - ./mysql/master_mysql57.cnf:/etc/mysql/conf.d/master_mysql57.cnf:ro
       - ./mysql/log:/var/log/mysql
     healthcheck:
       test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
