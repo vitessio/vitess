@@ -458,8 +458,8 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 
 // MergeUnion returns true if the rhs route could successfully be merged
 // with the rb route.
-func (rb *route) MergeUnion(right *route) bool {
-	if rb.UnionCanMerge(right) {
+func (rb *route) MergeUnion(right *route, isDistinct bool) bool {
+	if rb.unionCanMerge(right, isDistinct) {
 		rb.substitutions = append(rb.substitutions, right.substitutions...)
 		right.Redirect = rb
 		return true
@@ -475,7 +475,7 @@ func (rb *route) isSingleShard() bool {
 	return false
 }
 
-// JoinCanMerge, SubqueryCanMerge and UnionCanMerge have subtly different behaviors.
+// JoinCanMerge, SubqueryCanMerge and unionCanMerge have subtly different behaviors.
 // The difference in behavior is around SelectReference.
 // It's not worth trying to reuse the code between them.
 func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr) bool {
@@ -539,18 +539,20 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 	return false
 }
 
-func (rb *route) UnionCanMerge(rrb *route) bool {
-	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
+func (rb *route) unionCanMerge(other *route, distinct bool) bool {
+	if rb.eroute.Keyspace.Name != other.eroute.Keyspace.Name {
 		return false
 	}
 	switch rb.eroute.Opcode {
 	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
-		return rb.eroute.Opcode == rrb.eroute.Opcode
+		return rb.eroute.Opcode == other.eroute.Opcode
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
-		if rrb.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == rrb.eroute.Vindex && valEqual(rb.condition, rrb.condition) {
+		if other.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == other.eroute.Vindex && valEqual(rb.condition, other.condition) {
 			return true
 		}
+	case engine.SelectScatter:
+		return other.eroute.Opcode == engine.SelectScatter && !distinct
 	case engine.SelectNext:
 		return false
 	}

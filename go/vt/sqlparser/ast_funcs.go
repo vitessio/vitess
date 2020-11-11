@@ -795,17 +795,17 @@ func (node *Union) SetLock(lock Lock) {
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit, lock Lock) *Union {
+func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit, lock Lock) *Union {
 	union, isUnion := lhs.(*Union)
 	if isUnion {
-		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Type: typ, Statement: rhs})
+		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Distinct: distinct, Statement: rhs})
 		union.OrderBy = by
 		union.Limit = limit
 		union.Lock = lock
 		return union
 	}
 
-	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Type: typ, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
 }
 
 // ToString returns the string associated with the DDLAction Enum
