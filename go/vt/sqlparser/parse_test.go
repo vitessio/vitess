@@ -1141,20 +1141,15 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input:  "create index a on b",
-		output: "alter table b",
+		input: "create index a on b (col1)",
 	}, {
-		input:  "create unique index a on b",
-		output: "alter table b",
+		input: "create unique index a on b (col1)",
 	}, {
-		input:  "create unique index a using foo on b",
-		output: "alter table b",
+		input: "create unique index a using foo on b (col1)",
 	}, {
-		input:  "create fulltext index a using foo on b",
-		output: "alter table b",
+		input: "create fulltext index a using foo on b (col1)",
 	}, {
-		input:  "create spatial index a using foo on b",
-		output: "alter table b",
+		input: "create spatial index a using foo on b (col1)",
 	}, {
 		input:  "create view a",
 		output: "create table a",
@@ -1828,8 +1823,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input:  "create index b on A",
-		output: "alter table A",
+		input: "create index b on A (col1)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",

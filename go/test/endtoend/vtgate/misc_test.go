@@ -350,6 +350,16 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	assertMatches(t, conn, `select id1 from t1 order by id1`, `[]`)
 }
 
+func TestCreateIndex(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.ExecuteFetch(`create index i1 on t1 (id1)`, 1000, true)
+	require.NoError(t, err)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
