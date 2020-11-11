@@ -39,7 +39,7 @@ func TestDistinct(t *testing.T) {
 	}, {
 		testName:       "int64 numbers",
 		inputs:         r("myid", "int64", "0", "1", "1", "null", "null"),
-		expectedResult: r("myid", "int64", "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2"),
+		expectedResult: r("myid", "int64", "0", "1", "null"),
 	}, {
 		testName:      "varchar columns",
 		inputs:        r("myid", "varchar", "monkey", "horse"),
@@ -48,7 +48,6 @@ func TestDistinct(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
-
 			distinct := &Distinct{Source: &fakePrimitive{results: []*sqltypes.Result{tc.inputs}}}
 
 			qr, err := distinct.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
