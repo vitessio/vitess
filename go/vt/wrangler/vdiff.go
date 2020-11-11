@@ -76,7 +76,6 @@ type vdiff struct {
 	workflow       string
 	targetKeyspace string
 	tables         []string
-	parallel       int64
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -118,7 +117,7 @@ type shardStreamer struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
-	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, parallel int64) (map[string]*DiffReport, error) {
+	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
@@ -167,7 +166,6 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		workflow:       workflow,
 		targetKeyspace: targetKeyspace,
 		tables:         includeTables,
-		parallel:       parallel,
 	}
 	for shard, source := range ts.sources {
 		df.sources[shard] = &shardStreamer{
@@ -214,7 +212,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
-		if err := df.streamTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
+		if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
 			return nil, err
 		}
 		// Perform the diff of source and target streams.
@@ -242,7 +240,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	return diffReports, nil
 }
 
-func (df *vdiff) streamTable(ctx context.Context, wr *Wrangler, table string, td *tableDiffer, filteredReplicationWaitTime time.Duration) error {
+func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *tableDiffer, filteredReplicationWaitTime time.Duration) error {
 	log.Infof("Starting vdiff for table %s", table)
 
 	log.Infof("Locking target keyspace %s", df.targetKeyspace)

@@ -563,7 +563,7 @@ func TestVDiffUnsharded(t *testing.T) {
 		env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
 		env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
 
-		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", 1)
+		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "")
 		require.NoError(t, err)
 		assert.Equal(t, tcase.dr, dr["t1"], tcase.id)
 	}
@@ -625,7 +625,7 @@ func TestVDiffSharded(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", 1)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
@@ -691,7 +691,7 @@ func TestVDiffAggregates(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", 1)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
@@ -755,7 +755,7 @@ func TestVDiffPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", 1)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -819,7 +819,7 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", 1)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -857,23 +857,23 @@ func TestVDiffDefaults(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "", 100, "", 1)
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "", 100, "")
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "", 100, "", 1)
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "", 100, "")
 	require.NoError(t, err)
 
 	var df map[string]*DiffReport
-	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 100, "", 1)
+	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 100, "")
 	require.NoError(t, err)
 	require.Equal(t, df["t1"].ProcessedRows, 3)
-	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 1, "", 1)
+	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 1, "")
 	require.NoError(t, err)
 	require.Equal(t, df["t1"].ProcessedRows, 1)
-	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 0, "", 1)
+	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 0, "")
 	require.NoError(t, err)
 	require.Equal(t, df["t1"].ProcessedRows, 0)
 
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100, "", 1)
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100, "")
 	require.Error(t, err)
 	err = topo.CheckKeyspaceLocked(context.Background(), "target")
 	require.EqualErrorf(t, err, "keyspace target is not locked (no locksInfo)", "")
@@ -910,7 +910,7 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "", 1)
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "")
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "context deadline exceeded"))
 }
