@@ -1,0 +1,15 @@
+{
+  "Debug": true,
+  "EnableSyslog": false,
+  "Durability" : "none",
+  "ListenAddress": ":3000",
+  "MySQLTopologyUser": "orc_client_user",
+  "MySQLTopologyPassword": "orc_client_user_password",
+  "MySQLReplicaUser": "vt_repl",
+  "MySQLReplicaPassword": "",
+  "BackendDB": "sqlite",
+  "SQLite3DataFile": "/tmp/orchestrator.sqlite3",
+  "RecoverMasterClusterFilters": ["*"],
+  "RecoveryPeriodBlockSeconds": 5,
+  "DelayMasterPromotionIfSQLThreadNotUpToDate": true
+}

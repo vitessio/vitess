@@ -28,6 +28,34 @@ services:
     command: "agent -server -retry-join consul1 -disable-host-node-id"
     depends_on:
       - consul1
+  # This is a convenience container to quickly test vitess against an external database.
+  # In practice you will point Vitess to your existing database and migrate to a Vitess managed cluster.
+  external_db_host:
+    build:
+      context: ./external_db/mysql
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
+      MYSQL_DATABASE: ${DB:-commerce}
+      MYSQL_USER: ${DB_USER:-external_db_user}
+      MYSQL_PASSWORD: ${DB_PASS:-external_db_password}
+    volumes:
+      - ./external_db/mysql/:/docker-entrypoint-initdb.d/
+      - ./external_db/mysql/log:/var/log/mysql
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --gtid_mode=ON
+      - --enforce_gtid_consistency
+      - --general_log=1
+      - --slow_query_log=1
+    healthcheck:
+      test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
+      timeout: 10s
+      retries: 10
+    ports:
+      - "3306"
 
   vtctld:
     image: vitess/lite
@@ -50,6 +78,9 @@ services:
       - consul1
       - consul2
       - consul3
+    depends_on:
+      external_db_host:
+        condition: service_healthy
 
   vtgate:
     image: vitess/lite
@@ -105,6 +136,38 @@ services:
       vttablet101:
         condition: service_healthy
 
+  vttablet100:
+    image: vitess/lite
+    ports:
+      - "15100:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+      - ROLE=master
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/vttablet-up.sh 100 || exit 0"]
+    depends_on:
+      - vtctld
+    healthcheck:
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+
   vttablet101:
     image: vitess/lite
     ports:
@@ -154,6 +217,8 @@ services:
       - KEYSPACE
       - DB
       - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
       - DB_USER
       - DB_PASS
       - DB_CHARSET
@@ -184,6 +249,8 @@ services:
       - KEYSPACE
       - DB
       - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
       - DB_USER
       - DB_PASS
       - DB_CHARSET
@@ -196,3 +263,52 @@ services:
       interval: 30s
       timeout: 10s
       retries: 15
+
+  vtorc:
+    image: vitess/lite
+    command: ["sh", "-c", "/script/vtorc-up.sh"]
+    depends_on:
+      - vtctld
+    ports:
+      - "13000:3000"
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+    healthcheck:
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:3000/api/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+
+  vreplication:
+    image: vitess/lite
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0"]
+    depends_on:
+      - vtctld
