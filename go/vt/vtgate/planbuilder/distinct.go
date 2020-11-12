@@ -46,8 +46,8 @@ func (d *distinct) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr,
 	return d.input.PushSelect(pb, expr, origin)
 }
 
-func (d *distinct) MakeDistinct() error {
-	return nil
+func (d *distinct) MakeDistinct() (builder, error) {
+	return d, nil
 }
 
 func (d *distinct) PushGroupBy(by sqlparser.GroupBy) error {

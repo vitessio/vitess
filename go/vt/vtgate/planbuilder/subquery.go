@@ -113,8 +113,8 @@ func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr,
 }
 
 // MakeDistinct satisfies the builder interface.
-func (sq *subquery) MakeDistinct() error {
-	return errors.New("unsupported: distinct on cross-shard subquery")
+func (sq *subquery) MakeDistinct() (builder, error) {
+	return nil, errors.New("unsupported: distinct on cross-shard subquery")
 }
 
 // PushGroupBy satisfies the builder interface.

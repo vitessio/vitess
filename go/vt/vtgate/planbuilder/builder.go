@@ -68,7 +68,7 @@ type builder interface {
 	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error)
 
 	// MakeDistinct makes the primitive handle the distinct clause.
-	MakeDistinct() error
+	MakeDistinct() (builder, error)
 	// PushGroupBy makes the primitive handle the GROUP BY clause.
 	PushGroupBy(sqlparser.GroupBy) error
 

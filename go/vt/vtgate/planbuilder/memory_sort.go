@@ -99,8 +99,8 @@ func (ms *memorySort) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExp
 }
 
 // MakeDistinct satisfies the builder interface.
-func (ms *memorySort) MakeDistinct() error {
-	return errors.New("memorySort.MakeDistinct: unreachable")
+func (ms *memorySort) MakeDistinct() (builder, error) {
+	return nil, errors.New("memorySort.MakeDistinct: unreachable")
 }
 
 // PushGroupBy satisfies the builder interface.
