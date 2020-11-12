@@ -279,6 +279,10 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 // WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	if action == "show" {
+		ok, err := wr.CheckWorkflow(ctx,workflow,keyspace)
+		if !ok {
+			return nil, err
+		}
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
 		if err != nil {
 			return nil, err
@@ -524,6 +528,30 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string) ([]st
 	}
 	workflows := workflowsSet.List()
 	return workflows, nil
+}
+
+// CheckWorkflow will checks if the workflow exist in the given keyspace.
+func (wr *Wrangler) CheckWorkflow(ctx context.Context, workflow, keyspace  string) (bool, error) {
+	query := "select workflow from _vt.vreplication where workflow='" + workflow + "'"
+	results, err := wr.runVexec(ctx, "", keyspace, query, false)
+	if err != nil {
+		return false, err
+	}
+	for _, result := range results {
+		if len(result.Rows) == 0 {
+			continue
+		}
+		qr := sqltypes.Proto3ToResult(result)
+		for _, row := range qr.Rows {
+			for _, value := range row {
+				//Checking if the result contains the workflow
+				if value.ToString() == workflow {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, fmt.Errorf("the workflow %s does not exist in the keyspace %s", workflow,keyspace)
 }
 
 // ShowWorkflow will return all of the relevant replication related information for the given workflow.
