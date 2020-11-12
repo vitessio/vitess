@@ -175,19 +175,14 @@ func TestComStmtPrepareUpdStmt(t *testing.T) {
 	sql := "UPDATE test SET __bit = ?, __tinyInt = ?, __tinyIntU = ?, __smallInt = ?, __smallIntU = ?, __mediumInt = ?, __mediumIntU = ?, __int = ?, __intU = ?, __bigInt = ?, __bigIntU = ?, __decimal = ?, __float = ?, __double = ?, __date = ?, __datetime = ?, __timestamp = ?, __time = ?, __year = ?, __char = ?, __varchar = ?, __binary = ?, __varbinary = ?, __tinyblob = ?, __tinytext = ?, __blob = ?, __text = ?, __enum = ?, __set = ? WHERE __id = 0"
 	mockData := MockQueryPackets(t, sql)
 
-	if err := cConn.writePacket(mockData); err != nil {
-		t.Fatalf("writePacket failed: %v", err)
-	}
+	err := cConn.writePacket(mockData)
+	require.NoError(t, err, "writePacket failed")
 
 	data, err := sConn.ReadPacket()
-	if err != nil {
-		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v", err)
-	}
+	require.NoError(t, err, "sConn.ReadPacket - ComPrepare failed")
 
 	parsedQuery := sConn.parseComPrepare(data)
-	if parsedQuery != sql {
-		t.Fatalf("Received incorrect query, want: %v, got: %v", sql, parsedQuery)
-	}
+	require.Equal(t, sql, parsedQuery, "Received incorrect query")
 
 	paramsCount := uint16(29)
 	prepare := &PrepareData{
@@ -199,25 +194,17 @@ func TestComStmtPrepareUpdStmt(t *testing.T) {
 	sConn.PrepareData[prepare.StatementID] = prepare
 
 	// write the response to the client
-	if err := sConn.writePrepare(nil, prepare); err != nil {
-		t.Fatalf("sConn.writePrepare failed: %v", err)
-	}
+	err = sConn.writePrepare(nil, prepare)
+	require.NoError(t, err, "sConn.writePrepare failed")
 
 	resp, err := cConn.ReadPacket()
-	if err != nil {
-		t.Fatalf("cConn.ReadPacket failed: %v", err)
-	}
-	if uint32(resp[1]) != prepare.StatementID {
-		t.Fatalf("Received incorrect Statement ID, want: %v, got: %v", prepare.StatementID, resp[1])
-	}
+	require.NoError(t, err, "cConn.ReadPacket failed")
+	require.EqualValues(t, prepare.StatementID, resp[1], "Received incorrect Statement ID")
+
 	for i := uint16(0); i < paramsCount; i++ {
 		resp, err := cConn.ReadPacket()
-		if err != nil {
-			t.Fatalf("cConn.ReadPacket failed: %v", err)
-		}
-		if resp[17] != 0xfd {
-			t.Fatalf("Received incorrect params type, want: %v, got: %v", 0xfd, resp[21])
-		}
+		require.NoError(t, err, "cConn.ReadPacket failed")
+		require.EqualValues(t, 0xfd, resp[17], "Received incorrect Statement ID")
 	}
 }
 
