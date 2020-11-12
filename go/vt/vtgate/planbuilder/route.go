@@ -162,9 +162,9 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 }
 
 // MakeDistinct satisfies the builder interface.
-func (rb *route) MakeDistinct() error {
+func (rb *route) MakeDistinct() (builder, error) {
 	rb.Select.(*sqlparser.Select).Distinct = true
-	return nil
+	return rb, nil
 }
 
 // PushGroupBy satisfies the builder interface.

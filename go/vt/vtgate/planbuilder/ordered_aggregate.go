@@ -356,18 +356,23 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
-func (oa *orderedAggregate) MakeDistinct() error {
+func (oa *orderedAggregate) MakeDistinct() (builder, error) {
 	for i, rc := range oa.resultColumns {
 		// If the column origin is oa (and not the underlying route),
 		// it means that it's an aggregate function supplied by oa.
 		// So, the distinct 'operator' cannot be pushed down into the
 		// route.
 		if rc.column.Origin() == oa {
-			return errors.New("unsupported: distinct cannot be combined with aggregate functions")
+			return nil, errors.New("unsupported: distinct cannot be combined with aggregate functions")
 		}
 		oa.eaggr.Keys = append(oa.eaggr.Keys, i)
 	}
-	return oa.input.MakeDistinct()
+	distinctSrc, err := oa.input.MakeDistinct()
+	if err != nil {
+		return nil, err
+	}
+	oa.input=distinctSrc
+	return oa, err
 }
 
 // PushGroupBy satisfies the builder interface.

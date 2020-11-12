@@ -89,8 +89,8 @@ func (c *concatenate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedEx
 	return nil, 0, unreachable("Select")
 }
 
-func (c *concatenate) MakeDistinct() error {
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "only union-all is supported for this operator")
+func (c *concatenate) MakeDistinct() (builder, error) {
+	return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "only union-all is supported for this operator")
 }
 
 func (c *concatenate) PushGroupBy(by sqlparser.GroupBy) error {

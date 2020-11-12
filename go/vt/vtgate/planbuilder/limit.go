@@ -66,8 +66,8 @@ func (l *limit) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, ori
 }
 
 // MakeDistinct satisfies the builder interface.
-func (l *limit) MakeDistinct() error {
-	return errors.New("limit.MakeDistinct: unreachable")
+func (l *limit) MakeDistinct() (builder, error) {
+	return nil, errors.New("limit.MakeDistinct: unreachable")
 }
 
 // PushGroupBy satisfies the builder interface.
