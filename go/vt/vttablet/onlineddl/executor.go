@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -110,6 +111,7 @@ type Executor struct {
 	pool           *connpool.Pool
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
+	tabletAlias    *topodatapb.TabletAlias
 
 	keyspace string
 	shard    string
@@ -143,9 +145,10 @@ func PTOSCFileName() (fileName string, isOverride bool) {
 }
 
 // NewExecutor creates a new gh-ost executor.
-func NewExecutor(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
+func NewExecutor(env tabletenv.Env, tabletAlias topodatapb.TabletAlias, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType) *Executor {
 	return &Executor{
-		env: env,
+		env:         env,
+		tabletAlias: &tabletAlias,
 
 		pool: connpool.NewPool(env, "ExecutorPool", tabletenv.ConnPoolConfig{
 			Size:               1,
@@ -166,6 +169,11 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 	}
 	defer conn.Recycle()
 	return conn.Exec(ctx, query, math.MaxInt32, true)
+}
+
+// TabletAliasString returns tablet alias as string (duh)
+func (e *Executor) TabletAliasString() string {
+	return topoproto.TabletAliasString(e.tabletAlias)
 }
 
 func (e *Executor) initSchema(ctx context.Context) error {
@@ -403,7 +411,7 @@ export ONLINE_DDL_PASSWORD
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"
+curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"
 		`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
@@ -486,7 +494,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?p=low`, *servenv.Port),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -621,7 +629,7 @@ export MYSQL_PWD
 		my ($self, %args) = @_;
 
 		return sub {
-			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?p=low")) {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app=online-ddl:pt-osc:{{MIGRATION_UUID}}&p=low")) {
 				# Got HTTP 200 OK, means throttler is happy
 				return 0;
 			}	else {
@@ -785,14 +793,16 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		return nil, ErrMigrationNotFound
 	}
 	onlineDDL = &schema.OnlineDDL{
-		Keyspace: row["keyspace"].ToString(),
-		Table:    row["mysql_table"].ToString(),
-		Schema:   row["mysql_schema"].ToString(),
-		SQL:      row["migration_statement"].ToString(),
-		UUID:     row["migration_uuid"].ToString(),
-		Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
-		Options:  row["options"].ToString(),
-		Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Keyspace:    row["keyspace"].ToString(),
+		Table:       row["mysql_table"].ToString(),
+		Schema:      row["mysql_schema"].ToString(),
+		SQL:         row["migration_statement"].ToString(),
+		UUID:        row["migration_uuid"].ToString(),
+		Strategy:    sqlparser.DDLStrategy(row["strategy"].ToString()),
+		Options:     row["options"].ToString(),
+		Status:      schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Retries:     row.AsInt64("retries", 0),
+		TabletAlias: row["tablet"].ToString(),
 	}
 	return onlineDDL, nil
 }
@@ -1042,7 +1052,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		return countRunnning, err
 	}
 	for _, row := range r.Named().Rows {
-		// A pt-osc UUID is found which claims to be 'running'. Is it?
 		uuid := row["migration_uuid"].ToString()
 		// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
 		// if the process is alive, we update the `liveness_timestamp` for this migration.
@@ -1086,12 +1095,25 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 				return err
 			}
 		}
+		if onlineDDL.TabletAlias != e.TabletAliasString() {
+			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. master failover)
+			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
+				return err
+			}
+		}
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// retryTabletFailureMigrations looks for migrations failed by tablet failure (e.g. by failover)
+// and retry them (put them back in the queue)
+func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
+	_, err := e.retryMigration(ctx, sqlWhereTabletFailure)
+	return err
 }
 
 // gcArtifacts garbage-collects migration artifacts from completed/failed migrations
@@ -1156,10 +1178,12 @@ func (e *Executor) onMigrationCheckTick() {
 		return
 	}
 	ctx := context.Background()
-
 	if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
 		return
+	}
+	if err := e.retryTabletFailureMigrations(ctx); err != nil {
+		log.Error(err)
 	}
 	if err := e.scheduleNextMigration(ctx); err != nil {
 		log.Error(err)
@@ -1244,6 +1268,22 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 	return err
 }
 
+// updateTabletFailure marks a given migration as "tablet_failed"
+func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateTabletFailure, "_vt",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_uuid": sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
 	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStatus, "_vt",
 		":migration_status",
@@ -1261,18 +1301,49 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 	return err
 }
 
+func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, progress float64) error {
+	if progress <= 0 {
+		// progress starts at 0, and can only increase.
+		// A value of "0" either means "This is the actual current progress" or "No information"
+		// In both cases there's nothing to update
+		return nil
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationProgress, "_vt",
+		":migration_progress",
+		":migration_uuid",
+	)
+	bindVars := map[string]*querypb.BindVariable{
+		"migration_progress": sqltypes.Float64BindVariable(progress),
+		"migration_uuid":     sqltypes.StringBindVariable(uuid),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
 func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, "_vt", whereExpr)
-	result, err = e.execQuery(ctx, parsed.Query)
+	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, "_vt", ":tablet", whereExpr)
+	bindVars := map[string]*querypb.BindVariable{
+		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
+	}
+	bound, err := parsed.GenerateQuery(bindVars, nil)
+	result, err = e.execQuery(ctx, bound)
 	return result, err
 }
 
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
-func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam string) (err error) {
+func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam, progressParam string) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
 	dryRun := (dryrunParam == "true")
+	var progressPct float64
+	if pct, err := strconv.ParseFloat(progressParam, 32); err == nil {
+		progressPct = pct
+	}
 
 	if dryRun && status != schema.OnlineDDLStatusFailed {
 		// We don't consider dry-run reports unless there's a failure
@@ -1305,6 +1376,9 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 	if err = e.updateMigrationStatus(ctx, uuidParam, status); err != nil {
 		return err
 	}
+	if err = e.updateMigrationProgress(ctx, uuidParam, progressPct); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1335,6 +1409,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		// We can fill them in.
 		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
 		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
+		vx.AddOrReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)

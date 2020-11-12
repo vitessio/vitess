@@ -120,7 +120,6 @@ func skipToEnd(yylex interface{}) {
   showFilter    *ShowFilter
   optLike       *OptLike
   isolationLevel IsolationLevel
-  unionType	UnionType
   insertAction InsertAction
   scope 	Scope
   ignore 	Ignore
@@ -247,11 +246,10 @@ func skipToEnd(yylex interface{}) {
 %type <str> wild_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
-%type <unionType> union_op
 %type <bytes> explain_synonyms
 %type <str> cache_opt separator_opt
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt
+%type <boolean> distinct_opt union_op
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
@@ -2100,15 +2098,15 @@ comment_list:
 union_op:
   UNION
   {
-    $$ = UnionBasic
+    $$ = true
   }
 | UNION ALL
   {
-    $$ = UnionAll
+    $$ = false
   }
 | UNION DISTINCT
   {
-    $$ = UnionDistinct
+    $$ = true
   }
 
 cache_opt:

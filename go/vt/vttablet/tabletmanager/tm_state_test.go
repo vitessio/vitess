@@ -182,6 +182,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	assert.NotNil(t, ti.MasterTermStartTime)
+	assert.Equal(t, "master", statsTabletType.Get())
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 	require.NoError(t, err)
@@ -189,6 +190,7 @@ func TestStateChangeTabletType(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.MasterTermStartTime)
+	assert.Equal(t, "replica", statsTabletType.Get())
 }
 
 func TestPublishStateNew(t *testing.T) {

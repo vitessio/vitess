@@ -1,3 +1,5 @@
+**This README is kept here for reference, however the parent [README](../README) contains all the information necesaary to simulate this in a better way**
+
 # Simulate external/remote database for Vitess using docker-compose 
 
 This directory has a docker-compose that will bring up a mysql instance.

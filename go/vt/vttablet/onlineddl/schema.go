@@ -46,10 +46,17 @@ const (
 		artifacts varchar(1024) NOT NULL,
 		PRIMARY KEY (id),
 		UNIQUE KEY uuid_idx (migration_uuid),
-		KEY keyspace_shard_idx (keyspace,shard),
+		KEY keyspace_shard_idx (keyspace(64),shard(64)),
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
+	alterSchemaMigrationsTableRetries            = "ALTER TABLE %s.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTablet             = "ALTER TABLE %s.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableArtifacts          = "ALTER TABLE %s.schema_migrations modify artifacts TEXT NOT NULL"
+	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE %s.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE %s.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
+	alterSchemaMigrationsTableProgress           = "ALTER TABLE %s.schema_migrations add column progress float NOT NULL DEFAULT 0"
+
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
 			migration_status='ready',
@@ -62,6 +69,11 @@ const (
 	`
 	sqlUpdateMigrationStatus = `UPDATE %s.schema_migrations
 			SET migration_status=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationProgress = `UPDATE %s.schema_migrations
+			SET progress=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -81,21 +93,35 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateArtifacts = `UPDATE %s.schema_migrations
-			SET artifacts=%a
+			SET artifacts=concat(%a, ',', artifacts)
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateTabletFailure = `UPDATE %s.schema_migrations
+			SET tablet_failure=1
 		WHERE
 			migration_uuid=%a
 	`
 	sqlRetryMigration = `UPDATE %s.schema_migrations
 		SET
 			migration_status='queued',
+			tablet=%a,
+			retries=retries + 1,
+			tablet_failure=0,
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
-			completed_timestamp=NULL
+			completed_timestamp=NULL,
+			cleanup_timestamp=NULL
 		WHERE
 			migration_status IN ('failed', 'cancelled')
 			AND (%s)
 			LIMIT 1
+	`
+	sqlWhereTabletFailure = `
+		tablet_failure=1
+		AND migration_status='failed'
+		AND retries=0
 	`
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid
@@ -141,7 +167,9 @@ const (
 			liveness_timestamp,
 			completed_timestamp,
 			migration_status,
-			log_path
+			log_path,
+			retries,
+			tablet
 		FROM %s.schema_migrations
 		WHERE
 			migration_uuid=%a
@@ -161,7 +189,10 @@ const (
 			started_timestamp,
 			liveness_timestamp,
 			completed_timestamp,
-			migration_status
+			migration_status,
+			log_path,
+			retries,
+			tablet
 		FROM %s.schema_migrations
 		WHERE
 			migration_status='ready'
@@ -201,4 +232,10 @@ var (
 var applyDDL = []string{
 	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
 	fmt.Sprintf(sqlCreateSchemaMigrationsTable, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableRetries, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableTablet, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableArtifacts, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableTabletFailure, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableTabletFailureIndex, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableProgress, "_vt"),
 }
