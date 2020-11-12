@@ -127,37 +127,15 @@ func TestUnionDistinct(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// clean up before & after
-	exec(t, conn, "delete from t1")
-	exec(t, conn, "delete from t2")
-	defer exec(t, conn, "delete from t1")
-	defer exec(t, conn, "delete from t2")
-
-	exec(t, conn, "insert into t1(id1, id2) values(1, 1), (2, 2)")
-	exec(t, conn, "insert into t2(id3, id4) values(3, 3), (4, 4)")
-
-	// union all between two selectuniqueequal
-	assertMatches(t, conn, "select 1 union select null", "[[INT64(1)] [INT64(1)]]")
-	assertMatches(t, conn, "select null union select null", "[[INT64(1)]]")
-
-	// union all between two different tables
-	assertMatches(t, conn, "(select id1,id2 from t1 order by id1) union all (select id3,id4 from t2 order by id3)",
-		"[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]")
-
-	// union all between two different tables
-	result := exec(t, conn, "(select id1,id2 from t1) union all (select id3,id4 from t2)")
-	assert.Equal(t, 4, len(result.Rows))
-
-	// union all between two different tables
-	assertMatches(t, conn, "select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
-		"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
-
-	exec(t, conn, "insert into t1(id1, id2) values(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)")
-
-	// union all between two selectuniquein tables
-	qr := exec(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)")
-	expected := utils.SortString("[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
-	assert.Equal(t, expected, utils.SortString(fmt.Sprintf("%v", qr.Rows)))
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			exec(t, conn, "set workload = "+workload)
+			assertMatches(t, conn, "select 1 union select null", "[[INT64(1)] [NULL]]")
+			assertMatches(t, conn, "select null union select null", "[[NULL]]")
+			assertMatches(t, conn, "select * from (select 1 as col union select 2) as t", "[[INT64(1)] [INT64(2)]]")
+			assertMatches(t, conn, "select 1 from dual where 1 IN (select 1 as col union select 2)", "[[INT64(1)]]")
+		})
+	}
 }
 
 func TestUnionAllOlap(t *testing.T) {
