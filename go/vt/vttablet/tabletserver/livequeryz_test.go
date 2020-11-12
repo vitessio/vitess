@@ -24,82 +24,71 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestStreamQueryzHandlerJSON(t *testing.T) {
+func TestLiveQueryzHandlerJSON(t *testing.T) {
 	resp := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/streamqueryz?format=json", nil)
+	req, _ := http.NewRequest("GET", "/livequeryz/?format=json", nil)
 
-	queryList := NewQueryList()
+	queryList := NewQueryList("test")
 	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
 	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
 
-	streamQueryzHandler(queryList, resp, req)
+	livequeryzHandler([]*QueryList{queryList}, resp, req)
 }
 
-func TestStreamQueryzHandlerHTTP(t *testing.T) {
+func TestLiveQueryzHandlerHTTP(t *testing.T) {
 	resp := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/streamqueryz", nil)
+	req, _ := http.NewRequest("GET", "/livequeryz/", nil)
 
-	queryList := NewQueryList()
+	queryList := NewQueryList("test")
 	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
 	queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
 
-	streamQueryzHandler(queryList, resp, req)
+	livequeryzHandler([]*QueryList{queryList}, resp, req)
 }
 
-func TestStreamQueryzHandlerHTTPFailedInvalidForm(t *testing.T) {
+func TestLiveQueryzHandlerHTTPFailedInvalidForm(t *testing.T) {
 	resp := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/streamqueryz", nil)
+	req, _ := http.NewRequest("POST", "/livequeryz/", nil)
 
-	streamQueryzHandler(NewQueryList(), resp, req)
+	livequeryzHandler([]*QueryList{NewQueryList("test")}, resp, req)
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("http call should fail and return code: %d, but got: %d",
 			http.StatusInternalServerError, resp.Code)
 	}
 }
 
-func TestStreamQueryzHandlerTerminateConn(t *testing.T) {
+func TestLiveQueryzHandlerTerminateConn(t *testing.T) {
 	resp := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/streamqueryz/terminate?connID=1", nil)
+	req, _ := http.NewRequest("GET", "/livequeryz//terminate?connID=1", nil)
 
-	queryList := NewQueryList()
+	queryList := NewQueryList("test")
 	testConn := &testConn{id: 1}
 	queryList.Add(NewQueryDetail(context.Background(), testConn))
 	if testConn.IsKilled() {
 		t.Fatalf("conn should still be alive")
 	}
-	streamQueryzTerminateHandler(queryList, resp, req)
+	livequeryzTerminateHandler([]*QueryList{queryList}, resp, req)
 	if !testConn.IsKilled() {
 		t.Fatalf("conn should be killed")
 	}
 }
 
-func TestStreamQueryzHandlerTerminateFailedInvalidConnID(t *testing.T) {
+func TestLiveQueryzHandlerTerminateFailedInvalidConnID(t *testing.T) {
 	resp := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/streamqueryz/terminate?connID=invalid", nil)
+	req, _ := http.NewRequest("GET", "/livequeryz//terminate?connID=invalid", nil)
 
-	streamQueryzTerminateHandler(NewQueryList(), resp, req)
+	livequeryzTerminateHandler([]*QueryList{NewQueryList("test")}, resp, req)
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("http call should fail and return code: %d, but got: %d",
 			http.StatusInternalServerError, resp.Code)
 	}
 }
 
-func TestStreamQueryzHandlerTerminateFailedKnownConnID(t *testing.T) {
+func TestLiveQueryzHandlerTerminateFailedInvalidForm(t *testing.T) {
 	resp := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/streamqueryz/terminate?connID=10", nil)
+	req, _ := http.NewRequest("POST", "/livequeryz//terminate?inva+lid=2", nil)
 
-	streamQueryzTerminateHandler(NewQueryList(), resp, req)
-	if resp.Code != http.StatusInternalServerError {
-		t.Fatalf("http call should fail and return code: %d, but got: %d",
-			http.StatusInternalServerError, resp.Code)
-	}
-}
-
-func TestStreamQueryzHandlerTerminateFailedInvalidForm(t *testing.T) {
-	resp := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/streamqueryz/terminate?inva+lid=2", nil)
-
-	streamQueryzTerminateHandler(NewQueryList(), resp, req)
+	livequeryzTerminateHandler([]*QueryList{NewQueryList("test")}, resp, req)
 	if resp.Code != http.StatusInternalServerError {
 		t.Fatalf("http call should fail and return code: %d, but got: %d",
 			http.StatusInternalServerError, resp.Code)

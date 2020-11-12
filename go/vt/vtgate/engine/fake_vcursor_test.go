@@ -162,10 +162,10 @@ func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc
 	return func() {}
 }
 
-func (t noopVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+func (t noopVCursor) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
 	g, ctx := errgroup.WithContext(t.ctx)
 	t.ctx = ctx
-	return g
+	return g, func() {}
 }
 
 func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -290,7 +290,7 @@ func (f *loggingVCursor) SetContextTimeout(time.Duration) context.CancelFunc {
 	return func() {}
 }
 
-func (f *loggingVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+func (f *loggingVCursor) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
 	panic("implement me")
 }
 

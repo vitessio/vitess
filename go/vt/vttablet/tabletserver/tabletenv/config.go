@@ -93,7 +93,8 @@ func init() {
 	flag.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&deprecatedFoundRowsPoolSize, "client-found-rows-pool-size", 0, "DEPRECATED: queryserver-config-transaction-cap will be used instead.")
 	SecondsVar(&currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
-	SecondsVar(&currentConfig.GracePeriods.TransactionShutdownSeconds, "transaction_shutdown_grace_period", defaultConfig.GracePeriods.TransactionShutdownSeconds, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
+	SecondsVar(&currentConfig.GracePeriods.ShutdownSeconds, "shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
+	SecondsVar(&currentConfig.GracePeriods.ShutdownSeconds, "transaction_shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "DEPRECATED: use shutdown_grace_period instead.")
 	flag.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	flag.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	flag.IntVar(&deprecatedMaxDMLRows, "queryserver-config-max-dml-rows", 0, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
@@ -305,8 +306,8 @@ type HealthcheckConfig struct {
 // GracePeriodsConfig contains various grace periods.
 // TODO(sougou): move lameduck here?
 type GracePeriodsConfig struct {
-	TransactionShutdownSeconds Seconds `json:"transactionShutdownSeconds,omitempty"`
-	TransitionSeconds          Seconds `json:"transitionSeconds,omitempty"`
+	ShutdownSeconds   Seconds `json:"shutdownSeconds,omitempty"`
+	TransitionSeconds Seconds `json:"transitionSeconds,omitempty"`
 }
 
 // ReplicationTrackerConfig contains the config for the replication tracker.

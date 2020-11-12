@@ -203,10 +203,13 @@ func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFu
 }
 
 // ErrorGroupCancellableContext updates context that can be cancelled.
-func (vc *vcursorImpl) ErrorGroupCancellableContext() *errgroup.Group {
+func (vc *vcursorImpl) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
+	origCtx := vc.ctx
 	g, ctx := errgroup.WithContext(vc.ctx)
 	vc.ctx = ctx
-	return g
+	return g, func() {
+		vc.ctx = origCtx
+	}
 }
 
 // RecordWarning stores the given warning in the current session
