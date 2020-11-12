@@ -117,6 +117,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from user where 1 != 1",
+            "OrderBy": "0 DESC",
             "Query": "select id from user order by id desc limit :__upper_limit",
             "Table": "user"
           }
@@ -134,6 +135,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from music where 1 != 1",
+            "OrderBy": "0 DESC",
             "Query": "select id from music order by id desc limit :__upper_limit",
             "Table": "music"
           }
@@ -199,6 +201,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from user where 1 != 1",
+            "OrderBy": "0 ASC",
             "Query": "select id from user order by id asc limit :__upper_limit",
             "Table": "user"
           }
@@ -216,6 +219,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from music where 1 != 1",
+            "OrderBy": "0 DESC",
             "Query": "select id from music order by id desc limit :__upper_limit",
             "Table": "music"
           }
@@ -632,6 +636,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user where 1 != 1",
+            "OrderBy": "0 DESC",
             "Query": "select distinct 1 from user order by 1 desc",
             "Table": "user"
           },
@@ -643,6 +648,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user where 1 != 1",
+            "OrderBy": "0 ASC",
             "Query": "select distinct 1 from user order by 1 asc",
             "Table": "user"
           }

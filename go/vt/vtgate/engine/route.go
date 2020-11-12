@@ -690,6 +690,10 @@ func (route *Route) description() PrimitiveDescription {
 	if route.SysTableTableName != nil {
 		other["SysTableTableName"] = route.SysTableTableName.String()
 	}
+	orderBy := GenericJoin(route.OrderBy, orderByToString)
+	if orderBy != "" {
+		other["OrderBy"] = orderBy
+	}
 
 	return PrimitiveDescription{
 		OperatorType:      "Route",
@@ -698,6 +702,10 @@ func (route *Route) description() PrimitiveDescription {
 		TargetDestination: route.TargetDestination,
 		Other:             other,
 	}
+}
+
+func orderByToString(in interface{}) string {
+	return in.(OrderbyParams).String()
 }
 
 // BvTableName is used to fill in the table name for information_schema queries with routed tables
