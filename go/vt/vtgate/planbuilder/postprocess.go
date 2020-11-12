@@ -28,7 +28,7 @@ import (
 func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if sel.Distinct {
 		newBuilder, err := pb.bldr.MakeDistinct()
-		if  err != nil {
+		if err != nil {
 			return err
 		}
 		pb.bldr = newBuilder

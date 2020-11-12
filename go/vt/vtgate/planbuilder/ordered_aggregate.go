@@ -371,7 +371,7 @@ func (oa *orderedAggregate) MakeDistinct() (builder, error) {
 	if err != nil {
 		return nil, err
 	}
-	oa.input=distinctSrc
+	oa.input = distinctSrc
 	return oa, err
 }
 
