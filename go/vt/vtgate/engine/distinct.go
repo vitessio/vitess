@@ -81,9 +81,8 @@ func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	}
 
 	result := &sqltypes.Result{
-		Fields:              input.Fields,
-		InsertID:            input.InsertID,
-		SessionStateChanges: input.SessionStateChanges,
+		Fields:   input.Fields,
+		InsertID: input.InsertID,
 	}
 
 	pt := newProbeTable()
@@ -105,7 +104,26 @@ func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 
 // StreamExecute implements the Primitive interface
 func (d *Distinct) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	pt := newProbeTable()
+
+	err := d.Source.StreamExecute(vcursor, bindVars, wantfields, func(input *sqltypes.Result) error {
+		result := &sqltypes.Result{
+			Fields:   input.Fields,
+			InsertID: input.InsertID,
+		}
+		for _, row := range input.Rows {
+			exists, err := pt.exists(row)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				result.Rows = append(result.Rows, row)
+			}
+		}
+		return callback(result)
+	})
+
+	return err
 }
 
 // RouteType implements the Primitive interface

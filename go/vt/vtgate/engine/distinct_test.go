@@ -54,7 +54,7 @@ func TestDistinct(t *testing.T) {
 	}, {
 		testName:      "varchar columns",
 		inputs:        r("myid", "varchar", "monkey", "horse"),
-		expectedError: "types does not support hashcode yet",
+		expectedError: "types does not support hashcode yet: VARCHAR",
 	}}
 
 	for _, tc := range testCases {
@@ -68,8 +68,21 @@ func TestDistinct(t *testing.T) {
 				expected := fmt.Sprintf("%v", tc.expectedResult.Rows)
 				utils.MustMatch(t, expected, got, "result not what correct")
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.expectedError)
+				require.EqualError(t, err, tc.expectedError)
+			}
+		})
+		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
+			distinct := &Distinct{Source: &fakePrimitive{results: []*sqltypes.Result{tc.inputs}}}
+
+			result, err := wrapStreamExecute(distinct, &noopVCursor{ctx: context.Background()}, nil, true)
+
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				got := fmt.Sprintf("%v", result.Rows)
+				expected := fmt.Sprintf("%v", tc.expectedResult.Rows)
+				utils.MustMatch(t, expected, got, "result not what correct")
+			} else {
+				require.EqualError(t, err, tc.expectedError)
 			}
 		})
 	}
