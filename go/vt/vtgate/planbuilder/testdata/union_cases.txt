@@ -4,31 +4,15 @@
   "QueryType": "SELECT",
   "Original": "select id from user union all select id from music",
   "Instructions": {
-    "OperatorType": "Concatenate",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from user where 1 != 1",
-        "Query": "select id from user",
-        "Table": "user"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music",
-        "Table": "music"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1 union all select id from music where 1 != 1",
+    "Query": "select id from user union all select id from music",
+    "Table": "user"
   }
 }
 
@@ -126,31 +110,15 @@
   "QueryType": "SELECT",
   "Original": "select col1, col2 from user union all select col1, col2 from user_extra",
   "Instructions": {
-    "OperatorType": "Concatenate",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col1, col2 from user where 1 != 1",
-        "Query": "select col1, col2 from user",
-        "Table": "user"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col1, col2 from user_extra where 1 != 1",
-        "Query": "select col1, col2 from user_extra",
-        "Table": "user_extra"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col1, col2 from user where 1 != 1 union all select col1, col2 from user_extra where 1 != 1",
+    "Query": "select col1, col2 from user union all select col1, col2 from user_extra",
+    "Table": "user"
   }
 }
 
@@ -160,39 +128,15 @@
   "QueryType": "SELECT",
   "Original": "select * from (select * from user union all select * from user_extra) as t",
   "Instructions": {
-    "OperatorType": "Subquery",
-    "Columns": [
-      0
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from user where 1 != 1",
-            "Query": "select * from user",
-            "Table": "user"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from user_extra where 1 != 1",
-            "Query": "select * from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from (select * from user where 1 != 1 union all select * from user_extra where 1 != 1) as t where 1 != 1",
+    "Query": "select * from (select * from user union all select * from user_extra) as t",
+    "Table": "user"
   }
 }
 

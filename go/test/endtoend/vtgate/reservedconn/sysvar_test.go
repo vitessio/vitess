@@ -177,20 +177,13 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 
 	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
 	checkedExec(t, conn, "set sql_safe_updates = 1")
-	qr := checkedExec(t, conn, "select @@sql_safe_updates, connection_id() from test where id = 80")
-	require.Equal(t, "1", qr.Rows[0][0].ToString())
+	assertMatches(t, conn, "select @@sql_safe_updates from test where id = 80", "[[INT64(1)]]")
 
 	// Connection timeout.
 	time.Sleep(10 * time.Second)
 
-	// first query will fail
-	_, err = exec(t, conn, `select @@sql_safe_updates from test where id = 80`)
-	require.Error(t, err)
-
-	// this query is able to succeed.
-	newQR := checkedExec(t, conn, `select @@sql_safe_updates, connection_id() from test where id = 80`)
-	require.Equal(t, qr.Rows[0][0], newQR.Rows[0][0])
-	require.NotEqual(t, qr.Rows[0][1], newQR.Rows[0][1])
+	// connection has timed out, but vtgate will recreate the connection for us
+	assertMatches(t, conn, "select @@sql_safe_updates from test where id = 80", "[[INT64(1)]]")
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
@@ -286,13 +279,9 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 	// first query to 80- shard should pass
 	assertMatches(t, conn, "select id, val1 from test where id = 4", "[[INT64(4) NULL]]")
 
-	// first query to -80 shard will fail
-	_, err = exec(t, conn, "insert into test (id, val1) values (2, null)")
-	require.Error(t, err)
-
-	// subsequent queries on -80 will pass
-	assertMatches(t, conn, "select id from test where id = 2", "[]")
-	assertMatches(t, conn, "insert into test (id, val1) values (2, null)", "[]")
+	// first query to -80 shard will fail, but vtgate will auto-retry for us
+	checkedExec(t, conn, "insert into test (id, val1) values (2, null)")
+	assertMatches(t, conn, "select id from test where id = 2", "[[INT64(2)]]")
 	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 2", "[[INT64(2) INT64(1)]]")
 }
 
@@ -324,9 +313,8 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 	checkedExec(t, conn, "rollback")
 	assertMatches(t, conn, "select id, val1 from test where id = 2", "[]")
 
-	// first query to 80- shard will fail
-	_, err = exec(t, conn, "select @@sql_safe_updates from test where id = 4")
-	require.Error(t, err)
+	// first query to -80 shard will fail, but vtgate should retry once and succeed the second time
+	checkedExec(t, conn, "select @@sql_safe_updates from test where id = 4")
 
 	// subsequent queries on 80- will pass
 	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")

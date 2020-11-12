@@ -201,13 +201,6 @@ const (
 	Serializable
 )
 
-// Constants for Union.Type
-const (
-	UnionBasic UnionType = iota
-	UnionAll
-	UnionDistinct
-)
-
 // Constants for Enum Type - Insert.Action
 const (
 	InsertAct InsertAction = iota

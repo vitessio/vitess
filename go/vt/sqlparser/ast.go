@@ -97,13 +97,9 @@ type (
 
 	// UnionSelect represents union type and select statement after first select statement.
 	UnionSelect struct {
-		Type      UnionType
+		Distinct  bool
 		Statement SelectStatement
 	}
-
-	// UnionType is the type of union
-	UnionType int8
-
 	// Union represents a UNION statement.
 	Union struct {
 		FirstStatement SelectStatement
@@ -1070,15 +1066,10 @@ func (node *Union) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *UnionSelect) Format(buf *TrackedBuffer) {
-	switch node.Type {
-	case UnionBasic:
+	if node.Distinct {
 		buf.astPrintf(node, " %s %v", UnionStr, node.Statement)
-	case UnionAll:
+	} else {
 		buf.astPrintf(node, " %s %v", UnionAllStr, node.Statement)
-	case UnionDistinct:
-		buf.astPrintf(node, " %s %v", UnionDistinctStr, node.Statement)
-	default:
-		buf.astPrintf(node, " %s %v", "Unknown Union Type", node.Statement)
 	}
 }
 
