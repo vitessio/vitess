@@ -36,11 +36,10 @@ type probeTable struct {
 	m map[int64][]row
 }
 
-func (pt *probeTable) exists(r row) (bool, error) {
-
+func (pt *probeTable) exists(inputRow row) (bool, error) {
+	// calculate hashcode from all column values in the input row
 	code := int64(17)
-
-	for _, value := range r {
+	for _, value := range inputRow {
 		hashcode, err := evalengine.NullsafeHashcode(value)
 		if err != nil {
 			return false, err
@@ -50,23 +49,39 @@ func (pt *probeTable) exists(r row) (bool, error) {
 
 	existingRows, found := pt.m[code]
 	if !found {
-		pt.m[code] = []row{r}
+		// nothing with this hash code found, we can be sure it's a not seen row
+		pt.m[code] = []row{inputRow}
 		return false, nil
 	}
 
+	// we found something in the map - still need to check all individual values
+	// so we don't just fall for a hash collision
 	for _, existingRow := range existingRows {
-		cmp, err := evalengine.NullsafeCompare(r[0], existingRow[0])
+		exists, err := equal(existingRow, inputRow)
 		if err != nil {
 			return false, err
 		}
-		if cmp == 0 /*equal*/ {
+		if exists {
 			return true, nil
 		}
 	}
 
-	pt.m[code] = append(existingRows, r)
+	pt.m[code] = append(existingRows, inputRow)
 
 	return false, nil
+}
+
+func equal(a, b []sqltypes.Value) (bool, error) {
+	for i, aVal := range a {
+		cmp, err := evalengine.NullsafeCompare(aVal, b[i])
+		if err != nil {
+			return false, err
+		}
+		if cmp != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func newProbeTable() *probeTable {

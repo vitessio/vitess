@@ -49,8 +49,8 @@ func TestDistinct(t *testing.T) {
 		expectedResult: r("a|b", "int64|int64", "0|0", "1|1", "null|null", "1|2"),
 	}, {
 		testName:       "float64 columns designed to produce the same hashcode but not be equal",
-		inputs:         r("a", "float64", "0.1", "0.2", "0.3", "0.4"),
-		expectedResult: r("a", "float64", "0.1", "0.2", "0.3", "0.4"),
+		inputs:         r("a|b", "float64|float64", "0.1|0.2", "0.1|0.3", "0.1|0.4", "0.1|0.5"),
+		expectedResult: r("a|b", "float64|float64", "0.1|0.2", "0.1|0.3", "0.1|0.4", "0.1|0.5"),
 	}, {
 		testName:      "varchar columns",
 		inputs:        r("myid", "varchar", "monkey", "horse"),
