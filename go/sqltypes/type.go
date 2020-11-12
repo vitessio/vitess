@@ -196,37 +196,30 @@ func modifyType(typ querypb.Type, flags int64) querypb.Type {
 		if flags&mysqlUnsigned != 0 {
 			return Uint8
 		}
-		return Int8
 	case Int16:
 		if flags&mysqlUnsigned != 0 {
 			return Uint16
 		}
-		return Int16
 	case Int32:
 		if flags&mysqlUnsigned != 0 {
 			return Uint32
 		}
-		return Int32
 	case Int64:
 		if flags&mysqlUnsigned != 0 {
 			return Uint64
 		}
-		return Int64
 	case Int24:
 		if flags&mysqlUnsigned != 0 {
 			return Uint24
 		}
-		return Int24
 	case Text:
 		if flags&mysqlBinary != 0 {
 			return Blob
 		}
-		return Text
 	case VarChar:
 		if flags&mysqlBinary != 0 {
 			return VarBinary
 		}
-		return VarChar
 	case Char:
 		if flags&mysqlBinary != 0 {
 			return Binary
@@ -237,7 +230,10 @@ func modifyType(typ querypb.Type, flags int64) querypb.Type {
 		if flags&mysqlSet != 0 {
 			return Set
 		}
-		return Char
+	case Year:
+		if flags&mysqlBinary != 0 {
+			return VarBinary
+		}
 	}
 	return typ
 }
