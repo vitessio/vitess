@@ -19,7 +19,11 @@ package vreplication
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
+	"time"
+
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
@@ -118,7 +122,20 @@ func (st *vrStats) register() {
 		}
 		return result
 	}))
-
+	stats.Publish("VReplicationMessages", stats.StringMapFunc(func() map[string]string {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		result := make(map[string]string, len(st.controllers))
+		for _, ct := range st.controllers {
+			var messages []string
+			for _, rec := range ct.blpStats.History.Records() {
+				hist := rec.(*binlogplayer.StatsHistoryRecord)
+				messages = append(messages, fmt.Sprintf("%s:%s", hist.Time.Format(time.RFC3339Nano), hist.Message))
+			}
+			result[fmt.Sprintf("%v", ct.id)] = strings.Join(messages, "; ")
+		}
+		return result
+	}))
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationPhaseTimings",
 		"vreplication per phase timings per stream",

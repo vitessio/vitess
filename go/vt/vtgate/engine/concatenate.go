@@ -17,8 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"sort"
-	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
@@ -44,79 +42,102 @@ func (c *Concatenate) RouteType() string {
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to
 func (c *Concatenate) GetKeyspaceName() string {
-	ksMap := map[string]interface{}{}
-	for _, source := range c.Sources {
-		ksMap[source.GetKeyspaceName()] = nil
-	}
-	var ksArr []string
-	for ks := range ksMap {
-		ksArr = append(ksArr, ks)
-	}
-	sort.Strings(ksArr)
-	return strings.Join(ksArr, "_")
+	return formatTwoOptionsNicely(c.Sources[0].GetKeyspaceName(), c.Sources[1].GetKeyspaceName())
 }
 
 // GetTableName specifies the table that this primitive routes to.
 func (c *Concatenate) GetTableName() string {
-	var tabArr []string
-	for _, source := range c.Sources {
-		tabArr = append(tabArr, source.GetTableName())
+	return formatTwoOptionsNicely(c.Sources[0].GetTableName(), c.Sources[1].GetTableName())
+}
+
+func formatTwoOptionsNicely(a, b string) string {
+	if a == b {
+		return a
 	}
-	return strings.Join(tabArr, "_")
+	return a + "_" + b
 }
 
 // Execute performs a non-streaming exec.
 func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result := &sqltypes.Result{}
-	var wg sync.WaitGroup
-	qrs := make([]*sqltypes.Result, len(c.Sources))
-	errs := make([]error, len(c.Sources))
-	for i, source := range c.Sources {
-		wg.Add(1)
-		go func(i int, source Primitive) {
-			defer wg.Done()
-			qrs[i], errs[i] = source.Execute(vcursor, bindVars, wantfields)
-		}(i, source)
+	lhs, rhs, err := c.execSources(vcursor, bindVars, wantfields)
+	if err != nil {
+		return nil, err
 	}
-	wg.Wait()
-	for i := 0; i < len(c.Sources); i++ {
-		if errs[i] != nil {
-			return nil, vterrors.Wrap(errs[i], "Concatenate.Execute")
-		}
-		qr := qrs[i]
-		if result.Fields == nil {
-			result.Fields = qr.Fields
-		}
-		err := compareFields(result.Fields, qr.Fields)
+
+	fields, err := c.getFields(lhs.Fields, rhs.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(lhs.Rows) > 0 &&
+		len(rhs.Rows) > 0 &&
+		len(lhs.Rows[0]) != len(rhs.Rows[0]) {
+		return nil, mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
+	}
+
+	return &sqltypes.Result{
+		Fields:       fields,
+		RowsAffected: lhs.RowsAffected + rhs.RowsAffected,
+		Rows:         append(lhs.Rows, rhs.Rows...),
+	}, nil
+}
+
+func (c *Concatenate) getFields(a, b []*querypb.Field) ([]*querypb.Field, error) {
+	switch {
+	case a != nil && b != nil:
+		err := compareFields(a, b)
 		if err != nil {
 			return nil, err
 		}
-		if len(qr.Rows) > 0 {
-			result.Rows = append(result.Rows, qr.Rows...)
-			if len(result.Rows[0]) != len(qr.Rows[0]) {
-				return nil, mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
-			}
-			result.RowsAffected += qr.RowsAffected
-		}
+		return a, nil
+	case a != nil:
+		return a, nil
+	case b != nil:
+		return b, nil
 	}
-	return result, nil
+
+	return nil, nil
+}
+func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, *sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, 2)
+	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
+	defer restoreCtx()
+	for i, source := range c.Sources {
+		currIndex, currSource := i, source
+		g.Go(func() error {
+			result, err := currSource.Execute(vcursor, bindVars, wantfields)
+			if err != nil {
+				return err
+			}
+			results[currIndex] = result
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, nil, vterrors.Wrap(err, "Concatenate.Execute")
+	}
+	return results[0], results[1], nil
 }
 
 // StreamExecute performs a streaming exec.
 func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var fieldset sync.WaitGroup
-	fieldsSent := false
+	var cbMu sync.Mutex
 
-	g := vcursor.ErrorGroupCancellableContext()
+	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
+	defer restoreCtx()
+	fieldsSent := false
 	fieldset.Add(1)
-	var mu sync.Mutex
+
 	for i, source := range c.Sources {
-		i, source := i, source
+		currIndex, currSource := i, source
+
 		g.Go(func() error {
-			err := source.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			err := currSource.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
-				if i == 0 && !fieldsSent {
+				if currIndex == 0 && !fieldsSent {
 					defer fieldset.Done()
 					seenFields = resultChunk.Fields
 					fieldsSent = true
@@ -131,8 +152,8 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 					}
 				}
 				// This to ensure only one send happens back to the client.
-				mu.Lock()
-				defer mu.Unlock()
+				cbMu.Lock()
+				defer cbMu.Unlock()
 				select {
 				case <-vcursor.Context().Done():
 					return nil
@@ -141,7 +162,7 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 				}
 			})
 			// This is to ensure other streams complete if the first stream failed to unlock the wait.
-			if i == 0 && !fieldsSent {
+			if currIndex == 0 && !fieldsSent {
 				fieldset.Done()
 			}
 			return err
@@ -156,34 +177,25 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 
 // GetFields fetches the field info.
 func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	firstQr, err := c.Sources[0].GetFields(vcursor, bindVars)
+	lhs, err := c.Sources[0].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	for i, source := range c.Sources {
-		if i == 0 {
-			continue
-		}
-		qr, err := source.GetFields(vcursor, bindVars)
-		if err != nil {
-			return nil, err
-		}
-		err = compareFields(firstQr.Fields, qr.Fields)
-		if err != nil {
-			return nil, err
-		}
+	rhs, err := c.Sources[1].GetFields(vcursor, bindVars)
+	if err != nil {
+		return nil, err
 	}
-	return firstQr, nil
+	err = compareFields(lhs.Fields, rhs.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	return lhs, nil
 }
 
 //NeedsTransaction returns whether a transaction is needed for this primitive
 func (c *Concatenate) NeedsTransaction() bool {
-	for _, source := range c.Sources {
-		if source.NeedsTransaction() {
-			return true
-		}
-	}
-	return false
+	return c.Sources[0].NeedsTransaction() || c.Sources[1].NeedsTransaction()
 }
 
 // Inputs returns the input primitives for this

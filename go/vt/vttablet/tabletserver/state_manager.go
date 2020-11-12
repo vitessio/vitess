@@ -92,6 +92,11 @@ type stateManager struct {
 
 	requests sync.WaitGroup
 
+	// QueryList does not have an Open or Close.
+	statelessql *QueryList
+	statefulql  *QueryList
+	olapql      *QueryList
+
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
 	// All Close functions must be called before Open.
@@ -118,6 +123,7 @@ type stateManager struct {
 
 	timebombDuration      time.Duration
 	unhealthyThreshold    time.Duration
+	shutdownGracePeriod   time.Duration
 	transitionGracePeriod time.Duration
 }
 
@@ -139,13 +145,12 @@ type (
 	queryEngine interface {
 		Open() error
 		IsMySQLReachable() error
-		StopServing()
 		Close()
 	}
 
 	txEngine interface {
-		AcceptReadWrite() error
-		AcceptReadOnly() error
+		AcceptReadWrite()
+		AcceptReadOnly()
 		Close()
 	}
 
@@ -183,6 +188,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
 	sm.unhealthyThreshold = env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()
+	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
 }
 
@@ -417,9 +423,11 @@ func (sm *stateManager) serveMaster() error {
 
 	sm.rt.MakeMaster()
 	sm.tracker.Open()
-	if err := sm.te.AcceptReadWrite(); err != nil {
-		return err
-	}
+	// We instantly kill all stateful queries to allow for
+	// te to quickly transition into RW, but olap and stateless
+	// queries can continue serving.
+	sm.statefulql.TerminateAll()
+	sm.te.AcceptReadWrite()
 	sm.messager.Open()
 	sm.throttler.Open()
 	sm.tableGC.Open()
@@ -443,6 +451,11 @@ func (sm *stateManager) unserveMaster() error {
 }
 
 func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
+	// We are likely transitioning from master. We have to honor
+	// the shutdown grace period.
+	cancel := sm.handleShutdownGracePeriod()
+	defer cancel()
+
 	sm.ddle.Close()
 	sm.tableGC.Close()
 	sm.throttler.Close()
@@ -454,9 +467,7 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 		return err
 	}
 
-	if err := sm.te.AcceptReadOnly(); err != nil {
-		return err
-	}
+	sm.te.AcceptReadOnly()
 	sm.rt.MakeNonMaster()
 	sm.watcher.Open()
 	sm.setState(wantTabletType, StateServing)
@@ -493,14 +504,34 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	cancel := sm.handleShutdownGracePeriod()
+	defer cancel()
+
 	sm.ddle.Close()
 	sm.tableGC.Close()
 	sm.throttler.Close()
 	sm.messager.Close()
 	sm.te.Close()
-	sm.qe.StopServing()
+	log.Info("Killing all OLAP queries.")
+	sm.olapql.TerminateAll()
 	sm.tracker.Close()
 	sm.requests.Wait()
+}
+
+func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
+	if sm.shutdownGracePeriod == 0 {
+		return func() {}
+	}
+	ctx, cancel := context.WithCancel(context.TODO())
+	go func() {
+		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
+			return
+		}
+		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
+		sm.statelessql.TerminateAll()
+		sm.statefulql.TerminateAll()
+	}()
+	return cancel
 }
 
 func (sm *stateManager) closeAll() {
