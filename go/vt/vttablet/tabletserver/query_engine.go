@@ -134,7 +134,6 @@ type QueryEngine struct {
 	// that we start more than one transaction per hot row (range).
 	// For implementation details, please see BeginExecute() in tabletserver.go.
 	txSerializer *txserializer.TxSerializer
-	streamQList  *QueryList
 
 	// Vars
 	maxResultSize    sync2.AtomicInt64
@@ -179,7 +178,6 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.enableQueryPlanFieldCaching = config.CacheResultFields
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(env)
-	qe.streamQList = NewQueryList()
 
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
@@ -262,13 +260,6 @@ func (qe *QueryEngine) Open() error {
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
 	qe.isOpen = true
 	return nil
-}
-
-// StopServing kills all streaming queries.
-// Other queries are handled by the tsv.requests Waitgroup.
-func (qe *QueryEngine) StopServing() {
-	log.Info("Query Engine: killing all streaming queries")
-	qe.streamQList.TerminateAll()
 }
 
 // Close must be called to shut down QueryEngine.

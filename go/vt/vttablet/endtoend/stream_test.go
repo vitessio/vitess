@@ -101,10 +101,10 @@ func TestStreamTerminate(t *testing.T) {
 		nil,
 		func(*sqltypes.Result) error {
 			if !called {
-				queries := framework.StreamQueryz()
+				queries := framework.LiveQueryz()
 				if l := len(queries); l != 1 {
 					t.Errorf("len(queries): %d, want 1", l)
-					return errors.New("no queries from StreamQueryz")
+					return errors.New("no queries from LiveQueryz")
 				}
 				err := framework.StreamTerminate(queries[0].ConnID)
 				if err != nil {

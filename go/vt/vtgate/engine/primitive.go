@@ -65,7 +65,7 @@ type (
 		SetContextTimeout(timeout time.Duration) context.CancelFunc
 
 		// ErrorGroupCancellableContext updates context that can be cancelled.
-		ErrorGroupCancellableContext() *errgroup.Group
+		ErrorGroupCancellableContext() (*errgroup.Group, func())
 
 		// V3 functions.
 		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
