@@ -1143,13 +1143,21 @@ var (
 	}, {
 		input: "create index a on b (col1)",
 	}, {
-		input: "create unique index a on b (col1)",
+		input:  "create unique index a on b (col1)",
+		output: "create `unique` index a on b (col1)",
 	}, {
-		input: "create unique index a using foo on b (col1)",
+		input: "create `unique` index a using foo on b (col1 desc)",
 	}, {
-		input: "create fulltext index a using foo on b (col1)",
+		input:  "create fulltext index a using foo on b (col1)",
+		output: "create `fulltext` index a using foo on b (col1)",
 	}, {
-		input: "create spatial index a using foo on b (col1)",
+		input:  "create spatial index a using foo on b (col1)",
+		output: "create `spatial` index a using foo on b (col1)",
+	}, {
+		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+	}, {
+		input:  "create index a on b ((col1 + col2), (col1*col2))",
+		output: "create index a on b ()",
 	}, {
 		input:  "create view a",
 		output: "create table a",
@@ -1823,7 +1831,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input: "create index b on A (col1)",
+		input: "create index b on A (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
