@@ -161,6 +161,63 @@ func TestComStmtPrepare(t *testing.T) {
 	}
 }
 
+func TestComStmtPrepareUpdStmt(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "UPDATE test SET __bit = ?, __tinyInt = ?, __tinyIntU = ?, __smallInt = ?, __smallIntU = ?, __mediumInt = ?, __mediumIntU = ?, __int = ?, __intU = ?, __bigInt = ?, __bigIntU = ?, __decimal = ?, __float = ?, __double = ?, __date = ?, __datetime = ?, __timestamp = ?, __time = ?, __year = ?, __char = ?, __varchar = ?, __binary = ?, __varbinary = ?, __tinyblob = ?, __tinytext = ?, __blob = ?, __text = ?, __enum = ?, __set = ? WHERE __id = 0"
+	mockData := MockQueryPackets(t, sql)
+
+	if err := cConn.writePacket(mockData); err != nil {
+		t.Fatalf("writePacket failed: %v", err)
+	}
+
+	data, err := sConn.ReadPacket()
+	if err != nil {
+		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v", err)
+	}
+
+	parsedQuery := sConn.parseComPrepare(data)
+	if parsedQuery != sql {
+		t.Fatalf("Received incorrect query, want: %v, got: %v", sql, parsedQuery)
+	}
+
+	paramsCount := uint16(29)
+	prepare := &PrepareData{
+		StatementID: 1,
+		PrepareStmt: sql,
+		ParamsCount: paramsCount,
+	}
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	// write the response to the client
+	if err := sConn.writePrepare(nil, prepare); err != nil {
+		t.Fatalf("sConn.writePrepare failed: %v", err)
+	}
+
+	resp, err := cConn.ReadPacket()
+	if err != nil {
+		t.Fatalf("cConn.ReadPacket failed: %v", err)
+	}
+	if uint32(resp[1]) != prepare.StatementID {
+		t.Fatalf("Received incorrect Statement ID, want: %v, got: %v", prepare.StatementID, resp[1])
+	}
+	for i := uint16(0); i < paramsCount; i++ {
+		resp, err := cConn.ReadPacket()
+		if err != nil {
+			t.Fatalf("cConn.ReadPacket failed: %v", err)
+		}
+		if resp[17] != 0xfd {
+			t.Fatalf("Received incorrect params type, want: %v, got: %v", 0xfd, resp[21])
+		}
+	}
+}
+
 func TestComStmtSendLongData(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
