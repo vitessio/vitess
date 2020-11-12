@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
@@ -325,6 +326,72 @@ func TestPrepareReparentCommit(t *testing.T) {
 	if qr.RowsAffected != 4 {
 		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
 	}
+}
+
+func TestShutdownGracePeriod(t *testing.T) {
+	client := framework.NewClient()
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.Execute("select sleep(10) from dual", nil)
+		assert.Error(t, err)
+	}()
+
+	started := false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, started)
+
+	start := time.Now()
+	err = client.SetServingType(topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	client.Rollback()
+
+	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+	err = client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.Execute("select sleep(11) from dual", nil)
+		assert.Error(t, err)
+	}()
+
+	started = false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, started)
+	start = time.Now()
+	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	client.Rollback()
+}
+
+func TestShortTxTimeout(t *testing.T) {
+	client := framework.NewClient()
+	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
+	framework.Server.SetTxTimeout(10 * time.Millisecond)
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	start := time.Now()
+	_, err = client.Execute("select sleep(10) from dual", nil)
+	assert.Error(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	client.Rollback()
 }
 
 func TestMMCommitFlow(t *testing.T) {
