@@ -457,7 +457,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported: UNION cannot be executed as a single route")
+	assert.Contains(t, err.Error(), "types does not support hashcode yet: VARCHAR")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
