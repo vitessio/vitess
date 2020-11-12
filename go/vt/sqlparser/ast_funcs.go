@@ -75,8 +75,9 @@ func Append(buf *strings.Builder, node SQLNode) {
 
 // IndexColumn describes a column in an index definition with optional length
 type IndexColumn struct {
-	Column ColIdent
-	Length *Literal
+	Column    ColIdent
+	Length    *Literal
+	Direction OrderDirection
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -86,11 +87,11 @@ type LengthScaleOption struct {
 	Scale  *Literal
 }
 
-// IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING
+// IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING, WITH PARSER
 type IndexOption struct {
-	Name  string
-	Value *Literal
-	Using string
+	Name   string
+	Value  *Literal
+	String string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -1122,6 +1123,7 @@ func (ty ExplainType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
 func (sel SelectIntoType) ToString() string {
 	switch sel {
 	case IntoOutfile:

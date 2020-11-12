@@ -54,6 +54,12 @@ type (
 		SQLNode
 	}
 
+	// DDLStatement represents any DDL Statement
+	DDLStatement interface {
+		iDDLStatement()
+		Statement
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -253,6 +259,16 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// CreateIndex represents a CREATE INDEX query
+	CreateIndex struct {
+		Constraint ColIdent
+		Name       ColIdent
+		IndexType  ColIdent
+		Table      TableName
+		Columns    []*IndexColumn
+		Options    []*IndexOption
+	}
+
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
@@ -346,6 +362,10 @@ func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
+func (*CreateIndex) iStatement()       {}
+
+func (*DDL) iDDLStatement()         {}
+func (*CreateIndex) iDDLStatement() {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -956,7 +976,7 @@ type Order struct {
 	Direction OrderDirection
 }
 
-// OrderDirection is an enum for Order.Direction
+// OrderDirection is an enum for the direction in which to order - asc or desc.
 type OrderDirection int8
 
 // Limit represents a LIMIT clause.
@@ -1349,13 +1369,16 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		if col.Length != nil {
 			buf.astPrintf(idx, "(%v)", col.Length)
 		}
+		if col.Direction == DescOrder {
+			buf.astPrintf(idx, " desc")
+		}
 	}
 	buf.astPrintf(idx, ")")
 
 	for _, opt := range idx.Options {
 		buf.astPrintf(idx, " %s", opt.Name)
-		if opt.Using != "" {
-			buf.astPrintf(idx, " %s", opt.Using)
+		if opt.String != "" {
+			buf.astPrintf(idx, " %s", opt.String)
 		} else {
 			buf.astPrintf(idx, " %v", opt.Value)
 		}
@@ -2159,4 +2182,39 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " character set %s", node.Charset)
 	}
 	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
+}
+
+// Format formats the node.
+func (node *CreateIndex) Format(buf *TrackedBuffer) {
+	buf.WriteString("create")
+	if node.Constraint.String() != "" {
+		buf.astPrintf(node, " %v", node.Constraint)
+	}
+	buf.astPrintf(node, " index %v", node.Name)
+	if node.IndexType.String() != "" {
+		buf.astPrintf(node, " using %v", node.IndexType)
+	}
+	buf.astPrintf(node, " on %v (", node.Table)
+	for i, col := range node.Columns {
+		if i != 0 {
+			buf.astPrintf(node, ", %v", col.Column)
+		} else {
+			buf.astPrintf(node, "%v", col.Column)
+		}
+		if col.Length != nil {
+			buf.astPrintf(node, "(%v)", col.Length)
+		}
+		if col.Direction == DescOrder {
+			buf.astPrintf(node, " desc")
+		}
+	}
+	buf.astPrintf(node, ")")
+	for _, opt := range node.Options {
+		buf.astPrintf(node, " %s", strings.ToLower(opt.Name))
+		if opt.String != "" {
+			buf.astPrintf(node, " %s", opt.String)
+		} else {
+			buf.astPrintf(node, " %v", opt.Value)
+		}
+	}
 }
