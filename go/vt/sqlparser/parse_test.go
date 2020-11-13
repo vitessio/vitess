@@ -32,8 +32,9 @@ import (
 
 var (
 	validSQL = []struct {
-		input  string
-		output string
+		input      string
+		output     string
+		partialDDL bool
 	}{{
 		input:  "select 1",
 		output: "select 1 from dual",
@@ -1144,21 +1145,22 @@ var (
 	}, {
 		input: "create index a on b (col1)",
 	}, {
-		input:  "create unique index a on b (col1)",
-		output: "create `unique` index a on b (col1)",
+		input: "create unique index a on b (col1)",
 	}, {
-		input: "create `unique` index a using foo on b (col1 desc)",
+		input: "create unique index a using foo on b (col1 desc)",
 	}, {
-		input:  "create fulltext index a using foo on b (col1)",
-		output: "create `fulltext` index a using foo on b (col1)",
+		input:  "create with gh-ost unique index a using foo on b (col1 desc)",
+		output: "create unique index a using foo on b (col1 desc)",
 	}, {
-		input:  "create spatial index a using foo on b (col1)",
-		output: "create `spatial` index a using foo on b (col1)",
+		input: "create fulltext index a using foo on b (col1)",
+	}, {
+		input: "create spatial index a using foo on b (col1)",
 	}, {
 		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
 	}, {
-		input:  "create index a on b ((col1 + col2), (col1*col2))",
-		output: "create index a on b ()",
+		input:      "create index a on b ((col1 + col2), (col1*col2))",
+		output:     "create index a on b ()",
+		partialDDL: true,
 	}, {
 		input:  "create view a",
 		output: "create table a",
@@ -1759,6 +1761,14 @@ func TestValid(t *testing.T) {
 			out := String(tree)
 			if tcase.output != out {
 				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
+			}
+
+			// CREATE INDEX currently only has 5.7 specifications.
+			// For mysql 8.0 syntax, the query is not entirely parsed.
+			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
+			switch x := tree.(type) {
+			case *CreateIndex:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls

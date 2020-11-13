@@ -57,6 +57,8 @@ type (
 	// DDLStatement represents any DDL Statement
 	DDLStatement interface {
 		iDDLStatement()
+		GetOnlineHint() *OnlineDDLHint
+		IsFullyParsed() bool
 		Statement
 	}
 
@@ -257,12 +259,14 @@ type (
 
 	// CreateIndex represents a CREATE INDEX query
 	CreateIndex struct {
-		Constraint ColIdent
-		Name       ColIdent
-		IndexType  ColIdent
-		Table      TableName
-		Columns    []*IndexColumn
-		Options    []*IndexOption
+		Constraint  string
+		Name        ColIdent
+		OnlineHint  *OnlineDDLHint
+		IndexType   string
+		Table       TableName
+		Columns     []*IndexColumn
+		Options     []*IndexOption
+		FullyParsed bool
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -362,6 +366,26 @@ func (*CreateIndex) iStatement()       {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
+
+// IsFullyParsed implements the DDLStatement interface
+func (*DDL) IsFullyParsed() bool {
+	return false
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateIndex) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// GetOnlineHint implements the DDLStatement interface
+func (node *DDL) GetOnlineHint() *OnlineDDLHint {
+	return node.OnlineHint
+}
+
+// GetOnlineHint implements the DDLStatement interface
+func (node *CreateIndex) GetOnlineHint() *OnlineDDLHint {
+	return node.OnlineHint
+}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -2178,12 +2202,12 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *CreateIndex) Format(buf *TrackedBuffer) {
 	buf.WriteString("create")
-	if node.Constraint.String() != "" {
-		buf.astPrintf(node, " %v", node.Constraint)
+	if node.Constraint != "" {
+		buf.WriteString(" " + node.Constraint)
 	}
 	buf.astPrintf(node, " index %v", node.Name)
-	if node.IndexType.String() != "" {
-		buf.astPrintf(node, " using %v", node.IndexType)
+	if node.IndexType != "" {
+		buf.WriteString(" using " + node.IndexType)
 	}
 	buf.astPrintf(node, " on %v (", node.Table)
 	for i, col := range node.Columns {
@@ -2196,14 +2220,14 @@ func (node *CreateIndex) Format(buf *TrackedBuffer) {
 			buf.astPrintf(node, "(%v)", col.Length)
 		}
 		if col.Direction == DescOrder {
-			buf.astPrintf(node, " desc")
+			buf.WriteString(" desc")
 		}
 	}
 	buf.astPrintf(node, ")")
 	for _, opt := range node.Options {
-		buf.astPrintf(node, " %s", strings.ToLower(opt.Name))
+		buf.WriteString(" " + strings.ToLower(opt.Name))
 		if opt.String != "" {
-			buf.astPrintf(node, " %s", opt.String)
+			buf.WriteString(" " + opt.String)
 		} else {
 			buf.astPrintf(node, " %v", opt.Value)
 		}
