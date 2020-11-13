@@ -244,8 +244,10 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) updateTime(ts int64) (err error) {
-	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, time.Now().Unix(), ts)
+func (vp *vplayer) recordHeartbeat() (err error) {
+	tm := time.Now().Unix()
+	vp.vr.stats.RecordHeartbeat(tm)
+	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, tm)
 	if err != nil {
 		return err
 	}
@@ -599,7 +601,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if !vp.vr.dbClient.InTransaction {
-			err := vp.updateTime(event.Timestamp)
+			err := vp.recordHeartbeat()
 			if err != nil {
 				return err
 			}

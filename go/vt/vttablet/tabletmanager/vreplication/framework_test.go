@@ -67,6 +67,8 @@ type LogExpectation struct {
 	Detail string
 }
 
+var heartbeatRe *regexp.Regexp
+
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
@@ -78,6 +80,8 @@ func init() {
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
 	flag.Set("binlog_player_protocol", "test")
+
+	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
 }
 
 func TestMain(m *testing.M) {
@@ -409,11 +413,9 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 
 func expectDeleteQueries(t *testing.T) {
 	t.Helper()
-	expectDBClientQueries(t, []string{
-		"begin",
+	expectNontxQueries(t, []string{
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
-		"commit",
 	})
 }
 
@@ -465,7 +467,6 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			continue
 		}
 		var got string
-		heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
 	retry:
 		select {
 		case got = <-globalDBQueries:
@@ -508,7 +509,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 func expectNontxQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
-	heartbeatRe := regexp.MustCompile(`update _vt.vreplication set time_updated=\d+, transaction_timestamp=\d+ where id=\d+`)
+
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
