@@ -293,7 +293,7 @@
 }
 
 "select none from user_index where id = :id"
-"symbol none not found in table or subquery"
+"symbol `none` not found in table or subquery"
 
 "select * from samecolvin where col = :col"
 {

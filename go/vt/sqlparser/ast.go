@@ -59,6 +59,7 @@ type (
 		iDDLStatement()
 		GetOnlineHint() *OnlineDDLHint
 		IsFullyParsed() bool
+		GetTable() TableName
 		Statement
 	}
 
@@ -385,6 +386,16 @@ func (node *DDL) GetOnlineHint() *OnlineDDLHint {
 // GetOnlineHint implements the DDLStatement interface
 func (node *CreateIndex) GetOnlineHint() *OnlineDDLHint {
 	return node.OnlineHint
+}
+
+// GetTable implements the DDLStatement interface
+func (node *CreateIndex) GetTable() TableName {
+	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *DDL) GetTable() TableName {
+	return node.Table
 }
 
 // ParenSelect can actually not be a top level statement,
