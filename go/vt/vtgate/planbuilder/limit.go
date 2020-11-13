@@ -55,11 +55,6 @@ func (l *limit) PushLock(lock sqlparser.Lock) error {
 	return l.input.PushLock(lock)
 }
 
-// PushFilter satisfies the builder interface.
-func (l *limit) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	return errors.New("limit.PushFilter: unreachable")
-}
-
 // PushSelect satisfies the builder interface.
 func (l *limit) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return nil, 0, errors.New("limit.PushSelect: unreachable")

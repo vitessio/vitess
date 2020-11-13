@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"errors"
-	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -95,43 +94,6 @@ func (vf *vindexFunc) First() builder {
 // ResultColumns satisfies the builder interface.
 func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
-}
-
-// PushFilter satisfies the builder interface.
-// Only some where clauses are allowed.
-func (vf *vindexFunc) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
-	if vf.eVindexFunc.Opcode != engine.VindexNone {
-		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)")
-	}
-
-	// Check LHS.
-	comparison, ok := filter.(*sqlparser.ComparisonExpr)
-	if !ok {
-		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)")
-	}
-	if comparison.Operator != sqlparser.EqualOp {
-		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (not equality)")
-	}
-	colname, ok := comparison.Left.(*sqlparser.ColName)
-	if !ok {
-		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)")
-	}
-	if !colname.Name.EqualString("id") {
-		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)")
-	}
-
-	// Check RHS.
-	// We have to check before calling NewPlanValue because NewPlanValue allows lists also.
-	if !sqlparser.IsValue(comparison.Right) {
-		return errors.New("unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)")
-	}
-	var err error
-	vf.eVindexFunc.Value, err = sqlparser.NewPlanValue(comparison.Right)
-	if err != nil {
-		return fmt.Errorf("unsupported: where clause for vindex function must be of the form id = <val>: %v", err)
-	}
-	vf.eVindexFunc.Opcode = engine.VindexMap
-	return nil
 }
 
 // PushSelect satisfies the builder interface.

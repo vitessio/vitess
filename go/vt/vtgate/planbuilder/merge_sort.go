@@ -39,6 +39,11 @@ type mergeSort struct {
 	truncateColumnCount int
 }
 
+type singleInput interface {
+	getInput() builder
+	setInput(builder)
+}
+
 // newMergeSort builds a new mergeSort.
 func newMergeSort(rb *route) *mergeSort {
 	ms := &mergeSort{
@@ -46,6 +51,13 @@ func newMergeSort(rb *route) *mergeSort {
 	}
 	ms.truncater = ms
 	return ms
+}
+
+func (ms *mergeSort) getInput() builder {
+	return ms.input
+}
+func (ms *mergeSort) setInput(b builder) {
+	ms.input = b
 }
 
 // SetTruncateColumnCount satisfies the truncater interface.
@@ -63,11 +75,6 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 // PushLock satisfies the builder interface.
 func (ms *mergeSort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
-}
-
-// PushFilter satisfies the builder interface.
-func (ms *mergeSort) PushFilter(pb *primitiveBuilder, expr sqlparser.Expr, whereType string, origin builder) error {
-	return ms.input.PushFilter(pb, expr, whereType, origin)
 }
 
 // PushSelect satisfies the builder interface.

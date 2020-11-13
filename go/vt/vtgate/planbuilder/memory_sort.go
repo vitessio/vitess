@@ -88,11 +88,6 @@ func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 
-// PushFilter satisfies the builder interface.
-func (ms *memorySort) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	return errors.New("memorySort.PushFilter: unreachable")
-}
-
 // PushSelect satisfies the builder interface.
 func (ms *memorySort) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return nil, 0, errors.New("memorySort.PushSelect: unreachable")

@@ -121,20 +121,6 @@ func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
 }
 
-// PushFilter satisfies the builder interface.
-// The primitive will be updated if the new filter improves the plan.
-func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
-	sel := rb.Select.(*sqlparser.Select)
-	switch whereType {
-	case sqlparser.WhereStr:
-		sel.AddWhere(filter)
-	case sqlparser.HavingStr:
-		sel.AddHaving(filter)
-	}
-	rb.UpdatePlan(pb, filter)
-	return nil
-}
-
 // PushSelect satisfies the builder interface.
 func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
 	sel := rb.Select.(*sqlparser.Select)

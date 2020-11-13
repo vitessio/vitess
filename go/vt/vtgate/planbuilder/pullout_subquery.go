@@ -45,6 +45,14 @@ func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, s
 	}
 }
 
+func (ps *pulloutSubquery) getInput() builder {
+	return ps.underlying
+}
+
+func (ps *pulloutSubquery) setInput(b builder) {
+	ps.underlying = b
+}
+
 // setUnderlying sets the underlying primitive.
 func (ps *pulloutSubquery) setUnderlying(underlying builder) {
 	ps.underlying = underlying
@@ -89,11 +97,6 @@ func (ps *pulloutSubquery) First() builder {
 // ResultColumns satisfies the builder interface.
 func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
-}
-
-// PushFilter satisfies the builder interface.
-func (ps *pulloutSubquery) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	return ps.underlying.PushFilter(pb, filter, whereType, origin)
 }
 
 // PushSelect satisfies the builder interface.

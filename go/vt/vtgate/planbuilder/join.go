@@ -154,17 +154,6 @@ func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns
 }
 
-// PushFilter satisfies the builder interface.
-func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	if jb.isOnLeft(origin.Order()) {
-		return jb.Left.PushFilter(pb, filter, whereType, origin)
-	}
-	if jb.ejoin.Opcode == engine.LeftJoin {
-		return errors.New("unsupported: cross-shard left join and where clause")
-	}
-	return jb.Right.PushFilter(pb, filter, whereType, origin)
-}
-
 // PushSelect satisfies the builder interface.
 func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	if jb.isOnLeft(origin.Order()) {
