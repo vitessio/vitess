@@ -154,30 +154,6 @@ func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns
 }
 
-// PushSelect satisfies the builder interface.
-func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	if jb.isOnLeft(origin.Order()) {
-		rc, colNumber, err = jb.Left.PushSelect(pb, expr, origin)
-		if err != nil {
-			return nil, 0, err
-		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -colNumber-1)
-	} else {
-		// Pushing of non-trivial expressions not allowed for RHS of left joins.
-		if _, ok := expr.Expr.(*sqlparser.ColName); !ok && jb.ejoin.Opcode == engine.LeftJoin {
-			return nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
-		}
-
-		rc, colNumber, err = jb.Right.PushSelect(pb, expr, origin)
-		if err != nil {
-			return nil, 0, err
-		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, colNumber+1)
-	}
-	jb.resultColumns = append(jb.resultColumns, rc)
-	return rc, len(jb.resultColumns) - 1, nil
-}
-
 // MakeDistinct satisfies the builder interface.
 func (jb *join) MakeDistinct() error {
 	return errors.New("unsupported: distinct on cross-shard join")

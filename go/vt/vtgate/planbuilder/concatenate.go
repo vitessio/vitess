@@ -81,10 +81,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return nil, 0, unreachable("Select")
-}
-
 func (c *concatenate) MakeDistinct() error {
 	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "only union-all is supported for this operator")
 }

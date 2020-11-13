@@ -89,24 +89,6 @@ func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
 }
 
-// PushSelect satisfies the builder interface.
-func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
-	col, ok := expr.Expr.(*sqlparser.ColName)
-	if !ok {
-		return nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
-	}
-
-	// colNumber should already be set for subquery columns.
-	inner := col.Metadata.(*column).colNumber
-	sq.esubquery.Cols = append(sq.esubquery.Cols, inner)
-
-	// Build a new column reference to represent the result column.
-	rc = newResultColumn(expr, sq)
-	sq.resultColumns = append(sq.resultColumns, rc)
-
-	return rc, len(sq.resultColumns) - 1, nil
-}
-
 // MakeDistinct satisfies the builder interface.
 func (sq *subquery) MakeDistinct() error {
 	return errors.New("unsupported: distinct on cross-shard subquery")

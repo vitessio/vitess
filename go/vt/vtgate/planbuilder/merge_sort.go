@@ -77,11 +77,6 @@ func (ms *mergeSort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 
-// PushSelect satisfies the builder interface.
-func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return ms.input.PushSelect(pb, expr, origin)
-}
-
 // MakeDistinct satisfies the builder interface.
 func (ms *mergeSort) MakeDistinct() error {
 	return ms.input.MakeDistinct()

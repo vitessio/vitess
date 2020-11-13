@@ -56,13 +56,6 @@ type builder interface {
 	// which is usually the left most.
 	First() builder
 
-	// PushSelect pushes the select expression to the specified
-	// originator. If successful, the originator must create
-	// a resultColumn entry and return it. The top level caller
-	// must accumulate these result columns and set the symtab
-	// after analysis.
-	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error)
-
 	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() error
 	// PushGroupBy makes the primitive handle the GROUP BY clause.

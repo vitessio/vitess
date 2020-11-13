@@ -99,11 +99,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// PushSelect satisfies the builder interface.
-func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return ps.underlying.PushSelect(pb, expr, origin)
-}
-
 // MakeDistinct satisfies the builder interface.
 func (ps *pulloutSubquery) MakeDistinct() error {
 	return ps.underlying.MakeDistinct()

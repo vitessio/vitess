@@ -121,17 +121,6 @@ func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
 }
 
-// PushSelect satisfies the builder interface.
-func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
-	sel := rb.Select.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, expr)
-
-	rc = newResultColumn(expr, rb)
-	rb.resultColumns = append(rb.resultColumns, rc)
-
-	return rc, len(rb.resultColumns) - 1, nil
-}
-
 // PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
 // into the select expression list of the route. This function is
 // similar to PushSelect.
@@ -426,7 +415,7 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 		},
 	}
 	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
-	_, weightcolNumber, _ = rb.PushSelect(nil, expr, nil)
+	_, _, weightcolNumber, _ = project(nil, rb, expr, nil)
 	rb.weightStrings[rc] = weightcolNumber
 	return weightcolNumber, nil
 }

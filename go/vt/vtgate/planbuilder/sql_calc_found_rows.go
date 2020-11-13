@@ -69,11 +69,6 @@ func (s *sqlCalcFoundRows) First() builder {
 	return s.LimitQuery.First()
 }
 
-//PushSelect implements the builder interface
-func (s *sqlCalcFoundRows) PushSelect(*primitiveBuilder, *sqlparser.AliasedExpr, builder) (rc *resultColumn, colNumber int, err error) {
-	return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushSelect")
-}
-
 //MakeDistinct implements the builder interface
 func (s *sqlCalcFoundRows) MakeDistinct() error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.MakeDistinct")
