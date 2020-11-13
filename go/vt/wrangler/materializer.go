@@ -70,6 +70,12 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 
 	var vschema *vschemapb.Keyspace
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
+	if err != nil {
+		return err
+	}
+	if vschema == nil {
+		return fmt.Errorf("no vschema found for target keyspace %s", targetKeyspace)
+	}
 	if strings.HasPrefix(tableSpecs, "{") {
 		if vschema.Tables == nil {
 			vschema.Tables = make(map[string]*vschemapb.Table)
