@@ -219,7 +219,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
+	//defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
 		keyspace: &vindexes.Keyspace{
@@ -276,6 +276,13 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
+}
+
+func (vw *vschemaWrapper) KeyspaceExists(keyspace string) bool {
+	if vw.keyspace != nil {
+		return vw.keyspace.Name == keyspace
+	}
+	return false
 }
 
 func (vw *vschemaWrapper) SysVarSetEnabled() bool {
