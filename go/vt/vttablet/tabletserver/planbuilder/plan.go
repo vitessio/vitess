@@ -181,9 +181,10 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
 		plan, err = analyzeSet(stmt), nil
-	case *sqlparser.DDL:
-		// DDLs and other statements below don't get fully parsed.
+	case sqlparser.DDLStatement:
+		// DDLs and some other statements below don't get fully parsed.
 		// We have to use the original query at the time of execution.
+		// We are in the process of changing this
 		plan = &Plan{PlanID: PlanDDL}
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)

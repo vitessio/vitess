@@ -640,6 +640,20 @@ options:PassthroughDMLs
   ]
 }
 
+# create index
+"create index a on b(id)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ]
+}
+
+
 # alter
 "alter table a add column(a int)"
 {

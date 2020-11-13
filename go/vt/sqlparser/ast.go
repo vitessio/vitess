@@ -60,6 +60,7 @@ type (
 		GetOnlineHint() *OnlineDDLHint
 		IsFullyParsed() bool
 		GetTable() TableName
+		AffectedTables() TableNames
 		Statement
 	}
 
@@ -396,6 +397,22 @@ func (node *CreateIndex) GetTable() TableName {
 // GetTable implements the DDLStatement interface
 func (node *DDL) GetTable() TableName {
 	return node.Table
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *DDL) AffectedTables() TableNames {
+	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
+		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
+		list = append(list, node.FromTables...)
+		list = append(list, node.ToTables...)
+		return list
+	}
+	return TableNames{node.Table}
+}
+
+// AffectedTables implements DDLStatement.
+func (node *CreateIndex) AffectedTables() TableNames {
+	return TableNames{node.Table}
 }
 
 // ParenSelect can actually not be a top level statement,
