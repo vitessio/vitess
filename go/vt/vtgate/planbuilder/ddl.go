@@ -1,7 +1,8 @@
 package planbuilder
 
 import (
-	"fmt"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
@@ -30,31 +31,36 @@ func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (e
 	}, nil
 }
 
-func buildOnlineDDLPlan(query string, stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
-	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
+func buildOnlineDDLPlan(query string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+
+	_, keyspace, _, err := vschema.TargetDestination(stmt.GetTable().Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
-	if stmt.OnlineHint == nil {
-		return nil, fmt.Errorf("Not an online DDL: %s", query)
+	if stmt.GetOnlineHint() == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "not an online DDL: %s", query)
 	}
-	switch stmt.OnlineHint.Strategy {
+	switch stmt.GetOnlineHint().Strategy {
 	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC: // OK, do nothing
 	case schema.DDLStrategyNormal:
-		return nil, fmt.Errorf("Not an online DDL strategy")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "not an online DDL strategy")
 	default:
-		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", stmt.OnlineHint.Strategy)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown online DDL strategy: '%v'", stmt.GetOnlineHint().Strategy)
 	}
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
 		DDL:      stmt,
 		SQL:      query,
-		Strategy: stmt.OnlineHint.Strategy,
-		Options:  stmt.OnlineHint.Options,
+		Strategy: stmt.GetOnlineHint().Strategy,
+		Options:  stmt.GetOnlineHint().Options,
 	}, nil
 }
 
-func buildVSchemaDDLPlan(stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
+func buildVSchemaDDLPlan(ddlStmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	stmt, ok := ddlStmt.(*sqlparser.DDL)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "Incorrect type %T", ddlStmt)
+	}
 	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
 	if err != nil {
 		return nil, err
