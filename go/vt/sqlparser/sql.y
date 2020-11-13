@@ -292,7 +292,7 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <selectInto> into_option
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt using_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
@@ -314,7 +314,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolean> exists_opt not_exists_opt null_opt enforced_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt
 %type <bytes> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt constraint_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt work_opt savepoint_opt
@@ -691,6 +691,7 @@ create_statement:
   {
     $1.Columns = $3
     $1.Options = append($5,$6...)
+    $1.FullyParsed = true
     $$ = $1
   }
 | CREATE VIEW table_name ddl_skip_to_end
@@ -760,9 +761,9 @@ create_table_prefix:
   }
 
 create_index_prefix:
-  CREATE constraint_opt INDEX id_or_var using_opt ON table_name
+  CREATE online_hint_opt constraint_opt INDEX id_or_var using_opt ON table_name
   {
-    $$ = &CreateIndex{Constraint: $2, Name: $4, IndexType: $5, Table: $7}
+    $$ = &CreateIndex{Constraint: $3, Name: $5, IndexType: $6, Table: $8, OnlineHint: $2}
     setDDL(yylex, $$)
   }
 
@@ -3752,16 +3753,18 @@ index_opt:
   { $$ = struct{}{} }
 
 constraint_opt:
-  { $$ = ColIdent{} }
+  { $$ = "" }
 | UNIQUE
-  { $$ = NewColIdent(string($1)) }
-| sql_id
-  { $$ = $1 }
+  { $$ = string($1) }
+| SPATIAL
+  { $$ = string($1) }
+| FULLTEXT
+  { $$ = string($1) }
 
 using_opt:
-  { $$ = ColIdent{} }
+  { $$ = "" }
 | USING sql_id
-  { $$ = $2 }
+  { $$ = $2.val }
 
 sql_id:
   id_or_var
