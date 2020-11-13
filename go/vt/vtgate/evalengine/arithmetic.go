@@ -209,7 +209,7 @@ func isByteComparable(v sqltypes.Value) bool {
 		return true
 	}
 	switch v.Type() {
-	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set:
+	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON:
 		return true
 	}
 	return false
