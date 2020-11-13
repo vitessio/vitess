@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"errors"
 
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
@@ -133,6 +136,7 @@ type ContextVSchema interface {
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
+	KeyspaceExists(keyspace string) bool
 }
 
 //-------------------------------------------------------------------------
@@ -340,7 +344,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Load:
 		return buildLoadPlan(query, vschema)
 	case *sqlparser.DBDDL:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
+		return buildRoutePlan(stmt, vschema, buildDBDDLPlan)
 	case *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
@@ -351,6 +355,35 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+}
+
+func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	dbDDL := stmt.(*sqlparser.DBDDL)
+	ksExists := vschema.KeyspaceExists(dbDDL.DBName)
+	switch dbDDL.Action {
+	case sqlparser.CreateDBDDLAction:
+		if dbDDL.IfNotExists && ksExists {
+			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
+		}
+		if !dbDDL.IfNotExists && ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "cannot create database '%s'; database exists", dbDDL.DBName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
+	case sqlparser.AlterDBDDLAction:
+		if !ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot alter database '%s'; database does not exists", dbDDL.DBName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database not allowed")
+	case sqlparser.DropDBDDLAction:
+		if dbDDL.IfExists && !ksExists {
+			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
+		}
+		if !ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", dbDDL.DBName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDL))
 }
 
 func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
