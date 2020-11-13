@@ -10,10 +10,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
-	stmt := in.(*sqlparser.DDL)
+func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
 	// This method call will validate the destination != nil check.
-	destination, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
+	destination, keyspace, _, err := vschema.TargetDestination(stmt.GetTable().Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -22,10 +21,14 @@ func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (e
 		destination = key.DestinationAllShards{}
 	}
 
+	query := sql
+	if stmt.IsFullyParsed() {
+		query = sqlparser.String(stmt)
+	}
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             sql, //This is original sql query to be passed as the parser can provide partial ddl AST.
+		Query:             query, //This is original sql query to be passed as the parser can provide partial ddl AST.
 		IsDML:             false,
 		SingleShardOnly:   false,
 	}, nil
