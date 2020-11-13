@@ -147,17 +147,6 @@ const (
 	BitVal
 )
 
-// AffectedTables returns the list table names affected by the DDL.
-func (node *DDL) AffectedTables() TableNames {
-	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
-		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
-		list = append(list, node.FromTables...)
-		list = append(list, node.ToTables...)
-		return list
-	}
-	return TableNames{node.Table}
-}
-
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
 	ts.Columns = append(ts.Columns, cd)
