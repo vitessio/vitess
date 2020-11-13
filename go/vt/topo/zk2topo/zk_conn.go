@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/zkutils"
 )
 
 const (
@@ -382,7 +383,7 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 	}
 	// Make sure we re-resolve the DNS name every time we reconnect to a server
 	// In environments where DNS changes such as Kubernetes we can't cache the IP address
-	hostProvider := zk.WithHostProvider(&zk.SimpleDNSHostProvider{})
+	hostProvider := zk.WithHostProvider(&zkutils.RandomDNSHostProvider{})
 
 	// zk.Connect automatically shuffles the servers
 	zconn, session, err := zk.Connect(servers, *baseTimeout, dialer, hostProvider)
