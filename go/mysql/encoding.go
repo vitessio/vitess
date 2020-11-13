@@ -348,6 +348,11 @@ func (d *coder) writeUint16(value uint16) {
 	d.pos = newPos
 }
 
+func (d *coder) writeUint32(value uint32) {
+	newPos := writeUint32(d.data, d.pos, value)
+	d.pos = newPos
+}
+
 func (d *coder) writeLenEncString(value string) {
 	newPos := writeLenEncString(d.data, d.pos, value)
 	d.pos = newPos
