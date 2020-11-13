@@ -95,3 +95,21 @@
 #Alter table with unknown qualifier
 "alter table a.b ADD id int"
 "no keyspace with name [a] found"
+
+# DDL
+"create index a on b(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on b(id)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create index a on b (id)",
+    "SingleShardOnly": false
+  }
+}
