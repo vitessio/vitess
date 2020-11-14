@@ -52,14 +52,6 @@ func (c *concatenate) SetUpperLimit(count sqlparser.Expr) {
 	// not doing anything by design
 }
 
-func (c *concatenate) PushMisc(sel *sqlparser.Select) error {
-	err := c.lhs.PushMisc(sel)
-	if err != nil {
-		return err
-	}
-	return c.rhs.PushMisc(sel)
-}
-
 func (c *concatenate) Wireup(bldr builder, jt *jointab) error {
 	// TODO systay should we do something different here?
 	err := c.lhs.Wireup(bldr, jt)

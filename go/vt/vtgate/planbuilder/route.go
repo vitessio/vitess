@@ -143,19 +143,6 @@ func (rb *route) SetUpperLimit(count sqlparser.Expr) {
 	rb.Select.SetLimit(&sqlparser.Limit{Rowcount: count})
 }
 
-// PushMisc satisfies the builder interface.
-func (rb *route) PushMisc(sel *sqlparser.Select) error {
-	rb.Select.(*sqlparser.Select).Comments = sel.Comments
-	rb.Select.(*sqlparser.Select).Lock = sel.Lock
-	if sel.Into != nil {
-		if rb.eroute.Opcode != engine.SelectUnsharded {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
-		}
-		rb.Select.(*sqlparser.Select).Into = sel.Into
-	}
-	return nil
-}
-
 // Wireup satisfies the builder interface.
 func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	// Precaution: update ERoute.Values only if it's not set already.

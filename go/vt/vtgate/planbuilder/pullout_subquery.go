@@ -94,15 +94,6 @@ func (ps *pulloutSubquery) SetUpperLimit(count sqlparser.Expr) {
 	ps.underlying.SetUpperLimit(count)
 }
 
-// PushMisc satisfies the builder interface.
-func (ps *pulloutSubquery) PushMisc(sel *sqlparser.Select) error {
-	err := ps.subquery.PushMisc(sel)
-	if err != nil {
-		return err
-	}
-	return ps.underlying.PushMisc(sel)
-}
-
 // Wireup satisfies the builder interface.
 func (ps *pulloutSubquery) Wireup(bldr builder, jt *jointab) error {
 	if err := ps.underlying.Wireup(bldr, jt); err != nil {

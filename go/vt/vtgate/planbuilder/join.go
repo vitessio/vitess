@@ -154,15 +154,6 @@ func (jb *join) ResultColumns() []*resultColumn {
 func (jb *join) SetUpperLimit(_ sqlparser.Expr) {
 }
 
-// PushMisc satisfies the builder interface.
-func (jb *join) PushMisc(sel *sqlparser.Select) error {
-	err := jb.Left.PushMisc(sel)
-	if err != nil {
-		return err
-	}
-	return jb.Right.PushMisc(sel)
-}
-
 // Wireup satisfies the builder interface.
 func (jb *join) Wireup(bldr builder, jt *jointab) error {
 	err := jb.Right.Wireup(bldr, jt)
@@ -258,7 +249,6 @@ func (jb *join) Rewrite(inputs ...builder) error {
 func (jb *join) Inputs() []builder {
 	return []builder{jb.Left, jb.Right}
 }
-
 
 // isOnLeft returns true if the specified route number
 // is on the left side of the join. If false, it means

@@ -160,7 +160,13 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	if err := pb.pushLimit(sel.Limit); err != nil {
 		return err
 	}
-	return pb.bldr.PushMisc(sel)
+
+	newBuilder, err := planMisc(pb, pb.bldr, sel)
+	if err != nil {
+		return err
+	}
+	pb.bldr = newBuilder
+	return nil
 }
 
 func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {

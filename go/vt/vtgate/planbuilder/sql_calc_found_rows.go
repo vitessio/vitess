@@ -74,11 +74,6 @@ func (s *sqlCalcFoundRows) SetUpperLimit(count sqlparser.Expr) {
 	s.LimitQuery.SetUpperLimit(count)
 }
 
-//PushMisc implements the builder interface
-func (s *sqlCalcFoundRows) PushMisc(sel *sqlparser.Select) error {
-	return s.LimitQuery.PushMisc(sel)
-}
-
 //SupplyVar implements the builder interface
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	s.LimitQuery.SupplyVar(from, to, col, varname)
