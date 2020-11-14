@@ -69,11 +69,6 @@ func (s *sqlCalcFoundRows) First() builder {
 	return s.LimitQuery.First()
 }
 
-//MakeDistinct implements the builder interface
-func (s *sqlCalcFoundRows) MakeDistinct() error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.MakeDistinct")
-}
-
 //PushGroupBy implements the builder interface
 func (s *sqlCalcFoundRows) PushGroupBy(sqlparser.GroupBy) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushGroupBy")

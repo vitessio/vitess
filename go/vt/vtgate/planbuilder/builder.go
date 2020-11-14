@@ -56,8 +56,6 @@ type builder interface {
 	// which is usually the left most.
 	First() builder
 
-	// MakeDistinct makes the primitive handle the distinct clause.
-	MakeDistinct() error
 	// PushGroupBy makes the primitive handle the GROUP BY clause.
 	PushGroupBy(sqlparser.GroupBy) error
 

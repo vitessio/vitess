@@ -77,11 +77,6 @@ func (ms *mergeSort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 
-// MakeDistinct satisfies the builder interface.
-func (ms *mergeSort) MakeDistinct() error {
-	return ms.input.MakeDistinct()
-}
-
 // PushGroupBy satisfies the builder interface.
 func (ms *mergeSort) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	return ms.input.PushGroupBy(groupBy)

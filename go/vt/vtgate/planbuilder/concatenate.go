@@ -81,10 +81,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) MakeDistinct() error {
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "only union-all is supported for this operator")
-}
-
 func (c *concatenate) PushGroupBy(by sqlparser.GroupBy) error {
 	return unreachable("GroupBy")
 }

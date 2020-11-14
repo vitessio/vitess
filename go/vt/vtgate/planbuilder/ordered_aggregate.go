@@ -257,7 +257,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
-		newInput, _, innerCol, _ := project(pb, oa.input, innerAliased, origin)
+		newInput, _, innerCol, _ := planProjection(pb, oa.input, innerAliased, origin)
 		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
 		if err != nil {
 			return nil, 0, err
@@ -283,7 +283,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			Alias:  alias,
 		})
 	} else {
-		newInput, _, innerCol, _ := project(pb, oa.input, expr, origin)
+		newInput, _, innerCol, _ := planProjection(pb, oa.input, expr, origin)
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
@@ -322,20 +322,6 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 		return false, nil, nil
 	}
 	return true, innerAliased, nil
-}
-
-func (oa *orderedAggregate) MakeDistinct() error {
-	for i, rc := range oa.resultColumns {
-		// If the column origin is oa (and not the underlying route),
-		// it means that it's an aggregate function supplied by oa.
-		// So, the distinct 'operator' cannot be pushed down into the
-		// route.
-		if rc.column.Origin() == oa {
-			return errors.New("unsupported: distinct cannot be combined with aggregate functions")
-		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, i)
-	}
-	return oa.input.MakeDistinct()
 }
 
 // PushGroupBy satisfies the builder interface.

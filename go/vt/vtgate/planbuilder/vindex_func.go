@@ -96,11 +96,6 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
 }
 
-// MakeDistinct satisfies the builder interface.
-func (vf *vindexFunc) MakeDistinct() error {
-	return errors.New("unsupported: distinct on vindex function")
-}
-
 // PushGroupBy satisfies the builder interface.
 func (vf *vindexFunc) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	if (groupBy) == nil {

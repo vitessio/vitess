@@ -26,8 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-//Filter solves this particular expression, either by pushing it down to a child or changing this builder
-func Filter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, whereType string, origin builder) (builder, error) {
+// planFilter solves this particular expression, either by pushing it down to a child or changing this builder
+func planFilter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, whereType string, origin builder) (builder, error) {
 	switch node := input.(type) {
 	case *join:
 		isLeft := true
@@ -42,7 +42,7 @@ func Filter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, whereTyp
 			in = node.Right
 		}
 
-		filtered, err := Filter(pb, in, filter, whereType, origin)
+		filtered, err := planFilter(pb, in, filter, whereType, origin)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +68,7 @@ func Filter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, whereTyp
 	case *mergeSort, *pulloutSubquery:
 		si := node.(singleInput)
 
-		filteredInput, err := Filter(pb, si.getInput(), filter, whereType, origin)
+		filteredInput, err := planFilter(pb, si.getInput(), filter, whereType, origin)
 		if err != nil {
 			return nil, err
 		}

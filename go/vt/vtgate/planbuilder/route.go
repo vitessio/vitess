@@ -136,12 +136,6 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 	return rc
 }
 
-// MakeDistinct satisfies the builder interface.
-func (rb *route) MakeDistinct() error {
-	rb.Select.(*sqlparser.Select).Distinct = true
-	return nil
-}
-
 // PushGroupBy satisfies the builder interface.
 func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	rb.Select.(*sqlparser.Select).GroupBy = groupBy
@@ -415,7 +409,7 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 		},
 	}
 	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
-	_, _, weightcolNumber, _ = project(nil, rb, expr, nil)
+	_, _, weightcolNumber, _ = planProjection(nil, rb, expr, nil)
 	rb.weightStrings[rc] = weightcolNumber
 	return weightcolNumber, nil
 }

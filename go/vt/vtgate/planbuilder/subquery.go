@@ -89,11 +89,6 @@ func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
 }
 
-// MakeDistinct satisfies the builder interface.
-func (sq *subquery) MakeDistinct() error {
-	return errors.New("unsupported: distinct on cross-shard subquery")
-}
-
 // PushGroupBy satisfies the builder interface.
 func (sq *subquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	if (groupBy) == nil {

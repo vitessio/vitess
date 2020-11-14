@@ -88,11 +88,6 @@ func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 
-// MakeDistinct satisfies the builder interface.
-func (ms *memorySort) MakeDistinct() error {
-	return errors.New("memorySort.MakeDistinct: unreachable")
-}
-
 // PushGroupBy satisfies the builder interface.
 func (ms *memorySort) PushGroupBy(_ sqlparser.GroupBy) error {
 	return errors.New("memorySort.PushGroupBy: unreachable")

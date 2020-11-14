@@ -300,7 +300,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		}
 		// The returned expression may be complex. Resplit before pushing.
 		for _, subexpr := range splitAndExpression(nil, expr) {
-			pb.bldr, err = Filter(pb, pb.bldr, subexpr, whereType, origin)
+			pb.bldr, err = planFilter(pb, pb.bldr, subexpr, whereType, origin)
 			if err != nil {
 				return err
 			}
@@ -362,7 +362,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				return nil, err
 			}
 			node.Expr = expr
-			newBuilder, rc, _, err := project(pb, pb.bldr, node, origin)
+			newBuilder, rc, _, err := planProjection(pb, pb.bldr, node, origin)
 			if err != nil {
 				return nil, err
 			}
@@ -456,7 +456,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 						As: col,
 					}
 				}
-				newBuilder, rc, _, err := project(pb, pb.bldr, expr, t.Origin())
+				newBuilder, rc, _, err := planProjection(pb, pb.bldr, expr, t.Origin())
 				if err != nil {
 					// Unreachable because PushSelect won't fail on ColName.
 					return inrcs, false, err
@@ -484,7 +484,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 				Qualifier: expr.TableName,
 			},
 		}
-		newBuilder, rc, _, err := project(pb, pb.bldr, expr, t.Origin())
+		newBuilder, rc, _, err := planProjection(pb, pb.bldr, expr, t.Origin())
 		if err != nil {
 			// Unreachable because PushSelect won't fail on ColName.
 			return inrcs, false, err

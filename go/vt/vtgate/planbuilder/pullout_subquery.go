@@ -99,11 +99,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// MakeDistinct satisfies the builder interface.
-func (ps *pulloutSubquery) MakeDistinct() error {
-	return ps.underlying.MakeDistinct()
-}
-
 // PushGroupBy satisfies the builder interface.
 func (ps *pulloutSubquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
 	return ps.underlying.PushGroupBy(groupBy)

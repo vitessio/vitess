@@ -55,11 +55,6 @@ func (l *limit) PushLock(lock sqlparser.Lock) error {
 	return l.input.PushLock(lock)
 }
 
-// MakeDistinct satisfies the builder interface.
-func (l *limit) MakeDistinct() error {
-	return errors.New("limit.MakeDistinct: unreachable")
-}
-
 // PushGroupBy satisfies the builder interface.
 func (l *limit) PushGroupBy(_ sqlparser.GroupBy) error {
 	return errors.New("limit.PushGroupBy: unreachable")

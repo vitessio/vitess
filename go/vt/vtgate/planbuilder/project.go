@@ -26,17 +26,17 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// project pushes the select expression to the specified
+// planProjection pushes the select expression to the specified
 // originator. If successful, the originator must create
 // a resultColumn entry and return it. The top level caller
 // must accumulate these result columns and set the symtab
 // after analysis.
-func project(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExpr, origin builder) (builder, *resultColumn, int, error) {
+func planProjection(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExpr, origin builder) (builder, *resultColumn, int, error) {
 	switch node := in.(type) {
 	case *join:
 		var rc *resultColumn
 		if node.isOnLeft(origin.Order()) {
-			newLeft, col, colNumber, err := project(pb, node.Left, expr, origin)
+			newLeft, col, colNumber, err := planProjection(pb, node.Left, expr, origin)
 			if err != nil {
 				return nil, nil, 0, err
 			}
@@ -49,7 +49,7 @@ func project(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExpr, orig
 				return nil, nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
 			}
 
-			newRight, col, colNumber, err := project(pb, node.Right, expr, origin)
+			newRight, col, colNumber, err := planProjection(pb, node.Right, expr, origin)
 			if err != nil {
 				return nil, nil, 0, err
 			}
@@ -87,7 +87,7 @@ func project(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExpr, orig
 			return nil, nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
 		}
 
-		newInput, innerRC, _, err := project(pb, node.input, expr, origin)
+		newInput, innerRC, _, err := planProjection(pb, node.input, expr, origin)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -104,7 +104,7 @@ func project(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExpr, orig
 		return node, rc, len(node.resultColumns) - 1, nil
 	case *mergeSort, *pulloutSubquery:
 		si := node.(singleInput)
-		projectedInput, rc, idx, err := project(pb, si.getInput(), expr, origin)
+		projectedInput, rc, idx, err := planProjection(pb, si.getInput(), expr, origin)
 		if err != nil {
 			return nil, nil, 0, err
 		}
