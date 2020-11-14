@@ -98,3 +98,12 @@ func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err err
 func (s *sqlCalcFoundRows) PushLock(sqlparser.Lock) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushLock")
 }
+
+func (s *sqlCalcFoundRows) Rewrite(inputs ...builder) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	}
+	s.LimitQuery = inputs[0]
+	s.CountQuery = inputs[1]
+	return nil
+}

@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"errors"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -251,6 +254,15 @@ func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err erro
 	jb.resultColumns = append(jb.resultColumns, rc)
 	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
 	return len(jb.ejoin.Cols) - 1, nil
+}
+
+func (jb *join) Rewrite(inputs ...builder) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	}
+	jb.Left = inputs[0]
+	jb.Right = inputs[1]
+	return nil
 }
 
 // isOnLeft returns true if the specified route number

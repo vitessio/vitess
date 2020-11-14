@@ -33,7 +33,7 @@ func planDistinct(pb *primitiveBuilder, input builder) (builder, error) {
 		if err != nil {
 			return nil, err
 		}
-		si.setInput(newInput)
+		node.Rewrite(newInput)
 		return node, nil
 	case *route:
 		node.Select.(*sqlparser.Select).Distinct = true

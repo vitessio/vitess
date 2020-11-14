@@ -72,7 +72,7 @@ func planFilter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, wher
 		if err != nil {
 			return nil, err
 		}
-		si.setInput(filteredInput)
+		err = node.Rewrite(filteredInput)
 		return node, err
 	case *subquery:
 		return nil, errors.New("unsupported: filtering on results of cross-shard subquery")

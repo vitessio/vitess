@@ -95,6 +95,9 @@ type builder interface {
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
+
+	// Rewrite replaces the inputs on the buider with new ones
+	Rewrite(inputs ...builder) error
 }
 
 //-------------------------------------------------------------------------
@@ -166,6 +169,14 @@ func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, co
 
 func (bc *builderCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return bc.input.SupplyWeightString(colNumber)
+}
+
+func (bc *builderCommon) Rewrite(inputs ...builder) error {
+	if len(inputs) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	}
+	bc.input = inputs[0]
+	return nil
 }
 
 //-------------------------------------------------------------------------

@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"errors"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -141,4 +144,12 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 // SupplyWeightString satisfies the builder interface.
 func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return 0, errors.New("cannot do collation on vindex function")
+}
+
+func (vf *vindexFunc) Rewrite(inputs ...builder) error {
+	if len(inputs) != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	}
+
+	return nil
 }

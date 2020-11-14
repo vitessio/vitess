@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -47,10 +49,6 @@ func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, s
 
 func (ps *pulloutSubquery) getInput() builder {
 	return ps.underlying
-}
-
-func (ps *pulloutSubquery) setInput(b builder) {
-	ps.underlying = b
 }
 
 // setUnderlying sets the underlying primitive.
@@ -140,4 +138,12 @@ func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, 
 // SupplyWeightString satisfies the builder interface.
 func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return ps.underlying.SupplyWeightString(colNumber)
+}
+
+func (ps *pulloutSubquery) Rewrite(inputs ...builder) error {
+	if len(inputs) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	}
+	ps.underlying = inputs[0]
+	return nil
 }

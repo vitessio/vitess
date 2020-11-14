@@ -108,7 +108,10 @@ func planProjection(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExp
 		if err != nil {
 			return nil, nil, 0, err
 		}
-		si.setInput(projectedInput)
+		err = node.Rewrite(projectedInput)
+		if err != nil {
+			return nil, nil, 0, err
+		}
 		return node, rc, idx, nil
 	case *subquery:
 		col, ok := expr.Expr.(*sqlparser.ColName)

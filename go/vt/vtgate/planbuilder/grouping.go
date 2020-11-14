@@ -38,8 +38,11 @@ func planGroupBy(pb *primitiveBuilder, input builder, groupBy sqlparser.GroupBy)
 		if err != nil {
 			return nil, err
 		}
-		si.setInput(newInput)
-		return node, nil
+		err = node.Rewrite(newInput)
+		if err != nil {
+			return nil, err
+		}
+		return node, err
 	case *route:
 		node.Select.(*sqlparser.Select).GroupBy = groupBy
 		return node, nil

@@ -438,6 +438,15 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 	return false
 }
 
+// Rewrite implements the builder interface
+func (rb *route) Rewrite(inputs ...builder) error {
+	if len(inputs) != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	}
+
+	return nil
+}
+
 func (rb *route) unionCanMerge(other *route, distinct bool) bool {
 	if rb.eroute.Keyspace.Name != other.eroute.Keyspace.Name {
 		return false

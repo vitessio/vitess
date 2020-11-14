@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -95,4 +97,13 @@ func (c *concatenate) PushLock(lock sqlparser.Lock) error {
 		return err
 	}
 	return c.rhs.PushLock(lock)
+}
+
+func (c *concatenate) Rewrite(inputs ...builder) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	}
+	c.lhs = inputs[0]
+	c.rhs = inputs[1]
+	return nil
 }
