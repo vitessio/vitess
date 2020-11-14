@@ -33,8 +33,7 @@ func planGroupBy(pb *primitiveBuilder, input builder, groupBy sqlparser.GroupBy)
 
 	switch node := input.(type) {
 	case *mergeSort, *pulloutSubquery:
-		si := node.(singleInput)
-		newInput, err := planGroupBy(pb, si.getInput(), groupBy)
+		newInput, err := planGroupBy(pb, node.Inputs()[0], groupBy)
 		if err != nil {
 			return nil, err
 		}

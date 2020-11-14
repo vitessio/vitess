@@ -47,10 +47,6 @@ func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, s
 	}
 }
 
-func (ps *pulloutSubquery) getInput() builder {
-	return ps.underlying
-}
-
 // setUnderlying sets the underlying primitive.
 func (ps *pulloutSubquery) setUnderlying(underlying builder) {
 	ps.underlying = underlying

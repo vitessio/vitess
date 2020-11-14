@@ -35,10 +35,6 @@ type mergeSort struct {
 	truncateColumnCount int
 }
 
-type singleInput interface {
-	getInput() builder
-}
-
 // newMergeSort builds a new mergeSort.
 func newMergeSort(rb *route) *mergeSort {
 	ms := &mergeSort{
@@ -46,10 +42,6 @@ func newMergeSort(rb *route) *mergeSort {
 	}
 	ms.truncater = ms
 	return ms
-}
-
-func (ms *mergeSort) getInput() builder {
-	return ms.input
 }
 
 // SetTruncateColumnCount satisfies the truncater interface.

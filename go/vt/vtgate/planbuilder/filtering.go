@@ -66,9 +66,7 @@ func planFilter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, wher
 	case *vindexFunc:
 		return filterVindexFunc(node, filter)
 	case *mergeSort, *pulloutSubquery:
-		si := node.(singleInput)
-
-		filteredInput, err := planFilter(pb, si.getInput(), filter, whereType, origin)
+		filteredInput, err := planFilter(pb, node.Inputs()[0], filter, whereType, origin)
 		if err != nil {
 			return nil, err
 		}

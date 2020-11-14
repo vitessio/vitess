@@ -28,12 +28,14 @@ import (
 func planDistinct(pb *primitiveBuilder, input builder) (builder, error) {
 	switch node := input.(type) {
 	case *mergeSort, *pulloutSubquery:
-		si := node.(singleInput)
-		newInput, err := planDistinct(pb, si.getInput())
+		newInput, err := planDistinct(pb, node.Inputs()[0])
 		if err != nil {
 			return nil, err
 		}
-		node.Rewrite(newInput)
+		err = node.Rewrite(newInput)
+		if err != nil {
+			return nil, err
+		}
 		return node, nil
 	case *route:
 		node.Select.(*sqlparser.Select).Distinct = true
