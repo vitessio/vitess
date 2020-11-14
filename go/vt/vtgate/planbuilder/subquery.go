@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -87,14 +86,6 @@ func (sq *subquery) First() builder {
 // ResultColumns satisfies the builder interface.
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
-}
-
-// PushGroupBy satisfies the builder interface.
-func (sq *subquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	if (groupBy) == nil {
-		return nil
-	}
-	return errors.New("unsupported: group by on cross-shard subquery")
 }
 
 // PushOrderBy satisfies the builder interface.

@@ -81,10 +81,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) PushGroupBy(by sqlparser.GroupBy) error {
-	return unreachable("GroupBy")
-}
-
 func (c *concatenate) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
 	if by == nil {
 		return c, nil

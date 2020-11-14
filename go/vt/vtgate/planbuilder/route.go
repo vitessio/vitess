@@ -136,12 +136,6 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 	return rc
 }
 
-// PushGroupBy satisfies the builder interface.
-func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	rb.Select.(*sqlparser.Select).GroupBy = groupBy
-	return nil
-}
-
 // PushOrderBy satisfies the builder interface.
 func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	switch len(orderBy) {

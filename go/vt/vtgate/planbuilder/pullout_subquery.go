@@ -99,11 +99,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// PushGroupBy satisfies the builder interface.
-func (ps *pulloutSubquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	return ps.underlying.PushGroupBy(groupBy)
-}
-
 // PushOrderBy satisfies the builder interface.
 func (ps *pulloutSubquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	bldr, err := ps.underlying.PushOrderBy(orderBy)

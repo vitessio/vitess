@@ -89,11 +89,6 @@ func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (ms *memorySort) PushGroupBy(_ sqlparser.GroupBy) error {
-	return errors.New("memorySort.PushGroupBy: unreachable")
-}
-
-// PushGroupBy satisfies the builder interface.
 func (ms *memorySort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("memorySort.PushOrderBy: unreachable")
 }

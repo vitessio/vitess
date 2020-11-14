@@ -56,9 +56,6 @@ type builder interface {
 	// which is usually the left most.
 	First() builder
 
-	// PushGroupBy makes the primitive handle the GROUP BY clause.
-	PushGroupBy(sqlparser.GroupBy) error
-
 	// PushOrderBy pushes the ORDER BY clause. It returns the
 	// the current primitive or a replacement if a new one was
 	// created.

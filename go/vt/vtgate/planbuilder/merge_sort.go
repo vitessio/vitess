@@ -77,11 +77,6 @@ func (ms *mergeSort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 
-// PushGroupBy satisfies the builder interface.
-func (ms *mergeSort) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	return ms.input.PushGroupBy(groupBy)
-}
-
 // PushOrderBy satisfies the builder interface.
 // A merge sort is created due to the push of an ORDER BY clause.
 // So, this function should never get called.

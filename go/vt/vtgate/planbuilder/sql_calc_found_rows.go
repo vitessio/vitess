@@ -69,11 +69,6 @@ func (s *sqlCalcFoundRows) First() builder {
 	return s.LimitQuery.First()
 }
 
-//PushGroupBy implements the builder interface
-func (s *sqlCalcFoundRows) PushGroupBy(sqlparser.GroupBy) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushGroupBy")
-}
-
 //PushOrderBy implements the builder interface
 func (s *sqlCalcFoundRows) PushOrderBy(sqlparser.OrderBy) (builder, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushOrderBy")
