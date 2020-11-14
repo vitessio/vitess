@@ -361,3 +361,32 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 		SingleShardOnly:   true,
 	}, nil
 }
+
+type builderVisitor func(builder) (bool, builder, error)
+
+func visit(node builder, visitor builderVisitor) (builder, error) {
+	if visitor != nil {
+		kontinue, newNode, err := visitor(node)
+		if err != nil {
+			return nil, err
+		}
+		if !kontinue {
+			return newNode, nil
+		}
+		node = newNode
+	}
+	inputs := node.Inputs()
+	for i, input := range inputs {
+		newInput, err := visit(input, visitor)
+		if err != nil {
+			return nil, err
+		}
+		inputs[i] = newInput
+	}
+	err := node.Rewrite(inputs...)
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}

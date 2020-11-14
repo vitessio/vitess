@@ -25,31 +25,25 @@ import (
 
 // planMisc visits all children and sets a few
 func planMisc(pb *primitiveBuilder, in builder, sel *sqlparser.Select) (builder, error) {
-	switch node := in.(type) {
-	case *route:
-		// TODO: this is not cool
-		node.Select.(*sqlparser.Select).Comments = sel.Comments
-		node.Select.(*sqlparser.Select).Lock = sel.Lock
-		if sel.Into != nil {
-			if node.eroute.Opcode != engine.SelectUnsharded {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+	output, err := visit(in, func(bldr builder) (bool, builder, error) {
+		switch node := bldr.(type) {
+		case *route:
+			// TODO: this is not cool
+			node.Select.(*sqlparser.Select).Comments = sel.Comments
+			node.Select.(*sqlparser.Select).Lock = sel.Lock
+			if sel.Into != nil {
+				if node.eroute.Opcode != engine.SelectUnsharded {
+					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+				}
+				node.Select.(*sqlparser.Select).Into = sel.Into
 			}
-			node.Select.(*sqlparser.Select).Into = sel.Into
+			return true, node, nil
 		}
-		return node, nil
-	}
+		return true, bldr, nil
+	})
 
-	inputs := in.Inputs()
-	for i, input := range in.Inputs() {
-		newInput, err := planMisc(pb, input, sel)
-		if err != nil {
-			return nil, err
-		}
-		inputs[i] = newInput
-	}
-	err := in.Rewrite(inputs...)
 	if err != nil {
 		return nil, err
 	}
-	return in, nil
+	return output, nil
 }

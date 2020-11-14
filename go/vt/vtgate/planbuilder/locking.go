@@ -22,28 +22,20 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-//	planLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
+// planLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
 func planLock(pb *primitiveBuilder, in builder, lock sqlparser.Lock) (builder, error) {
-	switch node := in.(type) {
-	case *route:
-		node.Select.SetLock(lock)
-		return node, nil
-	case *sqlCalcFoundRows, *vindexFunc:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.locking: unreachable", in)
-	}
-
-	inputs := in.Inputs()
-	for i, input := range inputs {
-		newInput, err := planLock(pb, input, lock)
-		if err != nil {
-			return nil, err
+	output, err := visit(in, func(bldr builder) (bool, builder, error) {
+		switch node := in.(type) {
+		case *route:
+			node.Select.SetLock(lock)
+			return false, node, nil
+		case *sqlCalcFoundRows, *vindexFunc:
+			return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.locking: unreachable", in)
 		}
-		inputs[i] = newInput
-	}
-	err := in.Rewrite(inputs...)
+		return true, bldr, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	return in, nil
+	return output, nil
 }
