@@ -102,13 +102,22 @@ func planProjection(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExp
 		node.resultColumns = append(node.resultColumns, rc)
 
 		return node, rc, len(node.resultColumns) - 1, nil
-	case *mergeSort, *pulloutSubquery:
-		si := node.(singleInput)
-		projectedInput, rc, idx, err := planProjection(pb, si.getInput(), expr, origin)
+	case *mergeSort:
+		projectedInput, rc, idx, err := planProjection(pb, node.input, expr, origin)
 		if err != nil {
 			return nil, nil, 0, err
 		}
 		err = node.Rewrite(projectedInput)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		return node, rc, idx, nil
+	case *pulloutSubquery:
+		projectedInput, rc, idx, err := planProjection(pb, node.underlying, expr, origin)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		err = node.Rewrite(projectedInput, node.subquery)
 		if err != nil {
 			return nil, nil, 0, err
 		}

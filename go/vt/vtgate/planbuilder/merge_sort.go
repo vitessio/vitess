@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -63,11 +62,6 @@ func (ms *mergeSort) SetTruncateColumnCount(count int) {
 // Primitive satisfies the builder interface.
 func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
-}
-
-// PushLock satisfies the builder interface.
-func (ms *mergeSort) PushLock(lock sqlparser.Lock) error {
-	return ms.input.PushLock(lock)
 }
 
 // Wireup satisfies the builder interface.

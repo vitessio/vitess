@@ -77,16 +77,6 @@ func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	return ps.eSubquery
 }
 
-// PushLock satisfies the builder interface.
-func (ps *pulloutSubquery) PushLock(lock sqlparser.Lock) error {
-	err := ps.subquery.PushLock(lock)
-	if err != nil {
-		return err
-	}
-
-	return ps.underlying.PushLock(lock)
-}
-
 // First satisfies the builder interface.
 func (ps *pulloutSubquery) First() builder {
 	return ps.underlying.First()
@@ -141,9 +131,14 @@ func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber in
 }
 
 func (ps *pulloutSubquery) Rewrite(inputs ...builder) error {
-	if len(inputs) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pulloutSubquery: wrong number of inputs")
 	}
 	ps.underlying = inputs[0]
+	ps.subquery = inputs[1]
 	return nil
+}
+
+func (ps *pulloutSubquery) Inputs() []builder {
+	return []builder{ps.underlying, ps.subquery}
 }

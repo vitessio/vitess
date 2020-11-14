@@ -48,11 +48,6 @@ func (l *limit) Primitive() engine.Primitive {
 	return l.elimit
 }
 
-// PushLock satisfies the builder interface.
-func (l *limit) PushLock(lock sqlparser.Lock) error {
-	return l.input.PushLock(lock)
-}
-
 // SetLimit sets the limit for the primitive. It calls the underlying
 // primitive's SetUpperLimit, which is an optimization hint that informs
 // the underlying primitive that it doesn't need to return more rows than

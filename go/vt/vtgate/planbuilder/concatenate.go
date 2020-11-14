@@ -90,20 +90,15 @@ func (c *concatenate) Primitive() engine.Primitive {
 	}
 }
 
-// PushLock satisfies the builder interface.
-func (c *concatenate) PushLock(lock sqlparser.Lock) error {
-	err := c.lhs.PushLock(lock)
-	if err != nil {
-		return err
-	}
-	return c.rhs.PushLock(lock)
-}
-
 func (c *concatenate) Rewrite(inputs ...builder) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "concatenate: wrong number of inputs")
 	}
 	c.lhs = inputs[0]
 	c.rhs = inputs[1]
 	return nil
+}
+
+func (c *concatenate) Inputs() []builder {
+	return []builder{c.lhs, c.rhs}
 }

@@ -83,11 +83,6 @@ func (ms *memorySort) Primitive() engine.Primitive {
 	return ms.eMemorySort
 }
 
-// PushLock satisfies the builder interface.
-func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
-	return ms.input.PushLock(lock)
-}
-
 // SetLimit satisfies the builder interface.
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return errors.New("memorySort.Limit: unreachable")

@@ -235,11 +235,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	return oa.eaggr
 }
 
-// PushLock satisfies the builder interface.
-func (oa *orderedAggregate) PushLock(lock sqlparser.Lock) error {
-	return oa.input.PushLock(lock)
-}
-
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
 	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]

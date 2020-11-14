@@ -76,7 +76,11 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 		}
 		pb.st.Outer = outer
 	}
-	pb.bldr.PushLock(union.Lock)
+	bldr, err := planLock(pb, pb.bldr, union.Lock)
+	if err != nil {
+		return err
+	}
+	pb.bldr = bldr
 
 	if err := pb.pushOrderBy(union.OrderBy); err != nil {
 		return err

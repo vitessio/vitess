@@ -137,16 +137,6 @@ func (jb *join) Primitive() engine.Primitive {
 	return jb.ejoin
 }
 
-// PushLock satisfies the builder interface.
-func (jb *join) PushLock(lock sqlparser.Lock) error {
-	err := jb.Left.PushLock(lock)
-	if err != nil {
-		return err
-	}
-
-	return jb.Right.PushLock(lock)
-}
-
 // First satisfies the builder interface.
 func (jb *join) First() builder {
 	return jb.Left.First()
@@ -258,12 +248,17 @@ func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err erro
 
 func (jb *join) Rewrite(inputs ...builder) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "join: wrong number of inputs")
 	}
 	jb.Left = inputs[0]
 	jb.Right = inputs[1]
 	return nil
 }
+
+func (jb *join) Inputs() []builder {
+	return []builder{jb.Left, jb.Right}
+}
+
 
 // isOnLeft returns true if the specified route number
 // is on the left side of the join. If false, it means

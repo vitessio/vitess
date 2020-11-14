@@ -148,8 +148,12 @@ func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, er
 
 func (vf *vindexFunc) Rewrite(inputs ...builder) error {
 	if len(inputs) != 0 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of inputs")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindexFunc: wrong number of inputs")
 	}
 
 	return nil
+}
+
+func (vf *vindexFunc) Inputs() []builder {
+	return []builder{}
 }
