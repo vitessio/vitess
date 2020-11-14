@@ -103,9 +103,9 @@ func TestMissingTables(t *testing.T) {
 
 	ctx := context.Background()
 	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "")
-	require.EqualError(t, err, "tables not found in source keyspace sourceks: tyt")
+	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
 	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "")
-	require.EqualError(t, err, "tables not found in source keyspace sourceks: tyt,txt")
+	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
 	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "")
 	require.NoError(t, err)
 }
