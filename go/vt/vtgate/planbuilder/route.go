@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -134,69 +133,6 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 	rb.resultColumns = append(rb.resultColumns, rc)
 
 	return rc
-}
-
-// PushOrderBy satisfies the builder interface.
-func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	switch len(orderBy) {
-	case 0:
-		return rb, nil
-	case 1:
-		isSpecial := false
-		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
-			isSpecial = true
-		} else if f, ok := orderBy[0].Expr.(*sqlparser.FuncExpr); ok {
-			if f.Name.Lowered() == "rand" {
-				isSpecial = true
-			}
-		}
-		if isSpecial {
-			rb.Select.AddOrder(orderBy[0])
-			return rb, nil
-		}
-	}
-
-	if rb.isSingleShard() {
-		for _, order := range orderBy {
-			rb.Select.AddOrder(order)
-		}
-		return rb, nil
-	}
-
-	// If it's a scatter, we have to populate the OrderBy field.
-	for _, order := range orderBy {
-		colNumber := -1
-		switch expr := order.Expr.(type) {
-		case *sqlparser.Literal:
-			var err error
-			if colNumber, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
-				return nil, err
-			}
-		case *sqlparser.ColName:
-			c := expr.Metadata.(*column)
-			for i, rc := range rb.resultColumns {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
-		}
-		// If column is not found, then the order by is referencing
-		// a column that's not on the select list.
-		if colNumber == -1 {
-			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
-		}
-		ob := engine.OrderbyParams{
-			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescOrder,
-		}
-		rb.eroute.OrderBy = append(rb.eroute.OrderBy, ob)
-
-		rb.Select.AddOrder(order)
-	}
-	return newMergeSort(rb), nil
 }
 
 // SetLimit adds a LIMIT clause to the route.

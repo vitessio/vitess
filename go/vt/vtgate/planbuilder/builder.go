@@ -56,11 +56,6 @@ type builder interface {
 	// which is usually the left most.
 	First() builder
 
-	// PushOrderBy pushes the ORDER BY clause. It returns the
-	// the current primitive or a replacement if a new one was
-	// created.
-	PushOrderBy(sqlparser.OrderBy) (builder, error)
-
 	// SetUpperLimit is an optimization hint that tells that primitive
 	// that it does not need to return more than the specified number of rows.
 	// A primitive that cannot perform this can ignore the request.

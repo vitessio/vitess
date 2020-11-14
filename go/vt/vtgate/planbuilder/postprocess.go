@@ -53,7 +53,7 @@ func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if err := pb.st.ResolveSymbols(orderBy); err != nil {
 		return err
 	}
-	bldr, err := pb.bldr.PushOrderBy(orderBy)
+	bldr, err := planOrdering(pb, pb.bldr, orderBy)
 	if err != nil {
 		return err
 	}

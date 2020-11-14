@@ -69,11 +69,6 @@ func (s *sqlCalcFoundRows) First() builder {
 	return s.LimitQuery.First()
 }
 
-//PushOrderBy implements the builder interface
-func (s *sqlCalcFoundRows) PushOrderBy(sqlparser.OrderBy) (builder, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushOrderBy")
-}
-
 //SetUpperLimit implements the builder interface
 func (s *sqlCalcFoundRows) SetUpperLimit(count sqlparser.Expr) {
 	s.LimitQuery.SetUpperLimit(count)

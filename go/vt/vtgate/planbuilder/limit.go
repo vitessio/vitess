@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -53,11 +51,6 @@ func (l *limit) Primitive() engine.Primitive {
 // PushLock satisfies the builder interface.
 func (l *limit) PushLock(lock sqlparser.Lock) error {
 	return l.input.PushLock(lock)
-}
-
-// PushGroupBy satisfies the builder interface.
-func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, errors.New("limit.PushOrderBy: unreachable")
 }
 
 // SetLimit sets the limit for the primitive. It calls the underlying

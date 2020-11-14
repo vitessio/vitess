@@ -17,9 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -81,13 +79,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
-	if by == nil {
-		return c, nil
-	}
-	return nil, unreachable("OrderBy")
-}
-
 func (c *concatenate) Primitive() engine.Primitive {
 	lhs := c.lhs.Primitive()
 	rhs := c.rhs.Primitive()
@@ -104,8 +95,4 @@ func (c *concatenate) PushLock(lock sqlparser.Lock) error {
 		return err
 	}
 	return c.rhs.PushLock(lock)
-}
-
-func unreachable(name string) error {
-	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "concatenate.%s: unreachable", name)
 }

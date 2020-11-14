@@ -88,11 +88,6 @@ func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
 	return ms.input.PushLock(lock)
 }
 
-// PushGroupBy satisfies the builder interface.
-func (ms *memorySort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, errors.New("memorySort.PushOrderBy: unreachable")
-}
-
 // SetLimit satisfies the builder interface.
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return errors.New("memorySort.Limit: unreachable")

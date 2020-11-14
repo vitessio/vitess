@@ -99,16 +99,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// PushOrderBy satisfies the builder interface.
-func (ps *pulloutSubquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	bldr, err := ps.underlying.PushOrderBy(orderBy)
-	if err != nil {
-		return nil, err
-	}
-	ps.underlying = bldr
-	return ps, nil
-}
-
 // SetUpperLimit satisfies the builder interface.
 // This is a no-op because we actually call SetLimit for this primitive.
 // In the future, we may have to honor this call for subqueries.
