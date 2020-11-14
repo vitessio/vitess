@@ -112,6 +112,10 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 				if excludeTables != "" {
 					excludeTablesList = strings.Split(excludeTables, ",")
 				}
+				err = wr.validateSourceTablesExist(ctx, sourceKeyspace, ksTables, excludeTablesList)
+				if err != nil {
+					return err
+				}
 				if len(excludeTablesList) > 0 {
 					for _, ksTable := range ksTables {
 						exclude := false
@@ -228,7 +232,7 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 		}
 	}
 	if len(missingTables) > 0 {
-		return fmt.Errorf("tables not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
+		return fmt.Errorf("table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
 	}
 	return nil
 }
