@@ -74,6 +74,7 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 
 	expectDBClientQueries(t, []string{
 		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
