@@ -170,19 +170,41 @@ PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 
 # This rule rebuilds all the go files from the proto definitions for gRPC.
-proto: $(PROTO_GO_OUTS)
+PROTOC = /tmp/vitess-make-protoc
 
-ifndef NOBANNER
-	echo $$(date): Compiling proto definitions
-endif
+install_protoc-gen-go-3-12-4:
+	rm -f ${PROTOC}
+	if [ -f ${VTROOT}/bin/protoc ] && ${VTROOT}/bin/protoc --version | grep -q "3.12.4" ; then \
+		ln -s ${VTROOT}/bin/protoc ${PROTOC}
+	elif /tmp/proto-builder/protoc/bin/protoc --version | grep -q "3.12.4" ; then \
+		ln -s "/tmp/proto-builder/protoc/bin/protoc" ${PROTOC}
+		echo "OK"
+	elif ! ${PROTOC} --version | grep -q "3.12.4" ; then \
+		echo "getting protoc..."
+		PROTOC_GEN_GO_VERSION=v1.3.2
+		rm -rf "/tmp/proto-builder" && \
+		mkdir -p /tmp/proto-builder && \
+    cd /tmp/proto-builder && \
+    go mod init proto-builder && \
+    GO111MODULE=on go get golang.org/x/tools/cmd/goimports github.com/golang/protobuf/protoc-gen-go@$${PROTOC_GEN_GO_VERSION} && \
+		PROTOC_VERSION=3.12.4 && \
+		curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v$${PROTOC_VERSION}/protoc-$${PROTOC_VERSION}-linux-x86_64.zip && \
+    unzip protoc-$${PROTOC_VERSION}-linux-x86_64.zip -d ./protoc && \
+		ln -s "/tmp/proto-builder/protoc/bin/protoc" ${PROTOC}
+	fi
 
-$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
+proto:
+	install_protoc-gen-go-3-12-4 proto/*.proto
+	echo ".... protoc is ${PROTOC}"
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
-		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
+		echo "building $${name}"
+		${PROTOC} --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
+		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go;
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
+
+
 
 # Helper targets for building Docker images.
 # Please read docker/README.md to understand the different available images.
