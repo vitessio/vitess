@@ -23,20 +23,20 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*pulloutSubquery)(nil)
+var _ logicalPlan = (*pulloutSubquery)(nil)
 
-// pulloutSubquery is the builder for engine.PulloutSubquery.
+// pulloutSubquery is the logicalPlan for engine.PulloutSubquery.
 // This gets built if a subquery is not correlated and can
 // therefore can be pulled out and executed upfront.
 type pulloutSubquery struct {
 	order      int
-	subquery   builder
-	underlying builder
+	subquery   logicalPlan
+	underlying logicalPlan
 	eSubquery  *engine.PulloutSubquery
 }
 
 // newPulloutSubquery builds a new pulloutSubquery.
-func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, subquery builder) *pulloutSubquery {
+func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, subquery logicalPlan) *pulloutSubquery {
 	return &pulloutSubquery{
 		subquery: subquery,
 		eSubquery: &engine.PulloutSubquery{
@@ -48,45 +48,45 @@ func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, s
 }
 
 // setUnderlying sets the underlying primitive.
-func (ps *pulloutSubquery) setUnderlying(underlying builder) {
+func (ps *pulloutSubquery) setUnderlying(underlying logicalPlan) {
 	ps.underlying = underlying
 	ps.underlying.Reorder(ps.subquery.Order())
 	ps.order = ps.underlying.Order() + 1
 }
 
-// Order satisfies the builder interface.
+// Order satisfies the logicalPlan interface.
 func (ps *pulloutSubquery) Order() int {
 	return ps.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder satisfies the logicalPlan interface.
 func (ps *pulloutSubquery) Reorder(order int) {
 	ps.subquery.Reorder(order)
 	ps.underlying.Reorder(ps.subquery.Order())
 	ps.order = ps.underlying.Order() + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive satisfies the logicalPlan interface.
 func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
 	ps.eSubquery.Underlying = ps.underlying.Primitive()
 	return ps.eSubquery
 }
 
-// ResultColumns satisfies the builder interface.
+// ResultColumns satisfies the logicalPlan interface.
 func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// Wireup satisfies the builder interface.
-func (ps *pulloutSubquery) Wireup(bldr builder, jt *jointab) error {
+// Wireup satisfies the logicalPlan interface.
+func (ps *pulloutSubquery) Wireup(bldr logicalPlan, jt *jointab) error {
 	if err := ps.underlying.Wireup(bldr, jt); err != nil {
 		return err
 	}
 	return ps.subquery.Wireup(bldr, jt)
 }
 
-// SupplyVar satisfies the builder interface.
+// SupplyVar satisfies the logicalPlan interface.
 func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if from <= ps.subquery.Order() {
 		ps.subquery.SupplyVar(from, to, col, varname)
@@ -95,17 +95,17 @@ func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varna
 	ps.underlying.SupplyVar(from, to, col, varname)
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol satisfies the logicalPlan interface.
 func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	return ps.underlying.SupplyCol(col)
 }
 
-// SupplyWeightString satisfies the builder interface.
+// SupplyWeightString satisfies the logicalPlan interface.
 func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return ps.underlying.SupplyWeightString(colNumber)
 }
 
-func (ps *pulloutSubquery) Rewrite(inputs ...builder) error {
+func (ps *pulloutSubquery) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pulloutSubquery: wrong number of inputs")
 	}
@@ -114,6 +114,6 @@ func (ps *pulloutSubquery) Rewrite(inputs ...builder) error {
 	return nil
 }
 
-func (ps *pulloutSubquery) Inputs() []builder {
-	return []builder{ps.underlying, ps.subquery}
+func (ps *pulloutSubquery) Inputs() []logicalPlan {
+	return []logicalPlan{ps.underlying, ps.subquery}
 }

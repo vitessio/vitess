@@ -29,7 +29,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var _ builder = (*vindexFunc)(nil)
+var _ logicalPlan = (*vindexFunc)(nil)
 
 // vindexFunc is used to build a VindexFunc primitive.
 type vindexFunc struct {
@@ -69,44 +69,44 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vi
 	return vf, st
 }
 
-// Order satisfies the builder interface.
+// Order satisfies the logicalPlan interface.
 func (vf *vindexFunc) Order() int {
 	return vf.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder satisfies the logicalPlan interface.
 func (vf *vindexFunc) Reorder(order int) {
 	vf.order = order + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive satisfies the logicalPlan interface.
 func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
 }
 
-// PushLock satisfies the builder interface.
+// PushLock satisfies the logicalPlan interface.
 func (vf *vindexFunc) PushLock(lock sqlparser.Lock) error {
 	return nil
 }
 
-// ResultColumns satisfies the builder interface.
+// ResultColumns satisfies the logicalPlan interface.
 func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
 }
 
-// Wireup satisfies the builder interface.
-func (vf *vindexFunc) Wireup(bldr builder, jt *jointab) error {
+// Wireup satisfies the logicalPlan interface.
+func (vf *vindexFunc) Wireup(bldr logicalPlan, jt *jointab) error {
 	return nil
 }
 
-// SupplyVar satisfies the builder interface.
+// SupplyVar satisfies the logicalPlan interface.
 func (vf *vindexFunc) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	// vindexFunc is an atomic primitive. So, SupplyVar cannot be
 	// called on it.
 	panic("BUG: vindexFunc is an atomic node.")
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol satisfies the logicalPlan interface.
 func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range vf.resultColumns {
@@ -127,12 +127,12 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 	return rc, len(vf.resultColumns) - 1
 }
 
-// SupplyWeightString satisfies the builder interface.
+// SupplyWeightString satisfies the logicalPlan interface.
 func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return 0, errors.New("cannot do collation on vindex function")
 }
 
-func (vf *vindexFunc) Rewrite(inputs ...builder) error {
+func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 0 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindexFunc: wrong number of inputs")
 	}
@@ -140,6 +140,6 @@ func (vf *vindexFunc) Rewrite(inputs ...builder) error {
 	return nil
 }
 
-func (vf *vindexFunc) Inputs() []builder {
-	return []builder{}
+func (vf *vindexFunc) Inputs() []logicalPlan {
+	return []logicalPlan{}
 }

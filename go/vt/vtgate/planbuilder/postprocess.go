@@ -28,22 +28,22 @@ import (
 // and ensures that there are no subqueries.
 func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if sel.Distinct {
-		newBuilder, err := planDistinct(pb, pb.bldr)
+		newPlan, err := planDistinct(pb, pb.plan)
 		if err != nil {
 			return err
 		}
-		pb.bldr = newBuilder
+		pb.plan = newPlan
 	}
 
 	if err := pb.st.ResolveSymbols(sel.GroupBy); err != nil {
 		return err
 	}
 
-	newInput, err := planGroupBy(pb, pb.bldr, sel.GroupBy)
+	newInput, err := planGroupBy(pb, pb.plan, sel.GroupBy)
 	if err != nil {
 		return err
 	}
-	pb.bldr = newInput
+	pb.plan = newInput
 
 	return nil
 }
@@ -54,12 +54,12 @@ func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if err := pb.st.ResolveSymbols(orderBy); err != nil {
 		return err
 	}
-	bldr, err := planOrdering(pb, pb.bldr, orderBy)
+	bldr, err := planOrdering(pb, pb.plan, orderBy)
 	if err != nil {
 		return err
 	}
-	pb.bldr = bldr
-	pb.bldr.Reorder(0)
+	pb.plan = bldr
+	pb.plan.Reorder(0)
 	return nil
 }
 
@@ -67,13 +67,13 @@ func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 	if limit == nil {
 		return nil
 	}
-	rb, ok := pb.bldr.(*route)
+	rb, ok := pb.plan.(*route)
 	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return nil
 	}
 
-	lb, err := createLimit(pb.bldr, limit)
+	lb, err := createLimit(pb.plan, limit)
 	if err != nil {
 		return err
 	}
@@ -83,8 +83,8 @@ func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 		return err
 	}
 
-	pb.bldr = bldr
-	pb.bldr.Reorder(0)
+	pb.plan = bldr
+	pb.plan.Reorder(0)
 	return nil
 }
 
@@ -94,7 +94,7 @@ var _ builderVisitor = setUpperLimit
 // setUpperLimit is an optimization hint that tells that primitive
 // that it does not need to return more than the specified number of rows.
 // A primitive that cannot perform this can ignore the request.
-func setUpperLimit(bldr builder) (bool, builder, error) {
+func setUpperLimit(bldr logicalPlan) (bool, logicalPlan, error) {
 	arg := sqlparser.NewArgument([]byte(":__upper_limit"))
 	switch node := bldr.(type) {
 	case *join:
@@ -109,7 +109,7 @@ func setUpperLimit(bldr builder) (bool, builder, error) {
 		return false, node, nil
 	case *pulloutSubquery:
 		// we control the visitation manually here -
-		// we don't want to visit the subQuery side of this builder
+		// we don't want to visit the subQuery side of this plan
 		newUnderlying, err := visit(node.underlying, setUpperLimit)
 		if err != nil {
 			return false, nil, err
@@ -132,7 +132,7 @@ func setUpperLimit(bldr builder) (bool, builder, error) {
 // primitive's SetUpperLimit, which is an optimization hint that informs
 // the underlying primitive that it doesn't need to return more rows than
 // specified.
-func createLimit(input builder, limit *sqlparser.Limit) (builder, error) {
+func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
 	bldr := newLimit(input)
 	pv, err := sqlparser.NewPlanValue(limit.Rowcount)
 	if err != nil {

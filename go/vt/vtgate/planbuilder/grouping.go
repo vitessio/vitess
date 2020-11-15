@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func planGroupBy(pb *primitiveBuilder, input builder, groupBy sqlparser.GroupBy) (builder, error) {
+func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.GroupBy) (logicalPlan, error) {
 	if len(groupBy) == 0 {
 		// if we have no grouping declared, we only want to visit orderedAggregate
 		_, isOrdered := input.(*orderedAggregate)

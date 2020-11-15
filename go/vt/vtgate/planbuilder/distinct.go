@@ -25,7 +25,7 @@ import (
 )
 
 // planDistinct makes the output distinct
-func planDistinct(pb *primitiveBuilder, input builder) (builder, error) {
+func planDistinct(pb *primitiveBuilder, input logicalPlan) (logicalPlan, error) {
 	switch node := input.(type) {
 	case *mergeSort, *pulloutSubquery:
 		newInput, err := planDistinct(pb, node.Inputs()[0])

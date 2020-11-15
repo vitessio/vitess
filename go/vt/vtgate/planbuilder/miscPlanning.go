@@ -24,8 +24,8 @@ import (
 )
 
 // planMisc visits all children and sets a few
-func planMisc(pb *primitiveBuilder, in builder, sel *sqlparser.Select) (builder, error) {
-	output, err := visit(in, func(bldr builder) (bool, builder, error) {
+func planMisc(pb *primitiveBuilder, in logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
+	output, err := visit(in, func(bldr logicalPlan) (bool, logicalPlan, error) {
 		switch node := bldr.(type) {
 		case *route:
 			// TODO: this is not cool

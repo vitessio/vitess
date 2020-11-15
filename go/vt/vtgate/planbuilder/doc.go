@@ -66,16 +66,15 @@ any qualified or implicit column reference of a table
 is valid and we rely on the underlying vttablet/MySQL
 to eventually validate such references.
 
-Every 'builder' primitive must satisfy the builder
-interface. This allows the planbuilder to outsource
-primitive-specific handling into those implementations.
+The logicalPlan structs represent the plan that at
+the end will be turned into runnable [engine.Primitives].
 
 Variable naming: The AST, planbuilder and engine
 are three different worlds that use overloaded
 names that are contextually similar, but different.
 For example a join is:
 	Join is the AST node that represents the SQL construct
-	join is a builder in the current package
+	join is a logical plan in the current package
 	Join is a primitive in the engine package
 In order to disambiguate, we'll use the 'a' prefix
 for AST vars, and the 'e' prefix for engine vars.

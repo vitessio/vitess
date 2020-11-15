@@ -26,12 +26,12 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// planFilter solves this particular expression, either by pushing it down to a child or changing this builder
-func planFilter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, whereType string, origin builder) (builder, error) {
+// planFilter solves this particular expression, either by pushing it down to a child or changing this logicalPlan
+func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, whereType string, origin logicalPlan) (logicalPlan, error) {
 	switch node := input.(type) {
 	case *join:
 		isLeft := true
-		var in builder
+		var in logicalPlan
 		if node.isOnLeft(origin.Order()) {
 			in = node.Left
 		} else {
@@ -81,7 +81,7 @@ func planFilter(pb *primitiveBuilder, input builder, filter sqlparser.Expr, wher
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "%T.filtering: unreachable", input)
 }
 
-func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (builder, error) {
+func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, error) {
 	if node.eVindexFunc.Opcode != engine.VindexNone {
 		return nil, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)")
 	}

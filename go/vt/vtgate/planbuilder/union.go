@@ -36,10 +36,10 @@ func buildUnionPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 	if err := pb.processUnion(union, nil); err != nil {
 		return nil, err
 	}
-	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
+	if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
 		return nil, err
 	}
-	return pb.bldr.Primitive(), nil
+	return pb.plan.Primitive(), nil
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
@@ -51,15 +51,15 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 		if err := rpb.processPart(us.Statement, outer, false); err != nil {
 			return err
 		}
-		err := unionRouteMerge(pb.bldr, rpb.bldr, us)
+		err := unionRouteMerge(pb.plan, rpb.plan, us)
 		if err != nil {
 			if us.Distinct {
 				return err
 			}
 
 			// we are merging between two routes - let's check if we can see so that we have the same amount of columns on both sides of the union
-			lhsCols := len(pb.bldr.ResultColumns())
-			rhsCols := len(rpb.bldr.ResultColumns())
+			lhsCols := len(pb.plan.ResultColumns())
+			rhsCols := len(rpb.plan.ResultColumns())
 			if lhsCols != rhsCols {
 				return &mysql.SQLError{
 					Num:     mysql.ERWrongNumberOfColumnsInSelect,
@@ -69,18 +69,18 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 				}
 			}
 
-			pb.bldr = &concatenate{
-				lhs: pb.bldr,
-				rhs: rpb.bldr,
+			pb.plan = &concatenate{
+				lhs: pb.plan,
+				rhs: rpb.plan,
 			}
 		}
 		pb.st.Outer = outer
 	}
-	bldr, err := planLock(pb, pb.bldr, union.Lock)
+	bldr, err := planLock(pb, pb.plan, union.Lock)
 	if err != nil {
 		return err
 	}
-	pb.bldr = bldr
+	pb.plan = bldr
 
 	if err := pb.pushOrderBy(union.OrderBy); err != nil {
 		return err
@@ -109,7 +109,7 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 			return err
 		}
 		// TODO: This is probably not a great idea. If we ended up with something other than a route, we'll lose the parens
-		routeOp, ok := pb.bldr.(*route)
+		routeOp, ok := pb.plan.(*route)
 		if ok {
 			routeOp.Select = &sqlparser.ParenSelect{Select: routeOp.Select}
 		}
@@ -136,7 +136,7 @@ func checkOrderByAndLimit(part *sqlparser.Select) error {
 	return nil
 }
 
-func unionRouteMerge(left, right builder, us *sqlparser.UnionSelect) error {
+func unionRouteMerge(left, right logicalPlan, us *sqlparser.UnionSelect) error {
 	lroute, ok := left.(*route)
 	if !ok {
 		return errors.New("unsupported: SELECT of UNION is non-trivial")

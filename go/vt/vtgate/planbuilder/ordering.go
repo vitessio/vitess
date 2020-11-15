@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func planOrdering(pb *primitiveBuilder, input builder, orderBy sqlparser.OrderBy) (builder, error) {
+func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.OrderBy) (logicalPlan, error) {
 	switch node := input.(type) {
 	case *subquery, *vindexFunc:
 		if len(orderBy) == 0 {

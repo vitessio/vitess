@@ -42,8 +42,8 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 
 type subqueryInfo struct {
 	ast    *sqlparser.Subquery
-	bldr   builder
-	origin builder
+	bldr   logicalPlan
+	origin logicalPlan
 }
 
 // findOrigin identifies the right-most origin referenced by expr. In situations where
@@ -69,10 +69,10 @@ type subqueryInfo struct {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pulloutSubquery, origin builder, pushExpr sqlparser.Expr, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
 	// highestOrigin tracks the highest origin referenced by the expression.
 	// Default is the First.
-	highestOrigin := First(pb.bldr)
+	highestOrigin := First(pb.plan)
 
 	// subqueries tracks the list of subqueries encountered.
 	var subqueries []subqueryInfo
@@ -116,7 +116,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 			sqi := subqueryInfo{
 				ast:  node,
-				bldr: spb.bldr,
+				bldr: spb.plan,
 			}
 			for _, extern := range spb.st.Externs {
 				// No error expected. These are resolved externs.
@@ -222,7 +222,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 
 func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
-	if rb, ok := pb.bldr.(*route); ok {
+	if rb, ok := pb.plan.(*route); ok {
 		keyspace = rb.eroute.Keyspace.Name
 	} else {
 		// This code is unreachable because the caller checks.
@@ -246,7 +246,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := spb.bldr.(*route)
+				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
 					return false, errors.New("dummy")
@@ -267,7 +267,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := spb.bldr.(*route)
+				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
 					return false, errors.New("dummy")

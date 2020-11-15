@@ -26,9 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*orderedAggregate)(nil)
+var _ logicalPlan = (*orderedAggregate)(nil)
 
-// orderedAggregate is the builder for engine.OrderedAggregate.
+// orderedAggregate is the logicalPlan for engine.OrderedAggregate.
 // This gets built if there are aggregations on a SelectScatter
 // route. The primitive requests the underlying route to order
 // the results by the grouping columns. This will allow the
@@ -64,7 +64,7 @@ type orderedAggregate struct {
 // primitive and returns it. It returns a groupByHandler if there is aggregation it
 // can handle.
 func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
-	rb, isRoute := pb.bldr.(*route)
+	rb, isRoute := pb.plan.(*route)
 	if isRoute && rb.isSingleShard() {
 		return nil
 	}
@@ -125,11 +125,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 
 	// We need an aggregator primitive.
 	eaggr := &engine.OrderedAggregate{}
-	pb.bldr = &orderedAggregate{
+	pb.plan = &orderedAggregate{
 		resultsBuilder: newResultsBuilder(rb, eaggr),
 		eaggr:          eaggr,
 	}
-	pb.bldr.Reorder(0)
+	pb.plan.Reorder(0)
 	return nil
 }
 
@@ -229,13 +229,13 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 	return nil
 }
 
-// Primitive satisfies the builder interface.
+// Primitive satisfies the logicalPlan interface.
 func (oa *orderedAggregate) Primitive() engine.Primitive {
 	oa.eaggr.Input = oa.input.Primitive()
 	return oa.eaggr
 }
 
-func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
+func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
 	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
 	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
 	if len(funcExpr.Exprs) != 1 {
@@ -319,12 +319,12 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
-// Wireup satisfies the builder interface.
+// Wireup satisfies the logicalPlan interface.
 // If text columns are detected in the keys, then the function modifies
 // the primitive to pull a corresponding weight_string from mysql and
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
-func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
+func (oa *orderedAggregate) Wireup(bldr logicalPlan, jt *jointab) error {
 	for i, colNumber := range oa.eaggr.Keys {
 		rc := oa.resultColumns[colNumber]
 		if sqltypes.IsText(rc.column.typ) {

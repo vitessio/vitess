@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*join)(nil)
+var _ logicalPlan = (*join)(nil)
 
 // join is used to build a Join primitive.
 // It's used to build a normal join or a left join
@@ -64,7 +64,7 @@ type join struct {
 	leftOrder int
 
 	// Left and Right are the nodes for the join.
-	Left, Right builder
+	Left, Right logicalPlan
 
 	ejoin *engine.Join
 }
@@ -101,28 +101,28 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 			return errors.New("unsupported: join with USING(column_list) clause")
 		}
 	}
-	lpb.bldr = &join{
+	lpb.plan = &join{
 		weightStrings: make(map[*resultColumn]int),
-		Left:          lpb.bldr,
-		Right:         rpb.bldr,
+		Left:          lpb.plan,
+		Right:         rpb.plan,
 		ejoin: &engine.Join{
 			Opcode: opcode,
 			Vars:   make(map[string]int),
 		},
 	}
-	lpb.bldr.Reorder(0)
+	lpb.plan.Reorder(0)
 	if ajoin == nil || opcode == engine.LeftJoin {
 		return nil
 	}
 	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr)
 }
 
-// Order satisfies the builder interface.
+// Order satisfies the logicalPlan interface.
 func (jb *join) Order() int {
 	return jb.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder satisfies the logicalPlan interface.
 func (jb *join) Reorder(order int) {
 	jb.Left.Reorder(order)
 	jb.leftOrder = jb.Left.Order()
@@ -130,20 +130,20 @@ func (jb *join) Reorder(order int) {
 	jb.order = jb.Right.Order() + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive satisfies the logicalPlan interface.
 func (jb *join) Primitive() engine.Primitive {
 	jb.ejoin.Left = jb.Left.Primitive()
 	jb.ejoin.Right = jb.Right.Primitive()
 	return jb.ejoin
 }
 
-// ResultColumns satisfies the builder interface.
+// ResultColumns satisfies the logicalPlan interface.
 func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns
 }
 
-// Wireup satisfies the builder interface.
-func (jb *join) Wireup(bldr builder, jt *jointab) error {
+// Wireup satisfies the logicalPlan interface.
+func (jb *join) Wireup(bldr logicalPlan, jt *jointab) error {
 	err := jb.Right.Wireup(bldr, jt)
 	if err != nil {
 		return err
@@ -151,7 +151,7 @@ func (jb *join) Wireup(bldr builder, jt *jointab) error {
 	return jb.Left.Wireup(bldr, jt)
 }
 
-// SupplyVar satisfies the builder interface.
+// SupplyVar satisfies the logicalPlan interface.
 func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if !jb.isOnLeft(from) {
 		jb.Right.SupplyVar(from, to, col, varname)
@@ -178,7 +178,7 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 	_, jb.ejoin.Vars[varname] = jb.Left.SupplyCol(col)
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol satisfies the logicalPlan interface.
 func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range jb.resultColumns {
@@ -200,7 +200,7 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber i
 	return rc, len(jb.ejoin.Cols) - 1
 }
 
-// SupplyWeightString satisfies the builder interface.
+// SupplyWeightString satisfies the logicalPlan interface.
 func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	rc := jb.resultColumns[colNumber]
 	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
@@ -225,7 +225,7 @@ func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err erro
 	return len(jb.ejoin.Cols) - 1, nil
 }
 
-func (jb *join) Rewrite(inputs ...builder) error {
+func (jb *join) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "join: wrong number of inputs")
 	}
@@ -234,8 +234,8 @@ func (jb *join) Rewrite(inputs ...builder) error {
 	return nil
 }
 
-func (jb *join) Inputs() []builder {
-	return []builder{jb.Left, jb.Right}
+func (jb *join) Inputs() []logicalPlan {
+	return []logicalPlan{jb.Left, jb.Right}
 }
 
 // isOnLeft returns true if the specified route number

@@ -25,9 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*memorySort)(nil)
+var _ logicalPlan = (*memorySort)(nil)
 
-// memorySort is the builder for engine.Limit.
+// memorySort is the logicalPlan for engine.Limit.
 // This gets built if a limit needs to be applied
 // after rows are returned from an underlying
 // operation. Since a limit is the final operation
@@ -38,7 +38,7 @@ type memorySort struct {
 }
 
 // newMemorySort builds a new memorySort.
-func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error) {
+func newMemorySort(bldr logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, error) {
 	eMemorySort := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: newResultsBuilder(bldr, eMemorySort),
@@ -77,23 +77,23 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 	return ms, nil
 }
 
-// Primitive satisfies the builder interface.
+// Primitive satisfies the logicalPlan interface.
 func (ms *memorySort) Primitive() engine.Primitive {
 	ms.eMemorySort.Input = ms.input.Primitive()
 	return ms.eMemorySort
 }
 
-// SetLimit satisfies the builder interface.
+// SetLimit satisfies the logicalPlan interface.
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return errors.New("memorySort.Limit: unreachable")
 }
 
-// Wireup satisfies the builder interface.
+// Wireup satisfies the logicalPlan interface.
 // If text columns are detected in the keys, then the function modifies
 // the primitive to pull a corresponding weight_string from mysql and
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
-func (ms *memorySort) Wireup(bldr builder, jt *jointab) error {
+func (ms *memorySort) Wireup(bldr logicalPlan, jt *jointab) error {
 	for i, orderby := range ms.eMemorySort.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
 		if sqltypes.IsText(rc.column.typ) {

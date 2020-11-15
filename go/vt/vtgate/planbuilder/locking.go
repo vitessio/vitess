@@ -23,8 +23,8 @@ import (
 )
 
 // planLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
-func planLock(pb *primitiveBuilder, in builder, lock sqlparser.Lock) (builder, error) {
-	output, err := visit(in, func(bldr builder) (bool, builder, error) {
+func planLock(pb *primitiveBuilder, in logicalPlan, lock sqlparser.Lock) (logicalPlan, error) {
+	output, err := visit(in, func(bldr logicalPlan) (bool, logicalPlan, error) {
 		switch node := in.(type) {
 		case *route:
 			node.Select.SetLock(lock)

@@ -24,11 +24,11 @@ import (
 )
 
 type concatenate struct {
-	lhs, rhs builder
+	lhs, rhs logicalPlan
 	order    int
 }
 
-var _ builder = (*concatenate)(nil)
+var _ logicalPlan = (*concatenate)(nil)
 
 func (c *concatenate) Order() int {
 	return c.order
@@ -44,7 +44,7 @@ func (c *concatenate) Reorder(order int) {
 	c.order = c.rhs.Order() + 1
 }
 
-func (c *concatenate) Wireup(bldr builder, jt *jointab) error {
+func (c *concatenate) Wireup(bldr logicalPlan, jt *jointab) error {
 	// TODO systay should we do something different here?
 	err := c.lhs.Wireup(bldr, jt)
 	if err != nil {
@@ -74,7 +74,7 @@ func (c *concatenate) Primitive() engine.Primitive {
 	}
 }
 
-func (c *concatenate) Rewrite(inputs ...builder) error {
+func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "concatenate: wrong number of inputs")
 	}
@@ -83,6 +83,6 @@ func (c *concatenate) Rewrite(inputs ...builder) error {
 	return nil
 }
 
-func (c *concatenate) Inputs() []builder {
-	return []builder{c.lhs, c.rhs}
+func (c *concatenate) Inputs() []logicalPlan {
+	return []logicalPlan{c.lhs, c.rhs}
 }

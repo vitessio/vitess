@@ -23,9 +23,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*subquery)(nil)
+var _ logicalPlan = (*subquery)(nil)
 
-// subquery is a builder that wraps a subquery.
+// subquery is a logicalPlan that wraps a subquery.
 // This primitive wraps any subquery that results
 // in something that's not a route. It builds a
 // 'table' for the subquery allowing higher level
@@ -41,7 +41,7 @@ type subquery struct {
 }
 
 // newSubquery builds a new subquery.
-func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
+func newSubquery(alias sqlparser.TableIdent, bldr logicalPlan) (*subquery, *symtab, error) {
 	sq := &subquery{
 		builderCommon: newBuilderCommon(bldr),
 		esubquery:     &engine.Subquery{},
@@ -67,18 +67,18 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, 
 	return sq, st, nil
 }
 
-// Primitive satisfies the builder interface.
+// Primitive satisfies the logicalPlan interface.
 func (sq *subquery) Primitive() engine.Primitive {
 	sq.esubquery.Subquery = sq.input.Primitive()
 	return sq.esubquery
 }
 
-// ResultColumns satisfies the builder interface.
+// ResultColumns satisfies the logicalPlan interface.
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol satisfies the logicalPlan interface.
 func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range sq.resultColumns {
