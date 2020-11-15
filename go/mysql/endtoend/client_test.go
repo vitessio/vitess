@@ -339,20 +339,3 @@ func TestSessionTrackGTIDs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, qr.SessionStateChanges)
 }
-
-func TestDDLStrategy(t *testing.T) {
-	ctx := context.Background()
-	params := connParams
-	params.Flags |= mysql.CapabilityClientSessionTrack
-	conn, err := mysql.Connect(ctx, &params)
-	require.NoError(t, err)
-
-	_, err = conn.ExecuteFetch(`set session ddl_strategy='gh-ost'`, 1000, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(`set session ddl_strategy='pot-osc'`, 1000, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(`set session ddl_strategy=''`, 1000, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(`set session ddl_strategy='other'`, 1000, false)
-	require.Error(t, err)
-}
