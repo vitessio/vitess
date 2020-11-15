@@ -48,10 +48,6 @@ func (c *concatenate) First() builder {
 	panic("implement me")
 }
 
-func (c *concatenate) SetUpperLimit(count sqlparser.Expr) {
-	// not doing anything by design
-}
-
 func (c *concatenate) Wireup(bldr builder, jt *jointab) error {
 	// TODO systay should we do something different here?
 	err := c.lhs.Wireup(bldr, jt)

@@ -134,15 +134,6 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// SetUpperLimit satisfies the builder interface.
-// The route pushes the limit regardless of the plan.
-// If it's a scatter query, the rows returned will be
-// more than the upper limit, but enough for the limit
-// primitive to chop off where needed.
-func (rb *route) SetUpperLimit(count sqlparser.Expr) {
-	rb.Select.SetLimit(&sqlparser.Limit{Rowcount: count})
-}
-
 // Wireup satisfies the builder interface.
 func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	// Precaution: update ERoute.Values only if it's not set already.

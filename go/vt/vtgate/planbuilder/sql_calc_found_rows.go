@@ -69,11 +69,6 @@ func (s *sqlCalcFoundRows) First() builder {
 	return s.LimitQuery.First()
 }
 
-//SetUpperLimit implements the builder interface
-func (s *sqlCalcFoundRows) SetUpperLimit(count sqlparser.Expr) {
-	s.LimitQuery.SetUpperLimit(count)
-}
-
 //SupplyVar implements the builder interface
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	s.LimitQuery.SupplyVar(from, to, col, varname)

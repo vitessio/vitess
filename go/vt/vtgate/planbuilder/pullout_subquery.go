@@ -83,13 +83,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// SetUpperLimit satisfies the builder interface.
-// This is a no-op because we actually call SetLimit for this primitive.
-// In the future, we may have to honor this call for subqueries.
-func (ps *pulloutSubquery) SetUpperLimit(count sqlparser.Expr) {
-	ps.underlying.SetUpperLimit(count)
-}
-
 // Wireup satisfies the builder interface.
 func (ps *pulloutSubquery) Wireup(bldr builder, jt *jointab) error {
 	if err := ps.underlying.Wireup(bldr, jt); err != nil {

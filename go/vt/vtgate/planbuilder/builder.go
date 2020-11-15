@@ -56,11 +56,6 @@ type builder interface {
 	// which is usually the left most.
 	First() builder
 
-	// SetUpperLimit is an optimization hint that tells that primitive
-	// that it does not need to return more than the specified number of rows.
-	// A primitive that cannot perform this can ignore the request.
-	SetUpperLimit(count sqlparser.Expr)
-
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
 	// the lhs nodes.
@@ -141,10 +136,6 @@ func (bc *builderCommon) First() builder {
 
 func (bc *builderCommon) ResultColumns() []*resultColumn {
 	return bc.input.ResultColumns()
-}
-
-func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
-	bc.input.SetUpperLimit(count)
 }
 
 func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {

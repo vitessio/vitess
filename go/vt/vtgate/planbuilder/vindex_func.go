@@ -99,10 +99,6 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
 }
 
-// SetUpperLimit satisfies the builder interface.
-func (vf *vindexFunc) SetUpperLimit(_ sqlparser.Expr) {
-}
-
 // Wireup satisfies the builder interface.
 func (vf *vindexFunc) Wireup(bldr builder, jt *jointab) error {
 	return nil

@@ -319,11 +319,6 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
-// SetUpperLimit satisfies the builder interface.
-func (oa *orderedAggregate) SetUpperLimit(count sqlparser.Expr) {
-	oa.input.SetUpperLimit(count)
-}
-
 // Wireup satisfies the builder interface.
 // If text columns are detected in the keys, then the function modifies
 // the primitive to pull a corresponding weight_string from mysql and
