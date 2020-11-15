@@ -328,7 +328,8 @@ func TestSelectSystemVariables(t *testing.T) {
 
 	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
-		"@@read_after_write_timeout, @@session_track_gtids"
+		"@@read_after_write_timeout, @@session_track_gtids" +
+		"@@ddl_strategy"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -341,6 +342,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@read_after_write_gtid", Type: sqltypes.VarBinary},
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64},
 			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
+			{Name: "@@ddl_strategy", Type: sqltypes.VarBinary},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -355,6 +357,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewVarBinary("a fine gtid"),
 			sqltypes.NewFloat64(13),
 			sqltypes.NewVarBinary("own_gtid"),
+			sqltypes.NewVarBinary(""),
 		}},
 	}
 	require.NoError(t, err)
