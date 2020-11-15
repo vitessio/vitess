@@ -281,9 +281,9 @@ vitess/examples/compose$ (export CS=vttablet101; ./lvtctl.sh <args> )
 ```
 
 ## Custom Image Tags
-You  may specify a custom `vitess:lite` image tag by setting the evnironment variable `VITESS_TAG`.
+You  may specify a custom `vitess:lite` image tag by setting the evnironment variable `VITESS_TAG`.  
 This is optional and defaults to the `latest` tag. Example;
-* Set `VITESS_TAG=8.0.0` in your `.env` befor running `docker-compose up -d`
+* Set `VITESS_TAG=8.0.0` in your `.env` before running `docker-compose up -d`
 * Run `VITESS_TAG=8.0.0; docker-compose up -d`
 
 
