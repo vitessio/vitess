@@ -28,6 +28,7 @@ import (
 type myTestCase struct {
 	in, expected                                                      string
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID bool
+	ddlStrategy                                                       bool
 	udv                                                               int
 	autocommit, clientFoundRows, skipQueryPlanCache                   bool
 	sqlSelectLimit, transactionMode, workload                         bool
@@ -146,6 +147,10 @@ func TestRewrites(in *testing.T) {
 		expected: "select :__lastInsertId as x from dual",
 		liid:     true,
 	}, {
+		in:          `select * from user where col = @@ddl_strategy`,
+		expected:    "select * from user where col = :__vtddl_strategy",
+		ddlStrategy: true,
+	}, {
 		in:       `select * from user where col = @@read_after_write_gtid OR col = @@read_after_write_timeout OR col = @@session_track_gtids`,
 		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
 		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
@@ -177,6 +182,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
 			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
+			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
