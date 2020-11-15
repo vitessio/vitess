@@ -458,7 +458,7 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 func (session *SafeSession) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	// session.DDLStrategy = string(strategy)
+	session.DDLStrategy = string(strategy)
 }
 
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
