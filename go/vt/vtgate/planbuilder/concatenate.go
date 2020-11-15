@@ -44,10 +44,6 @@ func (c *concatenate) Reorder(order int) {
 	c.order = c.rhs.Order() + 1
 }
 
-func (c *concatenate) First() builder {
-	panic("implement me")
-}
-
 func (c *concatenate) Wireup(bldr builder, jt *jointab) error {
 	// TODO systay should we do something different here?
 	err := c.lhs.Wireup(bldr, jt)

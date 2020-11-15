@@ -73,11 +73,6 @@ func (sq *subquery) Primitive() engine.Primitive {
 	return sq.esubquery
 }
 
-// First satisfies the builder interface.
-func (sq *subquery) First() builder {
-	return sq
-}
-
 // ResultColumns satisfies the builder interface.
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns

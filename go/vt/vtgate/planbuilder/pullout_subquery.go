@@ -73,11 +73,6 @@ func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	return ps.eSubquery
 }
 
-// First satisfies the builder interface.
-func (ps *pulloutSubquery) First() builder {
-	return ps.underlying.First()
-}
-
 // ResultColumns satisfies the builder interface.
 func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()

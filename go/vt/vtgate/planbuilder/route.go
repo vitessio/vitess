@@ -104,11 +104,6 @@ func (rb *route) Primitive() engine.Primitive {
 	return rb.eroute
 }
 
-// First satisfies the builder interface.
-func (rb *route) First() builder {
-	return rb
-}
-
 // ResultColumns satisfies the builder interface.
 func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns

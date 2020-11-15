@@ -64,11 +64,6 @@ func (s *sqlCalcFoundRows) Reorder(order int) {
 	s.LimitQuery.Reorder(order)
 }
 
-//First implements the builder interface
-func (s *sqlCalcFoundRows) First() builder {
-	return s.LimitQuery.First()
-}
-
 //SupplyVar implements the builder interface
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	s.LimitQuery.SupplyVar(from, to, col, varname)

@@ -52,10 +52,6 @@ type builder interface {
 	// execute before this one.
 	Reorder(int)
 
-	// First returns the first builder of the tree,
-	// which is usually the left most.
-	First() builder
-
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
 	// the lhs nodes.
@@ -128,10 +124,6 @@ func (bc *builderCommon) Order() int {
 func (bc *builderCommon) Reorder(order int) {
 	bc.input.Reorder(order)
 	bc.order = bc.input.Order() + 1
-}
-
-func (bc *builderCommon) First() builder {
-	return bc.input.First()
 }
 
 func (bc *builderCommon) ResultColumns() []*resultColumn {
@@ -380,4 +372,14 @@ func visit(node builder, visitor builderVisitor) (builder, error) {
 	}
 
 	return node, nil
+}
+
+// First returns the first builder of the tree,
+// which is usually the left most.
+func First(input builder) builder {
+	inputs := input.Inputs()
+	if len(inputs) == 0 {
+		return input
+	}
+	return First(inputs[0])
 }

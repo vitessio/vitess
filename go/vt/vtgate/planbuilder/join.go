@@ -137,11 +137,6 @@ func (jb *join) Primitive() engine.Primitive {
 	return jb.ejoin
 }
 
-// First satisfies the builder interface.
-func (jb *join) First() builder {
-	return jb.Left.First()
-}
-
 // ResultColumns satisfies the builder interface.
 func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns

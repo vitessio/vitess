@@ -89,11 +89,6 @@ func (vf *vindexFunc) PushLock(lock sqlparser.Lock) error {
 	return nil
 }
 
-// First satisfies the builder interface.
-func (vf *vindexFunc) First() builder {
-	return vf
-}
-
 // ResultColumns satisfies the builder interface.
 func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
