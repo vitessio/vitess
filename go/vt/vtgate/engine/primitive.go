@@ -126,6 +126,8 @@ type (
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetFoundRows(uint64)
 
+		SetDDLStrategy(sqlparser.DDLStrategy)
+
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)
 		SetReadAfterWriteTimeout(float64)

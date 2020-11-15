@@ -99,6 +99,19 @@ type OnlineDDL struct {
 	Retries     int64                 `json:"retries,omitempty"`
 }
 
+func ValidateDDLStrategy(strategy string) (sqlparser.DDLStrategy, error) {
+	switch sqlparser.DDLStrategy(strategy) {
+	case DDLStrategyGhost:
+		return DDLStrategyGhost, nil
+	case DDLStrategyPTOSC:
+		return DDLStrategyPTOSC, nil
+	case DDLStrategyNormal:
+		return DDLStrategyNormal, nil
+	default:
+		return DDLStrategyNormal, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
+	}
+}
+
 // FromJSON creates an OnlineDDL from json
 func FromJSON(bytes []byte) (*OnlineDDL, error) {
 	onlineDDL := &OnlineDDL{}

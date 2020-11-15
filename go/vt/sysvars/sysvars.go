@@ -53,6 +53,8 @@ var (
 	Workload            = SystemVariable{Name: "workload", IdentifierAsString: true}
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
+	// Online DDL
+	DDLStrategy = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
 
 	// Read After Write settings
 	ReadAfterWriteGTID    = SystemVariable{Name: "read_after_write_gtid"}
@@ -67,6 +69,7 @@ var (
 		TransactionReadOnly,
 		SQLSelectLimit,
 		TransactionMode,
+		DDLStrategy,
 		Workload,
 		Charset,
 		Names,
