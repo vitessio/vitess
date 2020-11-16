@@ -591,6 +591,11 @@ func (vc *vcursorImpl) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface
+func (vc *vcursorImpl) GetDDLStrategy() string {
+	return vc.safeSession.GetDDLStrategy()
+}
+
+// SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
 	vc.safeSession.SetReadAfterWriteGTID(vtgtid)
 }

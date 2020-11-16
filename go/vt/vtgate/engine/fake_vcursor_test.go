@@ -61,6 +61,10 @@ func (t noopVCursor) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
 	panic("implement me")
 }
 
+func (t noopVCursor) GetDDLStrategy() string {
+	panic("implement me")
+}
+
 func (t noopVCursor) SetReadAfterWriteGTID(s string) {
 	panic("implement me")
 }
