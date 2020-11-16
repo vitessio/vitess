@@ -315,10 +315,118 @@
 "unsupported: REPLACE INTO with sharded schema"
 
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
-"unsupported: distinct on cross-shard join"
+{
+  "QueryType": "SELECT",
+  "Original": "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2",
+            "TableName": "user_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user.id, user.name from user where 1 != 1",
+                "Query": "select user.id, user.name from user",
+                "Table": "user"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.extra = 'asdf'",
+                "Table": "user_extra"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 'b', 'c' from user where 1 != 1",
+            "Query": "select 'b', 'c' from user",
+            "Table": "user"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
-"unsupported: distinct on cross-shard join"
+{
+  "QueryType": "SELECT",
+  "Original": "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 'b', 'c' from user where 1 != 1",
+            "Query": "select 'b', 'c' from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2",
+            "TableName": "user_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user.id, user.name from user where 1 != 1",
+                "Query": "select user.id, user.name from user",
+                "Table": "user"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.extra = 'asdf'",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 "select keyspace_id from user_index where id = 1 and id = 2"
 "unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
