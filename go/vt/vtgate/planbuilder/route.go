@@ -124,7 +124,10 @@ func (rb *route) ResultColumns() []*resultColumn {
 // PushFilter satisfies the builder interface.
 // The primitive will be updated if the new filter improves the plan.
 func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
-	sel := rb.Select.(*sqlparser.Select)
+	sel, ok := rb.Select.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+	}
 	switch whereType {
 	case sqlparser.WhereStr:
 		sel.AddWhere(filter)
@@ -137,7 +140,11 @@ func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereTy
 
 // PushSelect satisfies the builder interface.
 func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
-	sel := rb.Select.(*sqlparser.Select)
+	sel, ok := rb.Select.(*sqlparser.Select)
+	if !ok {
+		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+	}
+
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
 	rc = newResultColumn(expr, rb)
@@ -150,6 +157,7 @@ func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ 
 // into the select expression list of the route. This function is
 // similar to PushSelect.
 func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
+	// TODO: we should not assume that the query is a SELECT
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
@@ -163,13 +171,21 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 
 // MakeDistinct satisfies the builder interface.
 func (rb *route) MakeDistinct() (builder, error) {
-	rb.Select.(*sqlparser.Select).Distinct = true
+	s, ok := rb.Select.(*sqlparser.Select)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+	}
+	s.Distinct = true
 	return rb, nil
 }
 
 // PushGroupBy satisfies the builder interface.
 func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	rb.Select.(*sqlparser.Select).GroupBy = groupBy
+	s, ok := rb.Select.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+	}
+	s.GroupBy = groupBy
 	return nil
 }
 
@@ -252,13 +268,17 @@ func (rb *route) SetUpperLimit(count sqlparser.Expr) {
 
 // PushMisc satisfies the builder interface.
 func (rb *route) PushMisc(sel *sqlparser.Select) error {
-	rb.Select.(*sqlparser.Select).Comments = sel.Comments
-	rb.Select.(*sqlparser.Select).Lock = sel.Lock
+	s, ok := rb.Select.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+	}
+	s.Comments = sel.Comments
+	s.Lock = sel.Lock
 	if sel.Into != nil {
 		if rb.eroute.Opcode != engine.SelectUnsharded {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
 		}
-		rb.Select.(*sqlparser.Select).Into = sel.Into
+		s.Into = sel.Into
 	}
 	return nil
 }
@@ -420,6 +440,7 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 	// A new result has to be returned.
 	rc = &resultColumn{column: c}
 	rb.resultColumns = append(rb.resultColumns, rc)
+	// TODO: we should not assume that the query is a SELECT query
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: col})
 	return rc, len(rb.resultColumns) - 1
@@ -431,11 +452,16 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
 		return weightcolNumber, nil
 	}
+	s, ok := rb.Select.(*sqlparser.Select)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+	}
+
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
 			Name: sqlparser.NewColIdent("weight_string"),
 			Exprs: []sqlparser.SelectExpr{
-				rb.Select.(*sqlparser.Select).SelectExprs[colNumber],
+				s.SelectExprs[colNumber],
 			},
 		},
 	}
