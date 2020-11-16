@@ -1158,7 +1158,7 @@ var (
 	}, {
 		input: "create unique index a using foo on b (col1 desc)",
 	}, {
-		input:  "create with gh-ost unique index a using foo on b (col1 desc)",
+		input:  "create with 'gh-ost' unique index a using foo on b (col1 desc)",
 		output: "create unique index a using foo on b (col1 desc)",
 	}, {
 		input: "create fulltext index a using foo on b (col1)",
@@ -1170,9 +1170,6 @@ var (
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
 		output:     "create index a on b ()",
 		partialDDL: true,
-	}, {
-		input:  "create fulltext index a using foo on b",
-		output: "alter table b",
 	}, {
 		input:  "create view a",
 		output: "create table a",
