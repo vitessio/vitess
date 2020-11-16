@@ -61,6 +61,7 @@ type (
 		IsFullyParsed() bool
 		GetTable() TableName
 		AffectedTables() TableNames
+		SetTable(qualifier string, name string)
 		Statement
 	}
 
@@ -413,6 +414,18 @@ func (node *DDL) AffectedTables() TableNames {
 // AffectedTables implements DDLStatement.
 func (node *CreateIndex) AffectedTables() TableNames {
 	return TableNames{node.Table}
+}
+
+// SetTable implements DDLStatement.
+func (node *CreateIndex) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *DDL) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
 }
 
 // ParenSelect can actually not be a top level statement,
