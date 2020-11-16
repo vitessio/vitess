@@ -191,13 +191,13 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 			}
 		case 4:
 			if ksid != nil {
-				row = append(row, sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(fmt.Sprintf("%#x", ksid))))
+				row = append(row, sqltypes.NewVarBinary(fmt.Sprintf("%x", ksid)))
 			} else {
 				row = append(row, sqltypes.NULL)
 			}
 		case 5:
 			if ksid != nil {
-				row = append(row, sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(key.KeyRangeString(kr))))
+				row = append(row, sqltypes.NewVarBinary(key.KeyRangeString(kr)))
 			} else {
 				row = append(row, sqltypes.NULL)
 			}
