@@ -22,12 +22,17 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ Primitive = (*DDL)(nil)
 
 //DDL represents the a DDL statement, either normal or online DDL
 type DDL struct {
+	Keyspace *vindexes.Keyspace
+	SQL      string
+	DDL      *sqlparser.DDL
+
 	NormalDDL *Send
 	OnlineDDL *OnlineDDL
 
@@ -39,9 +44,9 @@ type DDL struct {
 func (v *DDL) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "DDL",
-		Keyspace:     v.OnlineDDL.Keyspace,
+		Keyspace:     v.Keyspace,
 		Other: map[string]interface{}{
-			"query": sqlparser.String(v.OnlineDDL.DDL),
+			"query": sqlparser.String(v.DDL),
 		},
 	}
 }
@@ -53,17 +58,17 @@ func (v *DDL) RouteType() string {
 
 //GetKeyspaceName implements the Primitive interface
 func (v *DDL) GetKeyspaceName() string {
-	return v.OnlineDDL.Keyspace.Name
+	return v.Keyspace.Name
 }
 
 //GetTableName implements the Primitive interface
 func (v *DDL) GetTableName() string {
-	return v.OnlineDDL.DDL.Table.Name.String()
+	return v.DDL.Table.Name.String()
 }
 
 //Execute implements the Primitive interface
 func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	if sqlparser.IsOnlineSchemaDDL(v.OnlineDDL.DDL, v.OnlineDDL.SQL) {
+	if sqlparser.IsOnlineSchemaDDL(v.DDL, v.SQL) {
 		return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}
 	//TODO (shlomi): check session variable

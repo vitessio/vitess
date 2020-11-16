@@ -7,6 +7,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
@@ -17,28 +18,30 @@ import (
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
-	stmt := in.(*sqlparser.DDL)
-	normalDDLPlan, err := buildDDLPlan(sql, stmt, vschema)
+	ddlStatement := in.(*sqlparser.DDL)
+	destination, keyspace, _, err := vschema.TargetDestination(ddlStatement.Table.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
-	onlineDDLPlan, err := buildOnlineDDLPlan(sql, stmt, vschema)
+	normalDDLPlan, err := buildDDLPlan(sql, ddlStatement, vschema, destination, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	onlineDDLPlan, err := buildOnlineDDLPlan(sql, ddlStatement, vschema, keyspace)
 	if err != nil {
 		return nil, err
 	}
 	return &engine.DDL{
+		Keyspace:  keyspace,
+		SQL:       sql,
+		DDL:       ddlStatement,
 		NormalDDL: normalDDLPlan,
 		OnlineDDL: onlineDDLPlan,
 	}, nil
 }
 
-func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (*engine.Send, error) {
-	stmt := in.(*sqlparser.DDL)
+func buildDDLPlan(sql string, ddlStatement *sqlparser.DDL, vschema ContextVSchema, destination key.Destination, keyspace *vindexes.Keyspace) (*engine.Send, error) {
 	// This method call will validate the destination != nil check.
-	destination, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
-	if err != nil {
-		return nil, err
-	}
 
 	if destination == nil {
 		destination = key.DestinationAllShards{}
@@ -53,25 +56,21 @@ func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (*
 	}, nil
 }
 
-func buildOnlineDDLPlan(query string, stmt *sqlparser.DDL, vschema ContextVSchema) (*engine.OnlineDDL, error) {
-	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
-	if err != nil {
-		return nil, err
-	}
+func buildOnlineDDLPlan(query string, ddlStatement *sqlparser.DDL, vschema ContextVSchema, keyspace *vindexes.Keyspace) (*engine.OnlineDDL, error) {
 	strategy := schema.DDLStrategyNormal
 	options := ""
-	if stmt.OnlineHint != nil {
-		strategy = stmt.OnlineHint.Strategy
-		options = stmt.OnlineHint.Options
+	if ddlStatement.OnlineHint != nil {
+		strategy = ddlStatement.OnlineHint.Strategy
+		options = ddlStatement.OnlineHint.Options
 	}
 	switch strategy {
 	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC, schema.DDLStrategyNormal: // OK, do nothing
 	default:
-		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", stmt.OnlineHint.Strategy)
+		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", ddlStatement.OnlineHint.Strategy)
 	}
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
-		DDL:      stmt,
+		DDL:      ddlStatement,
 		SQL:      query,
 		Strategy: strategy,
 		Options:  options,
