@@ -137,6 +137,9 @@ message Session {
 
   // read_after_write tracks the ReadAfterWrite settings for this session.
   ReadAfterWrite read_after_write = 20;
+
+  // DDL strategy
+  string DDLStrategy = 21;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout
