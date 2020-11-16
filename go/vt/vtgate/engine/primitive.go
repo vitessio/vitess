@@ -127,6 +127,7 @@ type (
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(sqlparser.DDLStrategy)
+		GetDDLStrategy() string
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)

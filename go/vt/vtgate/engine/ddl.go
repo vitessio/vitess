@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -46,7 +47,7 @@ func (v *DDL) description() PrimitiveDescription {
 		OperatorType: "DDL",
 		Keyspace:     v.Keyspace,
 		Other: map[string]interface{}{
-			"query": sqlparser.String(v.DDL),
+			"Query": v.SQL,
 		},
 	}
 }
@@ -66,11 +67,39 @@ func (v *DDL) GetTableName() string {
 	return v.DDL.Table.Name.String()
 }
 
+// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
+func (v *DDL) IsOnlineSchemaDDL() bool {
+	switch v.DDL.Action {
+	case sqlparser.AlterDDLAction:
+		if v.DDL.OnlineHint != nil {
+			return v.DDL.OnlineHint.Strategy != ""
+		}
+	}
+	return false
+}
+
 //Execute implements the Primitive interface
 func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	if sqlparser.IsOnlineSchemaDDL(v.DDL, v.SQL) {
+	if v.IsOnlineSchemaDDL() {
 		return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}
+
+	strategy, err := schema.ValidateDDLStrategy(vcursor.Session().GetDDLStrategy())
+	if err != nil {
+		return nil, err
+	}
+	if strategy != schema.DDLStrategyNormal {
+		v.OnlineDDL.Strategy = strategy
+		v.OnlineDDL.Options = ""
+		v.OnlineDDL.DDL.OnlineHint = &sqlparser.OnlineDDLHint{
+			Strategy: v.OnlineDDL.Strategy,
+			Options:  v.OnlineDDL.Options,
+		}
+		if v.IsOnlineSchemaDDL() {
+			return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
+		}
+	}
+
 	//TODO (shlomi): check session variable
 	return v.NormalDDL.Execute(vcursor, bindVars, wantfields)
 }
