@@ -650,7 +650,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"create index a on b (id)"
 }
 
 

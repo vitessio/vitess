@@ -97,19 +97,37 @@
 "no keyspace with name [a] found"
 
 # DDL
-"create index a on b(id)"
+"create index a on user(id)"
 {
   "QueryType": "DDL",
-  "Original": "create index a on b(id)",
+  "Original": "create index a on user(id)",
   "Instructions": {
     "OperatorType": "Send",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
     "TargetDestination": "AllShards()",
     "IsDML": false,
-    "Query": "create index a on b (id)",
+    "Query": "create index a on user (id)",
+    "SingleShardOnly": false
+  }
+}
+
+# DDL with qualifier
+"create index a on user.user(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on user.user(id)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create index a on user (id)",
     "SingleShardOnly": false
   }
 }

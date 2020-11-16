@@ -3,6 +3,7 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
@@ -11,10 +12,29 @@ import (
 )
 
 func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-	// This method call will validate the destination != nil check.
-	destination, keyspace, _, err := vschema.TargetDestination(stmt.GetTable().Qualifier.String())
-	if err != nil {
-		return nil, err
+	var table *vindexes.Table
+	var destination key.Destination
+	var keyspace *vindexes.Keyspace
+	var err error
+
+	switch stmt.(type) {
+	case *sqlparser.CreateIndex:
+		// For Create index, the table must already exist
+		// We should find the target of the query from this tables location
+		table, _, _, _, destination, err = vschema.FindTableOrVindex(stmt.GetTable())
+		keyspace = table.Keyspace
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", stmt.GetTable().Name.String())
+		}
+		stmt.SetTable("", table.Name.String())
+	case *sqlparser.DDL:
+		destination, keyspace, _, err = vschema.TargetDestination(stmt.GetTable().Qualifier.String())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if destination == nil {
@@ -22,13 +42,15 @@ func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchem
 	}
 
 	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
 	if stmt.IsFullyParsed() {
 		query = sqlparser.String(stmt)
 	}
+
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             query, //This is original sql query to be passed as the parser can provide partial ddl AST.
+		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   false,
 	}, nil

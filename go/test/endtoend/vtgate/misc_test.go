@@ -400,7 +400,11 @@ func TestCreateIndex(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	// Test that create index with the correct table name works
 	_, err = conn.ExecuteFetch(`create index i1 on t1 (id1)`, 1000, true)
+	require.NoError(t, err)
+	// Test routing rules for create index.
+	_, err = conn.ExecuteFetch(`create index i2 on ks.t1000 (id1)`, 1000, true)
 	require.NoError(t, err)
 }
 
