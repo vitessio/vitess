@@ -112,7 +112,7 @@ func TestVindexFuncMap(t *testing.T) {
 	}
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
-		"1|foo|||0x666f6f",
+		"1|foo|||666f6f",
 	)
 	for _, row := range want.Rows {
 		row[2] = sqltypes.NULL
@@ -164,8 +164,8 @@ func TestVindexFuncMap(t *testing.T) {
 	}
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
-		"1|foo|||0x666f6f",
-		"1|bar|||0x626172",
+		"1|foo|||666f6f",
+		"1|bar|||626172",
 	)
 	// Massage the rows because MakeTestResult doesn't do NULL values.
 	for _, row := range want.Rows {
@@ -204,9 +204,9 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
 	}, {
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("foo"), sqltypes.NULL, sqltypes.NULL, sqltypes.NewVarBinary("0x666f6f"),
+			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("foo"), sqltypes.NULL, sqltypes.NULL, sqltypes.NewVarBinary("666f6f"),
 		}, {
-			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("bar"), sqltypes.NULL, sqltypes.NULL, sqltypes.NewVarBinary("0x626172"),
+			sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("bar"), sqltypes.NULL, sqltypes.NULL, sqltypes.NewVarBinary("626172"),
 		}},
 	}}
 	i := 0
