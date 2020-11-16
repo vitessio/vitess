@@ -1323,6 +1323,25 @@ func TestMax(t *testing.T) {
 	}
 }
 
+func TestHashCodes(t *testing.T) {
+	n1 := sqltypes.NULL
+	n2 := sqltypes.Value{}
+
+	h1, err := NullsafeHashcode(n1)
+	require.NoError(t, err)
+	h2, err := NullsafeHashcode(n2)
+	require.NoError(t, err)
+	assert.Equal(t, h1, h2)
+
+	char := TestValue(querypb.Type_VARCHAR, "aa")
+	_, err = NullsafeHashcode(char)
+	require.Error(t, err)
+
+	num := TestValue(querypb.Type_INT64, "123")
+	_, err = NullsafeHashcode(num)
+	require.NoError(t, err)
+}
+
 func printValue(v sqltypes.Value) string {
 	return fmt.Sprintf("%v:%q", v.Type(), v.ToBytes())
 }
