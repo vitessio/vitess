@@ -220,6 +220,26 @@ func TestQueryExecutorPlans(t *testing.T) {
 		logWant:    "savepoint a",
 		inTxWant:   "savepoint a",
 	}, {
+		input: "create index a on user(id)",
+		dbResponses: []dbResponse{{
+			query:  "create index a on user (id)",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "DDL",
+		logWant:    "create index a on user (id)",
+		inTxWant:   "create index a on user (id)",
+	}, {
+		input: "create index a on user(id1 + id2)",
+		dbResponses: []dbResponse{{
+			query:  "create index a on user(id1 + id2)",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "DDL",
+		logWant:    "create index a on user(id1 + id2)",
+		inTxWant:   "create index a on user(id1 + id2)",
+	}, {
 		input: "ROLLBACK work to SAVEPOINT a",
 		dbResponses: []dbResponse{{
 			query:  "ROLLBACK work to SAVEPOINT a",
