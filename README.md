@@ -28,7 +28,7 @@ Vitess has a growing community. You can view the list of adopters
 To report a problem the best way to get attention is to create a GitHub [issue](.https://github.com/vitessio/vitess/issues ). 
 
 For topics that are better discussed live, please join the [Vitess Slack](https://vitess.io/slack) workspace.
-You may post a follow-up question on the #general channel.
+You may post any questions on the #general channel or join some of the special-interest channels.
 
 Follow  [Vitess Blog](https://blog.vitess.io/) for low-frequency updates like new features and releases.
 
