@@ -1219,7 +1219,7 @@
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter"
+            "Variant": "SelectScatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true

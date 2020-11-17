@@ -130,10 +130,6 @@
 "select count(*) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
 
-# Aggregate detection (distinct)
-"select distinct user.a from user join user_extra"
-"unsupported: cross-shard query with aggregates"
-
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
