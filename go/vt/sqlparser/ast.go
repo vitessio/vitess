@@ -272,6 +272,17 @@ type (
 		FullyParsed bool
 	}
 
+	// CreateView represents a CREATE VIEW query
+	CreateView struct {
+		ViewName  TableName
+		Algorithm string
+		Definer   string
+		Security  string
+
+		IsReplace   bool
+		FullyParsed bool
+	}
+
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
@@ -366,9 +377,11 @@ func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
 func (*CreateIndex) iStatement()       {}
+func (*CreateView) iStatement()        {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
+func (*CreateView) iDDLStatement()  {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -377,6 +390,11 @@ func (*DDL) IsFullyParsed() bool {
 
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateIndex) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateView) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
@@ -390,9 +408,19 @@ func (node *CreateIndex) GetOnlineHint() *OnlineDDLHint {
 	return node.OnlineHint
 }
 
+// GetOnlineHint implements the DDLStatement interface
+func (*CreateView) GetOnlineHint() *OnlineDDLHint {
+	return nil
+}
+
 // GetTable implements the DDLStatement interface
 func (node *CreateIndex) GetTable() TableName {
 	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *CreateView) GetTable() TableName {
+	return TableName{}
 }
 
 // GetTable implements the DDLStatement interface
@@ -416,6 +444,11 @@ func (node *CreateIndex) AffectedTables() TableNames {
 	return TableNames{node.Table}
 }
 
+// AffectedTables implements DDLStatement.
+func (node *CreateView) AffectedTables() TableNames {
+	return TableNames{node.ViewName}
+}
+
 // SetTable implements DDLStatement.
 func (node *CreateIndex) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
@@ -427,6 +460,9 @@ func (node *DDL) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
 	node.Table.Name = NewTableIdent(name)
 }
+
+// SetTable implements DDLStatement.
+func (node *CreateView) SetTable(qualifier string, name string) {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -2277,4 +2313,22 @@ func (node *CreateIndex) Format(buf *TrackedBuffer) {
 			buf.astPrintf(node, " %v", opt.Value)
 		}
 	}
+}
+
+// Format formats the node.
+func (node *CreateView) Format(buf *TrackedBuffer) {
+	buf.WriteString("create")
+	if node.IsReplace {
+		buf.WriteString(" or replace")
+	}
+	if node.Algorithm != "" {
+		buf.astPrintf(node, " algorithm = %s", node.Algorithm)
+	}
+	if node.Definer != "" {
+		buf.astPrintf(node, " definer = %s", node.Definer)
+	}
+	if node.Security != "" {
+		buf.astPrintf(node, " sql security = %s", node.Security)
+	}
+	buf.astPrintf(node, " view %v", node.ViewName)
 }

@@ -1171,11 +1171,9 @@ var (
 		output:     "create index a on b ()",
 		partialDDL: true,
 	}, {
-		input:  "create view a",
-		output: "create table a",
+		input: "create view a",
 	}, {
-		input:  "create or replace view a",
-		output: "create table a",
+		input: "create or replace view a",
 	}, {
 		input:  "alter view a",
 		output: "alter table a",
@@ -1911,7 +1909,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "create table A (\n\tA int\n)",
 	}, {
 		input:  "create view A",
-		output: "create table a",
+		output: "create view a",
 	}, {
 		input:  "alter view A",
 		output: "alter table a",
