@@ -840,6 +840,7 @@
           "Sharded": true
         },
         "FieldQuery": "select user_id from music where 1 != 1",
+        "OrderBy": "0 ASC",
         "Query": "select user_id from music order by user_id asc limit :__upper_limit",
         "Table": "music"
       }
@@ -1520,6 +1521,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_id, count(id) from music where 1 != 1 group by user_id",
+            "OrderBy": "0 ASC",
             "Query": "select user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
             "Table": "music"
           }
