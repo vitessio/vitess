@@ -78,10 +78,6 @@
 "select count(*) a from user having a >10"
 "unsupported: filtering on results of aggregates"
 
-# distinct and aggregate functions
-"select distinct a, count(*) from user"
-"unsupported: distinct cannot be combined with aggregate functions"
-
 # group by must reference select list
 "select a from user group by b"
 "unsupported: in scatter query: group by column must reference column in SELECT list"

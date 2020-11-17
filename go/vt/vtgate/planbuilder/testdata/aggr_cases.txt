@@ -1202,6 +1202,39 @@
   }
 }
 
+# distinct and aggregate functions
+"select distinct a, count(*) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "Distinct": "false",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter"
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from user where 1 != 1",
+            "OrderBy": "0 ASC",
+            "Query": "select a, count(*) from user order by a asc",
+            "Table": "user"
+          }
+        ]
+      }
+    ]
+  }
+}
+
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
 "column number is not an int"

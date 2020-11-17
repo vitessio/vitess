@@ -363,7 +363,7 @@ func (oa *orderedAggregate) MakeDistinct() (builder, error) {
 		// So, the distinct 'operator' cannot be pushed down into the
 		// route.
 		if rc.column.Origin() == oa {
-			return nil, errors.New("unsupported: distinct cannot be combined with aggregate functions")
+			return newDistinct(oa), nil
 		}
 		oa.eaggr.Keys = append(oa.eaggr.Keys, i)
 	}
@@ -372,7 +372,7 @@ func (oa *orderedAggregate) MakeDistinct() (builder, error) {
 		return nil, err
 	}
 	oa.input = distinctSrc
-	return oa, err
+	return oa, nil
 }
 
 // PushGroupBy satisfies the builder interface.
