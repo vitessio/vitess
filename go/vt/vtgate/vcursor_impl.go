@@ -586,7 +586,7 @@ func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface
-func (vc *vcursorImpl) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
+func (vc *vcursorImpl) SetDDLStrategy(strategy string) {
 	vc.safeSession.SetDDLStrategy(strategy)
 }
 
