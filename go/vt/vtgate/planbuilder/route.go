@@ -640,7 +640,7 @@ func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 		}
 	case engine.SelectScatter:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectNone:
+		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectMultiEqual, engine.SelectNone:
 			rb.updateRoute(opcode, vindex, values)
 		}
 	}
@@ -770,7 +770,7 @@ func (rb *route) iterateCompositeIN(pb *primitiveBuilder, comparison *sqlparser.
 			newOpcode, newVindex, newValues := rb.iterateCompositeIN(pb, comparison, coordinates, expr)
 			opcode, vindex, values = bestOfComposite(opcode, newOpcode, vindex, newVindex, values, newValues)
 		case *sqlparser.ColName:
-			newVindex := pb.st.Vindex(comparison.Left, rb)
+			newVindex := pb.st.Vindex(expr, rb)
 			if newVindex != nil {
 				newOpcode, newValues := rb.compositePlanForCol(pb, comparison, coordinates)
 				opcode, vindex, values = bestOfComposite(opcode, newOpcode, vindex, newVindex, values, newValues)
