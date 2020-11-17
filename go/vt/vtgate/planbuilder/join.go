@@ -276,13 +276,6 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return jb, nil
 }
 
-// SetUpperLimit satisfies the builder interface.
-// The call is ignored because results get multiplied
-// as they join with others. So, it's hard to reliably
-// predict if a limit push down will work correctly.
-func (jb *join) SetUpperLimit(_ sqlparser.Expr) {
-}
-
 // Wireup satisfies the builder interface.
 func (jb *join) Wireup(bldr builder, jt *jointab) error {
 	err := jb.Right.Wireup(bldr, jt)

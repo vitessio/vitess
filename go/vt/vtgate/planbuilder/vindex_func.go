@@ -174,10 +174,6 @@ func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return newMemorySort(vf, orderBy)
 }
 
-// SetUpperLimit satisfies the builder interface.
-func (vf *vindexFunc) SetUpperLimit(_ sqlparser.Expr) {
-}
-
 // Wireup satisfies the builder interface.
 func (vf *vindexFunc) Wireup(bldr builder, jt *jointab) error {
 	return nil

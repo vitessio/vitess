@@ -20,7 +20,6 @@ import (
 	"errors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -78,33 +77,4 @@ func (l *limit) PushGroupBy(_ sqlparser.GroupBy) error {
 // PushGroupBy satisfies the builder interface.
 func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("limit.PushOrderBy: unreachable")
-}
-
-// SetLimit sets the limit for the primitive. It calls the underlying
-// primitive's SetUpperLimit, which is an optimization hint that informs
-// the underlying primitive that it doesn't need to return more rows than
-// specified.
-func (l *limit) SetLimit(limit *sqlparser.Limit) error {
-	pv, err := sqlparser.NewPlanValue(limit.Rowcount)
-	if err != nil {
-		return vterrors.Wrap(err, "unexpected expression in LIMIT")
-	}
-	l.elimit.Count = pv
-
-	if limit.Offset != nil {
-		pv, err = sqlparser.NewPlanValue(limit.Offset)
-		if err != nil {
-			return vterrors.Wrap(err, "unexpected expression in OFFSET")
-		}
-		l.elimit.Offset = pv
-	}
-
-	l.input.SetUpperLimit(sqlparser.NewArgument([]byte(":__upper_limit")))
-	return nil
-}
-
-// SetUpperLimit satisfies the builder interface.
-// This is a no-op because we actually call SetLimit for this primitive.
-// In the future, we may have to honor this call for subqueries.
-func (l *limit) SetUpperLimit(count sqlparser.Expr) {
 }

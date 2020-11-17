@@ -143,10 +143,3 @@ func (ms *memorySort) Wireup(bldr builder, jt *jointab) error {
 	}
 	return ms.input.Wireup(bldr, jt)
 }
-
-// SetUpperLimit satisfies the builder interface.
-// This is a no-op because we actually call SetLimit for this primitive.
-// In the future, we may have to honor this call for subqueries.
-func (ms *memorySort) SetUpperLimit(count sqlparser.Expr) {
-	ms.eMemorySort.UpperLimit, _ = sqlparser.NewPlanValue(count)
-}
