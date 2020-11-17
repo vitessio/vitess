@@ -132,6 +132,7 @@ func skipToEnd(yylex interface{}) {
   explainType 	  ExplainType
   selectInto	  *SelectInto
   createIndex	  *CreateIndex
+  createView	  *CreateView
 }
 
 %token LEX_ERROR
@@ -185,8 +186,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
-%token <bytes> STATUS VARIABLES WARNINGS
-%token <bytes> SEQUENCE
+%token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
+%token <bytes> SEQUENCE UDEFINED MERGE TEMPTABLE INVOKER LOCAL SECURITY
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -212,7 +213,7 @@ func skipToEnd(yylex interface{}) {
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
-%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
+%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
 %token <bytes> CONVERT CAST
@@ -242,6 +243,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <createIndex> create_index_prefix
+%type <createView> create_view_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
@@ -251,12 +253,12 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> explain_synonyms
 %type <str> cache_opt separator_opt
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt union_op
+%type <boolean> distinct_opt union_op replace_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
 %type <strs> select_options
-%type <str> select_option
+%type <str> select_option algorithm_view security_view security_view_opt
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -694,13 +696,10 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
-| CREATE VIEW table_name ddl_skip_to_end
+| create_view_prefix ddl_skip_to_end
   {
-    $$ = &DDL{Action: CreateDDLAction, Table: $3.ToViewName()}
-  }
-| CREATE OR REPLACE VIEW table_name ddl_skip_to_end
-  {
-    $$ = &DDL{Action: CreateDDLAction, Table: $5.ToViewName()}
+    $1.FullyParsed = true
+    $$ = $1
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
@@ -709,6 +708,15 @@ create_statement:
 | CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
     $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
+  }
+
+replace_opt:
+  {
+    $$ = false
+  }
+| OR REPLACE
+  {
+    $$ = true
   }
 
 vindex_type_opt:
@@ -764,6 +772,13 @@ create_index_prefix:
   CREATE online_hint_opt constraint_opt INDEX id_or_var using_opt ON table_name
   {
     $$ = &CreateIndex{Constraint: $3, Name: $5, IndexType: $6, Table: $8, OnlineHint: $2}
+    setDDL(yylex, $$)
+  }
+
+create_view_prefix:
+CREATE replace_opt algorithm_view security_view_opt VIEW table_name
+  {
+    $$ = &CreateView{ViewName: $6.ToViewName(), IsReplace:$2, Algorithm:$3, Security:$4 }
     setDDL(yylex, $$)
   }
 
@@ -3373,6 +3388,69 @@ algorithm_index:
     $$ = &IndexOption{Name: string($1), String: string($3)}
   }
 
+algorithm_view:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' UNDEFINED
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' MERGE
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' TEMPTABLE
+  {
+    $$ = string($3)
+  }
+
+security_view_opt:
+  {
+    $$ = ""
+  }
+| SQL SECURITY security_view
+  {
+    $$ = $3
+  }
+
+security_view:
+  DEFINER
+  {
+    $$ = string($1)
+  }
+| INVOKER
+  {
+    $$ = string($1)
+  }
+
+
+//define_opt:
+//  {
+//    $$ = ""
+//  }
+//| DEFINER '=' user
+//  {
+//    $$ = $3
+//  }
+//
+//user:
+//CURRENT_USER
+//  {
+//    $$ = $1
+//  }
+//| CURRENT_USER '(' ')'
+//  {
+//    $$ = $1
+//  }
+//| STRING AT_ID STRING
+//  {
+//
+//  }
+//| ID
+//  {
+//
+//  }
 lock_opt:
   {
     $$ = NoLock
@@ -3803,7 +3881,6 @@ reserved_table_id:
   {
     $$ = NewTableIdent(string($1))
   }
-
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -3832,6 +3909,7 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
+| CURRENT_USER
 | SUBSTR
 | SUBSTRING
 | DATABASE
@@ -3956,6 +4034,7 @@ non_reserved_keyword:
 | BOOLEAN
 | BUCKETS
 | CASCADE
+| CASCADED
 | CHAR
 | CHARACTER
 | CHARSET
@@ -3973,6 +4052,7 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DECIMAL
+| DEFINER
 | DEFINITION
 | DESCRIPTION
 | DOUBLE
@@ -4007,6 +4087,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INVOKER
 | INDEXES
 | ISOLATION
 | JSON
@@ -4020,6 +4101,7 @@ non_reserved_keyword:
 | LINES
 | LINESTRING
 | LOAD
+| LOCAL
 | LOCKED
 | LONGBLOB
 | LONGTEXT
@@ -4031,6 +4113,7 @@ non_reserved_keyword:
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
+| MERGE
 | MODE
 | MULTILINESTRING
 | MULTIPOINT
@@ -4047,6 +4130,7 @@ non_reserved_keyword:
 | OFFSET
 | OJ
 | OLD
+| OPTION
 | OPTIONAL
 | OPTIONALLY
 | ORDINALITY
@@ -4092,6 +4176,7 @@ non_reserved_keyword:
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
+| SECURITY
 | SEQUENCE
 | SESSION
 | SERIALIZABLE
@@ -4101,11 +4186,13 @@ non_reserved_keyword:
 | SKIP
 | SMALLINT
 | SPATIAL
+| SQL
 | SRID
 | START
 | STARTING
 | STATUS
 | TABLES
+| TEMPTABLE
 | TERMINATED
 | TEXT
 | THAN
@@ -4122,6 +4209,7 @@ non_reserved_keyword:
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
+| UNDEFINED
 | UNSIGNED
 | UNUSED
 | VARBINARY
