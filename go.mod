@@ -76,6 +76,7 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
 	github.com/pkg/errors v0.9.1
+	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
 	github.com/prometheus/client_golang v1.4.1
 	github.com/prometheus/common v0.9.1
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
