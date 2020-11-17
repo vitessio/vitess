@@ -70,16 +70,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := false
-	if sel.Distinct {
-		hasAggregates = true
-	} else {
-		hasAggregates = nodeHasAggregates(sel.SelectExprs)
-	}
+	hasAggregates := nodeHasAggregates(sel.SelectExprs)
 	if len(sel.GroupBy) > 0 {
 		hasAggregates = true
 	}
-	if !hasAggregates {
+	if !hasAggregates && !sel.Distinct {
 		return nil
 	}
 
@@ -88,7 +83,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// we need the ability to push down group by and
 	// order by clauses.
 	if !isRoute {
-		return errors.New("unsupported: cross-shard query with aggregates")
+		if hasAggregates {
+			return errors.New("unsupported: cross-shard query with aggregates")
+		}
+		pb.bldr = newDistinct(pb.bldr)
+		return nil
 	}
 
 	// If there is a distinct clause, we can check the select list
