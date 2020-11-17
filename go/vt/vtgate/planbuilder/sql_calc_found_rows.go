@@ -64,11 +64,6 @@ func (s *sqlCalcFoundRows) Reorder(order int) {
 	s.LimitQuery.Reorder(order)
 }
 
-//First implements the builder interface
-func (s *sqlCalcFoundRows) First() builder {
-	return s.LimitQuery.First()
-}
-
 //PushFilter implements the builder interface
 func (s *sqlCalcFoundRows) PushFilter(*primitiveBuilder, sqlparser.Expr, string, builder) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushFilter")
@@ -99,11 +94,6 @@ func (s *sqlCalcFoundRows) SetUpperLimit(count sqlparser.Expr) {
 	s.LimitQuery.SetUpperLimit(count)
 }
 
-//PushMisc implements the builder interface
-func (s *sqlCalcFoundRows) PushMisc(sel *sqlparser.Select) error {
-	return s.LimitQuery.PushMisc(sel)
-}
-
 //SupplyVar implements the builder interface
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	s.LimitQuery.SupplyVar(from, to, col, varname)
@@ -122,4 +112,19 @@ func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err err
 //PushLock implements the builder interface
 func (s *sqlCalcFoundRows) PushLock(sqlparser.Lock) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushLock")
+}
+
+// Rewrite implements the builder interface
+func (s *sqlCalcFoundRows) Rewrite(inputs ...builder) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "sqlCalcFoundRows: wrong number of inputs")
+	}
+	s.LimitQuery = inputs[0]
+	s.CountQuery = inputs[1]
+	return nil
+}
+
+// Inputs implements the builder interface
+func (s *sqlCalcFoundRows) Inputs() []builder {
+	return []builder{s.LimitQuery, s.CountQuery}
 }

@@ -52,10 +52,6 @@ type builder interface {
 	// execute before this one.
 	Reorder(int)
 
-	// First returns the first builder of the tree,
-	// which is usually the left most.
-	First() builder
-
 	// PushFilter pushes a WHERE or HAVING clause expression
 	// to the specified origin.
 	PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error
@@ -81,9 +77,6 @@ type builder interface {
 	// that it does not need to return more than the specified number of rows.
 	// A primitive that cannot perform this can ignore the request.
 	SetUpperLimit(count sqlparser.Expr)
-
-	// PushMisc pushes miscelleaneous constructs to all the primitives.
-	PushMisc(sel *sqlparser.Select) error
 
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
@@ -116,6 +109,48 @@ type builder interface {
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
+
+	Inputs() []builder
+	Rewrite(inputs ...builder) error
+}
+
+type builderVisitor func(builder) (bool, builder, error)
+
+func visit(node builder, visitor builderVisitor) (builder, error) {
+	if visitor != nil {
+		kontinue, newNode, err := visitor(node)
+		if err != nil {
+			return nil, err
+		}
+		if !kontinue {
+			return newNode, nil
+		}
+		node = newNode
+	}
+	inputs := node.Inputs()
+	for i, input := range inputs {
+		newInput, err := visit(input, visitor)
+		if err != nil {
+			return nil, err
+		}
+		inputs[i] = newInput
+	}
+	err := node.Rewrite(inputs...)
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
+// First returns the first logical plan of the tree,
+// which is usually the left most leaf.
+func First(input builder) builder {
+	inputs := input.Inputs()
+	if len(inputs) == 0 {
+		return input
+	}
+	return First(inputs[0])
 }
 
 //-------------------------------------------------------------------------
@@ -157,20 +192,12 @@ func (bc *builderCommon) Reorder(order int) {
 	bc.order = bc.input.Order() + 1
 }
 
-func (bc *builderCommon) First() builder {
-	return bc.input.First()
-}
-
 func (bc *builderCommon) ResultColumns() []*resultColumn {
 	return bc.input.ResultColumns()
 }
 
 func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
 	bc.input.SetUpperLimit(count)
-}
-
-func (bc *builderCommon) PushMisc(sel *sqlparser.Select) error {
-	return bc.input.PushMisc(sel)
 }
 
 func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
@@ -187,6 +214,20 @@ func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, co
 
 func (bc *builderCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return bc.input.SupplyWeightString(colNumber)
+}
+
+// Rewrite implements the builder interface
+func (bc *builderCommon) Rewrite(inputs ...builder) error {
+	if len(inputs) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "builderCommon: wrong number of inputs")
+	}
+	bc.input = inputs[0]
+	return nil
+}
+
+// Inputs implements the builder interface
+func (bc *builderCommon) Inputs() []builder {
+	return []builder{bc.input}
 }
 
 //-------------------------------------------------------------------------

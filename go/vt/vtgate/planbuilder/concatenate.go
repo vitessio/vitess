@@ -17,7 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -44,20 +44,8 @@ func (c *concatenate) Reorder(order int) {
 	c.order = c.rhs.Order() + 1
 }
 
-func (c *concatenate) First() builder {
-	panic("implement me")
-}
-
 func (c *concatenate) SetUpperLimit(count sqlparser.Expr) {
 	// not doing anything by design
-}
-
-func (c *concatenate) PushMisc(sel *sqlparser.Select) error {
-	err := c.lhs.PushMisc(sel)
-	if err != nil {
-		return err
-	}
-	return c.rhs.PushMisc(sel)
 }
 
 func (c *concatenate) Wireup(bldr builder, jt *jointab) error {
@@ -113,6 +101,21 @@ func (c *concatenate) Primitive() engine.Primitive {
 	}
 }
 
+// Rewrite implements the builder interface
+func (c *concatenate) Rewrite(inputs ...builder) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "concatenate: wrong number of inputs")
+	}
+	c.lhs = inputs[0]
+	c.rhs = inputs[1]
+	return nil
+}
+
+// Inputs implements the builder interface
+func (c *concatenate) Inputs() []builder {
+	return []builder{c.lhs, c.rhs}
+}
+
 // PushLock satisfies the builder interface.
 func (c *concatenate) PushLock(lock sqlparser.Lock) error {
 	err := c.lhs.PushLock(lock)
@@ -123,5 +126,5 @@ func (c *concatenate) PushLock(lock sqlparser.Lock) error {
 }
 
 func unreachable(name string) error {
-	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "concatenate.%s: unreachable", name)
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "concatenate.%s: unreachable", name)
 }

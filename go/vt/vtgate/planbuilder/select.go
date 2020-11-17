@@ -160,7 +160,35 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	if err := pb.pushLimit(sel.Limit); err != nil {
 		return err
 	}
-	return pb.bldr.PushMisc(sel)
+
+	return setMiscFunc(pb.bldr, sel)
+}
+
+func setMiscFunc(in builder, sel *sqlparser.Select) error {
+	_, err := visit(in, func(bldr builder) (bool, builder, error) {
+		switch node := bldr.(type) {
+		case *route:
+			query, ok := node.Select.(*sqlparser.Select)
+			if !ok {
+				return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %T", node.Select)
+			}
+			query.Comments = sel.Comments
+			query.Lock = sel.Lock
+			if sel.Into != nil {
+				if node.eroute.Opcode != engine.SelectUnsharded {
+					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+				}
+				query.Into = sel.Into
+			}
+			return true, node, nil
+		}
+		return true, bldr, nil
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {

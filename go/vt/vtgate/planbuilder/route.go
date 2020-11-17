@@ -111,11 +111,6 @@ func (rb *route) PushLock(lock sqlparser.Lock) error {
 	return nil
 }
 
-// First satisfies the builder interface.
-func (rb *route) First() builder {
-	return rb
-}
-
 // ResultColumns satisfies the builder interface.
 func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
@@ -264,23 +259,6 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 // primitive to chop off where needed.
 func (rb *route) SetUpperLimit(count sqlparser.Expr) {
 	rb.Select.SetLimit(&sqlparser.Limit{Rowcount: count})
-}
-
-// PushMisc satisfies the builder interface.
-func (rb *route) PushMisc(sel *sqlparser.Select) error {
-	s, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	s.Comments = sel.Comments
-	s.Lock = sel.Lock
-	if sel.Into != nil {
-		if rb.eroute.Opcode != engine.SelectUnsharded {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
-		}
-		s.Into = sel.Into
-	}
-	return nil
 }
 
 // Wireup satisfies the builder interface.
@@ -469,6 +447,19 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 	_, weightcolNumber, _ = rb.PushSelect(nil, expr, nil)
 	rb.weightStrings[rc] = weightcolNumber
 	return weightcolNumber, nil
+}
+
+// Rewrite implements the builder interface
+func (rb *route) Rewrite(inputs ...builder) error {
+	if len(inputs) != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "route: wrong number of inputs")
+	}
+	return nil
+}
+
+// Inputs implements the builder interface
+func (rb *route) Inputs() []builder {
+	return []builder{}
 }
 
 // MergeSubquery returns true if the subquery route could successfully be merged
