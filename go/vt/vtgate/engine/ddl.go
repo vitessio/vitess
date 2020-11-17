@@ -105,11 +105,15 @@ func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, 
 }
 
 //StreamExecute implements the Primitive interface
-func (v *DDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: shlomi - have no idea if this should work
+func (v *DDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.Execute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(results)
 }
 
 //GetFields implements the Primitive interface
 func (v *DDL) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: shlomi - have no idea if this should work
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
 }
