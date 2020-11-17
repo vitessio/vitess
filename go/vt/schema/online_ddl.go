@@ -31,8 +31,9 @@ import (
 )
 
 var (
-	migrationBasePath   = "schema-migration"
-	onlineDdlUUIDRegexp = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
+	migrationBasePath    = "schema-migration"
+	onlineDdlUUIDRegexp  = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
+	strategyParserRegexp = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -99,16 +100,19 @@ type OnlineDDL struct {
 	Retries     int64                 `json:"retries,omitempty"`
 }
 
-func ValidateDDLStrategy(strategy string) (sqlparser.DDLStrategy, error) {
-	switch sqlparser.DDLStrategy(strategy) {
-	case DDLStrategyGhost:
-		return DDLStrategyGhost, nil
-	case DDLStrategyPTOSC:
-		return DDLStrategyPTOSC, nil
-	case DDLStrategyNormal:
-		return DDLStrategyNormal, nil
+// ParseDDLStrategy validates the given ddl_strategy variable value , and parses the strategy and options parts.
+func ParseDDLStrategy(strategyVariable string) (strategy sqlparser.DDLStrategy, options string, err error) {
+	strategyName := strategyVariable
+	if submatch := strategyParserRegexp.FindStringSubmatch(strategyVariable); len(submatch) > 0 {
+		strategyName = submatch[1]
+		options = submatch[2]
+	}
+
+	switch strategy = sqlparser.DDLStrategy(strategyName); strategy {
+	case DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyNormal:
+		return strategy, options, nil
 	default:
-		return DDLStrategyNormal, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
+		return strategy, options, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
 	}
 }
 

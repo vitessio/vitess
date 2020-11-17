@@ -84,13 +84,13 @@ func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, 
 		return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}
 
-	strategy, err := schema.ValidateDDLStrategy(vcursor.Session().GetDDLStrategy())
+	strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
 	if err != nil {
 		return nil, err
 	}
 	if strategy != schema.DDLStrategyNormal {
 		v.OnlineDDL.Strategy = strategy
-		v.OnlineDDL.Options = ""
+		v.OnlineDDL.Options = options
 		v.OnlineDDL.DDL.OnlineHint = &sqlparser.OnlineDDLHint{
 			Strategy: v.OnlineDDL.Strategy,
 			Options:  v.OnlineDDL.Options,
