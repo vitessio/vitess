@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"errors"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -142,11 +145,6 @@ func (jb *join) PushLock(lock sqlparser.Lock) error {
 	}
 
 	return jb.Right.PushLock(lock)
-}
-
-// First satisfies the builder interface.
-func (jb *join) First() builder {
-	return jb.Left.First()
 }
 
 // ResultColumns satisfies the builder interface.
@@ -285,15 +283,6 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 func (jb *join) SetUpperLimit(_ sqlparser.Expr) {
 }
 
-// PushMisc satisfies the builder interface.
-func (jb *join) PushMisc(sel *sqlparser.Select) error {
-	err := jb.Left.PushMisc(sel)
-	if err != nil {
-		return err
-	}
-	return jb.Right.PushMisc(sel)
-}
-
 // Wireup satisfies the builder interface.
 func (jb *join) Wireup(bldr builder, jt *jointab) error {
 	err := jb.Right.Wireup(bldr, jt)
@@ -375,6 +364,21 @@ func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err erro
 	jb.resultColumns = append(jb.resultColumns, rc)
 	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
 	return len(jb.ejoin.Cols) - 1, nil
+}
+
+// Rewrite implements the builder interface
+func (jb *join) Rewrite(inputs ...builder) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "join: wrong number of inputs")
+	}
+	jb.Left = inputs[0]
+	jb.Right = inputs[1]
+	return nil
+}
+
+// Inputs implements the builder interface
+func (jb *join) Inputs() []builder {
+	return []builder{jb.Left, jb.Right}
 }
 
 // isOnLeft returns true if the specified route number

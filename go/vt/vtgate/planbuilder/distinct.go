@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -70,4 +72,18 @@ func (d *distinct) Primitive() engine.Primitive {
 	return &engine.Distinct{
 		Source: d.input.Primitive(),
 	}
+}
+
+// Rewrite implements the builder interface
+func (d *distinct) Rewrite(inputs ...builder) error {
+	if len(inputs) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "distinct: wrong number of inputs")
+	}
+	d.input = inputs[0]
+	return nil
+}
+
+// Inputs implements the builder interface
+func (d *distinct) Inputs() []builder {
+	return []builder{d.input}
 }

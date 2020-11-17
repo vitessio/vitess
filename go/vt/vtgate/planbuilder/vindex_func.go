@@ -20,6 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -85,11 +88,6 @@ func (vf *vindexFunc) Primitive() engine.Primitive {
 // PushLock satisfies the builder interface.
 func (vf *vindexFunc) PushLock(lock sqlparser.Lock) error {
 	return nil
-}
-
-// First satisfies the builder interface.
-func (vf *vindexFunc) First() builder {
-	return vf
 }
 
 // ResultColumns satisfies the builder interface.
@@ -180,11 +178,6 @@ func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 func (vf *vindexFunc) SetUpperLimit(_ sqlparser.Expr) {
 }
 
-// PushMisc satisfies the builder interface.
-func (vf *vindexFunc) PushMisc(sel *sqlparser.Select) error {
-	return nil
-}
-
 // Wireup satisfies the builder interface.
 func (vf *vindexFunc) Wireup(bldr builder, jt *jointab) error {
 	return nil
@@ -221,4 +214,17 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 // SupplyWeightString satisfies the builder interface.
 func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return 0, errors.New("cannot do collation on vindex function")
+}
+
+// Rewrite implements the builder interface
+func (vf *vindexFunc) Rewrite(inputs ...builder) error {
+	if len(inputs) != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindexFunc: wrong number of inputs")
+	}
+	return nil
+}
+
+// Inputs implements the builder interface
+func (vf *vindexFunc) Inputs() []builder {
+	return []builder{}
 }

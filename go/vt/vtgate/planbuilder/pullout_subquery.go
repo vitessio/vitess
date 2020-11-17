@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -81,11 +83,6 @@ func (ps *pulloutSubquery) PushLock(lock sqlparser.Lock) error {
 	return ps.underlying.PushLock(lock)
 }
 
-// First satisfies the builder interface.
-func (ps *pulloutSubquery) First() builder {
-	return ps.underlying.First()
-}
-
 // ResultColumns satisfies the builder interface.
 func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
@@ -133,15 +130,6 @@ func (ps *pulloutSubquery) SetUpperLimit(count sqlparser.Expr) {
 	ps.underlying.SetUpperLimit(count)
 }
 
-// PushMisc satisfies the builder interface.
-func (ps *pulloutSubquery) PushMisc(sel *sqlparser.Select) error {
-	err := ps.subquery.PushMisc(sel)
-	if err != nil {
-		return err
-	}
-	return ps.underlying.PushMisc(sel)
-}
-
 // Wireup satisfies the builder interface.
 func (ps *pulloutSubquery) Wireup(bldr builder, jt *jointab) error {
 	if err := ps.underlying.Wireup(bldr, jt); err != nil {
@@ -167,4 +155,19 @@ func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, 
 // SupplyWeightString satisfies the builder interface.
 func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return ps.underlying.SupplyWeightString(colNumber)
+}
+
+// Rewrite implements the builder interface
+func (ps *pulloutSubquery) Rewrite(inputs ...builder) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pulloutSubquery: wrong number of inputs")
+	}
+	ps.underlying = inputs[0]
+	ps.subquery = inputs[1]
+	return nil
+}
+
+// Inputs implements the builder interface
+func (ps *pulloutSubquery) Inputs() []builder {
+	return []builder{ps.underlying, ps.subquery}
 }

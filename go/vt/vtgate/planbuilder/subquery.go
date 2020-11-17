@@ -79,11 +79,6 @@ func (sq *subquery) PushLock(lock sqlparser.Lock) error {
 	return sq.input.PushLock(lock)
 }
 
-// First satisfies the builder interface.
-func (sq *subquery) First() builder {
-	return sq
-}
-
 // ResultColumns satisfies the builder interface.
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
