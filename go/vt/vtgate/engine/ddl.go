@@ -80,27 +80,22 @@ func (v *DDL) IsOnlineSchemaDDL() bool {
 
 //Execute implements the Primitive interface
 func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+	if !v.IsOnlineSchemaDDL() {
+		strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
+		if err != nil {
+			return nil, err
+		}
+		v.OnlineDDL.Strategy = strategy
+		v.OnlineDDL.Options = options
+		v.OnlineDDL.DDL.OnlineHint = &sqlparser.OnlineDDLHint{
+			Strategy: strategy,
+			Options:  options,
+		}
+	}
 	if v.IsOnlineSchemaDDL() {
 		return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}
 
-	strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
-	if err != nil {
-		return nil, err
-	}
-	if strategy != schema.DDLStrategyNormal {
-		v.OnlineDDL.Strategy = strategy
-		v.OnlineDDL.Options = options
-		v.OnlineDDL.DDL.OnlineHint = &sqlparser.OnlineDDLHint{
-			Strategy: v.OnlineDDL.Strategy,
-			Options:  v.OnlineDDL.Options,
-		}
-		if v.IsOnlineSchemaDDL() {
-			return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
-		}
-	}
-
-	//TODO (shlomi): check session variable
 	return v.NormalDDL.Execute(vcursor, bindVars, wantfields)
 }
 
