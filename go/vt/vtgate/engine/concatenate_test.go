@@ -28,6 +28,10 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+func r(names, types string, rows ...string) *sqltypes.Result {
+	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(names, types), rows...)
+}
+
 func TestConcatenate_NoErrors(t *testing.T) {
 	type testCase struct {
 		testName       string
@@ -39,46 +43,46 @@ func TestConcatenate_NoErrors(t *testing.T) {
 	testCases := []*testCase{{
 		testName: "empty results",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id2|col21|col22", "int64|varbinary|varbinary")),
+			r("id1|col11|col12", "int64|varbinary|varbinary"),
+			r("id2|col21|col22", "int64|varbinary|varbinary"),
 		},
-		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
+		expectedResult: r("id1|col11|col12", "int64|varbinary|varbinary"),
 	}, {
 		testName: "2 non empty result",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "11|m1|n1", "22|m2|n2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+			r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2"),
+			r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
-		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2"),
+		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2"),
 	}, {
 		testName: "mismatch field type",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
+			r("id|col3|col4", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
 		expectedError: "column field type does not match for name",
 	}, {
 		testName: "input source has different column count",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varchar"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4|col5", "int64|varchar|varchar|int32"), "1|a1|b1|5", "2|a2|b2|6"),
+			r("id|col1|col2", "int64|varchar|varchar", "1|a1|b1", "2|a2|b2"),
+			r("id|col3|col4|col5", "int64|varchar|varchar|int32", "1|a1|b1|5", "2|a2|b2|6"),
 		},
 		expectedError: "The used SELECT statements have a different number of columns",
 	}, {
 		testName: "1 empty result and 1 non empty result",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+			r("myid|mycol1|mycol2", "int64|varchar|varbinary"),
+			r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
-		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 	}}
 
 	for _, tc := range testCases {
 		require.Equal(t, 2, len(tc.inputs))
 		concatenate := &Concatenate{
 			Sources: []Primitive{
-				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[0], tc.inputs[0]}, sendErr: errors.New("abc")},
-				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[1], tc.inputs[1]}, sendErr: errors.New("abc")},
+				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[0], tc.inputs[0]}},
+				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[1], tc.inputs[1]}},
 			},
 		}
 
@@ -110,7 +114,7 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	strFailed := "failed"
 	errString := "Concatenate.Execute: " + strFailed
 
-	fake := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2")
+	fake := r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2")
 	concatenate := &Concatenate{
 		Sources: []Primitive{
 			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
