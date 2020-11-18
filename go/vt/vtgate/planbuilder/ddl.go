@@ -1,7 +1,9 @@
 package planbuilder
 
 import (
-	"fmt"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
@@ -9,52 +11,81 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
-	stmt := in.(*sqlparser.DDL)
-	// This method call will validate the destination != nil check.
-	destination, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
-	if err != nil {
-		return nil, err
+func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	var table *vindexes.Table
+	var destination key.Destination
+	var keyspace *vindexes.Keyspace
+	var err error
+
+	switch stmt.(type) {
+	case *sqlparser.CreateIndex:
+		// For Create index, the table must already exist
+		// We should find the target of the query from this tables location
+		table, _, _, _, destination, err = vschema.FindTableOrVindex(stmt.GetTable())
+		keyspace = table.Keyspace
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", stmt.GetTable().Name.String())
+		}
+		stmt.SetTable("", table.Name.String())
+	case *sqlparser.DDL:
+		destination, keyspace, _, err = vschema.TargetDestination(stmt.GetTable().Qualifier.String())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if destination == nil {
 		destination = key.DestinationAllShards{}
 	}
 
+	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
+	if stmt.IsFullyParsed() {
+		query = sqlparser.String(stmt)
+	}
+
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             sql, //This is original sql query to be passed as the parser can provide partial ddl AST.
+		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   false,
 	}, nil
 }
 
-func buildOnlineDDLPlan(query string, stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
-	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
+func buildOnlineDDLPlan(query string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+
+	_, keyspace, _, err := vschema.TargetDestination(stmt.GetTable().Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
-	if stmt.OnlineHint == nil {
-		return nil, fmt.Errorf("Not an online DDL: %s", query)
+	if stmt.GetOnlineHint() == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "not an online DDL: %s", query)
 	}
-	switch stmt.OnlineHint.Strategy {
+	switch stmt.GetOnlineHint().Strategy {
 	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC: // OK, do nothing
 	case schema.DDLStrategyNormal:
-		return nil, fmt.Errorf("Not an online DDL strategy")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "not an online DDL strategy")
 	default:
-		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", stmt.OnlineHint.Strategy)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown online DDL strategy: '%v'", stmt.GetOnlineHint().Strategy)
 	}
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
 		DDL:      stmt,
 		SQL:      query,
-		Strategy: stmt.OnlineHint.Strategy,
-		Options:  stmt.OnlineHint.Options,
+		Strategy: stmt.GetOnlineHint().Strategy,
+		Options:  stmt.GetOnlineHint().Options,
 	}, nil
 }
 
-func buildVSchemaDDLPlan(stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
+func buildVSchemaDDLPlan(ddlStmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	stmt, ok := ddlStmt.(*sqlparser.DDL)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "Incorrect type %T", ddlStmt)
+	}
 	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
 	if err != nil {
 		return nil, err

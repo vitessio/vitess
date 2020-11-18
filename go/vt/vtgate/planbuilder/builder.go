@@ -314,11 +314,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildDeletePlan)
 	case *sqlparser.Union:
 		return buildRoutePlan(stmt, vschema, buildUnionPlan)
-	case *sqlparser.DDL:
+	case sqlparser.DDLStatement:
 		if sqlparser.IsVschemaDDL(stmt) {
 			return buildVSchemaDDLPlan(stmt, vschema)
 		}
-		if sqlparser.IsOnlineSchemaDDL(stmt, query) {
+		if sqlparser.IsOnlineSchemaDDL(stmt) {
 			return buildOnlineDDLPlan(query, stmt, vschema)
 		}
 		return buildDDLPlan(query, stmt, vschema)
