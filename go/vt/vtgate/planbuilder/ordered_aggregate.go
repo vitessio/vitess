@@ -234,42 +234,12 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	return oa.eaggr
 }
 
-// PushSelect satisfies the builder interface.
-// oa can accept expressions that are normal (a+b), or aggregate (MAX(v)).
-// Normal expressions are pushed through to the underlying route. But aggregate
-// expressions require post-processing. In such cases, oa shares the work with
-// the underlying route: It asks the scatter route to perform the MAX operation
-// also, and only performs the final aggregation with what the route returns.
-// Since the results are expected to be ordered, this is something that can
-// be performed 'as they come'. In this respect, oa is the originator for
-// aggregate expressions like MAX, which will be added to symtab. The underlying
-// MAX sent to the route will not be added to symtab and will not be reachable by
-// others. This functionality depends on the PushOrderBy to request that
-// the rows be correctly ordered.
-func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
-		if _, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
-			return oa.pushAggr(pb, expr, origin)
-		}
-	}
-
-	// Ensure that there are no aggregates in the expression.
-	if nodeHasAggregates(expr.Expr) {
-		return nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
-	}
-
-	innerRC, _, _ := oa.input.PushSelect(pb, expr, origin)
-	oa.resultColumns = append(oa.resultColumns, innerRC)
-	return innerRC, len(oa.resultColumns) - 1, nil
-}
-
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
 	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
 	if len(funcExpr.Exprs) != 1 {
 		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
 	}
-	var innerCol int
 	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
 	if err != nil {
 		return nil, 0, err
@@ -280,7 +250,11 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
-		_, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
+		newBuilder, _, innerCol, err := planProjection(pb, oa.input, innerAliased, origin)
+		if err != nil {
+			return nil, 0, err
+		}
+		pb.bldr = newBuilder
 		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
 		if err != nil {
 			return nil, 0, err
@@ -305,7 +279,11 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			Alias:  alias,
 		})
 	} else {
-		_, innerCol, _ = oa.input.PushSelect(pb, expr, origin)
+		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
+		if err != nil {
+			return nil, 0, err
+		}
+		pb.bldr = newBuilder
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,

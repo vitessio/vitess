@@ -390,10 +390,11 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				return nil, err
 			}
 			node.Expr = expr
-			rc, _, err := pb.bldr.PushSelect(pb, node, origin)
+			newBuilder, rc, _, err := planProjection(pb, pb.bldr, node, origin)
 			if err != nil {
 				return nil, err
 			}
+			pb.bldr = newBuilder
 			resultColumns = append(resultColumns, rc)
 			pb.addPullouts(pullouts)
 		case *sqlparser.StarExpr:
@@ -483,11 +484,12 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 						As: col,
 					}
 				}
-				rc, _, err := pb.bldr.PushSelect(pb, expr, t.Origin())
+				newBuilder, rc, _, err := planProjection(pb, pb.bldr, expr, t.Origin())
 				if err != nil {
 					// Unreachable because PushSelect won't fail on ColName.
 					return inrcs, false, err
 				}
+				pb.bldr = newBuilder
 				inrcs = append(inrcs, rc)
 			}
 		}
@@ -510,11 +512,12 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 				Qualifier: expr.TableName,
 			},
 		}
-		rc, _, err := pb.bldr.PushSelect(pb, expr, t.Origin())
+		newBuilder, rc, _, err := planProjection(pb, pb.bldr, expr, t.Origin())
 		if err != nil {
 			// Unreachable because PushSelect won't fail on ColName.
 			return inrcs, false, err
 		}
+		pb.bldr = newBuilder
 		inrcs = append(inrcs, rc)
 	}
 	return inrcs, true, nil

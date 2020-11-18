@@ -49,11 +49,6 @@ func (l *limit) Primitive() engine.Primitive {
 	return l.elimit
 }
 
-// PushSelect satisfies the builder interface.
-func (l *limit) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return nil, 0, errors.New("limit.PushSelect: unreachable")
-}
-
 // MakeDistinct satisfies the builder interface.
 func (l *limit) MakeDistinct() (builder, error) {
 	return nil, errors.New("limit.MakeDistinct: unreachable")

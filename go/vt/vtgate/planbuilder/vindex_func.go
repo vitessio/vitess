@@ -89,27 +89,6 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
 }
 
-// PushSelect satisfies the builder interface.
-func (vf *vindexFunc) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
-	// Catch the case where no where clause was specified. If so, the opcode
-	// won't be set.
-	if vf.eVindexFunc.Opcode == engine.VindexNone {
-		return nil, 0, errors.New("unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)")
-	}
-	col, ok := expr.Expr.(*sqlparser.ColName)
-	if !ok {
-		return nil, 0, errors.New("unsupported: expression on results of a vindex function")
-	}
-	rc = newResultColumn(expr, vf)
-	vf.resultColumns = append(vf.resultColumns, rc)
-	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
-		Name: rc.alias.String(),
-		Type: querypb.Type_VARBINARY,
-	})
-	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, col.Metadata.(*column).colNumber)
-	return rc, len(vf.resultColumns) - 1, nil
-}
-
 // MakeDistinct satisfies the builder interface.
 func (vf *vindexFunc) MakeDistinct() (builder, error) {
 	return nil, errors.New("unsupported: distinct on vindex function")

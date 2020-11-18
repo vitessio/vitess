@@ -40,10 +40,6 @@ func newDistinct(source builder) builder {
 	}
 }
 
-func (d *distinct) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return d.input.PushSelect(pb, expr, origin)
-}
-
 func (d *distinct) MakeDistinct() (builder, error) {
 	return d, nil
 }
