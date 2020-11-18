@@ -131,3 +131,21 @@
     "SingleShardOnly": false
   }
 }
+
+# DDL with qualifier
+"create index a on main.unknown(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on main.unknown(id)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create index a on unknown (id)",
+    "SingleShardOnly": false
+  }
+}
