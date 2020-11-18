@@ -25,7 +25,7 @@ func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, ddl *DDL) {
+func setDDL(yylex interface{}, ddl DDLStatement) {
   yylex.(*Tokenizer).partialDDL = ddl
 }
 
@@ -135,20 +135,21 @@ func skipToEnd(yylex interface{}) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   selectInto	  *SelectInto
+  createIndex	  *CreateIndex
 }
 
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
-%token <bytes> DISTINCTROW
+%token <bytes> DISTINCTROW PARSER
 %token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <bytes> ON USING
+%left <bytes> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
 %token <empty> '(' ',' ')'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
@@ -244,6 +245,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
+%type <createIndex> create_index_prefix
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
@@ -294,7 +296,7 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <selectInto> into_option
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt using_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
@@ -314,9 +316,9 @@ func skipToEnd(yylex interface{}) {
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt null_opt enforced_opt
-%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <empty> non_add_drop_or_rename_operation to_opt index_opt
 %type <bytes> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt work_opt savepoint_opt
@@ -345,8 +347,8 @@ func skipToEnd(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
-%type <indexOption> index_option
-%type <indexOptions> index_option_list
+%type <indexOption> index_option lock_index algorithm_index
+%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -709,10 +711,12 @@ create_statement:
     $1.OptLike = $2
     $$ = $1
   }
-| CREATE constraint_opt INDEX id_or_var using_opt ON table_name ddl_skip_to_end
+| create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
-    // Change this to an alter statement
-    $$ = &DDL{Action: AlterDDLAction, Table: $7}
+    $1.Columns = $3
+    $1.Options = append($5,$6...)
+    $1.FullyParsed = true
+    $$ = $1
   }
 | CREATE VIEW table_name ddl_skip_to_end
   {
@@ -779,6 +783,14 @@ create_table_prefix:
     $$ = &DDL{Action: CreateDDLAction, Table: $4}
     setDDL(yylex, $$)
   }
+
+create_index_prefix:
+  CREATE online_hint_opt constraint_opt INDEX id_or_var using_opt ON table_name
+  {
+    $$ = &CreateIndex{Constraint: $3, Name: $5, IndexType: $6, Table: $8, OnlineHint: $2}
+    setDDL(yylex, $$)
+  }
+
 
 table_spec:
   '(' table_column_list ')' table_option_list
@@ -1214,13 +1226,18 @@ column_comment_opt:
   }
 
 index_definition:
-  index_info '(' index_column_list ')' index_option_list
+  index_info '(' index_column_list ')' index_option_list_opt
   {
     $$ = &IndexDefinition{Info: $1, Columns: $3, Options: $5}
   }
-| index_info '(' index_column_list ')'
+
+index_option_list_opt:
   {
-    $$ = &IndexDefinition{Info: $1, Columns: $3}
+    $$ = nil
+  }
+| index_option_list
+  {
+    $$ = $1
   }
 
 index_option_list:
@@ -1236,7 +1253,7 @@ index_option_list:
 index_option:
   USING id_or_var
   {
-    $$ = &IndexOption{Name: string($1), Using: string($2.String())}
+    $$ = &IndexOption{Name: string($1), String: string($2.String())}
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
@@ -1246,6 +1263,10 @@ index_option:
 | COMMENT_KEYWORD STRING
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
+  }
+| WITH PARSER STRING
+  {
+    $$ = &IndexOption{Name: string($1) + " " + string($2), Value: NewStrLiteral($3)}
   }
 
 equal_opt:
@@ -1339,9 +1360,9 @@ index_column_list:
   }
 
 index_column:
-  sql_id length_opt
+  sql_id length_opt asc_desc_opt
   {
-      $$ = &IndexColumn{Column: $1, Length: $2}
+      $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
   }
 
 constraint_definition:
@@ -3322,6 +3343,60 @@ limit_opt:
     $$ = &Limit{Offset: $4, Rowcount: $2}
   }
 
+algorithm_lock_opt:
+  {
+    $$ = nil
+  }
+| lock_index algorithm_index
+  {
+     $$ = []*IndexOption{$1,$2}
+  }
+| algorithm_index lock_index
+  {
+     $$ = []*IndexOption{$1,$2}
+  }
+| algorithm_index
+  {
+     $$ = []*IndexOption{$1}
+  }
+| lock_index
+  {
+     $$ = []*IndexOption{$1}
+  }
+
+
+lock_index:
+  LOCK equal_opt DEFAULT
+  {
+    $$ = &IndexOption{Name: string($1), String: string($3)}
+  }
+| LOCK equal_opt NONE
+  {
+    $$ = &IndexOption{Name: string($1), String: string($3)}
+  }
+| LOCK equal_opt SHARED
+  {
+    $$ = &IndexOption{Name: string($1), String: string($3)}
+  }
+| LOCK equal_opt EXCLUSIVE
+  {
+    $$ = &IndexOption{Name: string($1), String: string($3)}
+  }
+
+algorithm_index:
+  ALGORITHM equal_opt DEFAULT
+  {
+    $$ = &IndexOption{Name: string($1), String: string($3)}
+  }
+| ALGORITHM equal_opt INPLACE
+  {
+    $$ = &IndexOption{Name: string($1), String: string($3)}
+  }
+| ALGORITHM equal_opt COPY
+  {
+    $$ = &IndexOption{Name: string($1), String: string($3)}
+  }
+
 lock_opt:
   {
     $$ = NoLock
@@ -3706,16 +3781,18 @@ index_opt:
   { $$ = struct{}{} }
 
 constraint_opt:
-  { $$ = struct{}{} }
+  { $$ = "" }
 | UNIQUE
-  { $$ = struct{}{} }
-| sql_id
-  { $$ = struct{}{} }
+  { $$ = string($1) }
+| SPATIAL
+  { $$ = string($1) }
+| FULLTEXT
+  { $$ = string($1) }
 
 using_opt:
-  { $$ = ColIdent{} }
+  { $$ = "" }
 | USING sql_id
-  { $$ = $2 }
+  { $$ = $2.val }
 
 sql_id:
   id_or_var
@@ -3894,6 +3971,7 @@ non_reserved_keyword:
 | ACTION
 | ACTIVE
 | ADMIN
+| ALGORITHM
 | BEGIN
 | BIGINT
 | BIT
@@ -3913,6 +3991,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| COPY
 | CSV
 | DATA
 | DATE
@@ -3929,6 +4008,7 @@ non_reserved_keyword:
 | ENUM
 | ESCAPED
 | EXCLUDE
+| EXCLUSIVE
 | EXPANSION
 | EXTENDED
 | FLOAT_TYPE
@@ -3947,6 +4027,7 @@ non_reserved_keyword:
 | HISTOGRAM
 | HISTORY
 | INACTIVE
+| INPLACE
 | INT
 | INTEGER
 | INVISIBLE
@@ -3984,6 +4065,7 @@ non_reserved_keyword:
 | NETWORK_NAMESPACE
 | NOWAIT
 | NO
+| NONE
 | NULLS
 | NUMERIC
 | OFFSET
@@ -3997,6 +4079,7 @@ non_reserved_keyword:
 | OPTIMIZE
 | OTHERS
 | OVERWRITE
+| PARSER
 | PARTITION
 | PATH
 | PERSIST
@@ -4037,6 +4120,7 @@ non_reserved_keyword:
 | SESSION
 | SERIALIZABLE
 | SHARE
+| SHARED
 | SIGNED
 | SKIP
 | SMALLINT
