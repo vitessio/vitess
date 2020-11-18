@@ -328,7 +328,8 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		}
 		// The returned expression may be complex. Resplit before pushing.
 		for _, subexpr := range splitAndExpression(nil, expr) {
-			if err := pb.bldr.PushFilter(pb, subexpr, whereType, origin); err != nil {
+			pb.bldr, err = planFilter(pb, pb.bldr, subexpr, whereType, origin)
+			if err != nil {
 				return err
 			}
 		}

@@ -79,11 +79,6 @@ func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
 }
 
-// PushFilter satisfies the builder interface.
-func (sq *subquery) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	return errors.New("unsupported: filtering on results of cross-shard subquery")
-}
-
 // PushSelect satisfies the builder interface.
 func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)

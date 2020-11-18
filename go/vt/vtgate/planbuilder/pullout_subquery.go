@@ -78,11 +78,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// PushFilter satisfies the builder interface.
-func (ps *pulloutSubquery) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	return ps.underlying.PushFilter(pb, filter, whereType, origin)
-}
-
 // PushSelect satisfies the builder interface.
 func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return ps.underlying.PushSelect(pb, expr, origin)
