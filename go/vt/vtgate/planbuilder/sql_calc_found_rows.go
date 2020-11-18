@@ -23,15 +23,15 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*sqlCalcFoundRows)(nil)
+var _ logicalPlan = (*sqlCalcFoundRows)(nil)
 
 type sqlCalcFoundRows struct {
-	LimitQuery, CountQuery builder
+	LimitQuery, CountQuery logicalPlan
 	ljt, cjt               *jointab
 }
 
-//Wireup implements the builder interface
-func (s *sqlCalcFoundRows) Wireup(builder, *jointab) error {
+//Wireup implements the logicalPlan interface
+func (s *sqlCalcFoundRows) Wireup(logicalPlan, *jointab) error {
 	err := s.LimitQuery.Wireup(s.LimitQuery, s.ljt)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func (s *sqlCalcFoundRows) Wireup(builder, *jointab) error {
 	return s.CountQuery.Wireup(s.CountQuery, s.cjt)
 }
 
-//Primitive implements the builder interface
+//Primitive implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 	return engine.SQLCalcFoundRows{
 		LimitPrimitive: s.LimitQuery.Primitive(),
@@ -47,40 +47,40 @@ func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 	}
 }
 
-// All the methods below are not implemented. They should not be called on a sqlCalcFoundRows builder
+// All the methods below are not implemented. They should not be called on a sqlCalcFoundRows plan
 
-//Order implements the builder interface
+//Order implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Order() int {
 	return s.LimitQuery.Order()
 }
 
-//ResultColumns implements the builder interface
+//ResultColumns implements the logicalPlan interface
 func (s *sqlCalcFoundRows) ResultColumns() []*resultColumn {
 	return s.LimitQuery.ResultColumns()
 }
 
-//Reorder implements the builder interface
+//Reorder implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Reorder(order int) {
 	s.LimitQuery.Reorder(order)
 }
 
-//SupplyVar implements the builder interface
+//SupplyVar implements the logicalPlan interface
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	s.LimitQuery.SupplyVar(from, to, col, varname)
 }
 
-//SupplyCol implements the builder interface
+//SupplyCol implements the logicalPlan interface
 func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (*resultColumn, int) {
 	return s.LimitQuery.SupplyCol(col)
 }
 
-//SupplyWeightString implements the builder interface
+//SupplyWeightString implements the logicalPlan interface
 func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err error) {
 	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.SupplyWeightString")
 }
 
-// Rewrite implements the builder interface
-func (s *sqlCalcFoundRows) Rewrite(inputs ...builder) error {
+// Rewrite implements the logicalPlan interface
+func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "sqlCalcFoundRows: wrong number of inputs")
 	}
@@ -89,7 +89,7 @@ func (s *sqlCalcFoundRows) Rewrite(inputs ...builder) error {
 	return nil
 }
 
-// Inputs implements the builder interface
-func (s *sqlCalcFoundRows) Inputs() []builder {
-	return []builder{s.LimitQuery, s.CountQuery}
+// Inputs implements the logicalPlan interface
+func (s *sqlCalcFoundRows) Inputs() []logicalPlan {
+	return []logicalPlan{s.LimitQuery, s.CountQuery}
 }

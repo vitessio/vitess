@@ -26,9 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*orderedAggregate)(nil)
+var _ logicalPlan = (*orderedAggregate)(nil)
 
-// orderedAggregate is the builder for engine.OrderedAggregate.
+// orderedAggregate is the logicalPlan for engine.OrderedAggregate.
 // This gets built if there are aggregations on a SelectScatter
 // route. The primitive requests the underlying route to order
 // the results by the grouping columns. This will allow the
@@ -64,7 +64,7 @@ type orderedAggregate struct {
 // primitive and returns it. It returns a groupByHandler if there is aggregation it
 // can handle.
 func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
-	rb, isRoute := pb.bldr.(*route)
+	rb, isRoute := pb.plan.(*route)
 	if isRoute && rb.isSingleShard() {
 		return nil
 	}
@@ -86,7 +86,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 		if hasAggregates {
 			return errors.New("unsupported: cross-shard query with aggregates")
 		}
-		pb.bldr = newDistinct(pb.bldr)
+		pb.plan = newDistinct(pb.plan)
 		return nil
 	}
 
@@ -124,11 +124,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 
 	// We need an aggregator primitive.
 	eaggr := &engine.OrderedAggregate{}
-	pb.bldr = &orderedAggregate{
+	pb.plan = &orderedAggregate{
 		resultsBuilder: newResultsBuilder(rb, eaggr),
 		eaggr:          eaggr,
 	}
-	pb.bldr.Reorder(0)
+	pb.plan.Reorder(0)
 	return nil
 }
 
@@ -228,13 +228,13 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 	return nil
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (oa *orderedAggregate) Primitive() engine.Primitive {
 	oa.eaggr.Input = oa.input.Primitive()
 	return oa.eaggr
 }
 
-func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
+func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
 	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
 	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
 	if len(funcExpr.Exprs) != 1 {
@@ -254,7 +254,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		if err != nil {
 			return nil, 0, err
 		}
-		pb.bldr = newBuilder
+		pb.plan = newBuilder
 		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
 		if err != nil {
 			return nil, 0, err
@@ -283,7 +283,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		if err != nil {
 			return nil, 0, err
 		}
-		pb.bldr = newBuilder
+		pb.plan = newBuilder
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
@@ -323,12 +323,12 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
-// Wireup satisfies the builder interface.
+// Wireup implements the logicalPlan interface
 // If text columns are detected in the keys, then the function modifies
 // the primitive to pull a corresponding weight_string from mysql and
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
-func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
+func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	for i, colNumber := range oa.eaggr.Keys {
 		rc := oa.resultColumns[colNumber]
 		if sqltypes.IsText(rc.column.typ) {
@@ -345,5 +345,5 @@ func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
 		}
 	}
-	return oa.input.Wireup(bldr, jt)
+	return oa.input.Wireup(plan, jt)
 }

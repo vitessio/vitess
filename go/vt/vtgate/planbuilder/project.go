@@ -31,7 +31,7 @@ import (
 // a resultColumn entry and return it. The top level caller
 // must accumulate these result columns and set the symtab
 // after analysis.
-func planProjection(pb *primitiveBuilder, in builder, expr *sqlparser.AliasedExpr, origin builder) (builder, *resultColumn, int, error) {
+func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.AliasedExpr, origin logicalPlan) (logicalPlan, *resultColumn, int, error) {
 	switch node := in.(type) {
 	case *join:
 		var rc *resultColumn

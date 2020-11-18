@@ -29,22 +29,22 @@ import (
 func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if sel.Distinct {
 
-		newBuilder, err := planDistinct(pb.bldr)
+		newBuilder, err := planDistinct(pb.plan)
 		if err != nil {
 			return err
 		}
-		pb.bldr = newBuilder
+		pb.plan = newBuilder
 	}
 
 	if err := pb.st.ResolveSymbols(sel.GroupBy); err != nil {
 		return err
 	}
 
-	newInput, err := planGroupBy(pb, pb.bldr, sel.GroupBy)
+	newInput, err := planGroupBy(pb, pb.plan, sel.GroupBy)
 	if err != nil {
 		return err
 	}
-	pb.bldr = newInput
+	pb.plan = newInput
 
 	return nil
 }
@@ -55,12 +55,12 @@ func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if err := pb.st.ResolveSymbols(orderBy); err != nil {
 		return err
 	}
-	bldr, err := planOrdering(pb, pb.bldr, orderBy)
+	plan, err := planOrdering(pb, pb.plan, orderBy)
 	if err != nil {
 		return err
 	}
-	pb.bldr = bldr
-	pb.bldr.Reorder(0)
+	pb.plan = plan
+	pb.plan.Reorder(0)
 	return nil
 }
 
@@ -68,36 +68,36 @@ func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 	if limit == nil {
 		return nil
 	}
-	rb, ok := pb.bldr.(*route)
+	rb, ok := pb.plan.(*route)
 	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return nil
 	}
 
-	lb, err := createLimit(pb.bldr, limit)
+	lb, err := createLimit(pb.plan, limit)
 	if err != nil {
 		return err
 	}
 
-	bldr, err := visit(lb, setUpperLimit)
+	plan, err := visit(lb, setUpperLimit)
 	if err != nil {
 		return err
 	}
 
-	pb.bldr = bldr
-	pb.bldr.Reorder(0)
+	pb.plan = plan
+	pb.plan.Reorder(0)
 	return nil
 }
 
 // make sure we have the right signature for this function
-var _ builderVisitor = setUpperLimit
+var _ planVisitor = setUpperLimit
 
 // setUpperLimit is an optimization hint that tells that primitive
 // that it does not need to return more than the specified number of rows.
 // A primitive that cannot perform this can ignore the request.
-func setUpperLimit(bldr builder) (bool, builder, error) {
+func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 	arg := sqlparser.NewArgument([]byte(":__upper_limit"))
-	switch node := bldr.(type) {
+	switch node := plan.(type) {
 	case *join:
 		return false, node, nil
 	case *memorySort:
@@ -126,24 +126,24 @@ func setUpperLimit(bldr builder) (bool, builder, error) {
 	case *concatenate:
 		return false, node, nil
 	}
-	return true, bldr, nil
+	return true, plan, nil
 }
 
-func createLimit(input builder, limit *sqlparser.Limit) (builder, error) {
-	bldr := newLimit(input)
+func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
+	plan := newLimit(input)
 	pv, err := sqlparser.NewPlanValue(limit.Rowcount)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
 	}
-	bldr.elimit.Count = pv
+	plan.elimit.Count = pv
 
 	if limit.Offset != nil {
 		pv, err = sqlparser.NewPlanValue(limit.Offset)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
 		}
-		bldr.elimit.Offset = pv
+		plan.elimit.Offset = pv
 	}
 
-	return bldr, nil
+	return plan, nil
 }
