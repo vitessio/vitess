@@ -342,46 +342,6 @@ func (oa *orderedAggregate) MakeDistinct() (builder, error) {
 	return oa, nil
 }
 
-// PushGroupBy satisfies the builder interface.
-func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	colNumber := -1
-	for _, expr := range groupBy {
-		switch node := expr.(type) {
-		case *sqlparser.ColName:
-			c := node.Metadata.(*column)
-			if c.Origin() == oa {
-				return fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
-			}
-			for i, rc := range oa.resultColumns {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
-			if colNumber == -1 {
-				return errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
-			}
-		case *sqlparser.Literal:
-			num, err := ResultFromNumber(oa.resultColumns, node)
-			if err != nil {
-				return err
-			}
-			colNumber = num
-		default:
-			return errors.New("unsupported: in scatter query: only simple references allowed")
-		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, colNumber)
-	}
-	// Append the distinct aggregate if any.
-	if oa.extraDistinct != nil {
-		groupBy = append(groupBy, oa.extraDistinct)
-	}
-
-	_ = oa.input.PushGroupBy(groupBy)
-
-	return nil
-}
-
 // PushOrderBy pushes the order by expression into the primitive.
 // The requested order must be such that the ordering can be done
 // before the group by, which will allow us to push it down to the

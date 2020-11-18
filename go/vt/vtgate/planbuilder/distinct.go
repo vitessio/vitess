@@ -44,10 +44,6 @@ func (d *distinct) MakeDistinct() (builder, error) {
 	return d, nil
 }
 
-func (d *distinct) PushGroupBy(by sqlparser.GroupBy) error {
-	return d.input.PushGroupBy(by)
-}
-
 func (d *distinct) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
 	orderBy, err := d.input.PushOrderBy(by)
 	if err != nil {

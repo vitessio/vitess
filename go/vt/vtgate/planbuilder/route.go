@@ -136,16 +136,6 @@ func (rb *route) MakeDistinct() (builder, error) {
 	return rb, nil
 }
 
-// PushGroupBy satisfies the builder interface.
-func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	s, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	s.GroupBy = groupBy
-	return nil
-}
-
 // PushOrderBy satisfies the builder interface.
 func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	switch len(orderBy) {

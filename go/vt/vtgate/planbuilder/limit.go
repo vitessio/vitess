@@ -55,11 +55,6 @@ func (l *limit) MakeDistinct() (builder, error) {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (l *limit) PushGroupBy(_ sqlparser.GroupBy) error {
-	return errors.New("limit.PushGroupBy: unreachable")
-}
-
-// PushGroupBy satisfies the builder interface.
 func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("limit.PushOrderBy: unreachable")
 }

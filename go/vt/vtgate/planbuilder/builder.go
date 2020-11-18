@@ -54,8 +54,6 @@ type builder interface {
 
 	// MakeDistinct makes the primitive handle the distinct clause.
 	MakeDistinct() (builder, error)
-	// PushGroupBy makes the primitive handle the GROUP BY clause.
-	PushGroupBy(sqlparser.GroupBy) error
 
 	// PushOrderBy pushes the ORDER BY clause. It returns the
 	// the current primitive or a replacement if a new one was
