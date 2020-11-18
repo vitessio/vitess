@@ -465,6 +465,20 @@ func TestDistinct(t *testing.T) {
 	exec(t, conn, "delete from aggr_test")
 }
 
+func TestCreateIndex(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	// Test that create index with the correct table name works
+	_, err = conn.ExecuteFetch(`create index i1 on t1 (id1)`, 1000, true)
+	require.NoError(t, err)
+	// Test routing rules for create index.
+	_, err = conn.ExecuteFetch(`create index i2 on ks.t1000 (id1)`, 1000, true)
+	require.NoError(t, err)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
