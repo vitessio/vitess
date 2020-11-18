@@ -318,6 +318,8 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
 	case SelectMultiEqual:
 		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
+	case SelectNone:
+		rss, bvs, err = nil, nil, nil
 	default:
 		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
 	}
