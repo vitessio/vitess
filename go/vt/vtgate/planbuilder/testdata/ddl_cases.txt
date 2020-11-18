@@ -132,7 +132,7 @@
   }
 }
 
-# DDL with qualifier
+# DDL with qualifier for a table not in vschema of an unsharded keyspace
 "create index a on main.unknown(id)"
 {
   "QueryType": "DDL",
@@ -140,8 +140,8 @@
   "Instructions": {
     "OperatorType": "Send",
     "Keyspace": {
-      "Name": "user",
-      "Sharded": true
+      "Name": "main",
+      "Sharded": false
     },
     "TargetDestination": "AllShards()",
     "IsDML": false,
