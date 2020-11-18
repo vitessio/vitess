@@ -85,6 +85,21 @@ func TestCastConvert(t *testing.T) {
 	assertMatches(t, conn, `SELECT CAST("test" AS CHAR(60))`, `[[VARCHAR("test")]]`)
 }
 
+func TestCompositeIN(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// clean up before & after
+	exec(t, conn, "delete from t1")
+	defer exec(t, conn, "delete from t1")
+
+	exec(t, conn, "insert into t1(id1, id2) values(1, 2), (4, 5)")
+
+	// Just check for correct results. Plan generation is tested in unit tests.
+	assertMatches(t, conn, "select id1 from t1 where (id1, id2) in ((1, 2))", "[[INT64(1)]]")
+}
+
 func TestUnionAll(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
