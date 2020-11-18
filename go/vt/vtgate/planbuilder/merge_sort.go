@@ -60,16 +60,6 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-// MakeDistinct satisfies the builder interface.
-func (ms *mergeSort) MakeDistinct() (builder, error) {
-	distinctSrc, err := ms.input.MakeDistinct()
-	if err != nil {
-		return nil, err
-	}
-	ms.input = distinctSrc
-	return ms, err
-}
-
 // PushOrderBy satisfies the builder interface.
 // A merge sort is created due to the push of an ORDER BY clause.
 // So, this function should never get called.

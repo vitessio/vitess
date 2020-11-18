@@ -49,11 +49,6 @@ func (l *limit) Primitive() engine.Primitive {
 	return l.elimit
 }
 
-// MakeDistinct satisfies the builder interface.
-func (l *limit) MakeDistinct() (builder, error) {
-	return nil, errors.New("limit.MakeDistinct: unreachable")
-}
-
 // PushGroupBy satisfies the builder interface.
 func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("limit.PushOrderBy: unreachable")

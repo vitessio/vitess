@@ -78,16 +78,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// MakeDistinct satisfies the builder interface.
-func (ps *pulloutSubquery) MakeDistinct() (builder, error) {
-	distinctUnderlying, err := ps.underlying.MakeDistinct()
-	if err != nil {
-		return nil, err
-	}
-	ps.underlying = distinctUnderlying
-	return ps, err
-}
-
 // PushOrderBy satisfies the builder interface.
 func (ps *pulloutSubquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	bldr, err := ps.underlying.PushOrderBy(orderBy)

@@ -52,9 +52,6 @@ type builder interface {
 	// execute before this one.
 	Reorder(int)
 
-	// MakeDistinct makes the primitive handle the distinct clause.
-	MakeDistinct() (builder, error)
-
 	// PushOrderBy pushes the ORDER BY clause. It returns the
 	// the current primitive or a replacement if a new one was
 	// created.

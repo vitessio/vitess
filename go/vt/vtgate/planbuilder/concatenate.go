@@ -65,10 +65,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) MakeDistinct() (builder, error) {
-	return newDistinct(c), nil
-}
-
 func (c *concatenate) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
 	if by == nil {
 		return c, nil

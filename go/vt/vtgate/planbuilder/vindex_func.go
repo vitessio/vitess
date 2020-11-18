@@ -89,11 +89,6 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
 }
 
-// MakeDistinct satisfies the builder interface.
-func (vf *vindexFunc) MakeDistinct() (builder, error) {
-	return nil, errors.New("unsupported: distinct on vindex function")
-}
-
 // PushOrderBy satisfies the builder interface.
 func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	if len(orderBy) == 0 {

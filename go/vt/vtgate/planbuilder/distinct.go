@@ -40,10 +40,6 @@ func newDistinct(source builder) builder {
 	}
 }
 
-func (d *distinct) MakeDistinct() (builder, error) {
-	return d, nil
-}
-
 func (d *distinct) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
 	orderBy, err := d.input.PushOrderBy(by)
 	if err != nil {
