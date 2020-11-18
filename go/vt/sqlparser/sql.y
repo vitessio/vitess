@@ -41,6 +41,10 @@ func decNesting(yylex interface{}) {
   yylex.(*Tokenizer).nesting--
 }
 
+func setAllowCarrats(yylex interface{}, val bool){
+  yylex.(*Tokenizer).allowCaratsInID = val
+}
+
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -146,7 +150,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
-%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -350,7 +354,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt
-%type <bytes> alter_object_type
+%type <bytes> alter_object_type at_id at_at_id at_allow_carrats
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 
@@ -408,13 +412,33 @@ id_or_var:
   {
     $$ = NewColIdentWithAt(string($1), NoAt)
   }
-| AT_ID
+| at_id
   {
     $$ = NewColIdentWithAt(string($1), SingleAt)
   }
-| AT_AT_ID
+| at_at_id
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+at_at_id:
+  at_allow_carrats '@' ID
+  {
+    $$ = $3
+    setAllowCarrats(yylex,false)
+  }
+
+at_id:
+  at_allow_carrats ID
+  {
+    $$ = $2
+    setAllowCarrats(yylex,false)
+  }
+
+at_allow_carrats:
+  '@'
+  {
+    setAllowCarrats(yylex,true)
   }
 
 do_statement:
@@ -1573,8 +1597,8 @@ alter_object_type:
 | FOREIGN
 | FULLTEXT
 | ID
-| AT_ID
-| AT_AT_ID
+| at_id
+| at_at_id
 | INDEX
 | KEY
 | PRIMARY
