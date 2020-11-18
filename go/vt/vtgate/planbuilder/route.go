@@ -110,23 +110,6 @@ func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
 }
 
-// PushFilter satisfies the builder interface.
-// The primitive will be updated if the new filter improves the plan.
-func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
-	sel, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	switch whereType {
-	case sqlparser.WhereStr:
-		sel.AddWhere(filter)
-	case sqlparser.HavingStr:
-		sel.AddHaving(filter)
-	}
-	rb.UpdatePlan(pb, filter)
-	return nil
-}
-
 // PushSelect satisfies the builder interface.
 func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
 	sel, ok := rb.Select.(*sqlparser.Select)

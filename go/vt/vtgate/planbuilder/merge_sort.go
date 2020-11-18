@@ -60,11 +60,6 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-// PushFilter satisfies the builder interface.
-func (ms *mergeSort) PushFilter(pb *primitiveBuilder, expr sqlparser.Expr, whereType string, origin builder) error {
-	return ms.input.PushFilter(pb, expr, whereType, origin)
-}
-
 // PushSelect satisfies the builder interface.
 func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return ms.input.PushSelect(pb, expr, origin)

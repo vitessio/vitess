@@ -234,11 +234,6 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 	return oa.eaggr
 }
 
-// PushFilter satisfies the builder interface.
-func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	return errors.New("unsupported: filtering on results of aggregates")
-}
-
 // PushSelect satisfies the builder interface.
 // oa can accept expressions that are normal (a+b), or aggregate (MAX(v)).
 // Normal expressions are pushed through to the underlying route. But aggregate

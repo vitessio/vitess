@@ -65,10 +65,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	return unreachable("Filter")
-}
-
 func (c *concatenate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	return nil, 0, unreachable("Select")
 }

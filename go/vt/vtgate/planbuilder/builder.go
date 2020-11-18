@@ -52,10 +52,6 @@ type builder interface {
 	// execute before this one.
 	Reorder(int)
 
-	// PushFilter pushes a WHERE or HAVING clause expression
-	// to the specified origin.
-	PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error
-
 	// PushSelect pushes the select expression to the specified
 	// originator. If successful, the originator must create
 	// a resultColumn entry and return it. The top level caller
