@@ -70,16 +70,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := false
-	if sel.Distinct {
-		hasAggregates = true
-	} else {
-		hasAggregates = nodeHasAggregates(sel.SelectExprs)
-	}
+	hasAggregates := nodeHasAggregates(sel.SelectExprs)
 	if len(sel.GroupBy) > 0 {
 		hasAggregates = true
 	}
-	if !hasAggregates {
+	if !hasAggregates && !sel.Distinct {
 		return nil
 	}
 
@@ -88,7 +83,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// we need the ability to push down group by and
 	// order by clauses.
 	if !isRoute {
-		return errors.New("unsupported: cross-shard query with aggregates")
+		if hasAggregates {
+			return errors.New("unsupported: cross-shard query with aggregates")
+		}
+		pb.bldr = newDistinct(pb.bldr)
+		return nil
 	}
 
 	// If there is a distinct clause, we can check the select list
@@ -356,18 +355,23 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
-func (oa *orderedAggregate) MakeDistinct() error {
+func (oa *orderedAggregate) MakeDistinct() (builder, error) {
 	for i, rc := range oa.resultColumns {
 		// If the column origin is oa (and not the underlying route),
 		// it means that it's an aggregate function supplied by oa.
 		// So, the distinct 'operator' cannot be pushed down into the
 		// route.
 		if rc.column.Origin() == oa {
-			return errors.New("unsupported: distinct cannot be combined with aggregate functions")
+			return newDistinct(oa), nil
 		}
 		oa.eaggr.Keys = append(oa.eaggr.Keys, i)
 	}
-	return oa.input.MakeDistinct()
+	distinctSrc, err := oa.input.MakeDistinct()
+	if err != nil {
+		return nil, err
+	}
+	oa.input = distinctSrc
+	return oa, nil
 }
 
 // PushGroupBy satisfies the builder interface.

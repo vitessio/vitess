@@ -102,8 +102,13 @@ func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.Alia
 }
 
 // MakeDistinct satisfies the builder interface.
-func (ps *pulloutSubquery) MakeDistinct() error {
-	return ps.underlying.MakeDistinct()
+func (ps *pulloutSubquery) MakeDistinct() (builder, error) {
+	distinctUnderlying, err := ps.underlying.MakeDistinct()
+	if err != nil {
+		return nil, err
+	}
+	ps.underlying = distinctUnderlying
+	return ps, err
 }
 
 // PushGroupBy satisfies the builder interface.
