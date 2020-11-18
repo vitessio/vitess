@@ -28,7 +28,8 @@ import (
 // and ensures that there are no subqueries.
 func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if sel.Distinct {
-		newBuilder, err := pb.bldr.MakeDistinct()
+
+		newBuilder, err := planDistinct(pb.bldr)
 		if err != nil {
 			return err
 		}

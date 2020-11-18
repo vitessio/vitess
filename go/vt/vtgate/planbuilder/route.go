@@ -126,16 +126,6 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 	return rc
 }
 
-// MakeDistinct satisfies the builder interface.
-func (rb *route) MakeDistinct() (builder, error) {
-	s, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	s.Distinct = true
-	return rb, nil
-}
-
 // PushOrderBy satisfies the builder interface.
 func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	switch len(orderBy) {

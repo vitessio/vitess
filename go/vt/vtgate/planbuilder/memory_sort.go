@@ -83,11 +83,6 @@ func (ms *memorySort) Primitive() engine.Primitive {
 	return ms.eMemorySort
 }
 
-// MakeDistinct satisfies the builder interface.
-func (ms *memorySort) MakeDistinct() (builder, error) {
-	return nil, errors.New("memorySort.MakeDistinct: unreachable")
-}
-
 // PushGroupBy satisfies the builder interface.
 func (ms *memorySort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("memorySort.PushOrderBy: unreachable")

@@ -93,3 +93,51 @@ func planGroupBy(pb *primitiveBuilder, input builder, groupBy sqlparser.GroupBy)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.groupBy: unreachable", input)
 }
+
+// planDistinct makes the output distinct
+func planDistinct(input builder) (builder, error) {
+	switch node := input.(type) {
+	case *mergeSort, *pulloutSubquery:
+		inputs := node.Inputs()
+		input := inputs[0]
+
+		newInput, err := planDistinct(input)
+		if err != nil {
+			return nil, err
+		}
+		inputs[0] = newInput
+		node.Rewrite(inputs...)
+		return node, nil
+	case *route:
+		node.Select.MakeDistinct()
+		return node, nil
+	case *orderedAggregate:
+		for i, rc := range node.resultColumns {
+			// If the column origin is oa (and not the underlying route),
+			// it means that it's an aggregate function supplied by oa.
+			// So, the distinct 'operator' cannot be pushed down into the
+			// route.
+			if rc.column.Origin() == node {
+				return newDistinct(node), nil
+			}
+			node.eaggr.Keys = append(node.eaggr.Keys, i)
+		}
+		newInput, err := planDistinct(node.input)
+		if err != nil {
+			return nil, err
+		}
+		node.input = newInput
+		return node, nil
+
+	case *subquery:
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: distinct on cross-shard subquery")
+	case *concatenate:
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "only union-all is supported for this operator")
+	case *join:
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: distinct on cross-shard join")
+	case *distinct:
+		return input, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.distinct: unreachable", input)
+}

@@ -64,11 +64,6 @@ func (s *sqlCalcFoundRows) Reorder(order int) {
 	s.LimitQuery.Reorder(order)
 }
 
-//MakeDistinct implements the builder interface
-func (s *sqlCalcFoundRows) MakeDistinct() (builder, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.MakeDistinct")
-}
-
 //PushOrderBy implements the builder interface
 func (s *sqlCalcFoundRows) PushOrderBy(sqlparser.OrderBy) (builder, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushOrderBy")

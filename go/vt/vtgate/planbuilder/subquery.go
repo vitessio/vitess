@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -77,11 +76,6 @@ func (sq *subquery) Primitive() engine.Primitive {
 // ResultColumns satisfies the builder interface.
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
-}
-
-// MakeDistinct satisfies the builder interface.
-func (sq *subquery) MakeDistinct() (builder, error) {
-	return nil, errors.New("unsupported: distinct on cross-shard subquery")
 }
 
 // PushOrderBy satisfies the builder interface.

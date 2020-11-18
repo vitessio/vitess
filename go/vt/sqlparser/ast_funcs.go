@@ -733,6 +733,11 @@ func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// MakeDistinct makes the statement distinct
+func (node *Select) MakeDistinct() {
+	node.Distinct = true
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
@@ -780,6 +785,11 @@ func (node *ParenSelect) SetLock(lock Lock) {
 	node.Select.SetLock(lock)
 }
 
+// MakeDistinct implements the SelectStatement interface
+func (node *ParenSelect) MakeDistinct() {
+	node.Select.MakeDistinct()
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -793,6 +803,11 @@ func (node *Union) SetLimit(limit *Limit) {
 // SetLock sets the lock clause
 func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
+}
+
+// MakeDistinct implements the SelectStatement interface
+func (node *Union) MakeDistinct() {
+	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one

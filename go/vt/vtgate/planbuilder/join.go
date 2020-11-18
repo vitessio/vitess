@@ -142,11 +142,6 @@ func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns
 }
 
-// MakeDistinct satisfies the builder interface.
-func (jb *join) MakeDistinct() (builder, error) {
-	return nil, errors.New("unsupported: distinct on cross-shard join")
-}
-
 // PushOrderBy satisfies the builder interface.
 func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	isSpecial := false

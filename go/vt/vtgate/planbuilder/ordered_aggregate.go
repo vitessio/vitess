@@ -323,25 +323,6 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
-func (oa *orderedAggregate) MakeDistinct() (builder, error) {
-	for i, rc := range oa.resultColumns {
-		// If the column origin is oa (and not the underlying route),
-		// it means that it's an aggregate function supplied by oa.
-		// So, the distinct 'operator' cannot be pushed down into the
-		// route.
-		if rc.column.Origin() == oa {
-			return newDistinct(oa), nil
-		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, i)
-	}
-	distinctSrc, err := oa.input.MakeDistinct()
-	if err != nil {
-		return nil, err
-	}
-	oa.input = distinctSrc
-	return oa, nil
-}
-
 // PushOrderBy pushes the order by expression into the primitive.
 // The requested order must be such that the ordering can be done
 // before the group by, which will allow us to push it down to the
