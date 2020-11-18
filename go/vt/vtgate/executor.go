@@ -156,6 +156,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	saveSessionStats(safeSession, stmtType, result, err)
 	if result != nil && len(result.Rows) > *warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v", sql, *warnMemoryRows)
 	}
 
 	logStats.Send()
