@@ -78,16 +78,6 @@ func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// PushOrderBy satisfies the builder interface.
-func (ps *pulloutSubquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	bldr, err := ps.underlying.PushOrderBy(orderBy)
-	if err != nil {
-		return nil, err
-	}
-	ps.underlying = bldr
-	return ps, nil
-}
-
 // Wireup satisfies the builder interface.
 func (ps *pulloutSubquery) Wireup(bldr builder, jt *jointab) error {
 	if err := ps.underlying.Wireup(bldr, jt); err != nil {

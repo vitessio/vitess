@@ -83,11 +83,6 @@ func (ms *memorySort) Primitive() engine.Primitive {
 	return ms.eMemorySort
 }
 
-// PushGroupBy satisfies the builder interface.
-func (ms *memorySort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, errors.New("memorySort.PushOrderBy: unreachable")
-}
-
 // SetLimit satisfies the builder interface.
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return errors.New("memorySort.Limit: unreachable")

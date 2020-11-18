@@ -65,13 +65,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
-	if by == nil {
-		return c, nil
-	}
-	return nil, unreachable("OrderBy")
-}
-
 func (c *concatenate) Primitive() engine.Primitive {
 	lhs := c.lhs.Primitive()
 	rhs := c.rhs.Primitive()
@@ -94,8 +87,4 @@ func (c *concatenate) Rewrite(inputs ...builder) error {
 // Inputs implements the builder interface
 func (c *concatenate) Inputs() []builder {
 	return []builder{c.lhs, c.rhs}
-}
-
-func unreachable(name string) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "concatenate.%s: unreachable", name)
 }
