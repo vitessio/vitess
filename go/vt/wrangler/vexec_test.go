@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
@@ -180,11 +179,17 @@ func TestWorkflowListStreams(t *testing.T) {
 	wr := New(logger, env.topoServ, env.tmc)
 
 	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
-	require.Nil(t, err)
+	require.NoError(t, err)
+
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false)
+	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
+
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false)
+	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
+	logger.Clear()
 	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
-	require.Nil(t, err)
-	want := `Workflows: wrWorkflow
-{
+	require.NoError(t, err)
+	want := `{
 	"Workflow": "wrWorkflow",
 	"SourceLocation": {
 		"Keyspace": "source",
@@ -330,9 +335,13 @@ func TestWorkflowListAll(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	workflows, err := wr.ListAllWorkflows(ctx, keyspace)
+	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
 	require.Nil(t, err)
 	require.Equal(t, []string{workflow}, workflows)
+
+	workflows, err = wr.ListAllWorkflows(ctx, keyspace, false)
+	require.Nil(t, err)
+	require.Equal(t, []string{workflow, "wrWorkflow2"}, workflows)
 }
 
 func TestVExecValidations(t *testing.T) {

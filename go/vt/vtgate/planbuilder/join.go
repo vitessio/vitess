@@ -190,8 +190,8 @@ func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, or
 }
 
 // MakeDistinct satisfies the builder interface.
-func (jb *join) MakeDistinct() error {
-	return errors.New("unsupported: distinct on cross-shard join")
+func (jb *join) MakeDistinct() (builder, error) {
+	return nil, errors.New("unsupported: distinct on cross-shard join")
 }
 
 // PushGroupBy satisfies the builder interface.
