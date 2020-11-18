@@ -60,11 +60,6 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-// PushSelect satisfies the builder interface.
-func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return ms.input.PushSelect(pb, expr, origin)
-}
-
 // MakeDistinct satisfies the builder interface.
 func (ms *mergeSort) MakeDistinct() (builder, error) {
 	distinctSrc, err := ms.input.MakeDistinct()
