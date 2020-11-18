@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func planOrdering(pb *primitiveBuilder, input builder, orderBy sqlparser.OrderBy) (builder, error) {
+func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.OrderBy) (logicalPlan, error) {
 	switch node := input.(type) {
 	case *subquery, *vindexFunc:
 		if len(orderBy) == 0 {
@@ -35,11 +35,11 @@ func planOrdering(pb *primitiveBuilder, input builder, orderBy sqlparser.OrderBy
 		node.input = newInput
 		return node, err
 	case *pulloutSubquery:
-		bldr, err := planOrdering(pb, node.underlying, orderBy)
+		plan, err := planOrdering(pb, node.underlying, orderBy)
 		if err != nil {
 			return nil, err
 		}
-		node.underlying = bldr
+		node.underlying = plan
 		return node, nil
 	case *route:
 		return planRouteOrdering(orderBy, node)
@@ -56,7 +56,7 @@ func planOrdering(pb *primitiveBuilder, input builder, orderBy sqlparser.OrderBy
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "%T.ordering: unreachable", input)
 }
 
-func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *orderedAggregate) (builder, error) {
+func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *orderedAggregate) (logicalPlan, error) {
 	// The requested order must be such that the ordering can be done
 	// before the group by, which will allow us to push it down to the
 	// route. This is actually true in most use cases, except for situations
@@ -134,18 +134,18 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 	// It's ok to push the original AST down because all references
 	// should point to the route. Only aggregate functions are originated
 	// by node, and we currently don't allow the ORDER BY to reference them.
-	bldr, err := planOrdering(pb, oa.input, selOrderBy)
+	plan, err := planOrdering(pb, oa.input, selOrderBy)
 	if err != nil {
 		return nil, err
 	}
-	oa.input = bldr
+	oa.input = plan
 	if postSort {
 		return newMemorySort(oa, orderBy)
 	}
 	return oa, nil
 }
 
-func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *join) (builder, error) {
+func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *join) (logicalPlan, error) {
 	isSpecial := false
 	switch len(orderBy) {
 	case 0:
@@ -220,7 +220,7 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *joi
 	return node, nil
 }
 
-func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (builder, error) {
+func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, error) {
 	switch len(orderBy) {
 	case 0:
 		return node, nil

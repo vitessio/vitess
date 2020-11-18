@@ -22,20 +22,20 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*distinct)(nil)
+var _ logicalPlan = (*distinct)(nil)
 
-// limit is the builder for engine.Limit.
+// limit is the logicalPlan for engine.Limit.
 // This gets built if a limit needs to be applied
 // after rows are returned from an underlying
 // operation. Since a limit is the final operation
 // of a SELECT, most pushes are not applicable.
 type distinct struct {
-	builderCommon
+	logicalPlanCommon
 }
 
-func newDistinct(source builder) builder {
+func newDistinct(source logicalPlan) logicalPlan {
 	return &distinct{
-		builderCommon: newBuilderCommon(source),
+		logicalPlanCommon: newBuilderCommon(source),
 	}
 }
 
@@ -45,8 +45,8 @@ func (d *distinct) Primitive() engine.Primitive {
 	}
 }
 
-// Rewrite implements the builder interface
-func (d *distinct) Rewrite(inputs ...builder) error {
+// Rewrite implements the logicalPlan interface
+func (d *distinct) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 1 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "distinct: wrong number of inputs")
 	}
@@ -54,7 +54,7 @@ func (d *distinct) Rewrite(inputs ...builder) error {
 	return nil
 }
 
-// Inputs implements the builder interface
-func (d *distinct) Inputs() []builder {
-	return []builder{d.input}
+// Inputs implements the logicalPlan interface
+func (d *distinct) Inputs() []logicalPlan {
+	return []logicalPlan{d.input}
 }

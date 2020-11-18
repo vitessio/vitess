@@ -21,7 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*mergeSort)(nil)
+var _ logicalPlan = (*mergeSort)(nil)
 
 // mergeSort is a pseudo-primitive. It amends the
 // the underlying Route to perform a merge sort.
@@ -51,13 +51,13 @@ func (ms *mergeSort) SetTruncateColumnCount(count int) {
 	ms.truncateColumnCount = count
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-// Wireup satisfies the builder interface.
-func (ms *mergeSort) Wireup(bldr builder, jt *jointab) error {
+// Wireup implements the logicalPlan interface
+func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	// If the route has to do the ordering, and if any columns are Text,
 	// we have to request the corresponding weight_string from mysql
 	// and use that value instead. This is because we cannot mimic
@@ -80,5 +80,5 @@ func (ms *mergeSort) Wireup(bldr builder, jt *jointab) error {
 		}
 	}
 	rb.eroute.TruncateColumnCount = ms.truncateColumnCount
-	return ms.input.Wireup(bldr, jt)
+	return ms.input.Wireup(plan, jt)
 }

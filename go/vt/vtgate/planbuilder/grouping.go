@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func planGroupBy(pb *primitiveBuilder, input builder, groupBy sqlparser.GroupBy) (builder, error) {
+func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.GroupBy) (logicalPlan, error) {
 	if len(groupBy) == 0 {
 		// if we have no grouping declared, we only want to visit orderedAggregate
 		_, isOrdered := input.(*orderedAggregate)
@@ -95,7 +95,7 @@ func planGroupBy(pb *primitiveBuilder, input builder, groupBy sqlparser.GroupBy)
 }
 
 // planDistinct makes the output distinct
-func planDistinct(input builder) (builder, error) {
+func planDistinct(input logicalPlan) (logicalPlan, error) {
 	switch node := input.(type) {
 	case *mergeSort, *pulloutSubquery:
 		inputs := node.Inputs()

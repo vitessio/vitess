@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ builder = (*route)(nil)
+var _ logicalPlan = (*route)(nil)
 
 // route is used to build a Route primitive.
 // It's used to build one of the Select routes like
@@ -89,22 +89,22 @@ func (rb *route) Resolve() *route {
 	return rb
 }
 
-// Order satisfies the builder interface.
+// Order implements the logicalPlan interface
 func (rb *route) Order() int {
 	return rb.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder implements the logicalPlan interface
 func (rb *route) Reorder(order int) {
 	rb.order = order + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (rb *route) Primitive() engine.Primitive {
 	return rb.eroute
 }
 
-// ResultColumns satisfies the builder interface.
+// ResultColumns implements the logicalPlan interface
 func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
 }
@@ -130,14 +130,14 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// Wireup satisfies the builder interface.
-func (rb *route) Wireup(bldr builder, jt *jointab) error {
+// Wireup implements the logicalPlan interface
+func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	// Precaution: update ERoute.Values only if it's not set already.
 	if rb.eroute.Values == nil {
-		// Resolve values stored in the builder.
+		// Resolve values stored in the logical plan.
 		switch vals := rb.condition.(type) {
 		case *sqlparser.ComparisonExpr:
-			pv, err := rb.procureValues(bldr, jt, vals.Right)
+			pv, err := rb.procureValues(plan, jt, vals.Right)
 			if err != nil {
 				return err
 			}
@@ -146,7 +146,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		case nil:
 			// no-op.
 		default:
-			pv, err := rb.procureValues(bldr, jt, vals)
+			pv, err := rb.procureValues(plan, jt, vals)
 			if err != nil {
 				return err
 			}
@@ -185,7 +185,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
-				joinVar := jt.Procure(bldr, node, rb.Order())
+				joinVar := jt.Procure(plan, node, rb.Order())
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
@@ -215,12 +215,12 @@ func systemTable(qualifier string) bool {
 
 // procureValues procures and converts the input into
 // the expected types for rb.Values.
-func (rb *route) procureValues(bldr builder, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
+func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
 	switch val := val.(type) {
 	case sqlparser.ValTuple:
 		pv := sqltypes.PlanValue{}
 		for _, val := range val {
-			v, err := rb.procureValues(bldr, jt, val)
+			v, err := rb.procureValues(plan, jt, val)
 			if err != nil {
 				return pv, err
 			}
@@ -228,7 +228,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val sqlparser.Expr) (s
 		}
 		return pv, nil
 	case *sqlparser.ColName:
-		joinVar := jt.Procure(bldr, val, rb.Order())
+		joinVar := jt.Procure(plan, val, rb.Order())
 		return sqltypes.PlanValue{Key: joinVar}, nil
 	default:
 		return sqlparser.NewPlanValue(val)
@@ -268,14 +268,14 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 	return query.Query
 }
 
-// SupplyVar satisfies the builder interface.
+// SupplyVar implements the logicalPlan interface
 func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	// route is an atomic primitive. So, SupplyVar cannot be
 	// called on it.
 	panic("BUG: route is an atomic node.")
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol implements the logicalPlan interface
 func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range rb.resultColumns {
@@ -293,7 +293,7 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 	return rc, len(rb.resultColumns) - 1
 }
 
-// SupplyWeightString satisfies the builder interface.
+// SupplyWeightString implements the logicalPlan interface
 func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	rc := rb.resultColumns[colNumber]
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
@@ -312,7 +312,7 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 			},
 		},
 	}
-	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
+	// It's ok to pass nil for pb and logicalPlan because PushSelect doesn't use them.
 	// TODO: we are ignoring a potential error here. need to clean this up
 	_, _, weightcolNumber, err = planProjection(nil, rb, expr, nil)
 	if err != nil {
@@ -322,17 +322,17 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 	return weightcolNumber, nil
 }
 
-// Rewrite implements the builder interface
-func (rb *route) Rewrite(inputs ...builder) error {
+// Rewrite implements the logicalPlan interface
+func (rb *route) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 0 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "route: wrong number of inputs")
 	}
 	return nil
 }
 
-// Inputs implements the builder interface
-func (rb *route) Inputs() []builder {
-	return []builder{}
+// Inputs implements the logicalPlan interface
+func (rb *route) Inputs() []logicalPlan {
+	return []logicalPlan{}
 }
 
 // MergeSubquery returns true if the subquery route could successfully be merged
