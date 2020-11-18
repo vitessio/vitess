@@ -70,11 +70,6 @@ func (ms *mergeSort) MakeDistinct() (builder, error) {
 	return ms, err
 }
 
-// PushGroupBy satisfies the builder interface.
-func (ms *mergeSort) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	return ms.input.PushGroupBy(groupBy)
-}
-
 // PushOrderBy satisfies the builder interface.
 // A merge sort is created due to the push of an ORDER BY clause.
 // So, this function should never get called.

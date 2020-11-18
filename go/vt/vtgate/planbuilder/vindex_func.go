@@ -94,14 +94,6 @@ func (vf *vindexFunc) MakeDistinct() (builder, error) {
 	return nil, errors.New("unsupported: distinct on vindex function")
 }
 
-// PushGroupBy satisfies the builder interface.
-func (vf *vindexFunc) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	if (groupBy) == nil {
-		return nil
-	}
-	return errors.New("unupported: group by on vindex function")
-}
-
 // PushOrderBy satisfies the builder interface.
 func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	if len(orderBy) == 0 {

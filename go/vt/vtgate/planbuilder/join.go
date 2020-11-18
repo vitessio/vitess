@@ -147,14 +147,6 @@ func (jb *join) MakeDistinct() (builder, error) {
 	return nil, errors.New("unsupported: distinct on cross-shard join")
 }
 
-// PushGroupBy satisfies the builder interface.
-func (jb *join) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	if (groupBy) == nil {
-		return nil
-	}
-	return errors.New("unupported: group by on cross-shard join")
-}
-
 // PushOrderBy satisfies the builder interface.
 func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	isSpecial := false

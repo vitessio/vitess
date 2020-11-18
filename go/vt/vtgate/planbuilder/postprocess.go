@@ -38,7 +38,14 @@ func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if err := pb.st.ResolveSymbols(sel.GroupBy); err != nil {
 		return err
 	}
-	return pb.bldr.PushGroupBy(sel.GroupBy)
+
+	newInput, err := planGroupBy(pb, pb.bldr, sel.GroupBy)
+	if err != nil {
+		return err
+	}
+	pb.bldr = newInput
+
+	return nil
 }
 
 // pushOrderBy pushes the order by clause into the primitives.
