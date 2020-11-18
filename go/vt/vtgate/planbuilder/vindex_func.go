@@ -89,14 +89,6 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns
 }
 
-// PushOrderBy satisfies the builder interface.
-func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	if len(orderBy) == 0 {
-		return vf, nil
-	}
-	return newMemorySort(vf, orderBy)
-}
-
 // Wireup satisfies the builder interface.
 func (vf *vindexFunc) Wireup(bldr builder, jt *jointab) error {
 	return nil

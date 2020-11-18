@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -38,14 +37,6 @@ func newDistinct(source builder) builder {
 	return &distinct{
 		builderCommon: newBuilderCommon(source),
 	}
-}
-
-func (d *distinct) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
-	orderBy, err := d.input.PushOrderBy(by)
-	if err != nil {
-		return nil, err
-	}
-	return &distinct{builderCommon: newBuilderCommon(orderBy)}, nil
 }
 
 func (d *distinct) Primitive() engine.Primitive {

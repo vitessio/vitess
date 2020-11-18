@@ -52,11 +52,6 @@ type builder interface {
 	// execute before this one.
 	Reorder(int)
 
-	// PushOrderBy pushes the ORDER BY clause. It returns the
-	// the current primitive or a replacement if a new one was
-	// created.
-	PushOrderBy(sqlparser.OrderBy) (builder, error)
-
 	// Wireup performs the wire-up work. Nodes should be traversed
 	// from right to left because the rhs nodes can request vars from
 	// the lhs nodes.

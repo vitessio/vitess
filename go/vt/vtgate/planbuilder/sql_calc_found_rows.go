@@ -64,11 +64,6 @@ func (s *sqlCalcFoundRows) Reorder(order int) {
 	s.LimitQuery.Reorder(order)
 }
 
-//PushOrderBy implements the builder interface
-func (s *sqlCalcFoundRows) PushOrderBy(sqlparser.OrderBy) (builder, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushOrderBy")
-}
-
 //SupplyVar implements the builder interface
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	s.LimitQuery.SupplyVar(from, to, col, varname)

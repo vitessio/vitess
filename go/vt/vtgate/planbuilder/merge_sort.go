@@ -17,11 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -58,13 +54,6 @@ func (ms *mergeSort) SetTruncateColumnCount(count int) {
 // Primitive satisfies the builder interface.
 func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
-}
-
-// PushOrderBy satisfies the builder interface.
-// A merge sort is created due to the push of an ORDER BY clause.
-// So, this function should never get called.
-func (ms *mergeSort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
 }
 
 // Wireup satisfies the builder interface.

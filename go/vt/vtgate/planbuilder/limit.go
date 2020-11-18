@@ -17,9 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -47,9 +44,4 @@ func newLimit(bldr builder) *limit {
 func (l *limit) Primitive() engine.Primitive {
 	l.elimit.Input = l.input.Primitive()
 	return l.elimit
-}
-
-// PushGroupBy satisfies the builder interface.
-func (l *limit) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, errors.New("limit.PushOrderBy: unreachable")
 }
