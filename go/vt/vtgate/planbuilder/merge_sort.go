@@ -60,11 +60,6 @@ func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-// PushLock satisfies the builder interface.
-func (ms *mergeSort) PushLock(lock sqlparser.Lock) error {
-	return ms.input.PushLock(lock)
-}
-
 // PushFilter satisfies the builder interface.
 func (ms *mergeSort) PushFilter(pb *primitiveBuilder, expr sqlparser.Expr, whereType string, origin builder) error {
 	return ms.input.PushFilter(pb, expr, whereType, origin)

@@ -105,12 +105,6 @@ func (rb *route) Primitive() engine.Primitive {
 	return rb.eroute
 }
 
-// PushLock satisfies the builder interface.
-func (rb *route) PushLock(lock sqlparser.Lock) error {
-	rb.Select.SetLock(lock)
-	return nil
-}
-
 // ResultColumns satisfies the builder interface.
 func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns

@@ -104,11 +104,6 @@ func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err err
 	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.SupplyWeightString")
 }
 
-//PushLock implements the builder interface
-func (s *sqlCalcFoundRows) PushLock(sqlparser.Lock) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.PushLock")
-}
-
 // Rewrite implements the builder interface
 func (s *sqlCalcFoundRows) Rewrite(inputs ...builder) error {
 	if len(inputs) != 2 {

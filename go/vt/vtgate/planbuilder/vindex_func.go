@@ -85,11 +85,6 @@ func (vf *vindexFunc) Primitive() engine.Primitive {
 	return vf.eVindexFunc
 }
 
-// PushLock satisfies the builder interface.
-func (vf *vindexFunc) PushLock(lock sqlparser.Lock) error {
-	return nil
-}
-
 // ResultColumns satisfies the builder interface.
 func (vf *vindexFunc) ResultColumns() []*resultColumn {
 	return vf.resultColumns

@@ -64,10 +64,6 @@ func (d *distinct) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
 	return &distinct{builderCommon: newBuilderCommon(orderBy)}, nil
 }
 
-func (d *distinct) PushLock(lock sqlparser.Lock) error {
-	return d.input.PushLock(lock)
-}
-
 func (d *distinct) Primitive() engine.Primitive {
 	return &engine.Distinct{
 		Source: d.input.Primitive(),

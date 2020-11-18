@@ -137,16 +137,6 @@ func (jb *join) Primitive() engine.Primitive {
 	return jb.ejoin
 }
 
-// PushLock satisfies the builder interface.
-func (jb *join) PushLock(lock sqlparser.Lock) error {
-	err := jb.Left.PushLock(lock)
-	if err != nil {
-		return err
-	}
-
-	return jb.Right.PushLock(lock)
-}
-
 // ResultColumns satisfies the builder interface.
 func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns

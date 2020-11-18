@@ -76,7 +76,10 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 		}
 		pb.st.Outer = outer
 	}
-	pb.bldr.PushLock(union.Lock)
+
+	if err := setLock(pb.bldr, union.Lock); err != nil {
+		return err
+	}
 
 	if err := pb.pushOrderBy(union.OrderBy); err != nil {
 		return err
@@ -154,5 +157,23 @@ func unionRouteMerge(left, right builder, us *sqlparser.UnionSelect) error {
 		lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{us}}
 	}
 
+	return nil
+}
+
+// planLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
+func setLock(in builder, lock sqlparser.Lock) error {
+	_, err := visit(in, func(bldr builder) (bool, builder, error) {
+		switch node := in.(type) {
+		case *route:
+			node.Select.SetLock(lock)
+			return false, node, nil
+		case *sqlCalcFoundRows, *vindexFunc:
+			return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.locking: unreachable", in)
+		}
+		return true, bldr, nil
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }

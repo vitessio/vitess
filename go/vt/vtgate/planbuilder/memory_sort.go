@@ -83,11 +83,6 @@ func (ms *memorySort) Primitive() engine.Primitive {
 	return ms.eMemorySort
 }
 
-// PushLock satisfies the builder interface.
-func (ms *memorySort) PushLock(lock sqlparser.Lock) error {
-	return ms.input.PushLock(lock)
-}
-
 // PushFilter satisfies the builder interface.
 func (ms *memorySort) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
 	return errors.New("memorySort.PushFilter: unreachable")
