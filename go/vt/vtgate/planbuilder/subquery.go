@@ -74,11 +74,6 @@ func (sq *subquery) Primitive() engine.Primitive {
 	return sq.esubquery
 }
 
-// PushLock satisfies the builder interface.
-func (sq *subquery) PushLock(lock sqlparser.Lock) error {
-	return sq.input.PushLock(lock)
-}
-
 // ResultColumns satisfies the builder interface.
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns

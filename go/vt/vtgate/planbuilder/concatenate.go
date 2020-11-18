@@ -112,15 +112,6 @@ func (c *concatenate) Inputs() []builder {
 	return []builder{c.lhs, c.rhs}
 }
 
-// PushLock satisfies the builder interface.
-func (c *concatenate) PushLock(lock sqlparser.Lock) error {
-	err := c.lhs.PushLock(lock)
-	if err != nil {
-		return err
-	}
-	return c.rhs.PushLock(lock)
-}
-
 func unreachable(name string) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "concatenate.%s: unreachable", name)
 }
