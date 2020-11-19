@@ -44,7 +44,7 @@ for shard in "customer/0"; do
 done;
 
 ./202_move_tables.sh
-
+exit
 sleep 3 # required for now
 
 ./203_switch_reads.sh
