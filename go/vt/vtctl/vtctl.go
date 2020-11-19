@@ -340,7 +340,7 @@ var commands = []commandGroup{
 				"[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry-run] <keyspace.workflow>",
 				"Switch read traffic for the specified workflow."},
 			{"SwitchWrites", commandSwitchWrites,
-				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=true] [-dry-run] <keyspace.workflow>",
+				"[-timeout=30s] [-reverse] [-reverse_replication=true] [-dry-run] <keyspace.workflow>",
 				"Switch write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
@@ -2140,18 +2140,29 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	tabletType := subFlags.String("tablet_type", "", "Tablet type (replica or rdonly)")
+	tabletTypes := subFlags.String("tablet_types", "rdonly,replica", "Tablet types to switch one or both or rdonly/replica")
+	deprecatedTabletType := subFlags.String("tablet_type", "", "(DEPRECATED) one of rdonly/replica")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 
-	if *tabletType == "" {
-		return fmt.Errorf("-tablet_type must be specified")
+	if !(*deprecatedTabletType == "" || *deprecatedTabletType == "replica" || *deprecatedTabletType == "rdonly") {
+		return fmt.Errorf("invalid value specified for -tablet_type: %s", *deprecatedTabletType)
 	}
-	servedType, err := parseTabletType(*tabletType, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
-	if err != nil {
-		return err
+
+	if *deprecatedTabletType != "" {
+		*tabletTypes = *deprecatedTabletType
+	}
+
+	tabletTypesArr := strings.Split(*tabletTypes, ",")
+	var servedTypes []topodatapb.TabletType
+	for _, tabletType := range tabletTypesArr {
+		servedType, err := parseTabletType(tabletType, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
+		if err != nil {
+			return err
+		}
+		servedTypes = append(servedTypes, servedType)
 	}
 	var cells []string
 	if *cellsStr != "" {
@@ -2168,8 +2179,13 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
+	/*
+		if strings.HasSuffix(workflow, "_reverse") {
+			return fmt.Errorf("workflow cannot end with _reverse, it is reserved for vreplication to create a reverse workflow")
+		}
 
-	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflow, servedType, cells, direction, *dryRun)
+	*/
+	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflow, servedTypes, cells, direction, *dryRun)
 	if err != nil {
 		return err
 	}
@@ -2181,9 +2197,11 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on master migrations. The migration will be aborted on timeout.")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "DEPRECATED Specifies the maximum time to wait, in seconds, for vreplication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
-	cancelMigrate := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
+	cancel := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
+	reverse := subFlags.Bool("reverse", false, "Reverse a previous SwitchWrites serve from source")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchWrites and only reports the actions to be taken")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -2196,8 +2214,19 @@ func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
+	/*
+		TODO: uncomment for subsequent release
+		if strings.HasSuffix(workflow, "_reverse") {
+			return fmt.Errorf("workflow cannot end with _reverse, it is reserved for vreplication to create a reverse workflow")
+		}
 
-	journalID, dryRunResults, err := wr.SwitchWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication, *dryRun)
+	*/
+
+	if filteredReplicationWaitTime != timeout {
+		timeout = filteredReplicationWaitTime
+	}
+
+	journalID, dryRunResults, err := wr.SwitchWrites(ctx, keyspace, workflow, *timeout, *cancel, *reverse, *reverseReplication, *dryRun)
 	if err != nil {
 		return err
 	}
@@ -3035,7 +3064,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("usage: Workflow --dry-run keyspace.workflow start/stop/delete/list/listall")
+		return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/list/listall")
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))

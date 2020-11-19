@@ -37,7 +37,7 @@ type switcherDryRun struct {
 	ts    *trafficSwitcher
 }
 
-func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
 	for _, source := range dr.ts.sources {
@@ -58,7 +58,7 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	return nil
 }
 
-func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	ks := dr.ts.targetKeyspace
 	if direction == DirectionBackward {
 		ks = dr.ts.sourceKeyspace
