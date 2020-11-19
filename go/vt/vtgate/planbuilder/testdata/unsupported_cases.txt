@@ -338,10 +338,6 @@
 "delete music,user from music inner join user where music.id = user.id"
 "unsupported: multi-shard or vindex write statement"
 
-# Database DDL
-"create database foo"
-"unsupported: Database DDL create database foo"
-
 # order by inside and outside parenthesis select
 "(select 1 from user order by 1 desc) order by 1 asc limit 2"
 "can't do ORDER BY on top of ORDER BY"
