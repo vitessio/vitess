@@ -32,8 +32,9 @@ import (
 
 var (
 	validSQL = []struct {
-		input  string
-		output string
+		input      string
+		output     string
+		partialDDL bool
 	}{{
 		input:  "select 1",
 		output: "select 1 from dual",
@@ -902,6 +903,9 @@ var (
 		input:  "alter table a add spatial key foo (column1)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add fulltext key foo (column1)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a",
 	}, {
@@ -986,6 +990,9 @@ var (
 		input:  "alter table a add spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add fulltext index idx (id)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add foreign key",
 		output: "alter table a",
 	}, {
@@ -1011,6 +1018,9 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a drop spatial index idx (id)",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop fulltext index idx (id)",
 		output: "alter table a",
 	}, {
 		input:  "alter table a add check ch_1",
@@ -1142,20 +1152,24 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input:  "create index a on b",
-		output: "alter table b",
+		input: "create index a on b (col1)",
 	}, {
-		input:  "create unique index a on b",
-		output: "alter table b",
+		input: "create unique index a on b (col1)",
 	}, {
-		input:  "create unique index a using foo on b",
-		output: "alter table b",
+		input: "create unique index a using foo on b (col1 desc)",
 	}, {
-		input:  "create fulltext index a using foo on b",
-		output: "alter table b",
+		input:  "create with 'gh-ost' unique index a using foo on b (col1 desc)",
+		output: "create unique index a using foo on b (col1 desc)",
 	}, {
-		input:  "create spatial index a using foo on b",
-		output: "alter table b",
+		input: "create fulltext index a using foo on b (col1)",
+	}, {
+		input: "create spatial index a using foo on b (col1)",
+	}, {
+		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+	}, {
+		input:      "create index a on b ((col1 + col2), (col1*col2))",
+		output:     "create index a on b ()",
+		partialDDL: true,
 	}, {
 		input:  "create view a",
 		output: "create table a",
@@ -1757,6 +1771,14 @@ func TestValid(t *testing.T) {
 			if tcase.output != out {
 				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 			}
+
+			// CREATE INDEX currently only has 5.7 specifications.
+			// For mysql 8.0 syntax, the query is not entirely parsed.
+			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
+			switch x := tree.(type) {
+			case *CreateIndex:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
 			// all its children. But we can examine code coverage and
@@ -1829,8 +1851,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input:  "create index b on A",
-		output: "alter table A",
+		input: "create index b on A (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -2382,6 +2403,7 @@ func TestCreateTable(t *testing.T) {
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
 			"	spatial key geom (geom),\n" +
+			"	fulltext key fts (full_name),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +

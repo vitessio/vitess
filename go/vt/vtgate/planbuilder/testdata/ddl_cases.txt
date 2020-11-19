@@ -133,3 +133,57 @@
 # drop db if exists main
 "drop database if exists main"
 "drop database not allowed"
+
+# DDL
+"create index a on user(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on user(id)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create index a on user (id)",
+    "SingleShardOnly": false
+  }
+}
+
+# DDL with qualifier
+"create index a on user.user(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on user.user(id)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create index a on user (id)",
+    "SingleShardOnly": false
+  }
+}
+
+# DDL with qualifier for a table not in vschema of an unsharded keyspace
+"create index a on main.unknown(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on main.unknown(id)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create index a on unknown (id)",
+    "SingleShardOnly": false
+  }
+}

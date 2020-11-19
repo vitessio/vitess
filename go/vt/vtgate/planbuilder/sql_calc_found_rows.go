@@ -80,8 +80,8 @@ func (s *sqlCalcFoundRows) PushSelect(*primitiveBuilder, *sqlparser.AliasedExpr,
 }
 
 //MakeDistinct implements the builder interface
-func (s *sqlCalcFoundRows) MakeDistinct() error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.MakeDistinct")
+func (s *sqlCalcFoundRows) MakeDistinct() (builder, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.MakeDistinct")
 }
 
 //PushGroupBy implements the builder interface

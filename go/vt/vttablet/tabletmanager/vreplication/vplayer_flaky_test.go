@@ -38,6 +38,60 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestVReplicationTimeUpdated(t *testing.T) {
+	ctx := context.Background()
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	execStatements(t, []string{
+		"insert into t1 values(1, 'aaa')",
+	})
+
+	var getTimestamps = func() (int64, int64) {
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp from _vt.vreplication")
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		require.Equal(t, 1, len(qr.Rows))
+		timeUpdated, err := qr.Rows[0][0].ToInt64()
+		require.NoError(t, err)
+		transactionTimestamp, err := qr.Rows[0][1].ToInt64()
+		require.NoError(t, err)
+		return timeUpdated, transactionTimestamp
+	}
+	expectNontxQueries(t, []string{
+		"insert into t1(id,val) values (1,'aaa')",
+	})
+	time.Sleep(1 * time.Second)
+	timeUpdated1, transactionTimestamp1 := getTimestamps()
+	time.Sleep(2 * time.Second)
+	timeUpdated2, _ := getTimestamps()
+	require.Greater(t, timeUpdated2, timeUpdated1, "time_updated not updated")
+	require.Greater(t, timeUpdated2, transactionTimestamp1, "transaction_timestamp should not be < time_updated")
+}
+
 func TestCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -164,7 +218,6 @@ func TestCharPK(t *testing.T) {
 		}
 	}
 }
-
 func TestRollup(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -1435,6 +1488,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
 		// Second update is from vreplicator.
+		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
 		fmt.Sprintf("/update.*'%s'", pos2),
@@ -1544,6 +1598,7 @@ func TestPlayerStopPos(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
 		// Second update is from vreplicator.
+		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
 		"insert into yes(id,val) values (1,'aaa')",
@@ -1568,6 +1623,7 @@ func TestPlayerStopPos(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
 		// Second update is from vreplicator.
+		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
 		// Since 'no' generates empty transactions that are skipped by
@@ -1585,6 +1641,7 @@ func TestPlayerStopPos(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update.*'Running'",
 		// Second update is from vreplicator.
+		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	})
@@ -2204,6 +2261,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"insert into t1 values(2, 'aaa')",
 	})
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running'",
 		"begin",
 		"insert into t1(id,val) values (2,'aaa')",
@@ -2395,9 +2453,9 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	}
 	expectDBClientQueries(t, []string{
 		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running'",
 	})
-
 	var once sync.Once
 	return func() {
 		t.Helper()

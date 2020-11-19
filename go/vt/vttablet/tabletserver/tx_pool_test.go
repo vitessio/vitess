@@ -48,7 +48,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
-	id := conn.ID()
+	id := conn.ReservedID()
 	conn.Unlock()
 
 	// get the connection and execute a query on it
@@ -120,14 +120,14 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	conn2.Unlock() // this marks conn2 as NonBusy
 
 	// This should rollback only txid2.
-	txPool.RollbackNonBusy(ctx)
+	txPool.Shutdown(ctx)
 
 	// committing tx1 should not be an issue
 	_, err = txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 
 	// Trying to get back to conn2 should not work since the transaction has been rolled back
-	_, err = txPool.GetAndLock(conn2.ID(), "")
+	_, err = txPool.GetAndLock(conn2.ReservedID(), "")
 	require.Error(t, err)
 
 	conn1.Release(tx.TxCommit)
@@ -220,8 +220,8 @@ func TestTxPoolBeginWithError(t *testing.T) {
 		Principal: "principle",
 	}
 
-	ctxWithCallerId := callerid.NewContext(ctx, ef, im)
-	_, _, err := txPool.Begin(ctxWithCallerId, &querypb.ExecuteOptions{}, false, 0, nil)
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+	_, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "error: rejected")
 	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
@@ -319,7 +319,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	db, txPool, _, _ := setup(t)
 	defer db.Close()
 	conn1, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	id := conn1.ID()
+	id := conn1.ReservedID()
 	conn1.Unlock()
 	txPool.Close()
 
@@ -341,7 +341,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	id = conn1.ID()
+	id = conn1.ReservedID()
 	_, err := txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 
@@ -356,7 +356,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	conn1.Unlock()
-	id = conn1.ID()
+	id = conn1.ReservedID()
 	time.Sleep(20 * time.Millisecond)
 
 	assertErrorMatch(id, "exceeded timeout: 1ms")
@@ -395,10 +395,10 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 		Principal: "principle",
 	}
 
-	ctxWithCallerId := callerid.NewContext(ctx, ef, im)
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
 
 	// Start transaction.
-	conn, _, err := txPool.Begin(ctxWithCallerId, &querypb.ExecuteOptions{}, false, 0, nil)
+	conn, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
 
