@@ -79,45 +79,12 @@ type Getter interface {
 // Use Connect on the client side to create a connection.
 // Use NewListener to create a server side and listen for connections.
 type Conn struct {
-	// conn is the underlying network connection.
-	// Calling Close() on the Conn will close this connection.
-	// If there are any ongoing reads or writes, they may get interrupted.
-	conn net.Conn
-
-	// For server-side connections, listener points to the server object.
-	listener *Listener
-
-	// ConnectionID is set:
-	// - at Connect() time for clients, with the value returned by
-	// the server.
-	// - at accept time for the server.
-	ConnectionID uint32
-
-	// closed is set to true when Close() is called on the connection.
-	closed sync2.AtomicBool
-
-	// Capabilities is the current set of features this connection
-	// is using.  It is the features that are both supported by
-	// the client and the server, and currently in use.
-	// It is set during the initial handshake.
-	//
-	// It is only used for CapabilityClientDeprecateEOF
-	// and CapabilityClientFoundRows.
-	Capabilities uint32
-
-	// CharacterSet is the character set used by the other side of the
-	// connection.
-	// It is set during the initial handshake.
-	// See the values in constants.go.
-	CharacterSet uint8
-
-	// User is the name used by the client to connect.
-	// It is set during the initial handshake.
-	User string
-
-	// UserData is custom data returned by the AuthServer module.
-	// It is set during the initial handshake.
-	UserData Getter
+	// fields contains the fields definitions for an on-going
+	// streaming query. It is set by ExecuteStreamFetch, and
+	// cleared by the last FetchNext().  It is nil if no streaming
+	// query is in progress.  If the streaming query returned no
+	// fields, this is set to an empty array (but not nil).
+	fields []*querypb.Field
 
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
@@ -126,42 +93,35 @@ type Conn struct {
 	// through the 'USE' statement, which will bypass this variable.
 	schemaName string
 
-	// ServerVersion is set during Connect with the server
-	// version.  It is not changed afterwards. It is unused for
-	// server-side connections.
-	ServerVersion string
-
-	// flavor contains the auto-detected flavor for this client
-	// connection. It is unused for server-side connections.
-	flavor flavor
-
-	// StatusFlags are the status flags we will base our returned flags on.
-	// This is a bit field, with values documented in constants.go.
-	// An interesting value here would be ServerStatusAutocommit.
-	// It is only used by the server. These flags can be changed
-	// by Handler methods.
-	StatusFlags uint16
-
 	// ClientData is a place where an application can store any
 	// connection-related data. Mostly used on the server side, to
 	// avoid maps indexed by ConnectionID for instance.
 	ClientData interface{}
 
-	// Packet encoding variables.
-	sequence       uint8
+	// conn is the underlying network connection.
+	// Calling Close() on the Conn will close this connection.
+	// If there are any ongoing reads or writes, they may get interrupted.
+	conn net.Conn
+
+	// flavor contains the auto-detected flavor for this client
+	// connection. It is unused for server-side connections.
+	flavor flavor
+
+	// ServerVersion is set during Connect with the server
+	// version.  It is not changed afterwards. It is unused for
+	// server-side connections.
+	ServerVersion string
+
+	// User is the name used by the client to connect.
+	// It is set during the initial handshake.
+	User string // For server-side connections, listener points to the server object.
+
+	// UserData is custom data returned by the AuthServer module.
+	// It is set during the initial handshake.
+	UserData Getter
+
 	bufferedReader *bufio.Reader
-
-	// Buffered writing has a timer which flushes on inactivity.
-	bufMu          sync.Mutex
-	bufferedWriter *bufio.Writer
 	flushTimer     *time.Timer
-
-	// fields contains the fields definitions for an on-going
-	// streaming query. It is set by ExecuteStreamFetch, and
-	// cleared by the last FetchNext().  It is nil if no streaming
-	// query is in progress.  If the streaming query returned no
-	// fields, this is set to an empty array (but not nil).
-	fields []*querypb.Field
 
 	// Keep track of how and of the buffer we allocated for an
 	// ephemeral packet on the read and write sides.
@@ -173,11 +133,53 @@ type Conn struct {
 	// It can be allocated from bufPool or heap and should be recycled in the same manner.
 	currentEphemeralBuffer *[]byte
 
-	// StatementID is the prepared statement ID.
-	StatementID uint32
+	listener *Listener
+
+	// Buffered writing has a timer which flushes on inactivity.
+	bufferedWriter *bufio.Writer
 
 	// PrepareData is the map to use a prepared statement.
 	PrepareData map[uint32]*PrepareData
+
+	// protects the bufferedWriter and bufferedReader
+	bufMu sync.Mutex
+
+	// Capabilities is the current set of features this connection
+	// is using.  It is the features that are both supported by
+	// the client and the server, and currently in use.
+	// It is set during the initial handshake.
+	//
+	// It is only used for CapabilityClientDeprecateEOF
+	// and CapabilityClientFoundRows.
+	Capabilities uint32
+
+	// closed is set to true when Close() is called on the connection.
+	closed sync2.AtomicBool
+
+	// ConnectionID is set:
+	// - at Connect() time for clients, with the value returned by
+	// the server.
+	// - at accept time for the server.
+	ConnectionID uint32
+
+	// StatementID is the prepared statement ID.
+	StatementID uint32
+
+	// StatusFlags are the status flags we will base our returned flags on.
+	// This is a bit field, with values documented in constants.go.
+	// An interesting value here would be ServerStatusAutocommit.
+	// It is only used by the server. These flags can be changed
+	// by Handler methods.
+	StatusFlags uint16
+
+	// CharacterSet is the character set used by the other side of the
+	// connection.
+	// It is set during the initial handshake.
+	// See the values in constants.go.
+	CharacterSet uint8
+
+	// Packet encoding variables.
+	sequence uint8
 }
 
 // splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
@@ -185,12 +187,12 @@ var splitStatementFunction func(blob string) (pieces []string, err error) = sqlp
 
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
-	StatementID uint32
-	PrepareStmt string
-	ParamsCount uint16
 	ParamsType  []int32
 	ColumnNames []string
+	PrepareStmt string
 	BindVars    map[string]*querypb.BindVariable
+	StatementID uint32
+	ParamsCount uint16
 }
 
 // execResult is an enum signifying the result of executing a query
