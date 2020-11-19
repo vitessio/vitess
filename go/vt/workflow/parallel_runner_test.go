@@ -560,7 +560,7 @@ func triggerAction(ctx context.Context, m *Manager, nodePath, actionName string)
 
 func setupNotifications(m *Manager) (chan []byte, int, error) {
 	// Set up notifications channel to monitor UI updates.
-	notifications := make(chan []byte, 10)
+	notifications := make(chan []byte, 100)
 	_, index, err := m.NodeManager().GetAndWatchFullTree(notifications)
 	if err != nil {
 		return nil, -1, fmt.Errorf("GetAndWatchTree Failed: %v", err)

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -198,7 +199,7 @@ func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgate
 			sess.Target.TabletType == shardSession.Target.TabletType &&
 			sess.Target.Shard == shardSession.Target.Shard
 		if targetedAtSameTablet {
-			if sess.TabletAlias.Cell != shardSession.TabletAlias.Cell || sess.TabletAlias.Uid != shardSession.TabletAlias.Uid {
+			if !proto.Equal(sess.TabletAlias, shardSession.TabletAlias) {
 				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
 			}
 			// replace the old info with the new one
@@ -451,6 +452,13 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: unexpected commitOrder")
 	}
 	return nil
+}
+
+// SetDDLStrategy set the DDLStrategy setting.
+func (session *SafeSession) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.DDLStrategy = string(strategy)
 }
 
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.

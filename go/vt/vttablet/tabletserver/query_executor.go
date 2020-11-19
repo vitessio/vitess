@@ -203,9 +203,9 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
 	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
-		return qre.execSQL(conn, qre.query, true)
+		return qre.execStatefulConn(conn, qre.query, true)
 	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
-		return qre.execSQL(conn, qre.query, true)
+		return qre.execStatefulConn(conn, qre.query, true)
 	case planbuilder.PlanSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible, planbuilder.PlanShowTables:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
@@ -259,11 +259,11 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 		conn = dbConn
 	}
 
-	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.qe.streamQList.Add(qd)
-	defer qre.tsv.qe.streamQList.Remove(qd)
-
-	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, callback)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return err
+	}
+	return qre.execStreamSQL(conn, sql, callback)
 }
 
 // MessageStream streams messages from a message table.
@@ -380,7 +380,17 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		}
 	}()
 
-	result, err := qre.execSQL(conn, qre.query, true)
+	sql := qre.query
+	// If FullQuery is not nil, then the DDL query was fully parsed
+	// and we should use the ast to generate the query instead.
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, _, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +406,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 }
 
 func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {
-	result, err := qre.execSQL(conn, qre.query, true)
+	result, err := qre.execStatefulConn(conn, qre.query, true)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +443,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
 		_, err := qre.execAsTransaction(func(conn *StatefulConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
-			qr, err := qre.execSQL(conn, query, false)
+			qr, err := qre.execStatefulConn(conn, query, false)
 			if err != nil {
 				return nil, err
 			}
@@ -468,7 +478,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
 			conn.TxProperties().RecordQuery(query)
-			_, err = qre.execSQL(conn, query, false)
+			_, err = qre.execStatefulConn(conn, query, false)
 			if err != nil {
 				return nil, err
 			}
@@ -508,7 +518,12 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars)
+
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+	return qre.execDBConn(conn, sql, true)
 }
 
 func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -546,7 +561,7 @@ func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.execSQL(conn, qre.query, true)
+	return qre.execDBConn(conn, qre.query, true)
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
@@ -597,7 +612,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 				q.Err = err
 			} else {
 				defer conn.Recycle()
-				q.Result, q.Err = qre.execSQL(conn, sql, false)
+				q.Result, q.Err = qre.execDBConn(conn, sql, false)
 			}
 		} else {
 			logStats.QuerySources |= tabletenv.QuerySourceConsolidator
@@ -615,7 +630,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 		return nil, err
 	}
 	defer conn.Recycle()
-	res, err := qre.execSQL(conn, sql, false)
+	res, err := qre.execDBConn(conn, sql, false)
 	if err != nil {
 		return nil, err
 	}
@@ -628,7 +643,7 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 	if err != nil {
 		return nil, err
 	}
-	qr, err := qre.execSQL(conn, sql, true)
+	qr, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		return nil, err
 	}
@@ -637,24 +652,6 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 		conn.TxProperties().RecordQuery(sql)
 	}
 	return qr, nil
-}
-
-// dbConnFetch fetches from a connpool.DBConn.
-func (qre *QueryExecutor) dbConnFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	sql, _, err := qre.generateFinalSQL(parsedQuery, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	return qre.execSQL(conn, sql, true)
-}
-
-// streamFetch performs a streaming fetch.
-func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
-	sql, _, err := qre.generateFinalSQL(parsedQuery, bindVars)
-	if err != nil {
-		return err
-	}
-	return qre.execStreamSQL(conn, sql, callback)
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
@@ -681,16 +678,29 @@ func (qre *QueryExecutor) getSelectLimit() int64 {
 	return maxRows
 }
 
-// executor is an abstraction for reusing code in execSQL.
-type executor interface {
-	Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
-}
-
-func (qre *QueryExecutor) execSQL(conn executor, sql string, wantfields bool) (*sqltypes.Result, error) {
-	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execSQL")
+func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execDBConn")
 	defer span.Finish()
 
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
+
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	qre.tsv.statelessql.Add(qd)
+	defer qre.tsv.statelessql.Remove(qd)
+
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+}
+
+func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStatefulConn")
+	defer span.Finish()
+
+	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
+
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	qre.tsv.statefulql.Add(qd)
+	defer qre.tsv.statefulql.Remove(qd)
+
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
@@ -701,6 +711,10 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 		defer span.Finish()
 		return callback(result)
 	}
+
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	qre.tsv.olapql.Add(qd)
+	defer qre.tsv.olapql.Remove(qd)
 
 	start := time.Now()
 	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))

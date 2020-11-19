@@ -27,6 +27,28 @@ func TestCreateUUID(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestValidateDDLStrategy(t *testing.T) {
+	{
+		strategy, err := ValidateDDLStrategy("gh-ost")
+		assert.NoError(t, err)
+		assert.Equal(t, DDLStrategyGhost, strategy)
+	}
+	{
+		strategy, err := ValidateDDLStrategy("pt-osc")
+		assert.NoError(t, err)
+		assert.Equal(t, DDLStrategyPTOSC, strategy)
+	}
+	{
+		strategy, err := ValidateDDLStrategy("")
+		assert.NoError(t, err)
+		assert.Equal(t, DDLStrategyNormal, strategy)
+	}
+	{
+		_, err := ValidateDDLStrategy("other")
+		assert.Error(t, err)
+	}
+}
+
 func TestIsOnlineDDLUUID(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		uuid, err := CreateUUID()

@@ -71,7 +71,7 @@ type builder interface {
 	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error)
 
 	// MakeDistinct makes the primitive handle the distinct clause.
-	MakeDistinct() error
+	MakeDistinct() (builder, error)
 	// PushGroupBy makes the primitive handle the GROUP BY clause.
 	PushGroupBy(sqlparser.GroupBy) error
 
@@ -318,11 +318,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildDeletePlan)
 	case *sqlparser.Union:
 		return buildRoutePlan(stmt, vschema, buildUnionPlan)
-	case *sqlparser.DDL:
+	case sqlparser.DDLStatement:
 		if sqlparser.IsVschemaDDL(stmt) {
 			return buildVSchemaDDLPlan(stmt, vschema)
 		}
-		if sqlparser.IsOnlineSchemaDDL(stmt, query) {
+		if sqlparser.IsOnlineSchemaDDL(stmt) {
 			return buildOnlineDDLPlan(query, stmt, vschema)
 		}
 		return buildDDLPlan(query, stmt, vschema)

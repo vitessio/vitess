@@ -54,6 +54,17 @@ type (
 		SQLNode
 	}
 
+	// DDLStatement represents any DDL Statement
+	DDLStatement interface {
+		iDDLStatement()
+		GetOnlineHint() *OnlineDDLHint
+		IsFullyParsed() bool
+		GetTable() TableName
+		AffectedTables() TableNames
+		SetTable(qualifier string, name string)
+		Statement
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -249,6 +260,18 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// CreateIndex represents a CREATE INDEX query
+	CreateIndex struct {
+		Constraint  string
+		Name        ColIdent
+		OnlineHint  *OnlineDDLHint
+		IndexType   string
+		Table       TableName
+		Columns     []*IndexColumn
+		Options     []*IndexOption
+		FullyParsed bool
+	}
+
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
@@ -342,6 +365,68 @@ func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
+func (*CreateIndex) iStatement()       {}
+
+func (*DDL) iDDLStatement()         {}
+func (*CreateIndex) iDDLStatement() {}
+
+// IsFullyParsed implements the DDLStatement interface
+func (*DDL) IsFullyParsed() bool {
+	return false
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateIndex) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// GetOnlineHint implements the DDLStatement interface
+func (node *DDL) GetOnlineHint() *OnlineDDLHint {
+	return node.OnlineHint
+}
+
+// GetOnlineHint implements the DDLStatement interface
+func (node *CreateIndex) GetOnlineHint() *OnlineDDLHint {
+	return node.OnlineHint
+}
+
+// GetTable implements the DDLStatement interface
+func (node *CreateIndex) GetTable() TableName {
+	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *DDL) GetTable() TableName {
+	return node.Table
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *DDL) AffectedTables() TableNames {
+	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
+		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
+		list = append(list, node.FromTables...)
+		list = append(list, node.ToTables...)
+		return list
+	}
+	return TableNames{node.Table}
+}
+
+// AffectedTables implements DDLStatement.
+func (node *CreateIndex) AffectedTables() TableNames {
+	return TableNames{node.Table}
+}
+
+// SetTable implements DDLStatement.
+func (node *CreateIndex) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *DDL) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -470,11 +555,12 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Spatial bool
-	Unique  bool
+	Type     string
+	Name     ColIdent
+	Primary  bool
+	Spatial  bool
+	Fulltext bool
+	Unique   bool
 }
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
@@ -952,7 +1038,7 @@ type Order struct {
 	Direction OrderDirection
 }
 
-// OrderDirection is an enum for Order.Direction
+// OrderDirection is an enum for the direction in which to order - asc or desc.
 type OrderDirection int8
 
 // Limit represents a LIMIT clause.
@@ -1319,6 +1405,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.KeyOpt == colKeySpatialKey {
 		opts = append(opts, keywordStrings[SPATIAL], keywordStrings[KEY])
 	}
+	if ct.KeyOpt == colKeyFulltextKey {
+		opts = append(opts, keywordStrings[FULLTEXT], keywordStrings[KEY])
+	}
 	if ct.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
@@ -1340,13 +1429,16 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		if col.Length != nil {
 			buf.astPrintf(idx, "(%v)", col.Length)
 		}
+		if col.Direction == DescOrder {
+			buf.astPrintf(idx, " desc")
+		}
 	}
 	buf.astPrintf(idx, ")")
 
 	for _, opt := range idx.Options {
 		buf.astPrintf(idx, " %s", opt.Name)
-		if opt.Using != "" {
-			buf.astPrintf(idx, " %s", opt.Using)
+		if opt.String != "" {
+			buf.astPrintf(idx, " %s", opt.String)
 		} else {
 			buf.astPrintf(idx, " %v", opt.Value)
 		}
@@ -2150,4 +2242,39 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " character set %s", node.Charset)
 	}
 	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
+}
+
+// Format formats the node.
+func (node *CreateIndex) Format(buf *TrackedBuffer) {
+	buf.WriteString("create")
+	if node.Constraint != "" {
+		buf.WriteString(" " + node.Constraint)
+	}
+	buf.astPrintf(node, " index %v", node.Name)
+	if node.IndexType != "" {
+		buf.WriteString(" using " + node.IndexType)
+	}
+	buf.astPrintf(node, " on %v (", node.Table)
+	for i, col := range node.Columns {
+		if i != 0 {
+			buf.astPrintf(node, ", %v", col.Column)
+		} else {
+			buf.astPrintf(node, "%v", col.Column)
+		}
+		if col.Length != nil {
+			buf.astPrintf(node, "(%v)", col.Length)
+		}
+		if col.Direction == DescOrder {
+			buf.WriteString(" desc")
+		}
+	}
+	buf.astPrintf(node, ")")
+	for _, opt := range node.Options {
+		buf.WriteString(" " + strings.ToLower(opt.Name))
+		if opt.String != "" {
+			buf.WriteString(" " + opt.String)
+		} else {
+			buf.astPrintf(node, " %v", opt.Value)
+		}
+	}
 }
