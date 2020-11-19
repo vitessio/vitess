@@ -873,6 +873,15 @@ func (c *Conn) parseComStmtReset(data []byte) (uint32, bool) {
 	return val, ok
 }
 
+func (c *Conn) parseComStmtFetch(data []byte) (uint32, uint32, bool) {
+	stmtId, pos, ok := readUint32(data, 1)
+	if !ok {
+		return 0, 0, false
+	}
+	numRows, _, ok := readUint32(data, pos)
+	return stmtId, numRows, ok
+}
+
 func (c *Conn) parseComInitDB(data []byte) string {
 	return string(data[1:])
 }

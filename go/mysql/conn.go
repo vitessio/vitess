@@ -644,12 +644,12 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 // This method returns a generic error, not a SQLError.
 func (c *Conn) writeOKPacketWithInfo(affectedRows, lastInsertID uint64, flags uint16, warnings uint16, info string) error {
 	length := 1 + // OKPacket
-			lenEncIntSize(affectedRows) +
-			lenEncIntSize(lastInsertID) +
-			2 + // flags
-			2 + // warnings
-			1 + // 1 byte before info string
-			lenEOFString(info)
+		lenEncIntSize(affectedRows) +
+		lenEncIntSize(lastInsertID) +
+		2 + // flags
+		2 + // warnings
+		1 + // 1 byte before info string
+		lenEOFString(info)
 	data := c.startEphemeralPacket(length)
 	pos := 0
 	pos = writeByte(data, pos, OKPacket)
@@ -662,7 +662,6 @@ func (c *Conn) writeOKPacketWithInfo(affectedRows, lastInsertID uint64, flags ui
 
 	return c.writeEphemeralPacket()
 }
-
 
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
 // This is used at the end of a result set if
@@ -1124,6 +1123,17 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 			log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
 			return err
+		}
+
+	case ComStmtFetch:
+		_, _, _ = c.parseComStmtFetch(data)
+		c.recycleReadPacket()
+
+		err = fmt.Errorf("COM_STMT_FETCH is not suppported")
+		if werr := c.writeErrorPacketFromError(err); werr != nil {
+			// If we can't even write the error, we're done.
+			log.Errorf("Error writing query error to %s: %v", c, werr)
+			return werr
 		}
 
 	case ComResetConnection:
