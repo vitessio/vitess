@@ -270,14 +270,10 @@ func TestSelectNone(t *testing.T) {
 	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
 
 	vc.Rewind()
-
-	result, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, true)
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
-	})
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	require.Empty(t, vc.log)
+	expectResult(t, "sel.StreamExecute", result, nil)
 }
 
 func TestSelectEqualUniqueScatter(t *testing.T) {
