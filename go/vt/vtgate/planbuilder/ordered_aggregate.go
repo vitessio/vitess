@@ -66,14 +66,14 @@ type orderedAggregate struct {
 func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	rb, isRoute := pb.plan.(*route)
 	if isRoute && rb.isSingleShard() {
+		// since we can push down all of the aggregation to the route,
+		// we don't need to do anything else here
 		return nil
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := nodeHasAggregates(sel.SelectExprs)
-	if len(sel.GroupBy) > 0 {
-		hasAggregates = true
-	}
+	hasAggregates := nodeHasAggregates(sel.SelectExprs) || len(sel.GroupBy) > 0
+
 	if !hasAggregates && !sel.Distinct {
 		return nil
 	}

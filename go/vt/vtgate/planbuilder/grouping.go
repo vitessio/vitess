@@ -32,7 +32,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 	}
 
 	switch node := input.(type) {
-	case *mergeSort, *pulloutSubquery:
+	case *mergeSort, *pulloutSubquery, *distinct:
 		inputs := node.Inputs()
 		input := inputs[0]
 
@@ -41,7 +41,10 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			return nil, err
 		}
 		inputs[0] = newInput
-		node.Rewrite(inputs...)
+		err = node.Rewrite(inputs...)
+		if err != nil {
+			return nil, err
+		}
 		return node, nil
 	case *route:
 		node.Select.(*sqlparser.Select).GroupBy = groupBy
@@ -88,8 +91,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 
 		return node, nil
 	case *join:
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unupported: group by on cross-shard join")
-
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on cross-shard join")
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.groupBy: unreachable", input)
 }
@@ -132,7 +134,7 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 	case *subquery:
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: distinct on cross-shard subquery")
 	case *concatenate:
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "only union-all is supported for this operator")
+		return newDistinct(node), nil
 	case *join:
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: distinct on cross-shard join")
 	case *distinct:
