@@ -176,6 +176,14 @@ func replaceCreateIndexTable(newNode, parent SQLNode) {
 	parent.(*CreateIndex).Table = newNode.(TableName)
 }
 
+func replaceCreateViewColumns(newNode, parent SQLNode) {
+	parent.(*CreateView).Columns = newNode.(Columns)
+}
+
+func replaceCreateViewSelect(newNode, parent SQLNode) {
+	parent.(*CreateView).Select = newNode.(SelectStatement)
+}
+
 func replaceCreateViewViewName(newNode, parent SQLNode) {
 	parent.(*CreateView).ViewName = newNode.(TableName)
 }
@@ -1032,6 +1040,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Table, replaceCreateIndexTable)
 
 	case *CreateView:
+		a.apply(node, n.Columns, replaceCreateViewColumns)
+		a.apply(node, n.Select, replaceCreateViewSelect)
 		a.apply(node, n.ViewName, replaceCreateViewViewName)
 
 	case *CurTimeFuncExpr:

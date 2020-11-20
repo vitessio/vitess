@@ -274,11 +274,13 @@ type (
 
 	// CreateView represents a CREATE VIEW query
 	CreateView struct {
-		ViewName  TableName
-		Algorithm string
-		Definer   string
-		Security  string
-
+		ViewName    TableName
+		Algorithm   string
+		Definer     string
+		Security    string
+		Columns     Columns
+		Select      SelectStatement
+		CheckOption string
 		IsReplace   bool
 		FullyParsed bool
 	}
@@ -2328,7 +2330,13 @@ func (node *CreateView) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " definer = %s", node.Definer)
 	}
 	if node.Security != "" {
-		buf.astPrintf(node, " sql security = %s", node.Security)
+		buf.astPrintf(node, " sql security %s", node.Security)
 	}
 	buf.astPrintf(node, " view %v", node.ViewName)
+	if node.FullyParsed {
+		buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
+		if node.CheckOption != "" {
+			buf.astPrintf(node, " with %s check option", node.CheckOption)
+		}
+	}
 }
