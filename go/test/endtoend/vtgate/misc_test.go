@@ -414,13 +414,13 @@ func TestCreateView(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-
+	defer exec(t, conn, `delete from t1`)
 	// Test that create view works and the output is as expected
-	_, err = conn.ExecuteFetch(`create view ks.v1 as select * from t1`, 1000, true)
+	_, err = conn.ExecuteFetch(`create view v1 as select * from t1`, 1000, true)
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch(`insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`, 1000, true)
 	require.NoError(t, err)
-	assertMatches(t, conn, "select * from v1", "")
+	assertMatches(t, conn, "select * from v1", `[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)] [INT64(5) INT64(5)]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
