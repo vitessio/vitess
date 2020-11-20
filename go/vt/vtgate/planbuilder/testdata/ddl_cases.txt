@@ -131,3 +131,39 @@
     "SingleShardOnly": false
   }
 }
+
+# Create View
+"create view a as select* from user"
+{
+  "QueryType": "DDL",
+  "Original": "create view a as select* from user",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create view a as select * from user",
+    "SingleShardOnly": false
+  }
+}
+
+# create view with qualifier
+"create view user.a as select* from user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.a as select* from user",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create view a as select * from user",
+    "SingleShardOnly": false
+  }
+}

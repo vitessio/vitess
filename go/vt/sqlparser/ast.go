@@ -422,7 +422,7 @@ func (node *CreateIndex) GetTable() TableName {
 
 // GetTable implements the DDLStatement interface
 func (node *CreateView) GetTable() TableName {
-	return TableName{}
+	return node.ViewName
 }
 
 // GetTable implements the DDLStatement interface
@@ -464,7 +464,10 @@ func (node *DDL) SetTable(qualifier string, name string) {
 }
 
 // SetTable implements DDLStatement.
-func (node *CreateView) SetTable(qualifier string, name string) {}
+func (node *CreateView) SetTable(qualifier string, name string) {
+	node.ViewName.Qualifier = NewTableIdent(qualifier)
+	node.ViewName.Name = NewTableIdent(name)
+}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
