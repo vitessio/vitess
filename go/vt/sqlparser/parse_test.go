@@ -1175,6 +1175,20 @@ var (
 	}, {
 		input: "create or replace view a",
 	}, {
+		input: "create algorithm = merge sql security definer view a as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e with cascaded check option",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e with cascaded check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create algorithm = undefined sql security invoker view a unparsable",
+		output: "create algorithm = undefined sql security invoker view a",
+	}, {
 		input:  "alter view a",
 		output: "alter table a",
 	}, {

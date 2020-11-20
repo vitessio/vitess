@@ -247,7 +247,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
-%type <str> wild_opt
+%type <str> wild_opt check_option_opt cascade_or_local_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <bytes> explain_synonyms
@@ -296,7 +296,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt using_opt
 %type <lock> lock_opt
-%type <columns> ins_column_list column_list
+%type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -696,9 +696,12 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
-| create_view_prefix ddl_skip_to_end
+| create_view_prefix column_list_opt AS select_statement check_option_opt
   {
     $1.FullyParsed = true
+    $1.Columns = $2
+    $1.Select = $4
+    $1.CheckOption = $5
     $$ = $1
   }
 | CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
@@ -2328,6 +2331,15 @@ table_name as_opt_id index_hint_list
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
 
+column_list_opt:
+  {
+    $$ = nil
+  }
+| '(' column_list ')'
+  {
+    $$ = $2
+  }
+
 column_list:
   sql_id
   {
@@ -3424,6 +3436,27 @@ security_view:
     $$ = string($1)
   }
 
+check_option_opt:
+  {
+    $$ = ""
+  }
+| WITH cascade_or_local_opt CHECK OPTION
+  {
+    $$ = $2
+  }
+
+cascade_or_local_opt:
+  {
+    $$ = "cascaded"
+  }
+| CASCADED
+  {
+    $$ = string($1)
+  }
+| LOCAL
+  {
+    $$ = string($1)
+  }
 
 //define_opt:
 //  {
@@ -4008,6 +4041,7 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| WITH
 | WHEN
 | WHERE
 | WINDOW
@@ -4227,7 +4261,6 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA
 | WARNINGS
-| WITH
 | WRITE
 | YEAR
 | ZEROFILL
