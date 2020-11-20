@@ -654,6 +654,19 @@ options:PassthroughDMLs
   "FullQuery":"create index a on b (id)"
 }
 
+# create view
+"create view a as select * from b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"create view a as select * from b"
+}
 
 # alter
 "alter table a add column(a int)"

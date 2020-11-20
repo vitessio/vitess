@@ -1171,11 +1171,15 @@ var (
 		output:     "create index a on b ()",
 		partialDDL: true,
 	}, {
-		input: "create view a",
+		input:      "create view a",
+		partialDDL: true,
 	}, {
-		input: "create or replace view a",
+		input:      "create or replace view a",
+		partialDDL: true,
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
+	}, {
+		input: "create view ks.a as select * from e",
 	}, {
 		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e",
 		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e",
@@ -1186,8 +1190,9 @@ var (
 		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
 		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
 	}, {
-		input:  "create algorithm = undefined sql security invoker view a unparsable",
-		output: "create algorithm = undefined sql security invoker view a",
+		input:      "create algorithm = undefined sql security invoker view a unparsable",
+		output:     "create algorithm = undefined sql security invoker view a",
+		partialDDL: true,
 	}, {
 		input:  "alter view a",
 		output: "alter table a",
@@ -1789,6 +1794,8 @@ func TestValid(t *testing.T) {
 			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
 			switch x := tree.(type) {
 			case *CreateIndex:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			case *CreateView:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			}
 			// This test just exercises the tree walking functionality.

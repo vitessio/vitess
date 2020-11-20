@@ -30,11 +30,14 @@ func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchem
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", stmt.GetTable().Name.String())
 		}
 		stmt.SetTable("", table.Name.String())
-	case *sqlparser.DDL:
+	case *sqlparser.DDL, *sqlparser.CreateView:
+		// For Create View, etc it is only required that the keyspace exist
+		// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 		destination, keyspace, _, err = vschema.TargetDestination(stmt.GetTable().Qualifier.String())
 		if err != nil {
 			return nil, err
 		}
+		stmt.SetTable("", stmt.GetTable().Name.String())
 	}
 
 	if destination == nil {
