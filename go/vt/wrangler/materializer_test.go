@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "")
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -73,6 +74,101 @@ func TestMigrateTables(t *testing.T) {
 	for _, wantstr := range want {
 		require.Contains(t, got, wantstr)
 	}
+}
+
+func TestMissingTables(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t2",
+		}, {
+			TargetTable:      "t3",
+			SourceExpression: "select * from t3",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+	ctx := context.Background()
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "")
+	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "")
+	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "")
+	require.NoError(t, err)
+}
+
+func TestMoveTablesAllAndExclude(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t2",
+		}, {
+			TargetTable:      "t3",
+			SourceExpression: "select * from t3",
+		}},
+	}
+
+	ctx := context.Background()
+	var err error
+
+	var targetTables = func(env *testMaterializerEnv) []string {
+		vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
+		require.NoError(t, err)
+		var targetTables []string
+		for table := range vschema.Keyspaces["targetks"].Tables {
+			targetTables = append(targetTables, table)
+		}
+		sort.Strings(targetTables)
+		return targetTables
+	}
+	allTables := []string{"t1", "t2", "t3"}
+	sort.Strings(allTables)
+
+	type testCase struct {
+		allTables     bool
+		excludeTables string
+		want          []string
+	}
+	testCases := []*testCase{
+		{true, "", allTables},
+		{true, "t2,t3", []string{"t1"}},
+		{true, "t1", []string{"t2", "t3"}},
+	}
+	for _, tcase := range testCases {
+		t.Run("", func(t *testing.T) {
+			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			defer env.close()
+			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables)
+			require.NoError(t, err)
+			require.EqualValues(t, tcase.want, targetTables(env))
+		})
+
+	}
+
 }
 
 func TestMigrateVSchema(t *testing.T) {
@@ -95,7 +191,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "")
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
