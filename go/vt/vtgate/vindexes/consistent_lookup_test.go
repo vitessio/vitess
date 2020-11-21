@@ -452,7 +452,6 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 		{querypb.Type_CHAR, "some string"},
 		{querypb.Type_BIT, "some string"},
 		{querypb.Type_GEOMETRY, "some string"},
-		{querypb.Type_JSON, "some string"},
 	}
 
 	for _, val := range tests {
