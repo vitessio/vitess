@@ -40,6 +40,7 @@ type TabletExecutor struct {
 	allowBigSchemaChange bool
 	keyspace             string
 	waitReplicasTimeout  time.Duration
+	ddlStrategy          string
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
@@ -62,6 +63,15 @@ func (exec *TabletExecutor) AllowBigSchemaChange() {
 // TabletExecutor will reject these.
 func (exec *TabletExecutor) DisallowBigSchemaChange() {
 	exec.allowBigSchemaChange = false
+}
+
+// SetDDLStrategy applies ddl_strategy from command line flags
+func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
+	if _, _, err := schema.ParseDDLStrategy(ddlStrategy); err != nil {
+		return err
+	}
+	exec.ddlStrategy = ddlStrategy
+	return nil
 }
 
 // Open opens a connection to the master for every shard.
@@ -140,6 +150,21 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlpa
 	return parsedDDLs, parsedDBDDLs, nil
 }
 
+// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
+func (exec *TabletExecutor) isOnlineSchemaDDL(ddl *sqlparser.DDL) (isOnline bool, strategy sqlparser.DDLStrategy, options string) {
+	if ddl.Action != sqlparser.AlterDDLAction {
+		return false, strategy, options
+	}
+	strategy, options, _ = schema.ParseDDLStrategy(exec.ddlStrategy)
+	if strategy != schema.DDLStrategyNormal {
+		return true, strategy, options
+	}
+	if ddl.OnlineHint != nil {
+		return ddl.OnlineHint.Strategy != schema.DDLStrategyNormal, ddl.OnlineHint.Strategy, ddl.OnlineHint.Options
+	}
+	return false, strategy, options
+}
+
 // a schema change that satisfies any following condition is considered
 // to be a big schema change and will be rejected.
 //   1. Alter more than 100,000 rows.
@@ -159,16 +184,13 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
 	for _, ddl := range parsedDDLs {
+		if isOnline, _, _ := exec.isOnlineSchemaDDL(ddl); isOnline {
+			// Since this is an online schema change, there is no need to worry about big changes
+			continue
+		}
 		switch ddl.Action {
 		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
 			continue
-		case sqlparser.AlterDDLAction:
-			if ddl.OnlineHint != nil {
-				if ddl.OnlineHint.Strategy != schema.DDLStrategyNormal {
-					// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
-					continue
-				}
-			}
 		}
 		tableName := ddl.Table.Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
@@ -248,13 +270,8 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		tableName := ""
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
-			if ddl.Action == sqlparser.AlterDDLAction {
-				if ddl.OnlineHint != nil {
-					strategy = ddl.OnlineHint.Strategy
-					options = ddl.OnlineHint.Options
-				}
-			}
 			tableName = ddl.Table.Name.String()
+			_, strategy, options = exec.isOnlineSchemaDDL(ddl)
 		}
 		exec.wr.Logger().Infof("Received DDL request. strategy = %+v", strategy)
 		exec.executeOnAllTablets(ctx, &execResult, sql, tableName, strategy, options)

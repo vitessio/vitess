@@ -58,7 +58,7 @@ var (
 		ADD COLUMN non_online INT UNSIGNED NOT NULL`
 	// A trivial statement which must succeed and does not change the schema
 	alterTableTrivialStatement = `
-		ALTER WITH 'gh-ost' TABLE %s
+		ALTER TABLE %s
 		ENGINE=InnoDB`
 	// The following statement is valid
 	alterTableSuccessfulStatement = `
@@ -208,7 +208,11 @@ func testAlterTable(t *testing.T, alterStatement string, ddlStrategy string, exe
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery)
+		ddlStrategyArg := ""
+		if ddlStrategy != ddlStrategyUnchanged {
+			ddlStrategyArg = ddlStrategy
+		}
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategyArg)
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
