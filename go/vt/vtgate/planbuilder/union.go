@@ -53,10 +53,6 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 		}
 		err := unionRouteMerge(pb.bldr, rpb.bldr, us)
 		if err != nil {
-			if us.Distinct {
-				return err
-			}
-
 			// we are merging between two routes - let's check if we can see so that we have the same amount of columns on both sides of the union
 			lhsCols := len(pb.bldr.ResultColumns())
 			rhsCols := len(rpb.bldr.ResultColumns())
@@ -72,6 +68,10 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 			pb.bldr = &concatenate{
 				lhs: pb.bldr,
 				rhs: rpb.bldr,
+			}
+
+			if us.Distinct {
+				pb.bldr = newDistinct(pb.bldr)
 			}
 		}
 		pb.st.Outer = outer
@@ -132,6 +132,7 @@ func checkOrderByAndLimit(part *sqlparser.Select) error {
 	return nil
 }
 
+// TODO (systay) we never use this as an actual error. we should rethink the return type
 func unionRouteMerge(left, right builder, us *sqlparser.UnionSelect) error {
 	lroute, ok := left.(*route)
 	if !ok {

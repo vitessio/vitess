@@ -168,6 +168,14 @@ func replaceConvertUsingExprExpr(newNode, parent SQLNode) {
 	parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 }
 
+func replaceCreateIndexName(newNode, parent SQLNode) {
+	parent.(*CreateIndex).Name = newNode.(ColIdent)
+}
+
+func replaceCreateIndexTable(newNode, parent SQLNode) {
+	parent.(*CreateIndex).Table = newNode.(TableName)
+}
+
 func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 }
@@ -1014,6 +1022,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *ConvertUsingExpr:
 		a.apply(node, n.Expr, replaceConvertUsingExprExpr)
+
+	case *CreateIndex:
+		a.apply(node, n.Name, replaceCreateIndexName)
+		a.apply(node, n.Table, replaceCreateIndexTable)
 
 	case *CurTimeFuncExpr:
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)

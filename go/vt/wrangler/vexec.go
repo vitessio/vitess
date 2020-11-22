@@ -278,6 +278,7 @@ func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
 
 // WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+
 	if action == "show" {
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
 		if err != nil {
@@ -286,11 +287,11 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		err = dumpStreamListAsJSON(replStatus, wr)
 		return nil, err
 	} else if action == "listall" {
-		workflows, err := wr.ListAllWorkflows(ctx, keyspace)
+		workflows, err := wr.ListAllWorkflows(ctx, keyspace, false)
 		if err != nil {
 			return nil, err
 		}
-		wr.printWorkflowList(workflows)
+		wr.printWorkflowList(keyspace, workflows)
 		return nil, err
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
@@ -464,6 +465,9 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	for master, result := range results {
 		var rsrStatus []*ReplicationStatus
 		qr := sqltypes.Proto3ToResult(result)
+		if len(qr.Rows) == 0 {
+			continue
+		}
 		for _, row := range qr.Rows {
 			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, master)
 			if err != nil {
@@ -502,9 +506,18 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	return &rsr, nil
 }
 
-// ListAllWorkflows will return a list of all active workflows for the given keyspace.
-func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string) ([]string, error) {
-	query := "select distinct workflow from _vt.vreplication where state <> 'Stopped'"
+// ListActiveWorkflows will return a list of all active workflows for the given keyspace.
+func (wr *Wrangler) ListActiveWorkflows(ctx context.Context, keyspace string) ([]string, error) {
+	return wr.ListAllWorkflows(ctx, keyspace, true)
+}
+
+// ListAllWorkflows will return a list of all workflows (Running and Stopped) for the given keyspace.
+func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, active bool) ([]string, error) {
+	where := ""
+	if active {
+		where = " where state <> 'Stopped'"
+	}
+	query := "select distinct workflow from _vt.vreplication" + where
 	results, err := wr.runVexec(ctx, "", keyspace, query, false)
 	if err != nil {
 		return nil, err
@@ -559,12 +572,13 @@ func dumpStreamListAsJSON(replStatus *ReplicationStatusResult, wr *Wrangler) err
 	return nil
 }
 
-func (wr *Wrangler) printWorkflowList(workflows []string) {
+func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	list := strings.Join(workflows, ", ")
 	if list == "" {
+		wr.Logger().Printf("No workflows found in keyspace %s", keyspace)
 		return
 	}
-	wr.Logger().Printf("Workflows: %v", list)
+	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)
 }
 
 func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {

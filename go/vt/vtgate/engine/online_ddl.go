@@ -32,7 +32,7 @@ var _ Primitive = (*OnlineDDL)(nil)
 //OnlineDDL represents the instructions to perform an online schema change via vtctld
 type OnlineDDL struct {
 	Keyspace *vindexes.Keyspace
-	DDL      *sqlparser.DDL
+	DDL      sqlparser.DDLStatement
 	SQL      string
 	Strategy sqlparser.DDLStrategy
 	Options  string
@@ -47,7 +47,7 @@ func (v *OnlineDDL) description() PrimitiveDescription {
 		OperatorType: "OnlineDDL",
 		Keyspace:     v.Keyspace,
 		Other: map[string]interface{}{
-			"query": sqlparser.String(v.DDL),
+			"query": v.SQL,
 		},
 	}
 }
@@ -64,7 +64,7 @@ func (v *OnlineDDL) GetKeyspaceName() string {
 
 //GetTableName implements the Primitive interface
 func (v *OnlineDDL) GetTableName() string {
-	return v.DDL.Table.Name.String()
+	return v.DDL.GetTable().Name.String()
 }
 
 //Execute implements the Primitive interface
