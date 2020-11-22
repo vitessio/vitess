@@ -1,6 +1,8 @@
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -9,7 +11,6 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
@@ -51,8 +52,8 @@ func buildDDLPlan(sql string, ddlStatement *sqlparser.DDL, vschema ContextVSchem
 
 	query := sql
 	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
-	if stmt.IsFullyParsed() {
-		query = sqlparser.String(stmt)
+	if ddlStatement.IsFullyParsed() {
+		query = sqlparser.String(ddlStatement)
 	}
 
 	return &engine.Send{

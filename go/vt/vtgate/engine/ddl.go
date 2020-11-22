@@ -68,11 +68,11 @@ func (v *DDL) GetTableName() string {
 }
 
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func (v *DDL) IsOnlineSchemaDDL() bool {
+func (v *DDL) isOnlineSchemaDDL() bool {
 	switch v.DDL.Action {
 	case sqlparser.AlterDDLAction:
-		if v.DDL.OnlineHint != nil {
-			return v.DDL.OnlineHint.Strategy != ""
+		if v.DDL.GetOnlineHint() != nil {
+			return v.DDL.GetOnlineHint().Strategy != ""
 		}
 	}
 	return false
@@ -80,19 +80,19 @@ func (v *DDL) IsOnlineSchemaDDL() bool {
 
 //Execute implements the Primitive interface
 func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	if !v.IsOnlineSchemaDDL() {
+	if !v.isOnlineSchemaDDL() {
 		strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
 		if err != nil {
 			return nil, err
 		}
 		v.OnlineDDL.Strategy = strategy
 		v.OnlineDDL.Options = options
-		v.OnlineDDL.DDL.OnlineHint = &sqlparser.OnlineDDLHint{
+		v.OnlineDDL.DDL.SetOnlineHint(&sqlparser.OnlineDDLHint{
 			Strategy: strategy,
 			Options:  options,
-		}
+		})
 	}
-	if v.IsOnlineSchemaDDL() {
+	if v.isOnlineSchemaDDL() {
 		return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}
 
