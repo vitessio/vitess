@@ -19,11 +19,6 @@ import (
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
-	if ddlStatement.IsFullyParsed() {
-		sql = sqlparser.String(ddlStatement)
-	}
-
 	normalDDLPlan, err := buildDDLPlan(sql, ddlStatement, vschema)
 	if err != nil {
 		return nil, err
@@ -32,10 +27,15 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschem
 	if err != nil {
 		return nil, err
 	}
+	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
+	if ddlStatement.IsFullyParsed() {
+		query = sqlparser.String(ddlStatement)
+	}
 
 	return &engine.DDL{
 		Keyspace:  normalDDLPlan.Keyspace,
-		SQL:       sql,
+		SQL:       query,
 		DDL:       ddlStatement,
 		NormalDDL: normalDDLPlan,
 		OnlineDDL: onlineDDLPlan,
@@ -72,10 +72,16 @@ func buildDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema Conte
 		destination = key.DestinationAllShards{}
 	}
 
+	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
+	if ddlStatement.IsFullyParsed() {
+		query = sqlparser.String(ddlStatement)
+	}
+
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             sql,
+		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   false,
 	}, nil
