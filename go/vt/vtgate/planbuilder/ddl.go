@@ -1,8 +1,6 @@
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -20,31 +18,55 @@ import (
 // a session context. It's only when we Execute() the primitive that we have that context.
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
-func buildGeneralDDLPlan(sql string, in sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
-	ddlStatement := in.(*sqlparser.DDL)
-	destination, keyspace, _, err := vschema.TargetDestination(ddlStatement.Table.Qualifier.String())
+func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	normalDDLPlan, err := buildDDLPlan(sql, ddlStatement, vschema)
 	if err != nil {
 		return nil, err
 	}
-	normalDDLPlan, err := buildDDLPlan(sql, ddlStatement, vschema, destination, keyspace)
+	onlineDDLPlan, err := buildOnlineDDLPlan(sql, ddlStatement, vschema)
 	if err != nil {
 		return nil, err
 	}
-	onlineDDLPlan, err := buildOnlineDDLPlan(sql, ddlStatement, vschema, keyspace)
-	if err != nil {
-		return nil, err
+	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
+	if ddlStatement.IsFullyParsed() {
+		query = sqlparser.String(ddlStatement)
 	}
+
 	return &engine.DDL{
-		Keyspace:  keyspace,
-		SQL:       sql,
+		Keyspace:  normalDDLPlan.Keyspace,
+		SQL:       query,
 		DDL:       ddlStatement,
 		NormalDDL: normalDDLPlan,
 		OnlineDDL: onlineDDLPlan,
 	}, nil
 }
 
-func buildDDLPlan(sql string, ddlStatement *sqlparser.DDL, vschema ContextVSchema, destination key.Destination, keyspace *vindexes.Keyspace) (*engine.Send, error) {
-	// This method call will validate the destination != nil check.
+func buildDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (*engine.Send, error) {
+	var table *vindexes.Table
+	var destination key.Destination
+	var keyspace *vindexes.Keyspace
+	var err error
+
+	switch ddlStatement.(type) {
+	case *sqlparser.CreateIndex:
+		// For Create index, the table must already exist
+		// We should find the target of the query from this tables location
+		table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
+		keyspace = table.Keyspace
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", ddlStatement.GetTable().Name.String())
+		}
+		ddlStatement.SetTable("", table.Name.String())
+	case *sqlparser.DDL:
+		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if destination == nil {
 		destination = key.DestinationAllShards{}
@@ -65,17 +87,22 @@ func buildDDLPlan(sql string, ddlStatement *sqlparser.DDL, vschema ContextVSchem
 	}, nil
 }
 
-func buildOnlineDDLPlan(query string, ddlStatement *sqlparser.DDL, vschema ContextVSchema, keyspace *vindexes.Keyspace) (*engine.OnlineDDL, error) {
+func buildOnlineDDLPlan(query string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (*engine.OnlineDDL, error) {
+	_, keyspace, _, err := vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+
 	strategy := schema.DDLStrategyNormal
 	options := ""
-	if ddlStatement.OnlineHint != nil {
-		strategy = ddlStatement.OnlineHint.Strategy
-		options = ddlStatement.OnlineHint.Options
+	if ddlStatement.GetOnlineHint() != nil {
+		strategy = ddlStatement.GetOnlineHint().Strategy
+		options = ddlStatement.GetOnlineHint().Options
 	}
 	switch strategy {
 	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC, schema.DDLStrategyNormal: // OK, do nothing
 	default:
-		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", ddlStatement.OnlineHint.Strategy)
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown online DDL strategy: '%v'", strategy)
 	}
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,

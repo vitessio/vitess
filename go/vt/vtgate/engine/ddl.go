@@ -32,7 +32,7 @@ var _ Primitive = (*DDL)(nil)
 type DDL struct {
 	Keyspace *vindexes.Keyspace
 	SQL      string
-	DDL      *sqlparser.DDL
+	DDL      sqlparser.DDLStatement
 
 	NormalDDL *Send
 	OnlineDDL *OnlineDDL
@@ -64,12 +64,12 @@ func (v *DDL) GetKeyspaceName() string {
 
 //GetTableName implements the Primitive interface
 func (v *DDL) GetTableName() string {
-	return v.DDL.Table.Name.String()
+	return v.DDL.GetTable().Name.String()
 }
 
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func (v *DDL) isOnlineSchemaDDL() bool {
-	switch v.DDL.Action {
+	switch v.DDL.GetAction() {
 	case sqlparser.AlterDDLAction:
 		if v.DDL.GetOnlineHint() != nil {
 			return v.DDL.GetOnlineHint().Strategy != ""

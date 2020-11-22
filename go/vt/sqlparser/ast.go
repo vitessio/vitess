@@ -61,6 +61,7 @@ type (
 		SetOnlineHint(*OnlineDDLHint)
 		IsFullyParsed() bool
 		GetTable() TableName
+		GetAction() DDLAction
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		Statement
@@ -386,14 +387,14 @@ func (node *DDL) GetOnlineHint() *OnlineDDLHint {
 	return node.OnlineHint
 }
 
-// SetOnlineHint implements the DDLStatement interface
-func (node *DDL) SetOnlineHint(hint *OnlineDDLHint) {
-	node.OnlineHint = hint
-}
-
 // GetOnlineHint implements the DDLStatement interface
 func (node *CreateIndex) GetOnlineHint() *OnlineDDLHint {
 	return node.OnlineHint
+}
+
+// SetOnlineHint implements the DDLStatement interface
+func (node *DDL) SetOnlineHint(hint *OnlineDDLHint) {
+	node.OnlineHint = hint
 }
 
 // SetOnlineHint implements the DDLStatement interface
@@ -409,6 +410,16 @@ func (node *CreateIndex) GetTable() TableName {
 // GetTable implements the DDLStatement interface
 func (node *DDL) GetTable() TableName {
 	return node.Table
+}
+
+// GetAction implements the DDLStatement interface
+func (node *CreateIndex) GetAction() DDLAction {
+	return AlterDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *DDL) GetAction() DDLAction {
+	return node.Action
 }
 
 // AffectedTables returns the list table names affected by the DDLStatement.
