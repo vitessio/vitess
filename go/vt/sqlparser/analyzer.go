@@ -74,7 +74,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case *DDL, *DBDDL:
+	case DDLStatement, *DBDDL:
 		return StmtDDL
 	case *Use:
 		return StmtUse
@@ -256,10 +256,13 @@ func IsDMLStatement(stmt Statement) bool {
 }
 
 //IsVschemaDDL returns true if the query is an Vschema alter ddl.
-func IsVschemaDDL(ddl *DDL) bool {
-	switch ddl.Action {
-	case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
-		return true
+func IsVschemaDDL(ddl DDLStatement) bool {
+	switch ddlStatement := ddl.(type) {
+	case *DDL:
+		switch ddlStatement.Action {
+		case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
+			return true
+		}
 	}
 	return false
 }

@@ -280,6 +280,13 @@ To run against a specific compose service/container, use the environment variabl
 vitess/examples/compose$ (export CS=vttablet101; ./lvtctl.sh <args> )
 ```
 
+## Custom Image Tags
+You  may specify a custom `vitess:lite` image tag by setting the evnironment variable `VITESS_TAG`.  
+This is optional and defaults to the `latest` tag. Example;
+* Set `VITESS_TAG=8.0.0` in your `.env` before running `docker-compose up -d`
+* Run `VITESS_TAG=8.0.0; docker-compose up -d`
+
+
 ## Reference
 Checkout this excellent post about [The Life of a Vitess Cluster](https://vitess.io/blog/2020-04-27-life-of-a-cluster/)
 

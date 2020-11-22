@@ -160,6 +160,11 @@ const (
 	// clause using a Vindex. Requires: A Vindex,
 	// and a Values list.
 	SelectIN
+	// SelectMultiEqual is the opcode for routing a query
+	// based on multiple vindex input values, similar to
+	// SelectIN, but the query sent to each shard is the
+	// same.
+	SelectMultiEqual
 	// SelectScatter is for routing a scatter query
 	// to all shards of a keyspace.
 	SelectScatter
@@ -180,6 +185,7 @@ var routeName = map[RouteOpcode]string{
 	SelectEqualUnique: "SelectEqualUnique",
 	SelectEqual:       "SelectEqual",
 	SelectIN:          "SelectIN",
+	SelectMultiEqual:  "SelectMultiEqual",
 	SelectScatter:     "SelectScatter",
 	SelectNext:        "SelectNext",
 	SelectDBA:         "SelectDBA",
@@ -245,6 +251,8 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
 	case SelectIN:
 		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
+	case SelectMultiEqual:
+		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
 	case SelectNone:
 		rss, bvs, err = nil, nil, nil
 	default:
@@ -308,6 +316,10 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
 	case SelectIN:
 		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
+	case SelectMultiEqual:
+		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
+	case SelectNone:
+		rss, bvs, err = nil, nil, nil
 	default:
 		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
 	}
@@ -516,6 +528,22 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 	return rss, shardVars(bindVars, values), nil
 }
 
+func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	keys, err := route.Values[0].ResolveList(bindVars)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
+	}
+	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
+	if err != nil {
+		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
+	}
+	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range multiBindVars {
+		multiBindVars[i] = bindVars
+	}
+	return rss, multiBindVars, nil
+}
+
 func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
@@ -690,6 +718,10 @@ func (route *Route) description() PrimitiveDescription {
 	if route.SysTableTableName != nil {
 		other["SysTableTableName"] = route.SysTableTableName.String()
 	}
+	orderBy := GenericJoin(route.OrderBy, orderByToString)
+	if orderBy != "" {
+		other["OrderBy"] = orderBy
+	}
 
 	return PrimitiveDescription{
 		OperatorType:      "Route",
@@ -698,6 +730,10 @@ func (route *Route) description() PrimitiveDescription {
 		TargetDestination: route.TargetDestination,
 		Other:             other,
 	}
+}
+
+func orderByToString(in interface{}) string {
+	return in.(OrderbyParams).String()
 }
 
 // BvTableName is used to fill in the table name for information_schema queries with routed tables

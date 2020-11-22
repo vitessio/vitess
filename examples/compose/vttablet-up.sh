@@ -130,7 +130,6 @@ if [ $tablet_role = "externalmaster" ]; then
                       -db_filtered_password $DB_PASS \
                       -db_repl_user $DB_USER \
                       -db_repl_password $DB_PASS \
-                      -init_populate_metadata=true \
                       -enable_replication_reporter=false \
                       -enforce_strict_trans_tables=false \
                       -track_schema_versions=true \

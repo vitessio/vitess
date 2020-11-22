@@ -1,7 +1,9 @@
 package planbuilder
 
 import (
-	"fmt"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/schema"
@@ -47,10 +49,16 @@ func buildDDLPlan(sql string, ddlStatement *sqlparser.DDL, vschema ContextVSchem
 		destination = key.DestinationAllShards{}
 	}
 
+	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
+	if stmt.IsFullyParsed() {
+		query = sqlparser.String(stmt)
+	}
+
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             sql, //This is original sql query to be passed as the parser can provide partial ddl AST.
+		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   false,
 	}, nil
@@ -77,7 +85,11 @@ func buildOnlineDDLPlan(query string, ddlStatement *sqlparser.DDL, vschema Conte
 	}, nil
 }
 
-func buildVSchemaDDLPlan(stmt *sqlparser.DDL, vschema ContextVSchema) (engine.Primitive, error) {
+func buildVSchemaDDLPlan(ddlStmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	stmt, ok := ddlStmt.(*sqlparser.DDL)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "Incorrect type %T", ddlStmt)
+	}
 	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
 	if err != nil {
 		return nil, err

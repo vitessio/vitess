@@ -380,7 +380,17 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		}
 	}()
 
-	result, err := qre.execStatefulConn(conn, qre.query, true)
+	sql := qre.query
+	// If FullQuery is not nil, then the DDL query was fully parsed
+	// and we should use the ast to generate the query instead.
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, _, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return nil, err
+		}
+	}
+	result, err := qre.execStatefulConn(conn, sql, true)
 	if err != nil {
 		return nil, err
 	}
