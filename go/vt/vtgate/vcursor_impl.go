@@ -318,6 +318,16 @@ func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	return kss[keys[0]].Keyspace, nil
 }
 
+// SysVarSetEnabled implements the ContextVSchema interface
+func (vc *vcursorImpl) SysVarSetEnabled() bool {
+	return *sysVarSetEnabled
+}
+
+// KeyspaceExists provides whether the keyspace exists or not.
+func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
+	return vc.vschema.Keyspaces[ks] != nil
+}
+
 // TargetString returns the current TargetString of the session.
 func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
@@ -574,15 +584,15 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
-// SysVarSetEnabled implements the SessionActions interface
-func (vc *vcursorImpl) SysVarSetEnabled() bool {
-	return *sysVarSetEnabled
-}
-
 // SetFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.FoundRows = foundRows
 	vc.safeSession.foundRowsHandled = true
+}
+
+// SetReadAfterWriteGTID implements the SessionActions interface
+func (vc *vcursorImpl) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
+	vc.safeSession.SetDDLStrategy(strategy)
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface

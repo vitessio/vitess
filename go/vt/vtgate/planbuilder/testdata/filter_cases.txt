@@ -143,6 +143,299 @@
   }
 }
 
+# Composite IN clause
+"select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user",
+    "Values": [
+      [
+        "aa",
+        "cc"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN clause, swapped columns
+"select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user",
+    "Values": [
+      [
+        "bb",
+        "dd"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN clause, choose cost within tuple
+"select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user",
+    "Values": [
+      [
+        "bb",
+        "dd"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN clause, choose cost within tuple, swapped
+"select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user",
+    "Values": [
+      [
+        "aa",
+        "cc"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN clause, choose cost
+"select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
+    "Table": "user",
+    "Values": [
+      [
+        "dd"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN clause vs equality
+"select id from user where (col, name) in (('aa', 'bb')) and id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col, name) in (('aa', 'bb')) and id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (col, name) in (('aa', 'bb')) and id = 5",
+    "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# Composite IN: multiple vindex matches
+"select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "user",
+    "Values": [
+      [
+        "bb",
+        "dd"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN: tuple inside tuple
+"select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
+    "Table": "user",
+    "Values": [
+      [
+        "bb",
+        "ee"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN: tuple inside tuple, but no match in tuple
+"select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectMultiEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
+    "Table": "user",
+    "Values": [
+      [
+        "aa",
+        "dd"
+      ]
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# Composite IN: tuple inside tuple, mismiatched values
+"select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
+    "Table": "user"
+  }
+}
+
+# Composite IN: RHS not tuple
+"select id from user where (col1, name) in (select * from music where music.user_id=user.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col1, name) in (select * from music where music.user_id=user.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (col1, name) in (select * from music where music.user_id = user.id)",
+    "Table": "user"
+  }
+}
+
+# Composite IN: RHS has no simple values
+"select id from user where (col1, name) in (('aa', 1+1))"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col1, name) in (('aa', 1+1))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user where (col1, name) in (('aa', 1 + 1))",
+    "Table": "user"
+  }
+}
+
+# IN clause: LHS is neither column nor composite tuple
+"select Id from user where 1 in ('aa', 'bb')"
+{
+  "QueryType": "SELECT",
+  "Original": "select Id from user where 1 in ('aa', 'bb')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select Id from user where 1 != 1",
+    "Query": "select Id from user where 1 in ('aa', 'bb')",
+    "Table": "user"
+  }
+}
+
 # Single table complex in clause
 "select id from user where name in (col, 'bb')"
 {
@@ -1480,4 +1773,3 @@
     "SysTableTableSchema": "VARBINARY(\"ks\")"
   }
 }
-                

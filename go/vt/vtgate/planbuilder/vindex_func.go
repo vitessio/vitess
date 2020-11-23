@@ -156,8 +156,8 @@ func (vf *vindexFunc) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExp
 }
 
 // MakeDistinct satisfies the builder interface.
-func (vf *vindexFunc) MakeDistinct() error {
-	return errors.New("unsupported: distinct on vindex function")
+func (vf *vindexFunc) MakeDistinct() (builder, error) {
+	return nil, errors.New("unsupported: distinct on vindex function")
 }
 
 // PushGroupBy satisfies the builder interface.

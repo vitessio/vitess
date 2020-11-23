@@ -96,6 +96,44 @@
 "alter table a.b ADD id int"
 "no keyspace with name [a] found"
 
+# create db foo
+"create database foo"
+"create database not allowed"
+
+# create db main
+"create database main"
+"cannot create database 'main'; database exists"
+
+# create db if not exists main
+"create database if not exists main"
+{
+  "QueryType": "DDL",
+  "Original": "create database if not exists main",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# alter db foo
+"alter database foo collate utf8"
+"cannot alter database 'foo'; database does not exists"
+
+# alter db main
+"alter database main collate utf8"
+"alter database not allowed"
+
+# drop db foo
+"drop database foo"
+"cannot drop database 'foo'; database does not exists"
+
+# drop db main
+"drop database main"
+"drop database not allowed"
+
+# drop db if exists main
+"drop database if exists main"
+"drop database not allowed"
+
 # DDL
 "create index a on user(id)"
 {
@@ -128,6 +166,24 @@
     "TargetDestination": "AllShards()",
     "IsDML": false,
     "Query": "create index a on user (id)",
+    "SingleShardOnly": false
+  }
+}
+
+# DDL with qualifier for a table not in vschema of an unsharded keyspace
+"create index a on main.unknown(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on main.unknown(id)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "create index a on unknown (id)",
     "SingleShardOnly": false
   }
 }
