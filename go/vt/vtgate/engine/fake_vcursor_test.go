@@ -57,7 +57,11 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
-func (t noopVCursor) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
+func (t noopVCursor) SetDDLStrategy(strategy string) {
+	panic("implement me")
+}
+
+func (t noopVCursor) GetDDLStrategy() string {
 	panic("implement me")
 }
 

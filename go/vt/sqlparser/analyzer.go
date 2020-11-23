@@ -267,14 +267,6 @@ func IsVschemaDDL(ddl DDLStatement) bool {
 	return false
 }
 
-// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func IsOnlineSchemaDDL(ddl DDLStatement) bool {
-	if ddl.GetOnlineHint() != nil {
-		return ddl.GetOnlineHint().Strategy != ""
-	}
-	return false
-}
-
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
