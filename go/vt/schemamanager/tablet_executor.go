@@ -159,9 +159,6 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(ddl *sqlparser.DDL) (isOnline bool
 	if strategy != schema.DDLStrategyNormal {
 		return true, strategy, options
 	}
-	if ddl.OnlineHint != nil {
-		return ddl.OnlineHint.Strategy != schema.DDLStrategyNormal, ddl.OnlineHint.Strategy, ddl.OnlineHint.Options
-	}
 	return false, strategy, options
 }
 
