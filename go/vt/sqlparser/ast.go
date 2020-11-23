@@ -51,6 +51,7 @@ type (
 		AddOrder(*Order)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
+		MakeDistinct()
 		SQLNode
 	}
 

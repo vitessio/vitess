@@ -1202,7 +1202,7 @@
   }
 }
 
-# distinct and aggregate functions
+# distinct and aggregate functions missing group by
 "select distinct a, count(*) from user"
 {
   "QueryType": "SELECT",
@@ -1227,6 +1227,39 @@
             "FieldQuery": "select a, count(*) from user where 1 != 1",
             "OrderBy": "0 ASC",
             "Query": "select a, count(*) from user order by a asc",
+            "Table": "user"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# distinct and aggregate functions
+"select distinct a, count(*) from user group by a"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user group by a",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "Distinct": "false",
+        "GroupBy": "0, 0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from user where 1 != 1 group by a",
+            "OrderBy": "0 ASC, 0 ASC",
+            "Query": "select a, count(*) from user group by a order by a asc, a asc",
             "Table": "user"
           }
         ]

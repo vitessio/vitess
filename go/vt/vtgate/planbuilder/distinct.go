@@ -17,57 +17,44 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/sqlparser"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*distinct)(nil)
+var _ logicalPlan = (*distinct)(nil)
 
-// limit is the builder for engine.Limit.
+// limit is the logicalPlan for engine.Limit.
 // This gets built if a limit needs to be applied
 // after rows are returned from an underlying
 // operation. Since a limit is the final operation
 // of a SELECT, most pushes are not applicable.
 type distinct struct {
-	builderCommon
+	logicalPlanCommon
 }
 
-func newDistinct(source builder) builder {
+func newDistinct(source logicalPlan) logicalPlan {
 	return &distinct{
-		builderCommon: newBuilderCommon(source),
+		logicalPlanCommon: newBuilderCommon(source),
 	}
-}
-
-func (d *distinct) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	return d.input.PushFilter(pb, filter, whereType, origin)
-}
-
-func (d *distinct) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return d.input.PushSelect(pb, expr, origin)
-}
-
-func (d *distinct) MakeDistinct() (builder, error) {
-	return d, nil
-}
-
-func (d *distinct) PushGroupBy(by sqlparser.GroupBy) error {
-	return d.input.PushGroupBy(by)
-}
-
-func (d *distinct) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
-	orderBy, err := d.input.PushOrderBy(by)
-	if err != nil {
-		return nil, err
-	}
-	return &distinct{builderCommon: newBuilderCommon(orderBy)}, nil
-}
-
-func (d *distinct) PushLock(lock sqlparser.Lock) error {
-	return d.input.PushLock(lock)
 }
 
 func (d *distinct) Primitive() engine.Primitive {
 	return &engine.Distinct{
 		Source: d.input.Primitive(),
 	}
+}
+
+// Rewrite implements the logicalPlan interface
+func (d *distinct) Rewrite(inputs ...logicalPlan) error {
+	if len(inputs) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "distinct: wrong number of inputs")
+	}
+	d.input = inputs[0]
+	return nil
+}
+
+// Inputs implements the logicalPlan interface
+func (d *distinct) Inputs() []logicalPlan {
+	return []logicalPlan{d.input}
 }
