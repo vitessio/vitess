@@ -65,6 +65,13 @@ type (
 		Statement
 	}
 
+	// DBDDLStatement represents any DBDDL Statement
+	DBDDLStatement interface {
+		iDBDDLStatement()
+		IsFullyParsed() bool
+		Statement
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -209,7 +216,7 @@ type (
 	// AccessMode is enum for the mode - ReadOnly or ReadWrite
 	AccessMode int8
 
-	// DBDDL represents a CREATE, DROP, or ALTER database statement.
+	// DBDDL represents a DROP, or ALTER database statement.
 	DBDDL struct {
 		Action      DBDDLAction
 		DBName      string
@@ -217,6 +224,24 @@ type (
 		IfNotExists bool
 		Collate     string
 		Charset     string
+	}
+
+	// CollateAndCharsetType is an enum for CollateAndCharset.Type
+	CollateAndCharsetType int8
+
+	// CollateAndCharset is a struct that stores Collation or Character Set value
+	CollateAndCharset struct {
+		Type      CollateAndCharsetType
+		IsDefault bool
+		Value     string
+	}
+
+	// CreateDatabase represents a CREATE database statement.
+	CreateDatabase struct {
+		DBName        string
+		IfNotExists   bool
+		CreateOptions []CollateAndCharset
+		FullyParsed   bool
 	}
 
 	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
@@ -366,6 +391,7 @@ func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
 func (*CreateIndex) iStatement()       {}
+func (*CreateDatabase) iStatement()    {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
@@ -426,6 +452,19 @@ func (node *CreateIndex) SetTable(qualifier string, name string) {
 func (node *DDL) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
 	node.Table.Name = NewTableIdent(name)
+}
+
+func (*DBDDL) iDBDDLStatement()          {}
+func (*CreateDatabase) iDBDDLStatement() {}
+
+// IsFullyParsed implements the DBDDLStatement interface
+func (node *DBDDL) IsFullyParsed() bool {
+	return false
+}
+
+// IsFullyParsed implements the DBDDLStatement interface
+func (node *CreateDatabase) IsFullyParsed() bool {
+	return node.FullyParsed
 }
 
 // ParenSelect can actually not be a top level statement,
@@ -2275,6 +2314,24 @@ func (node *CreateIndex) Format(buf *TrackedBuffer) {
 			buf.WriteString(" " + opt.String)
 		} else {
 			buf.astPrintf(node, " %v", opt.Value)
+		}
+	}
+}
+
+// Format formats the node.
+func (node *CreateDatabase) Format(buf *TrackedBuffer) {
+	buf.WriteString("create database")
+	if node.IfNotExists {
+		buf.WriteString(" if not exists")
+	}
+	buf.astPrintf(node, " %s", node.DBName)
+	if node.CreateOptions != nil {
+		for _, createOption := range node.CreateOptions {
+			if createOption.IsDefault {
+				buf.WriteString(" default")
+			}
+			buf.WriteString(createOption.Type.ToString())
+			buf.WriteString(" " + createOption.Value)
 		}
 	}
 }

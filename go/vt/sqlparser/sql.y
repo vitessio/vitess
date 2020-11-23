@@ -25,8 +25,8 @@ func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, ddl DDLStatement) {
-  yylex.(*Tokenizer).partialDDL = ddl
+func setDDL(yylex interface{}, node Statement) {
+  yylex.(*Tokenizer).partialDDL = node
 }
 
 func incNesting(yylex interface{}) bool {
@@ -132,6 +132,9 @@ func skipToEnd(yylex interface{}) {
   explainType 	  ExplainType
   selectInto	  *SelectInto
   createIndex	  *CreateIndex
+  createDatabase  *CreateDatabase
+  collateAndCharset CollateAndCharset
+  collateAndCharsets []CollateAndCharset
 }
 
 %token LEX_ERROR
@@ -242,6 +245,10 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <createIndex> create_index_prefix
+%type <createDatabase> create_database_prefix
+%type <collateAndCharset> collate character_set
+%type <collateAndCharsets> create_options create_options_opt
+%type <boolean> default_optional
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
@@ -352,7 +359,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt
-%type <bytes> alter_object_type
+%type <bytes> alter_object_type database_or_schema
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 
@@ -702,13 +709,11 @@ create_statement:
   {
     $$ = &DDL{Action: CreateDDLAction, Table: $5.ToViewName()}
   }
-| CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
+| create_database_prefix create_options_opt
   {
-    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
-  }
-| CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
-  {
-    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
+    $1.FullyParsed = true
+    $1.CreateOptions = $2
+    $$ = $1
   }
 
 vindex_type_opt:
@@ -767,6 +772,16 @@ create_index_prefix:
     setDDL(yylex, $$)
   }
 
+create_database_prefix:
+  CREATE database_or_schema not_exists_opt id_or_var
+  {
+    $$ = &CreateDatabase{DBName: string($4.String()), IfNotExists: $3}
+    setDDL(yylex,$$)
+  }
+
+database_or_schema:
+  DATABASE
+| SCHEMA
 
 table_spec:
   '(' table_column_list ')' table_option_list
@@ -774,6 +789,63 @@ table_spec:
     $$ = $2
     $$.Options = $4
   }
+
+create_options_opt:
+  {
+    $$ = nil
+  }
+| create_options
+  {
+    $$ = $1
+  }
+
+create_options:
+  character_set
+  {
+    $$ = []CollateAndCharset{$1}
+  }
+| collate
+  {
+    $$ = []CollateAndCharset{$1}
+  }
+| create_options collate
+  {
+    $$ = append($1,$2)
+  }
+| create_options character_set
+  {
+    $$ = append($1,$2)
+  }
+
+default_optional:
+  {
+    $$ = false
+  }
+| DEFAULT
+  {
+    $$ = true
+  }
+
+character_set:
+  default_optional CHARACTER SET equal_opt id_or_var
+  {
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:($5.String()), IsDefault:$1}
+  }
+| default_optional CHARACTER SET equal_opt STRING
+  {
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:("'" + string($5) + "'"), IsDefault:$1}
+  }
+
+collate:
+  default_optional COLLATE equal_opt id_or_var
+  {
+    $$ = CollateAndCharset{Type:CollateType, Value:($4.String()), IsDefault:$1}
+  }
+| default_optional COLLATE equal_opt STRING
+  {
+    $$ = CollateAndCharset{Type:CollateType, Value:("'" + string($4) + "'"), IsDefault:$1}
+  }
+
 
 create_like:
   LIKE table_name
