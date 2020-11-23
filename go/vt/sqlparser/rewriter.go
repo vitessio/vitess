@@ -1023,6 +1023,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ConvertUsingExpr:
 		a.apply(node, n.Expr, replaceConvertUsingExprExpr)
 
+	case *CreateDatabase:
+
 	case *CreateIndex:
 		a.apply(node, n.Name, replaceCreateIndexName)
 		a.apply(node, n.Table, replaceCreateIndexTable)

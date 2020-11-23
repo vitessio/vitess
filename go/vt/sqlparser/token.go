@@ -44,7 +44,7 @@ type Tokenizer struct {
 	LastError           error
 	posVarIndex         int
 	ParseTree           Statement
-	partialDDL          DDLStatement
+	partialDDL          Statement
 	nesting             int
 	multi               bool
 	specialComment      *Tokenizer
