@@ -28,7 +28,7 @@ import (
 
 var _ Primitive = (*DDL)(nil)
 
-//DDL represents the a DDL statement, either normal or online DDL
+// DDL represents a DDL statement, either normal or online DDL
 type DDL struct {
 	Keyspace *vindexes.Keyspace
 	SQL      string
@@ -52,17 +52,17 @@ func (v *DDL) description() PrimitiveDescription {
 	}
 }
 
-//RouteType implements the Primitive interface
+// RouteType implements the Primitive interface
 func (v *DDL) RouteType() string {
 	return "DDL"
 }
 
-//GetKeyspaceName implements the Primitive interface
+// GetKeyspaceName implements the Primitive interface
 func (v *DDL) GetKeyspaceName() string {
 	return v.Keyspace.Name
 }
 
-//GetTableName implements the Primitive interface
+// GetTableName implements the Primitive interface
 func (v *DDL) GetTableName() string {
 	return v.DDL.GetTable().Name.String()
 }
@@ -78,7 +78,7 @@ func (v *DDL) isOnlineSchemaDDL() bool {
 	return false
 }
 
-//Execute implements the Primitive interface
+// Execute implements the Primitive interface
 func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if !v.isOnlineSchemaDDL() {
 		strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
@@ -99,7 +99,7 @@ func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, 
 	return v.NormalDDL.Execute(vcursor, bindVars, wantfields)
 }
 
-//StreamExecute implements the Primitive interface
+// StreamExecute implements the Primitive interface
 func (v *DDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	results, err := v.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
@@ -108,7 +108,7 @@ func (v *DDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVari
 	return callback(results)
 }
 
-//GetFields implements the Primitive interface
+// GetFields implements the Primitive interface
 func (v *DDL) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
 }
