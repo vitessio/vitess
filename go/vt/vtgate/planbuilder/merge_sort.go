@@ -76,8 +76,13 @@ func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExp
 }
 
 // MakeDistinct satisfies the builder interface.
-func (ms *mergeSort) MakeDistinct() error {
-	return ms.input.MakeDistinct()
+func (ms *mergeSort) MakeDistinct() (builder, error) {
+	distinctSrc, err := ms.input.MakeDistinct()
+	if err != nil {
+		return nil, err
+	}
+	ms.input = distinctSrc
+	return ms, err
 }
 
 // PushGroupBy satisfies the builder interface.

@@ -85,6 +85,21 @@ func TestCastConvert(t *testing.T) {
 	assertMatches(t, conn, `SELECT CAST("test" AS CHAR(60))`, `[[VARCHAR("test")]]`)
 }
 
+func TestCompositeIN(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// clean up before & after
+	exec(t, conn, "delete from t1")
+	defer exec(t, conn, "delete from t1")
+
+	exec(t, conn, "insert into t1(id1, id2) values(1, 2), (4, 5)")
+
+	// Just check for correct results. Plan generation is tested in unit tests.
+	assertMatches(t, conn, "select id1 from t1 where (id1, id2) in ((1, 2))", "[[INT64(1)]]")
+}
+
 func TestUnionAll(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -117,9 +132,43 @@ func TestUnionAll(t *testing.T) {
 	exec(t, conn, "insert into t1(id1, id2) values(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)")
 
 	// union all between two selectuniquein tables
-	qr := exec(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)")
-	expected := utils.SortString("[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
-	assert.Equal(t, expected, utils.SortString(fmt.Sprintf("%v", qr.Rows)))
+	assertMatchesNoOrder(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
+}
+
+func TestUnionDistinct(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// clean up before & after
+	exec(t, conn, "delete from t1")
+	exec(t, conn, "delete from t2")
+	defer func() {
+		exec(t, conn, "set workload = oltp")
+		exec(t, conn, "delete from t1")
+		exec(t, conn, "delete from t2")
+	}()
+
+	exec(t, conn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3,3), (4,4)")
+	exec(t, conn, "insert into t2(id3, id4) values (2, 3), (3, 4), (4,4), (5,5)")
+
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			exec(t, conn, "set workload = "+workload)
+			assertMatches(t, conn, "select 1 union select null", "[[INT64(1)] [NULL]]")
+			assertMatches(t, conn, "select null union select null", "[[NULL]]")
+			assertMatches(t, conn, "select * from (select 1 as col union select 2) as t", "[[INT64(1)] [INT64(2)]]")
+			assertMatches(t, conn, "select 1 from dual where 1 IN (select 1 as col union select 2)", "[[INT64(1)]]")
+
+			// test with real data coming from mysql
+			assertMatches(t, conn, "select id1 from t1 where id1 = 1 union select id1 from t1 where id1 = 5", "[[INT64(1)]]")
+			assertMatchesNoOrder(t, conn, "select id1 from t1 where id1 = 1 union select id1 from t1 where id1 = 4", "[[INT64(1)] [INT64(4)]]")
+			assertMatchesNoOrder(t, conn, "select id1 from t1 where id1 = 1 union select 452 union select id1 from t1 where id1 = 4", "[[INT64(1)] [INT64(452)] [INT64(4)]]")
+			assertMatchesNoOrder(t, conn, "select id1, id2 from t1 union select 827, 452 union select id3,id4 from t2",
+				"[[INT64(4) INT64(4)] [INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(827) INT64(452)] [INT64(2) INT64(3)] [INT64(3) INT64(4)] [INT64(5) INT64(5)]]")
+		})
+	}
 }
 
 func TestUnionAllOlap(t *testing.T) {
@@ -128,14 +177,18 @@ func TestUnionAllOlap(t *testing.T) {
 	defer conn.Close()
 
 	// clean up before & after
-	defer exec(t, conn, "delete from t1")
-	defer exec(t, conn, "delete from t2")
+	exec(t, conn, "delete from t1")
+	exec(t, conn, "delete from t2")
+	defer func() {
+		exec(t, conn, "set workload = oltp")
+		exec(t, conn, "delete from t1")
+		exec(t, conn, "delete from t2")
+	}()
 
 	exec(t, conn, "insert into t1(id1, id2) values(1, 1), (2, 2)")
 	exec(t, conn, "insert into t2(id3, id4) values(3, 3), (4, 4)")
 
 	exec(t, conn, "set workload = olap")
-	defer exec(t, conn, "set workload = oltp")
 
 	// union all between two selectuniqueequal
 	assertMatches(t, conn, "select id1 from t1 where id1 = 1 union all select id1 from t1 where id1 = 4", "[[INT64(1)]]")
@@ -158,9 +211,9 @@ func TestUnionAllOlap(t *testing.T) {
 	exec(t, conn, "set workload = olap")
 
 	// union all between two selectuniquein tables
-	qr := exec(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)")
-	expected := utils.SortString("[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
-	assert.Equal(t, expected, utils.SortString(fmt.Sprintf("%v", qr.Rows)))
+	assertMatchesNoOrder(t, conn, "select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8) union all select id1 from t1 where id1 in (1, 2, 3, 4, 5, 6, 7, 8)",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]")
+
 }
 
 func TestUnion(t *testing.T) {
@@ -394,6 +447,24 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	assertMatches(t, conn, `select id1 from t1 order by id1`, `[]`)
 }
 
+func TestDistinct(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	exec(t, conn, "insert into t3(id5,id6,id7) values(1,3,3), (2,3,4), (3,3,6), (4,5,7), (5,5,6)")
+	exec(t, conn, "insert into t7_xxhash(uid,phone) values('1',4), ('2',4), ('3',3), ('4',1), ('5',1)")
+	exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	exec(t, conn, "insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
+	assertMatches(t, conn, "select distinct val2, count(*) from aggr_test group by val2", `[[NULL INT64(2)] [INT64(1) INT64(4)] [INT64(3) INT64(1)] [INT64(4) INT64(1)]]`)
+	assertMatches(t, conn, "select distinct id6 from t3 join t7_xxhash on t3.id5 = t7_xxhash.phone", `[[INT64(3)] [INT64(5)]]`)
+	exec(t, conn, "delete from t3")
+	exec(t, conn, "delete from t7_xxhash")
+	exec(t, conn, "delete from aggr_test")
+}
+
 func TestCreateIndex(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -433,6 +504,12 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
+}
+func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := exec(t, conn, query)
+	actual := fmt.Sprintf("%v", qr.Rows)
+	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
 }
 
 func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
