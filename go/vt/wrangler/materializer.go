@@ -157,6 +157,10 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	for _, table := range tables {
 		rules[table] = []string{sourceKeyspace + "." + table}
 		rules[targetKeyspace+"."+table] = []string{sourceKeyspace + "." + table}
+		rules[targetKeyspace+"."+table+"@replica"] = []string{sourceKeyspace + "." + table}
+		rules[targetKeyspace+"."+table+"@rdonly"] = []string{sourceKeyspace + "." + table}
+		rules[sourceKeyspace+"."+table+"@replica"] = []string{sourceKeyspace + "." + table}
+		rules[sourceKeyspace+"."+table+"@rdonly"] = []string{sourceKeyspace + "." + table}
 	}
 	if err := wr.saveRoutingRules(ctx, rules); err != nil {
 		return err
