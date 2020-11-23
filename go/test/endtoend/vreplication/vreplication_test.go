@@ -220,7 +220,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	switchReads(t, allCellNames, ksWorkflow)
 	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
 	switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
-	switchWrites(t, ksWorkflow)
+	switchWrites(t, ksWorkflow, false)
 	ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 	printShardPositions(vc, ksShards)
 	insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
@@ -236,7 +236,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	if testReverse {
 		//Reverse Replicate
 		switchReads(t, allCellNames, reverseKsWorkflow)
-		switchWrites(t, reverseKsWorkflow)
+		printShardPositions(vc, ksShards)
+		switchWrites(t, reverseKsWorkflow, false)
 
 		insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
@@ -248,8 +249,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		//Go forward again
 		switchReads(t, allCellNames, ksWorkflow)
-		switchWrites(t, ksWorkflow)
-
+		switchWrites(t, ksWorkflow, false)
 		dropSourcesDryRun(t, ksWorkflow, false, dryRunResultsDropSourcesDropCustomerShard)
 		dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
@@ -417,7 +417,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	if dryRunResultswitchWrites != nil {
 		switchWritesDryRun(t, ksWorkflow, dryRunResultswitchWrites)
 	}
-	switchWrites(t, ksWorkflow)
+	switchWrites(t, ksWorkflow, false)
 	dropSources(t, ksWorkflow)
 
 	for tabletName, count := range counts {
@@ -445,7 +445,7 @@ func shardOrders(t *testing.T) {
 	catchup(t, customerTab2, workflow, "MoveTables")
 	vdiff(t, ksWorkflow)
 	switchReads(t, allCellNames, ksWorkflow)
-	switchWrites(t, ksWorkflow)
+	switchWrites(t, ksWorkflow, false)
 	dropSources(t, ksWorkflow)
 	validateCountInTablet(t, customerTab1, "customer", "orders", 1)
 	validateCountInTablet(t, customerTab2, "customer", "orders", 2)
@@ -477,7 +477,7 @@ func shardMerchant(t *testing.T) {
 
 	vdiff(t, "merchant.p2m")
 	switchReads(t, allCellNames, ksWorkflow)
-	switchWrites(t, ksWorkflow)
+	switchWrites(t, ksWorkflow, false)
 	dropSources(t, ksWorkflow)
 
 	validateCountInTablet(t, merchantTab1, "merchant", "merchant", 1)
@@ -615,7 +615,7 @@ func verifyClusterHealth(t *testing.T) {
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
 	const MaxWait = 10 * time.Second
 	err := vc.WaitForVReplicationToCatchup(vttablet, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
-	require.NoError(nil, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
+	require.NoError(t, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
@@ -679,18 +679,16 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	}
 }
 
-func switchWrites(t *testing.T, ksWorkflow string) {
+func switchWrites(t *testing.T, ksWorkflow string, reverse bool) {
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
-		"-filtered_replication_wait_time="+SwitchWritesTimeout, ksWorkflow)
+		"-filtered_replication_wait_time="+SwitchWritesTimeout, fmt.Sprintf("-reverse=%t", reverse), ksWorkflow)
 	if output != "" {
 		fmt.Printf("Output of SwitchWrites for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
 	//printSwitchWritesExtraDebug is useful when debugging failures in SwitchWrites due to corner cases/races
 	_ = printSwitchWritesExtraDebug
-	if err != nil {
-		require.FailNow(t, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
-	}
+	require.NoError(t, err, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
 }
 
 func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {

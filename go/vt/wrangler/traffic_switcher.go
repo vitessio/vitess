@@ -245,7 +245,6 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		wr.Logger().Errorf("Found a previous journal entry for %d", ts.id)
 		//return nil, fmt.Errorf("found an entry from a previous run for migration id %d in _vt.resharding_journal, please review and delete it before proceeding", ts.id)
 	}
-
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -254,7 +253,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 	}
 
 	if ts.frozen {
-		return nil, fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
+		//return nil, fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
 	}
 	if err := ts.validate(ctx, false /* isWrite */); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
@@ -679,11 +678,11 @@ func (ts *trafficSwitcher) validate(ctx context.Context, isWrite bool) error {
 			}
 		}
 		if isWrite {
-			return ts.validateTableForWrite(ctx)
+			//return ts.validateTableForWrite(ctx)
 		}
 	} else { // binlogdatapb.MigrationType_SHARDS
 		if isWrite {
-			return ts.validateShardForWrite(ctx)
+			//return ts.validateShardForWrite(ctx)
 		}
 	}
 	return nil
@@ -755,6 +754,7 @@ func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, s
 }
 
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
 	rules, err := ts.wr.getRoutingRules(ctx)
 	if err != nil {
 		return err
@@ -772,9 +772,12 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 				rules[ts.targetKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
 				rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
 			} else {
-				delete(rules, table+"@"+tt)
-				delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
-				delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
+				//delete(rules, table+"@"+tt)
+				//delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
+				//delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
+				rules[table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
+				rules[ts.targetKeyspace+"."+table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
+				rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
 			}
 		}
 	}
@@ -1121,12 +1124,12 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 
 func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		return ts.changeTableRouting(ctx)
+		return ts.changeWriteRoute(ctx)
 	}
 	return ts.changeShardRouting(ctx)
 }
 
-func (ts *trafficSwitcher) changeTableRouting(ctx context.Context) error {
+func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	rules, err := ts.wr.getRoutingRules(ctx)
 	if err != nil {
 		return err
@@ -1141,13 +1144,13 @@ func (ts *trafficSwitcher) changeTableRouting(ctx context.Context) error {
 	// table -> targetKeyspace.table
 	// sourceKeyspace.table -> targetKeyspace.table
 	for _, table := range ts.tables {
-		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
-			tt := strings.ToLower(tabletType.String())
-			delete(rules, table+"@"+tt)
-			delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
-			delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
-			ts.wr.Logger().Infof("Delete routing: %v %v %v", table+"@"+tt, ts.targetKeyspace+"."+table+"@"+tt, ts.sourceKeyspace+"."+table+"@"+tt)
-		}
+		//for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
+		//	tt := strings.ToLower(tabletType.String())
+		//	delete(rules, table+"@"+tt)
+		//	delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
+		//	delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
+		//	ts.wr.Logger().Infof("Delete routing: %v %v %v", table+"@"+tt, ts.targetKeyspace+"."+table+"@"+tt, ts.sourceKeyspace+"."+table+"@"+tt)
+		//}
 		delete(rules, ts.targetKeyspace+"."+table)
 		ts.wr.Logger().Infof("Delete routing: %v", ts.targetKeyspace+"."+table)
 		rules[table] = []string{ts.targetKeyspace + "." + table}
