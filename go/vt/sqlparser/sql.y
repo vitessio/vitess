@@ -45,6 +45,10 @@ func setAllowCarrats(yylex interface{}, val bool){
   yylex.(*Tokenizer).allowCaratsInID = val
 }
 
+func setAllowBlanks(yylex interface{}, val bool){
+  yylex.(*Tokenizer).allowBlanks = val
+}
+
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -428,6 +432,7 @@ at_at_id:
   {
     $$ = $3
     setAllowCarrats(yylex,false)
+    setAllowBlanks(yylex,true)
   }
 
 at_id:
@@ -435,12 +440,14 @@ at_id:
   {
     $$ = $2
     setAllowCarrats(yylex,false)
+    setAllowBlanks(yylex,true)
   }
 
 at_allow_carrats:
   '@'
   {
     setAllowCarrats(yylex,true)
+    setAllowBlanks(yylex,false)
   }
 
 do_statement:

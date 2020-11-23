@@ -1830,6 +1830,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "/*!*/",
 		err:   "empty statement",
+	}, {
+		input: "USE @ tableName",
+		err:   "syntax error",
 	}}
 
 	for _, tcase := range invalidSQL {

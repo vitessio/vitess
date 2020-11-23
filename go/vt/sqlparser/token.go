@@ -52,6 +52,9 @@ type Tokenizer struct {
 	// Set to true during parsing if we want to allow ID to also include Carat symbols
 	allowCaratsInID bool
 
+	// Set to true if the parser should allow blank characters
+	allowBlanks bool
+
 	buf     []byte
 	bufPos  int
 	bufSize int
@@ -62,8 +65,9 @@ type Tokenizer struct {
 func NewStringTokenizer(sql string) *Tokenizer {
 	buf := []byte(sql)
 	return &Tokenizer{
-		buf:     buf,
-		bufSize: len(buf),
+		buf:         buf,
+		bufSize:     len(buf),
+		allowBlanks: true,
 	}
 }
 
@@ -71,8 +75,9 @@ func NewStringTokenizer(sql string) *Tokenizer {
 // string from the io.Reader.
 func NewTokenizer(r io.Reader) *Tokenizer {
 	return &Tokenizer{
-		InStream: r,
-		buf:      make([]byte, defaultBufSize),
+		InStream:    r,
+		buf:         make([]byte, defaultBufSize),
+		allowBlanks: true,
 	}
 }
 
@@ -525,8 +530,9 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	if tkn.lastChar == 0 {
 		tkn.next()
 	}
-
-	tkn.skipBlank()
+	if tkn.allowBlanks {
+		tkn.skipBlank()
+	}
 	switch ch := tkn.lastChar; {
 	case isLetter(ch):
 		tkn.next()
