@@ -106,7 +106,7 @@ func TestMain(m *testing.M) {
 			"-migration_check_interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"-default-ddl-strategy", "gh-ost",
+			"-ddl-strategy", "gh-ost",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
