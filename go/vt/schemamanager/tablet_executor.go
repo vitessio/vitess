@@ -237,19 +237,8 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 	}()
 
-	// We added the WITH_GHOST and WITH_PT hints to ALTER TABLE syntax, but these hints are
-	// obviously not accepted by MySQL.
-	// To run preflightSchemaChanges we must clean up such hints from the ALTER TABLE statement.
-	// Because our sqlparser does not do a complete parse of ALTER TABLE statements at this time,
-	// we resort to temporary regexp based parsing.
-	// TODO(shlomi): replace the below with sqlparser based reconstruction of the query,
-	//               when sqlparser has a complete coverage of ALTER TABLE syntax
-	sqlsWithoutAlterTableHints := []string{}
-	for _, sql := range sqls {
-		sqlsWithoutAlterTableHints = append(sqlsWithoutAlterTableHints, schema.RemoveOnlineDDLHints(sql))
-	}
 	// Make sure the schema changes introduce a table definition change.
-	if err := exec.preflightSchemaChanges(ctx, sqlsWithoutAlterTableHints); err != nil {
+	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
 		execResult.ExecutorErr = err.Error()
 		return &execResult
 	}
