@@ -65,13 +65,6 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		return node, nil
 	case *vindexFunc:
 		return filterVindexFunc(node, filter)
-	case *mergeSort, *pulloutSubquery:
-		filteredInput, err := planFilter(pb, node.Inputs()[0], filter, whereType, origin)
-		if err != nil {
-			return nil, err
-		}
-		err = node.Rewrite(filteredInput)
-		return node, err
 	case *subquery:
 		return nil, errors.New("unsupported: filtering on results of cross-shard subquery")
 	case *orderedAggregate:
