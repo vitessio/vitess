@@ -61,7 +61,7 @@ func TestJoinCanMerge(t *testing.T) {
 		condition: &sqlparser.ColName{},
 	}
 	pb := &primitiveBuilder{
-		bldr: lRoute,
+		plan: lRoute,
 	}
 	rRoute := &route{
 		condition: &sqlparser.ColName{},
@@ -92,7 +92,7 @@ func TestSubqueryCanMerge(t *testing.T) {
 	ks := &vindexes.Keyspace{}
 	lRoute := &route{}
 	pb := &primitiveBuilder{
-		bldr: lRoute,
+		plan: lRoute,
 	}
 	rRoute := &route{}
 	for left, vals := range testcases {
