@@ -19,8 +19,6 @@ package schema
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,7 +30,7 @@ func TestCreateUUID(t *testing.T) {
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable string
-		strategy         sqlparser.DDLStrategy
+		strategy         DDLStrategy
 		options          string
 		err              error
 	}{

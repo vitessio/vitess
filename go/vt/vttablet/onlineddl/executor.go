@@ -798,7 +798,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		Schema:      row["mysql_schema"].ToString(),
 		SQL:         row["migration_statement"].ToString(),
 		UUID:        row["migration_uuid"].ToString(),
-		Strategy:    sqlparser.DDLStrategy(row["strategy"].ToString()),
+		Strategy:    schema.DDLStrategy(row["strategy"].ToString()),
 		Options:     row["options"].ToString(),
 		Status:      schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		Retries:     row.AsInt64("retries", 0),
@@ -938,7 +938,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Schema:   row["mysql_schema"].ToString(),
 			SQL:      row["migration_statement"].ToString(),
 			UUID:     row["migration_uuid"].ToString(),
-			Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
+			Strategy: schema.DDLStrategy(row["strategy"].ToString()),
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}

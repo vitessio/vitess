@@ -151,7 +151,7 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlpa
 }
 
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func (exec *TabletExecutor) isOnlineSchemaDDL(ddl *sqlparser.DDL) (isOnline bool, strategy sqlparser.DDLStrategy, options string) {
+func (exec *TabletExecutor) isOnlineSchemaDDL(ddl *sqlparser.DDL) (isOnline bool, strategy schema.DDLStrategy, options string) {
 	if ddl.Action != sqlparser.AlterDDLAction {
 		return false, strategy, options
 	}
@@ -270,7 +270,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 func (exec *TabletExecutor) executeOnAllTablets(
 	ctx context.Context, execResult *ExecuteResult, sql string,
-	tableName string, strategy sqlparser.DDLStrategy, options string,
+	tableName string, strategy schema.DDLStrategy, options string,
 ) {
 	if strategy != schema.DDLStrategyNormal {
 		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options)

@@ -226,7 +226,7 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		query       string
 		ddlStrategy string
 		isOnlineDDL bool
-		strategy    sqlparser.DDLStrategy
+		strategy    schema.DDLStrategy
 		options     string
 	}{
 		{

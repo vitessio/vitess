@@ -220,9 +220,6 @@ type (
 		Charset     string
 	}
 
-	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
-	DDLStrategy string
-
 	// DBDDLAction is an enum for DBDDL Actions
 	DBDDLAction int8
 
