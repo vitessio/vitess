@@ -69,6 +69,7 @@ type (
 	DBDDLStatement interface {
 		iDBDDLStatement()
 		IsFullyParsed() bool
+		GetDatabaseName() string
 		Statement
 	}
 
@@ -465,6 +466,16 @@ func (node *DBDDL) IsFullyParsed() bool {
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *CreateDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
+}
+
+// GetDatabaseName implements the DBDDLStatement interface
+func (node *DBDDL) GetDatabaseName() string {
+	return node.DBName
+}
+
+// GetDatabaseName implements the DBDDLStatement interface
+func (node *CreateDatabase) GetDatabaseName() string {
+	return node.DBName
 }
 
 // ParenSelect can actually not be a top level statement,
