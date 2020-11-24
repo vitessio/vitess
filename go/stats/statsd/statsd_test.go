@@ -191,14 +191,13 @@ func TestStatsdCountersWithSingleLabel(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result := string(bytes[:n])
+			result := strings.Split(string(bytes[:n]), "\n")
+			sort.Strings(result)
 			expected := []string{
 				"test.counter_with_single_label_name:0|c|#label:tag2",
 				"test.counter_with_single_label_name:2|c|#label:tag1",
 			}
-			res := strings.Split(result, "\n")
-			sort.Strings(res)
-			for i, res := range res {
+			for i, res := range result {
 				assert.Equal(t, res, expected[i])
 			}
 		}
@@ -260,12 +259,13 @@ func TestStatsdCountersFuncWithMultiLabels(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result := string(bytes[:n])
+			result := strings.Split(string(bytes[:n]), "\n")
+			sort.Strings(result)
 			expected := []string{
 				"test.counter_func_with_multiple_labels_name:1|c|#label1:foo,label2:bar",
 				"test.counter_func_with_multiple_labels_name:2|c|#label1:bar,label2:baz",
 			}
-			for i, res := range strings.Split(result, "\n") {
+			for i, res := range result {
 				assert.Equal(t, res, expected[i])
 			}
 		}
@@ -327,14 +327,13 @@ func TestStatsdGaugesFuncWithMultiLabels(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result := string(bytes[:n])
+			result := strings.Split(string(bytes[:n]), "\n")
+			sort.Strings(result)
 			expected := []string{
 				"test.gauges_func_with_multiple_labels_name:1.000000|g|#label1:foo,label2:bar",
 				"test.gauges_func_with_multiple_labels_name:2.000000|g|#label1:bar,label2:baz",
 			}
-			res := strings.Split(result, "\n")
-			sort.Strings(res)
-			for i, res := range res {
+			for i, res := range result {
 				assert.Equal(t, res, expected[i])
 			}
 		}
