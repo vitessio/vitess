@@ -152,6 +152,9 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlpa
 
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func (exec *TabletExecutor) isOnlineSchemaDDL(ddl *sqlparser.DDL) (isOnline bool, strategy schema.DDLStrategy, options string) {
+	if ddl == nil {
+		return false, strategy, options
+	}
 	if ddl.Action != sqlparser.AlterDDLAction {
 		return false, strategy, options
 	}
@@ -251,16 +254,19 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			execResult.ExecutorErr = err.Error()
 			return &execResult
 		}
-		strategy := schema.DDLStrategyNormal
-		options := ""
+		isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(nil)
 		tableName := ""
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
 			tableName = ddl.Table.Name.String()
-			_, strategy, options = exec.isOnlineSchemaDDL(ddl)
+			isOnlineDDL, strategy, options = exec.isOnlineSchemaDDL(ddl)
 		}
-		exec.wr.Logger().Infof("Received DDL request. strategy = %+v", strategy)
-		exec.executeOnAllTablets(ctx, &execResult, sql, tableName, strategy, options)
+		exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
+		if isOnlineDDL {
+			exec.executeOnlineDDL(ctx, &execResult, sql, tableName, strategy, options)
+		} else {
+			exec.executeOnAllTablets(ctx, &execResult, sql)
+		}
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -268,30 +274,37 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	return &execResult
 }
 
-func (exec *TabletExecutor) executeOnAllTablets(
+// executeOnlineDDL submits an online DDL request; this runs on topo, not on tablets, and is a quick operation.
+func (exec *TabletExecutor) executeOnlineDDL(
 	ctx context.Context, execResult *ExecuteResult, sql string,
 	tableName string, strategy schema.DDLStrategy, options string,
 ) {
-	if strategy != schema.DDLStrategyNormal {
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options)
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return
-		}
-		conn, err := exec.wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
-		if err != nil {
-			execResult.ExecutorErr = fmt.Sprintf("online DDL ConnForCell error:%s", err.Error())
-			return
-		}
-		err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-		}
-		exec.wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
-		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+	if strategy == schema.DDLStrategyNormal {
+		execResult.ExecutorErr = "Not an online DDL strategy"
 		return
 	}
+	onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options)
+	if err != nil {
+		execResult.ExecutorErr = err.Error()
+		return
+	}
+	conn, err := exec.wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		execResult.ExecutorErr = fmt.Sprintf("online DDL ConnForCell error:%s", err.Error())
+		return
+	}
+	err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
+	if err != nil {
+		execResult.ExecutorErr = err.Error()
+	}
+	exec.wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
+	exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+}
 
+// executeOnAllTablets runs a query on all tablets, synchronously. This can be a long running operation.
+func (exec *TabletExecutor) executeOnAllTablets(
+	ctx context.Context, execResult *ExecuteResult, sql string,
+) {
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)
