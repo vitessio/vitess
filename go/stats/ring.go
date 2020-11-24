@@ -20,13 +20,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"sync/atomic"
 )
 
 // Ring of int64 values
 // Not thread safe
 type RingInt64 struct {
-	position int
+	position int64
 	values   []int64
+	mu       sync.RWMutex
 }
 
 func NewRingInt64(capacity int) *RingInt64 {
@@ -34,18 +37,23 @@ func NewRingInt64(capacity int) *RingInt64 {
 }
 
 func (ri *RingInt64) Add(val int64) {
-	if len(ri.values) == cap(ri.values) {
+	if int(ri.position) == cap(ri.values)-1 {
+		ri.mu.Lock()
 		ri.values[ri.position] = val
-		ri.position = (ri.position + 1) % cap(ri.values)
+		ri.position = (ri.position + 1) % int64(cap(ri.values))
+		ri.mu.Unlock()
 	} else {
-		ri.values = append(ri.values, val)
+		// add 1 atomically so that next call will see the most up to update position
+		pos := int(atomic.AddInt64(&ri.position, 1))
+		ri.values[pos-1] = val
 	}
 }
 
 func (ri *RingInt64) Values() (values []int64) {
+	pos := int(ri.position)
 	values = make([]int64, len(ri.values))
 	for i := 0; i < len(ri.values); i++ {
-		values[i] = ri.values[(ri.position+i)%cap(ri.values)]
+		values[i] = ri.values[(pos+i)%cap(ri.values)]
 	}
 	return values
 }
