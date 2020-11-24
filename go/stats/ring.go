@@ -16,6 +16,12 @@ limitations under the License.
 
 package stats
 
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+)
+
 // Ring of int64 values
 // Not thread safe
 type RingInt64 struct {
@@ -42,4 +48,12 @@ func (ri *RingInt64) Values() (values []int64) {
 		values[i] = ri.values[(ri.position+i)%cap(ri.values)]
 	}
 	return values
+}
+
+// MarshalJSON returns a JSON representation of the RingInt64.
+func (ri *RingInt64) MarshalJSON() ([]byte, error) {
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	s, _ := json.Marshal(ri.values)
+	fmt.Fprintf(b, "%v", string(s))
+	return b.Bytes(), nil
 }
