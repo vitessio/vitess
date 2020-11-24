@@ -272,6 +272,7 @@ func TestParseShardingSpec(t *testing.T) {
 	x80 := []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	goodTable := map[string][]*topodatapb.KeyRange{
 		"-": {{}},
+		"0": {{}},
 		"-4000000000000000-8000000000000000-": {
 			{End: x40},
 			{Start: x40, End: x80},
