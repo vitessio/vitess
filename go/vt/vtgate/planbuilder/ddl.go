@@ -91,7 +91,7 @@ func buildOnlineDDLPlan(query string, ddlStatement sqlparser.DDLStatement, vsche
 	if err != nil {
 		return nil, err
 	}
-	// strategy and options will be completed in real time, on Execute()
+	// strategy and options will be computed in real time, on Execute()
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
 		DDL:      ddlStatement,
