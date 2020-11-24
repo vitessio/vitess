@@ -191,20 +191,23 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 		return true
 	}
 	switch stmt := ast.(type) {
-	case *sqlparser.DBDDL:
+	case sqlparser.DBDDLStatement:
 		return false
-	case *sqlparser.DDL:
-		if !stmt.Table.IsEmpty() {
-			return tableMatches(stmt.Table, dbname, filter)
+	case sqlparser.DDLStatement:
+		if !stmt.GetTable().IsEmpty() {
+			return tableMatches(stmt.GetTable(), dbname, filter)
 		}
-		for _, table := range stmt.FromTables {
-			if tableMatches(table, dbname, filter) {
-				return true
+		ddlStmt, isDDL := stmt.(*sqlparser.DDL)
+		if isDDL {
+			for _, table := range ddlStmt.FromTables {
+				if tableMatches(table, dbname, filter) {
+					return true
+				}
 			}
-		}
-		for _, table := range stmt.ToTables {
-			if tableMatches(table, dbname, filter) {
-				return true
+			for _, table := range ddlStmt.ToTables {
+				if tableMatches(table, dbname, filter) {
+					return true
+				}
 			}
 		}
 		return false
