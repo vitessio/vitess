@@ -74,7 +74,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case DDLStatement, *DBDDL:
+	case DDLStatement, DBDDLStatement:
 		return StmtDDL
 	case *Use:
 		return StmtUse
