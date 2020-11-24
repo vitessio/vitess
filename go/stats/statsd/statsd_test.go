@@ -3,6 +3,7 @@ package statsd
 import (
 	"expvar"
 	"net"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -192,10 +193,12 @@ func TestStatsdCountersWithSingleLabel(t *testing.T) {
 			}
 			result := string(bytes[:n])
 			expected := []string{
-				"test.counter_with_single_label_name:2|c|#label:tag1",
 				"test.counter_with_single_label_name:0|c|#label:tag2",
+				"test.counter_with_single_label_name:2|c|#label:tag1",
 			}
-			for i, res := range strings.Split(result, "\n") {
+			res := strings.Split(result, "\n")
+			sort.Strings(res)
+			for i, res := range res {
 				assert.Equal(t, res, expected[i])
 			}
 		}
@@ -329,7 +332,9 @@ func TestStatsdGaugesFuncWithMultiLabels(t *testing.T) {
 				"test.gauges_func_with_multiple_labels_name:1.000000|g|#label1:foo,label2:bar",
 				"test.gauges_func_with_multiple_labels_name:2.000000|g|#label1:bar,label2:baz",
 			}
-			for i, res := range strings.Split(result, "\n") {
+			res := strings.Split(result, "\n")
+			sort.Strings(res)
+			for i, res := range res {
 				assert.Equal(t, res, expected[i])
 			}
 		}
@@ -374,7 +379,6 @@ func TestStatsdMultiTimings(t *testing.T) {
 	name := "multi_timings_name"
 	s := stats.NewMultiTimings(name, "help", []string{"label1", "label2"})
 	s.Add([]string{"foo", "bar"}, 10*time.Millisecond)
-	s.Add([]string{"foo", "bar"}, 2*time.Millisecond)
 	found := false
 	expvar.Do(func(kv expvar.KeyValue) {
 		if kv.Key == name {
@@ -383,15 +387,22 @@ func TestStatsdMultiTimings(t *testing.T) {
 			if err := sb.statsdClient.Flush(); err != nil {
 				t.Errorf("Error flushing: %s", err)
 			}
-			bytes := make([]byte, 4096)
+			bytes := make([]byte, 49152)
 			n, err := server.Read(bytes)
 			if err != nil {
 				t.Fatal(err)
 			}
 			result := string(bytes[:n])
 			expected := []string{
-				"test.multi_timings_name:10.000000|ms|#label1:foo,label2:bar",
-				"test.multi_timings_name:2.000000|ms|#label1:foo,label2:bar",
+				"test.multi_timings_name.500000:0.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.1000000:0.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.5000000:0.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.10000000:1.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.50000000:0.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.100000000:0.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.500000000:0.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.1000000000:0.000000|g|#label1:foo,label2:bar",
+				"test.multi_timings_name.5000000000:0.000000|g|#label1:foo,label2:bar",
 			}
 			for i, res := range strings.Split(result, "\n") {
 				assert.Equal(t, res, expected[i])
@@ -409,7 +420,6 @@ func TestStatsdTimings(t *testing.T) {
 	name := "timings_name"
 	s := stats.NewTimings(name, "help", "label1")
 	s.Add("foo", 2*time.Millisecond)
-	s.Add("bar", 10*time.Millisecond)
 	found := false
 	expvar.Do(func(kv expvar.KeyValue) {
 		if kv.Key == name {
@@ -418,15 +428,22 @@ func TestStatsdTimings(t *testing.T) {
 			if err := sb.statsdClient.Flush(); err != nil {
 				t.Errorf("Error flushing: %s", err)
 			}
-			bytes := make([]byte, 12288)
+			bytes := make([]byte, 49152)
 			n, err := server.Read(bytes)
 			if err != nil {
 				t.Fatal(err)
 			}
 			result := string(bytes[:n])
 			expected := []string{
-				"test.timings_name:2.000000|ms|#label1:foo",
-				"test.timings_name:10.000000|ms|#label1:bar",
+				"test.timings_name.500000:0.000000|g|#label1:foo",
+				"test.timings_name.1000000:0.000000|g|#label1:foo",
+				"test.timings_name.5000000:1.000000|g|#label1:foo",
+				"test.timings_name.10000000:0.000000|g|#label1:foo",
+				"test.timings_name.50000000:0.000000|g|#label1:foo",
+				"test.timings_name.100000000:0.000000|g|#label1:foo",
+				"test.timings_name.500000000:0.000000|g|#label1:foo",
+				"test.timings_name.1000000000:0.000000|g|#label1:foo",
+				"test.timings_name.5000000000:0.000000|g|#label1:foo",
 			}
 			for i, res := range strings.Split(result, "\n") {
 				assert.Equal(t, res, expected[i])
@@ -461,10 +478,12 @@ func TestStatsdHistogram(t *testing.T) {
 			}
 			result := string(bytes[:n])
 			expected := []string{
-				"test.histogram_name.1:0|c",
-				"test.histogram_name.5:2|c",
-				"test.histogram_name.10:1|c",
-				"test.histogram_name.inf:0|c",
+				"test.histogram_name.1:0.000000|g",
+				"test.histogram_name.5:2.000000|g",
+				"test.histogram_name.10:1.000000|g",
+				"test.histogram_name.inf:0.000000|g",
+				"test.histogram_name.Count:3.000000|g",
+				"test.histogram_name.Total:11.000000|g",
 			}
 			for i, res := range strings.Split(result, "\n") {
 				assert.Equal(t, res, expected[i])

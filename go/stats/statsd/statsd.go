@@ -45,6 +45,25 @@ func makeLabels(labelNames []string, labelValsCombined string) []string {
 	return tags
 }
 
+func (sb StatsBackend) addHistogram(name string, h *stats.Histogram, tags []string) {
+	labels := h.Labels()
+	buckets := h.Buckets()
+	for i := range labels {
+		name := fmt.Sprintf("%s.%s", name, labels[i])
+		sb.statsdClient.Gauge(name, float64(buckets[i]), tags, sb.sampleRate)
+	}
+	sb.statsdClient.Gauge(fmt.Sprintf("%s.%s", name, h.CountLabel()),
+		(float64)(h.Count()),
+		tags,
+		sb.sampleRate,
+	)
+	sb.statsdClient.Gauge(fmt.Sprintf("%s.%s", name, h.TotalLabel()),
+		(float64)(h.Total()),
+		tags,
+		sb.sampleRate,
+	)
+}
+
 // Init initializes the statsd with the given namespace.
 func Init(namespace string) {
 	servenv.OnRun(func() {
@@ -141,35 +160,23 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 		}
 	case *stats.MultiTimings:
 		labels := v.Labels()
-		buffers := v.Buffers()
-		for labelValsCombined, buffer := range buffers {
-			tags := makeLabels(labels, labelValsCombined)
-			for _, elapsedNs := range buffer.Values() {
-				if err := sb.statsdClient.TimeInMilliseconds(k, float64(elapsedNs)/1000.0/1000.0, tags, sb.sampleRate); err != nil {
-					log.Errorf("Failed to add TimeInMilliseconds %v for key %v", buffer.Values(), k)
-				}
-			}
+		hists := v.Histograms()
+		for labelValsCombined, histogram := range hists {
+			sb.addHistogram(k, histogram, makeLabels(labels, labelValsCombined))
 		}
 	case *stats.Timings:
-		label := v.Label()
-		buffers := v.Buffers()
-		for labelValsCombined, buffer := range buffers {
-			tags := makeLabel(label, labelValsCombined)
-			for _, elapsedNs := range buffer.Values() {
-				if err := sb.statsdClient.TimeInMilliseconds(k, float64(elapsedNs)/1000.0/1000.0, tags, sb.sampleRate); err != nil {
-					log.Errorf("Failed to add TimeInMilliseconds %v for key %v", buffer.Values(), k)
-				}
-			}
+		// TODO: for statsd.timing metrics, there is no good way to transfer the histogram to it
+		// If we store a in memory buffer for stats.Timings and flush it here it's hard to make the stats
+		// thread safe.
+		// Instead, we export the timings stats as histogram here. We won't have the percentile breakdown
+		// for the metrics, but we can still get the average from total and count
+		labels := []string{v.Label()}
+		hists := v.Histograms()
+		for labelValsCombined, histogram := range hists {
+			sb.addHistogram(k, histogram, makeLabels(labels, labelValsCombined))
 		}
 	case *stats.Histogram:
-		labels := v.Labels()
-		buckets := v.Buckets()
-		for i := range labels {
-			name := fmt.Sprintf("%s.%s", k, labels[i])
-			if err := sb.statsdClient.Count(name, buckets[i], []string{}, sb.sampleRate); err != nil {
-				log.Errorf("Failed to add Histogram %v for key %v", buckets[i], name)
-			}
-		}
+		sb.addHistogram(k, v, []string{})
 	case expvar.Func:
 		// Export memstats as gauge so that we don't need to call extra ReadMemStats
 		if k == "memstats" {

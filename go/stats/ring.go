@@ -16,20 +16,11 @@ limitations under the License.
 
 package stats
 
-import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"sync"
-	"sync/atomic"
-)
-
 // Ring of int64 values
 // Not thread safe
 type RingInt64 struct {
-	position int64
+	position int
 	values   []int64
-	mu       sync.RWMutex
 }
 
 func NewRingInt64(capacity int) *RingInt64 {
@@ -37,31 +28,18 @@ func NewRingInt64(capacity int) *RingInt64 {
 }
 
 func (ri *RingInt64) Add(val int64) {
-	if int(ri.position) == cap(ri.values)-1 {
-		ri.mu.Lock()
+	if len(ri.values) == cap(ri.values) {
 		ri.values[ri.position] = val
-		ri.position = (ri.position + 1) % int64(cap(ri.values))
-		ri.mu.Unlock()
+		ri.position = (ri.position + 1) % cap(ri.values)
 	} else {
-		// add 1 atomically so that next call will see the most up to update position
-		pos := int(atomic.AddInt64(&ri.position, 1))
-		ri.values[pos-1] = val
+		ri.values = append(ri.values, val)
 	}
 }
 
 func (ri *RingInt64) Values() (values []int64) {
-	pos := int(ri.position)
 	values = make([]int64, len(ri.values))
 	for i := 0; i < len(ri.values); i++ {
-		values[i] = ri.values[(pos+i)%cap(ri.values)]
+		values[i] = ri.values[(ri.position+i)%cap(ri.values)]
 	}
 	return values
-}
-
-// MarshalJSON returns a JSON representation of the RingInt64.
-func (ri *RingInt64) MarshalJSON() ([]byte, error) {
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-	s, _ := json.Marshal(ri.values)
-	fmt.Fprintf(b, "%v", string(s))
-	return b.Bytes(), nil
 }
