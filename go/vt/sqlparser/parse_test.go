@@ -1771,6 +1771,21 @@ var (
 	}, {
 		input:  "use @@`@as@s`",
 		output: "use `@@@as@s`",
+	}, {
+		input:  "drop index as@s on t",
+		output: "alter table t",
+	}, {
+		input:  "drop index @as@s on t",
+		output: "alter table t",
+	}, {
+		input:  "drop index @@as@s on t",
+		output: "alter table t",
+	}, {
+		input:  "drop index @`@as@s` on t",
+		output: "alter table t",
+	}, {
+		input:  "drop index @@`@as@s` on t",
+		output: "alter table t",
 	}}
 )
 
