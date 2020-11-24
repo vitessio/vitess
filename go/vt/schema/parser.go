@@ -26,8 +26,6 @@ var (
 	alterTableBasicPattern               = `(?s)(?i)\balter\s+table\s+`
 	alterTableExplicitSchemaTableRegexps = []*regexp.Regexp{
 		// ALTER TABLE `scm`.`tbl` something
-		// ALTER WITH_GHOST TABLE `scm`.`tbl` something
-		// ALTER WITH_PT TABLE `scm`.`tbl` something
 		regexp.MustCompile(alterTableBasicPattern + "`" + `([^` + "`" + `]+)` + "`" + `[.]` + "`" + `([^` + "`" + `]+)` + "`" + `\s+(.*$)`),
 		// ALTER TABLE `scm`.tbl something
 		regexp.MustCompile(alterTableBasicPattern + "`" + `([^` + "`" + `]+)` + "`" + `[.]([\S]+)\s+(.*$)`),
