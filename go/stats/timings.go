@@ -18,12 +18,15 @@ package stats
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sync2"
 )
+
+var timingsBufferSize = flag.Int("timings_buffer_size", 5, "RingFloat64 capacity used by Timings stats")
 
 // Timings is meant to tracks timing data
 // by named categories as well as histograms.
@@ -33,6 +36,7 @@ type Timings struct {
 
 	mu         sync.RWMutex
 	histograms map[string]*Histogram
+	buffers    map[string]*RingInt64
 
 	help          string
 	label         string
@@ -44,14 +48,17 @@ type Timings struct {
 // Categories that aren't initialized will be missing from the map until the
 // first time they are updated.
 func NewTimings(name, help, label string, categories ...string) *Timings {
+	bufferSize := *timingsBufferSize
 	t := &Timings{
 		histograms:    make(map[string]*Histogram),
+		buffers:       make(map[string]*RingInt64),
 		help:          help,
 		label:         label,
 		labelCombined: IsDimensionCombined(label),
 	}
 	for _, cat := range categories {
 		t.histograms[cat] = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
+		t.buffers[cat] = NewRingInt64(bufferSize)
 	}
 	if name != "" {
 		publish(name, t)
@@ -64,6 +71,7 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
 func (t *Timings) Reset() {
 	t.mu.RLock()
 	t.histograms = make(map[string]*Histogram)
+	t.buffers = make(map[string]*RingInt64)
 	t.mu.RUnlock()
 }
 
@@ -92,6 +100,27 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 	hist.Add(elapsedNs)
 	t.totalCount.Add(1)
 	t.totalTime.Add(elapsedNs)
+
+	if *timingsBufferSize > 0 {
+		bufferSize := *timingsBufferSize
+		// Get existing buffer
+		t.mu.RLock()
+		buffer, ok := t.buffers[name]
+		t.mu.RUnlock()
+
+		// Create buffer if it does not exist.
+		if !ok {
+			t.mu.Lock()
+			buffer, ok = t.buffers[name]
+			if !ok {
+				buffer = NewRingInt64(bufferSize)
+				t.buffers[name] = buffer
+			}
+			t.mu.Unlock()
+		}
+
+		buffer.Add(elapsedNs)
+	}
 }
 
 // Record is a convenience function that records completion
@@ -112,10 +141,12 @@ func (t *Timings) String() string {
 		TotalCount int64
 		TotalTime  int64
 		Histograms map[string]*Histogram
+		Buffers    map[string]*RingInt64
 	}{
 		t.totalCount.Get(),
 		t.totalTime.Get(),
 		t.histograms,
+		t.buffers,
 	}
 
 	data, err := json.Marshal(tm)
@@ -123,6 +154,17 @@ func (t *Timings) String() string {
 		data, _ = json.Marshal(err.Error())
 	}
 	return string(data)
+}
+
+// Buffers returns a map pointing at the buffers.
+func (t *Timings) Buffers() (b map[string]*RingInt64) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	b = make(map[string]*RingInt64, len(t.buffers))
+	for k, v := range t.buffers {
+		b[k] = v
+	}
+	return
 }
 
 // Histograms returns a map pointing at the histograms.
@@ -201,6 +243,7 @@ func NewMultiTimings(name string, help string, labels []string) *MultiTimings {
 	t := &MultiTimings{
 		Timings: Timings{
 			histograms: make(map[string]*Histogram),
+			buffers:    make(map[string]*RingInt64),
 			help:       help,
 		},
 		labels:         labels,
