@@ -1756,6 +1756,21 @@ var (
 		input: "release savepoint a",
 	}, {
 		input: "release savepoint `@@@;a`",
+	}, {
+		input:  "use as@s",
+		output: "use `as@s`",
+	}, {
+		input:  "use @as@s",
+		output: "use `@as@s`",
+	}, {
+		input:  "use @@as@s",
+		output: "use `@@as@s`",
+	}, {
+		input:  "use @`@as@s`",
+		output: "use `@@as@s`",
+	}, {
+		input:  "use @@`@as@s`",
+		output: "use `@@@as@s`",
 	}}
 )
 
@@ -1832,6 +1847,21 @@ func TestInvalid(t *testing.T) {
 		err:   "empty statement",
 	}, {
 		input: "USE @ tableName",
+		err:   "syntax error",
+	}, {
+		input: "USE @@ tableName",
+		err:   "syntax error",
+	}, {
+		input: "USE @",
+		err:   "syntax error",
+	}, {
+		input: "USE @ `ds`",
+		err:   "syntax error",
+	}, {
+		input: "use @@@s@s",
+		err:   "syntax error",
+	}, {
+		input: "use @'as@s'",
 		err:   "syntax error",
 	}}
 
