@@ -34,7 +34,7 @@ type OnlineDDL struct {
 	Keyspace *vindexes.Keyspace
 	DDL      sqlparser.DDLStatement
 	SQL      string
-	Strategy sqlparser.DDLStrategy
+	Strategy schema.DDLStrategy
 	Options  string
 
 	noTxNeeded

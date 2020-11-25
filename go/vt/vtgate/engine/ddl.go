@@ -71,27 +71,20 @@ func (v *DDL) GetTableName() string {
 func (v *DDL) isOnlineSchemaDDL() bool {
 	switch v.DDL.GetAction() {
 	case sqlparser.AlterDDLAction:
-		if v.DDL.GetOnlineHint() != nil {
-			return v.DDL.GetOnlineHint().Strategy != ""
-		}
+		return v.OnlineDDL.Strategy != schema.DDLStrategyNormal
 	}
 	return false
 }
 
 // Execute implements the Primitive interface
 func (v *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	if !v.isOnlineSchemaDDL() {
-		strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
-		if err != nil {
-			return nil, err
-		}
-		v.OnlineDDL.Strategy = strategy
-		v.OnlineDDL.Options = options
-		v.OnlineDDL.DDL.SetOnlineHint(&sqlparser.OnlineDDLHint{
-			Strategy: strategy,
-			Options:  options,
-		})
+	strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
+	if err != nil {
+		return nil, err
 	}
+	v.OnlineDDL.Strategy = strategy
+	v.OnlineDDL.Options = options
+
 	if v.isOnlineSchemaDDL() {
 		return v.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}

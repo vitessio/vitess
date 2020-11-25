@@ -6,7 +6,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -92,24 +91,11 @@ func buildOnlineDDLPlan(query string, ddlStatement sqlparser.DDLStatement, vsche
 	if err != nil {
 		return nil, err
 	}
-
-	strategy := schema.DDLStrategyNormal
-	options := ""
-	if ddlStatement.GetOnlineHint() != nil {
-		strategy = ddlStatement.GetOnlineHint().Strategy
-		options = ddlStatement.GetOnlineHint().Options
-	}
-	switch strategy {
-	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC, schema.DDLStrategyNormal: // OK, do nothing
-	default:
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown online DDL strategy: '%v'", strategy)
-	}
+	// strategy and options will be computed in real time, on Execute()
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
 		DDL:      ddlStatement,
 		SQL:      query,
-		Strategy: strategy,
-		Options:  options,
 	}, nil
 }
 
