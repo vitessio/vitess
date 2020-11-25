@@ -58,8 +58,6 @@ type (
 	// DDLStatement represents any DDL Statement
 	DDLStatement interface {
 		iDDLStatement()
-		GetOnlineHint() *OnlineDDLHint
-		SetOnlineHint(*OnlineDDLHint)
 		IsFullyParsed() bool
 		GetTable() TableName
 		GetAction() DDLAction
@@ -222,14 +220,6 @@ type (
 		Charset     string
 	}
 
-	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
-	DDLStrategy string
-
-	// OnlineDDLHint indicates strategy and options for running an online DDL
-	OnlineDDLHint struct {
-		Strategy DDLStrategy
-		Options  string
-	}
 	// DBDDLAction is an enum for DBDDL Actions
 	DBDDLAction int8
 
@@ -251,7 +241,6 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
-		OnlineHint    *OnlineDDLHint
 
 		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
@@ -267,7 +256,6 @@ type (
 	CreateIndex struct {
 		Constraint  string
 		Name        ColIdent
-		OnlineHint  *OnlineDDLHint
 		IndexType   string
 		Table       TableName
 		Columns     []*IndexColumn
@@ -381,26 +369,6 @@ func (*DDL) IsFullyParsed() bool {
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateIndex) IsFullyParsed() bool {
 	return node.FullyParsed
-}
-
-// GetOnlineHint implements the DDLStatement interface
-func (node *DDL) GetOnlineHint() *OnlineDDLHint {
-	return node.OnlineHint
-}
-
-// GetOnlineHint implements the DDLStatement interface
-func (node *CreateIndex) GetOnlineHint() *OnlineDDLHint {
-	return node.OnlineHint
-}
-
-// SetOnlineHint implements the DDLStatement interface
-func (node *DDL) SetOnlineHint(hint *OnlineDDLHint) {
-	node.OnlineHint = hint
-}
-
-// SetOnlineHint implements the DDLStatement interface
-func (node *CreateIndex) SetOnlineHint(hint *OnlineDDLHint) {
-	node.OnlineHint = hint
 }
 
 // GetTable implements the DDLStatement interface

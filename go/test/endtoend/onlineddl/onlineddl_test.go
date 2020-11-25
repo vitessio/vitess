@@ -71,8 +71,9 @@ var (
 		ALTER TABLE %s
 		DROP PRIMARY KEY,
 		DROP COLUMN ghost_col`
+	// We will run this query with "gh-ost --max-load=Threads_running=1"
 	alterTableThrottlingStatement = `
-		ALTER WITH 'gh-ost' '--max-load=Threads_running=1' TABLE %s
+		ALTER TABLE %s
 		DROP COLUMN ghost_col`
 )
 
@@ -164,20 +165,20 @@ func TestSchemaChange(t *testing.T) {
 		checkRetryMigration(t, uuid, false)
 	}
 	{
-		uuid := testAlterTable(t, alterTableTrivialStatement, string(schema.DDLStrategyGhost), "vtctl", "ghost_col")
+		uuid := testAlterTable(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
 	}
 	{
-		uuid := testAlterTable(t, alterTableThrottlingStatement, string(schema.DDLStrategyGhost), "vtgate", "ghost_col")
+		uuid := testAlterTable(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
 		checkCancelMigration(t, uuid, true)
 		time.Sleep(2 * time.Second)
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 	}
 	{
-		uuid := testAlterTable(t, alterTableFailedStatement, string(schema.DDLStrategyGhost), "vtgate", "ghost_col")
+		uuid := testAlterTable(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, true)
