@@ -909,6 +909,34 @@
   }
 }
 
+# scatter aggregate multiple group by columns inverse order
+"select a, b, count(*) from user group by b, a"
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) from user group by 2, 1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(2)",
+    "Distinct": "false",
+    "GroupBy": "1, 0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by 2, 1",
+        "OrderBy": "1 ASC, 0 ASC",
+        "Query": "select a, b, count(*) from user group by 2, 1 order by b asc, a asc",
+        "Table": "user"
+      }
+    ]
+  }
+}
+
 # scatter aggregate group by column number
 "select col from user group by 1"
 {
