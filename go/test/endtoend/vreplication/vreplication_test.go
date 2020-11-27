@@ -198,7 +198,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		t.Fatal(err)
 	}
 	tables := "customer"
-	moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+	moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables, "")
 
 	// Assume we are operating on first cell
 	defaultCell := cells[0]
@@ -436,7 +436,7 @@ func shardOrders(t *testing.T) {
 	tables := "orders"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	applyVSchema(t, ordersVSchema, targetKs)
-	moveTables(t, cell, workflow, sourceKs, targetKs, tables)
+	moveTables(t, cell, workflow, sourceKs, targetKs, tables, "")
 
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -468,7 +468,7 @@ func shardMerchant(t *testing.T) {
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "merchant", "80-"), 1); err != nil {
 		t.Fatal(err)
 	}
-	moveTables(t, cell, workflow, sourceKs, targetKs, tables)
+	moveTables(t, cell, workflow, sourceKs, targetKs, tables, "")
 	merchantKs := vc.Cells[defaultCell.Name].Keyspaces["merchant"]
 	merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet
 	merchantTab2 := merchantKs.Shards["80-"].Tablets["zone1-500"].Vttablet
@@ -618,9 +618,9 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 	require.NoError(t, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
 }
 
-func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
+func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables, action string) {
 	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+cell, "-workflow="+workflow,
-		"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+		"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables, action); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }

@@ -1909,8 +1909,59 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells, *tabletTypes)
 }
 
+func parseMoveTablesArgs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, allTables *bool) (
+	action, source, target, tableSpecs, workflow string, err error) {
+	nArgs := subFlags.NArg()
+	if *allTables {
+		switch nArgs {
+		case 2:
+		case 3:
+			action = subFlags.Arg(2)
+		default:
+			return "", "", "", "", "",
+				fmt.Errorf("following arguments are required: source_keyspace, target_keyspace [,action]")
+		}
+		source = subFlags.Arg(0)
+		target = subFlags.Arg(1)
+	} else {
+		if nArgs == 2 { //expect MoveTables targetKeyspace.workflow [SwitchReads|SwitchReads|Complete|Abort]
+			ksWorkflow := subFlags.Arg(0)
+			action = subFlags.Arg(1)
+			if action == wrangler.WorkflowEventStart || !wr.IsUserFacingEvent(action) {
+				return "", "", "", "", "",
+					fmt.Errorf("unexpected workflow action %s", action)
+			}
+			target, workflow, err = splitKeyspaceWorkflow(ksWorkflow)
+			if err != nil {
+				return "", "", "", "", "", err
+			}
+			_, err = wr.TopoServer().GetKeyspace(ctx, target)
+			if err != nil {
+				wr.Logger().Errorf("keyspace %s not found", target)
+			}
+		} else {
+			switch nArgs {
+			case 3:
+			case 4:
+				action = subFlags.Arg(3)
+			default:
+				return "", "", "", "", "",
+					fmt.Errorf("following arguments are required: source_keyspace, target_keyspace, tableSpecs [,action]")
+			}
+			source = subFlags.Arg(0)
+			target = subFlags.Arg(1)
+			tableSpecs = subFlags.Arg(2)
+			if action != wrangler.WorkflowEventStart {
+				return "", "", "", "", "",
+					fmt.Errorf("expected workflow action %s", wrangler.WorkflowEventStart)
+			}
+		}
+	}
+	return action, source, target, tableSpecs, workflow, nil
+}
+
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	workflow := subFlags.String("workflow", "", "Workflow name. Can be any descriptive string. Will be used to later migrate traffic via SwitchReads/SwitchWrites.")
+	workflowName := subFlags.String("workflow", "", "Workflow name. Can be any descriptive string. Will be used to later migrate traffic via SwitchReads/SwitchWrites.")
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from (e.g. master, replica, rdonly). Defaults to -vreplication_tablet_type parameter value for the tablet, which has the default value of replica.")
 	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
@@ -1919,26 +1970,34 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if *workflow == "" {
-		return fmt.Errorf("a workflow name must be specified")
+	action, source, target, tableSpecs, wfName, err := parseMoveTablesArgs(ctx, wr, subFlags, allTables)
+	if err != nil {
+		return err
 	}
-	if !*allTables && len(*excludes) > 0 {
-		return fmt.Errorf("you can only specify tables to exclude if all tables are to be moved (with -all)")
-	}
-	if *allTables {
-		if subFlags.NArg() != 2 {
-			return fmt.Errorf("two arguments are required: source_keyspace, target_keyspace")
+	if action == "" {
+		log.Infof("Calling deprecated MoveTables")
+		if *workflowName == "" {
+			return fmt.Errorf("a workflow name must be specified")
 		}
-	} else {
-		if subFlags.NArg() != 3 {
-			return fmt.Errorf("three arguments are required: source_keyspace, target_keyspace, tableSpecs")
+		if !*allTables && len(*excludes) > 0 {
+			return fmt.Errorf("you can only specify tables to exclude if all tables are to be moved (with -all)")
 		}
+		return wr.MoveTables(ctx, *workflowName, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
 	}
-
-	source := subFlags.Arg(0)
-	target := subFlags.Arg(1)
-	tableSpecs := subFlags.Arg(2)
-	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
+	log.Infof("Calling new MoveTables workflow")
+	if action == wrangler.WorkflowEventStart {
+		wfName = *workflowName
+	}
+	wf, err := wr.NewMoveTablesWorkflow(ctx, wfName, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
+	if err != nil {
+		log.Warningf("NewMoveTablesWorkflow returned error %+v", wf)
+		return err
+	}
+	if err := wf.Start(); err != nil {
+		log.Warningf("NewMoveTablesWorkflow Start error %+v", wf)
+		return err
+	}
+	return nil
 }
 
 func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
