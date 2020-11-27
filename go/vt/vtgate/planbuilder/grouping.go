@@ -50,8 +50,8 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 		node.Select.(*sqlparser.Select).GroupBy = groupBy
 		return node, nil
 	case *orderedAggregate:
-		colNumber := -1
 		for _, expr := range groupBy {
+			colNumber := -1
 			switch e := expr.(type) {
 			case *sqlparser.ColName:
 				c := e.Metadata.(*column)
