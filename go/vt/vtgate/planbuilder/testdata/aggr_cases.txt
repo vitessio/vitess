@@ -913,7 +913,7 @@
 "select a, b, count(*) from user group by b, a"
 {
   "QueryType": "SELECT",
-  "Original": "select a, b, count(*) from user group by 2, 1",
+  "Original": "select a, b, count(*) from user group by b, a",
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
@@ -928,9 +928,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by 2, 1",
+        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a",
         "OrderBy": "1 ASC, 0 ASC",
-        "Query": "select a, b, count(*) from user group by 2, 1 order by b asc, a asc",
+        "Query": "select a, b, count(*) from user group by b, a order by b asc, a asc",
         "Table": "user"
       }
     ]
