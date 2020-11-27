@@ -25,40 +25,9 @@ type (
 		exprScope  map[sqlparser.Expr]*scope
 		outerScope *scope
 	}
-	Column struct {
-	}
-
-	Dependency interface {
-		iDep()
-	}
-	TableExpression struct {
-		te sqlparser.TableExpr
-	}
-	ColumnExpression struct {
-		ae *sqlparser.AliasedExpr
-	}
-	column struct {
-	}
-
 	scope struct {
-		inner   []*scope
-		tables  []*TableExpression
-		columns []*column
 	}
 )
-
-func (*TableExpression) iDep()  {}
-func (*ColumnExpression) iDep() {}
-
-var _ Dependency = (*TableExpression)(nil)
-
-func (t *SemTable) Columns() []Column {
-	return nil
-}
-
-func (t *SemTable) DependenciesFor(expr sqlparser.Expr) ([]Dependency, error) {
-	return nil, nil
-}
 
 func (t *SemTable) scope(expr sqlparser.Expr) *scope {
 	return t.exprScope[expr]
@@ -104,6 +73,12 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func (a *analyzer) analyzeExprs(cursor *sqlparser.Cursor) bool {
 	switch expr := cursor.Node().(type) {
+	case *sqlparser.Subquery:
+		a.exprScope[expr] = a.peek()
+		a.push(&scope{})
+		a.analyze(expr.Select)
+		_ = a.pop()
+		return false
 	case sqlparser.Expr:
 		a.exprScope[expr] = a.peek()
 	}

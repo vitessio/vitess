@@ -17,43 +17,30 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func TestSimpleColumn(t *testing.T) {
+func TestScope(t *testing.T) {
 	query := "select col, (select 2) from (select col from t) as x where 3 in (select 4 from t where t.col = x.col)"
 	stmt, semTable := parseAndAnalyze(t, query)
 	sel, _ := stmt.(*sqlparser.Select)
 
 	s1 := semTable.scope(sel.SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
 	s2 := semTable.scope(sel.From[0].(*sqlparser.AliasedTableExpr).Expr.(*sqlparser.DerivedTable).Select.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
-	require.NotEqual(t, fmt.Sprintf("%p", s1), fmt.Sprintf("%p", s2), "different scope expected")
+	require.False(t, &s1 == &s2, "different scope expected")
+
+	s3 := semTable.scope(sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
+	require.False(t, &s1 == &s3, "different scope expected")
+	require.False(t, &s2 == &s3, "different scope expected")
+
+	s4 := semTable.scope(sel.Where.Expr.(*sqlparser.ComparisonExpr).Left)
+	require.Truef(t, &s1 == &s4, "want: %p, got %p", &s1, &s4)
 }
 
-/*func TestScoping(t *testing.T) {
-	query :=
-		`select (
-	select 42
-	from dual) as x
-from (
-	select col2 as col
-	from t) as derived
-where c = (
-	select count(*)
-	from t2
-	where derived.col2 = t2.col2)`
-	parse, err := sqlparser.Parse(query)
-	require.NoError(t, err)
-	semTable, err := Analyse(parse)
-	require.NoError(t, err)
 
-	assert.NotEmpty(t, semTable.outerScope.inner)
-}
-*/
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
