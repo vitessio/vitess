@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -55,7 +57,16 @@ func Analyse(statement sqlparser.Statement) (*SemTable, error) {
 	return &SemTable{outerScope: analyzer.peek(), exprScope: analyzer.exprScope}, nil
 }
 
+func log(node sqlparser.SQLNode, format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+	if node == nil {
+		fmt.Println()
+	} else {
+		fmt.Println(" - " + sqlparser.String(node))
+	}
+}
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
+	log(statement, "analyse %T", statement)
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		sqlparser.Rewrite(stmt.SelectExprs, a.analyzeExprs, nil)
@@ -72,7 +83,9 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 }
 
 func (a *analyzer) analyzeExprs(cursor *sqlparser.Cursor) bool {
-	switch expr := cursor.Node().(type) {
+	n := cursor.Node()
+	log(n, "analyzeExprs %T", n)
+	switch expr := n.(type) {
 	case *sqlparser.Subquery:
 		a.exprScope[expr] = a.peek()
 		a.push(&scope{})
@@ -92,6 +105,7 @@ func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) {
 }
 
 func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
+	log(tableExpr, "analyzeTableExpr %T", tableExpr)
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		a.analyzeSimpleTableExpr(table.Expr)
@@ -105,6 +119,7 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
 }
 
 func (a *analyzer) analyzeSimpleTableExpr(expr sqlparser.SimpleTableExpr) {
+	log(expr, "analyzeSimpleTableExpr %T", expr)
 	dt, derived := expr.(*sqlparser.DerivedTable)
 	if derived {
 		a.push(&scope{})
@@ -114,10 +129,12 @@ func (a *analyzer) analyzeSimpleTableExpr(expr sqlparser.SimpleTableExpr) {
 }
 
 func (a *analyzer) push(s *scope) {
+	log(nil, "pushScope")
 	a.scopes = append(a.scopes, s)
 }
 
 func (a *analyzer) pop() *scope {
+	log(nil, "popScope")
 	len := len(a.scopes) - 1
 	scope := a.scopes[len]
 	a.scopes = a.scopes[:len]
