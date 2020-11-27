@@ -705,14 +705,19 @@ type (
 		Name, Qualifier TableIdent
 	}
 
-	// Subquery represents a subquery.
+	// Subquery represents a subquery used as an value expression.
 	Subquery struct {
+		Select SelectStatement
+	}
+
+	// DerivedTable represents a subquery used as a table expression.
+	DerivedTable struct {
 		Select SelectStatement
 	}
 )
 
-func (TableName) iSimpleTableExpr() {}
-func (*Subquery) iSimpleTableExpr() {}
+func (TableName) iSimpleTableExpr()     {}
+func (*DerivedTable) iSimpleTableExpr() {}
 
 // TableNames is a list of TableName.
 type TableNames []TableName
@@ -1903,6 +1908,11 @@ func (node ValTuple) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Subquery) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "(%v)", node.Select)
+}
+
+// Format formats the node.
+func (node *DerivedTable) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "(%v)", node.Select)
 }
 
