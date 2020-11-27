@@ -17,13 +17,12 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
 	SemTable struct {
+		exprScope  map[sqlparser.Expr]*scope
 		outerScope *scope
 	}
 	Column struct {
@@ -61,21 +60,95 @@ func (t *SemTable) DependenciesFor(expr sqlparser.Expr) ([]Dependency, error) {
 	return nil, nil
 }
 
+func (t *SemTable) scope(expr sqlparser.Expr) *scope {
+	return t.exprScope[expr]
+}
+
+type analyzer struct {
+	exprScope map[sqlparser.Expr]*scope
+	scopes    []*scope
+}
+
+func NewAnalyzer() *analyzer {
+	return &analyzer{
+		exprScope: map[sqlparser.Expr]*scope{},
+	}
+}
+
 func Analyse(statement sqlparser.Statement) (*SemTable, error) {
-	s := &scope{}
-	table := &SemTable{outerScope: s}
-	down := func(cursor *sqlparser.Cursor) bool {
-		switch cursor.Node().(type) {
-		case *sqlparser.Subquery:
-			fmt.Printf("1 %T - %s\n", cursor.Parent(), sqlparser.String(cursor.Parent()))
-		case *sqlparser.Select:
-			fmt.Printf("2 %T - %s\n", cursor.Parent(), sqlparser.String(cursor.Parent()))
+	analyzer := NewAnalyzer()
+	// Initial scope
+	analyzer.push(&scope{})
+	err := analyzer.analyze(statement)
+	if err != nil {
+		return nil, err
+	}
+	return &SemTable{outerScope: analyzer.peek(), exprScope: analyzer.exprScope}, nil
+}
+
+func (a *analyzer) analyze(statement sqlparser.Statement) error {
+	switch stmt := statement.(type) {
+	case *sqlparser.Select:
+		sqlparser.Rewrite(stmt.SelectExprs, a.analyzeExprs, nil)
+		sqlparser.Rewrite(stmt.Where, a.analyzeExprs, nil)
+		sqlparser.Rewrite(stmt.OrderBy, a.analyzeExprs, nil)
+		sqlparser.Rewrite(stmt.GroupBy, a.analyzeExprs, nil)
+		sqlparser.Rewrite(stmt.Having, a.analyzeExprs, nil)
+		sqlparser.Rewrite(stmt.Limit, a.analyzeExprs, nil)
+		for _, tableExpr := range stmt.From {
+			a.analyzeTableExpr(tableExpr)
 		}
-		return true
 	}
-	up := func(cursor *sqlparser.Cursor) bool {
-		return true
+	return nil
+}
+
+func (a *analyzer) analyzeExprs(cursor *sqlparser.Cursor) bool {
+	switch expr := cursor.Node().(type) {
+	case sqlparser.Expr:
+		a.exprScope[expr] = a.peek()
 	}
-	sqlparser.Rewrite(statement, down, up)
-	return table, nil
+	return true
+}
+
+func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) {
+	for _, tableExpr := range tablExprs {
+		a.analyzeTableExpr(tableExpr)
+	}
+}
+
+func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
+	switch table := tableExpr.(type) {
+	case *sqlparser.AliasedTableExpr:
+		a.analyzeSimpleTableExpr(table.Expr)
+	case *sqlparser.JoinTableExpr:
+		a.analyzeTableExpr(table.LeftExpr)
+		a.analyzeTableExpr(table.RightExpr)
+	case *sqlparser.ParenTableExpr:
+		a.analyzeTableExprs(table.Exprs)
+	}
+	return true
+}
+
+func (a *analyzer) analyzeSimpleTableExpr(expr sqlparser.SimpleTableExpr) {
+	dt, derived := expr.(*sqlparser.DerivedTable)
+	if derived {
+		a.push(&scope{})
+		a.analyze(dt.Select)
+		_ = a.pop()
+	}
+}
+
+func (a *analyzer) push(s *scope) {
+	a.scopes = append(a.scopes, s)
+}
+
+func (a *analyzer) pop() *scope {
+	len := len(a.scopes) - 1
+	scope := a.scopes[len]
+	a.scopes = a.scopes[:len]
+	return scope
+}
+
+func (a *analyzer) peek() *scope {
+	return a.scopes[len(a.scopes)-1]
 }

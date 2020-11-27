@@ -17,47 +17,34 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestSimpleColumn(t *testing.T) {
-	query := "select col from t"
-	parse, err := sqlparser.Parse(query)
-	require.NoError(t, err)
-	semTable, err := Analyse(parse)
-	require.NoError(t, err)
+	query := "select col, (select 2) from (select col from t) as x where 3 in (select 4 from t where t.col = x.col)"
+	stmt, semTable := parseAndAnalyze(t, query)
+	sel, _ := stmt.(*sqlparser.Select)
 
-	sel := parse.(*sqlparser.Select)
-	columnExpr := sel.SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName)
-
-	deps, err := semTable.DependenciesFor(columnExpr)
-	require.NoError(t, err)
-
-	require.Equal(t, 1, len(deps))
-	dependency := deps[0]
-	assert.IsType(t, &TableExpression{}, dependency)
-	expression := dependency.(*TableExpression)
-	expr := expression.te.(*sqlparser.AliasedTableExpr)
-	tableName := expr.Expr.(sqlparser.TableName)
-	name := tableName.Name
-	assert.Equal(t, "apa", name)
+	s1 := semTable.scope(sel.SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
+	s2 := semTable.scope(sel.From[0].(*sqlparser.AliasedTableExpr).Expr.(*sqlparser.DerivedTable).Select.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
+	require.NotEqual(t, fmt.Sprintf("%p", s1), fmt.Sprintf("%p", s2), "different scope expected")
 }
 
-func TestScoping(t *testing.T) {
+/*func TestScoping(t *testing.T) {
 	query :=
 		`select (
-	select 42 
-	from dual) as x 
+	select 42
+	from dual) as x
 from (
-	select col2 as col 
-	from t) as derived 
+	select col2 as col
+	from t) as derived
 where c = (
-	select count(*) 
-	from t2 
+	select count(*)
+	from t2
 	where derived.col2 = t2.col2)`
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
@@ -65,4 +52,12 @@ where c = (
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, semTable.outerScope.inner)
+}
+*/
+func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
+	parse, err := sqlparser.Parse(query)
+	require.NoError(t, err)
+	semTable, err := Analyse(parse)
+	require.NoError(t, err)
+	return parse, semTable
 }
