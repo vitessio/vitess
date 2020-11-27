@@ -84,6 +84,8 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
+		case *sqlparser.DerivedTable:
+			panic(42)
 		case *sqlparser.ColName:
 			newOrigin, isLocal, err := pb.st.Find(node)
 			if err != nil {
@@ -211,7 +213,8 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 func hasSubquery(node sqlparser.SQLNode) bool {
 	has := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
+		switch node.(type) {
+		case *sqlparser.DerivedTable, *sqlparser.Subquery:
 			has = true
 			return false, errors.New("dummy")
 		}

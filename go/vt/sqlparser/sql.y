@@ -81,6 +81,7 @@ func skipToEnd(yylex interface{}) {
   values        Values
   valTuple      ValTuple
   subquery      *Subquery
+  derivedTable  *DerivedTable
   whens         []*When
   when          *When
   orderBy       OrderBy
@@ -278,7 +279,8 @@ func skipToEnd(yylex interface{}) {
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
-%type <subquery> subquery derived_table
+%type <subquery> subquery
+%type <derivedTable> derived_table
 %type <colName> column_name
 %type <whens> when_expression_list
 %type <when> when_expression
@@ -2298,7 +2300,7 @@ table_factor:
 derived_table:
   openb select_statement closeb
   {
-    $$ = &Subquery{$2}
+    $$ = &DerivedTable{$2}
   }
 
 aliased_table_name:
