@@ -28,18 +28,21 @@ func TestScope(t *testing.T) {
 	stmt, semTable := parseAndAnalyze(t, query)
 	sel, _ := stmt.(*sqlparser.Select)
 
-	s1 := semTable.scope(sel.SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
-	s2 := semTable.scope(sel.From[0].(*sqlparser.AliasedTableExpr).Expr.(*sqlparser.DerivedTable).Select.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
+	extract := func(in *sqlparser.Select, idx int) sqlparser.Expr {
+		return in.SelectExprs[idx].(*sqlparser.AliasedExpr).Expr
+	}
+
+	s1 := semTable.scope(extract(sel, 0))
+	s2 := semTable.scope(extract(sel.From[0].(*sqlparser.AliasedTableExpr).Expr.(*sqlparser.DerivedTable).Select.(*sqlparser.Select), 0))
 	require.False(t, &s1 == &s2, "different scope expected")
 
-	s3 := semTable.scope(sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr)
+	s3 := semTable.scope(extract(extract(sel, 1).(*sqlparser.Subquery).Select.(*sqlparser.Select), 0))
 	require.False(t, &s1 == &s3, "different scope expected")
 	require.False(t, &s2 == &s3, "different scope expected")
 
 	s4 := semTable.scope(sel.Where.Expr.(*sqlparser.ComparisonExpr).Left)
-	require.Truef(t, &s1 == &s4, "want: %p, got %p", &s1, &s4)
+	require.Truef(t, s1.i == s4.i, "want: %v, got %v", s1, s4)
 }
-
 
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
 	parse, err := sqlparser.Parse(query)

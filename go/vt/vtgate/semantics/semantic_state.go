@@ -28,8 +28,16 @@ type (
 		outerScope *scope
 	}
 	scope struct {
+		i int
 	}
 )
+
+var i = 0
+
+func newScope() *scope {
+	i++
+	return &scope{i: i}
+}
 
 func (t *SemTable) scope(expr sqlparser.Expr) *scope {
 	return t.exprScope[expr]
@@ -49,7 +57,7 @@ func NewAnalyzer() *analyzer {
 func Analyse(statement sqlparser.Statement) (*SemTable, error) {
 	analyzer := NewAnalyzer()
 	// Initial scope
-	analyzer.push(&scope{})
+	analyzer.push(newScope())
 	err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
@@ -57,12 +65,16 @@ func Analyse(statement sqlparser.Statement) (*SemTable, error) {
 	return &SemTable{outerScope: analyzer.peek(), exprScope: analyzer.exprScope}, nil
 }
 
+var debug = false
+
 func log(node sqlparser.SQLNode, format string, args ...interface{}) {
-	fmt.Printf(format, args...)
-	if node == nil {
-		fmt.Println()
-	} else {
-		fmt.Println(" - " + sqlparser.String(node))
+	if debug {
+		fmt.Printf(format, args...)
+		if node == nil {
+			fmt.Println()
+		} else {
+			fmt.Println(" - " + sqlparser.String(node))
+		}
 	}
 }
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
@@ -84,16 +96,17 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func (a *analyzer) analyzeExprs(cursor *sqlparser.Cursor) bool {
 	n := cursor.Node()
-	log(n, "analyzeExprs %T", n)
+	current := a.peek()
+	log(n, "%d analyzeExprs %T", current.i, n)
 	switch expr := n.(type) {
 	case *sqlparser.Subquery:
-		a.exprScope[expr] = a.peek()
-		a.push(&scope{})
+		a.exprScope[expr] = current
+		a.push(newScope())
 		a.analyze(expr.Select)
-		_ = a.pop()
+		a.pop()
 		return false
 	case sqlparser.Expr:
-		a.exprScope[expr] = a.peek()
+		a.exprScope[expr] = current
 	}
 	return true
 }
@@ -122,23 +135,19 @@ func (a *analyzer) analyzeSimpleTableExpr(expr sqlparser.SimpleTableExpr) {
 	log(expr, "analyzeSimpleTableExpr %T", expr)
 	dt, derived := expr.(*sqlparser.DerivedTable)
 	if derived {
-		a.push(&scope{})
+		a.push(newScope())
 		a.analyze(dt.Select)
-		_ = a.pop()
+		a.pop()
 	}
 }
 
 func (a *analyzer) push(s *scope) {
-	log(nil, "pushScope")
 	a.scopes = append(a.scopes, s)
 }
 
-func (a *analyzer) pop() *scope {
-	log(nil, "popScope")
-	len := len(a.scopes) - 1
-	scope := a.scopes[len]
-	a.scopes = a.scopes[:len]
-	return scope
+func (a *analyzer) pop() {
+	l := len(a.scopes) - 1
+	a.scopes = a.scopes[:l]
 }
 
 func (a *analyzer) peek() *scope {
