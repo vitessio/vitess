@@ -113,7 +113,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -1768,7 +1768,7 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	keyspace := subFlags.Arg(0)
 
 	// TODO: make vtctld a field of the wrangler
-	vtctld := grpcvtctlserver.NewVtctldServer(wr.TopoServer())
+	vtctld := grpcvtctldserver.NewVtctldServer(wr.TopoServer())
 	keyspaceInfo, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{
 		Keyspace: keyspace,
 	})
@@ -1780,12 +1780,12 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	vtctld := grpcvtctlserver.NewVtctldServer(wr.TopoServer())
-	keyspaces, err := vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+	vtctld := grpcvtctldserver.NewVtctldServer(wr.TopoServer())
+	resp, err := vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	if err != nil {
 		return err
 	}
-	wr.Logger().Printf("%v\n", strings.Join(keyspaces, "\n"))
+	wr.Logger().Printf("%v\n", strings.Join(resp.Keyspaces, "\n"))
 	return nil
 }
 
