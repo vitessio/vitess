@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -23,17 +23,17 @@ import (
 
 type fakeTabletManagerClient struct {
 	tmclient.TabletManagerClient
-	schemas map[string]*tabletmanagerdata.SchemaDefinition
+	schemas map[string]*tabletmanagerdatapb.SchemaDefinition
 }
 
 func newTMClient() *fakeTabletManagerClient {
 	return &fakeTabletManagerClient{
 		TabletManagerClient: faketmclient.NewFakeTabletManagerClient(),
-		schemas:             map[string]*tabletmanagerdata.SchemaDefinition{},
+		schemas:             map[string]*tabletmanagerdatapb.SchemaDefinition{},
 	}
 }
 
-func (c *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodata.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdata.SchemaDefinition, error) {
+func (c *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	key := topoproto.TabletAliasString(tablet.Alias)
 
 	schema, ok := c.schemas[key]
@@ -49,20 +49,20 @@ func TestGetSchema(t *testing.T) {
 
 	topo := memorytopo.NewServer("zone1", "zone2", "zone3")
 
-	tablet := &topodata.Tablet{
-		Alias: &topodata.TabletAlias{
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
 			Cell: "zone1",
 			Uid:  uuid.New().ID(),
 		},
 		Hostname: "abcd",
 		Keyspace: "testkeyspace",
 		Shard:    "-",
-		Type:     topodata.TabletType_MASTER,
+		Type:     topodatapb.TabletType_MASTER,
 	}
 	require.NoError(t, topo.CreateTablet(ctx, tablet))
 
-	sd := &tabletmanagerdata.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdata.TableDefinition{
+	sd := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 			{
 				Name:       "foo",
 				RowCount:   1000,
@@ -79,10 +79,10 @@ func TestGetSchema(t *testing.T) {
 				PrimaryKeyColumns: []string{
 					"id",
 				},
-				Fields: []*query.Field{
+				Fields: []*querypb.Field{
 					{
 						Name:         "id",
-						Type:         query.Type_INT32,
+						Type:         querypb.Type_INT32,
 						Table:        "foo",
 						OrgTable:     "foo",
 						Database:     "vt_testkeyspace",
@@ -93,7 +93,7 @@ func TestGetSchema(t *testing.T) {
 					},
 					{
 						Name:         "name",
-						Type:         query.Type_VARCHAR,
+						Type:         querypb.Type_VARCHAR,
 						Table:        "foo",
 						OrgTable:     "foo",
 						Database:     "vt_testkeyspace",
@@ -121,10 +121,10 @@ func TestGetSchema(t *testing.T) {
 				PrimaryKeyColumns: []string{
 					"id",
 				},
-				Fields: []*query.Field{
+				Fields: []*querypb.Field{
 					{
 						Name:         "id",
-						Type:         query.Type_INT32,
+						Type:         querypb.Type_INT32,
 						Table:        "bar",
 						OrgTable:     "bar",
 						Database:     "vt_testkeyspace",
@@ -135,7 +135,7 @@ func TestGetSchema(t *testing.T) {
 					},
 					{
 						Name:         "foo_id",
-						Type:         query.Type_INT32,
+						Type:         querypb.Type_INT32,
 						Table:        "bar",
 						OrgTable:     "bar",
 						Database:     "vt_testkeyspace",
@@ -146,7 +146,7 @@ func TestGetSchema(t *testing.T) {
 					},
 					{
 						Name:         "is_active",
-						Type:         query.Type_INT8,
+						Type:         querypb.Type_INT8,
 						Table:        "bar",
 						OrgTable:     "bar",
 						Database:     "vt_testkeyspace",
@@ -175,7 +175,7 @@ func TestGetSchema(t *testing.T) {
 	assert.Equal(t, 1, len(events), "expected 1 event from GetSchema")
 	val := events[0].Value
 
-	actual := &tabletmanagerdata.SchemaDefinition{}
+	actual := &tabletmanagerdatapb.SchemaDefinition{}
 	err = json2.Unmarshal([]byte(val), actual)
 	require.NoError(t, err)
 
@@ -184,15 +184,15 @@ func TestGetSchema(t *testing.T) {
 	// reset for the next invocation, where we verify that passing
 	// -table_sizes_only does not include the create table statement or columns.
 	logger.Events = nil
-	sd = &tabletmanagerdata.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdata.TableDefinition{
+	sd = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 			{
 				Name:              "foo",
 				RowCount:          1000,
 				DataLength:        1000000,
 				Columns:           []string{},
 				PrimaryKeyColumns: []string{},
-				Fields:            []*query.Field{},
+				Fields:            []*querypb.Field{},
 			},
 			{
 				Name:              "bar",
@@ -200,7 +200,7 @@ func TestGetSchema(t *testing.T) {
 				DataLength:        10,
 				Columns:           []string{},
 				PrimaryKeyColumns: []string{},
-				Fields:            []*query.Field{},
+				Fields:            []*querypb.Field{},
 			},
 		},
 	}
@@ -216,7 +216,7 @@ func TestGetSchema(t *testing.T) {
 	assert.Equal(t, 1, len(events), "expected 1 event from GetSchema")
 	val = events[0].Value
 
-	actual = &tabletmanagerdata.SchemaDefinition{}
+	actual = &tabletmanagerdatapb.SchemaDefinition{}
 	err = json2.Unmarshal([]byte(val), actual)
 	require.NoError(t, err)
 
