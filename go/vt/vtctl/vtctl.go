@@ -117,7 +117,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -2330,9 +2330,9 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	}
 
 	if *tableSizesOnly {
-		sizeTds := make([]*tabletmanagerdata.TableDefinition, len(sd.TableDefinitions))
+		sizeTds := make([]*tabletmanagerdatapb.TableDefinition, len(sd.TableDefinitions))
 		for i, td := range sd.TableDefinitions {
-			sizeTds[i] = &tabletmanagerdata.TableDefinition{
+			sizeTds[i] = &tabletmanagerdatapb.TableDefinition{
 				Name:       td.Name,
 				Type:       td.Type,
 				RowCount:   td.RowCount,
