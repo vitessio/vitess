@@ -93,10 +93,12 @@ var emptyResult = &sqltypes.Result{
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
+var migrationNextCheckInterval = 5 * time.Second
 
 const (
-	maxPasswordLength     = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes = 10
+	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
+	staleMigrationMinutes         = 10
+	progressPctFull       float64 = 100.0
 )
 
 var (
@@ -117,10 +119,11 @@ type Executor struct {
 	shard    string
 	dbName   string
 
-	initMutex         sync.Mutex
-	migrationMutex    sync.Mutex
-	migrationRunning  int64
-	lastMigrationUUID string
+	initMutex          sync.Mutex
+	migrationMutex     sync.Mutex
+	migrationRunning   int64
+	lastMigrationUUID  string
+	tickReentranceFlag int64
 
 	ticks             *timer.Timer
 	isOpen            bool
@@ -245,6 +248,11 @@ func (e *Executor) Close() {
 	e.isOpen = false
 }
 
+// triggerNextCheckInterval the next tick sooner than normal
+func (e *Executor) triggerNextCheckInterval() {
+	e.ticks.TriggerAfter(migrationNextCheckInterval)
+}
+
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
 	return path.Join(os.TempDir(), fmt.Sprintf("ghost.%s.panic.flag", uuid))
 }
@@ -363,7 +371,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	if _, err := conn.ExecuteFetch(onlineDDL.SQL, 0, false); err != nil {
 		return err
 	}
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, 100.0)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
 
 	return nil
 }
@@ -1242,6 +1250,20 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 
 // onMigrationCheckTick runs all migrations life cycle
 func (e *Executor) onMigrationCheckTick() {
+	// This function can be called by multiple triggers. First, there's the normal ticker.
+	// Then, any time a migration completes, we set a timer to trigger this function.
+	// also, any time a new INSERT arrives, we set a timer to trigger this function.
+	// Some of these may be correlated. To avoid spamming of this function we:
+	// - ensure the function is non-reentrant, using tickReentranceFlag
+	// - clean up tickReentranceFlag 1 second after function completes; this throttles calls to
+	//   this function at no more than 1/sec rate.
+	if atomic.CompareAndSwapInt64(&e.tickReentranceFlag, 0, 1) {
+		defer time.AfterFunc(time.Second, func() { atomic.StoreInt64(&e.tickReentranceFlag, 0) })
+	} else {
+		// An instance of this function is already running
+		return
+	}
+
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
 		return
 	}
@@ -1249,6 +1271,7 @@ func (e *Executor) onMigrationCheckTick() {
 		log.Errorf("Executor.onMigrationCheckTick(): empty keyspace")
 		return
 	}
+
 	ctx := context.Background()
 	if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
@@ -1428,6 +1451,7 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, sta
 		}
 	case schema.OnlineDDLStatusComplete:
 		{
+			progressPct = progressPctFull
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
 		}
@@ -1445,6 +1469,13 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, sta
 	}
 	if err = e.updateMigrationProgress(ctx, uuid, progressPct); err != nil {
 		return err
+	}
+
+	if !dryRun {
+		switch status {
+		case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+			e.triggerNextCheckInterval()
+		}
 	}
 
 	return nil
@@ -1489,6 +1520,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
 		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
 		vx.AddOrReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
+		e.triggerNextCheckInterval()
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
