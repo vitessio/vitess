@@ -257,6 +257,8 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		case *sqlparser.DDL:
 			switch ddl.Action {
 			case sqlparser.DropDDLAction:
+				// TODO (shlomi): break into distinct per-table DROP statements; on a future PR where
+				// we implement lazy DROP TABLE on Online DDL
 				tableName = ddl.FromTables[0].Name.String()
 			default:
 				tableName = ddl.Table.Name.String()
