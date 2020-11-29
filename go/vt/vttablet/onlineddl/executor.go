@@ -349,6 +349,25 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 	return (row != nil), nil
 }
 
+// executeDirectly runs a DDL query directly on the backend MySQL server
+func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch(onlineDDL.SQL, 0, false); err != nil {
+		return err
+	}
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, 100.0)
+
+	return nil
+}
+
 // ExecuteWithGhost validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
@@ -930,6 +949,53 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	return err
 }
 
+func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	failMigration := func(err error) error {
+		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+		return err
+	}
+
+	stmt, err := sqlparser.Parse(onlineDDL.SQL)
+	if err != nil {
+		return failMigration(fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", onlineDDL.SQL, err))
+	}
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		switch stmt.GetAction() {
+		case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
+			go func() {
+				if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+					failMigration(err)
+				}
+			}()
+		case sqlparser.AlterDDLAction:
+			switch onlineDDL.Strategy {
+			case schema.DDLStrategyGhost:
+				go func() {
+					if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
+						failMigration(err)
+					}
+				}()
+			case schema.DDLStrategyPTOSC:
+				go func() {
+					if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+						failMigration(err)
+					}
+				}()
+			default:
+				{
+					return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
+				}
+			}
+		}
+	default:
+		{
+			return failMigration(fmt.Errorf("Unsupported query type: %+v", onlineDDL.SQL))
+		}
+	}
+	return nil
+}
+
 func (e *Executor) runNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -955,25 +1021,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
-		switch onlineDDL.Strategy {
-		case schema.DDLStrategyGhost:
-			go func() {
-				if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
-					_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-				}
-			}()
-		case schema.DDLStrategyPTOSC:
-			go func() {
-				if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
-					_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-				}
-			}()
-		default:
-			{
-				_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-				return fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy)
-			}
-		}
+		e.executeMigration(ctx, onlineDDL)
 		// the query should only ever return a single row at the most
 		// but let's make it also explicit here that we only run a single migration
 		if i == 0 {
@@ -1362,6 +1410,46 @@ func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result
 	return result, err
 }
 
+// onSchemaMigrationStatus is called when a status is set/changed for a running migration
+func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64) (err error) {
+	if dryRun && status != schema.OnlineDDLStatusFailed {
+		// We don't consider dry-run reports unless there's a failure
+		return nil
+	}
+	switch status {
+	case schema.OnlineDDLStatusReady:
+		{
+			err = e.updateMigrationTimestamp(ctx, "ready_timestamp", uuid)
+		}
+	case schema.OnlineDDLStatusRunning:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+		}
+	case schema.OnlineDDLStatusComplete:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+		}
+	case schema.OnlineDDLStatusFailed:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if err = e.updateMigrationStatus(ctx, uuid, status); err != nil {
+		return err
+	}
+	if err = e.updateMigrationProgress(ctx, uuid, progressPct); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
 func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam, progressParam string) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
@@ -1371,42 +1459,7 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 		progressPct = pct
 	}
 
-	if dryRun && status != schema.OnlineDDLStatusFailed {
-		// We don't consider dry-run reports unless there's a failure
-		return nil
-	}
-	switch status {
-	case schema.OnlineDDLStatusReady:
-		{
-			err = e.updateMigrationTimestamp(ctx, "ready_timestamp", uuidParam)
-		}
-	case schema.OnlineDDLStatusRunning:
-		{
-			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
-			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuidParam)
-		}
-	case schema.OnlineDDLStatusComplete:
-		{
-			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
-			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuidParam)
-		}
-	case schema.OnlineDDLStatusFailed:
-		{
-			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
-			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuidParam)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	if err = e.updateMigrationStatus(ctx, uuidParam, status); err != nil {
-		return err
-	}
-	if err = e.updateMigrationProgress(ctx, uuidParam, progressPct); err != nil {
-		return err
-	}
-
-	return nil
+	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct)
 }
 
 // VExec is called by a VExec invocation
