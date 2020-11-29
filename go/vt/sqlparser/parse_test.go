@@ -1158,9 +1158,6 @@ var (
 	}, {
 		input: "create unique index a using foo on b (col1 desc)",
 	}, {
-		input:  "create with 'gh-ost' unique index a using foo on b (col1 desc)",
-		output: "create unique index a using foo on b (col1 desc)",
-	}, {
 		input: "create fulltext index a using foo on b (col1)",
 	}, {
 		input: "create spatial index a using foo on b (col1)",

@@ -33,96 +33,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-//-------------------------------------------------------------------------
-
-// builder defines the interface that a primitive must
-// satisfy.
-type builder interface {
-	// Order is the execution order of the primitive. If there are subprimitives,
-	// the order is one above the order of the subprimitives.
-	// This is because the primitive executes its subprimitives first and
-	// processes their results to generate its own values.
-	// Please copy code from an existing primitive to define this function.
-	Order() int
-
-	// ResultColumns returns the list of result columns the
-	// primitive returns.
-	// Please copy code from an existing primitive to define this function.
-	ResultColumns() []*resultColumn
-
-	// Reorder reassigns order for the primitive and its sub-primitives.
-	// The input is the order of the previous primitive that should
-	// execute before this one.
-	Reorder(int)
-
-	// First returns the first builder of the tree,
-	// which is usually the left most.
-	First() builder
-
-	// PushFilter pushes a WHERE or HAVING clause expression
-	// to the specified origin.
-	PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error
-
-	// PushSelect pushes the select expression to the specified
-	// originator. If successful, the originator must create
-	// a resultColumn entry and return it. The top level caller
-	// must accumulate these result columns and set the symtab
-	// after analysis.
-	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error)
-
-	// MakeDistinct makes the primitive handle the distinct clause.
-	MakeDistinct() (builder, error)
-	// PushGroupBy makes the primitive handle the GROUP BY clause.
-	PushGroupBy(sqlparser.GroupBy) error
-
-	// PushOrderBy pushes the ORDER BY clause. It returns the
-	// the current primitive or a replacement if a new one was
-	// created.
-	PushOrderBy(sqlparser.OrderBy) (builder, error)
-
-	// SetUpperLimit is an optimization hint that tells that primitive
-	// that it does not need to return more than the specified number of rows.
-	// A primitive that cannot perform this can ignore the request.
-	SetUpperLimit(count sqlparser.Expr)
-
-	// PushMisc pushes miscelleaneous constructs to all the primitives.
-	PushMisc(sel *sqlparser.Select) error
-
-	// Wireup performs the wire-up work. Nodes should be traversed
-	// from right to left because the rhs nodes can request vars from
-	// the lhs nodes.
-	Wireup(bldr builder, jt *jointab) error
-
-	// SupplyVar finds the common root between from and to. If it's
-	// the common root, it supplies the requested var to the rhs tree.
-	// If the primitive already has the column in its list, it should
-	// just supply it to the 'to' node. Otherwise, it should request
-	// for it by calling SupplyCol on the 'from' sub-tree to request the
-	// column, and then supply it to the 'to' node.
-	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
-
-	// SupplyCol is meant to be used for the wire-up process. This function
-	// changes the primitive to supply the requested column and returns
-	// the resultColumn and column number of the result. SupplyCol
-	// is different from PushSelect because it may reuse an existing
-	// resultColumn, whereas PushSelect guarantees the addition of a new
-	// result column and returns a distinct symbol for it.
-	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
-
-	// SupplyWeightString must supply a weight_string expression of the
-	// specified column.
-	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
-
-	// PushLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
-	PushLock(lock sqlparser.Lock) error
-
-	// Primitive returns the underlying primitive.
-	// This function should only be called after Wireup is finished.
-	Primitive() engine.Primitive
-}
-
-//-------------------------------------------------------------------------
-
 // ContextVSchema defines the interface for this package to fetch
 // info about tables.
 type ContextVSchema interface {
@@ -139,132 +49,9 @@ type ContextVSchema interface {
 	KeyspaceExists(keyspace string) bool
 }
 
-//-------------------------------------------------------------------------
-
-// builderCommon implements some common functionality of builders.
-// Make sure to override in case behavior needs to be changed.
-type builderCommon struct {
-	order int
-	input builder
-}
-
-func newBuilderCommon(input builder) builderCommon {
-	return builderCommon{input: input}
-}
-
-func (bc *builderCommon) Order() int {
-	return bc.order
-}
-
-func (bc *builderCommon) Reorder(order int) {
-	bc.input.Reorder(order)
-	bc.order = bc.input.Order() + 1
-}
-
-func (bc *builderCommon) First() builder {
-	return bc.input.First()
-}
-
-func (bc *builderCommon) ResultColumns() []*resultColumn {
-	return bc.input.ResultColumns()
-}
-
-func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
-	bc.input.SetUpperLimit(count)
-}
-
-func (bc *builderCommon) PushMisc(sel *sqlparser.Select) error {
-	return bc.input.PushMisc(sel)
-}
-
-func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
-	return bc.input.Wireup(bldr, jt)
-}
-
-func (bc *builderCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	bc.input.SupplyVar(from, to, col, varname)
-}
-
-func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	return bc.input.SupplyCol(col)
-}
-
-func (bc *builderCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	return bc.input.SupplyWeightString(colNumber)
-}
-
-//-------------------------------------------------------------------------
-
 type truncater interface {
 	SetTruncateColumnCount(int)
 }
-
-// resultsBuilder is a superset of builderCommon. It also handles
-// resultsColumn functionality.
-type resultsBuilder struct {
-	builderCommon
-	resultColumns []*resultColumn
-	weightStrings map[*resultColumn]int
-	truncater     truncater
-}
-
-func newResultsBuilder(input builder, truncater truncater) resultsBuilder {
-	return resultsBuilder{
-		builderCommon: newBuilderCommon(input),
-		resultColumns: input.ResultColumns(),
-		weightStrings: make(map[*resultColumn]int),
-		truncater:     truncater,
-	}
-}
-
-func (rsb *resultsBuilder) ResultColumns() []*resultColumn {
-	return rsb.resultColumns
-}
-
-// SupplyCol is currently unreachable because the builders using resultsBuilder
-// are currently above a join, which is the only builder that uses it for now.
-// This can change if we start supporting correlated subqueries.
-func (rsb *resultsBuilder) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	c := col.Metadata.(*column)
-	for i, rc := range rsb.resultColumns {
-		if rc.column == c {
-			return rc, i
-		}
-	}
-	rc, colNumber = rsb.input.SupplyCol(col)
-	if colNumber < len(rsb.resultColumns) {
-		return rc, colNumber
-	}
-	// Add result columns from input until colNumber is reached.
-	for colNumber >= len(rsb.resultColumns) {
-		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
-	}
-	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
-	return rc, colNumber
-}
-
-func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	rc := rsb.resultColumns[colNumber]
-	if weightcolNumber, ok := rsb.weightStrings[rc]; ok {
-		return weightcolNumber, nil
-	}
-	weightcolNumber, err = rsb.input.SupplyWeightString(colNumber)
-	if err != nil {
-		return 0, nil
-	}
-	rsb.weightStrings[rc] = weightcolNumber
-	if weightcolNumber < len(rsb.resultColumns) {
-		return weightcolNumber, nil
-	}
-	// Add result columns from input until weightcolNumber is reached.
-	for weightcolNumber >= len(rsb.resultColumns) {
-		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
-	}
-	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
-	return weightcolNumber, nil
-}
-
-//-------------------------------------------------------------------------
 
 // Build builds a plan for a query based on the specified vschema.
 // This method is only used from tests
@@ -322,10 +109,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		if sqlparser.IsVschemaDDL(stmt) {
 			return buildVSchemaDDLPlan(stmt, vschema)
 		}
-		if sqlparser.IsOnlineSchemaDDL(stmt) {
-			return buildOnlineDDLPlan(query, stmt, vschema)
-		}
-		return buildDDLPlan(query, stmt, vschema)
+		return buildGeneralDDLPlan(query, stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:

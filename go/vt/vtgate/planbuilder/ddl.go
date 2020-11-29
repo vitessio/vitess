@@ -6,32 +6,62 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+// buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
+// The two behave compeltely differently, and have two very different primitives.
+// We want to be able to dynamically choose between normal/online plans according to Session settings.
+// However, due to caching of plans, we're unable to make that choice right now. In this function we don't have
+// a session context. It's only when we Execute() the primitive that we have that context.
+// This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
+// and which chooses which of the two to invoke at runtime.
+func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	normalDDLPlan, err := buildDDLPlan(sql, ddlStatement, vschema)
+	if err != nil {
+		return nil, err
+	}
+	onlineDDLPlan, err := buildOnlineDDLPlan(sql, ddlStatement, vschema)
+	if err != nil {
+		return nil, err
+	}
+	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
+	if ddlStatement.IsFullyParsed() {
+		query = sqlparser.String(ddlStatement)
+	}
+
+	return &engine.DDL{
+		Keyspace:  normalDDLPlan.Keyspace,
+		SQL:       query,
+		DDL:       ddlStatement,
+		NormalDDL: normalDDLPlan,
+		OnlineDDL: onlineDDLPlan,
+	}, nil
+}
+
+func buildDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (*engine.Send, error) {
 	var table *vindexes.Table
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
 
-	switch stmt.(type) {
+	switch ddlStatement.(type) {
 	case *sqlparser.CreateIndex:
 		// For Create index, the table must already exist
 		// We should find the target of the query from this tables location
-		table, _, _, _, destination, err = vschema.FindTableOrVindex(stmt.GetTable())
+		table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
 		keyspace = table.Keyspace
 		if err != nil {
 			return nil, err
 		}
 		if table == nil {
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", stmt.GetTable().Name.String())
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", ddlStatement.GetTable().Name.String())
 		}
-		stmt.SetTable("", table.Name.String())
+		ddlStatement.SetTable("", table.Name.String())
 	case *sqlparser.DDL:
-		destination, keyspace, _, err = vschema.TargetDestination(stmt.GetTable().Qualifier.String())
+		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
 		if err != nil {
 			return nil, err
 		}
@@ -43,8 +73,8 @@ func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchem
 
 	query := sql
 	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
-	if stmt.IsFullyParsed() {
-		query = sqlparser.String(stmt)
+	if ddlStatement.IsFullyParsed() {
+		query = sqlparser.String(ddlStatement)
 	}
 
 	return &engine.Send{
@@ -56,28 +86,16 @@ func buildDDLPlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchem
 	}, nil
 }
 
-func buildOnlineDDLPlan(query string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-
-	_, keyspace, _, err := vschema.TargetDestination(stmt.GetTable().Qualifier.String())
+func buildOnlineDDLPlan(query string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (*engine.OnlineDDL, error) {
+	_, keyspace, _, err := vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
-	if stmt.GetOnlineHint() == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "not an online DDL: %s", query)
-	}
-	switch stmt.GetOnlineHint().Strategy {
-	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC: // OK, do nothing
-	case schema.DDLStrategyNormal:
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "not an online DDL strategy")
-	default:
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown online DDL strategy: '%v'", stmt.GetOnlineHint().Strategy)
-	}
+	// strategy and options will be computed in real time, on Execute()
 	return &engine.OnlineDDL{
 		Keyspace: keyspace,
-		DDL:      stmt,
+		DDL:      ddlStatement,
 		SQL:      query,
-		Strategy: stmt.GetOnlineHint().Strategy,
-		Options:  stmt.GetOnlineHint().Options,
 	}, nil
 }
 

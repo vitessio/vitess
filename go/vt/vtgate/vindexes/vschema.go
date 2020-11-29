@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sort"
-	"strings"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
@@ -352,7 +351,11 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if t == nil || table.AutoIncrement == nil {
 				continue
 			}
-			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
+			seqks, seqtab, err := sqlparser.ParseTable(table.AutoIncrement.Sequence)
+			var seq *Table
+			if err == nil {
+				seq, err = vschema.FindTable(seqks, seqtab)
+			}
 			if err != nil {
 				// Better to remove the table than to leave it partially initialized.
 				delete(ksvschema.Tables, tname)
@@ -410,14 +413,20 @@ outer:
 				}
 				continue outer
 			}
-			parts := strings.Split(toTable, ".")
-			if len(parts) != 2 {
+			toks, totabname, err := sqlparser.ParseTable(toTable)
+			if err != nil {
+				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
+					Error: err,
+				}
+				continue outer
+			}
+			if toks == "" {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: fmt.Errorf("table %s must be qualified", toTable),
 				}
 				continue outer
 			}
-			t, err := vschema.FindTable(parts[0], parts[1])
+			t, err := vschema.FindTable(toks, totabname)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: err,
@@ -428,18 +437,6 @@ outer:
 		}
 		vschema.RoutingRules[rule.FromTable] = rr
 	}
-}
-
-// findQualified finds a table t or k.t.
-func (vschema *VSchema) findQualified(name string) (*Table, error) {
-	splits := strings.Split(name, ".")
-	switch len(splits) {
-	case 1:
-		return vschema.FindTable("", splits[0])
-	case 2:
-		return vschema.FindTable(splits[0], splits[1])
-	}
-	return nil, fmt.Errorf("table %s not found", name)
 }
 
 // FindTable returns a pointer to the Table. If a keyspace is specified, only tables

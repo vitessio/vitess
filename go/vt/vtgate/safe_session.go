@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -455,10 +454,17 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 }
 
 // SetDDLStrategy set the DDLStrategy setting.
-func (session *SafeSession) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
+func (session *SafeSession) SetDDLStrategy(strategy string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.DDLStrategy = string(strategy)
+	session.DDLStrategy = strategy
+}
+
+// GetDDLStrategy returns the DDLStrategy value.
+func (session *SafeSession) GetDDLStrategy() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.DDLStrategy
 }
 
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.

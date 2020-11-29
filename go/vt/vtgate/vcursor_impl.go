@@ -99,6 +99,10 @@ type vcursorImpl struct {
 	vm                    VSchemaOperator
 }
 
+func (vc *vcursorImpl) GetKeyspace() string {
+	return vc.keyspace
+}
+
 func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
 	srvVschema := vc.vm.GetCurrentSrvVschema()
 	if srvVschema == nil {
@@ -591,8 +595,13 @@ func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface
-func (vc *vcursorImpl) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
+func (vc *vcursorImpl) SetDDLStrategy(strategy string) {
 	vc.safeSession.SetDDLStrategy(strategy)
+}
+
+// SetReadAfterWriteGTID implements the SessionActions interface
+func (vc *vcursorImpl) GetDDLStrategy() string {
+	return vc.safeSession.GetDDLStrategy()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface
