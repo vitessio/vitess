@@ -72,7 +72,7 @@ func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 	if err := wr.InitTablet(ctx, tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
-	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyMasterAlias", "", wr, testWaitReplicasTimeout)
 	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a master") {
 		t.Fatalf("executor.Open() = '%v', want error", err)
 	}
@@ -106,7 +106,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 	})
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorValidate", "", wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	sqls := []string{
@@ -196,7 +196,7 @@ func TestTabletExecutorDML(t *testing.T) {
 	})
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorDML", "", wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	executor.Open(ctx, "unsharded_keyspace")
