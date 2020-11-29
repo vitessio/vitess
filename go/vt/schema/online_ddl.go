@@ -26,13 +26,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	migrationBasePath   = "schema-migration"
-	onlineDdlUUIDRegexp = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
+	migrationBasePath    = "schema-migration"
+	onlineDdlUUIDRegexp  = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
+	strategyParserRegexp = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -75,40 +75,46 @@ const (
 	OnlineDDLStatusFailed    OnlineDDLStatus = "failed"
 )
 
+// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
+type DDLStrategy string
+
 const (
 	// DDLStrategyNormal means not an online-ddl migration. Just a normal MySQL ALTER TABLE
-	DDLStrategyNormal sqlparser.DDLStrategy = ""
+	DDLStrategyNormal DDLStrategy = ""
 	// DDLStrategyGhost requests gh-ost to run the migration
-	DDLStrategyGhost sqlparser.DDLStrategy = "gh-ost"
+	DDLStrategyGhost DDLStrategy = "gh-ost"
 	// DDLStrategyPTOSC requests pt-online-schema-change to run the migration
-	DDLStrategyPTOSC sqlparser.DDLStrategy = "pt-osc"
+	DDLStrategyPTOSC DDLStrategy = "pt-osc"
 )
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace    string                `json:"keyspace,omitempty"`
-	Table       string                `json:"table,omitempty"`
-	Schema      string                `json:"schema,omitempty"`
-	SQL         string                `json:"sql,omitempty"`
-	UUID        string                `json:"uuid,omitempty"`
-	Strategy    sqlparser.DDLStrategy `json:"strategy,omitempty"`
-	Options     string                `json:"options,omitempty"`
-	RequestTime int64                 `json:"time_created,omitempty"`
-	Status      OnlineDDLStatus       `json:"status,omitempty"`
-	TabletAlias string                `json:"tablet,omitempty"`
-	Retries     int64                 `json:"retries,omitempty"`
+	Keyspace    string          `json:"keyspace,omitempty"`
+	Table       string          `json:"table,omitempty"`
+	Schema      string          `json:"schema,omitempty"`
+	SQL         string          `json:"sql,omitempty"`
+	UUID        string          `json:"uuid,omitempty"`
+	Strategy    DDLStrategy     `json:"strategy,omitempty"`
+	Options     string          `json:"options,omitempty"`
+	RequestTime int64           `json:"time_created,omitempty"`
+	Status      OnlineDDLStatus `json:"status,omitempty"`
+	TabletAlias string          `json:"tablet,omitempty"`
+	Retries     int64           `json:"retries,omitempty"`
 }
 
-func ValidateDDLStrategy(strategy string) (sqlparser.DDLStrategy, error) {
-	switch sqlparser.DDLStrategy(strategy) {
-	case DDLStrategyGhost:
-		return DDLStrategyGhost, nil
-	case DDLStrategyPTOSC:
-		return DDLStrategyPTOSC, nil
-	case DDLStrategyNormal:
-		return DDLStrategyNormal, nil
+// ParseDDLStrategy validates the given ddl_strategy variable value , and parses the strategy and options parts.
+func ParseDDLStrategy(strategyVariable string) (strategy DDLStrategy, options string, err error) {
+	strategyName := strategyVariable
+	if submatch := strategyParserRegexp.FindStringSubmatch(strategyVariable); len(submatch) > 0 {
+		strategyName = submatch[1]
+		options = submatch[2]
+	}
+
+	switch strategy = DDLStrategy(strategyName); strategy {
+	case DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyNormal:
+		return strategy, options, nil
 	default:
-		return DDLStrategyNormal, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
+		return strategy, options, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
 	}
 }
 
@@ -133,7 +139,7 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.DDLStrategy, options string) (*OnlineDDL, error) {
+func NewOnlineDDL(keyspace string, table string, sql string, strategy DDLStrategy, options string) (*OnlineDDL, error) {
 	u, err := CreateUUID()
 	if err != nil {
 		return nil, err

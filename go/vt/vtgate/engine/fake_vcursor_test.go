@@ -57,7 +57,11 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
-func (t noopVCursor) SetDDLStrategy(strategy sqlparser.DDLStrategy) {
+func (t noopVCursor) SetDDLStrategy(strategy string) {
+	panic("implement me")
+}
+
+func (t noopVCursor) GetDDLStrategy() string {
 	panic("implement me")
 }
 
@@ -160,6 +164,10 @@ func (t noopVCursor) MaxMemoryRows() int {
 
 func (t noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
 	return !testIgnoreMaxMemoryRows && numRows > testMaxMemoryRows
+}
+
+func (t noopVCursor) GetKeyspace() string {
+	return ""
 }
 
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
@@ -296,6 +304,10 @@ func (f *loggingVCursor) SetContextTimeout(time.Duration) context.CancelFunc {
 
 func (f *loggingVCursor) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) GetKeyspace() string {
+	return ""
 }
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {

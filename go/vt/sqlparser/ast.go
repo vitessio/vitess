@@ -51,15 +51,16 @@ type (
 		AddOrder(*Order)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
+		MakeDistinct()
 		SQLNode
 	}
 
 	// DDLStatement represents any DDL Statement
 	DDLStatement interface {
 		iDDLStatement()
-		GetOnlineHint() *OnlineDDLHint
 		IsFullyParsed() bool
 		GetTable() TableName
+		GetAction() DDLAction
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		Statement
@@ -245,14 +246,6 @@ type (
 		FullyParsed   bool
 	}
 
-	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
-	DDLStrategy string
-
-	// OnlineDDLHint indicates strategy and options for running an online DDL
-	OnlineDDLHint struct {
-		Strategy DDLStrategy
-		Options  string
-	}
 	// DBDDLAction is an enum for DBDDL Actions
 	DBDDLAction int8
 
@@ -274,7 +267,6 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
-		OnlineHint    *OnlineDDLHint
 
 		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
@@ -290,7 +282,6 @@ type (
 	CreateIndex struct {
 		Constraint  string
 		Name        ColIdent
-		OnlineHint  *OnlineDDLHint
 		IndexType   string
 		Table       TableName
 		Columns     []*IndexColumn
@@ -407,16 +398,6 @@ func (node *CreateIndex) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
-// GetOnlineHint implements the DDLStatement interface
-func (node *DDL) GetOnlineHint() *OnlineDDLHint {
-	return node.OnlineHint
-}
-
-// GetOnlineHint implements the DDLStatement interface
-func (node *CreateIndex) GetOnlineHint() *OnlineDDLHint {
-	return node.OnlineHint
-}
-
 // GetTable implements the DDLStatement interface
 func (node *CreateIndex) GetTable() TableName {
 	return node.Table
@@ -425,6 +406,16 @@ func (node *CreateIndex) GetTable() TableName {
 // GetTable implements the DDLStatement interface
 func (node *DDL) GetTable() TableName {
 	return node.Table
+}
+
+// GetAction implements the DDLStatement interface
+func (node *CreateIndex) GetAction() DDLAction {
+	return AlterDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *DDL) GetAction() DDLAction {
+	return node.Action
 }
 
 // AffectedTables returns the list table names affected by the DDLStatement.
@@ -764,14 +755,19 @@ type (
 		Name, Qualifier TableIdent
 	}
 
-	// Subquery represents a subquery.
+	// Subquery represents a subquery used as an value expression.
 	Subquery struct {
+		Select SelectStatement
+	}
+
+	// DerivedTable represents a subquery used as a table expression.
+	DerivedTable struct {
 		Select SelectStatement
 	}
 )
 
-func (TableName) iSimpleTableExpr() {}
-func (*Subquery) iSimpleTableExpr() {}
+func (TableName) iSimpleTableExpr()     {}
+func (*DerivedTable) iSimpleTableExpr() {}
 
 // TableNames is a list of TableName.
 type TableNames []TableName
@@ -1962,6 +1958,11 @@ func (node ValTuple) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Subquery) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "(%v)", node.Select)
+}
+
+// Format formats the node.
+func (node *DerivedTable) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "(%v)", node.Select)
 }
 

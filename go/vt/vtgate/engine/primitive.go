@@ -53,6 +53,7 @@ type (
 		// Context returns the context of the current request.
 		Context() context.Context
 
+		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
 
@@ -126,7 +127,8 @@ type (
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetFoundRows(uint64)
 
-		SetDDLStrategy(sqlparser.DDLStrategy)
+		SetDDLStrategy(string)
+		GetDDLStrategy() string
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)

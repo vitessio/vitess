@@ -48,16 +48,17 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 }
 
 // ApplySchemaWithOutput applies SQL schema to the keyspace
-func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string) (result string, err error) {
+func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, ddlStrategy string) (result string, err error) {
 	return vtctlclient.ExecuteCommandWithOutput(
 		"ApplySchema",
 		"-sql", SQL,
+		"-ddl_strategy", ddlStrategy,
 		Keyspace)
 }
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL)
+	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "")
 	return err
 }
 
