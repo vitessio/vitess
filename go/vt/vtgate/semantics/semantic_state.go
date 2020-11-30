@@ -19,16 +19,21 @@ package semantics
 import (
 	"fmt"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
+	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		exprScope  map[sqlparser.Expr]*scope
-		outerScope *scope
+		exprScope        map[sqlparser.Expr]*scope
+		exprDependencies map[sqlparser.Expr][]*sqlparser.AliasedTableExpr
 	}
 	scope struct {
-		i int
+		i      int
+		tables map[string]*sqlparser.AliasedTableExpr
 	}
 )
 
@@ -36,36 +41,46 @@ var i = 0
 
 func newScope() *scope {
 	i++
-	return &scope{i: i}
+	return &scope{i: i, tables: map[string]*sqlparser.AliasedTableExpr{}}
 }
 
 func (t *SemTable) scope(expr sqlparser.Expr) *scope {
 	return t.exprScope[expr]
 }
 
-type analyzer struct {
-	exprScope map[sqlparser.Expr]*scope
-	scopes    []*scope
+func (t *SemTable) dependencies(expr sqlparser.Expr) []*sqlparser.AliasedTableExpr {
+	return t.exprDependencies[expr]
 }
 
-func NewAnalyzer() *analyzer {
-	return &analyzer{
-		exprScope: map[sqlparser.Expr]*scope{},
+// Analyzer is a struct to work with analyzing the query.
+type Analyzer struct {
+	scopes           []*scope
+	exprScope        map[sqlparser.Expr]*scope
+	exprDependencies map[sqlparser.Expr][]*sqlparser.AliasedTableExpr
+	err              error
+}
+
+// NewAnalyzer create the semantic Analyzer
+func NewAnalyzer() *Analyzer {
+	return &Analyzer{
+		exprScope:        map[sqlparser.Expr]*scope{},
+		exprDependencies: map[sqlparser.Expr][]*sqlparser.AliasedTableExpr{},
 	}
 }
 
+// Analyse analyzes the parsed query.
 func Analyse(statement sqlparser.Statement) (*SemTable, error) {
 	analyzer := NewAnalyzer()
 	// Initial scope
 	analyzer.push(newScope())
-	err := analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
+	analyzer.analyze(statement)
+	if analyzer.err != nil {
+		return nil, analyzer.err
 	}
-	return &SemTable{outerScope: analyzer.peek(), exprScope: analyzer.exprScope}, nil
+	return &SemTable{exprScope: analyzer.exprScope, exprDependencies: analyzer.exprDependencies}, nil
 }
 
-var debug = false
+var debug = true
 
 func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 	if debug {
@@ -77,27 +92,26 @@ func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 		}
 	}
 }
-func (a *analyzer) analyze(statement sqlparser.Statement) error {
+func (a *Analyzer) analyze(statement sqlparser.Statement) {
 	log(statement, "analyse %T", statement)
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
-		sqlparser.Rewrite(stmt.SelectExprs, a.analyzeExprs, nil)
-		sqlparser.Rewrite(stmt.Where, a.analyzeExprs, nil)
-		sqlparser.Rewrite(stmt.OrderBy, a.analyzeExprs, nil)
-		sqlparser.Rewrite(stmt.GroupBy, a.analyzeExprs, nil)
-		sqlparser.Rewrite(stmt.Having, a.analyzeExprs, nil)
-		sqlparser.Rewrite(stmt.Limit, a.analyzeExprs, nil)
 		for _, tableExpr := range stmt.From {
 			a.analyzeTableExpr(tableExpr)
 		}
+		sqlparser.Rewrite(stmt.SelectExprs, a.scopeExprs, a.bindExprs)
+		sqlparser.Rewrite(stmt.Where, a.scopeExprs, a.bindExprs)
+		sqlparser.Rewrite(stmt.OrderBy, a.scopeExprs, a.bindExprs)
+		sqlparser.Rewrite(stmt.GroupBy, a.scopeExprs, a.bindExprs)
+		sqlparser.Rewrite(stmt.Having, a.scopeExprs, a.bindExprs)
+		sqlparser.Rewrite(stmt.Limit, a.scopeExprs, a.bindExprs)
 	}
-	return nil
 }
 
-func (a *analyzer) analyzeExprs(cursor *sqlparser.Cursor) bool {
+func (a *Analyzer) scopeExprs(cursor *sqlparser.Cursor) bool {
 	n := cursor.Node()
 	current := a.peek()
-	log(n, "%d analyzeExprs %T", current.i, n)
+	log(n, "%d scopeExprs %T", current.i, n)
 	switch expr := n.(type) {
 	case *sqlparser.Subquery:
 		a.exprScope[expr] = current
@@ -111,17 +125,51 @@ func (a *analyzer) analyzeExprs(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) {
+func (a *Analyzer) bindExprs(cursor *sqlparser.Cursor) bool {
+	n := cursor.Node()
+	current := a.peek()
+	log(n, "%d bindExprs %T", current.i, n)
+	switch expr := n.(type) {
+	case *sqlparser.ColName:
+		qualifier := expr.Qualifier.Name.String()
+		if qualifier == "" {
+			a.err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "qualifier not present for %s", sqlparser.String(expr))
+			return false
+		}
+		tableExpr := current.tables[qualifier]
+		a.exprDependencies[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
+	case *sqlparser.BinaryExpr:
+		a.exprDependencies[expr] = append(a.exprDependencies[expr.Left], a.exprDependencies[expr.Right]...)
+	}
+	return a.err == nil
+}
+func (a *Analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) {
 	for _, tableExpr := range tablExprs {
 		a.analyzeTableExpr(tableExpr)
 	}
 }
 
-func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
+func (a *Analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
 	log(tableExpr, "analyzeTableExpr %T", tableExpr)
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		a.analyzeSimpleTableExpr(table.Expr)
+		expr := table.Expr
+		switch t := expr.(type) {
+		case *sqlparser.DerivedTable:
+
+			a.push(newScope())
+			a.analyze(t.Select)
+			a.pop()
+			scope := a.peek()
+			scope.tables[table.As.String()] = table
+		case sqlparser.TableName:
+			scope := a.peek()
+			if table.As.IsEmpty() {
+				scope.tables[t.Name.String()] = table
+			} else {
+				scope.tables[table.As.String()] = table
+			}
+		}
 	case *sqlparser.JoinTableExpr:
 		a.analyzeTableExpr(table.LeftExpr)
 		a.analyzeTableExpr(table.RightExpr)
@@ -131,25 +179,15 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
 	return true
 }
 
-func (a *analyzer) analyzeSimpleTableExpr(expr sqlparser.SimpleTableExpr) {
-	log(expr, "analyzeSimpleTableExpr %T", expr)
-	dt, derived := expr.(*sqlparser.DerivedTable)
-	if derived {
-		a.push(newScope())
-		a.analyze(dt.Select)
-		a.pop()
-	}
-}
-
-func (a *analyzer) push(s *scope) {
+func (a *Analyzer) push(s *scope) {
 	a.scopes = append(a.scopes, s)
 }
 
-func (a *analyzer) pop() {
+func (a *Analyzer) pop() {
 	l := len(a.scopes) - 1
 	a.scopes = a.scopes[:l]
 }
 
-func (a *analyzer) peek() *scope {
+func (a *Analyzer) peek() *scope {
 	return a.scopes[len(a.scopes)-1]
 }
