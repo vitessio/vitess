@@ -25,10 +25,22 @@ import (
 )
 
 type (
+	table = *sqlparser.AliasedTableExpr
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
 		exprScope        map[sqlparser.Expr]*scope
-		exprDependencies map[sqlparser.Expr][]*sqlparser.AliasedTableExpr
+		exprDependencies map[sqlparser.Expr][]table
+	}
+	// analyzer is a struct to work with analyzing the query.
+	analyzer struct {
+		scopes    []*scope
+		exprScope map[sqlparser.Expr]*scope
+		exprDeps  map[sqlparser.Expr][]table
+		si        schemaInformation
+		err       error
+	}
+	schemaInformation interface {
+		FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 	}
 )
 
@@ -36,28 +48,15 @@ func (t *SemTable) scope(expr sqlparser.Expr) *scope {
 	return t.exprScope[expr]
 }
 
-func (t *SemTable) dependencies(expr sqlparser.Expr) []*sqlparser.AliasedTableExpr {
+func (t *SemTable) dependencies(expr sqlparser.Expr) []table {
 	return t.exprDependencies[expr]
-}
-
-// analyzer is a struct to work with analyzing the query.
-type analyzer struct {
-	scopes    []*scope
-	exprScope map[sqlparser.Expr]*scope
-	exprDeps  map[sqlparser.Expr][]*sqlparser.AliasedTableExpr
-	si        schemaInformation
-	err       error
-}
-
-type schemaInformation interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 }
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(si schemaInformation) *analyzer {
 	return &analyzer{
 		exprScope: map[sqlparser.Expr]*scope{},
-		exprDeps:  map[sqlparser.Expr][]*sqlparser.AliasedTableExpr{},
+		exprDeps:  map[sqlparser.Expr][]table{},
 		si:        si,
 	}
 }
@@ -74,7 +73,7 @@ func Analyse(statement sqlparser.Statement, si schemaInformation) (*SemTable, er
 	return &SemTable{exprScope: analyzer.exprScope, exprDependencies: analyzer.exprDeps}, nil
 }
 
-var debug = false
+var debug = true
 
 func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 	if debug {
@@ -93,12 +92,12 @@ func (a *analyzer) analyze(statement sqlparser.Statement) {
 		for _, tableExpr := range stmt.From {
 			a.analyzeTableExpr(tableExpr)
 		}
-		sqlparser.Rewrite(stmt.SelectExprs, a.scopeExprs, a.bindExprs)
-		sqlparser.Rewrite(stmt.Where, a.scopeExprs, a.bindExprs)
-		sqlparser.Rewrite(stmt.OrderBy, a.scopeExprs, a.bindExprs)
-		sqlparser.Rewrite(stmt.GroupBy, a.scopeExprs, a.bindExprs)
-		sqlparser.Rewrite(stmt.Having, a.scopeExprs, a.bindExprs)
-		sqlparser.Rewrite(stmt.Limit, a.scopeExprs, a.bindExprs)
+		sqlparser.Rewrite(stmt.SelectExprs, a.scopeExprs, a.bindExpr)
+		sqlparser.Rewrite(stmt.Where, a.scopeExprs, a.bindExpr)
+		sqlparser.Rewrite(stmt.OrderBy, a.scopeExprs, a.bindExpr)
+		sqlparser.Rewrite(stmt.GroupBy, a.scopeExprs, a.bindExpr)
+		sqlparser.Rewrite(stmt.Having, a.scopeExprs, a.bindExpr)
+		sqlparser.Rewrite(stmt.Limit, a.scopeExprs, a.bindExpr)
 	}
 }
 

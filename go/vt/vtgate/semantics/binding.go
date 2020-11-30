@@ -21,10 +21,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func (a *analyzer) bindExprs(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) bindExpr(cursor *sqlparser.Cursor) bool {
 	n := cursor.Node()
 	current := a.peek()
-	log(n, "%d bindExprs %T", current.i, n)
+	log(n, "%d bindExpr %T", current.i, n)
 	switch expr := n.(type) {
 	case *sqlparser.ColName:
 		if expr.Qualifier.IsEmpty() {
@@ -32,15 +32,28 @@ func (a *analyzer) bindExprs(cursor *sqlparser.Cursor) bool {
 			a.resolveUnQualifiedColumn(current, expr)
 			return true
 		}
-		a.err = a.resolveQualifiedColumn(expr, current)
+		a.err = a.resolveQualifiedColumn(current, expr)
 	case *sqlparser.BinaryExpr:
-		a.exprDeps[expr] = append(a.exprDeps[expr.Left], a.exprDeps[expr.Right]...)
+		deps := a.exprDeps[expr.Left]
+		for _, t1 := range a.exprDeps[expr.Right] {
+			found := false
+			for _, t2 := range deps {
+				if t1 == t2 {
+					found = true
+					break
+				}
+			}
+			if !found {
+				deps = append(deps, t1)
+			}
+		}
+		a.exprDeps[expr] = deps
 	}
 
 	return a.err == nil
 }
 
-func (a *analyzer) resolveQualifiedColumn(expr *sqlparser.ColName, current *scope) error {
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) error {
 	qualifier := expr.Qualifier.Name.String()
 
 	for current != nil {
