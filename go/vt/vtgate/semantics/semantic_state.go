@@ -19,6 +19,9 @@ package semantics
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -49,32 +52,38 @@ func (t *SemTable) dependencies(expr sqlparser.Expr) []*sqlparser.AliasedTableEx
 	return t.exprDependencies[expr]
 }
 
-// Analyzer is a struct to work with analyzing the query.
-type Analyzer struct {
-	scopes           []*scope
-	exprScope        map[sqlparser.Expr]*scope
-	exprDependencies map[sqlparser.Expr][]*sqlparser.AliasedTableExpr
-	err              error
+// analyzer is a struct to work with analyzing the query.
+type analyzer struct {
+	scopes    []*scope
+	exprScope map[sqlparser.Expr]*scope
+	exprDeps  map[sqlparser.Expr][]*sqlparser.AliasedTableExpr
+	si        schemaInformation
+	err       error
 }
 
-// NewAnalyzer create the semantic Analyzer
-func NewAnalyzer() *Analyzer {
-	return &Analyzer{
-		exprScope:        map[sqlparser.Expr]*scope{},
-		exprDependencies: map[sqlparser.Expr][]*sqlparser.AliasedTableExpr{},
+type schemaInformation interface {
+	FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
+}
+
+// newAnalyzer create the semantic analyzer
+func newAnalyzer(si schemaInformation) *analyzer {
+	return &analyzer{
+		exprScope: map[sqlparser.Expr]*scope{},
+		exprDeps:  map[sqlparser.Expr][]*sqlparser.AliasedTableExpr{},
+		si:        si,
 	}
 }
 
 // Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement) (*SemTable, error) {
-	analyzer := NewAnalyzer()
+func Analyse(statement sqlparser.Statement, si schemaInformation) (*SemTable, error) {
+	analyzer := newAnalyzer(si)
 	// Initial scope
 	analyzer.push(newScope())
 	analyzer.analyze(statement)
 	if analyzer.err != nil {
 		return nil, analyzer.err
 	}
-	return &SemTable{exprScope: analyzer.exprScope, exprDependencies: analyzer.exprDependencies}, nil
+	return &SemTable{exprScope: analyzer.exprScope, exprDependencies: analyzer.exprDeps}, nil
 }
 
 var debug = false
@@ -89,7 +98,7 @@ func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 		}
 	}
 }
-func (a *Analyzer) analyze(statement sqlparser.Statement) {
+func (a *analyzer) analyze(statement sqlparser.Statement) {
 	log(statement, "analyse %T", statement)
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
@@ -105,7 +114,7 @@ func (a *Analyzer) analyze(statement sqlparser.Statement) {
 	}
 }
 
-func (a *Analyzer) scopeExprs(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) scopeExprs(cursor *sqlparser.Cursor) bool {
 	n := cursor.Node()
 	current := a.peek()
 	log(n, "%d scopeExprs %T", current.i, n)
@@ -122,27 +131,53 @@ func (a *Analyzer) scopeExprs(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func (a *Analyzer) bindExprs(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) bindExprs(cursor *sqlparser.Cursor) bool {
 	n := cursor.Node()
 	current := a.peek()
 	log(n, "%d bindExprs %T", current.i, n)
 	switch expr := n.(type) {
 	case *sqlparser.ColName:
-		qualifier := expr.Qualifier.Name.String()
-		tableExpr := current.tables[qualifier]
-		a.exprDependencies[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
+		if expr.Qualifier.IsEmpty() {
+			// try to guess which table this column belongs to
+			a.resolveUnQualifiedColumn(current, expr)
+			return true
+		}
+
+		a.err = a.resolveQualifiedColumn(expr, current)
 	case *sqlparser.BinaryExpr:
-		a.exprDependencies[expr] = append(a.exprDependencies[expr.Left], a.exprDependencies[expr.Right]...)
+		a.exprDeps[expr] = append(a.exprDeps[expr.Left], a.exprDeps[expr.Right]...)
 	}
+
 	return a.err == nil
 }
-func (a *Analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) {
+
+func (a *analyzer) resolveQualifiedColumn(expr *sqlparser.ColName, current *scope) error {
+	qualifier := expr.Qualifier.Name.String()
+	tableExpr, found := current.tables[qualifier]
+	if found {
+		a.exprDeps[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
+		return nil
+	}
+
+	return mysql.NewSQLError(mysql.ERBadFieldError, mysql.SSBadFieldError, "Unknown column '%s'", sqlparser.String(expr))
+}
+
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) {
+	if len(current.tables) == 1 {
+		for _, tableExpr := range current.tables {
+
+			a.exprDeps[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
+		}
+	}
+}
+
+func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) {
 	for _, tableExpr := range tablExprs {
 		a.analyzeTableExpr(tableExpr)
 	}
 }
 
-func (a *Analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
+func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
 	log(tableExpr, "analyzeTableExpr %T", tableExpr)
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
@@ -172,15 +207,15 @@ func (a *Analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
 	return true
 }
 
-func (a *Analyzer) push(s *scope) {
+func (a *analyzer) push(s *scope) {
 	a.scopes = append(a.scopes, s)
 }
 
-func (a *Analyzer) pop() {
+func (a *analyzer) pop() {
 	l := len(a.scopes) - 1
 	a.scopes = a.scopes[:l]
 }
 
-func (a *Analyzer) peek() *scope {
+func (a *analyzer) peek() *scope {
 	return a.scopes[len(a.scopes)-1]
 }

@@ -46,12 +46,12 @@ func TestScope(t *testing.T) {
 
 func TestBindingSingleTable(t *testing.T) {
 	queries := []string{
-		//	"select col from t",
-		"select t.col from t",
-		"select d.t.col from t",
-		//	"select col from d.t",
-		"select t.col from d.t",
-		"select d.t.col from d.t",
+		"select col from tabl",
+		"select tabl.col from tabl",
+		"select d.tabl.col from tabl",
+		"select col from d.tabl",
+		"select tabl.col from d.tabl",
+		"select d.tabl.col from d.tabl",
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
@@ -60,7 +60,8 @@ func TestBindingSingleTable(t *testing.T) {
 
 			d := semTable.dependencies(extract(sel, 0))
 			require.NotEmpty(t, d)
-			//require.Equal(t, "t", sqlparser.String(d[0]))
+			require.NotNil(t, d[0])
+			require.Contains(t, sqlparser.String(d[0]), "tabl")
 		})
 	}
 }
@@ -93,7 +94,7 @@ func TestBindingMultiTable(t *testing.T) {
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	semTable, err := Analyse(parse)
+	semTable, err := Analyse(parse, nil)
 	require.NoError(t, err)
 	return parse, semTable
 }
