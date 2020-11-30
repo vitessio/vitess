@@ -1657,6 +1657,14 @@ var (
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",
 	}, {
+		input: "create database test_db default collate 'utf8mb4_general_ci' collate utf8mb4_general_ci",
+	}, {
+		input: "create database test_db character set geostd8",
+	}, {
+		input:      "create database test_db character set * unparsable",
+		output:     "create database test_db",
+		partialDDL: true,
+	}, {
 		input: "drop database test_db",
 	}, {
 		input:  "drop schema test_db",
@@ -1774,6 +1782,8 @@ func TestValid(t *testing.T) {
 			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
 			switch x := tree.(type) {
 			case *CreateIndex:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			case *CreateDatabase:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			}
 			// This test just exercises the tree walking functionality.
