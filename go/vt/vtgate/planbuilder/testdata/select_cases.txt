@@ -861,7 +861,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where name = 'abc' and id = 4 limit 5",
+    "Query": "select * from user where `name` = 'abc' and id = 4 limit 5",
     "Table": "user",
     "Values": [
       4
@@ -883,7 +883,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -905,7 +905,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -971,7 +971,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name = true limit 5",
+    "Query": "select * from user where id = 1 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       1
@@ -993,7 +993,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name limit 5",
+    "Query": "select * from user where id = 1 and `name` limit 5",
     "Table": "user",
     "Values": [
       1
@@ -1015,7 +1015,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 and name = true limit 5",
+    "Query": "select * from user where id = 5 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       5
@@ -1237,8 +1237,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select id, name from unsharded where 1 != 1",
-    "Query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+    "FieldQuery": "select id, `name` from unsharded where 1 != 1",
+    "Query": "select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
     "Table": "unsharded"
   }
 }
@@ -1288,8 +1288,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)",
-    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1)",
+    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)",
     "Table": "unsharded"
   }
 }
