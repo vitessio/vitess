@@ -19,9 +19,6 @@ package semantics
 import (
 	"fmt"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -80,7 +77,7 @@ func Analyse(statement sqlparser.Statement) (*SemTable, error) {
 	return &SemTable{exprScope: analyzer.exprScope, exprDependencies: analyzer.exprDependencies}, nil
 }
 
-var debug = true
+var debug = false
 
 func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 	if debug {
@@ -132,10 +129,6 @@ func (a *Analyzer) bindExprs(cursor *sqlparser.Cursor) bool {
 	switch expr := n.(type) {
 	case *sqlparser.ColName:
 		qualifier := expr.Qualifier.Name.String()
-		if qualifier == "" {
-			a.err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "qualifier not present for %s", sqlparser.String(expr))
-			return false
-		}
 		tableExpr := current.tables[qualifier]
 		a.exprDependencies[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
 	case *sqlparser.BinaryExpr:
