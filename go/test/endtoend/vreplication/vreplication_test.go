@@ -619,8 +619,15 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables, action string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+cell, "-workflow="+workflow,
-		"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables, action); err != nil {
+	if action == "" || action == "Start" {
+		if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+cell, "-workflow="+workflow,
+			"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables, action); err != nil {
+			t.Fatalf("MoveTables command failed with %+v\n", err)
+		}
+		return
+	}
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+cell,
+		fmt.Sprintf("%s.%s", targetKs, workflow), action); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }

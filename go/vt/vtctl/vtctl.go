@@ -1988,15 +1988,16 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if action == wrangler.WorkflowEventStart {
 		wfName = *workflowName
 	}
-	wf, err := wr.NewMoveTablesWorkflow(ctx, wfName, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
+	mtwf, err := wr.NewMoveTablesWorkflow(ctx, wfName, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
 	if err != nil {
-		log.Warningf("NewMoveTablesWorkflow returned error %+v", wf)
+		log.Warningf("NewMoveTablesWorkflow returned error %+v", mtwf)
 		return err
 	}
-	if err := wf.Start(); err != nil {
-		log.Warningf("NewMoveTablesWorkflow Start error %+v", wf)
+	if err := mtwf.FireEvent(action); err != nil {
+		log.Warningf("NewMoveTablesWorkflow %s error: %+v", action, mtwf)
 		return err
 	}
+	wr.Logger().Printf("MoveTables %s was successful\n\n%s", action, mtwf)
 	return nil
 }
 
