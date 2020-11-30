@@ -128,9 +128,9 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	return err
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlparser.DBDDL, error) {
+func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []sqlparser.DBDDLStatement, error) {
 	parsedDDLs := make([]*sqlparser.DDL, 0)
-	parsedDBDDLs := make([]*sqlparser.DBDDL, 0)
+	parsedDBDDLs := make([]sqlparser.DBDDLStatement, 0)
 	for _, sql := range sqls {
 		stat, err := sqlparser.Parse(sql)
 		if err != nil {
@@ -139,7 +139,7 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlpa
 		switch ddl := stat.(type) {
 		case *sqlparser.DDL:
 			parsedDDLs = append(parsedDDLs, ddl)
-		case *sqlparser.DBDDL:
+		case sqlparser.DBDDLStatement:
 			parsedDBDDLs = append(parsedDBDDLs, ddl)
 		default:
 			if len(exec.tablets) != 1 {
