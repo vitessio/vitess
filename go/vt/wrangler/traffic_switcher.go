@@ -47,7 +47,8 @@ import (
 )
 
 const (
-	frozenStr = "FROZEN"
+	frozenStr      = "FROZEN"
+	ErrorNoStreams = "no streams found in keyspace %s for: %s"
 )
 
 // TrafficSwitchDirection specifies the switching direction.
@@ -143,12 +144,17 @@ type workflowState struct {
 }
 
 func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, *workflowState, error) {
-	ws := &workflowState{Workflow: workflow, TargetKeyspace: targetKeyspace}
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+
 	if err != nil {
+		if err.Error() == fmt.Sprintf(ErrorNoStreams, targetKeyspace, workflow) {
+			return nil, nil, nil
+		}
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, nil, err
 	}
+
+	ws := &workflowState{Workflow: workflow, TargetKeyspace: targetKeyspace}
 	ws.SourceKeyspace = ts.sourceKeyspace
 	if ts.frozen {
 		ws.WritesSwitched = true
@@ -222,6 +228,11 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return nil, err
 	}
+	if ts == nil {
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace", workflow, targetKeyspace)
+		wr.Logger().Errorf(errorMsg)
+		return nil, fmt.Errorf(errorMsg)
+	}
 
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
@@ -285,10 +296,16 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, timeout time.Duration, cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
-	_ = ws
 	if err != nil {
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return 0, nil, err
+	}
+	if ts == nil {
+		if ts == nil {
+			errorMsg := fmt.Sprintf("workflow %s not found in keyspace", workflow, targetKeyspace)
+			wr.Logger().Errorf(errorMsg)
+			return 0, nil, fmt.Errorf(errorMsg)
+		}
 	}
 
 	if reverse {
@@ -495,10 +512,11 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, error) {
-	targets, frozen, optCells, optTabletTypes, err := wr.buildTargets(ctx, targetKeyspace, workflow)
+	tgtInfo, err := wr.buildTargets(ctx, targetKeyspace, workflow)
 	if err != nil {
 		return nil, err
 	}
+	targets, frozen, optCells, optTabletTypes := tgtInfo.targets, tgtInfo.frozen, tgtInfo.optCells, tgtInfo.optTabletTypes
 
 	ts := &trafficSwitcher{
 		wr:              wr,
@@ -581,11 +599,21 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	return ts, nil
 }
 
-func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow string) (targets map[string]*tsTarget, frozen bool, optCells string, optTabletTypes string, err error) {
-	targets = make(map[string]*tsTarget)
+type targetInfo struct {
+	targets        map[string]*tsTarget
+	frozen         bool
+	optCells       string
+	optTabletTypes string
+}
+
+func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow string) (*targetInfo, error) {
+	var err error
+	var frozen bool
+	var optCells, optTabletTypes string
+	targets := make(map[string]*tsTarget)
 	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
 	if err != nil {
-		return nil, false, "", "", err
+		return nil, err
 	}
 	// We check all target shards. All of them may not have a stream.
 	// For example, if we're splitting -80 to -40,40-80, only those
@@ -593,19 +621,19 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 	for _, targetShard := range targetShards {
 		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
-			return nil, false, "", "", err
+			return nil, err
 		}
 		if targetsi.MasterAlias == nil {
 			// This can happen if bad inputs are given.
-			return nil, false, "", "", fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
+			return nil, fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
 		}
 		targetMaster, err := wr.ts.GetTablet(ctx, targetsi.MasterAlias)
 		if err != nil {
-			return nil, false, "", "", err
+			return nil, err
 		}
 		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source, message, cell, tablet_types from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
 		if err != nil {
-			return nil, false, "", "", err
+			return nil, err
 		}
 		// If there's no vreplication stream, check the next target.
 		if len(p3qr.Rows) < 1 {
@@ -621,12 +649,12 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 		for _, row := range qr.Rows {
 			id, err := evalengine.ToInt64(row[0])
 			if err != nil {
-				return nil, false, "", "", err
+				return nil, err
 			}
 
 			var bls binlogdatapb.BinlogSource
 			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
-				return nil, false, "", "", err
+				return nil, err
 			}
 			targets[targetShard].sources[uint32(id)] = &bls
 
@@ -638,9 +666,11 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 		}
 	}
 	if len(targets) == 0 {
-		return nil, false, "", "", fmt.Errorf("no streams found in keyspace %s for: %s", targetKeyspace, workflow)
+		err2 := fmt.Errorf(ErrorNoStreams, targetKeyspace, workflow)
+		return nil, err2
 	}
-	return targets, frozen, optCells, optTabletTypes, nil
+	tinfo := &targetInfo{targets: targets, frozen: frozen, optCells: optCells, optTabletTypes: optTabletTypes}
+	return tinfo, nil
 }
 
 // hashStreams produces a reproducible hash based on the input parameters.

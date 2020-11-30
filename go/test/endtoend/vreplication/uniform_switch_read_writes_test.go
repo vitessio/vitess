@@ -26,11 +26,95 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	moveTablesWorkflowName = "p2c"
+	sourceKs               = "product"
+	targetKs               = "customer"
+	ksWorkflow             = targetKs + "." + moveTablesWorkflowName
+	reverseKsWorkflow      = sourceKs + "." + moveTablesWorkflowName + "_reverse"
+	tablesToMove           = "customer"
+	defaultCellName        = "zone1"
+	query                  = "select * from customer"
+)
+
+var (
+	customerTab1, customerTab2, productReplicaTab, customerReplicaTab1, productTab *cluster.VttabletProcess
+)
+
+func moveTablesStart(t *testing.T) {
+	moveTables(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowEventStart)
+	catchup(t, customerTab1, moveTablesWorkflowName, "MoveTables")
+	catchup(t, customerTab2, moveTablesWorkflowName, "MoveTables")
+	vdiff(t, ksWorkflow)
+}
+
+func moveTablesSwitchReads(t *testing.T) {
+	moveTables(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchReads)
+}
+
+func moveTablesSwitchWrites(t *testing.T) {
+	moveTables(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchWrites)
+}
+
+func validateReadsRouteToSource(t *testing.T) {
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productReplicaTab, "product@replica", query, query))
+}
+
+func validateReadsRouteToTarget(t *testing.T) {
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerReplicaTab1, "product@replica", query, query))
+}
+
+func validateWritesRouteToSource(t *testing.T) {
+	insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
+	matchInsertQuery := "insert into customer(name, cid) values (:vtg1, :_cid0)"
+	require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery, matchInsertQuery))
+	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
+}
+func validateWritesRouteToTarget(t *testing.T) {
+	insertQuery := "insert into customer(name, cid) values('tempCustomer3', 101)"
+	matchInsertQuery := "insert into customer(name, cid) values (:vtg1, :_cid0)"
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery, matchInsertQuery))
+	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery, matchInsertQuery))
+	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
+}
+
+func revert(t *testing.T) {
+	switchWrites(t, reverseKsWorkflow, false)
+	validateWritesRouteToSource(t)
+	switchReadsNew(t, allCellNames, ksWorkflow, true)
+	validateReadsRouteToSource(t)
+	queries := []string{
+		"delete from _vt.vreplication",
+		"delete from _vt.resharding_journal",
+	}
+
+	for _, query := range queries {
+		customerTab1.QueryTablet(query, "customer", true)
+		customerTab2.QueryTablet(query, "customer", true)
+		productTab.QueryTablet(query, "product", true)
+	}
+	customerTab1.QueryTablet("drop table vt_customer.customer", "customer", true)
+	customerTab2.QueryTablet("drop table vt_customer.customer", "customer", true)
+
+	clearRoutingRules(t, vc)
+}
+
 func TestNewMoveTablesWorkflow(t *testing.T) {
 	vc = setupCluster(t)
-	setupCustomerKeyspace(t)
-	moveTablesNew(t) //moveTables(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowEventStart)
+	defer vtgateConn.Close()
+	//defer vc.TearDown()
 
+	setupCustomerKeyspace(t)
+	moveTablesStart(t)
+
+	validateReadsRouteToSource(t)
+	moveTablesSwitchReads(t)
+	validateReadsRouteToTarget(t)
+
+	validateWritesRouteToSource(t)
+	moveTablesSwitchWrites(t)
+	validateReadsRouteToTarget(t)
 }
 
 func setupCluster(t *testing.T) *VitessCluster {
@@ -42,8 +126,6 @@ func setupCluster(t *testing.T) *VitessCluster {
 	allCellNames = defaultCellName
 	defaultCell = vc.Cells[defaultCellName]
 
-	//defer vc.TearDown()
-
 	cell1 := vc.Cells["zone1"]
 	vc.AddKeyspace(t, []*Cell{cell1}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 
@@ -53,25 +135,14 @@ func setupCluster(t *testing.T) *VitessCluster {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
 	verifyClusterHealth(t)
 	insertInitialData(t)
+
+	productReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
+	productTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
+
 	return vc
 }
-
-const (
-	moveTablesWorkflowName = "p2c"
-	sourceKs               = "product"
-	targetKs               = "customer"
-	ksWorkflow             = targetKs + "." + moveTablesWorkflowName
-	reverseKsWorkflow      = sourceKs + "." + moveTablesWorkflowName + "_reverse"
-	tablesToMove           = "customer"
-	defaultCellName        = "zone1"
-)
-
-var (
-	customerTab1, customerTab2 *cluster.VttabletProcess
-)
 
 func setupCustomerKeyspace(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells[defaultCellName]}, "customer", "-80,80-",
@@ -93,6 +164,8 @@ func setupCustomerKeyspace(t *testing.T) {
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	customerTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 	customerTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+	customerReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
+
 }
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
@@ -109,19 +182,11 @@ func switchReadsNew(t *testing.T, cells, ksWorkflow string, reverse bool) {
 	}
 }
 
-var moveTablesNew = func(t *testing.T) {
-	moveTables(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowEventStart)
-	catchup(t, customerTab1, moveTablesWorkflowName, "MoveTables")
-	catchup(t, customerTab2, moveTablesWorkflowName, "MoveTables")
-	vdiff(t, ksWorkflow)
-}
-
 func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
 	workflow := "p2c"
 	sourceKs := "product"
 	targetKs := "customer"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-	reverseKsWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKs, workflow)
 
 	if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
@@ -144,56 +209,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	defaultCell := cells[0]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 	customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
-	customerReplicaTab1 := custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
 	customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
-
-	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	productReplicaTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
-	query := "select * from customer"
-
-	validateReadsRouteToSource := func() {
-		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productReplicaTab, "product@replica", query, query))
-	}
-
-	validateReadsRouteToTarget := func() {
-		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerReplicaTab1, "product@replica", query, query))
-	}
-
-	validateWritesRouteToSource := func() {
-		insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
-		matchInsertQuery := "insert into customer(name, cid) values (:vtg1, :_cid0)"
-		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery, matchInsertQuery))
-		execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
-	}
-	validateWritesRouteToTarget := func() {
-		insertQuery := "insert into customer(name, cid) values('tempCustomer3', 101)"
-		matchInsertQuery := "insert into customer(name, cid) values (:vtg1, :_cid0)"
-		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery, matchInsertQuery))
-		insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
-		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery, matchInsertQuery))
-		execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
-	}
-
-	revert := func() {
-		switchWrites(t, reverseKsWorkflow, false)
-		validateWritesRouteToSource()
-		switchReadsNew(t, allCellNames, ksWorkflow, true)
-		validateReadsRouteToSource()
-		queries := []string{
-			"delete from _vt.vreplication",
-			"delete from _vt.resharding_journal",
-		}
-
-		for _, query := range queries {
-			customerTab1.QueryTablet(query, "customer", true)
-			customerTab2.QueryTablet(query, "customer", true)
-			productTab.QueryTablet(query, "product", true)
-		}
-		customerTab1.QueryTablet("drop table vt_customer.customer", "customer", true)
-		customerTab2.QueryTablet("drop table vt_customer.customer", "customer", true)
-
-		clearRoutingRules(t, vc)
-	}
 
 	var moveTablesNew = func() {
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables, wrangler.WorkflowEventStart)
@@ -205,79 +221,79 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	var switchReadsFollowedBySwitchWrites = func() {
 		moveTablesNew()
 
-		validateReadsRouteToSource()
+		validateReadsRouteToSource(t)
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget()
+		validateReadsRouteToTarget(t)
 
-		validateWritesRouteToSource()
+		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
-		validateWritesRouteToTarget()
+		validateWritesRouteToTarget(t)
 
-		revert()
+		revert(t)
 	}
 	var switchWritesFollowedBySwitchReads = func() {
 		moveTablesNew()
 
-		validateWritesRouteToSource()
+		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
-		validateWritesRouteToTarget()
+		validateWritesRouteToTarget(t)
 
-		validateReadsRouteToSource()
+		validateReadsRouteToSource(t)
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget()
+		validateReadsRouteToTarget(t)
 
-		revert()
+		revert(t)
 	}
 
 	var switchReadsReverseSwitchWritesSwitchReads = func() {
 		moveTablesNew()
 
-		validateReadsRouteToSource()
+		validateReadsRouteToSource(t)
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget()
+		validateReadsRouteToTarget(t)
 
 		switchReadsNew(t, allCellNames, ksWorkflow, true)
-		validateReadsRouteToSource()
+		validateReadsRouteToSource(t)
 		printRoutingRules(t, vc, "After reversing SwitchReads")
 
-		validateWritesRouteToSource()
+		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
-		validateWritesRouteToTarget()
+		validateWritesRouteToTarget(t)
 
 		printRoutingRules(t, vc, "After SwitchWrites and reversing SwitchReads")
-		validateReadsRouteToSource()
+		validateReadsRouteToSource(t)
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget()
+		validateReadsRouteToTarget(t)
 
-		revert()
+		revert(t)
 	}
 
 	var switchWritesReverseSwitchReadsSwitchWrites = func() {
 		moveTablesNew()
 
-		validateWritesRouteToSource()
+		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
-		validateWritesRouteToTarget()
+		validateWritesRouteToTarget(t)
 
 		switchWrites(t, ksWorkflow, true)
-		validateWritesRouteToSource()
+		validateWritesRouteToSource(t)
 
-		validateReadsRouteToSource()
+		validateReadsRouteToSource(t)
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget()
+		validateReadsRouteToTarget(t)
 
-		validateWritesRouteToSource()
+		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
-		validateWritesRouteToTarget()
+		validateWritesRouteToTarget(t)
 
-		revert()
+		revert(t)
 	}
 	_ = switchReadsFollowedBySwitchWrites
 	_ = switchWritesFollowedBySwitchReads
 	_ = switchReadsReverseSwitchWritesSwitchReads
 	_ = switchWritesReverseSwitchReadsSwitchWrites
 	switchReadsFollowedBySwitchWrites()
-	//switchWritesFollowedBySwitchReads()
-	//switchReadsReverseSwitchWritesSwitchReads()
-	//switchWritesReverseSwitchReadsSwitchWrites()
+	switchWritesFollowedBySwitchReads()
+	switchReadsReverseSwitchWritesSwitchReads()
+	switchWritesReverseSwitchReadsSwitchWrites()
 }
