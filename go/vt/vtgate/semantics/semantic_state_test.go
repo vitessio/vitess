@@ -91,6 +91,13 @@ func TestBindingMultiTable(t *testing.T) {
 	}
 }
 
+func TestNotUniqueTableName(t *testing.T) {
+	parse, _ := sqlparser.Parse("select * from t, t")
+	_, err := Analyse(parse, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Not unique table/alias")
+}
+
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
