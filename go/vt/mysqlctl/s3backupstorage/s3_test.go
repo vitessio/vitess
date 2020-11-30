@@ -25,7 +25,7 @@ func (s3errclient *s3ErrorClient) PutObjectRequest(in *s3.PutObjectInput) (*requ
 }
 
 func TestAddFileError(t *testing.T) {
-	bh := &S3BackupHandle{client: &s3ErrorClient{}, readOnly: false}
+	bh := &S3BackupHandle{client: &s3ErrorClient{}, bs: &S3BackupStorage{}, readOnly: false}
 
 	wc, err := bh.AddFile(aws.BackgroundContext(), "somefile", 100000)
 	require.NoErrorf(t, err, "AddFile() expected no error, got %s", err)

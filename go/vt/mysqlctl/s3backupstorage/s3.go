@@ -24,10 +24,13 @@ limitations under the License.
 package s3backupstorage
 
 import (
+	"crypto/md5"
 	"crypto/tls"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"sort"
@@ -75,6 +78,9 @@ var (
 
 	// sse is the server-side encryption algorithm used when storing this object in S3
 	sse = flag.String("s3_backup_server_side_encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms)")
+
+	// sseCustomerKeyFile is the server-side encryption customer-provided key (base64 encoded) file path used for backup/restore
+	sseCustomerKeyFile = flag.String("s3_backup_sse_c_key", "", "server-side encryption customer-provided key file path")
 
 	// path component delimiter
 	delimiter = "/"
@@ -156,6 +162,9 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 			Key:                  object,
 			Body:                 reader,
 			ServerSideEncryption: sseOption,
+			SSECustomerAlgorithm: bh.bs.s3SSECustomer.alg,
+			SSECustomerKey:       bh.bs.s3SSECustomer.key,
+			SSECustomerKeyMD5:    bh.bs.s3SSECustomer.md5,
 		})
 		if err != nil {
 			reader.CloseWithError(err)
@@ -190,8 +199,11 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	}
 	object := objName(bh.dir, bh.name, filename)
 	out, err := bh.client.GetObject(&s3.GetObjectInput{
-		Bucket: bucket,
-		Key:    object,
+		Bucket:               bucket,
+		Key:                  object,
+		SSECustomerAlgorithm: bh.bs.s3SSECustomer.alg,
+		SSECustomerKey:       bh.bs.s3SSECustomer.key,
+		SSECustomerKeyMD5:    bh.bs.s3SSECustomer.md5,
 	})
 	if err != nil {
 		return nil, err
@@ -201,10 +213,45 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)
 
+type S3SSECustomer struct {
+	alg *string
+	key *string
+	md5 *string
+}
+
+func (sseCustomer *S3SSECustomer) Open() error {
+	if *sseCustomerKeyFile != "" {
+		base64CodedKey, err := ioutil.ReadFile(*sseCustomerKeyFile)
+		if err != nil {
+			log.Errorf(err.Error())
+			sseCustomer.Close()
+			return err
+		}
+
+		decodedKey, err := base64.StdEncoding.DecodeString(string(base64CodedKey))
+		if err != nil {
+			decodedKey = base64CodedKey
+		}
+
+		md5Hash := md5.Sum(decodedKey)
+		sseCustomer.alg = aws.String("AES256")
+		sseCustomer.key = aws.String(string(decodedKey))
+		sseCustomer.md5 = aws.String(base64.StdEncoding.EncodeToString(md5Hash[:]))
+	}
+	return nil
+}
+
+func (sseCustomer *S3SSECustomer) Close() {
+	sseCustomer.alg = nil
+	sseCustomer.key = nil
+	sseCustomer.md5 = nil
+}
+
 // S3BackupStorage implements the backupstorage.BackupStorage interface.
 type S3BackupStorage struct {
-	_client *s3.S3
-	mu      sync.Mutex
+	_client       *s3.S3
+	mu            sync.Mutex
+	s3SSECustomer S3SSECustomer
 }
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
@@ -339,6 +386,7 @@ func (bs *S3BackupStorage) Close() error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	bs._client = nil
+	bs.s3SSECustomer.Close()
 	return nil
 }
 
@@ -392,6 +440,10 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 		}
 
 		if _, err := bs._client.HeadBucket(&s3.HeadBucketInput{Bucket: bucket}); err != nil {
+			return nil, err
+		}
+
+		if err := bs.s3SSECustomer.Open(); err != nil {
 			return nil, err
 		}
 	}
