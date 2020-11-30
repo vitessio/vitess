@@ -32,7 +32,6 @@ func (a *analyzer) bindExprs(cursor *sqlparser.Cursor) bool {
 			a.resolveUnQualifiedColumn(current, expr)
 			return true
 		}
-
 		a.err = a.resolveQualifiedColumn(expr, current)
 	case *sqlparser.BinaryExpr:
 		a.exprDeps[expr] = append(a.exprDeps[expr.Left], a.exprDeps[expr.Right]...)
@@ -59,8 +58,26 @@ func (a *analyzer) resolveQualifiedColumn(expr *sqlparser.ColName, current *scop
 func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {
-
 			a.exprDeps[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
 		}
 	}
+}
+
+func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
+	switch t := expr.(type) {
+	case *sqlparser.DerivedTable:
+		a.push(newScope(nil))
+		a.analyze(t.Select)
+		a.pop()
+		scope := a.peek()
+		return scope.addTable(alias.As.String(), alias)
+	case sqlparser.TableName:
+		scope := a.peek()
+		if alias.As.IsEmpty() {
+			return scope.addTable(t.Name.String(), alias)
+		}
+
+		return scope.addTable(alias.As.String(), alias)
+	}
+	return nil
 }

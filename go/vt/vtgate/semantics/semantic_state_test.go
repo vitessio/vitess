@@ -19,6 +19,8 @@ package semantics
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -91,11 +93,31 @@ func TestBindingMultiTable(t *testing.T) {
 	}
 }
 
+func TestBindingSingleDepPerTable(t *testing.T) {
+	query := "select t.col + t.col2 from t"
+	stmt, semTable := parseAndAnalyze(t, query)
+	sel, _ := stmt.(*sqlparser.Select)
+
+	d := semTable.dependencies(extract(sel, 0))
+	assert.Equal(t, 1, len(d), "size wrong")
+	assert.Equal(t, "t", sqlparser.String(d[0]))
+}
+
 func TestNotUniqueTableName(t *testing.T) {
-	parse, _ := sqlparser.Parse("select * from t, t")
-	_, err := Analyse(parse, nil)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Not unique table/alias")
+	queries := []string{
+		"select * from t, t",
+		"select * from t, (select 1 from x) as t",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, _ := sqlparser.Parse(query)
+			_, err := Analyse(parse, nil)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "Not unique table/alias")
+		})
+	}
+
 }
 
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {

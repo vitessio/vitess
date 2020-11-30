@@ -72,22 +72,7 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
 	log(tableExpr, "analyzeTableExpr %T", tableExpr)
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		expr := table.Expr
-		switch t := expr.(type) {
-		case *sqlparser.DerivedTable:
-			a.push(newScope(nil))
-			a.analyze(t.Select)
-			a.pop()
-			scope := a.peek()
-			a.err = scope.addTable(table.As.String(), table)
-		case sqlparser.TableName:
-			scope := a.peek()
-			if table.As.IsEmpty() {
-				a.err = scope.addTable(t.Name.String(), table) //.tables[t.Name.String()] = table
-			} else {
-				a.err = scope.addTable(table.As.String(), table)
-			}
-		}
+		a.err = a.bindTable(table, table.Expr)
 	case *sqlparser.JoinTableExpr:
 		a.analyzeTableExpr(table.LeftExpr)
 		a.analyzeTableExpr(table.RightExpr)
