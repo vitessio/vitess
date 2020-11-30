@@ -412,9 +412,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select name, count(*) from user where 1 != 1 group by name",
+        "FieldQuery": "select `name`, count(*) from user where 1 != 1 group by `name`",
         "OrderBy": "0 ASC",
-        "Query": "select name, count(*) from user group by name order by name asc",
+        "Query": "select `name`, count(*) from user group by `name` order by `name` asc",
         "Table": "user"
       }
     ]
