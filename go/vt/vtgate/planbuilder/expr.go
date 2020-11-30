@@ -84,8 +84,6 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
-		case *sqlparser.DerivedTable:
-			panic(42)
 		case *sqlparser.ColName:
 			newOrigin, isLocal, err := pb.st.Find(node)
 			if err != nil {

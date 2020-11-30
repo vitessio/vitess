@@ -61,7 +61,7 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 		return nil, err
 	}
 
-	result, err := sqlparser.PrepareAST(stmt, map[string]*querypb.BindVariable{}, "", true)
+	result, err := sqlparser.RewriteAST(stmt)
 	if err != nil {
 		return nil, err
 	}
