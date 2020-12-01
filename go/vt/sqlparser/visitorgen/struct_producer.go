@@ -27,9 +27,10 @@ type (
 	VisitorItem interface {
 		toFieldItemString() string
 		typeName() string
-		asSwitchCase() string
+		asApplySwitchCase() string
 		asReplMethod() string
 		getFieldName() string
+		asVisitWithStateSwitchCase() string
 	}
 
 	// SingleFieldItem is a single field in a struct
@@ -130,8 +131,12 @@ func (s *SingleFieldItem) toFieldItemString() string {
 	return fmt.Sprintf("single item: %v of type: %v", s.FieldName, s.FieldType.toTypString())
 }
 
-func (s *SingleFieldItem) asSwitchCase() string {
+func (s *SingleFieldItem) asApplySwitchCase() string {
 	return fmt.Sprintf(`		a.apply(node, n.%s, %s)`, s.FieldName, s.typeName())
+}
+
+func (s *SingleFieldItem) asVisitWithStateSwitchCase() string {
+	return fmt.Sprintf(`					todo = append(todo, &pre{n.%s})`, s.FieldName)
 }
 
 func (s *SingleFieldItem) asReplMethod() string {
@@ -200,7 +205,7 @@ func (afi *ArrayFieldItem) getFieldName() string {
 	return afi.FieldName
 }
 
-func (ai *ArrayItem) asSwitchCase() string {
+func (ai *ArrayItem) asApplySwitchCase() string {
 	return fmt.Sprintf(`		replacer := %s(0)
 		replacerRef := &replacer
 		for _, item := range n {
@@ -209,13 +214,25 @@ func (ai *ArrayItem) asSwitchCase() string {
 		}`, ai.typeName())
 }
 
-func (afi *ArrayFieldItem) asSwitchCase() string {
+func (ai *ArrayItem) asVisitWithStateSwitchCase() string {
+	return `					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}`
+}
+
+func (afi *ArrayFieldItem) asApplySwitchCase() string {
 	return fmt.Sprintf(`		replacer%s := %s(0)
 		replacer%sB := &replacer%s
 		for _, item := range n.%s {
 			a.apply(node, item, replacer%sB.replace)
 			replacer%sB.inc()
 		}`, afi.FieldName, afi.typeName(), afi.FieldName, afi.FieldName, afi.FieldName, afi.FieldName, afi.FieldName)
+}
+
+func (afi *ArrayFieldItem) asVisitWithStateSwitchCase() string {
+	return fmt.Sprintf(`					for _, item := range n.%s {
+						todo = append(todo, &pre{item})
+					}`, afi.FieldName)
 }
 
 func (ai *ArrayItem) typeName() string {

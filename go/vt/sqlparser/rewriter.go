@@ -933,7 +933,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	// walk children
 	// (the order of the cases is alphabetical)
 	switch n := node.(type) {
-	case nil:
 	case AccessMode:
 
 	case *AliasedExpr:
@@ -1470,6 +1469,536 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	}
 
 	a.cursor = saved
+}
+
+type (
+	action interface {
+		act()
+	}
+	pre struct {
+		n SQLNode
+	}
+	post struct {
+		n      SQLNode
+		states []interface{}
+	}
+)
+
+func (*pre) act()  {}
+func (*post) act() {}
+
+// VisitWithState does a visit of the tree, and allows
+// for the accumulation of state when coming up from the leaves
+// preF is the visitor that will visit nodes on the way down the tree.
+//      if it returns false, postF will not be called on this node, and it's children will not be visited
+//      if it returns an error, the visitation is aborted and the error is returned
+// postF is the visitor that will be called after all the children have been visited.
+//      As inputs, it accepts the visited node, and the state from the postF calls of the children
+//      It returns a state, and an error. If the error is non nil, visitation is aborted and the error is returned
+//      the state is added to the parents postF call
+func VisitWithState(
+	root SQLNode,
+	preF func(SQLNode) (bool, error),
+	postF func(sqlNode SQLNode, childrenStates []interface{}) (interface{}, error)) error {
+
+	todo := []action{&pre{root}}
+
+	for len(todo) > 0 {
+		newSize := len(todo) - 1
+		popped := todo[newSize]
+		todo = todo[:newSize]
+		switch next := popped.(type) {
+		case *pre:
+			if next.n == nil || isNilValue(next.n) {
+				continue
+			}
+
+			kontinue, err := preF(next.n)
+			if err != nil {
+				return err
+			}
+			if kontinue {
+				todo = append(todo, &post{n: next.n})
+				switch n := next.n.(type) {
+				case AccessMode:
+
+				case *AliasedExpr:
+					todo = append(todo, &pre{n.As})
+					todo = append(todo, &pre{n.Expr})
+
+				case *AliasedTableExpr:
+					todo = append(todo, &pre{n.As})
+					todo = append(todo, &pre{n.Expr})
+					todo = append(todo, &pre{n.Hints})
+					todo = append(todo, &pre{n.Partitions})
+
+				case *AndExpr:
+					todo = append(todo, &pre{n.Left})
+					todo = append(todo, &pre{n.Right})
+
+				case Argument:
+
+				case *AutoIncSpec:
+					todo = append(todo, &pre{n.Column})
+					todo = append(todo, &pre{n.Sequence})
+
+				case *Begin:
+
+				case *BinaryExpr:
+					todo = append(todo, &pre{n.Left})
+					todo = append(todo, &pre{n.Right})
+
+				case BoolVal:
+
+				case *CaseExpr:
+					todo = append(todo, &pre{n.Else})
+					todo = append(todo, &pre{n.Expr})
+					for _, item := range n.Whens {
+						todo = append(todo, &pre{item})
+					}
+
+				case *CheckConstraintDefinition:
+					todo = append(todo, &pre{n.Expr})
+
+				case ColIdent:
+
+				case *ColName:
+					todo = append(todo, &pre{n.Name})
+					todo = append(todo, &pre{n.Qualifier})
+
+				case *CollateExpr:
+					todo = append(todo, &pre{n.Expr})
+
+				case *ColumnDefinition:
+					todo = append(todo, &pre{n.Name})
+
+				case *ColumnType:
+					todo = append(todo, &pre{n.Comment})
+					todo = append(todo, &pre{n.Default})
+					todo = append(todo, &pre{n.Length})
+					todo = append(todo, &pre{n.OnUpdate})
+					todo = append(todo, &pre{n.Scale})
+
+				case Columns:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case Comments:
+
+				case *Commit:
+
+				case *ComparisonExpr:
+					todo = append(todo, &pre{n.Escape})
+					todo = append(todo, &pre{n.Left})
+					todo = append(todo, &pre{n.Right})
+
+				case *ConstraintDefinition:
+					todo = append(todo, &pre{n.Details})
+
+				case *ConvertExpr:
+					todo = append(todo, &pre{n.Expr})
+					todo = append(todo, &pre{n.Type})
+
+				case *ConvertType:
+					todo = append(todo, &pre{n.Length})
+					todo = append(todo, &pre{n.Scale})
+
+				case *ConvertUsingExpr:
+					todo = append(todo, &pre{n.Expr})
+
+				case *CreateDatabase:
+
+				case *CreateIndex:
+					todo = append(todo, &pre{n.Name})
+					todo = append(todo, &pre{n.Table})
+
+				case *CurTimeFuncExpr:
+					todo = append(todo, &pre{n.Fsp})
+					todo = append(todo, &pre{n.Name})
+
+				case *DBDDL:
+
+				case *DDL:
+					todo = append(todo, &pre{n.AutoIncSpec})
+					todo = append(todo, &pre{n.FromTables})
+					todo = append(todo, &pre{n.OptLike})
+					todo = append(todo, &pre{n.PartitionSpec})
+					todo = append(todo, &pre{n.Table})
+					todo = append(todo, &pre{n.TableSpec})
+					todo = append(todo, &pre{n.ToTables})
+					for _, item := range n.VindexCols {
+						todo = append(todo, &pre{item})
+					}
+					todo = append(todo, &pre{n.VindexSpec})
+
+				case *Default:
+
+				case *Delete:
+					todo = append(todo, &pre{n.Comments})
+					todo = append(todo, &pre{n.Limit})
+					todo = append(todo, &pre{n.OrderBy})
+					todo = append(todo, &pre{n.Partitions})
+					todo = append(todo, &pre{n.TableExprs})
+					todo = append(todo, &pre{n.Targets})
+					todo = append(todo, &pre{n.Where})
+
+				case *DerivedTable:
+					todo = append(todo, &pre{n.Select})
+
+				case *ExistsExpr:
+					todo = append(todo, &pre{n.Subquery})
+
+				case *Explain:
+					todo = append(todo, &pre{n.Statement})
+
+				case Exprs:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *ForeignKeyDefinition:
+					todo = append(todo, &pre{n.OnDelete})
+					todo = append(todo, &pre{n.OnUpdate})
+					todo = append(todo, &pre{n.ReferencedColumns})
+					todo = append(todo, &pre{n.ReferencedTable})
+					todo = append(todo, &pre{n.Source})
+
+				case *FuncExpr:
+					todo = append(todo, &pre{n.Exprs})
+					todo = append(todo, &pre{n.Name})
+					todo = append(todo, &pre{n.Qualifier})
+
+				case GroupBy:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *GroupConcatExpr:
+					todo = append(todo, &pre{n.Exprs})
+					todo = append(todo, &pre{n.Limit})
+					todo = append(todo, &pre{n.OrderBy})
+
+				case *IndexDefinition:
+					todo = append(todo, &pre{n.Info})
+
+				case *IndexHints:
+					for _, item := range n.Indexes {
+						todo = append(todo, &pre{item})
+					}
+
+				case *IndexInfo:
+					todo = append(todo, &pre{n.Name})
+
+				case *Insert:
+					todo = append(todo, &pre{n.Columns})
+					todo = append(todo, &pre{n.Comments})
+					todo = append(todo, &pre{n.OnDup})
+					todo = append(todo, &pre{n.Partitions})
+					todo = append(todo, &pre{n.Rows})
+					todo = append(todo, &pre{n.Table})
+
+				case *IntervalExpr:
+					todo = append(todo, &pre{n.Expr})
+
+				case *IsExpr:
+					todo = append(todo, &pre{n.Expr})
+
+				case IsolationLevel:
+
+				case JoinCondition:
+					todo = append(todo, &pre{n.On})
+					todo = append(todo, &pre{n.Using})
+
+				case *JoinTableExpr:
+					todo = append(todo, &pre{n.Condition})
+					todo = append(todo, &pre{n.LeftExpr})
+					todo = append(todo, &pre{n.RightExpr})
+
+				case *Limit:
+					todo = append(todo, &pre{n.Offset})
+					todo = append(todo, &pre{n.Rowcount})
+
+				case ListArg:
+
+				case *Literal:
+
+				case *Load:
+
+				case *MatchExpr:
+					todo = append(todo, &pre{n.Columns})
+					todo = append(todo, &pre{n.Expr})
+
+				case Nextval:
+					todo = append(todo, &pre{n.Expr})
+
+				case *NotExpr:
+					todo = append(todo, &pre{n.Expr})
+
+				case *NullVal:
+
+				case OnDup:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *OptLike:
+					todo = append(todo, &pre{n.LikeTable})
+
+				case *OrExpr:
+					todo = append(todo, &pre{n.Left})
+					todo = append(todo, &pre{n.Right})
+
+				case *Order:
+					todo = append(todo, &pre{n.Expr})
+
+				case OrderBy:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *OtherAdmin:
+
+				case *OtherRead:
+
+				case *ParenSelect:
+					todo = append(todo, &pre{n.Select})
+
+				case *ParenTableExpr:
+					todo = append(todo, &pre{n.Exprs})
+
+				case *PartitionDefinition:
+					todo = append(todo, &pre{n.Limit})
+					todo = append(todo, &pre{n.Name})
+
+				case *PartitionSpec:
+					for _, item := range n.Definitions {
+						todo = append(todo, &pre{item})
+					}
+					todo = append(todo, &pre{n.Name})
+
+				case Partitions:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *RangeCond:
+					todo = append(todo, &pre{n.From})
+					todo = append(todo, &pre{n.Left})
+					todo = append(todo, &pre{n.To})
+
+				case ReferenceAction:
+
+				case *Release:
+					todo = append(todo, &pre{n.Name})
+
+				case *Rollback:
+
+				case *SRollback:
+					todo = append(todo, &pre{n.Name})
+
+				case *Savepoint:
+					todo = append(todo, &pre{n.Name})
+
+				case *Select:
+					todo = append(todo, &pre{n.Comments})
+					todo = append(todo, &pre{n.From})
+					todo = append(todo, &pre{n.GroupBy})
+					todo = append(todo, &pre{n.Having})
+					todo = append(todo, &pre{n.Into})
+					todo = append(todo, &pre{n.Limit})
+					todo = append(todo, &pre{n.OrderBy})
+					todo = append(todo, &pre{n.SelectExprs})
+					todo = append(todo, &pre{n.Where})
+
+				case SelectExprs:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *SelectInto:
+
+				case *Set:
+					todo = append(todo, &pre{n.Comments})
+					todo = append(todo, &pre{n.Exprs})
+
+				case *SetExpr:
+					todo = append(todo, &pre{n.Expr})
+					todo = append(todo, &pre{n.Name})
+
+				case SetExprs:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *SetTransaction:
+					for _, item := range n.Characteristics {
+						todo = append(todo, &pre{item})
+					}
+					todo = append(todo, &pre{n.Comments})
+
+				case *Show:
+					todo = append(todo, &pre{n.Internal})
+
+				case *ShowColumns:
+					todo = append(todo, &pre{n.Filter})
+					todo = append(todo, &pre{n.Table})
+
+				case *ShowFilter:
+					todo = append(todo, &pre{n.Filter})
+
+				case *ShowLegacy:
+					todo = append(todo, &pre{n.OnTable})
+					todo = append(todo, &pre{n.ShowCollationFilterOpt})
+					todo = append(todo, &pre{n.Table})
+
+				case *ShowTableStatus:
+					todo = append(todo, &pre{n.Filter})
+
+				case *StarExpr:
+					todo = append(todo, &pre{n.TableName})
+
+				case *Stream:
+					todo = append(todo, &pre{n.Comments})
+					todo = append(todo, &pre{n.SelectExpr})
+					todo = append(todo, &pre{n.Table})
+
+				case *Subquery:
+					todo = append(todo, &pre{n.Select})
+
+				case *SubstrExpr:
+					todo = append(todo, &pre{n.From})
+					todo = append(todo, &pre{n.Name})
+					todo = append(todo, &pre{n.StrVal})
+					todo = append(todo, &pre{n.To})
+
+				case TableExprs:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case TableIdent:
+
+				case TableName:
+					todo = append(todo, &pre{n.Name})
+					todo = append(todo, &pre{n.Qualifier})
+
+				case TableNames:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *TableSpec:
+					for _, item := range n.Columns {
+						todo = append(todo, &pre{item})
+					}
+					for _, item := range n.Constraints {
+						todo = append(todo, &pre{item})
+					}
+					for _, item := range n.Indexes {
+						todo = append(todo, &pre{item})
+					}
+
+				case *TimestampFuncExpr:
+					todo = append(todo, &pre{n.Expr1})
+					todo = append(todo, &pre{n.Expr2})
+
+				case *UnaryExpr:
+					todo = append(todo, &pre{n.Expr})
+
+				case *Union:
+					todo = append(todo, &pre{n.FirstStatement})
+					todo = append(todo, &pre{n.Limit})
+					todo = append(todo, &pre{n.OrderBy})
+					for _, item := range n.UnionSelects {
+						todo = append(todo, &pre{item})
+					}
+
+				case *UnionSelect:
+					todo = append(todo, &pre{n.Statement})
+
+				case *Update:
+					todo = append(todo, &pre{n.Comments})
+					todo = append(todo, &pre{n.Exprs})
+					todo = append(todo, &pre{n.Limit})
+					todo = append(todo, &pre{n.OrderBy})
+					todo = append(todo, &pre{n.TableExprs})
+					todo = append(todo, &pre{n.Where})
+
+				case *UpdateExpr:
+					todo = append(todo, &pre{n.Expr})
+					todo = append(todo, &pre{n.Name})
+
+				case UpdateExprs:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *Use:
+					todo = append(todo, &pre{n.DBName})
+
+				case *VStream:
+					todo = append(todo, &pre{n.Comments})
+					todo = append(todo, &pre{n.Limit})
+					todo = append(todo, &pre{n.SelectExpr})
+					todo = append(todo, &pre{n.Table})
+					todo = append(todo, &pre{n.Where})
+
+				case ValTuple:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case Values:
+					for _, item := range n {
+						todo = append(todo, &pre{item})
+					}
+
+				case *ValuesFuncExpr:
+					todo = append(todo, &pre{n.Name})
+
+				case VindexParam:
+					todo = append(todo, &pre{n.Key})
+
+				case *VindexSpec:
+					todo = append(todo, &pre{n.Name})
+					for _, item := range n.Params {
+						todo = append(todo, &pre{item})
+					}
+					todo = append(todo, &pre{n.Type})
+
+				case *When:
+					todo = append(todo, &pre{n.Cond})
+					todo = append(todo, &pre{n.Val})
+
+				case *Where:
+					todo = append(todo, &pre{n.Expr})
+
+				case *XorExpr:
+					todo = append(todo, &pre{n.Left})
+					todo = append(todo, &pre{n.Right})
+
+				default:
+					panic("unknown ast type " + reflect.TypeOf(n).String())
+				}
+			}
+		case *post:
+			state, err := postF(next.n, next.states)
+			if err != nil {
+				return err
+			}
+			// now we'll go up the stack looking for the next post, which is our parent,
+			// and add the output state from this post visit to the parents post-input
+			for i := len(todo); i > 0; i-- {
+				p, ok := todo[i].(*post)
+				if ok {
+					p.states = append(p.states, state)
+					break
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func isNilValue(i interface{}) bool {

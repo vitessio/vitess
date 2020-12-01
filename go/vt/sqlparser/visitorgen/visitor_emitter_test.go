@@ -35,7 +35,7 @@ func TestSingleItem(t *testing.T) {
 
 	expectedSwitch := `		a.apply(node, n.Field, replaceStructField)`
 	require.Equal(t, expectedReplacer, sfi.asReplMethod())
-	require.Equal(t, expectedSwitch, sfi.asSwitchCase())
+	require.Equal(t, expectedSwitch, sfi.asApplySwitchCase())
 }
 
 func TestArrayFieldItem(t *testing.T) {
@@ -62,7 +62,7 @@ func (r *replaceStructField) inc() {
 			replacerFieldB.inc()
 		}`
 	require.Equal(t, expectedReplacer, sfi.asReplMethod())
-	require.Equal(t, expectedSwitch, sfi.asSwitchCase())
+	require.Equal(t, expectedSwitch, sfi.asApplySwitchCase())
 }
 
 func TestArrayItem(t *testing.T) {
@@ -88,5 +88,5 @@ func (r *replaceStructItems) inc() {
 			replacerRef.inc()
 		}`
 	require.Equal(t, expectedReplacer, sfi.asReplMethod())
-	require.Equal(t, expectedSwitch, sfi.asSwitchCase())
+	require.Equal(t, expectedSwitch, sfi.asApplySwitchCase())
 }

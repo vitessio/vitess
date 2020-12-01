@@ -36,15 +36,28 @@ func EmitReplacementMethods(vd *VisitorPlan) string {
 	return sb.String()
 }
 
-// EmitTypeSwitches is an anti-parser (a.k.a prettifier) - it takes a struct that is much like an AST,
-// and produces a string from it. This method will produce the switch cases needed to cover the Vitess AST.
-func EmitTypeSwitches(vd *VisitorPlan) string {
+// EmitApplyTypeSwitches will produce the type switch cases for the `apply` method
+func EmitApplyTypeSwitches(vd *VisitorPlan) string {
 	var sb builder
 	for _, s := range vd.Switches {
 		sb.newLine()
 		sb.appendF("	case %s:", s.Type.toTypString())
 		for _, k := range s.Fields {
-			sb.appendF(k.asSwitchCase())
+			sb.appendF(k.asApplySwitchCase())
+		}
+	}
+
+	return sb.String()
+}
+
+// EmitVisitWithStateTypeSwitches will produce the type switch cases for the VisitWithState method
+func EmitVisitWithStateTypeSwitches(vd *VisitorPlan) string {
+	var sb builder
+	for _, s := range vd.Switches {
+		sb.newLine()
+		sb.appendF("\t\t\t\tcase %s:", s.Type.toTypString())
+		for _, k := range s.Fields {
+			sb.appendF(k.asVisitWithStateSwitchCase())
 		}
 	}
 
