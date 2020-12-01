@@ -5,7 +5,7 @@ The following is the full list, alphabetically ordered.
 * Alkin Tezuysal ([askdba](https://github.com/askdba)) alkin@planetscale.com
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Anthony Yeh ([enisoc](https://github.com/enisoc)) enisoc@planetscale.com
-* Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) koz@planetscale.com
+* Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) dan.kozlowski@gmail.com
 * David Weitzman ([dweitzman](https://github.com/dweitzman)) dweitzman@pinterest.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
