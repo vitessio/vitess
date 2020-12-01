@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,26 +70,37 @@ func TestBindingSingleTable(t *testing.T) {
 }
 
 func TestBindingMultiTable(t *testing.T) {
-	queries := []string{
-		"select t.col, s.col, t.col + s.col from t, s",
+	type testCase struct {
+		query string
+		deps  []string
 	}
+	d := func(i ...string) []string { return i }
+	queries := []testCase{{
+		query: "select t.col from t, s",
+		deps:  d("t"),
+	}, {
+		query: "select max(t.col+s.col) from t, s",
+		deps:  d("s", "t"),
+	}, {
+		query: "select case t.col when s.col then r.col else w.col end from t, s, r, w, u",
+		deps:  d("r", "s", "t", "w"),
+	}, {
+		// make sure that we don't let sub-query dependencies leak out by mistake
+		query: "select t.col + (select 42 from s) from t",
+		deps:  d("t"),
+	}}
 	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, query)
+		t.Run(query.query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query.query)
 			sel, _ := stmt.(*sqlparser.Select)
 
 			d := semTable.dependencies(extract(sel, 0))
-			require.NotEmpty(t, d)
-			require.Equal(t, "t", sqlparser.String(d[0]))
-
-			d = semTable.dependencies(extract(sel, 1))
-			require.NotEmpty(t, d)
-			require.Equal(t, "s", sqlparser.String(d[0]))
-
-			d = semTable.dependencies(extract(sel, 2))
-			require.NotEmpty(t, d)
-			require.Equal(t, "t", sqlparser.String(d[0]))
-			require.Equal(t, "s", sqlparser.String(d[1]))
+			var deps []string
+			for _, t2 := range d {
+				deps = append(deps, sqlparser.String(t2))
+			}
+			sort.Strings(deps)
+			assert.Equal(t, deps, query.deps)
 		})
 	}
 }

@@ -45,39 +45,47 @@ func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 	return nil
 }
 
-func (a *analyzer) scopeExprs(cursor *sqlparser.Cursor) bool {
-	n := cursor.Node()
+func (a *analyzer) scopeExprs(n sqlparser.SQLNode) (bool, error) {
 	current := a.peek()
 	log(n, "%d scopeExprs %T", current.i, n)
 	switch expr := n.(type) {
 	case *sqlparser.Subquery:
 		a.exprScope[expr] = current
 		a.push(newScope(current))
-		a.analyze(expr.Select)
+		if err := a.analyze(expr.Select); err != nil {
+			return false, err
+		}
 		a.pop()
-		return false
+		return false, nil
 	case sqlparser.Expr:
 		a.exprScope[expr] = current
 	}
-	return true
+	return true, nil
 }
 
-func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) {
+func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
 	for _, tableExpr := range tablExprs {
-		a.analyzeTableExpr(tableExpr)
+		if err := a.analyzeTableExpr(tableExpr); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) bool {
+func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 	log(tableExpr, "analyzeTableExpr %T", tableExpr)
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		a.err = a.bindTable(table, table.Expr)
+		return a.bindTable(table, table.Expr)
 	case *sqlparser.JoinTableExpr:
-		a.analyzeTableExpr(table.LeftExpr)
-		a.analyzeTableExpr(table.RightExpr)
+		if err := a.analyzeTableExpr(table.LeftExpr); err != nil {
+			return err
+		}
+		if err := a.analyzeTableExpr(table.RightExpr); err != nil {
+			return err
+		}
 	case *sqlparser.ParenTableExpr:
-		a.analyzeTableExprs(table.Exprs)
+		return a.analyzeTableExprs(table.Exprs)
 	}
-	return a.err == nil
+	return nil
 }

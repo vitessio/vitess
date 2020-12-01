@@ -37,7 +37,6 @@ type (
 		exprScope map[sqlparser.Expr]*scope
 		exprDeps  map[sqlparser.Expr][]table
 		si        schemaInformation
-		err       error
 	}
 	schemaInformation interface {
 		FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
@@ -66,9 +65,9 @@ func Analyse(statement sqlparser.Statement, si schemaInformation) (*SemTable, er
 	analyzer := newAnalyzer(si)
 	// Initial scope
 	analyzer.push(newScope(nil))
-	analyzer.analyze(statement)
-	if analyzer.err != nil {
-		return nil, analyzer.err
+	err := analyzer.analyze(statement)
+	if err != nil {
+		return nil, err
 	}
 	return &SemTable{exprScope: analyzer.exprScope, exprDependencies: analyzer.exprDeps}, nil
 }
@@ -85,20 +84,35 @@ func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 		}
 	}
 }
-func (a *analyzer) analyze(statement sqlparser.Statement) {
+func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	log(statement, "analyse %T", statement)
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		for _, tableExpr := range stmt.From {
-			a.analyzeTableExpr(tableExpr)
+			if err := a.analyzeTableExpr(tableExpr); err != nil {
+				return err
+			}
 		}
-		sqlparser.Rewrite(stmt.SelectExprs, a.scopeExprs, a.bindExpr)
-		sqlparser.Rewrite(stmt.Where, a.scopeExprs, a.bindExpr)
-		sqlparser.Rewrite(stmt.OrderBy, a.scopeExprs, a.bindExpr)
-		sqlparser.Rewrite(stmt.GroupBy, a.scopeExprs, a.bindExpr)
-		sqlparser.Rewrite(stmt.Having, a.scopeExprs, a.bindExpr)
-		sqlparser.Rewrite(stmt.Limit, a.scopeExprs, a.bindExpr)
+		if err := sqlparser.VisitWithState(stmt.SelectExprs, a.scopeExprs, a.bindExpr); err != nil {
+			return err
+		}
+		if err := sqlparser.VisitWithState(stmt.Where, a.scopeExprs, a.bindExpr); err != nil {
+			return err
+		}
+		if err := sqlparser.VisitWithState(stmt.OrderBy, a.scopeExprs, a.bindExpr); err != nil {
+			return err
+		}
+		if err := sqlparser.VisitWithState(stmt.GroupBy, a.scopeExprs, a.bindExpr); err != nil {
+			return err
+		}
+		if err := sqlparser.VisitWithState(stmt.Having, a.scopeExprs, a.bindExpr); err != nil {
+			return err
+		}
+		if err := sqlparser.VisitWithState(stmt.Limit, a.scopeExprs, a.bindExpr); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (a *analyzer) push(s *scope) {

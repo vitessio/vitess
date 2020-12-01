@@ -18,62 +18,81 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func (a *analyzer) bindExpr(cursor *sqlparser.Cursor) bool {
-	n := cursor.Node()
+func (a *analyzer) bindExpr(n sqlparser.SQLNode, childrenState []interface{}) (interface{}, error) {
 	current := a.peek()
 	log(n, "%d bindExpr %T", current.i, n)
+
+	deps := collectChildrenDeps(childrenState)
+
 	switch expr := n.(type) {
 	case *sqlparser.ColName:
+		var err error
+		var t table
 		if expr.Qualifier.IsEmpty() {
-			// try to guess which table this column belongs to
-			a.resolveUnQualifiedColumn(current, expr)
-			return true
+			t, err = a.resolveUnQualifiedColumn(current, expr)
+		} else {
+			t, err = a.resolveQualifiedColumn(current, expr)
 		}
-		a.err = a.resolveQualifiedColumn(current, expr)
-	case *sqlparser.BinaryExpr:
-		deps := a.exprDeps[expr.Left]
-		for _, t1 := range a.exprDeps[expr.Right] {
-			found := false
-			for _, t2 := range deps {
-				if t1 == t2 {
-					found = true
-					break
-				}
-			}
-			if !found {
-				deps = append(deps, t1)
-			}
+		if err != nil {
+			return nil, err
 		}
+		deps = append(deps, t)
+		a.exprDeps[expr] = deps
+	case sqlparser.Expr:
 		a.exprDeps[expr] = deps
 	}
 
-	return a.err == nil
+	return deps, nil
 }
 
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) error {
+func collectChildrenDeps(childrenState []interface{}) []table {
+	if len(childrenState) == 1 {
+		return childrenState[0].([]table)
+	}
+
+	type Void struct{}
+	var void Void
+	resultMap := map[table]Void{}
+	// adding dependencies through a map to make them unique
+	for _, d := range childrenState {
+		dependencies := d.([]table)
+		for _, table := range dependencies {
+			resultMap[table] = void
+		}
+	}
+	var deps []table
+	for t := range resultMap {
+		deps = append(deps, t)
+	}
+	return deps
+}
+
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
 	qualifier := expr.Qualifier.Name.String()
 
 	for current != nil {
 		tableExpr, found := current.tables[qualifier]
 		if found {
-			a.exprDeps[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
-			return nil
+			return tableExpr, nil
 		}
 		current = current.parent
 	}
 
-	return mysql.NewSQLError(mysql.ERBadFieldError, mysql.SSBadFieldError, "Unknown column '%s'", sqlparser.String(expr))
+	return nil, mysql.NewSQLError(mysql.ERBadFieldError, mysql.SSBadFieldError, "Unknown column '%s'", sqlparser.String(expr))
 }
 
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {
-			a.exprDeps[expr] = []*sqlparser.AliasedTableExpr{tableExpr}
+			return tableExpr, nil
 		}
 	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "todo - figure out which table this column belongs to")
 }
 
 func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
