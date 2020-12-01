@@ -72,7 +72,7 @@ func Analyse(statement sqlparser.Statement, si schemaInformation) (*SemTable, er
 	return &SemTable{exprScope: analyzer.exprScope, exprDependencies: analyzer.exprDeps}, nil
 }
 
-var debug = true
+var debug = false
 
 func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 	if debug {

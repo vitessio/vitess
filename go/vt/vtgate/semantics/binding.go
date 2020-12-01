@@ -99,7 +99,9 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 	switch t := expr.(type) {
 	case *sqlparser.DerivedTable:
 		a.push(newScope(nil))
-		a.analyze(t.Select)
+		if err := a.analyze(t.Select); err != nil {
+			return err
+		}
 		a.pop()
 		scope := a.peek()
 		return scope.addTable(alias.As.String(), alias)
