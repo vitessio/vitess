@@ -13,7 +13,6 @@ The following is the full list, alphabetically ordered.
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
-* Morgan Tocker ([morgo](https://github.com/morgo)) morgan@planetscale.com
 * Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@slack-corp.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
@@ -23,13 +22,13 @@ The following is the full list, alphabetically ordered.
 ## Areas of expertise
 
 ### General Vitess
-sougou, demmer, rafael, dweitzman, tirsen, morgo, enisoc
+sougou, demmer, rafael, dweitzman, tirsen, askdba, enisoc
 
 ### Builds
-dkhenry, morgo
+dkhenry, shlomi-noach
 
 ### Resharding
-sougou, rafael, tirsen, dweitzman, systay
+sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps
 
 ### Parser
 sougou, dweitzman, deepthi, systay, harshit-gangal
