@@ -47,17 +47,38 @@ func TestAddFileError(t *testing.T) {
 	require.Equal(t, bh.HasErrors(), true, "AddFile() expected bh to record async error but did not")
 }
 
-func TestNoSSECustomer(t *testing.T) {
-	sse := S3SSECustomer{}
-	err := sse.Open()
-	require.NoErrorf(t, err, "Open() expected to succeed")
+func TestNoSSE(t *testing.T) {
+	sseData := S3ServerSideEncryption{}
+	err := sseData.init()
+	require.NoErrorf(t, err, "init() expected to succeed")
 
-	assert.Nil(t, sse.alg, "S3SSECustomer.alg expected to be nil")
-	assert.Nil(t, sse.key, "S3SSECustomer.key expected to be nil")
-	assert.Nil(t, sse.md5, "S3SSECustomer.md5 expected to be nil")
+	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
+	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
+	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 
-	sse.Close()
-	require.NoErrorf(t, err, "Close() expected to succeed")
+	sseData.reset()
+	require.NoErrorf(t, err, "reset() expected to succeed")
+}
+
+func TestSSEAws(t *testing.T) {
+	sse = aws.String("aws:kms")
+	sseData := S3ServerSideEncryption{}
+	err := sseData.init()
+	require.NoErrorf(t, err, "init() expected to succeed")
+
+	assert.Equal(t, aws.String("aws:kms"), sseData.awsAlg, "awsAlg expected to be aws:kms")
+	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
+	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
+	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
+
+	sseData.reset()
+	require.NoErrorf(t, err, "reset() expected to succeed")
+
+	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
+	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
+	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 }
 
 func TestSSECustomerFileNotFound(t *testing.T) {
@@ -71,10 +92,10 @@ func TestSSECustomerFileNotFound(t *testing.T) {
 	err = os.Remove(tempFile.Name())
 	require.NoErrorf(t, err, "Remove() expected to succeed")
 
-	sseCustomerKeyFile = aws.String(tempFile.Name())
-	sse := S3SSECustomer{}
-	err = sse.Open()
-	require.Errorf(t, err, "Open() expected to fail")
+	sse = aws.String(sseCustomerPrefix + tempFile.Name())
+	sseData := S3ServerSideEncryption{}
+	err = sseData.init()
+	require.Errorf(t, err, "init() expected to fail")
 }
 
 func TestSSECustomerFileBinaryKey(t *testing.T) {
@@ -90,22 +111,24 @@ func TestSSECustomerFileBinaryKey(t *testing.T) {
 	err = tempFile.Close()
 	require.NoErrorf(t, err, "Close() expected to succeed")
 
-	sseCustomerKeyFile = aws.String(tempFile.Name())
-	sse := S3SSECustomer{}
-	err = sse.Open()
-	require.NoErrorf(t, err, "Open() expected to succeed")
+	sse = aws.String(sseCustomerPrefix + tempFile.Name())
+	sseData := S3ServerSideEncryption{}
+	err = sseData.init()
+	require.NoErrorf(t, err, "init() expected to succeed")
 
-	assert.Equal(t, aws.String("AES256"), sse.alg, "S3SSECustomer.alg expected to be AES256")
-	assert.Equal(t, aws.String(string(randomKey)), sse.key, "S3SSECustomer.key expected to be equal to the generated randomKey")
+	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Equal(t, aws.String("AES256"), sseData.customerAlg, "customerAlg expected to be AES256")
+	assert.Equal(t, aws.String(string(randomKey)), sseData.customerKey, "customerKey expected to be equal to the generated randomKey")
 	md5Hash := md5.Sum(randomKey)
-	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sse.md5, "S3SSECustomer.md5 expected to be equal to the md5 hash of the generated randomKey")
+	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sseData.customerMd5, "customerMd5 expected to be equal to the customerMd5 hash of the generated randomKey")
 
-	sse.Close()
-	require.NoErrorf(t, err, "Close() expected to succeed")
+	sseData.reset()
+	require.NoErrorf(t, err, "reset() expected to succeed")
 
-	assert.Nil(t, sse.alg, "S3SSECustomer.alg expected to be nil")
-	assert.Nil(t, sse.key, "S3SSECustomer.key expected to be nil")
-	assert.Nil(t, sse.md5, "S3SSECustomer.md5 expected to be nil")
+	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
+	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
+	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 }
 
 func TestSSECustomerFileBase64Key(t *testing.T) {
@@ -123,20 +146,22 @@ func TestSSECustomerFileBase64Key(t *testing.T) {
 	err = tempFile.Close()
 	require.NoErrorf(t, err, "Close() expected to succeed")
 
-	sseCustomerKeyFile = aws.String(tempFile.Name())
-	sse := S3SSECustomer{}
-	err = sse.Open()
-	require.NoErrorf(t, err, "Open() expected to succeed")
+	sse = aws.String(sseCustomerPrefix + tempFile.Name())
+	sseData := S3ServerSideEncryption{}
+	err = sseData.init()
+	require.NoErrorf(t, err, "init() expected to succeed")
 
-	assert.Equal(t, aws.String("AES256"), sse.alg, "S3SSECustomer.alg expected to be AES256")
-	assert.Equal(t, aws.String(string(randomKey)), sse.key, "S3SSECustomer.key expected to be equal to the generated randomKey")
+	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Equal(t, aws.String("AES256"), sseData.customerAlg, "customerAlg expected to be AES256")
+	assert.Equal(t, aws.String(string(randomKey)), sseData.customerKey, "customerKey expected to be equal to the generated randomKey")
 	md5Hash := md5.Sum(randomKey)
-	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sse.md5, "S3SSECustomer.md5 expected to be equal to the md5 hash of the generated randomKey")
+	assert.Equal(t, aws.String(base64.StdEncoding.EncodeToString(md5Hash[:])), sseData.customerMd5, "customerMd5 expected to be equal to the customerMd5 hash of the generated randomKey")
 
-	sse.Close()
-	require.NoErrorf(t, err, "Close() expected to succeed")
+	sseData.reset()
+	require.NoErrorf(t, err, "reset() expected to succeed")
 
-	assert.Nil(t, sse.alg, "S3SSECustomer.alg expected to be nil")
-	assert.Nil(t, sse.key, "S3SSECustomer.key expected to be nil")
-	assert.Nil(t, sse.md5, "S3SSECustomer.md5 expected to be nil")
+	assert.Nil(t, sseData.awsAlg, "awsAlg expected to be nil")
+	assert.Nil(t, sseData.customerAlg, "customerAlg expected to be nil")
+	assert.Nil(t, sseData.customerKey, "customerKey expected to be nil")
+	assert.Nil(t, sseData.customerMd5, "customerMd5 expected to be nil")
 }
