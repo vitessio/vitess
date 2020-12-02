@@ -23,17 +23,13 @@ import (
 
 type (
 	scope struct {
-		i      int
 		parent *scope
 		tables map[string]*sqlparser.AliasedTableExpr
 	}
 )
 
-var i = 0
-
 func newScope(parent *scope) *scope {
-	i++
-	return &scope{i: i, tables: map[string]*sqlparser.AliasedTableExpr{}, parent: parent}
+	return &scope{tables: map[string]*sqlparser.AliasedTableExpr{}, parent: parent}
 }
 
 func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
@@ -45,9 +41,16 @@ func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 	return nil
 }
 
-func (a *analyzer) scopeExprs(n sqlparser.SQLNode) (bool, error) {
+func (a *analyzer) scopeUp(n sqlparser.SQLNode) {
+	_, ok := n.(*sqlparser.Subquery)
+	if ok {
+		a.popScope()
+	}
+}
+
+func (a *analyzer) scopeDown(n sqlparser.SQLNode) (bool, error) {
 	current := a.currentScope()
-	log(n, "%d scopeExprs %T", current.i, n)
+	log(n, "%p scopeDown %T", current, n)
 	switch node := n.(type) {
 	case *sqlparser.Select:
 		for _, tableExpr := range node.From {

@@ -23,9 +23,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func (a *analyzer) bindExpr(n sqlparser.SQLNode, childrenState []interface{}) (interface{}, error) {
+func (a *analyzer) bindUp(n sqlparser.SQLNode, childrenState []interface{}) (interface{}, error) {
 	current := a.currentScope()
-	log(n, "%d bindExpr %T", current.i, n)
+	log(n, "%p bindUp %T", current, n)
 
 	deps := collectChildrenDeps(childrenState)
 
@@ -43,9 +43,6 @@ func (a *analyzer) bindExpr(n sqlparser.SQLNode, childrenState []interface{}) (i
 		}
 		deps = append(deps, t)
 		a.exprDeps[expr] = deps
-	case *sqlparser.Subquery:
-		a.exprDeps[expr] = deps
-		a.popScope()
 	case sqlparser.Expr:
 		a.exprDeps[expr] = deps
 	}
@@ -54,6 +51,7 @@ func (a *analyzer) bindExpr(n sqlparser.SQLNode, childrenState []interface{}) (i
 }
 
 func collectChildrenDeps(childrenState []interface{}) []table {
+	// if we have a single child, it's dependencies is all we need. we can cut short here
 	if len(childrenState) == 1 {
 		return childrenState[0].([]table)
 	}
@@ -75,6 +73,7 @@ func collectChildrenDeps(childrenState []interface{}) []table {
 	return deps
 }
 
+// resolveQualifiedColumn handles `tabl.col` expressions
 func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
 	qualifier := expr.Qualifier.Name.String()
 
@@ -89,6 +88,7 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 	return nil, mysql.NewSQLError(mysql.ERBadFieldError, mysql.SSBadFieldError, "Unknown column '%s'", sqlparser.String(expr))
 }
 
+// resolveUnQualifiedColumn
 func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {

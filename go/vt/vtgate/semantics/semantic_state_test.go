@@ -31,21 +31,20 @@ func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
 }
 
 func TestScope(t *testing.T) {
-	query := "select col, (select 2) from (select col from t) as x where 3 in (select 4 from t where t.col = x.col)"
+	query := `
+select t.col1, (
+	select t.col2 from z as t) 
+from x as t`
 	stmt, semTable := parseAndAnalyze(t, query)
+
 	sel, _ := stmt.(*sqlparser.Select)
 
-	s1 := semTable.scope(extract(sel, 0))
-	s2 := semTable.scope(extract(sel.From[0].(*sqlparser.AliasedTableExpr).Expr.(*sqlparser.DerivedTable).Select.(*sqlparser.Select), 0))
-	require.False(t, &s1 == &s2, "different scope expected")
+	// extract the `t.col2` expression from the subquery
+	sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
+	s1 := semTable.dependencies(extract(sel2, 0))
 
-	s3 := semTable.scope(extract(extract(sel, 1).(*sqlparser.Subquery).Select.(*sqlparser.Select), 0))
-	require.False(t, &s1 == &s3, "different scope expected")
-	require.False(t, &s2 == &s3, "different scope expected")
-
-	s4 := semTable.scope(sel.Where.Expr.(*sqlparser.ComparisonExpr).Left)
-	require.NotNil(t, s1)
-	require.Truef(t, s1.i == s4.i, "want: %v, got %v", s1, s4)
+	// if scoping works as expected, we should be able to see the inner table being used by the inner expression
+	assert.Equal(t, []string{"z as t"}, sortDeps(s1))
 }
 
 func TestBindingSingleTable(t *testing.T) {
@@ -99,14 +98,18 @@ func TestBindingMultiTable(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 
 			d := semTable.dependencies(extract(sel, 0))
-			var deps []string
-			for _, t2 := range d {
-				deps = append(deps, sqlparser.String(t2))
-			}
-			sort.Strings(deps)
-			assert.Equal(t, query.deps, deps)
+			assert.Equal(t, query.deps, sortDeps(d))
 		})
 	}
+}
+
+func sortDeps(d []table) []string {
+	var deps []string
+	for _, t2 := range d {
+		deps = append(deps, sqlparser.String(t2))
+	}
+	sort.Strings(deps)
+	return deps
 }
 
 func TestBindingSingleDepPerTable(t *testing.T) {

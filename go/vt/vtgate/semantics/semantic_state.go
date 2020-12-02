@@ -19,6 +19,9 @@ package semantics
 import (
 	"fmt"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -42,10 +45,6 @@ type (
 		FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 	}
 )
-
-func (t *SemTable) scope(expr sqlparser.Expr) *scope {
-	return t.exprScope[expr]
-}
 
 func (t *SemTable) dependencies(expr sqlparser.Expr) []table {
 	return t.exprDependencies[expr]
@@ -85,47 +84,23 @@ func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 	}
 }
 
-// Void is an empty type, meant to save memory on sets
-type Void struct{}
-
-var void Void
-
-func uniquefy(deps []table) []table {
-	resultMap := map[table]Void{}
-	for _, table := range deps {
-		resultMap[table] = void
-	}
-	var result []table
-	for t := range resultMap {
-		result = append(result, t)
-	}
-	return result
-}
-
 func (a *analyzer) analyze(statement sqlparser.Statement) ([]table, error) {
 	log(statement, "analyse %T", statement)
-	switch stmt := statement.(type) {
-	case *sqlparser.Select:
-		for _, tableExpr := range stmt.From {
-			if err := a.analyzeTableExpr(tableExpr); err != nil {
-				return nil, err
-			}
-		}
-		var result []table
-		inputs := []sqlparser.SQLNode{stmt.SelectExprs, stmt.Where, stmt.OrderBy, stmt.GroupBy, stmt.Having, stmt.Limit}
-		for _, input := range inputs {
-			deps, err := sqlparser.VisitWithState(input, a.scopeExprs, a.bindExpr)
-			if err != nil {
-				return nil, err
-			}
-			tables, ok := deps.([]table)
-			if ok {
-				result = append(result, tables...)
-			}
-		}
-		return uniquefy(result), nil
+	deps, err := sqlparser.VisitWithState(statement, a.scopeDown, a.analyzeUp)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	tables, ok := deps.([]table)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bug: got unknown content from AST traversal: %T", deps)
+	}
+
+	return tables, nil
+}
+
+func (a *analyzer) analyzeUp(n sqlparser.SQLNode, childrenState []interface{}) (interface{}, error) {
+	a.scopeUp(n)
+	return a.bindUp(n, childrenState)
 }
 
 func (a *analyzer) push(s *scope) {
