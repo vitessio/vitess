@@ -65,6 +65,7 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
+	`update _vt.schema_migrations set migration_status='val' where mysql_schema='val'`,
 	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val'`,
 	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val' and shard='val'`,
 }
@@ -908,17 +909,14 @@ func (e *Executor) cancelPendingMigrations(ctx context.Context) (result *sqltype
 		uuids = append(uuids, uuid)
 	}
 
+	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
 		log.Infof("cancelPendingMigrations: cancelling %s", uuid)
 		res, err := e.cancelMigration(ctx, uuid, true)
 		if err != nil {
 			return result, err
 		}
-		if result == nil {
-			result = res
-		} else {
-			result.AppendResult(res)
-		}
+		result.AppendResult(res)
 	}
 	return result, nil
 }
@@ -1472,7 +1470,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			return nil, err
 		}
 		if !match {
-			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(vexecUpdateTemplates, "; "))
+			return nil, fmt.Errorf("Query must match one of these templates: %s; query=%s", strings.Join(vexecUpdateTemplates, "; "), vx.Query)
 		}
 		if shard, _ := vx.ColumnStringVal(vx.WhereCols, "shard"); shard != "" {
 			// shard is specified.
@@ -1493,8 +1491,15 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			if err != nil {
 				return nil, err
 			}
+			if !schema.IsOnlineDDLUUID(uuid) {
+				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
+			}
 			return response(e.cancelMigration(ctx, uuid, true))
 		case cancelAllMigrationHint:
+			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
+			if uuid != "" {
+				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
+			}
 			return response(e.cancelPendingMigrations(ctx))
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
