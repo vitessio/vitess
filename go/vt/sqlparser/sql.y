@@ -259,6 +259,7 @@ func skipToEnd(yylex interface{}) {
 %type <selectExpr> select_expression
 %type <strs> select_options
 %type <str> select_option algorithm_view security_view security_view_opt
+%type <str> definer_opt user
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -779,9 +780,9 @@ create_index_prefix:
   }
 
 create_view_prefix:
-CREATE replace_opt algorithm_view security_view_opt VIEW table_name
+CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name
   {
-    $$ = &CreateView{ViewName: $6.ToViewName(), IsReplace:$2, Algorithm:$3, Security:$4 }
+    $$ = &CreateView{ViewName: $7.ToViewName(), IsReplace:$2, Algorithm:$3, Definer: $4 ,Security:$5 }
     setDDL(yylex, $$)
   }
 
@@ -3458,32 +3459,33 @@ cascade_or_local_opt:
     $$ = string($1)
   }
 
-//define_opt:
-//  {
-//    $$ = ""
-//  }
-//| DEFINER '=' user
-//  {
-//    $$ = $3
-//  }
-//
-//user:
-//CURRENT_USER
-//  {
-//    $$ = $1
-//  }
-//| CURRENT_USER '(' ')'
-//  {
-//    $$ = $1
-//  }
-//| STRING AT_ID STRING
-//  {
-//
-//  }
-//| ID
-//  {
-//
-//  }
+definer_opt:
+  {
+    $$ = ""
+  }
+| DEFINER '=' user
+  {
+    $$ = $3
+  }
+
+user:
+CURRENT_USER
+  {
+    $$ = string($1)
+  }
+| CURRENT_USER '(' ')'
+  {
+    $$ = string($1)
+  }
+| STRING AT_ID
+  {
+    $$ = "'" + string($1) + "'@" + string($2)
+  }
+| ID
+  {
+    $$ = string($1)
+  }
+
 lock_opt:
   {
     $$ = NoLock

@@ -713,6 +713,9 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isVariable bool) (int, []by
 		isDigit(tkn.lastChar) ||
 		tkn.lastChar == '@' ||
 		(isVariable && isCarat(tkn.lastChar)) {
+		if tkn.lastChar == '@' {
+			isVariable = true
+		}
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}

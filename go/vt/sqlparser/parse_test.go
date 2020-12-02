@@ -1190,6 +1190,12 @@ var (
 		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
 		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
 	}, {
+		input:  "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
+		output: "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
+		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
+	}, {
 		input:      "create algorithm = undefined sql security invoker view a unparsable",
 		output:     "create algorithm = undefined sql security invoker view a",
 		partialDDL: true,
