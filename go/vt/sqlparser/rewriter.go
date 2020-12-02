@@ -1499,7 +1499,7 @@ func (*post) act() {}
 func VisitWithState(
 	root SQLNode,
 	preF func(SQLNode) (bool, error),
-	postF func(sqlNode SQLNode, childrenStates []interface{}) (interface{}, error)) error {
+	postF func(sqlNode SQLNode, childrenStates []interface{}) (interface{}, error)) (interface{}, error) {
 
 	todo := []action{&pre{root}}
 
@@ -1513,12 +1513,12 @@ func VisitWithState(
 				continue
 			}
 
-			kontinue, err := preF(next.n)
+			visitChildren, err := preF(next.n)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			if kontinue {
-				todo = append(todo, &post{n: next.n})
+			todo = append(todo, &post{n: next.n})
+			if visitChildren {
 				switch n := next.n.(type) {
 				case AccessMode:
 
@@ -1985,20 +1985,25 @@ func VisitWithState(
 		case *post:
 			state, err := postF(next.n, next.states)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			// now we'll go up the stack looking for the next post, which is our parent,
 			// and add the output state from this post visit to the parents post-input
+			last := true
 			for i := len(todo) - 1; i > 0; i-- {
 				p, ok := todo[i].(*post)
 				if ok {
+					last = false
 					p.states = append(p.states, state)
 					break
 				}
 			}
+			if last {
+				return state, nil
+			}
 		}
 	}
-	return nil
+	return nil, nil // this should never happen
 }
 
 func isNilValue(i interface{}) bool {

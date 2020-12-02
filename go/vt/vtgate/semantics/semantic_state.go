@@ -65,7 +65,7 @@ func Analyse(statement sqlparser.Statement, si schemaInformation) (*SemTable, er
 	analyzer := newAnalyzer(si)
 	// Initial scope
 	analyzer.push(newScope(nil))
-	err := analyzer.analyze(statement)
+	_, err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
 	}
@@ -84,46 +84,59 @@ func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 		}
 	}
 }
-func (a *analyzer) analyze(statement sqlparser.Statement) error {
+
+// Void is an empty type, meant to save memory on sets
+type Void struct{}
+
+var void Void
+
+func uniquefy(deps []table) []table {
+	resultMap := map[table]Void{}
+	for _, table := range deps {
+		resultMap[table] = void
+	}
+	var result []table
+	for t := range resultMap {
+		result = append(result, t)
+	}
+	return result
+}
+
+func (a *analyzer) analyze(statement sqlparser.Statement) ([]table, error) {
 	log(statement, "analyse %T", statement)
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		for _, tableExpr := range stmt.From {
 			if err := a.analyzeTableExpr(tableExpr); err != nil {
-				return err
+				return nil, err
 			}
 		}
-		if err := sqlparser.VisitWithState(stmt.SelectExprs, a.scopeExprs, a.bindExpr); err != nil {
-			return err
+		var result []table
+		inputs := []sqlparser.SQLNode{stmt.SelectExprs, stmt.Where, stmt.OrderBy, stmt.GroupBy, stmt.Having, stmt.Limit}
+		for _, input := range inputs {
+			deps, err := sqlparser.VisitWithState(input, a.scopeExprs, a.bindExpr)
+			if err != nil {
+				return nil, err
+			}
+			tables, ok := deps.([]table)
+			if ok {
+				result = append(result, tables...)
+			}
 		}
-		if err := sqlparser.VisitWithState(stmt.Where, a.scopeExprs, a.bindExpr); err != nil {
-			return err
-		}
-		if err := sqlparser.VisitWithState(stmt.OrderBy, a.scopeExprs, a.bindExpr); err != nil {
-			return err
-		}
-		if err := sqlparser.VisitWithState(stmt.GroupBy, a.scopeExprs, a.bindExpr); err != nil {
-			return err
-		}
-		if err := sqlparser.VisitWithState(stmt.Having, a.scopeExprs, a.bindExpr); err != nil {
-			return err
-		}
-		if err := sqlparser.VisitWithState(stmt.Limit, a.scopeExprs, a.bindExpr); err != nil {
-			return err
-		}
+		return uniquefy(result), nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (a *analyzer) push(s *scope) {
 	a.scopes = append(a.scopes, s)
 }
 
-func (a *analyzer) pop() {
+func (a *analyzer) popScope() {
 	l := len(a.scopes) - 1
 	a.scopes = a.scopes[:l]
 }
 
-func (a *analyzer) peek() *scope {
+func (a *analyzer) currentScope() *scope {
 	return a.scopes[len(a.scopes)-1]
 }

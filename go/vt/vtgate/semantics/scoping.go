@@ -46,19 +46,25 @@ func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 }
 
 func (a *analyzer) scopeExprs(n sqlparser.SQLNode) (bool, error) {
-	current := a.peek()
+	current := a.currentScope()
 	log(n, "%d scopeExprs %T", current.i, n)
-	switch expr := n.(type) {
-	case *sqlparser.Subquery:
-		a.exprScope[expr] = current
-		a.push(newScope(current))
-		if err := a.analyze(expr.Select); err != nil {
-			return false, err
+	switch node := n.(type) {
+	case *sqlparser.Select:
+		for _, tableExpr := range node.From {
+			if err := a.analyzeTableExpr(tableExpr); err != nil {
+				return false, err
+			}
 		}
-		a.pop()
+	case *sqlparser.TableExprs:
+		// this has already been visited when we encountered the SELECT struct
 		return false, nil
+
+	case *sqlparser.Subquery:
+		a.exprScope[node] = current
+		a.push(newScope(current))
+
 	case sqlparser.Expr:
-		a.exprScope[expr] = current
+		a.exprScope[node] = current
 	}
 	return true, nil
 }
