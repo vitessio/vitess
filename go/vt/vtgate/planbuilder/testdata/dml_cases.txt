@@ -256,7 +256,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "update user set val = 1 where name = 'foo' and id = 1",
+    "Query": "update user set val = 1 where `name` = 'foo' and id = 1",
     "Table": "user",
     "Values": [
       1
@@ -415,7 +415,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id = 1 for update",
     "Query": "delete from user where id = 1",
     "Table": "user",
     "Values": [
@@ -494,7 +494,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id = 1 for update",
     "Query": "delete from user as route1 where id = 1",
     "Table": "user",
     "Values": [
@@ -894,7 +894,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, val, Name, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -913,7 +913,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -955,7 +955,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -974,7 +974,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -993,7 +993,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert ignore into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert ignore into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1012,7 +1012,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
     "TableName": "user"
   }
 }
@@ -1031,7 +1031,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1050,7 +1050,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1069,7 +1069,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, nonid, Name, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1088,7 +1088,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1107,7 +1107,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
+    "Query": "insert into user(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1199,7 +1199,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
   }
 }
@@ -1218,7 +1218,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "QueryTimeout": 1,
     "TableName": "user"
   }
@@ -1238,7 +1238,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": true,
-    "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+    "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
   }
 }
@@ -1625,7 +1625,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "update user_extra set val = 1 where name = 'foo'",
+    "Query": "update user_extra set val = 1 where `name` = 'foo'",
     "Table": "user_extra"
   }
 }
@@ -1663,7 +1663,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "update user_extra set val = 1 where name = 'foo' or id = 1",
+    "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
     "Table": "user_extra"
   }
 }
@@ -1739,7 +1739,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "delete from user_extra where name = 'jose'",
+    "Query": "delete from user_extra where `name` = 'jose'",
     "Table": "user_extra"
   }
 }
@@ -1758,7 +1758,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": true,
-    "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
+    "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'",
     "Table": "user_extra"
   }
 }
@@ -1777,7 +1777,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+    "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
     "QueryTimeout": 1,
     "Table": "user_extra"
   }
@@ -1863,8 +1863,8 @@
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly, name = null from user where id = 1 for update",
-    "Query": "update user set name = null where id = 1",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user where id = 1 for update",
+    "Query": "update user set `name` = null where id = 1",
     "Table": "user",
     "Values": [
       1
@@ -1910,8 +1910,8 @@
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly, name = null from user where id in (1, 2, 3) for update",
-    "Query": "update user set name = null where id in (1, 2, 3)",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user where id in (1, 2, 3) for update",
+    "Query": "update user set `name` = null where id in (1, 2, 3)",
     "Table": "user",
     "Values": [
       [
@@ -1942,8 +1942,8 @@
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly, name = null from user for update",
-    "Query": "update user set name = null",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user for update",
+    "Query": "update user set `name` = null",
     "Table": "user"
   }
 }
@@ -1966,8 +1966,8 @@
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly, name = null from user where id + 1 = 2 for update",
-    "Query": "update user set name = null where id + 1 = 2",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user where id + 1 = 2 for update",
+    "Query": "update user set `name` = null where id + 1 = 2",
     "Table": "user"
   }
 }
@@ -1987,7 +1987,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id in (1, 2, 3) for update",
     "Query": "delete from user where id in (1, 2, 3)",
     "Table": "user",
     "Values": [
@@ -2016,7 +2016,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id + 1 = 2 for update",
     "Query": "delete from user where id + 1 = 2",
     "Table": "user"
   }
@@ -2037,7 +2037,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user for update",
     "Query": "delete from user",
     "Table": "user"
   }
@@ -2102,7 +2102,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user for update",
     "Query": "delete from user",
     "Table": "user"
   }
@@ -2154,8 +2154,8 @@
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly, name = _binary 'abc' from user where id = 1 for update",
-    "Query": "update user set name = _binary 'abc' where id = 1",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from user where id = 1 for update",
+    "Query": "update user set `name` = _binary 'abc' where id = 1",
     "Table": "user",
     "Values": [
       1
@@ -2179,8 +2179,8 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where name = _binary 'abc' for update",
-    "Query": "delete from user where name = _binary 'abc'",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where `name` = _binary 'abc' for update",
+    "Query": "delete from user where `name` = _binary 'abc'",
     "Table": "user"
   }
 }
@@ -2200,7 +2200,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user for update",
     "Query": "delete from user",
     "Table": "user"
   }
@@ -2224,8 +2224,8 @@
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly, name = 'myname' from user for update",
-    "Query": "update user set name = 'myname'",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'myname' from user for update",
+    "Query": "update user set `name` = 'myname'",
     "Table": "user"
   }
 }
