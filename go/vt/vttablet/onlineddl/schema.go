@@ -143,6 +143,12 @@ const (
 			migration_status='running'
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
+	sqlSelectPendingMigrations = `SELECT
+			migration_uuid
+		FROM %s.schema_migrations
+		WHERE
+			migration_status IN ('queued', 'ready', 'running')
+	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
 			artifacts
@@ -213,8 +219,9 @@ const (
 )
 
 const (
-	retryMigrationHint  = "retry"
-	cancelMigrationHint = "cancel"
+	retryMigrationHint     = "retry"
+	cancelMigrationHint    = "cancel"
+	cancelAllMigrationHint = "cancel-all"
 )
 
 var (
