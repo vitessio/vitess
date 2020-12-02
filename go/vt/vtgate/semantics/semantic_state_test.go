@@ -69,6 +69,20 @@ func TestBindingSingleTable(t *testing.T) {
 	}
 }
 
+func TestUnion(t *testing.T) {
+	query := "select col1 from tabl1 union select col2 from tabl2"
+
+	stmt, semTable := parseAndAnalyze(t, query)
+	union, _ := stmt.(*sqlparser.Union)
+	sel1 := union.FirstStatement.(*sqlparser.Select)
+	sel2 := union.UnionSelects[0].Statement.(*sqlparser.Select)
+
+	d1 := semTable.dependencies(extract(sel1, 0))
+	d2 := semTable.dependencies(extract(sel2, 0))
+	require.Contains(t, sortDeps(d1), "tabl1")
+	require.Contains(t, sortDeps(d2), "tabl2")
+}
+
 func TestBindingMultiTable(t *testing.T) {
 	type testCase struct {
 		query string

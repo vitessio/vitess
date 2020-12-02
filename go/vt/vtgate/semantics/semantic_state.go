@@ -63,7 +63,7 @@ func newAnalyzer(si schemaInformation) *analyzer {
 func Analyse(statement sqlparser.Statement, si schemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(si)
 	// Initial scope
-	analyzer.push(newScope(nil))
+	//analyzer.push(newScope(nil))
 	_, err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
@@ -104,14 +104,20 @@ func (a *analyzer) analyzeUp(n sqlparser.SQLNode, childrenState []interface{}) (
 }
 
 func (a *analyzer) push(s *scope) {
+	log(nil, "enter new scope")
 	a.scopes = append(a.scopes, s)
 }
 
 func (a *analyzer) popScope() {
+	log(nil, "exit scope")
 	l := len(a.scopes) - 1
 	a.scopes = a.scopes[:l]
 }
 
 func (a *analyzer) currentScope() *scope {
-	return a.scopes[len(a.scopes)-1]
+	size := len(a.scopes)
+	if size == 0 {
+		return nil
+	}
+	return a.scopes[size-1]
 }

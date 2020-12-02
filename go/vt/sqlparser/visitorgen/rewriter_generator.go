@@ -188,7 +188,7 @@ const fileFooter = `
 			// now we'll go up the stack looking for the next post, which is our parent,
 			// and add the output state from this post visit to the parents post-input
 			last := true
-			for i := len(todo) - 1; i > 0; i-- {
+			for i := len(todo) - 1; i >= 0; i-- {
 				p, ok := todo[i].(*post)
 				if ok {
 					last = false

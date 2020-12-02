@@ -42,8 +42,8 @@ func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 }
 
 func (a *analyzer) scopeUp(n sqlparser.SQLNode) {
-	_, ok := n.(*sqlparser.Subquery)
-	if ok {
+	switch n.(type) {
+	case *sqlparser.Subquery, *sqlparser.Select:
 		a.popScope()
 	}
 }
@@ -53,6 +53,7 @@ func (a *analyzer) scopeDown(n sqlparser.SQLNode) (bool, error) {
 	log(n, "%p scopeDown %T", current, n)
 	switch node := n.(type) {
 	case *sqlparser.Select:
+		a.push(newScope(current))
 		for _, tableExpr := range node.From {
 			if err := a.analyzeTableExpr(tableExpr); err != nil {
 				return false, err
