@@ -116,7 +116,7 @@ func (t noopVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	panic("implement me")
 }
 
-func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error {
 	panic("implement me")
 }
 
@@ -281,7 +281,7 @@ func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	return nil
 }
 
-func (f *loggingVCursor) ExecuteVSchema(string, *sqlparser.DDL) error {
+func (f *loggingVCursor) ExecuteVSchema(string, sqlparser.DDLStatement) error {
 	panic("implement me")
 }
 

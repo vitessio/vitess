@@ -177,7 +177,7 @@ func TestSetLimit(t *testing.T) {
 func TestDDL(t *testing.T) {
 	testcases := []struct {
 		query    string
-		output   *DDL
+		output   DDLStatement
 		affected []string
 	}{{
 		query: "create table a",
@@ -244,7 +244,7 @@ func TestDDL(t *testing.T) {
 		for _, t := range tcase.affected {
 			want = append(want, TableName{Name: NewTableIdent(t)})
 		}
-		if affected := got.(*DDL).AffectedTables(); !reflect.DeepEqual(affected, want) {
+		if affected := got.(DDLStatement).AffectedTables(); !reflect.DeepEqual(affected, want) {
 			t.Errorf("Affected(%s): %v, want %v", tcase.query, affected, want)
 		}
 	}
