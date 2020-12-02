@@ -143,33 +143,41 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 
 func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	dbDDLstmt := stmt.(sqlparser.DBDDLStatement)
-	ksExists := vschema.KeyspaceExists(dbDDLstmt.GetDatabaseName())
+	ksName := dbDDLstmt.GetDatabaseName()
+	if ksName == "" {
+		ks, err := vschema.DefaultKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		ksName = ks.Name
+	}
+	ksExists := vschema.KeyspaceExists(ksName)
 
 	switch dbDDL := dbDDLstmt.(type) {
 	case *sqlparser.DBDDL:
 		switch dbDDL.Action {
-		case sqlparser.AlterDBDDLAction:
-			if !ksExists {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot alter database '%s'; database does not exists", dbDDL.DBName)
-			}
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database not allowed")
 		case sqlparser.DropDBDDLAction:
 			if dbDDL.IfExists && !ksExists {
 				return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 			}
 			if !ksExists {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", dbDDL.DBName)
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", ksName)
 			}
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDLstmt))
 		}
+	case *sqlparser.AlterDatabase:
+		if !ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot alter database '%s'; database does not exists", ksName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database not allowed")
 	case *sqlparser.CreateDatabase:
 		if dbDDL.IfNotExists && ksExists {
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !dbDDL.IfNotExists && ksExists {
-			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "cannot create database '%s'; database exists", dbDDL.DBName)
+			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "cannot create database '%s'; database exists", ksName)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
 	}
