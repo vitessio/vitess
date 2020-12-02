@@ -135,10 +135,11 @@ func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 					migration_statement,
 					strategy,
 					options,
+					ddl_action,
 					requested_timestamp,
 					migration_status
 				) VALUES (
-					'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
+					'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
 				)`,
 			},
 		},

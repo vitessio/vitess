@@ -56,6 +56,7 @@ const (
 	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE %s.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE %s.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
 	alterSchemaMigrationsTableProgress           = "ALTER TABLE %s.schema_migrations add column progress float NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE %s.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
 
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
@@ -238,4 +239,5 @@ var applyDDL = []string{
 	fmt.Sprintf(alterSchemaMigrationsTableTabletFailure, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableTabletFailureIndex, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableProgress, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableDDLAction, "_vt"),
 }

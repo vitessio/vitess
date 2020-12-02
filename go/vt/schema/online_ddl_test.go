@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestCreateUUID(t *testing.T) {
@@ -78,5 +79,40 @@ func TestIsOnlineDDLUUID(t *testing.T) {
 	}
 	for _, tc := range tt {
 		assert.False(t, IsOnlineDDLUUID(tc))
+	}
+}
+
+func TestGetActionStr(t *testing.T) {
+	tt := []struct {
+		statement string
+		actionStr string
+		isError   bool
+	}{
+		{
+			statement: "create table t (id int primary key)",
+			actionStr: sqlparser.CreateStr,
+		},
+		{
+			statement: "alter table t drop column c",
+			actionStr: sqlparser.AlterStr,
+		},
+		{
+			statement: "drop table t",
+			actionStr: sqlparser.DropStr,
+		},
+		{
+			statement: "rename table t to t2",
+			isError:   true,
+		},
+	}
+	for _, ts := range tt {
+		onlineDDL := &OnlineDDL{SQL: ts.statement}
+		actionStr, err := onlineDDL.GetActionStr()
+		if ts.isError {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+			assert.Equal(t, actionStr, ts.actionStr)
+		}
 	}
 }
