@@ -894,6 +894,35 @@ func (e *Executor) cancelMigrations(ctx context.Context, uuids []string) (err er
 	return nil
 }
 
+// cancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
+// for this keyspace
+func (e *Executor) cancelPendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	parsed := sqlparser.BuildParsedQuery(sqlSelectPendingMigrations, "_vt")
+	r, err := e.execQuery(ctx, parsed.Query)
+	if err != nil {
+		return result, err
+	}
+	var uuids []string
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		uuids = append(uuids, uuid)
+	}
+
+	for _, uuid := range uuids {
+		log.Infof("cancelPendingMigrations: cancelling %s", uuid)
+		res, err := e.cancelMigration(ctx, uuid, true)
+		if err != nil {
+			return result, err
+		}
+		if result == nil {
+			result = res
+		} else {
+			result.AppendResult(res)
+		}
+	}
+	return result, nil
+}
+
 // scheduleNextMigration attemps to schedule a single migration to run next.
 // possibly there's no migrations to run. Possibly there's a migration running right now,
 // in which cases nothing happens.
@@ -1465,6 +1494,8 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 				return nil, err
 			}
 			return response(e.cancelMigration(ctx, uuid, true))
+		case cancelAllMigrationHint:
+			return response(e.cancelPendingMigrations(ctx))
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				statusVal, retryMigrationHint, cancelMigrationHint)

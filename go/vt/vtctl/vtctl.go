@@ -2547,6 +2547,13 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			uuid = arg
 			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid='%s'`, uuid)
 		}
+	case "cancel-all":
+		{
+			if arg != "" {
+				return fmt.Errorf("UUID not allowed in %s", command)
+			}
+			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel-all'`)
+		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
