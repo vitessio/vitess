@@ -17,71 +17,81 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
-	"fmt"
+	"io"
 	"os"
-	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
-
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-// The default values used by these flags cannot be taken from wrangler and
-// actionnode modules, as we do't want to depend on them at all.
-//
-// (TODO:@amason) - These flags are also duplicated. This also only works for
-// GetKeyspaces, because I cannot currently define subcommands and also have
-// them take the global flags scattered throughout the codebase.
 var (
-	actionTimeout = flag.Duration("action_timeout", time.Hour, "timeout for the total command")
-	server        = flag.String("server", "", "server to use for connection")
+	client        vtctldclient.VtctldClient
+	traceCloser   io.Closer
+	commandCtx    context.Context
+	commandCancel func()
+
+	server        string
+	actionTimeout time.Duration
+
+	// We use cobra to make subcommands easier to manage. And do a hack below
+	// in main to grab the rest of the flags globally scattered to make sure we
+	// pick up things like common servenv flags, tracing flags, etc. Refer to
+	// commands.go for all of the subcommands.
+	rootCmd = &cobra.Command{
+		// We use PersistentPreRun to set up the tracer, grpc client, and
+		// command context for every command.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			traceCloser = trace.StartTracing("vtctldclient")
+			if server == "" {
+				err = errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")
+				log.Error(err)
+				return err
+			}
+
+			client, err = vtctldclient.New("grpc", server)
+
+			commandCtx, commandCancel = context.WithTimeout(context.Background(), actionTimeout)
+			return err
+		},
+		// Similarly, PersistentPostRun cleans up the resources spawned by
+		// PersistentPreRun.
+		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			commandCancel()
+			err := client.Close()
+			trace.LogErrorsWhenClosing(traceCloser)
+			return err
+		},
+		TraverseChildren: true,
+	}
 )
 
 func main() {
 	defer exit.Recover()
 
-	// fs := flag.NewFlagSet("vtctldclient", flag.PanicOnError)
-	// flag.CommandLine.VisitAll(func(f *flag.Flag) {
-	// 	fs.Var(f.Value, f.Name, f.Usage)
-	// })
+	// Grab all those global flags across the codebase and shove 'em on in.
+	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+	// Attach our local flags
+	rootCmd.PersistentFlags().StringVar(&server, "server", "", "server to use for connection")
+	rootCmd.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout for the total command")
 
-	// flag.CommandLine = fs
-
+	// hack to get rid of an "ERROR: logging before flag.Parse"
+	args := os.Args[:]
+	os.Args = os.Args[:1]
+	flag.CommandLine = flag.NewFlagSet("", flag.ContinueOnError)
 	flag.Parse()
+	os.Args = args
 
-	closer := trace.StartTracing("vtctldclient")
-	defer trace.LogErrorsWhenClosing(closer)
-
-	// We can't do much without a -server flag
-	if *server == "" {
-		log.Error(errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to"))
-		os.Exit(1)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), *actionTimeout)
-	defer cancel()
-
-	client, err := vtctldclient.New("grpc", *server)
-	if err != nil {
-		log.Fatalf("could not create gRPC client to %s; err = %s", *server, err)
-	}
-	defer client.Close()
-
-	switch strings.ToLower(flag.Args()[0]) {
-	case "getkeyspaces":
-		resp, err := client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-		if err != nil {
-			log.Errorf("GetKeyspaces error: %s", err)
-			return
-		}
-		fmt.Println(strings.Join(resp.Keyspaces, "\n"))
+	// back to your regularly scheduled cobra programming
+	if err := rootCmd.Execute(); err != nil {
+		log.Error(err)
+		exit.Return(1)
 	}
 }
