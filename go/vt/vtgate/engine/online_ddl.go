@@ -69,10 +69,7 @@ func (v *OnlineDDL) GetTableName() string {
 
 // Execute implements the Primitive interface
 func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	onlineDDL, err := schema.NewOnlineDDL(
-		v.GetKeyspaceName(), v.GetTableName(), v.SQL, v.Strategy, v.Options,
-		"vtgate", "",
-	)
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL, v.Strategy, v.Options, "vtgate")
 	if err != nil {
 		return result, err
 	}

@@ -34,8 +34,7 @@ import (
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
-	requestBy            string
-	requestParam         string
+	requestContext       string
 	wr                   *wrangler.Wrangler
 	tablets              []*topodatapb.Tablet
 	isClosed             bool
@@ -46,12 +45,13 @@ type TabletExecutor struct {
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
-func NewTabletExecutor(requestBy string, requestParam string, wr *wrangler.Wrangler, waitReplicasTimeout time.Duration) *TabletExecutor {
+func NewTabletExecutor(requestContext string, wr *wrangler.Wrangler, waitReplicasTimeout time.Duration) *TabletExecutor {
 	return &TabletExecutor{
 		wr:                   wr,
 		isClosed:             true,
 		allowBigSchemaChange: false,
 		waitReplicasTimeout:  waitReplicasTimeout,
+		requestContext:       requestContext,
 	}
 }
 
@@ -285,10 +285,7 @@ func (exec *TabletExecutor) executeOnlineDDL(
 		execResult.ExecutorErr = "Not an online DDL strategy"
 		return
 	}
-	onlineDDL, err := schema.NewOnlineDDL(
-		exec.keyspace, tableName, sql, strategy, options,
-		exec.requestBy, exec.requestParam,
-	)
+	onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options, exec.requestContext)
 	if err != nil {
 		execResult.ExecutorErr = err.Error()
 		return
