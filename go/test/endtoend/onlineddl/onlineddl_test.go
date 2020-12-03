@@ -197,11 +197,11 @@ func TestSchemaChange(t *testing.T) {
 		for i := 0; i < count; i++ {
 			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				_ = testAlterTable(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
 			}()
 		}
 		wg.Wait()
-		time.Sleep(2 * time.Second)
 		checkCancelAllMigrations(t, count)
 	}
 }
