@@ -227,7 +227,7 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symta
 			SelectExprs: countStartExpr,
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
-					Expr: &sqlparser.Subquery{Select: sel2},
+					Expr: &sqlparser.DerivedTable{Select: sel2},
 					As:   sqlparser.NewTableIdent("t"),
 				},
 			},

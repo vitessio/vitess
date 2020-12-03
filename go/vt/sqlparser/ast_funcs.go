@@ -1142,6 +1142,18 @@ func (sel SelectIntoType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
+func (node CollateAndCharsetType) ToString() string {
+	switch node {
+	case CharacterSetType:
+		return CharacterSetStr
+	case CollateType:
+		return CollateStr
+	default:
+		return "Unknown CollateAndCharsetType Type"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
