@@ -61,6 +61,13 @@ type (
 		IsFullyParsed() bool
 		GetTable() TableName
 		GetAction() DDLAction
+		GetOptLike() *OptLike
+		GetTableSpec() *TableSpec
+		GetVindexSpec() *VindexSpec
+		GetFromTables() TableNames
+		GetToTables() TableNames
+		GetAutoIncSpec() *AutoIncSpec
+		GetVindexCols() []ColIdent
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		Statement
@@ -246,6 +253,14 @@ type (
 		FullyParsed   bool
 	}
 
+	// AlterDatabase represents a ALTER database statement.
+	AlterDatabase struct {
+		DBName              string
+		UpdateDataDirectory bool
+		AlterOptions        []CollateAndCharset
+		FullyParsed         bool
+	}
+
 	// DBDDLAction is an enum for DBDDL Actions
 	DBDDLAction int8
 
@@ -384,6 +399,7 @@ func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
 func (*CreateIndex) iStatement()       {}
 func (*CreateDatabase) iStatement()    {}
+func (*AlterDatabase) iStatement()     {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
@@ -411,6 +427,76 @@ func (node *DDL) GetTable() TableName {
 // GetAction implements the DDLStatement interface
 func (node *CreateIndex) GetAction() DDLAction {
 	return AlterDDLAction
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *DDL) GetOptLike() *OptLike {
+	return node.OptLike
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *CreateIndex) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *DDL) GetTableSpec() *TableSpec {
+	return node.TableSpec
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *CreateIndex) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetVindexSpec implements the DDLStatement interface
+func (node *DDL) GetVindexSpec() *VindexSpec {
+	return node.VindexSpec
+}
+
+// GetVindexSpec implements the DDLStatement interface
+func (node *CreateIndex) GetVindexSpec() *VindexSpec {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *DDL) GetFromTables() TableNames {
+	return node.FromTables
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *CreateIndex) GetFromTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *DDL) GetToTables() TableNames {
+	return node.ToTables
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *CreateIndex) GetToTables() TableNames {
+	return nil
+}
+
+// GetAutoIncSpec implements the DDLStatement interface
+func (node *DDL) GetAutoIncSpec() *AutoIncSpec {
+	return node.AutoIncSpec
+}
+
+// GetAutoIncSpec implements the DDLStatement interface
+func (node *CreateIndex) GetAutoIncSpec() *AutoIncSpec {
+	return nil
+}
+
+// GetVindexCols implements the DDLStatement interface
+func (node *DDL) GetVindexCols() []ColIdent {
+	return node.VindexCols
+}
+
+// GetVindexCols implements the DDLStatement interface
+func (node *CreateIndex) GetVindexCols() []ColIdent {
+	return nil
 }
 
 // GetAction implements the DDLStatement interface
@@ -448,6 +534,7 @@ func (node *DDL) SetTable(qualifier string, name string) {
 
 func (*DBDDL) iDBDDLStatement()          {}
 func (*CreateDatabase) iDBDDLStatement() {}
+func (*AlterDatabase) iDBDDLStatement()  {}
 
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *DBDDL) IsFullyParsed() bool {
@@ -459,6 +546,11 @@ func (node *CreateDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// IsFullyParsed implements the DBDDLStatement interface
+func (node *AlterDatabase) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
 // GetDatabaseName implements the DBDDLStatement interface
 func (node *DBDDL) GetDatabaseName() string {
 	return node.DBName
@@ -466,6 +558,11 @@ func (node *DBDDL) GetDatabaseName() string {
 
 // GetDatabaseName implements the DBDDLStatement interface
 func (node *CreateDatabase) GetDatabaseName() string {
+	return node.DBName
+}
+
+// GetDatabaseName implements the DBDDLStatement interface
+func (node *AlterDatabase) GetDatabaseName() string {
 	return node.DBName
 }
 
@@ -2339,6 +2436,26 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, " %s", node.DBName)
 	if node.CreateOptions != nil {
 		for _, createOption := range node.CreateOptions {
+			if createOption.IsDefault {
+				buf.WriteString(" default")
+			}
+			buf.WriteString(createOption.Type.ToString())
+			buf.WriteString(" " + createOption.Value)
+		}
+	}
+}
+
+// Format formats the node.
+func (node *AlterDatabase) Format(buf *TrackedBuffer) {
+	buf.WriteString("alter database")
+	if node.DBName != "" {
+		buf.astPrintf(node, " %s", node.DBName)
+	}
+	if node.UpdateDataDirectory {
+		buf.WriteString(" upgrade data directory name")
+	}
+	if node.AlterOptions != nil {
+		for _, createOption := range node.AlterOptions {
 			if createOption.IsDefault {
 				buf.WriteString(" default")
 			}

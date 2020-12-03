@@ -266,7 +266,7 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		stmt, err := sqlparser.Parse(ts.query)
 		assert.NoError(t, err)
 
-		ddl, ok := stmt.(*sqlparser.DDL)
+		ddl, ok := stmt.(sqlparser.DDLStatement)
 		assert.True(t, ok)
 
 		isOnlineDDL, strategy, options := e.isOnlineSchemaDDL(ddl)
