@@ -213,7 +213,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	query := "select * from customer"
 	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 	insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
-	matchInsertQuery1 := "insert into customer(cid, name) values (:vtg1, :vtg2)"
+	matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
 	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 	vdiff(t, ksWorkflow)
 	switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
@@ -224,7 +224,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 	printShardPositions(vc, ksShards)
 	insertQuery2 := "insert into customer(name) values('tempCustomer2')"
-	matchInsertQuery2 := "insert into customer(name, cid) values (:vtg1, :_cid0)"
+	matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
 	require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
 	insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" //ID 101, hence due to reverse_bits in shard 80-

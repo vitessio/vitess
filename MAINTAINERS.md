@@ -5,7 +5,7 @@ The following is the full list, alphabetically ordered.
 * Alkin Tezuysal ([askdba](https://github.com/askdba)) alkin@planetscale.com
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Anthony Yeh ([enisoc](https://github.com/enisoc)) enisoc@planetscale.com
-* Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) koz@planetscale.com
+* Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) dan.kozlowski@gmail.com
 * David Weitzman ([dweitzman](https://github.com/dweitzman)) dweitzman@pinterest.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
@@ -13,7 +13,6 @@ The following is the full list, alphabetically ordered.
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
-* Morgan Tocker ([morgo](https://github.com/morgo)) morgan@planetscale.com
 * Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@slack-corp.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
@@ -23,13 +22,13 @@ The following is the full list, alphabetically ordered.
 ## Areas of expertise
 
 ### General Vitess
-sougou, demmer, rafael, dweitzman, tirsen, morgo, enisoc
+sougou, demmer, rafael, dweitzman, tirsen, askdba, enisoc
 
 ### Builds
-dkhenry, morgo
+dkhenry, shlomi-noach
 
 ### Resharding
-sougou, rafael, tirsen, dweitzman, systay
+sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps
 
 ### Parser
 sougou, dweitzman, deepthi, systay, harshit-gangal
