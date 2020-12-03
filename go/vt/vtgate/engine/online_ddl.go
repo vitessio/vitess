@@ -34,7 +34,7 @@ type OnlineDDL struct {
 	Keyspace *vindexes.Keyspace
 	DDL      sqlparser.DDLStatement
 	SQL      string
-	Strategy sqlparser.DDLStrategy
+	Strategy schema.DDLStrategy
 	Options  string
 
 	noTxNeeded
@@ -96,11 +96,15 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 }
 
 //StreamExecute implements the Primitive interface
-func (v *OnlineDDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: shlomi - have no idea if this should work
+func (v *OnlineDDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.Execute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(results)
 }
 
 //GetFields implements the Primitive interface
 func (v *OnlineDDL) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: shlomi - have no idea if this should work
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable")
 }

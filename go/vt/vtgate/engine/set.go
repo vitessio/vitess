@@ -404,11 +404,10 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		if err != nil {
 			return err
 		}
-		strategy, err := schema.ValidateDDLStrategy(str)
-		if err != nil {
+		if _, _, err := schema.ParseDDLStrategy(str); err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid DDL strategy: %s", str)
 		}
-		vcursor.Session().SetDDLStrategy(strategy)
+		vcursor.Session().SetDDLStrategy(str)
 	case sysvars.Charset.Name, sysvars.Names.Name:
 		str, err := svss.evalAsString(env)
 		if err != nil {

@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -29,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ builder = (*route)(nil)
+var _ logicalPlan = (*route)(nil)
 
 // route is used to build a Route primitive.
 // It's used to build one of the Select routes like
@@ -90,67 +89,24 @@ func (rb *route) Resolve() *route {
 	return rb
 }
 
-// Order satisfies the builder interface.
+// Order implements the logicalPlan interface
 func (rb *route) Order() int {
 	return rb.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder implements the logicalPlan interface
 func (rb *route) Reorder(order int) {
 	rb.order = order + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (rb *route) Primitive() engine.Primitive {
 	return rb.eroute
 }
 
-// PushLock satisfies the builder interface.
-func (rb *route) PushLock(lock sqlparser.Lock) error {
-	rb.Select.SetLock(lock)
-	return nil
-}
-
-// First satisfies the builder interface.
-func (rb *route) First() builder {
-	return rb
-}
-
-// ResultColumns satisfies the builder interface.
+// ResultColumns implements the logicalPlan interface
 func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
-}
-
-// PushFilter satisfies the builder interface.
-// The primitive will be updated if the new filter improves the plan.
-func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
-	sel, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	switch whereType {
-	case sqlparser.WhereStr:
-		sel.AddWhere(filter)
-	case sqlparser.HavingStr:
-		sel.AddHaving(filter)
-	}
-	rb.UpdatePlan(pb, filter)
-	return nil
-}
-
-// PushSelect satisfies the builder interface.
-func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
-	sel, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-
-	sel.SelectExprs = append(sel.SelectExprs, expr)
-
-	rc = newResultColumn(expr, rb)
-	rb.resultColumns = append(rb.resultColumns, rc)
-
-	return rc, len(rb.resultColumns) - 1, nil
 }
 
 // PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
@@ -169,128 +125,19 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 	return rc
 }
 
-// MakeDistinct satisfies the builder interface.
-func (rb *route) MakeDistinct() (builder, error) {
-	s, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	s.Distinct = true
-	return rb, nil
-}
-
-// PushGroupBy satisfies the builder interface.
-func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	s, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	s.GroupBy = groupBy
-	return nil
-}
-
-// PushOrderBy satisfies the builder interface.
-func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	switch len(orderBy) {
-	case 0:
-		return rb, nil
-	case 1:
-		isSpecial := false
-		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
-			isSpecial = true
-		} else if f, ok := orderBy[0].Expr.(*sqlparser.FuncExpr); ok {
-			if f.Name.Lowered() == "rand" {
-				isSpecial = true
-			}
-		}
-		if isSpecial {
-			rb.Select.AddOrder(orderBy[0])
-			return rb, nil
-		}
-	}
-
-	if rb.isSingleShard() {
-		for _, order := range orderBy {
-			rb.Select.AddOrder(order)
-		}
-		return rb, nil
-	}
-
-	// If it's a scatter, we have to populate the OrderBy field.
-	for _, order := range orderBy {
-		colNumber := -1
-		switch expr := order.Expr.(type) {
-		case *sqlparser.Literal:
-			var err error
-			if colNumber, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
-				return nil, err
-			}
-		case *sqlparser.ColName:
-			c := expr.Metadata.(*column)
-			for i, rc := range rb.resultColumns {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
-		}
-		// If column is not found, then the order by is referencing
-		// a column that's not on the select list.
-		if colNumber == -1 {
-			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
-		}
-		ob := engine.OrderbyParams{
-			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescOrder,
-		}
-		rb.eroute.OrderBy = append(rb.eroute.OrderBy, ob)
-
-		rb.Select.AddOrder(order)
-	}
-	return newMergeSort(rb), nil
-}
-
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// SetUpperLimit satisfies the builder interface.
-// The route pushes the limit regardless of the plan.
-// If it's a scatter query, the rows returned will be
-// more than the upper limit, but enough for the limit
-// primitive to chop off where needed.
-func (rb *route) SetUpperLimit(count sqlparser.Expr) {
-	rb.Select.SetLimit(&sqlparser.Limit{Rowcount: count})
-}
-
-// PushMisc satisfies the builder interface.
-func (rb *route) PushMisc(sel *sqlparser.Select) error {
-	s, ok := rb.Select.(*sqlparser.Select)
-	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
-	}
-	s.Comments = sel.Comments
-	s.Lock = sel.Lock
-	if sel.Into != nil {
-		if rb.eroute.Opcode != engine.SelectUnsharded {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
-		}
-		s.Into = sel.Into
-	}
-	return nil
-}
-
-// Wireup satisfies the builder interface.
-func (rb *route) Wireup(bldr builder, jt *jointab) error {
+// Wireup implements the logicalPlan interface
+func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	// Precaution: update ERoute.Values only if it's not set already.
 	if rb.eroute.Values == nil {
-		// Resolve values stored in the builder.
+		// Resolve values stored in the logical plan.
 		switch vals := rb.condition.(type) {
 		case *sqlparser.ComparisonExpr:
-			pv, err := rb.procureValues(bldr, jt, vals.Right)
+			pv, err := rb.procureValues(plan, jt, vals.Right)
 			if err != nil {
 				return err
 			}
@@ -299,7 +146,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		case nil:
 			// no-op.
 		default:
-			pv, err := rb.procureValues(bldr, jt, vals)
+			pv, err := rb.procureValues(plan, jt, vals)
 			if err != nil {
 				return err
 			}
@@ -338,7 +185,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
-				joinVar := jt.Procure(bldr, node, rb.Order())
+				joinVar := jt.Procure(plan, node, rb.Order())
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
@@ -368,12 +215,12 @@ func systemTable(qualifier string) bool {
 
 // procureValues procures and converts the input into
 // the expected types for rb.Values.
-func (rb *route) procureValues(bldr builder, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
+func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
 	switch val := val.(type) {
 	case sqlparser.ValTuple:
 		pv := sqltypes.PlanValue{}
 		for _, val := range val {
-			v, err := rb.procureValues(bldr, jt, val)
+			v, err := rb.procureValues(plan, jt, val)
 			if err != nil {
 				return pv, err
 			}
@@ -381,7 +228,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val sqlparser.Expr) (s
 		}
 		return pv, nil
 	case *sqlparser.ColName:
-		joinVar := jt.Procure(bldr, val, rb.Order())
+		joinVar := jt.Procure(plan, val, rb.Order())
 		return sqltypes.PlanValue{Key: joinVar}, nil
 	default:
 		return sqlparser.NewPlanValue(val)
@@ -421,14 +268,14 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 	return query.Query
 }
 
-// SupplyVar satisfies the builder interface.
+// SupplyVar implements the logicalPlan interface
 func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	// route is an atomic primitive. So, SupplyVar cannot be
 	// called on it.
 	panic("BUG: route is an atomic node.")
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol implements the logicalPlan interface
 func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range rb.resultColumns {
@@ -446,7 +293,7 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 	return rc, len(rb.resultColumns) - 1
 }
 
-// SupplyWeightString satisfies the builder interface.
+// SupplyWeightString implements the logicalPlan interface
 func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	rc := rb.resultColumns[colNumber]
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
@@ -465,10 +312,27 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 			},
 		},
 	}
-	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
-	_, weightcolNumber, _ = rb.PushSelect(nil, expr, nil)
+	// It's ok to pass nil for pb and logicalPlan because PushSelect doesn't use them.
+	// TODO: we are ignoring a potential error here. need to clean this up
+	_, _, weightcolNumber, err = planProjection(nil, rb, expr, nil)
+	if err != nil {
+		return 0, err
+	}
 	rb.weightStrings[rc] = weightcolNumber
 	return weightcolNumber, nil
+}
+
+// Rewrite implements the logicalPlan interface
+func (rb *route) Rewrite(inputs ...logicalPlan) error {
+	if len(inputs) != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "route: wrong number of inputs")
+	}
+	return nil
+}
+
+// Inputs implements the logicalPlan interface
+func (rb *route) Inputs() []logicalPlan {
+	return []logicalPlan{}
 }
 
 // MergeSubquery returns true if the subquery route could successfully be merged
