@@ -24,6 +24,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -186,17 +187,22 @@ func TestSchemaChange(t *testing.T) {
 	}
 	{
 		// no migrations pending at this time
-		time.Sleep(time.Second * 5)
+		time.Sleep(10 * time.Second)
 		checkCancelAllMigrations(t, 0)
 	}
 	{
 		// spawn n migrations; cancel them via cancel-all
+		var wg sync.WaitGroup
 		count := 4
 		for i := 0; i < count; i++ {
-			_ = testAlterTable(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+			wg.Add(1)
+			go func() {
+				_ = testAlterTable(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+			}()
 		}
+		wg.Wait()
 		time.Sleep(2 * time.Second)
-		checkCancelAllMigrations(t, 4)
+		checkCancelAllMigrations(t, count)
 	}
 }
 
