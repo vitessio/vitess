@@ -109,7 +109,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where costly = 'aa' and name = 'bb'",
+    "Query": "select id from user where costly = 'aa' and `name` = 'bb'",
     "Table": "user",
     "Values": [
       "bb"
@@ -131,7 +131,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where costly in ('aa', 'bb') and name in ::__vals",
+    "Query": "select id from user where costly in ('aa', 'bb') and `name` in ::__vals",
     "Table": "user",
     "Values": [
       [
@@ -156,7 +156,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (name, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Query": "select id from user where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "user",
     "Values": [
       [
@@ -181,7 +181,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col, name) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Query": "select id from user where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "user",
     "Values": [
       [
@@ -206,7 +206,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Query": "select id from user where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "user",
     "Values": [
       [
@@ -231,7 +231,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (name, costly) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Query": "select id from user where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "user",
     "Values": [
       [
@@ -256,7 +256,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col, costly) in (('aa', 'bb')) and (col, name) in (('cc', 'dd'))",
+    "Query": "select id from user where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
     "Table": "user",
     "Values": [
       [
@@ -280,7 +280,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col, name) in (('aa', 'bb')) and id = 5",
+    "Query": "select id from user where (col, `name`) in (('aa', 'bb')) and id = 5",
     "Table": "user",
     "Values": [
       5
@@ -302,7 +302,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Query": "select id from user where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "user",
     "Values": [
       [
@@ -327,7 +327,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where ((col1, name), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
+    "Query": "select id from user where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
     "Table": "user",
     "Values": [
       [
@@ -352,7 +352,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (name, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
+    "Query": "select id from user where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
     "Table": "user",
     "Values": [
       [
@@ -377,7 +377,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
+    "Query": "select id from user where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
     "Table": "user"
   }
 }
@@ -395,7 +395,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col1, name) in (select * from music where music.user_id = user.id)",
+    "Query": "select id from user where (col1, `name`) in (select * from music where music.user_id = user.id)",
     "Table": "user"
   }
 }
@@ -413,7 +413,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col1, name) in (('aa', 1 + 1))",
+    "Query": "select id from user where (col1, `name`) in (('aa', 1 + 1))",
     "Table": "user"
   }
 }
@@ -449,7 +449,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where name in (col, 'bb')",
+    "Query": "select id from user where `name` in (col, 'bb')",
     "Table": "user"
   }
 }
@@ -467,7 +467,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where name = :a",
+    "Query": "select id from user where `name` = :a",
     "Table": "user",
     "Values": [
       ":a"
@@ -489,7 +489,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where name = 18446744073709551615",
+    "Query": "select id from user where `name` = 18446744073709551615",
     "Table": "user",
     "Values": [
       18446744073709551615
@@ -511,7 +511,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where name in ::__vals",
+    "Query": "select id from user where `name` in ::__vals",
     "Table": "user",
     "Values": [
       "::list"
@@ -835,7 +835,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id or col as val from user where 1 != 1",
-    "Query": "select id or col as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+    "Query": "select id or col as val from user where user.col = 5 and user.id in (1, 2) and user.`name` = 'aa'",
     "Table": "user",
     "Values": [
       "aa"
@@ -857,7 +857,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
+    "Query": "select id from user where user.col = false and user.id in (1, 2) and user.`name` = 'aa'",
     "Table": "user",
     "Values": [
       "aa"
@@ -879,7 +879,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
+    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.`name` = 'aa' and user.id = 1",
     "Table": "user",
     "Values": [
       1
@@ -901,7 +901,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
+    "Query": "select id from user where user.id = 1 and user.`name` = 'aa' and user.id in (1, 2) and user.col = 5",
     "Table": "user",
     "Values": [
       1
@@ -923,7 +923,7 @@
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
+    "Query": "select id from user where user.id = 1 or user.`name` = 'aa' and user.id in (1, 2)",
     "Table": "user"
   }
 }

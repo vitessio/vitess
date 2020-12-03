@@ -133,6 +133,7 @@ func skipToEnd(yylex interface{}) {
   selectInto	  *SelectInto
   createIndex	  *CreateIndex
   createDatabase  *CreateDatabase
+  alterDatabase  *AlterDatabase
   collateAndCharset CollateAndCharset
   collateAndCharsets []CollateAndCharset
 }
@@ -187,7 +188,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
-%token <bytes> VINDEX VINDEXES
+%token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 
@@ -246,6 +247,7 @@ func skipToEnd(yylex interface{}) {
 %type <ddl> create_table_prefix rename_list
 %type <createIndex> create_index_prefix
 %type <createDatabase> create_database_prefix
+%type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
 %type <boolean> default_optional
@@ -358,7 +360,7 @@ func skipToEnd(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> id_or_var vindex_type vindex_type_opt
+%type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <bytes> alter_object_type database_or_schema
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
@@ -424,6 +426,15 @@ id_or_var:
 | AT_AT_ID
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+id_or_var_opt:
+  {
+    $$ = NewColIdentWithAt("", NoAt)
+  }
+| id_or_var
+  {
+    $$ = $1
   }
 
 do_statement:
@@ -776,6 +787,13 @@ create_database_prefix:
   CREATE database_or_schema not_exists_opt id_or_var
   {
     $$ = &CreateDatabase{DBName: string($4.String()), IfNotExists: $3}
+    setDDL(yylex,$$)
+  }
+
+alter_database_prefix:
+  ALTER database_or_schema
+  {
+    $$ = &AlterDatabase{}
     setDDL(yylex,$$)
   }
 
@@ -1582,13 +1600,19 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterDDLAction, Table: $3, PartitionSpec: $4}
   }
-| ALTER DATABASE id_or_var ddl_skip_to_end
+| alter_database_prefix id_or_var_opt create_options
   {
-    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
+    $1.FullyParsed = true
+    $1.DBName = $2.String()
+    $1.AlterOptions = $3
+    $$ = $1
   }
-| ALTER SCHEMA id_or_var ddl_skip_to_end
+| alter_database_prefix id_or_var UPGRADE DATA DIRECTORY NAME
   {
-    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
+    $1.FullyParsed = true
+    $1.DBName = $2.String()
+    $1.UpdateDataDirectory = true
+    $$ = $1
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
@@ -4029,6 +4053,7 @@ non_reserved_keyword:
 | DECIMAL
 | DEFINITION
 | DESCRIPTION
+| DIRECTORY
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
@@ -4089,6 +4114,7 @@ non_reserved_keyword:
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
+| NAME
 | NAMES
 | NCHAR
 | NESTED
@@ -4178,6 +4204,7 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
+| UPGRADE
 | VARBINARY
 | VARCHAR
 | VARIABLES

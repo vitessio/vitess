@@ -2774,7 +2774,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		if err != nil {
 			return fmt.Errorf("error parsing vschema statement `%s`: %v", *sql, err)
 		}
-		ddl, ok := stmt.(*sqlparser.DDL)
+		ddl, ok := stmt.(sqlparser.DDLStatement)
 		if !ok {
 			return fmt.Errorf("error parsing vschema statement `%s`: not a ddl statement", *sql)
 		}
