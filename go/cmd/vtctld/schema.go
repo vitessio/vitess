@@ -72,7 +72,7 @@ func initSchema() {
 			err = schemamanager.Run(
 				ctx,
 				controller,
-				schemamanager.NewTabletExecutor(wr, *schemaChangeReplicasTimeout),
+				schemamanager.NewTabletExecutor("vtctld/schema", wr, *schemaChangeReplicasTimeout),
 			)
 			if err != nil {
 				log.Errorf("Schema change failed, error: %v", err)
