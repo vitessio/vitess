@@ -632,10 +632,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		if err != nil {
 			return err
 		}
-		executor := schemamanager.NewTabletExecutor(
-			"vtctld/api", apiCallUUID,
-			wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second,
-		)
+		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
+		executor := schemamanager.NewTabletExecutor(requestContext, wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
 
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
