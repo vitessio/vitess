@@ -950,9 +950,9 @@ func stripTableConstraints(ddl string) (string, error) {
 
 	stripConstraints := func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
-		case *sqlparser.DDL:
-			if node.TableSpec != nil {
-				node.TableSpec.Constraints = nil
+		case sqlparser.DDLStatement:
+			if node.GetTableSpec() != nil {
+				node.GetTableSpec().Constraints = nil
 			}
 		}
 		return true

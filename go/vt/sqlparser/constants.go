@@ -149,6 +149,9 @@ const (
 	NoOperatorStr   = ""
 	CharsetStr      = "charset"
 
+	// CollateAndCharset.Type
+	CollateStr = " collate"
+
 	// MatchExpr.Option
 	NoOptionStr                              = ""
 	BooleanModeStr                           = " in boolean mode"
@@ -377,4 +380,10 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
+)
+
+// Constant for Enum Type - CollateAndCharsetType
+const (
+	CollateType CollateAndCharsetType = iota
+	CharacterSetType
 )
