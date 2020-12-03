@@ -123,6 +123,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	switch qre.plan.PlanID {
 	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShowTables:
 		maxrows := qre.getSelectLimit()
+		log.Info("========== Execute with maxrows: %d - %v, \n plan: %v", maxrows, qre.query, qre.plan)
+
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
@@ -361,6 +363,12 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 			qre.tsv.Stats().TableaclPseudoDenied.Add(statsKey, 1)
 			return nil
 		}
+
+		// Skip ACL check for queries against the dummy dual table
+		if tableName == "dual" {
+			return nil
+		}
+
 		if qre.tsv.qe.strictTableACL {
 			errStr := fmt.Sprintf("table acl error: %q %v cannot run %v on table %q", callerID.Username, callerID.Groups, qre.plan.PlanID, tableName)
 			qre.tsv.Stats().TableaclDenied.Add(statsKey, 1)
