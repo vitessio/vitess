@@ -203,7 +203,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
 %token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS
 
 // SET tokens
@@ -1725,6 +1725,11 @@ show_statement:
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW DATABASES like_opt
+  {
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+  }
+| SHOW SCHEMAS like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
     $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
@@ -3888,6 +3893,7 @@ reserved_keyword:
 | RIGHT
 | ROW_NUMBER
 | SCHEMA
+| SCHEMAS
 | SELECT
 | SEPARATOR
 | SET
