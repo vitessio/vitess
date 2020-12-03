@@ -768,10 +768,10 @@ var (
 		output: "update (select id from foo) as subqalias set id = 4",
 	}, {
 		input:  "update foo f, bar b set f.id = b.id where b.name = 'test'",
-		output: "update foo as f, bar as b set f.id = b.id where b.name = 'test'",
+		output: "update foo as f, bar as b set f.id = b.id where b.`name` = 'test'",
 	}, {
 		input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
-		output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
+		output: "update foo as f join bar as b on f.`name` = b.`name` set f.id = b.id where b.`name` = 'test'",
 	}, {
 		input: "update /* ignore */ ignore a set b = 3",
 	}, {
@@ -785,9 +785,11 @@ var (
 	}, {
 		input: "delete /* limit */ from a limit b",
 	}, {
-		input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+		input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
+		output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 	}, {
-		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+		input:  "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from a, b where a.id = b.id and b.`name` = 'test'",
 	}, {
 		input: "delete /* simple */ ignore from a",
 	}, {
@@ -1041,29 +1043,30 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
-		input:  "alter database d default character set = charset",
-		output: "alter database d",
+		input: "alter database character set geostd8",
 	}, {
-		input:  "alter database d character set = charset",
-		output: "alter database d",
+		input: "alter database d character set geostd8",
 	}, {
-		input:  "alter database d default collate = collation",
-		output: "alter database d",
+		input: "alter database d default collate 'utf8_bin'",
 	}, {
-		input:  "alter database d collate = collation",
-		output: "alter database d",
+		input: "alter database default collate 'utf8_bin'",
 	}, {
-		input:  "alter schema d default character set = charset",
-		output: "alter database d",
+		input: "alter database d upgrade data directory name",
 	}, {
-		input:  "alter schema d character set = charset",
-		output: "alter database d",
+		input:  "alter database d collate = 'utf8_bin'",
+		output: "alter database d collate 'utf8_bin'",
 	}, {
-		input:  "alter schema d default collate = collation",
-		output: "alter database d",
+		input:  "alter schema d default character set = geostd8",
+		output: "alter database d default character set geostd8",
 	}, {
-		input:  "alter schema d collate = collation",
-		output: "alter database d",
+		input:  "alter schema d character set = geostd8",
+		output: "alter database d character set geostd8",
+	}, {
+		input:  "alter schema d default collate = 'utf8_bin'",
+		output: "alter database d default collate 'utf8_bin'",
+	}, {
+		input:  "alter schema d collate = 'utf8_bin' character set = geostd8 character set = geostd8",
+		output: "alter database d collate 'utf8_bin' character set geostd8 character set geostd8",
 	}, {
 		input: "create table a",
 	}, {
@@ -1134,10 +1137,11 @@ var (
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
 		output: "alter vschema on a add vindex hash (id) using hash",
 	}, {
-		input: "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		output: "alter vschema on user add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter vschema on a drop vindex hash",
 	}, {
@@ -1603,13 +1607,17 @@ var (
 	}, {
 		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 	}, {
-		input: "select name, group_concat(score) from t group by name",
+		input:  "select name, group_concat(score) from t group by name",
+		output: "select `name`, group_concat(score) from t group by `name`",
 	}, {
-		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+		input:  "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+		output: "select `name`, group_concat(distinct id, score order by id desc separator ':') from t group by `name`",
 	}, {
-		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+		input:  "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+		output: "select `name`, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by `name`",
 	}, {
-		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
+		input:  "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
+		output: "select `name`, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by `name`",
 	}, {
 		input: "select * from t partition (p0)",
 	}, {
@@ -1657,6 +1665,14 @@ var (
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",
 	}, {
+		input: "create database test_db default collate 'utf8mb4_general_ci' collate utf8mb4_general_ci",
+	}, {
+		input: "create database test_db character set geostd8",
+	}, {
+		input:      "create database test_db character set * unparsable",
+		output:     "create database test_db",
+		partialDDL: true,
+	}, {
 		input: "drop database test_db",
 	}, {
 		input:  "drop schema test_db",
@@ -1665,7 +1681,7 @@ var (
 		input: "drop database if exists test_db",
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
-		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
 		output: "select distinct a.* from (select 1 from dual union all select 1 from dual) as a",
@@ -1774,6 +1790,10 @@ func TestValid(t *testing.T) {
 			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
 			switch x := tree.(type) {
 			case *CreateIndex:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			case *CreateDatabase:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			case *AlterDatabase:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			}
 			// This test just exercises the tree walking functionality.
@@ -2154,7 +2174,7 @@ func TestSelectInto(t *testing.T) {
 		output string
 	}{{
 		input:  "select * from t order by name limit 100 into outfile s3 'out_file_name'",
-		output: "select * from t order by name asc limit 100 into outfile s3 'out_file_name'",
+		output: "select * from t order by `name` asc limit 100 into outfile s3 'out_file_name'",
 	}, {
 		input: "select * from t into dumpfile 'out_file_name'",
 	}, {
@@ -2162,7 +2182,8 @@ func TestSelectInto(t *testing.T) {
 	}, {
 		input: "select * from t into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
 	}, {
-		input: "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
+		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
+		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
 	}, {
 		// Invalid queries but these are parsed and errors caught in planbuilder
 		input: "select * from t limit 100 into outfile s3 'out_file_name' union select * from t2",

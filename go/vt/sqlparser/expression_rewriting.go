@@ -167,12 +167,7 @@ func (er *expressionRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 
 func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	sel, isSimpleSelect := subquery.Select.(*Select)
-	// Today, subqueries and derived tables use the same AST struct,
-	// so we have to check what the parent is so we don't accidentally
-	// rewrite a FROM clause instead of an expression
-	_, isDerivedTable := cursor.Parent().(*AliasedTableExpr)
-
-	if isDerivedTable || !isSimpleSelect {
+	if !isSimpleSelect {
 		return
 	}
 
