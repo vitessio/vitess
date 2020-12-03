@@ -31,7 +31,7 @@ var _ Primitive = (*AlterVSchema)(nil)
 type AlterVSchema struct {
 	Keyspace *vindexes.Keyspace
 
-	DDL *sqlparser.DDL
+	DDL sqlparser.DDLStatement
 
 	noTxNeeded
 
@@ -60,7 +60,7 @@ func (v *AlterVSchema) GetKeyspaceName() string {
 
 //GetTableName implements the Primitive interface
 func (v *AlterVSchema) GetTableName() string {
-	return v.DDL.Table.Name.String()
+	return v.DDL.GetTable().Name.String()
 }
 
 //Execute implements the Primitive interface

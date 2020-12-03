@@ -130,18 +130,18 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	return err
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlparser.DBDDL, error) {
-	parsedDDLs := make([]*sqlparser.DDL, 0)
-	parsedDBDDLs := make([]*sqlparser.DBDDL, 0)
+func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, error) {
+	parsedDDLs := make([]sqlparser.DDLStatement, 0)
+	parsedDBDDLs := make([]sqlparser.DBDDLStatement, 0)
 	for _, sql := range sqls {
 		stat, err := sqlparser.Parse(sql)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
 		}
 		switch ddl := stat.(type) {
-		case *sqlparser.DDL:
+		case sqlparser.DDLStatement:
 			parsedDDLs = append(parsedDDLs, ddl)
-		case *sqlparser.DBDDL:
+		case sqlparser.DBDDLStatement:
 			parsedDBDDLs = append(parsedDBDDLs, ddl)
 		default:
 			if len(exec.tablets) != 1 {
@@ -153,11 +153,11 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlpa
 }
 
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func (exec *TabletExecutor) isOnlineSchemaDDL(ddl *sqlparser.DDL) (isOnline bool, strategy schema.DDLStrategy, options string) {
+func (exec *TabletExecutor) isOnlineSchemaDDL(ddl sqlparser.DDLStatement) (isOnline bool, strategy schema.DDLStrategy, options string) {
 	if ddl == nil {
 		return false, strategy, options
 	}
-	if ddl.Action != sqlparser.AlterDDLAction {
+	if ddl.GetAction() != sqlparser.AlterDDLAction {
 		return false, strategy, options
 	}
 	strategy, options, _ = schema.ParseDDLStrategy(exec.ddlStrategy)
@@ -171,7 +171,7 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(ddl *sqlparser.DDL) (isOnline bool
 // to be a big schema change and will be rejected.
 //   1. Alter more than 100,000 rows.
 //   2. Change a table with more than 2,000,000 rows (Drops are fine).
-func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []*sqlparser.DDL) (bool, error) {
+func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []sqlparser.DDLStatement) (bool, error) {
 	// exec.tablets is guaranteed to have at least one element;
 	// Otherwise, Open should fail and executor should fail.
 	masterTabletInfo := exec.tablets[0]
@@ -190,13 +190,13 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 			// Since this is an online schema change, there is no need to worry about big changes
 			continue
 		}
-		switch ddl.Action {
+		switch ddl.GetAction() {
 		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
 			continue
 		}
-		tableName := ddl.Table.Name.String()
+		tableName := ddl.GetTable().Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
-			if rowCount > 100000 && ddl.Action == sqlparser.AlterDDLAction {
+			if rowCount > 100000 && ddl.GetAction() == sqlparser.AlterDDLAction {
 				return true, fmt.Errorf(
 					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s alters a table with more than 100 thousand rows", sqlparser.String(ddl))
 			}
@@ -259,8 +259,8 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(nil)
 		tableName := ""
 		switch ddl := stat.(type) {
-		case *sqlparser.DDL:
-			tableName = ddl.Table.Name.String()
+		case sqlparser.DDLStatement:
+			tableName = ddl.GetTable().Name.String()
 			isOnlineDDL, strategy, options = exec.isOnlineSchemaDDL(ddl)
 		}
 		exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)

@@ -254,6 +254,10 @@ func replaceDeleteWhere(newNode, parent SQLNode) {
 	parent.(*Delete).Where = newNode.(*Where)
 }
 
+func replaceDerivedTableSelect(newNode, parent SQLNode) {
+	parent.(*DerivedTable).Select = newNode.(SelectStatement)
+}
+
 func replaceExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
@@ -942,6 +946,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Hints, replaceAliasedTableExprHints)
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
 
+	case *AlterDatabase:
+
 	case *AndExpr:
 		a.apply(node, n.Left, replaceAndExprLeft)
 		a.apply(node, n.Right, replaceAndExprRight)
@@ -1023,6 +1029,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ConvertUsingExpr:
 		a.apply(node, n.Expr, replaceConvertUsingExprExpr)
 
+	case *CreateDatabase:
+
 	case *CreateIndex:
 		a.apply(node, n.Name, replaceCreateIndexName)
 		a.apply(node, n.Table, replaceCreateIndexTable)
@@ -1059,6 +1067,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.TableExprs, replaceDeleteTableExprs)
 		a.apply(node, n.Targets, replaceDeleteTargets)
 		a.apply(node, n.Where, replaceDeleteWhere)
+
+	case *DerivedTable:
+		a.apply(node, n.Select, replaceDerivedTableSelect)
 
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)

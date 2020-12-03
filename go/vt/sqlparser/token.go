@@ -44,7 +44,7 @@ type Tokenizer struct {
 	LastError           error
 	posVarIndex         int
 	ParseTree           Statement
-	partialDDL          DDLStatement
+	partialDDL          Statement
 	nesting             int
 	multi               bool
 	specialComment      *Tokenizer
@@ -161,6 +161,7 @@ var keywords = map[string]int{
 	"desc":                DESC,
 	"describe":            DESCRIBE,
 	"deterministic":       UNUSED,
+	"directory":           DIRECTORY,
 	"distinct":            DISTINCT,
 	"distinctrow":         DISTINCTROW,
 	"div":                 DIV,
@@ -280,6 +281,7 @@ var keywords = map[string]int{
 	"multilinestring":     MULTILINESTRING,
 	"multipoint":          MULTIPOINT,
 	"multipolygon":        MULTIPOLYGON,
+	"name":                NAME,
 	"names":               NAMES,
 	"natural":             NATURAL,
 	"nchar":               NCHAR,
@@ -400,6 +402,7 @@ var keywords = map[string]int{
 	"unlock":              UNLOCK,
 	"unsigned":            UNSIGNED,
 	"update":              UPDATE,
+	"upgrade":             UPGRADE,
 	"usage":               UNUSED,
 	"use":                 USE,
 	"using":               USING,

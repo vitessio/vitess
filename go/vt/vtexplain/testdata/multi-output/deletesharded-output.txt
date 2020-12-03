@@ -16,9 +16,9 @@ delete from music_extra where id=1 and extra='abc'
 delete from user where id=1
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: select id, name from user where id = 1 limit 10001 for update
+1 ks_sharded/-40: select id, `name` from user where id = 1 limit 10001 for update
 2 ks_sharded/40-80: begin
-2 ks_sharded/40-80: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001
+2 ks_sharded/40-80: delete from name_user_map where `name` = 'name_val_2' and user_id = 1 limit 10001
 3 ks_sharded/-40: delete from user where id = 1 limit 10001
 4 ks_sharded/-40: commit
 5 ks_sharded/40-80: commit
@@ -27,12 +27,12 @@ delete from user where id=1
 delete from user where name='billy'
 
 1 ks_sharded/c0-: begin
-1 ks_sharded/c0-: select name, user_id from name_user_map where name in ('billy') limit 10001 for update
+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('billy') limit 10001 for update
 2 ks_sharded/-40: begin
-2 ks_sharded/-40: select id, name from user where name = 'billy' limit 10001 for update
+2 ks_sharded/-40: select id, `name` from user where `name` = 'billy' limit 10001 for update
 3 ks_sharded/40-80: begin
-3 ks_sharded/40-80: delete from name_user_map where name = 'name_val_2' and user_id = 1 limit 10001
-4 ks_sharded/-40: delete from user where name = 'billy' limit 10001
+3 ks_sharded/40-80: delete from name_user_map where `name` = 'name_val_2' and user_id = 1 limit 10001
+4 ks_sharded/-40: delete from user where `name` = 'billy' limit 10001
 5 ks_sharded/c0-: commit
 6 ks_sharded/-40: commit
 7 ks_sharded/40-80: commit

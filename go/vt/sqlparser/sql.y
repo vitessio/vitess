@@ -25,8 +25,8 @@ func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, ddl DDLStatement) {
-  yylex.(*Tokenizer).partialDDL = ddl
+func setDDL(yylex interface{}, node Statement) {
+  yylex.(*Tokenizer).partialDDL = node
 }
 
 func incNesting(yylex interface{}) bool {
@@ -81,6 +81,7 @@ func skipToEnd(yylex interface{}) {
   values        Values
   valTuple      ValTuple
   subquery      *Subquery
+  derivedTable  *DerivedTable
   whens         []*When
   when          *When
   orderBy       OrderBy
@@ -131,6 +132,10 @@ func skipToEnd(yylex interface{}) {
   explainType 	  ExplainType
   selectInto	  *SelectInto
   createIndex	  *CreateIndex
+  createDatabase  *CreateDatabase
+  alterDatabase  *AlterDatabase
+  collateAndCharset CollateAndCharset
+  collateAndCharsets []CollateAndCharset
 }
 
 %token LEX_ERROR
@@ -183,7 +188,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
-%token <bytes> VINDEX VINDEXES
+%token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 
@@ -241,6 +246,11 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> create_table_prefix rename_list
 %type <createIndex> create_index_prefix
+%type <createDatabase> create_database_prefix
+%type <alterDatabase> alter_database_prefix
+%type <collateAndCharset> collate character_set
+%type <collateAndCharsets> create_options create_options_opt
+%type <boolean> default_optional
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
@@ -278,7 +288,8 @@ func skipToEnd(yylex interface{}) {
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
-%type <subquery> subquery derived_table
+%type <subquery> subquery
+%type <derivedTable> derived_table
 %type <colName> column_name
 %type <whens> when_expression_list
 %type <when> when_expression
@@ -349,8 +360,8 @@ func skipToEnd(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> id_or_var vindex_type vindex_type_opt
-%type <bytes> alter_object_type
+%type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
+%type <bytes> alter_object_type database_or_schema
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 
@@ -415,6 +426,15 @@ id_or_var:
 | AT_AT_ID
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+id_or_var_opt:
+  {
+    $$ = NewColIdentWithAt("", NoAt)
+  }
+| id_or_var
+  {
+    $$ = $1
   }
 
 do_statement:
@@ -700,13 +720,11 @@ create_statement:
   {
     $$ = &DDL{Action: CreateDDLAction, Table: $5.ToViewName()}
   }
-| CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
+| create_database_prefix create_options_opt
   {
-    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
-  }
-| CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
-  {
-    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
+    $1.FullyParsed = true
+    $1.CreateOptions = $2
+    $$ = $1
   }
 
 vindex_type_opt:
@@ -765,6 +783,23 @@ create_index_prefix:
     setDDL(yylex, $$)
   }
 
+create_database_prefix:
+  CREATE database_or_schema not_exists_opt id_or_var
+  {
+    $$ = &CreateDatabase{DBName: string($4.String()), IfNotExists: $3}
+    setDDL(yylex,$$)
+  }
+
+alter_database_prefix:
+  ALTER database_or_schema
+  {
+    $$ = &AlterDatabase{}
+    setDDL(yylex,$$)
+  }
+
+database_or_schema:
+  DATABASE
+| SCHEMA
 
 table_spec:
   '(' table_column_list ')' table_option_list
@@ -772,6 +807,63 @@ table_spec:
     $$ = $2
     $$.Options = $4
   }
+
+create_options_opt:
+  {
+    $$ = nil
+  }
+| create_options
+  {
+    $$ = $1
+  }
+
+create_options:
+  character_set
+  {
+    $$ = []CollateAndCharset{$1}
+  }
+| collate
+  {
+    $$ = []CollateAndCharset{$1}
+  }
+| create_options collate
+  {
+    $$ = append($1,$2)
+  }
+| create_options character_set
+  {
+    $$ = append($1,$2)
+  }
+
+default_optional:
+  {
+    $$ = false
+  }
+| DEFAULT
+  {
+    $$ = true
+  }
+
+character_set:
+  default_optional CHARACTER SET equal_opt id_or_var
+  {
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:($5.String()), IsDefault:$1}
+  }
+| default_optional CHARACTER SET equal_opt STRING
+  {
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:("'" + string($5) + "'"), IsDefault:$1}
+  }
+
+collate:
+  default_optional COLLATE equal_opt id_or_var
+  {
+    $$ = CollateAndCharset{Type:CollateType, Value:($4.String()), IsDefault:$1}
+  }
+| default_optional COLLATE equal_opt STRING
+  {
+    $$ = CollateAndCharset{Type:CollateType, Value:("'" + string($4) + "'"), IsDefault:$1}
+  }
+
 
 create_like:
   LIKE table_name
@@ -1508,13 +1600,19 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterDDLAction, Table: $3, PartitionSpec: $4}
   }
-| ALTER DATABASE id_or_var ddl_skip_to_end
+| alter_database_prefix id_or_var_opt create_options
   {
-    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
+    $1.FullyParsed = true
+    $1.DBName = $2.String()
+    $1.AlterOptions = $3
+    $$ = $1
   }
-| ALTER SCHEMA id_or_var ddl_skip_to_end
+| alter_database_prefix id_or_var UPGRADE DATA DIRECTORY NAME
   {
-    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
+    $1.FullyParsed = true
+    $1.DBName = $2.String()
+    $1.UpdateDataDirectory = true
+    $$ = $1
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
@@ -2298,7 +2396,7 @@ table_factor:
 derived_table:
   openb select_statement closeb
   {
-    $$ = &Subquery{$2}
+    $$ = &DerivedTable{$2}
   }
 
 aliased_table_name:
@@ -3955,6 +4053,7 @@ non_reserved_keyword:
 | DECIMAL
 | DEFINITION
 | DESCRIPTION
+| DIRECTORY
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
@@ -4015,6 +4114,7 @@ non_reserved_keyword:
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
+| NAME
 | NAMES
 | NCHAR
 | NESTED
@@ -4104,6 +4204,7 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
+| UPGRADE
 | VARBINARY
 | VARCHAR
 | VARIABLES
