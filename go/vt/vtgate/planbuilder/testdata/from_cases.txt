@@ -234,7 +234,7 @@
 
 # routing rules bad table
 "select * from bad_table"
-"keyspace none not found in vschema"
+"keyspace noks not found in vschema"
 
 # routing rules disabled table
 "select * from disabled"
@@ -996,7 +996,7 @@
           "Sharded": true
         },
         "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user where user.name = :user_extra_user_id",
+        "Query": "select user.col from user where user.`name` = :user_extra_user_id",
         "Table": "user",
         "Values": [
           ":user_extra_user_id"
@@ -1060,7 +1060,6 @@
     "Table": "user"
   }
 }
-
 
 # reference table can merge with other opcodes left to right and vindex value is in the plan.
 # This tests that route.Merge also copies the condition to the LHS.

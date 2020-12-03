@@ -389,6 +389,10 @@
   }
 }
 
+# group by must only reference expressions in the select list
+"select col, count(*) from user group by col, baz"
+"unsupported: in scatter query: group by column must reference column in SELECT list"
+
 # group by a non-unique vindex column should use an OrderdAggregate primitive
 "select name, count(*) from user group by name"
 {
@@ -408,9 +412,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select name, count(*) from user where 1 != 1 group by name",
+        "FieldQuery": "select `name`, count(*) from user where 1 != 1 group by `name`",
         "OrderBy": "0 ASC",
-        "Query": "select name, count(*) from user group by name order by name asc",
+        "Query": "select `name`, count(*) from user group by `name` order by `name` asc",
         "Table": "user"
       }
     ]
@@ -905,6 +909,34 @@
   }
 }
 
+# scatter aggregate multiple group by columns inverse order
+"select a, b, count(*) from user group by b, a"
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) from user group by b, a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(2)",
+    "Distinct": "false",
+    "GroupBy": "1, 0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a",
+        "OrderBy": "1 ASC, 0 ASC",
+        "Query": "select a, b, count(*) from user group by b, a order by b asc, a asc",
+        "Table": "user"
+      }
+    ]
+  }
+}
+
 # scatter aggregate group by column number
 "select col from user group by 1"
 {
@@ -1202,7 +1234,7 @@
   }
 }
 
-# distinct and aggregate functions
+# distinct and aggregate functions missing group by
 "select distinct a, count(*) from user"
 {
   "QueryType": "SELECT",
@@ -1227,6 +1259,39 @@
             "FieldQuery": "select a, count(*) from user where 1 != 1",
             "OrderBy": "0 ASC",
             "Query": "select a, count(*) from user order by a asc",
+            "Table": "user"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# distinct and aggregate functions
+"select distinct a, count(*) from user group by a"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user group by a",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "Distinct": "false",
+        "GroupBy": "0, 0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from user where 1 != 1 group by a",
+            "OrderBy": "0 ASC, 0 ASC",
+            "Query": "select a, count(*) from user group by a order by a asc, a asc",
             "Table": "user"
           }
         ]

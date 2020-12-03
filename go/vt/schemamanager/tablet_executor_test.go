@@ -27,8 +27,12 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -214,5 +218,62 @@ func TestTabletExecutorExecute(t *testing.T) {
 	result := executor.Execute(ctx, sqls)
 	if result.ExecutorErr == "" {
 		t.Fatalf("execute should fail, call execute.Open first")
+	}
+}
+
+func TestIsOnlineSchemaDDL(t *testing.T) {
+	tt := []struct {
+		query       string
+		ddlStrategy string
+		isOnlineDDL bool
+		strategy    schema.DDLStrategy
+		options     string
+	}{
+		{
+			query:       "CREATE TABLE t(id int)",
+			isOnlineDDL: false,
+		},
+		{
+			query:       "CREATE TABLE t(id int)",
+			ddlStrategy: "gh-ost",
+			isOnlineDDL: false,
+		},
+		{
+			query:       "ALTER TABLE t ADD COLUMN i INT",
+			ddlStrategy: "",
+			isOnlineDDL: false,
+		},
+		{
+			query:       "ALTER TABLE t ADD COLUMN i INT",
+			ddlStrategy: "gh-ost",
+			isOnlineDDL: true,
+			strategy:    schema.DDLStrategyGhost,
+		},
+		{
+			query:       "ALTER TABLE t ADD COLUMN i INT",
+			ddlStrategy: "gh-ost --max-load=Threads_running=100",
+			isOnlineDDL: true,
+			strategy:    schema.DDLStrategyGhost,
+			options:     "--max-load=Threads_running=100",
+		},
+	}
+
+	for _, ts := range tt {
+		e := &TabletExecutor{}
+		err := e.SetDDLStrategy(ts.ddlStrategy)
+		assert.NoError(t, err)
+
+		stmt, err := sqlparser.Parse(ts.query)
+		assert.NoError(t, err)
+
+		ddl, ok := stmt.(sqlparser.DDLStatement)
+		assert.True(t, ok)
+
+		isOnlineDDL, strategy, options := e.isOnlineSchemaDDL(ddl)
+		assert.Equal(t, ts.isOnlineDDL, isOnlineDDL)
+		if isOnlineDDL {
+			assert.Equal(t, ts.strategy, strategy)
+			assert.Equal(t, ts.options, options)
+		}
 	}
 }

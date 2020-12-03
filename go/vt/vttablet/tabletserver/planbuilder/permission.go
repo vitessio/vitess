@@ -94,7 +94,7 @@ func buildTableExprPermissions(node sqlparser.TableExpr, role tableacl.Role, per
 		switch node := node.Expr.(type) {
 		case sqlparser.TableName:
 			permissions = buildTableNamePermissions(node, role, permissions)
-		case *sqlparser.Subquery:
+		case *sqlparser.DerivedTable:
 			permissions = buildSubqueryPermissions(node.Select, role, permissions)
 		}
 	case *sqlparser.ParenTableExpr:

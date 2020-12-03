@@ -289,10 +289,16 @@ func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
+// "0" is treated as "-", to allow us to not have to special-case
+// client code.
 func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
-		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
+		if spec == "0" {
+			parts = []string{"", ""}
+		} else {
+			return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
+		}
 	}
 	old := parts[0]
 	ranges := make([]*topodatapb.KeyRange, len(parts)-1)

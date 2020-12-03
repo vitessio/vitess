@@ -515,12 +515,12 @@ func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string
 func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
 	qr := exec(t, conn, query)
-	assert.Empty(t, qr.Rows)
+	assert.Empty(t, qr.Rows, "for query: "+query)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
+	require.NoError(t, err, "for query: "+query)
 	return qr
 }

@@ -40,6 +40,7 @@ type TabletExecutor struct {
 	allowBigSchemaChange bool
 	keyspace             string
 	waitReplicasTimeout  time.Duration
+	ddlStrategy          string
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
@@ -62,6 +63,15 @@ func (exec *TabletExecutor) AllowBigSchemaChange() {
 // TabletExecutor will reject these.
 func (exec *TabletExecutor) DisallowBigSchemaChange() {
 	exec.allowBigSchemaChange = false
+}
+
+// SetDDLStrategy applies ddl_strategy from command line flags
+func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
+	if _, _, err := schema.ParseDDLStrategy(ddlStrategy); err != nil {
+		return err
+	}
+	exec.ddlStrategy = ddlStrategy
+	return nil
 }
 
 // Open opens a connection to the master for every shard.
@@ -118,18 +128,18 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	return err
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlparser.DBDDL, error) {
-	parsedDDLs := make([]*sqlparser.DDL, 0)
-	parsedDBDDLs := make([]*sqlparser.DBDDL, 0)
+func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, error) {
+	parsedDDLs := make([]sqlparser.DDLStatement, 0)
+	parsedDBDDLs := make([]sqlparser.DBDDLStatement, 0)
 	for _, sql := range sqls {
 		stat, err := sqlparser.Parse(sql)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
 		}
 		switch ddl := stat.(type) {
-		case *sqlparser.DDL:
+		case sqlparser.DDLStatement:
 			parsedDDLs = append(parsedDDLs, ddl)
-		case *sqlparser.DBDDL:
+		case sqlparser.DBDDLStatement:
 			parsedDBDDLs = append(parsedDBDDLs, ddl)
 		default:
 			if len(exec.tablets) != 1 {
@@ -140,11 +150,26 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlpa
 	return parsedDDLs, parsedDBDDLs, nil
 }
 
+// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
+func (exec *TabletExecutor) isOnlineSchemaDDL(ddl sqlparser.DDLStatement) (isOnline bool, strategy schema.DDLStrategy, options string) {
+	if ddl == nil {
+		return false, strategy, options
+	}
+	if ddl.GetAction() != sqlparser.AlterDDLAction {
+		return false, strategy, options
+	}
+	strategy, options, _ = schema.ParseDDLStrategy(exec.ddlStrategy)
+	if strategy != schema.DDLStrategyNormal {
+		return true, strategy, options
+	}
+	return false, strategy, options
+}
+
 // a schema change that satisfies any following condition is considered
 // to be a big schema change and will be rejected.
 //   1. Alter more than 100,000 rows.
 //   2. Change a table with more than 2,000,000 rows (Drops are fine).
-func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []*sqlparser.DDL) (bool, error) {
+func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []sqlparser.DDLStatement) (bool, error) {
 	// exec.tablets is guaranteed to have at least one element;
 	// Otherwise, Open should fail and executor should fail.
 	masterTabletInfo := exec.tablets[0]
@@ -159,20 +184,17 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
 	for _, ddl := range parsedDDLs {
-		switch ddl.Action {
+		if isOnline, _, _ := exec.isOnlineSchemaDDL(ddl); isOnline {
+			// Since this is an online schema change, there is no need to worry about big changes
+			continue
+		}
+		switch ddl.GetAction() {
 		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
 			continue
-		case sqlparser.AlterDDLAction:
-			if ddl.OnlineHint != nil {
-				if ddl.OnlineHint.Strategy != schema.DDLStrategyNormal {
-					// Seeing that we intend to run an online-schema-change, we can skip the "big change" check.
-					continue
-				}
-			}
 		}
-		tableName := ddl.Table.Name.String()
+		tableName := ddl.GetTable().Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
-			if rowCount > 100000 && ddl.Action == sqlparser.AlterDDLAction {
+			if rowCount > 100000 && ddl.GetAction() == sqlparser.AlterDDLAction {
 				return true, fmt.Errorf(
 					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s alters a table with more than 100 thousand rows", sqlparser.String(ddl))
 			}
@@ -218,19 +240,8 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 	}()
 
-	// We added the WITH_GHOST and WITH_PT hints to ALTER TABLE syntax, but these hints are
-	// obviously not accepted by MySQL.
-	// To run preflightSchemaChanges we must clean up such hints from the ALTER TABLE statement.
-	// Because our sqlparser does not do a complete parse of ALTER TABLE statements at this time,
-	// we resort to temporary regexp based parsing.
-	// TODO(shlomi): replace the below with sqlparser based reconstruction of the query,
-	//               when sqlparser has a complete coverage of ALTER TABLE syntax
-	sqlsWithoutAlterTableHints := []string{}
-	for _, sql := range sqls {
-		sqlsWithoutAlterTableHints = append(sqlsWithoutAlterTableHints, schema.RemoveOnlineDDLHints(sql))
-	}
 	// Make sure the schema changes introduce a table definition change.
-	if err := exec.preflightSchemaChanges(ctx, sqlsWithoutAlterTableHints); err != nil {
+	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
 		execResult.ExecutorErr = err.Error()
 		return &execResult
 	}
@@ -243,21 +254,19 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			execResult.ExecutorErr = err.Error()
 			return &execResult
 		}
-		strategy := schema.DDLStrategyNormal
-		options := ""
+		isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(nil)
 		tableName := ""
 		switch ddl := stat.(type) {
-		case *sqlparser.DDL:
-			if ddl.Action == sqlparser.AlterDDLAction {
-				if ddl.OnlineHint != nil {
-					strategy = ddl.OnlineHint.Strategy
-					options = ddl.OnlineHint.Options
-				}
-			}
-			tableName = ddl.Table.Name.String()
+		case sqlparser.DDLStatement:
+			tableName = ddl.GetTable().Name.String()
+			isOnlineDDL, strategy, options = exec.isOnlineSchemaDDL(ddl)
 		}
-		exec.wr.Logger().Infof("Received DDL request. strategy = %+v", strategy)
-		exec.executeOnAllTablets(ctx, &execResult, sql, tableName, strategy, options)
+		exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
+		if isOnlineDDL {
+			exec.executeOnlineDDL(ctx, &execResult, sql, tableName, strategy, options)
+		} else {
+			exec.executeOnAllTablets(ctx, &execResult, sql)
+		}
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -265,30 +274,37 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	return &execResult
 }
 
-func (exec *TabletExecutor) executeOnAllTablets(
+// executeOnlineDDL submits an online DDL request; this runs on topo, not on tablets, and is a quick operation.
+func (exec *TabletExecutor) executeOnlineDDL(
 	ctx context.Context, execResult *ExecuteResult, sql string,
-	tableName string, strategy sqlparser.DDLStrategy, options string,
+	tableName string, strategy schema.DDLStrategy, options string,
 ) {
-	if strategy != schema.DDLStrategyNormal {
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options)
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return
-		}
-		conn, err := exec.wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
-		if err != nil {
-			execResult.ExecutorErr = fmt.Sprintf("online DDL ConnForCell error:%s", err.Error())
-			return
-		}
-		err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-		}
-		exec.wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
-		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+	if strategy == schema.DDLStrategyNormal {
+		execResult.ExecutorErr = "Not an online DDL strategy"
 		return
 	}
+	onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, tableName, sql, strategy, options)
+	if err != nil {
+		execResult.ExecutorErr = err.Error()
+		return
+	}
+	conn, err := exec.wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
+	if err != nil {
+		execResult.ExecutorErr = fmt.Sprintf("online DDL ConnForCell error:%s", err.Error())
+		return
+	}
+	err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
+	if err != nil {
+		execResult.ExecutorErr = err.Error()
+	}
+	exec.wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
+	exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+}
 
+// executeOnAllTablets runs a query on all tablets, synchronously. This can be a long running operation.
+func (exec *TabletExecutor) executeOnAllTablets(
+	ctx context.Context, execResult *ExecuteResult, sql string,
+) {
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)

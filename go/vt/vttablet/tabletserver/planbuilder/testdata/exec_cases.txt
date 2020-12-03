@@ -295,7 +295,7 @@
       "Role": 1
     }
   ],
-  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)"
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update `name` = func(a)"
 }
 
 # replace
@@ -337,8 +337,8 @@
       "Role": 1
     }
   ],
-  "FullQuery": "update d set foo = 'foo' where name in ('a', 'b') limit :#maxLimit",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "update d set foo = 'foo' where `name` in ('a', 'b') limit :#maxLimit",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # normal update
@@ -353,8 +353,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update d set foo = 'foo' where name in ('a', 'b')",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "update d set foo = 'foo' where `name` in ('a', 'b')",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # cross-db update
@@ -368,8 +368,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a.b set foo = 'foo' where name in ('a', 'b')",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "update a.b set foo = 'foo' where `name` in ('a', 'b')",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # update unknown table
@@ -383,7 +383,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update bogus set name = 'foo' where id = 1",
+  "FullQuery": "update bogus set `name` = 'foo' where id = 1",
   "WhereClause": "where id = 1"
 }
 
@@ -399,7 +399,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update bogus set name = 'foo' where id = 1",
+  "FullQuery": "update bogus set `name` = 'foo' where id = 1",
   "WhereClause": "where id = 1"
 }
 
@@ -418,7 +418,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'",
+  "FullQuery": "update a, b set a.`name` = 'foo' where a.id = b.id and b.var = 'test'",
   "WhereClause": "where a.id = b.id and b.var = 'test'"
 }
 
@@ -438,7 +438,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'",
+  "FullQuery": "update a join b on a.id = b.id set a.`name` = 'foo' where b.var = 'test'",
   "WhereClause": "where b.var = 'test'"
 }
 
@@ -454,7 +454,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a set name = 'foo' limit 1"
+  "FullQuery": "update a set `name` = 'foo' limit 1"
 }
 
 # update with limit
@@ -469,7 +469,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a set name = 'foo' limit 1"
+  "FullQuery": "update a set `name` = 'foo' limit 1"
 }
 
 # delete with no where clause
@@ -497,8 +497,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "delete from d where name in ('a', 'b') limit :#maxLimit",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "delete from d where `name` in ('a', 'b') limit :#maxLimit",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # normal delete
@@ -513,8 +513,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "delete from d where name in ('a', 'b')",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "delete from d where `name` in ('a', 'b')",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # delete unknown table

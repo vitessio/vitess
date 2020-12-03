@@ -25,8 +25,8 @@ func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, ddl DDLStatement) {
-  yylex.(*Tokenizer).partialDDL = ddl
+func setDDL(yylex interface{}, node Statement) {
+  yylex.(*Tokenizer).partialDDL = node
 }
 
 func incNesting(yylex interface{}) bool {
@@ -81,6 +81,7 @@ func skipToEnd(yylex interface{}) {
   values        Values
   valTuple      ValTuple
   subquery      *Subquery
+  derivedTable  *DerivedTable
   whens         []*When
   when          *When
   orderBy       OrderBy
@@ -101,7 +102,6 @@ func skipToEnd(yylex interface{}) {
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
-  OnlineDDLHint *OnlineDDLHint
   columnDefinition *ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
@@ -132,6 +132,10 @@ func skipToEnd(yylex interface{}) {
   explainType 	  ExplainType
   selectInto	  *SelectInto
   createIndex	  *CreateIndex
+  createDatabase  *CreateDatabase
+  alterDatabase  *AlterDatabase
+  collateAndCharset CollateAndCharset
+  collateAndCharsets []CollateAndCharset
   createView	  *CreateView
 }
 
@@ -185,7 +189,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
-%token <bytes> VINDEX VINDEXES
+%token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
 %token <bytes> SEQUENCE UDEFINED MERGE TEMPTABLE INVOKER LOCAL SECURITY
 
@@ -244,6 +248,11 @@ func skipToEnd(yylex interface{}) {
 %type <ddl> create_table_prefix rename_list
 %type <createIndex> create_index_prefix
 %type <createView> create_view_prefix
+%type <createDatabase> create_database_prefix
+%type <alterDatabase> alter_database_prefix
+%type <collateAndCharset> collate character_set
+%type <collateAndCharsets> create_options create_options_opt
+%type <boolean> default_optional
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <bytes2> comment_opt comment_list
@@ -282,7 +291,8 @@ func skipToEnd(yylex interface{}) {
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
-%type <subquery> subquery derived_table
+%type <subquery> subquery
+%type <derivedTable> derived_table
 %type <colName> column_name
 %type <whens> when_expression_list
 %type <when> when_expression
@@ -311,7 +321,6 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <OnlineDDLHint> online_hint_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt null_opt enforced_opt
@@ -354,8 +363,8 @@ func skipToEnd(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> id_or_var vindex_type vindex_type_opt
-%type <bytes> alter_object_type
+%type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
+%type <bytes> alter_object_type database_or_schema
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 
@@ -420,6 +429,15 @@ id_or_var:
 | AT_AT_ID
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+id_or_var_opt:
+  {
+    $$ = NewColIdentWithAt("", NoAt)
+  }
+| id_or_var
+  {
+    $$ = $1
   }
 
 do_statement:
@@ -705,13 +723,11 @@ create_statement:
     $1.CheckOption = $5
     $$ = $1
   }
-| CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
+| create_database_prefix create_options_opt
   {
-    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
-  }
-| CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
-  {
-    $$ = &DBDDL{Action: CreateDBDDLAction, DBName: string($4.String()), IfNotExists: $3}
+    $1.FullyParsed = true
+    $1.CreateOptions = $2
+    $$ = $1
   }
 
 replace_opt:
@@ -773,11 +789,29 @@ create_table_prefix:
   }
 
 create_index_prefix:
-  CREATE online_hint_opt constraint_opt INDEX id_or_var using_opt ON table_name
+  CREATE constraint_opt INDEX id_or_var using_opt ON table_name
   {
-    $$ = &CreateIndex{Constraint: $3, Name: $5, IndexType: $6, Table: $8, OnlineHint: $2}
+    $$ = &CreateIndex{Constraint: $2, Name: $4, IndexType: $5, Table: $7}
     setDDL(yylex, $$)
   }
+
+create_database_prefix:
+  CREATE database_or_schema not_exists_opt id_or_var
+  {
+    $$ = &CreateDatabase{DBName: string($4.String()), IfNotExists: $3}
+    setDDL(yylex,$$)
+  }
+
+alter_database_prefix:
+  ALTER database_or_schema
+  {
+    $$ = &AlterDatabase{}
+    setDDL(yylex,$$)
+  }
+
+database_or_schema:
+  DATABASE
+| SCHEMA
 
 create_view_prefix:
 CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name
@@ -786,13 +820,69 @@ CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name
     setDDL(yylex, $$)
   }
 
-
 table_spec:
   '(' table_column_list ')' table_option_list
   {
     $$ = $2
     $$.Options = $4
   }
+
+create_options_opt:
+  {
+    $$ = nil
+  }
+| create_options
+  {
+    $$ = $1
+  }
+
+create_options:
+  character_set
+  {
+    $$ = []CollateAndCharset{$1}
+  }
+| collate
+  {
+    $$ = []CollateAndCharset{$1}
+  }
+| create_options collate
+  {
+    $$ = append($1,$2)
+  }
+| create_options character_set
+  {
+    $$ = append($1,$2)
+  }
+
+default_optional:
+  {
+    $$ = false
+  }
+| DEFAULT
+  {
+    $$ = true
+  }
+
+character_set:
+  default_optional CHARACTER SET equal_opt id_or_var
+  {
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:($5.String()), IsDefault:$1}
+  }
+| default_optional CHARACTER SET equal_opt STRING
+  {
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:("'" + string($5) + "'"), IsDefault:$1}
+  }
+
+collate:
+  default_optional COLLATE equal_opt id_or_var
+  {
+    $$ = CollateAndCharset{Type:CollateType, Value:($4.String()), IsDefault:$1}
+  }
+| default_optional COLLATE equal_opt STRING
+  {
+    $$ = CollateAndCharset{Type:CollateType, Value:("'" + string($4) + "'"), IsDefault:$1}
+  }
+
 
 create_like:
   LIKE table_name
@@ -1499,43 +1589,49 @@ table_opt_value:
   }
 
 alter_statement:
-  ALTER online_hint_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
+  ALTER TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
-    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $3}
   }
-| ALTER online_hint_opt TABLE table_name ADD alter_object_type skip_to_end
+| ALTER TABLE table_name ADD alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $3}
   }
-| ALTER online_hint_opt TABLE table_name DROP alter_object_type skip_to_end
+| ALTER TABLE table_name DROP alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $3}
   }
-| ALTER online_hint_opt TABLE table_name RENAME to_opt table_name
+| ALTER TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
+    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$3}, ToTables: TableNames{$6}}
   }
-| ALTER online_hint_opt TABLE table_name RENAME index_opt skip_to_end
+| ALTER TABLE table_name RENAME index_opt skip_to_end
   {
     // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4}
+    $$ = &DDL{Action: AlterDDLAction, Table: $3}
   }
 | ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
   }
-| ALTER online_hint_opt TABLE table_name partition_operation
+| ALTER TABLE table_name partition_operation
   {
-    $$ = &DDL{Action: AlterDDLAction, OnlineHint: $2, Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterDDLAction, Table: $3, PartitionSpec: $4}
   }
-| ALTER DATABASE id_or_var ddl_skip_to_end
+| alter_database_prefix id_or_var_opt create_options
   {
-    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
+    $1.FullyParsed = true
+    $1.DBName = $2.String()
+    $1.AlterOptions = $3
+    $$ = $1
   }
-| ALTER SCHEMA id_or_var ddl_skip_to_end
+| alter_database_prefix id_or_var UPGRADE DATA DIRECTORY NAME
   {
-    $$ = &DBDDL{Action: AlterDBDDLAction, DBName: string($3.String())}
+    $1.FullyParsed = true
+    $1.DBName = $2.String()
+    $1.UpdateDataDirectory = true
+    $$ = $1
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
@@ -2319,7 +2415,7 @@ table_factor:
 derived_table:
   openb select_statement closeb
   {
-    $$ = &Subquery{$2}
+    $$ = &DerivedTable{$2}
   }
 
 aliased_table_name:
@@ -3838,24 +3934,6 @@ non_add_drop_or_rename_operation:
   { $$ = struct{}{} }
 
 
-online_hint_opt:
-  {
-    $$ = &OnlineDDLHint{}
-  }
-| WITH STRING
-  {
-    $$ = &OnlineDDLHint{
-        Strategy: DDLStrategy($2),
-    }
-  }
-| WITH STRING STRING
-  {
-    $$ = &OnlineDDLHint{
-        Strategy: DDLStrategy($2),
-        Options: string($3),
-    }
-  }
-
 to_opt:
   { $$ = struct{}{} }
 | TO
@@ -4091,6 +4169,7 @@ non_reserved_keyword:
 | DEFINER
 | DEFINITION
 | DESCRIPTION
+| DIRECTORY
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
@@ -4154,6 +4233,7 @@ non_reserved_keyword:
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
+| NAME
 | NAMES
 | NCHAR
 | NESTED
@@ -4248,6 +4328,7 @@ non_reserved_keyword:
 | UNDEFINED
 | UNSIGNED
 | UNUSED
+| UPGRADE
 | VARBINARY
 | VARCHAR
 | VARIABLES

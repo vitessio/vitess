@@ -27,24 +27,38 @@ func TestCreateUUID(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestValidateDDLStrategy(t *testing.T) {
-	{
-		strategy, err := ValidateDDLStrategy("gh-ost")
+func TestParseDDLStrategy(t *testing.T) {
+	tt := []struct {
+		strategyVariable string
+		strategy         DDLStrategy
+		options          string
+		err              error
+	}{
+		{
+			strategyVariable: "gh-ost",
+			strategy:         DDLStrategyGhost,
+		},
+		{
+			strategyVariable: "pt-osc",
+			strategy:         DDLStrategyPTOSC,
+		},
+		{
+			strategy: DDLStrategyNormal,
+		},
+		{
+			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
+			strategy:         DDLStrategyGhost,
+			options:          "--max-load=Threads_running=100 --allow-master",
+		},
+	}
+	for _, ts := range tt {
+		strategy, options, err := ParseDDLStrategy(ts.strategyVariable)
 		assert.NoError(t, err)
-		assert.Equal(t, DDLStrategyGhost, strategy)
+		assert.Equal(t, ts.strategy, strategy)
+		assert.Equal(t, ts.options, options)
 	}
 	{
-		strategy, err := ValidateDDLStrategy("pt-osc")
-		assert.NoError(t, err)
-		assert.Equal(t, DDLStrategyPTOSC, strategy)
-	}
-	{
-		strategy, err := ValidateDDLStrategy("")
-		assert.NoError(t, err)
-		assert.Equal(t, DDLStrategyNormal, strategy)
-	}
-	{
-		_, err := ValidateDDLStrategy("other")
+		_, _, err := ParseDDLStrategy("other")
 		assert.Error(t, err)
 	}
 }

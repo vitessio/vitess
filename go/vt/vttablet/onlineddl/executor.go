@@ -798,7 +798,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		Schema:      row["mysql_schema"].ToString(),
 		SQL:         row["migration_statement"].ToString(),
 		UUID:        row["migration_uuid"].ToString(),
-		Strategy:    sqlparser.DDLStrategy(row["strategy"].ToString()),
+		Strategy:    schema.DDLStrategy(row["strategy"].ToString()),
 		Options:     row["options"].ToString(),
 		Status:      schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		Retries:     row.AsInt64("retries", 0),
@@ -883,6 +883,17 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 	return result, nil
 }
 
+// cancelMigrations attempts to abort a list of migrations
+func (e *Executor) cancelMigrations(ctx context.Context, uuids []string) (err error) {
+	for _, uuid := range uuids {
+		log.Infof("cancelMigrations: cancelling %s", uuid)
+		if _, err := e.cancelMigration(ctx, uuid, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // scheduleNextMigration attemps to schedule a single migration to run next.
 // possibly there's no migrations to run. Possibly there's a migration running right now,
 // in which cases nothing happens.
@@ -900,11 +911,13 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		row := r.Named().Row()
 		countReady, err := row.ToInt64("count_ready")
 		if err != nil {
 			return err
 		}
+
 		if countReady > 0 {
 			// seems like there's already one migration that's good to go
 			return nil
@@ -938,7 +951,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Schema:   row["mysql_schema"].ToString(),
 			SQL:      row["migration_statement"].ToString(),
 			UUID:     row["migration_uuid"].ToString(),
-			Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
+			Strategy: schema.DDLStrategy(row["strategy"].ToString()),
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
@@ -1038,18 +1051,21 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 
 // reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
 // actually running).
-func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, err error) {
+func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, runningNotByThisProcess []string, err error) {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
 	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, "_vt", ":strategy")
 	bindVars := map[string]*querypb.BindVariable{
 		"strategy": sqltypes.StringBindVariable(string(schema.DDLStrategyPTOSC)),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
-		return countRunnning, err
+		return countRunnning, runningNotByThisProcess, err
 	}
 	r, err := e.execQuery(ctx, bound)
 	if err != nil {
-		return countRunnning, err
+		return countRunnning, runningNotByThisProcess, err
 	}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
@@ -1059,8 +1075,16 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 		}
 		countRunnning++
+
+		if uuid != e.lastMigrationUUID {
+			// This executor can only run one migration at a time. And that
+			// migration is identified by e.lastMigrationUUID.
+			// If we find a _running_ migration that does not have this UUID, it _must_
+			// mean the migration was started by a former vttablet (ie vttablet crashed and restarted)
+			runningNotByThisProcess = append(runningNotByThisProcess, uuid)
+		}
 	}
-	return countRunnning, err
+	return countRunnning, runningNotByThisProcess, err
 }
 
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
@@ -1191,7 +1215,9 @@ func (e *Executor) onMigrationCheckTick() {
 	if err := e.runNextMigration(ctx); err != nil {
 		log.Error(err)
 	}
-	if _, err := e.reviewRunningMigrations(ctx); err != nil {
+	if _, runningNotByThisProcess, err := e.reviewRunningMigrations(ctx); err != nil {
+		log.Error(err)
+	} else if err := e.cancelMigrations(ctx, runningNotByThisProcess); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {

@@ -65,7 +65,7 @@
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
+    "Query": "insert into USER(ID, `NAME`) values (42, 'ms X')",
     "SingleShardOnly": false
   }
 }
