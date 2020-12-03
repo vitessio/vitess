@@ -2472,8 +2472,12 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-
-	executor := schemamanager.NewTabletExecutor(wr, *waitReplicasTimeout)
+	executionUUID, err := schema.CreateUUID()
+	if err != nil {
+		return err
+	}
+	requestContext := fmt.Sprintf("vtctl:%s", executionUUID)
+	executor := schemamanager.NewTabletExecutor(requestContext, wr, *waitReplicasTimeout)
 	if *allowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
