@@ -1500,13 +1500,15 @@ func (tsv *TabletServer) Close(ctx context.Context) error {
 
 var okMessage = []byte("ok\n")
 
+// Health check
+// Returns ok if we are in the desired serving state
 func (tsv *TabletServer) registerHealthzHealthHandler() {
 	tsv.exporter.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return
 		}
-		if tsv.sm.Target().TabletType != topodatapb.TabletType_SPARE && !tsv.sm.IsServing() {
+		if tsv.sm.wantState == StateServing && !tsv.sm.IsServing() {
 			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 			return
 		}
@@ -1516,6 +1518,8 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 	})
 }
 
+// Query service health check
+// Returns ok if a query can go all the way to database and back
 func (tsv *TabletServer) registerDebugHealthHandler() {
 	tsv.exporter.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {

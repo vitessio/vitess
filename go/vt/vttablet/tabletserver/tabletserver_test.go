@@ -91,7 +91,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	txid1, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
 
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid1, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set `name` = 2 where pk = 1", nil, txid1, 0, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, txid1, "aa")
 	require.NoError(t, err)
@@ -153,13 +153,13 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("update test_table set name = 2 where pk = 1 limit 10001"),
+			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
 		}},
 	})
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
-	want := []string{"update test_table set name = 2 where pk = 1 limit 10001"}
+	want := []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
@@ -182,7 +182,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			sqltypes.NewVarBinary("a:b:10"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("update test_table set name = 2 where pk = 1 limit 10001"),
+			sqltypes.NewVarBinary("update test_table set `name` = 2 where pk = 1 limit 10001"),
 		}, {
 			sqltypes.NewVarBinary("a:b:20"),
 			sqltypes.NewInt64(RedoStateFailed),
@@ -193,7 +193,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOnTxEngine()
 	assert.EqualValues(t, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
 	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
-	want = []string{"update test_table set name = 2 where pk = 1 limit 10001"}
+	want = []string{"update test_table set `name` = 2 where pk = 1 limit 10001"}
 	utils.MustMatch(t, want, got, "Prepared queries")
 	wantFailed := map[string]error{"a:b:20": errPrepFailed}
 	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
@@ -450,7 +450,7 @@ func TestTabletServerPrepare(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set `name` = 2 where pk = 1", nil, transactionID, 0, nil)
 	require.NoError(t, err)
 	defer tsv.RollbackPrepared(ctx, &target, "aa", 0)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
@@ -465,7 +465,7 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set `name` = 2 where pk = 1", nil, transactionID, 0, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
 	require.NoError(t, err)
@@ -628,7 +628,7 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, _, err := tsv.Begin(ctx, &target, nil)
 	require.NoError(t, err)
-	_, err = tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, transactionID, 0, nil)
+	_, err = tsv.Execute(ctx, &target, "update test_table set `name` = 2 where pk = 1", nil, transactionID, 0, nil)
 	require.NoError(t, err)
 	err = tsv.Prepare(ctx, &target, transactionID, "aa")
 	require.NoError(t, err)
@@ -898,9 +898,9 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
-	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
-	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
-	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and `name` = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and `name` = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and `name` = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
 		"pk":   sqltypes.Int64BindVariable(1),
@@ -920,10 +920,10 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	// Make sure that tx3 could finish while tx2 could not.
 	tx3Finished := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
-			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1039,9 +1039,9 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
-	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
-	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
-	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and `name` = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and `name` = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and `name` = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
 		"pk":   sqltypes.Int64BindVariable(1),
@@ -1059,10 +1059,10 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
 	tx1Started := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
-			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1151,9 +1151,9 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
-	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
-	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
-	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and `name` = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and `name` = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and `name` = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
 		"pk":   sqltypes.Int64BindVariable(1),
@@ -1170,7 +1170,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 
 	tx1Started := make(chan struct{})
 	allQueriesPending := make(chan struct{})
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			<-allQueriesPending
@@ -1239,7 +1239,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	// transactions via db.SetBeforeFunc() for the same reason as mentioned
 	// in TestSerializeTransactionsSameRow: The MySQL C client does not seem
 	// to allow more than connection attempt at a time.
-	err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3)
+	err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 3)
 	require.NoError(t, err)
 	close(allQueriesPending)
 
@@ -1285,8 +1285,8 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
-	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
-	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and `name` = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and `name` = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
 		"pk":   sqltypes.Int64BindVariable(1),
@@ -1302,7 +1302,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	// Signal when tx2 is done.
 	tx2Failed := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			<-tx2Failed
@@ -1333,7 +1333,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 
 		<-tx1Started
 		_, _, _, err := tsv.BeginExecute(ctx, &target, nil, q2, bvTx2, 0, nil)
-		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
+		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and `name` = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
 		}
 		// No commit necessary because the Begin failed.
@@ -1368,8 +1368,8 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
-	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
-	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and `name` = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and `name` = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
 		"pk":   sqltypes.Int64BindVariable(1),
@@ -1385,7 +1385,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 	// Signal when tx2 is done.
 	tx2Failed := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			<-tx2Failed
@@ -1422,7 +1422,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 			Sql:           q2,
 			BindVariables: bvTx2,
 		}}, true /*asTransaction*/, 0 /*connID*/, nil /*options*/)
-		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
+		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and `name` = 1')" {
 			t.Errorf("tx2 should have failed because there are too many pending requests: %v results: %+v", err, results)
 		}
 	}()
@@ -1454,9 +1454,9 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 
 	// Fake data.
-	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
-	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
-	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and `name` = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and `name` = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and `name` = :name"
 	// Every request needs their own bind variables to avoid data races.
 	bvTx1 := map[string]*querypb.BindVariable{
 		"pk":   sqltypes.Int64BindVariable(1),
@@ -1476,7 +1476,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	// Signal when tx2 is done.
 	tx2Done := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			// Keep blocking until tx2 was canceled.
@@ -1524,7 +1524,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		defer wg.Done()
 
 		// Wait until tx1 and tx2 are pending to make the test deterministic.
-		if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+		if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
 			t.Error(err)
 		}
 
@@ -1539,7 +1539,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	}()
 
 	// Wait until tx1, 2 and 3 are pending.
-	err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 3)
+	err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 3)
 	require.NoError(t, err)
 	// Now unblock tx2 and cancel it.
 	cancelTx2()
@@ -2463,17 +2463,17 @@ func setupFakeDB(t *testing.T) *fakesqldb.DB {
 func getSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// Queries for how row protection test (txserializer).
-		"update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001": {
+		"update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001": {
 			RowsAffected: 1,
 		},
-		"update test_table set name_string = 'tx2' where pk = 1 and name = 1 limit 10001": {
+		"update test_table set name_string = 'tx2' where pk = 1 and `name` = 1 limit 10001": {
 			RowsAffected: 1,
 		},
-		"update test_table set name_string = 'tx3' where pk = 1 and name = 1 limit 10001": {
+		"update test_table set name_string = 'tx3' where pk = 1 and `name` = 1 limit 10001": {
 			RowsAffected: 1,
 		},
 		// tx3, but with different primary key.
-		"update test_table set name_string = 'tx3' where pk = 2 and name = 1 limit 10001": {
+		"update test_table set name_string = 'tx3' where pk = 2 and `name` = 1 limit 10001": {
 			RowsAffected: 1,
 		},
 		// queries for twopc

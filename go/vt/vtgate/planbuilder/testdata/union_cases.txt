@@ -446,8 +446,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select name from unsharded where 1 != 1",
-                "Query": "select name from unsharded",
+                "FieldQuery": "select `name` from unsharded where 1 != 1",
+                "Query": "select `name` from unsharded",
                 "Table": "unsharded"
               }
             ]
@@ -504,8 +504,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select name from unsharded where 1 != 1",
-                    "Query": "select name from unsharded",
+                    "FieldQuery": "select `name` from unsharded where 1 != 1",
+                    "Query": "select `name` from unsharded",
                     "Table": "unsharded"
                   }
                 ]
@@ -716,8 +716,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select user.id, user.name from user where 1 != 1",
-                "Query": "select user.id, user.name from user",
+                "FieldQuery": "select user.id, user.`name` from user where 1 != 1",
+                "Query": "select user.id, user.`name` from user",
                 "Table": "user"
               },
               {
@@ -785,8 +785,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select user.id, user.name from user where 1 != 1",
-                "Query": "select user.id, user.name from user",
+                "FieldQuery": "select user.id, user.`name` from user where 1 != 1",
+                "Query": "select user.id, user.`name` from user",
                 "Table": "user"
               },
               {
