@@ -209,7 +209,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
+%token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURRENT_USER
 %token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
@@ -3205,8 +3205,12 @@ function_call_nonkeyword:
   {
     $$ = &FuncExpr{Name:NewColIdent("current_time")}
   }
+| CURRENT_USER func_datetime_opt
+  {
+    $$ = &FuncExpr{Name:NewColIdent("current_user")}
+  }
 // these functions can also be called with an optional argument
-|  CURRENT_TIMESTAMP func_datetime_precision
+| CURRENT_TIMESTAMP func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$2}
   }

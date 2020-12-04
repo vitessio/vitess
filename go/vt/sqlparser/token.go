@@ -142,7 +142,7 @@ var keywords = map[string]int{
 	"current_date":        CURRENT_DATE,
 	"current_time":        CURRENT_TIME,
 	"current_timestamp":   CURRENT_TIMESTAMP,
-	"current_user":        UNUSED,
+	"current_user":        CURRENT_USER,
 	"cursor":              UNUSED,
 	"cursor_name":         CURSOR_NAME,
 	"database":            DATABASE,
