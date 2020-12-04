@@ -2092,6 +2092,9 @@ func TestKeywords(t *testing.T) {
 		input:  "select a, current_date from t",
 		output: "select a, current_date() from t",
 	}, {
+		input:  "select a, current_user from t",
+		output: "select a, current_user() from t",
+	}, {
 		input:  "insert into t(a, b) values (current_date, current_date())",
 		output: "insert into t(a, b) values (current_date(), current_date())",
 	}, {
