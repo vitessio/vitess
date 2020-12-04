@@ -89,17 +89,18 @@ const (
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace    string          `json:"keyspace,omitempty"`
-	Table       string          `json:"table,omitempty"`
-	Schema      string          `json:"schema,omitempty"`
-	SQL         string          `json:"sql,omitempty"`
-	UUID        string          `json:"uuid,omitempty"`
-	Strategy    DDLStrategy     `json:"strategy,omitempty"`
-	Options     string          `json:"options,omitempty"`
-	RequestTime int64           `json:"time_created,omitempty"`
-	Status      OnlineDDLStatus `json:"status,omitempty"`
-	TabletAlias string          `json:"tablet,omitempty"`
-	Retries     int64           `json:"retries,omitempty"`
+	Keyspace       string          `json:"keyspace,omitempty"`
+	Table          string          `json:"table,omitempty"`
+	Schema         string          `json:"schema,omitempty"`
+	SQL            string          `json:"sql,omitempty"`
+	UUID           string          `json:"uuid,omitempty"`
+	Strategy       DDLStrategy     `json:"strategy,omitempty"`
+	Options        string          `json:"options,omitempty"`
+	RequestTime    int64           `json:"time_created,omitempty"`
+	RequestContext string          `json:"context,omitempty"`
+	Status         OnlineDDLStatus `json:"status,omitempty"`
+	TabletAlias    string          `json:"tablet,omitempty"`
+	Retries        int64           `json:"retries,omitempty"`
 }
 
 // ParseDDLStrategy validates the given ddl_strategy variable value , and parses the strategy and options parts.
@@ -139,20 +140,21 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, strategy DDLStrategy, options string) (*OnlineDDL, error) {
+func NewOnlineDDL(keyspace string, table string, sql string, strategy DDLStrategy, options string, requestContext string) (*OnlineDDL, error) {
 	u, err := CreateUUID()
 	if err != nil {
 		return nil, err
 	}
 	return &OnlineDDL{
-		Keyspace:    keyspace,
-		Table:       table,
-		SQL:         sql,
-		UUID:        u,
-		Strategy:    strategy,
-		Options:     options,
-		RequestTime: time.Now().UnixNano(),
-		Status:      OnlineDDLStatusRequested,
+		Keyspace:       keyspace,
+		Table:          table,
+		SQL:            sql,
+		UUID:           u,
+		Strategy:       strategy,
+		Options:        options,
+		RequestTime:    time.Now().UnixNano(),
+		RequestContext: requestContext,
+		Status:         OnlineDDLStatusRequested,
 	}, nil
 }
 
