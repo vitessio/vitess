@@ -1,6 +1,6 @@
 * @sougou
 
-/config/mycnf/ @morgo
+/config/mycnf/ @askdba @shlomi-noach
 /docker/ @derekperkins @dkhenry
 /examples/compose @shlomi-noach
 /examples/local @rohit-nayak-ps
@@ -10,7 +10,6 @@
 /go/test/endtoend/vtgate @harshit-gangal @systay
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
-/go/vt/mysqlctl/mysqld.go @morgo
 /go/vt/orchestrator @deepthi @shlomi-noach
 /go/vt/schema @shlomi-noach
 /go/vt/sqlparser @harshit-gangal @systay

@@ -1056,8 +1056,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
 
-	case *DBDDL:
-
 	case *DDL:
 		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
 		a.apply(node, n.FromTables, replaceDDLFromTables)
@@ -1087,6 +1085,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *DerivedTable:
 		a.apply(node, n.Select, replaceDerivedTableSelect)
+
+	case *DropDatabase:
 
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
