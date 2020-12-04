@@ -225,14 +225,10 @@ type (
 	// AccessMode is enum for the mode - ReadOnly or ReadWrite
 	AccessMode int8
 
-	// DBDDL represents a DROP, or ALTER database statement.
-	DBDDL struct {
-		Action      DBDDLAction
-		DBName      string
-		IfExists    bool
-		IfNotExists bool
-		Collate     string
-		Charset     string
+	// DropDatabase represents a DROP database statement.
+	DropDatabase struct {
+		DBName   string
+		IfExists bool
 	}
 
 	// CollateAndCharsetType is an enum for CollateAndCharset.Type
@@ -260,9 +256,6 @@ type (
 		AlterOptions        []CollateAndCharset
 		FullyParsed         bool
 	}
-
-	// DBDDLAction is an enum for DBDDL Actions
-	DBDDLAction int8
 
 	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 	DDL struct {
@@ -393,7 +386,7 @@ func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
 func (*SetTransaction) iStatement()    {}
-func (*DBDDL) iStatement()             {}
+func (*DropDatabase) iStatement()      {}
 func (*DDL) iStatement()               {}
 func (*Show) iStatement()              {}
 func (*Use) iStatement()               {}
@@ -608,13 +601,13 @@ func (node *CreateView) SetTable(qualifier string, name string) {
 	node.ViewName.Name = NewTableIdent(name)
 }
 
-func (*DBDDL) iDBDDLStatement()          {}
+func (*DropDatabase) iDBDDLStatement()   {}
 func (*CreateDatabase) iDBDDLStatement() {}
 func (*AlterDatabase) iDBDDLStatement()  {}
 
 // IsFullyParsed implements the DBDDLStatement interface
-func (node *DBDDL) IsFullyParsed() bool {
-	return false
+func (node *DropDatabase) IsFullyParsed() bool {
+	return true
 }
 
 // IsFullyParsed implements the DBDDLStatement interface
@@ -628,7 +621,7 @@ func (node *AlterDatabase) IsFullyParsed() bool {
 }
 
 // GetDatabaseName implements the DBDDLStatement interface
-func (node *DBDDL) GetDatabaseName() string {
+func (node *DropDatabase) GetDatabaseName() string {
 	return node.DBName
 }
 
@@ -1433,23 +1426,12 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *DBDDL) Format(buf *TrackedBuffer) {
-	switch node.Action {
-	case CreateDBDDLAction:
-		notExists := ""
-		if node.IfNotExists {
-			notExists = " if not exists"
-		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", CreateStr, notExists, node.DBName))
-	case AlterDBDDLAction:
-		buf.WriteString(fmt.Sprintf("%s database %s", AlterStr, node.DBName))
-	case DropDBDDLAction:
-		exists := ""
-		if node.IfExists {
-			exists = " if exists"
-		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
+func (node *DropDatabase) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = " if exists"
 	}
+	buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
 }
 
 // Format formats the node.

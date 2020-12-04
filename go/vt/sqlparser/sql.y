@@ -1776,13 +1776,9 @@ drop_statement:
   {
     $$ = &DDL{Action: DropDDLAction, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
   }
-| DROP DATABASE exists_opt id_or_var
+| DROP database_or_schema exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String()), IfExists: $3}
-  }
-| DROP SCHEMA exists_opt id_or_var
-  {
-    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String()), IfExists: $3}
+    $$ = &DropDatabase{DBName: string($4.String()), IfExists: $3}
   }
 
 truncate_statement:
