@@ -119,6 +119,16 @@
 "drop database if exists main"
 "drop database not allowed"
 
+# drop db if exists foo
+"drop schema if exists foo"
+{
+  "QueryType": "DDL",
+  "Original": "drop schema if exists foo",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
 # DDL
 "create index a on user(id)"
 {
