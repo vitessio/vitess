@@ -158,8 +158,11 @@ var _Vtctl_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type VtctldClient interface {
+	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.Keyspace, error)
+	// GetKeyspaces returns the names of all keyspaces in the topo.
 	GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error)
+	// ShowAllKeyspaces returns the keyspace struct of each keyspace in the topo.
 	ShowAllKeyspaces(ctx context.Context, in *vtctldata.ShowAllKeyspacesRequest, opts ...grpc.CallOption) (Vtctld_ShowAllKeyspacesClient, error)
 }
 
@@ -223,8 +226,11 @@ func (x *vtctldShowAllKeyspacesClient) Recv() (*vtctldata.Keyspace, error) {
 
 // VtctldServer is the server API for Vtctld service.
 type VtctldServer interface {
+	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.Keyspace, error)
+	// GetKeyspaces returns the names of all keyspaces in the topo.
 	GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error)
+	// ShowAllKeyspaces returns the keyspace struct of each keyspace in the topo.
 	ShowAllKeyspaces(*vtctldata.ShowAllKeyspacesRequest, Vtctld_ShowAllKeyspacesServer) error
 }
 
