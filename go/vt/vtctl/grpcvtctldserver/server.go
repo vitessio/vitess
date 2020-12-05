@@ -58,7 +58,9 @@ func (s *VtctldServer) ShowAllKeyspaces(req *vtctldatapb.ShowAllKeyspacesRequest
 			return err
 		}
 
-		stream.Send(ks)
+		if err := stream.Send(ks); err != nil {
+			return err
+		}
 	}
 
 	return nil
