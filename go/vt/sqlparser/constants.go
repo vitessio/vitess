@@ -210,13 +210,6 @@ const (
 	ReplaceAct
 )
 
-// Constants for Enum Type - DBDDL.Action
-const (
-	CreateDBDDLAction DBDDLAction = iota
-	AlterDBDDLAction
-	DropDBDDLAction
-)
-
 // Constants for Enum Type - DDL.Action
 const (
 	CreateDDLAction DDLAction = iota
