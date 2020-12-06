@@ -436,12 +436,12 @@ func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
-	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES"} {
+	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES", "show schemas", "show SCHEMAS"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 
 		wantqr := &sqltypes.Result{
-			Fields: buildVarCharFields("Databases"),
+			Fields: buildVarCharFields("Database"),
 			Rows: [][]sqltypes.Value{
 				buildVarCharRow("TestExecutor"),
 				buildVarCharRow(KsTestSharded),
