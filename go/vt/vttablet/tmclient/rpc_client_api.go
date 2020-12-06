@@ -110,26 +110,8 @@ type TabletManagerClient interface {
 	// Replication related methods
 	//
 
-	// Deprecated
-	SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
-
 	// MasterStatus returns the tablet's mysql master status.
 	MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error)
-
-	// Deprecated
-	StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// Deprecated
-	StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, stopPos string, waitTime time.Duration) (string, error)
-
-	// Deprecated
-	StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error
-
-	// Deprecated
-	StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error
-
-	// Deprecated
-	GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
 	// ReplicationStatus returns the tablet's mysql replication status.
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
@@ -181,9 +163,6 @@ type TabletManagerClient interface {
 	// its reparent_journal table.
 	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
 
-	// Deprecated
-	InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
-
 	// InitReplica tells a tablet to start replicating from the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table.
@@ -197,9 +176,6 @@ type TabletManagerClient interface {
 	// To be used if we are unable to promote the chosen new master
 	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// Deprecated
-	SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
-
 	// ReplicaWasPromoted tells the remote tablet it is now the master
 	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
 
@@ -207,9 +183,6 @@ type TabletManagerClient interface {
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).
 	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
-
-	// Deprecated
-	SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error
 
 	// ReplicaWasRestarted tells the replica tablet its master has changed
 	ReplicaWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error
