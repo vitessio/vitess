@@ -85,7 +85,6 @@ func main() {
 	// hack to get rid of an "ERROR: logging before flag.Parse"
 	args := os.Args[:]
 	os.Args = os.Args[:1]
-	flag.CommandLine = flag.NewFlagSet("", flag.ContinueOnError)
 	flag.Parse()
 	os.Args = args
 
