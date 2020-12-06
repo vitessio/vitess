@@ -52,24 +52,24 @@ func (v *OnlineDDL) description() PrimitiveDescription {
 	}
 }
 
-//RouteType implements the Primitive interface
+// RouteType implements the Primitive interface
 func (v *OnlineDDL) RouteType() string {
 	return "OnlineDDL"
 }
 
-//GetKeyspaceName implements the Primitive interface
+// GetKeyspaceName implements the Primitive interface
 func (v *OnlineDDL) GetKeyspaceName() string {
 	return v.Keyspace.Name
 }
 
-//GetTableName implements the Primitive interface
+// GetTableName implements the Primitive interface
 func (v *OnlineDDL) GetTableName() string {
 	return v.DDL.GetTable().Name.String()
 }
 
-//Execute implements the Primitive interface
+// Execute implements the Primitive interface
 func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL, v.Strategy, v.Options)
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL, v.Strategy, v.Options, "vtgate")
 	if err != nil {
 		return result, err
 	}

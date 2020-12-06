@@ -720,7 +720,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			show.ShowTablesOpt.DbName = ""
 		}
 		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES), sqlparser.KeywordString(sqlparser.KEYSPACES):
+	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.SCHEMAS), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES), sqlparser.KeywordString(sqlparser.KEYSPACES):
 		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 		if err != nil {
 			return nil, err
@@ -744,7 +744,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Databases"),
+			Fields:       buildVarCharFields("Database"),
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
