@@ -42,6 +42,12 @@ func createUUID(delimiter string) (string, error) {
 	return result, nil
 }
 
+// CreateUUID creates a globally unique ID
+// example result "1876a01a-354d-11eb-9a79-f8e4e33000bb"
+func CreateUUID() (string, error) {
+	return createUUID("-")
+}
+
 // ToReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
 // (as opposed to unix timestamp which is just a number)
 // Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
