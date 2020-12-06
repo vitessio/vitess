@@ -3,32 +3,46 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
+	"vitess.io/vitess/go/sqltypes"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/looplab/fsm"
 	"vitess.io/vitess/go/vt/log"
 )
 
+/*
+	TODO
+	* Actions: Abort, Complete, Status
+	* Unit Tests (lots of!)
+    * expand e2e for testing all possible transitions
+
+	* implement Reshard same as MoveTables!
+
+*/
+
+// Possible workflow states
 const (
 	WorkflowStateNotStarted                    = "Not Started"
-	WorkflowStateCopying                       = "Copying"
-	WorkflowStateReplicating                   = "Replicating"
+	WorkflowStateStarted                       = "Replicating, Reads and Writes Not Switched"
 	WorkflowStateReplicaReadsSwitched          = "Replica Reads Switched"
 	WorkflowStateRdonlyReadsSwitched           = "Rdonly Reads Switched"
 	WorkflowStateReadsSwitched                 = "Reads Switched"
 	WorkflowStateWritesSwitched                = "Writes Switched"
-	WorkflowStateReplicaReadsAndWritesSwitched = "Replica Reads and Writes Switched"
-	WorkflowStateRdonlyReadsAndWritesSwitched  = "Rdonly Reads and Writes Switched"
+	WorkflowStateReplicaReadsAndWritesSwitched = "Writes and Replica Reads Switched"
+	WorkflowStateRdonlyReadsAndWritesSwitched  = "Writes and Rdonly Reads Switched"
 	WorkflowStateReadsAndWritesSwitched        = "Both Reads and Writes Switched"
 	WorkflowStateCompleted                     = "Completed"
 	WorkflowStateAborted                       = "Aborted"
-	WorkflowStateError                         = "Error"
 )
 
+// Possible events that cause workflow state transitions
 const (
 	WorkflowEventStart              = "Start"
-	WorkflowEventCopyCompleted      = "CopyCompleted"
 	WorkflowEventSwitchReads        = "SwitchReads"
 	WorkflowEventSwitchReplicaReads = "SwitchReplicaReads"
 	WorkflowEventSwitchRdonlyReads  = "SwitchRdonlyReads"
@@ -40,52 +54,115 @@ const (
 )
 
 type Workflow struct {
-	name          string
-	wsm           *fsm.FSM
-	typ           string
-	isReplicating bool
-	isRunning     bool
-	hasErrors     bool
+	name      string
+	wsm       *fsm.FSM
+	typ       string
+	hasErrors bool
 }
 
-func (wr *Wrangler) IsUserFacingEvent(ev string) bool {
-	allUserFacingEvents := []string{WorkflowEventStart, WorkflowEventSwitchReads, WorkflowEventSwitchWrites,
-		WorkflowEventComplete, WorkflowEventAbort}
-	for _, ev2 := range allUserFacingEvents {
-		if ev2 == ev {
-			return true
-		}
+var eventNameMap map[string]string
+
+func init() {
+	eventNameMap = make(map[string]string)
+	transitions := getWorkflowTransitions()
+	for _, transition := range transitions {
+		eventNameMap[strings.ToLower(transition.Name)] = transition.Name
 	}
-	return false
 }
+
+// region FSM setup
 
 func getWorkflowTransitions() []fsm.EventDesc {
 	return []fsm.EventDesc{
-		{Name: WorkflowEventStart, Src: []string{WorkflowStateNotStarted}, Dst: WorkflowStateCopying},
-		{Name: WorkflowEventCopyCompleted, Src: []string{WorkflowStateCopying}, Dst: WorkflowStateReplicating},
+		{Name: WorkflowEventStart, Src: []string{WorkflowStateNotStarted}, Dst: WorkflowStateStarted},
 
-		{Name: WorkflowEventSwitchReplicaReads, Src: []string{WorkflowStateReplicating}, Dst: WorkflowStateReplicaReadsSwitched},
+		{Name: WorkflowEventSwitchReplicaReads, Src: []string{WorkflowStateStarted}, Dst: WorkflowStateReplicaReadsSwitched},
 		{Name: WorkflowEventSwitchReplicaReads, Src: []string{WorkflowStateRdonlyReadsSwitched}, Dst: WorkflowStateReadsSwitched},
 		{Name: WorkflowEventSwitchReplicaReads, Src: []string{WorkflowStateWritesSwitched}, Dst: WorkflowStateReplicaReadsAndWritesSwitched},
 
-		{Name: WorkflowEventSwitchRdonlyReads, Src: []string{WorkflowStateReplicating}, Dst: WorkflowStateRdonlyReadsSwitched},
+		{Name: WorkflowEventSwitchRdonlyReads, Src: []string{WorkflowStateStarted}, Dst: WorkflowStateRdonlyReadsSwitched},
 		{Name: WorkflowEventSwitchRdonlyReads, Src: []string{WorkflowStateReplicaReadsSwitched}, Dst: WorkflowStateReadsSwitched},
 		{Name: WorkflowEventSwitchRdonlyReads, Src: []string{WorkflowStateWritesSwitched}, Dst: WorkflowStateRdonlyReadsAndWritesSwitched},
 
-		{Name: WorkflowEventSwitchReads, Src: []string{WorkflowStateReplicating}, Dst: WorkflowStateReadsSwitched},
+		{Name: WorkflowEventSwitchReads, Src: []string{WorkflowStateStarted}, Dst: WorkflowStateReadsSwitched},
 		{Name: WorkflowEventSwitchReads, Src: []string{WorkflowStateWritesSwitched}, Dst: WorkflowStateReadsAndWritesSwitched},
 
-		{Name: WorkflowEventSwitchWrites, Src: []string{WorkflowStateReplicating}, Dst: WorkflowStateWritesSwitched},
+		{Name: WorkflowEventSwitchWrites, Src: []string{WorkflowStateStarted}, Dst: WorkflowStateWritesSwitched},
 		{Name: WorkflowEventSwitchWrites, Src: []string{WorkflowStateReadsSwitched}, Dst: WorkflowStateReadsAndWritesSwitched},
+		{Name: WorkflowEventSwitchWrites, Src: []string{WorkflowStateReplicaReadsSwitched}, Dst: WorkflowStateReplicaReadsAndWritesSwitched},
+		{Name: WorkflowEventSwitchWrites, Src: []string{WorkflowStateRdonlyReadsSwitched}, Dst: WorkflowStateRdonlyReadsAndWritesSwitched},
 
 		{Name: WorkflowEventComplete, Src: []string{WorkflowStateReadsAndWritesSwitched}, Dst: WorkflowStateCompleted},
-		{Name: WorkflowEventAbort, Src: []string{WorkflowStateNotStarted, WorkflowStateCopying,
-			WorkflowStateReplicating, WorkflowStateReadsSwitched, WorkflowStateWritesSwitched}, Dst: WorkflowStateAborted},
-		{Name: WorkflowEventReverseReads, Src: []string{WorkflowStateReadsSwitched}, Dst: WorkflowStateReplicating},
-		{Name: WorkflowEventReverseReads, Src: []string{WorkflowStateReadsAndWritesSwitched}, Dst: WorkflowStateWritesSwitched},
-		{Name: WorkflowEventReverseWrites, Src: []string{WorkflowStateWritesSwitched}, Dst: WorkflowStateReplicating},
+		{Name: WorkflowEventAbort, Src: []string{WorkflowStateNotStarted,
+			WorkflowStateStarted, WorkflowStateReadsSwitched, WorkflowStateWritesSwitched}, Dst: WorkflowStateAborted},
+
+		{Name: WorkflowEventReverseReads, Src: []string{WorkflowStateReadsSwitched,
+			WorkflowStateReplicaReadsSwitched, WorkflowStateRdonlyReadsSwitched}, Dst: WorkflowStateStarted},
+		{Name: WorkflowEventReverseReads, Src: []string{WorkflowStateReadsAndWritesSwitched,
+			WorkflowStateReplicaReadsAndWritesSwitched, WorkflowStateRdonlyReadsAndWritesSwitched}, Dst: WorkflowStateWritesSwitched},
+
+		{Name: WorkflowEventReverseWrites, Src: []string{WorkflowStateWritesSwitched}, Dst: WorkflowStateStarted},
 		{Name: WorkflowEventReverseWrites, Src: []string{WorkflowStateReadsAndWritesSwitched}, Dst: WorkflowStateReadsSwitched},
 	}
+}
+
+func (mtwf *MoveTablesWorkflow) getCallbacks() map[string]fsm.Callback {
+	callbacks := make(map[string]fsm.Callback)
+	callbacks["before_"+WorkflowEventStart] = func(e *fsm.Event) {
+		if err := mtwf.initMoveTables(); err != nil {
+			e.Cancel(err)
+		}
+	}
+	callbacks["before_"+WorkflowEventSwitchReads] = func(e *fsm.Event) {
+		mtwf.params.TabletTypes = "replica,rdonly"
+		if err := mtwf.switchReads(); err != nil {
+			e.Cancel(err)
+		}
+	}
+	callbacks["before_"+WorkflowEventSwitchReplicaReads] = func(e *fsm.Event) {
+		mtwf.params.TabletTypes = "replica"
+		if err := mtwf.switchReads(); err != nil {
+			e.Cancel(err)
+		}
+	}
+	callbacks["before_"+WorkflowEventSwitchRdonlyReads] = func(e *fsm.Event) {
+		mtwf.params.TabletTypes = "rdonly"
+		if err := mtwf.switchReads(); err != nil {
+			e.Cancel(err)
+		}
+	}
+	callbacks["before_"+WorkflowEventSwitchWrites] = func(e *fsm.Event) {
+		if err := mtwf.switchWrites(); err != nil {
+			e.Cancel(err)
+		}
+	}
+	callbacks["before_"+WorkflowEventReverseReads] = func(e *fsm.Event) {
+		var tabletTypes []string
+		if mtwf.ws.ReplicaReadsSwitched && mtwf.ws.RdonlyReadsSwitched {
+			tabletTypes = append(tabletTypes, "replica", "rdonly")
+		} else if mtwf.ws.ReplicaReadsSwitched {
+			tabletTypes = append(tabletTypes, "replica")
+		} else if mtwf.ws.RdonlyReadsSwitched {
+			tabletTypes = append(tabletTypes, "rdonly")
+
+		} else {
+			e.Cancel(fmt.Errorf("reads have not been switched for %s.%s", mtwf.params.TargetKeyspace, mtwf.params.Workflow))
+			return
+		}
+		mtwf.params.TabletTypes = strings.Join(tabletTypes, ",")
+		mtwf.params.Direction = DirectionBackward
+		if err := mtwf.switchReads(); err != nil {
+			e.Cancel(err)
+		}
+	}
+	callbacks["before_"+WorkflowEventReverseWrites] = func(e *fsm.Event) {
+		mtwf.params.Direction = DirectionBackward
+		if err := mtwf.switchWrites(); err != nil {
+			e.Cancel(err)
+		}
+	}
+
+	return callbacks
 }
 
 func NewWorkflow(name, typ string, callbacks map[string]fsm.Callback) (*Workflow, error) {
@@ -97,84 +174,139 @@ func NewWorkflow(name, typ string, callbacks map[string]fsm.Callback) (*Workflow
 	return wf, nil
 }
 
-type MoveTablesWorkflow struct {
-	ctx       context.Context
-	wf        *Workflow
-	allTables bool
-	wr        *Wrangler
+// endregion
 
-	sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes, excludeTables string
+// region Move Tables Public API
+
+type MoveTablesWorkflow struct {
+	ctx    context.Context
+	wf     *Workflow
+	wr     *Wrangler
+	action string
+	params *MoveTablesParams
+	ts     *trafficSwitcher
+	ws     *workflowState
 }
 
 func (mtwf *MoveTablesWorkflow) String() string {
 	s := fmt.Sprintf("%s Workflow %s from keyspace %s to keyspace %s. Current State: %s\n",
-		mtwf.wf.typ, mtwf.wf.name, mtwf.targetKeyspace, mtwf.sourceKeyspace, mtwf.wf.wsm.Current())
+		mtwf.wf.typ, mtwf.wf.name, mtwf.params.SourceKeyspace, mtwf.params.TargetKeyspace, mtwf.wf.wsm.Current())
 	return s
 }
 
-func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
-	cell, tabletTypes string, allTables bool, excludeTables string) (*MoveTablesWorkflow, error) {
-	callbacks := make(map[string]fsm.Callback)
-	mtwf := &MoveTablesWorkflow{wr: wr, ctx: ctx, sourceKeyspace: sourceKeyspace, targetKeyspace: targetKeyspace,
-		tabletTypes: tabletTypes, tableSpecs: tableSpecs, cell: cell,
-		allTables: allTables, excludeTables: excludeTables}
+type MoveTablesParams struct {
+	Workflow, SourceKeyspace, TargetKeyspace, Tables string
+	Cells, TabletTypes, ExcludeTables                string
+	EnableReverseReplication, DryRun, AllTables      bool
 
-	callbacks["before_"+WorkflowEventStart] = func(e *fsm.Event) { mtwf.initMoveTables() }
-	callbacks["before_"+WorkflowEventSwitchReads] = func(e *fsm.Event) { mtwf.switchReads() }
-	callbacks["before_"+WorkflowEventSwitchWrites] = func(e *fsm.Event) { mtwf.switchWrites() }
+	Timeout   time.Duration
+	Direction TrafficSwitchDirection
+}
 
-	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
+func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTablesParams) (*MoveTablesWorkflow, error) {
+	log.Infof("NewMoveTablesWorkflow with params %+v", params)
+	mtwf := &MoveTablesWorkflow{wr: wr, ctx: ctx, params: params}
+	ts, ws, err := wr.getWorkflowState(ctx, params.TargetKeyspace, params.Workflow)
 	if err != nil {
 		return nil, err
 	}
-	wf, err := NewWorkflow(workflow, "MoveTables", callbacks)
+	log.Infof("Workflow state is %+v", ws)
+	wf, err := NewWorkflow(params.Workflow, "MoveTables", mtwf.getCallbacks())
 	if err != nil {
 		return nil, err
 	}
-	mtwf.sourceKeyspace = ts.sourceKeyspace
-
+	if ts != nil { //Other than on Start we need to get SourceKeyspace from the workflow
+		mtwf.params.SourceKeyspace = ts.sourceKeyspace
+		mtwf.ts = ts
+	}
+	mtwf.ws = ws
 	state := ""
 	if ts == nil {
 		state = WorkflowStateNotStarted
+	} else if ws.WritesSwitched {
+		if ws.ReplicaReadsSwitched && ws.RdonlyReadsSwitched {
+			state = WorkflowStateReadsAndWritesSwitched
+		} else if ws.RdonlyReadsSwitched {
+			state = WorkflowStateRdonlyReadsAndWritesSwitched
+		} else if ws.ReplicaReadsSwitched {
+			state = WorkflowStateReplicaReadsAndWritesSwitched
+		} else {
+			state = WorkflowStateWritesSwitched
+		}
 	} else if ws.RdonlyReadsSwitched && ws.ReplicaReadsSwitched {
 		state = WorkflowStateReadsSwitched
-	} else if ws.WritesSwitched {
-		state = WorkflowStateWritesSwitched
+	} else if ws.RdonlyReadsSwitched {
+		state = WorkflowStateRdonlyReadsSwitched
+	} else if ws.ReplicaReadsSwitched {
+		state = WorkflowStateReplicaReadsSwitched
 	} else {
-		state = WorkflowStateReplicating //FIXME: copying, error, ...
+		state = WorkflowStateStarted
 	}
 	if state == "" {
 		return nil, fmt.Errorf("workflow is in an inconsistent state: %+v", mtwf)
 	}
+	log.Infof("Setting workflow state to %s", state)
 	wf.wsm.SetState(state)
 	mtwf.wf = wf
 	return mtwf, nil
 }
 
 func (mtwf *MoveTablesWorkflow) FireEvent(ev string) error {
+	log.Infof("Firing Event %s", ev)
+	ev = eventNameMap[strings.ToLower(ev)]
+	log.Infof("Firing Event, converted %s", ev)
 	return mtwf.wf.wsm.Event(ev)
-
 }
 
-func (mtwf *MoveTablesWorkflow) Start() error {
-	log.Infof("In MoveTablesWorkflow.Start() for %+v", mtwf)
-	err := mtwf.wf.wsm.Event(WorkflowEventStart)
-	if err != nil {
-		return err
+func (mtwf *MoveTablesWorkflow) IsActionValid(ev string) bool {
+	ev = eventNameMap[strings.ToLower(ev)]
+	log.Infof("IsActionValid for %s, %t", ev, mtwf.wf.wsm.Can(ev))
+	return mtwf.wf.wsm.Can(ev)
+}
+
+func (mtwf *MoveTablesWorkflow) CurrentState() string {
+	return mtwf.wf.wsm.Current()
+}
+
+func (mtwf *MoveTablesWorkflow) Visualize() string {
+	return fsm.Visualize(mtwf.wf.wsm)
+}
+
+// endregion
+
+// region Helpers
+
+func (mtwf *MoveTablesWorkflow) getCellsAsArray() []string {
+	if mtwf.params.Cells != "" {
+		return strings.Split(mtwf.params.Cells, ",")
 	}
 	return nil
 }
 
+func (mtwf *MoveTablesWorkflow) getTabletTypes() []topodatapb.TabletType {
+	tabletTypesArr := strings.Split(mtwf.params.TabletTypes, ",")
+	var tabletTypes []topodatapb.TabletType
+	for _, tabletType := range tabletTypesArr {
+		servedType, _ := topoproto.ParseTabletType(tabletType)
+		tabletTypes = append(tabletTypes, servedType)
+	}
+	return tabletTypes
+}
+
+// endregion
+
+// region Core Actions
+
 func (mtwf *MoveTablesWorkflow) initMoveTables() error {
 	log.Infof("In MoveTablesWorkflow.initMoveTables() for %+v", mtwf)
-	return mtwf.wr.MoveTables(mtwf.ctx, mtwf.wf.name, mtwf.sourceKeyspace, mtwf.targetKeyspace, mtwf.tableSpecs,
-		mtwf.cell, mtwf.tabletTypes, mtwf.allTables, mtwf.excludeTables)
+	return mtwf.wr.MoveTables(mtwf.ctx, mtwf.wf.name, mtwf.params.SourceKeyspace, mtwf.params.TargetKeyspace, mtwf.params.Tables,
+		mtwf.params.Cells, mtwf.params.TabletTypes, mtwf.params.AllTables, mtwf.params.ExcludeTables)
 }
 
 func (mtwf *MoveTablesWorkflow) switchReads() error {
 	log.Infof("In MoveTablesWorkflow.switchReads() for %+v", mtwf)
-	_, err := mtwf.wr.SwitchReads(mtwf.ctx, mtwf.targetKeyspace, mtwf.wf.name,
-		[]topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}, nil, DirectionForward, false)
+	_, err := mtwf.wr.SwitchReads(mtwf.ctx, mtwf.params.TargetKeyspace, mtwf.wf.name, mtwf.getTabletTypes(),
+		mtwf.getCellsAsArray(), mtwf.params.Direction, false)
 	if err != nil {
 		return err
 	}
@@ -183,8 +315,15 @@ func (mtwf *MoveTablesWorkflow) switchReads() error {
 
 func (mtwf *MoveTablesWorkflow) switchWrites() error {
 	log.Infof("In MoveTablesWorkflow.switchWrites() for %+v", mtwf)
-	journalId, _, err := mtwf.wr.SwitchWrites(mtwf.ctx, mtwf.targetKeyspace, mtwf.wf.name, DefaultFilteredReplicationWaitTime,
-		false, false, true, false)
+	if mtwf.params.Direction == DirectionBackward {
+		keyspace := mtwf.params.SourceKeyspace
+		mtwf.params.SourceKeyspace = mtwf.params.TargetKeyspace
+		mtwf.params.TargetKeyspace = keyspace
+		mtwf.params.Workflow = reverseName(mtwf.params.Workflow)
+		log.Infof("In MoveTablesWorkflow.switchWrites(reverse) for %+v", mtwf)
+	}
+	journalId, _, err := mtwf.wr.SwitchWrites(mtwf.ctx, mtwf.params.TargetKeyspace, mtwf.params.Workflow, mtwf.params.Timeout,
+		false, mtwf.params.Direction == DirectionBackward, mtwf.params.EnableReverseReplication, false)
 	if err != nil {
 		return err
 	}
@@ -192,22 +331,112 @@ func (mtwf *MoveTablesWorkflow) switchWrites() error {
 	return nil
 }
 
-/*
+// endregion
 
-New
-GetState
+// region Copy Progress
+type TableCopyProgress struct {
+	targetRowCount, targetTableSize int64
+	sourceRowCount, sourceTableSize int64
+}
 
-Start
-Pause
-Restart
+type CopyProgress map[string]*TableCopyProgress
 
-SwitchReads
-ResetReads
-SwitchWrites
-ResetWrites
+func (mtwf *MoveTablesWorkflow) GetCopyProgress() (*CopyProgress, error) {
+	ctx := context.Background()
+	getTablesQuery := "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id == cs.vrepl_id and vr.id = %d"
+	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = database() and table_name in (%s)"
+	tables := make(map[string]bool)
+	sourceMasters := make(map[*topodatapb.TabletAlias]bool)
+	for shard, target := range mtwf.ts.targets {
+		log.Infof("GCP: %s, %v", shard, target)
+		for id, bls := range target.sources {
+			query := fmt.Sprintf(getTablesQuery, id)
+			p3qr, err := mtwf.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+			if err != nil {
+				return nil, err
+			}
+			if len(p3qr.Rows) < 1 {
+				continue
+			}
+			qr := sqltypes.Proto3ToResult(p3qr)
+			for i := 0; i < len(p3qr.Rows); i++ {
+				tables[qr.Rows[0][0].String()] = true
+			}
+			sourcesi, err := mtwf.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
+			if err != nil {
+				return nil, err
+			}
+			sourceMasters[sourcesi.MasterAlias] = true
+		}
+	}
+	tableList := ""
+	targetRowCounts := make(map[string]int64)
+	sourceRowCounts := make(map[string]int64)
+	targetTableSizes := make(map[string]int64)
+	sourceTableSizes := make(map[string]int64)
 
-GetProgress
-Abort
-Finalize
+	for table := range tables {
+		if tableList != "" {
+			tableList += ","
+		}
+		tableList += encodeString(table)
+		targetRowCounts[table] = 0
+		sourceRowCounts[table] = 0
+		targetTableSizes[table] = 0
+		sourceTableSizes[table] = 0
+	}
+	log.Infof("table list is %s", tableList)
+	query := fmt.Sprintf(getRowCountQuery, tableList)
+	log.Infof("query is %s", query)
 
-*/
+	var getTableMetrics = func(tablet *topodatapb.Tablet, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
+		p3qr, err := mtwf.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, []byte(query), len(tables), false, false)
+		if err != nil {
+			return err
+		}
+		qr := sqltypes.Proto3ToResult(p3qr)
+		for i := 0; i < len(qr.Rows); i++ {
+			table := qr.Rows[0][0].String()
+			rowCount, err := evalengine.ToInt64(qr.Rows[0][1])
+			if err != nil {
+				return err
+			}
+			tableSize, err := evalengine.ToInt64(qr.Rows[0][2])
+			if err != nil {
+				return err
+			}
+			targetRowCounts[table] += rowCount
+			targetTableSizes[table] += tableSize
+		}
+		return nil
+	}
+	for _, target := range mtwf.ts.targets {
+		tablet := target.master.Tablet
+		if err := getTableMetrics(tablet, &targetRowCounts, &targetTableSizes); err != nil {
+			return nil, err
+		}
+	}
+	for source := range sourceMasters {
+		ti, err := mtwf.wr.ts.GetTablet(ctx, source)
+		tablet := ti.Tablet
+		if err != nil {
+			return nil, err
+		}
+		if err := getTableMetrics(tablet, &sourceRowCounts, &sourceTableSizes); err != nil {
+			return nil, err
+		}
+	}
+
+	copyProgress := CopyProgress{}
+	for table, rowCount := range targetRowCounts {
+		copyProgress[table] = &TableCopyProgress{
+			targetRowCount:  rowCount,
+			targetTableSize: targetTableSizes[table],
+			sourceRowCount:  sourceRowCounts[table],
+			sourceTableSize: sourceTableSizes[table],
+		}
+	}
+	return &copyProgress, nil
+}
+
+// endregion
