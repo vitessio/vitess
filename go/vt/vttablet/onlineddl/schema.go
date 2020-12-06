@@ -28,7 +28,7 @@ const (
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 		migration_uuid varchar(64) NOT NULL,
 		keyspace varchar(256) NOT NULL,
-		shard varchar(256) NOT NULL,
+		shard varchar(255) NOT NULL,
 		mysql_schema varchar(128) NOT NULL,
 		mysql_table varchar(128) NOT NULL,
 		migration_statement text NOT NULL,
@@ -56,6 +56,7 @@ const (
 	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE %s.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE %s.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
 	alterSchemaMigrationsTableProgress           = "ALTER TABLE %s.schema_migrations add column progress float NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableContext            = "ALTER TABLE %s.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
 
 	sqlScheduleSingleMigration = `UPDATE %s.schema_migrations
 		SET
@@ -238,4 +239,5 @@ var applyDDL = []string{
 	fmt.Sprintf(alterSchemaMigrationsTableTabletFailure, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableTabletFailureIndex, "_vt"),
 	fmt.Sprintf(alterSchemaMigrationsTableProgress, "_vt"),
+	fmt.Sprintf(alterSchemaMigrationsTableContext, "_vt"),
 }
