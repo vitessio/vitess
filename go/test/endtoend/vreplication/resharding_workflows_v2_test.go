@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -42,18 +43,39 @@ var (
 )
 
 func moveTablesStart(t *testing.T) {
-	moveTables(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowEventStart)
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowEventStart)
 	catchup(t, customerTab1, moveTablesWorkflowName, "MoveTables")
 	catchup(t, customerTab2, moveTablesWorkflowName, "MoveTables")
 	vdiff(t, ksWorkflow)
 }
 
+func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action string) {
+	var args []string
+	args = append(args, "MoveTables", "-v2")
+	action = strings.ToLower(action)
+	switch action {
+	case "start":
+		args = append(args, "-source", sourceKs, "-tables", tables)
+	case "switchreads":
+	case "switchwrites":
+	}
+	if cells != "" {
+		args = append(args, "-cells", cells)
+	}
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+	args = append(args, ksWorkflow, action)
+	if err := vc.VtctlClient.ExecuteCommand(args...)
+		err != nil {
+		t.Fatalf("MoveTables command failed with %+v\n", err)
+	}
+}
+
 func moveTablesSwitchReads(t *testing.T) {
-	moveTables(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchReads)
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchReads)
 }
 
 func moveTablesSwitchWrites(t *testing.T) {
-	moveTables(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchWrites)
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchWrites)
 }
 
 func validateReadsRouteToSource(t *testing.T) {
@@ -100,7 +122,7 @@ func revert(t *testing.T) {
 	clearRoutingRules(t, vc)
 }
 
-func TestNewMoveTablesWorkflow(t *testing.T) {
+func TestMoveTablesV2Workflow(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
 	//defer vc.TearDown()
@@ -187,39 +209,18 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	sourceKs := "product"
 	targetKs := "customer"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-
-	if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "-80"), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "80-"), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 1); err != nil {
-		t.Fatal(err)
-	}
 	tables := "customer"
+	setupCustomerKeyspace(t)
 
-	// Assume we are operating on first cell
-	defaultCell := cells[0]
-	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
-	customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
-	customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
-
-	var moveTablesNew = func() {
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables, wrangler.WorkflowEventStart)
+	var moveTablesAndWait = func() {
+		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
 		vdiff(t, ksWorkflow)
 	}
 
 	var switchReadsFollowedBySwitchWrites = func() {
-		moveTablesNew()
+		moveTablesAndWait()
 
 		validateReadsRouteToSource(t)
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
@@ -232,7 +233,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		revert(t)
 	}
 	var switchWritesFollowedBySwitchReads = func() {
-		moveTablesNew()
+		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
@@ -246,7 +247,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	}
 
 	var switchReadsReverseSwitchWritesSwitchReads = func() {
-		moveTablesNew()
+		moveTablesAndWait()
 
 		validateReadsRouteToSource(t)
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
@@ -269,7 +270,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	}
 
 	var switchWritesReverseSwitchReadsSwitchWrites = func() {
-		moveTablesNew()
+		moveTablesAndWait()
 
 		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)

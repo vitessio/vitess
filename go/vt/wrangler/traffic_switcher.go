@@ -48,7 +48,7 @@ import (
 
 const (
 	frozenStr      = "FROZEN"
-	ErrorNoStreams = "no streams found in keyspace %s for: %s"
+	errorNoStreams = "no streams found in keyspace %s for: %s"
 )
 
 // TrafficSwitchDirection specifies the switching direction.
@@ -147,7 +147,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 
 	if err != nil {
-		if err.Error() == fmt.Sprintf(ErrorNoStreams, targetKeyspace, workflow) {
+		if err.Error() == fmt.Sprintf(errorNoStreams, targetKeyspace, workflow) {
 			return nil, nil, nil
 		}
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -222,14 +222,17 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 }
 
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
-func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedTypes []topodatapb.TabletType, cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedTypes []topodatapb.TabletType,
+	cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+
+	log.Infof("SwitchReads: targetKeyspace %s, direction %d", targetKeyspace, direction)
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return nil, err
 	}
 	if ts == nil {
-		errorMsg := fmt.Sprintf("workflow %s not found in keyspace", workflow, targetKeyspace)
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
 		wr.Logger().Errorf(errorMsg)
 		return nil, fmt.Errorf(errorMsg)
 	}
@@ -296,23 +299,17 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, timeout time.Duration, cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
+	_ = ws
 	if err != nil {
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return 0, nil, err
 	}
 	if ts == nil {
 		if ts == nil {
-			errorMsg := fmt.Sprintf("workflow %s not found in keyspace", workflow, targetKeyspace)
+			errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
 			wr.Logger().Errorf(errorMsg)
 			return 0, nil, fmt.Errorf(errorMsg)
 		}
-	}
-
-	if reverse {
-		if !ws.WritesSwitched {
-			return 0, nil, fmt.Errorf("-reverse was passed but writes have not yet been switched for %s.%s", ws.TargetKeyspace, ws.Workflow)
-		}
-		workflow = reverseName(workflow)
 	}
 
 	var sw iswitcher
@@ -666,7 +663,7 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 		}
 	}
 	if len(targets) == 0 {
-		err2 := fmt.Errorf(ErrorNoStreams, targetKeyspace, workflow)
+		err2 := fmt.Errorf(errorNoStreams, targetKeyspace, workflow)
 		return nil, err2
 	}
 	tinfo := &targetInfo{targets: targets, frozen: frozen, optCells: optCells, optTabletTypes: optTabletTypes}
@@ -798,10 +795,12 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.tables {
 			if direction == DirectionForward {
+				log.Infof("Route direction forward")
 				rules[table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
 				rules[ts.targetKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
 				rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
 			} else {
+				log.Infof("Route direction backwards")
 				//delete(rules, table+"@"+tt)
 				//delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
 				//delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
