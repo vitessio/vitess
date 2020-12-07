@@ -103,7 +103,7 @@ func TestMtlsAuth(t *testing.T) {
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
 }
 
-func TestMtlsAuthUnaothorizedFails(t *testing.T) {
+func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	// Our test root.
 	root, err := ioutil.TempDir("", "tlstest")
 	if err != nil {
