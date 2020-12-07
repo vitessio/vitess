@@ -31,8 +31,7 @@ import (
 
 const (
 	// BaseShowTables is the base query used in further methods.
-	BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
-
+	BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time) as create_timestamp, table_comment, unix_timestamp(if (update_time is null, create_time, update_time)) as update_timestamp FROM information_schema.tables WHERE table_schema = database()"
 	// BaseShowPrimary is the base query for fetching primary key info.
 	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
 )
@@ -64,7 +63,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
-		Name:         "unix_timestamp(create_time)",
+		Name:         "create_timestamp",
 		Type:         querypb.Type_INT64,
 		ColumnLength: 11,
 		Charset:      CharacterSetBinary,
@@ -81,6 +80,13 @@ var BaseShowTablesFields = []*querypb.Field{
 		Charset:      CharacterSetUtf8,
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
+	{
+		Name:         "update_timestamp",
+		Type:         querypb.Type_INT64,
+		ColumnLength: 11,
+		Charset:      CharacterSetBinary,
+		Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
+	},
 }
 
 // BaseShowTablesRow returns the fields from a BaseShowTables or
@@ -93,8 +99,9 @@ func BaseShowTablesRow(tableName string, isView bool, comment string) []sqltypes
 	return []sqltypes.Value{
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tableName)),
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tableType)),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")), // unix_timestamp(create_time)
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")), // create_timestamp
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(comment)),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")), // update_timestamp
 	}
 }
 

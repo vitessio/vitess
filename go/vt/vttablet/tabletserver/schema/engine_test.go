@@ -73,13 +73,21 @@ func TestOpenAndReload(t *testing.T) {
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table_01", false, ""),
-			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_02")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+				// Change the updated time
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325879")),
+			},
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
 				// Match the timestamp.
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),
 			},
 			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
 			mysql.BaseShowTablesRow("test_table_04", false, ""),
@@ -126,7 +134,8 @@ func TestOpenAndReload(t *testing.T) {
 			assert.Equal(t, []string(nil), dropped)
 		} else {
 			assert.Equal(t, []string{"test_table_04"}, created)
-			assert.Equal(t, []string{"test_table_03"}, altered)
+			sort.Strings(altered)
+			assert.Equal(t, []string{"test_table_02", "test_table_03"}, altered)
 			sort.Strings(dropped)
 			assert.Equal(t, []string{"msg"}, dropped)
 		}

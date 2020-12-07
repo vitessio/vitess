@@ -305,6 +305,7 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
+	log.Infof("QUERY %s", mysql.BaseShowTables)
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		return err
@@ -321,10 +322,12 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
-		// TODO(sougou); find a better way detect changed tables. This method
-		// seems unreliable. The endtoend test flags all tables as changed.
-		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
+		updateTime, _ := evalengine.ToInt64(row[4])
+		if _, ok := se.tables[tableName]; ok && (updateTime < se.lastChange && createTime < se.lastChange) {
 			continue
+		} else {
+			log.Infof("Table HAS changed: table %s, createTime %d, updateTime %d, last checked %d",
+				tableName, createTime, updateTime, se.lastChange)
 		}
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
