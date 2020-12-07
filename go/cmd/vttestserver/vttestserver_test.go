@@ -102,6 +102,13 @@ func TestMtlsAuth(t *testing.T) {
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
 }
+func TestPollution(t *testing.T) {
+	cluster, err := startCluster()
+	defer cluster.TearDown()
+	args := os.Args
+	defer resetFlags(args)
+	assert.NoError(t, err)
+}
 
 func TestMtlsAuthUnaothorizedFails(t *testing.T) {
 	// Our test root.
