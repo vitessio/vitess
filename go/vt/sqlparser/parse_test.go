@@ -1271,8 +1271,14 @@ var (
 		input:  "show databases",
 		output: "show databases",
 	}, {
+		input:  "show databases like '%'",
+		output: "show databases like '%'",
+	}, {
 		input:  "show schemas",
 		output: "show schemas",
+	}, {
+		input:  "show schemas like '%'",
+		output: "show schemas like '%'",
 	}, {
 		input:  "show engine INNODB",
 		output: "show engine",

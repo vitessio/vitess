@@ -175,22 +175,12 @@ var commands = []commandGroup{
 			{"SetReadWrite", commandSetReadWrite,
 				"<tablet alias>",
 				"Sets the tablet as read-write."},
-			{"StartSlave", commandStartReplication,
-				"DEPRECATED -- Use StartReplication <tablet alias>",
-				"Starts replication on the specified tablet."},
 			{"StartReplication", commandStartReplication,
 				"<table alias>",
 				"Starts replication on the specified tablet."},
-			{"StopSlave", commandStopReplication,
-				"DEPRECATED -- Use StopReplication <tablet alias>",
-				"Stops replication on the specified tablet."},
 			{"StopReplication", commandStopReplication,
 				"<tablet alias>",
 				"Stops replication on the specified tablet."},
-			{"ChangeSlaveType", commandChangeTabletType,
-				"DEPRECATED -- Use ChangeTabletType [-dry-run] <tablet alias> <tablet type>",
-				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
-					"NOTE: This command automatically updates the serving graph.\n"},
 			{"ChangeTabletType", commandChangeTabletType,
 				"[-dry-run] <tablet alias> <tablet type>",
 				"Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a master.\n" +
@@ -2454,12 +2444,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", "", "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
-	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitReplicasTimeout, "DEPRECATED -- use -wait_replicas_timeout")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
-	if *deprecatedTimeout != wrangler.DefaultWaitReplicasTimeout {
-		*waitReplicasTimeout = *deprecatedTimeout
-	}
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2472,8 +2457,12 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-
-	executor := schemamanager.NewTabletExecutor(wr, *waitReplicasTimeout)
+	executionUUID, err := schema.CreateUUID()
+	if err != nil {
+		return err
+	}
+	requestContext := fmt.Sprintf("vtctl:%s", executionUUID)
+	executor := schemamanager.NewTabletExecutor(requestContext, wr, *waitReplicasTimeout)
 	if *allowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
@@ -2547,6 +2536,13 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			uuid = arg
 			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid='%s'`, uuid)
 		}
+	case "cancel-all":
+		{
+			if arg != "" {
+				return fmt.Errorf("UUID not allowed in %s", command)
+			}
+			query = `update _vt.schema_migrations set migration_status='cancel-all'`
+		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
@@ -2565,11 +2561,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
 	skipVerify := subFlags.Bool("skip-verify", false, "Skip verification of source and target schema after copy")
 	// for backwards compatibility
-	deprecatedTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitReplicasTimeout, "DEPRECATED -- use -wait_replicas_timeout")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
-	if *deprecatedTimeout != wrangler.DefaultWaitReplicasTimeout {
-		*waitReplicasTimeout = *deprecatedTimeout
-	}
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

@@ -94,7 +94,7 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	controller.SetKeyspace("unknown_keyspace")
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), newFakeTabletManagerClient())
-	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorOpenFail", wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	err := Run(ctx, controller, executor)
@@ -107,7 +107,7 @@ func TestSchemaManagerExecutorExecuteFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), newFakeTabletManagerClient())
-	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorExecuteFail", wr, testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	err := Run(ctx, controller, executor)
@@ -138,7 +138,7 @@ func TestSchemaManagerRun(t *testing.T) {
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestSchemaManagerRun", wr, testWaitReplicasTimeout)
 
 	ctx := context.Background()
 	err := Run(ctx, controller, executor)
@@ -184,7 +184,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 	fakeTmc.EnableExecuteFetchAsDbaError = true
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor(wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", wr, testWaitReplicasTimeout)
 
 	ctx := context.Background()
 	err := Run(ctx, controller, executor)
@@ -229,7 +229,7 @@ func TestSchemaManagerRegisterControllerFactory(t *testing.T) {
 
 func newFakeExecutor(t *testing.T) *TabletExecutor {
 	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), newFakeTabletManagerClient())
-	return NewTabletExecutor(wr, testWaitReplicasTimeout)
+	return NewTabletExecutor("newFakeExecutor", wr, testWaitReplicasTimeout)
 }
 
 func newFakeTabletManagerClient() *fakeTabletManagerClient {
