@@ -24,6 +24,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -182,6 +183,26 @@ func TestSchemaChange(t *testing.T) {
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, true)
+		// migration will fail again
+	}
+	{
+		// no migrations pending at this time
+		time.Sleep(10 * time.Second)
+		checkCancelAllMigrations(t, 0)
+	}
+	{
+		// spawn n migrations; cancel them via cancel-all
+		var wg sync.WaitGroup
+		count := 4
+		for i := 0; i < count; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_ = testAlterTable(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+			}()
+		}
+		wg.Wait()
+		checkCancelAllMigrations(t, count)
 	}
 }
 
@@ -275,6 +296,18 @@ func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) 
 	} else {
 		r = fullWordRegexp("0")
 	}
+	m := r.FindAllString(result, -1)
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
+}
+
+// checkCancelAllMigrations all pending migrations
+func checkCancelAllMigrations(t *testing.T, expectCount int) {
+	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelAllMigrations(keyspaceName)
+	fmt.Println("# 'vtctlclient OnlineDDL cancel-all' output (for debug purposes):")
+	fmt.Println(result)
+	assert.NoError(t, err)
+
+	r := fullWordRegexp(fmt.Sprintf("%d", expectCount))
 	m := r.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
