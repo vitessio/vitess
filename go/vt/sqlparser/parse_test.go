@@ -2538,20 +2538,21 @@ func TestCreateTable(t *testing.T) {
 			t.Errorf("input: %s, err: %v", sql, err)
 			continue
 		}
-		got := String(tree.(*DDL))
-
+		got := String(tree.(*CreateTable))
+		assert.True(t, tree.(*CreateTable).FullyParsed)
 		if sql != got {
 			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
 		}
 	}
 
 	sql := "create table t garbage"
-	_, err := Parse(sql)
+	tree, err := Parse(sql)
 	if err != nil {
 		t.Errorf("input: %s, err: %v", sql, err)
 	}
+	assert.True(t, !tree.(*CreateTable).FullyParsed)
 
-	tree, err := ParseStrictDDL(sql)
+	tree, err = ParseStrictDDL(sql)
 	if tree != nil || err == nil {
 		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
 	}
@@ -2755,7 +2756,8 @@ func TestCreateTable(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		assert.True(t, tree.(*CreateTable).FullyParsed)
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}
@@ -2786,7 +2788,8 @@ func TestCreateTableLike(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		assert.True(t, tree.(*CreateTable).FullyParsed)
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}
@@ -2815,7 +2818,7 @@ func TestCreateTableEscaped(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}

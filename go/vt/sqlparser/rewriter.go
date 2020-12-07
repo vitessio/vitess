@@ -176,6 +176,18 @@ func replaceCreateIndexTable(newNode, parent SQLNode) {
 	parent.(*CreateIndex).Table = newNode.(TableName)
 }
 
+func replaceCreateTableOptLike(newNode, parent SQLNode) {
+	parent.(*CreateTable).OptLike = newNode.(*OptLike)
+}
+
+func replaceCreateTableTable(newNode, parent SQLNode) {
+	parent.(*CreateTable).Table = newNode.(TableName)
+}
+
+func replaceCreateTableTableSpec(newNode, parent SQLNode) {
+	parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
+}
+
 func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 }
@@ -1034,6 +1046,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *CreateIndex:
 		a.apply(node, n.Name, replaceCreateIndexName)
 		a.apply(node, n.Table, replaceCreateIndexTable)
+
+	case *CreateTable:
+		a.apply(node, n.OptLike, replaceCreateTableOptLike)
+		a.apply(node, n.Table, replaceCreateTableTable)
+		a.apply(node, n.TableSpec, replaceCreateTableTableSpec)
 
 	case *CurTimeFuncExpr:
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)
