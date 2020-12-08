@@ -85,14 +85,6 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
-func (client *gRPCVtctldClient) ShowAllKeyspaces(ctx context.Context, in *vtctldatapb.ShowAllKeyspacesRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_ShowAllKeyspacesClient, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.ShowAllKeyspaces(ctx, in, opts...)
-}
-
 func init() {
 	vtctldclient.Register("grpc", gRPCVtctldClientFactory)
 }

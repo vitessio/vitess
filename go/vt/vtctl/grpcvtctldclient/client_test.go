@@ -2,7 +2,6 @@ package grpcvtctldclient_test
 
 import (
 	"context"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,87 +79,21 @@ func TestGetKeyspaces(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Empty(t, resp.Keyspaces)
 
-		err = ts.CreateKeyspace(ctx, "testkeyspace", &topodatapb.Keyspace{})
+		expected := &vtctldatapb.Keyspace{
+			Name:     "testkeyspace",
+			Keyspace: &topodatapb.Keyspace{},
+		}
+		in := *expected.Keyspace
+
+		err = ts.CreateKeyspace(ctx, expected.Name, &in)
 		require.NoError(t, err)
 
 		resp, err = client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 		assert.NoError(t, err)
-		assert.Equal(t, []string{"testkeyspace"}, resp.Keyspaces)
+		assert.Equal(t, []*vtctldatapb.Keyspace{expected}, resp.Keyspaces)
 
 		client.Close()
 		_, err = client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-		assert.Error(t, err)
-	})
-}
-
-func consumeShowAllKeyspaces(
-	t *testing.T,
-	stream vtctlservicepb.Vtctld_ShowAllKeyspacesClient,
-	f func(t *testing.T, keyspace *vtctldatapb.Keyspace, err error),
-) {
-	for {
-		ks, err := stream.Recv()
-		if err == io.EOF {
-			return
-		}
-
-		f(t, ks, err)
-	}
-}
-
-func TestShowAllKeyspaces(t *testing.T) {
-	ctx := context.Background()
-
-	ts := memorytopo.NewServer("cell1")
-	vtctld := grpcvtctldserver.NewVtctldServer(ts)
-
-	withTestServer(t, vtctld, func(t *testing.T, addr string) {
-		client, err := vtctldclient.New("grpc", addr)
-		require.NoError(t, err)
-
-		var actual []*vtctldatapb.Keyspace
-
-		stream, err := client.ShowAllKeyspaces(ctx, &vtctldatapb.ShowAllKeyspacesRequest{})
-		assert.NoError(t, err)
-		consumeShowAllKeyspaces(t, stream, func(t *testing.T, keyspace *vtctldatapb.Keyspace, err error) {
-			assert.NoError(t, err)
-			actual = append(actual, keyspace)
-		})
-		assert.Empty(t, actual)
-
-		expected := []*vtctldatapb.Keyspace{
-			{
-				Name: "ks1",
-				Keyspace: &topodatapb.Keyspace{
-					ShardingColumnName: "col1",
-				},
-			},
-			{
-				Name: "ks2",
-				Keyspace: &topodatapb.Keyspace{
-					ShardingColumnName: "col2",
-				},
-			},
-		}
-
-		for _, ks := range expected {
-			keyspace := *ks.Keyspace // value copy
-			err := ts.CreateKeyspace(ctx, ks.Name, &keyspace)
-			require.NoError(t, err)
-		}
-
-		// reset our tracking slice
-		actual = nil
-		stream, err = client.ShowAllKeyspaces(ctx, &vtctldatapb.ShowAllKeyspacesRequest{})
-		assert.NoError(t, err)
-		consumeShowAllKeyspaces(t, stream, func(t *testing.T, keyspace *vtctldatapb.Keyspace, err error) {
-			assert.NoError(t, err)
-			actual = append(actual, keyspace)
-		})
-		assert.Equal(t, expected, actual)
-
-		client.Close()
-		_, err = client.ShowAllKeyspaces(ctx, &vtctldatapb.ShowAllKeyspacesRequest{})
 		assert.Error(t, err)
 	})
 }

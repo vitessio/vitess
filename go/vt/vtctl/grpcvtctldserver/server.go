@@ -35,35 +35,23 @@ func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeys
 
 // GetKeyspaces is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest) (*vtctldatapb.GetKeyspacesResponse, error) {
-	keyspaces, err := s.ts.GetKeyspaces(ctx)
+	names, err := s.ts.GetKeyspaces(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
-}
+	keyspaces := make([]*vtctldatapb.Keyspace, len(names))
 
-// ShowAllKeyspaces is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) ShowAllKeyspaces(req *vtctldatapb.ShowAllKeyspacesRequest, stream vtctlservicepb.Vtctld_ShowAllKeyspacesServer) error {
-	ctx := stream.Context()
-
-	keyspaces, err := s.ts.GetKeyspaces(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, keyspace := range keyspaces {
-		ks, err := s.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: keyspace})
+	for i, name := range names {
+		ks, err := s.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: name})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		if err := stream.Send(ks); err != nil {
-			return err
-		}
+		keyspaces[i] = ks
 	}
 
-	return nil
+	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
