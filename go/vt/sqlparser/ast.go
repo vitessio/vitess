@@ -371,6 +371,21 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
+
+	LockType int8
+
+	TableAndLockType struct {
+		Table TableName
+		Lock  LockType
+	}
+
+	TableAndLockTypes []TableAndLockType
+
+	LockTables struct {
+		Tables TableAndLockTypes
+	}
+
+	UnlockTables struct{}
 )
 
 func (*Union) iStatement()             {}
@@ -403,6 +418,8 @@ func (*CreateIndex) iStatement()       {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
 func (*CreateTable) iStatement()       {}
+func (*LockTables) iStatement()        {}
+func (*UnlockTables) iStatement()      {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
@@ -2528,4 +2545,17 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 	if node.TableSpec != nil {
 		buf.astPrintf(node, " %v", node.TableSpec)
 	}
+}
+
+// Format formats the LockTables node.
+func (node *LockTables) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "lock tables %v %v", node.Tables[0].Table, node.Tables[1].Lock)
+	for i := 1; i < len(node.Tables); i++ {
+		buf.astPrintf(node, ", %v %v", node.Tables)
+	}
+}
+
+// Format formats the UnlockTables node.
+func (node *UnlockTables) Format(buf *TrackedBuffer) {
+	buf.WriteString("unlock tables")
 }
