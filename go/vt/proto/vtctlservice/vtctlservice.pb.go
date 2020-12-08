@@ -29,22 +29,20 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 func init() { proto.RegisterFile("vtctlservice.proto", fileDescriptor_27055cdbb1148d2b) }
 
 var fileDescriptor_27055cdbb1148d2b = []byte{
-	// 227 bytes of a gzipped FileDescriptorProto
+	// 204 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2a, 0x2b, 0x49, 0x2e,
 	0xc9, 0x29, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2,
 	0x41, 0x16, 0x93, 0xe2, 0x07, 0xf3, 0x52, 0x12, 0x4b, 0x12, 0x21, 0xd2, 0x46, 0x85, 0x5c, 0xac,
 	0x61, 0x20, 0x21, 0xa1, 0x0c, 0x2e, 0x61, 0xd7, 0x8a, 0xd4, 0xe4, 0xd2, 0x92, 0x54, 0x30, 0xdf,
 	0x39, 0x3f, 0x37, 0x37, 0x31, 0x2f, 0x45, 0x48, 0x55, 0x0f, 0xa1, 0x03, 0x8b, 0x7c, 0x50, 0x6a,
 	0x61, 0x69, 0x6a, 0x71, 0x89, 0x94, 0x1a, 0x21, 0x65, 0xc5, 0x05, 0xf9, 0x79, 0xc5, 0xa9, 0x4a,
-	0x0c, 0x06, 0x8c, 0x46, 0x1f, 0x19, 0xb9, 0xd8, 0xc0, 0x92, 0x29, 0x42, 0xce, 0x5c, 0xdc, 0xee,
+	0x0c, 0x06, 0x8c, 0x46, 0x0b, 0x18, 0xb9, 0xd8, 0xc0, 0x92, 0x29, 0x42, 0xce, 0x5c, 0xdc, 0xee,
 	0xa9, 0x25, 0xde, 0xa9, 0x95, 0xc5, 0x05, 0x89, 0xc9, 0xa9, 0x42, 0xb2, 0x48, 0xa6, 0x20, 0x89,
 	0xc3, 0x2c, 0x11, 0x46, 0x92, 0x86, 0xc9, 0x29, 0x31, 0x08, 0x05, 0x72, 0xf1, 0x20, 0x29, 0x2e,
-	0x16, 0x92, 0xc3, 0x6e, 0x4a, 0x31, 0xcc, 0x18, 0x79, 0x9c, 0xf2, 0x30, 0x47, 0x0a, 0xf9, 0x73,
-	0x09, 0x04, 0x67, 0xe4, 0x97, 0x3b, 0xe6, 0xe4, 0x20, 0x8c, 0x55, 0x42, 0xd2, 0x86, 0x2e, 0x89,
-	0xdf, 0x85, 0x06, 0x8c, 0x4e, 0xda, 0x51, 0x9a, 0x65, 0x99, 0x25, 0xa9, 0xc5, 0xc5, 0x7a, 0x99,
-	0xf9, 0xfa, 0x10, 0x96, 0x7e, 0x7a, 0xbe, 0x7e, 0x59, 0x89, 0x3e, 0x38, 0x1a, 0xf4, 0x91, 0x23,
-	0x29, 0x89, 0x0d, 0x2c, 0x66, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0xc5, 0x5f, 0xa5, 0x60, 0xcf,
-	0x01, 0x00, 0x00,
+	0x16, 0x92, 0xc3, 0x6e, 0x4a, 0x31, 0xcc, 0x18, 0x79, 0x9c, 0xf2, 0x30, 0x47, 0x3a, 0x69, 0x47,
+	0x69, 0x96, 0x65, 0x96, 0xa4, 0x16, 0x17, 0xeb, 0x65, 0xe6, 0xeb, 0x43, 0x58, 0xfa, 0xe9, 0xf9,
+	0xfa, 0x65, 0x25, 0xfa, 0xe0, 0x50, 0xd3, 0x47, 0x0e, 0xd3, 0x24, 0x36, 0xb0, 0x98, 0x31, 0x20,
+	0x00, 0x00, 0xff, 0xff, 0x6a, 0xd1, 0x88, 0x6e, 0x7e, 0x01, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -160,10 +158,8 @@ var _Vtctl_serviceDesc = grpc.ServiceDesc{
 type VtctldClient interface {
 	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.Keyspace, error)
-	// GetKeyspaces returns the names of all keyspaces in the topo.
+	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error)
-	// ShowAllKeyspaces returns the keyspace struct of each keyspace in the topo.
-	ShowAllKeyspaces(ctx context.Context, in *vtctldata.ShowAllKeyspacesRequest, opts ...grpc.CallOption) (Vtctld_ShowAllKeyspacesClient, error)
 }
 
 type vtctldClient struct {
@@ -192,46 +188,12 @@ func (c *vtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspa
 	return out, nil
 }
 
-func (c *vtctldClient) ShowAllKeyspaces(ctx context.Context, in *vtctldata.ShowAllKeyspacesRequest, opts ...grpc.CallOption) (Vtctld_ShowAllKeyspacesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Vtctld_serviceDesc.Streams[0], "/vtctlservice.Vtctld/ShowAllKeyspaces", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &vtctldShowAllKeyspacesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Vtctld_ShowAllKeyspacesClient interface {
-	Recv() (*vtctldata.Keyspace, error)
-	grpc.ClientStream
-}
-
-type vtctldShowAllKeyspacesClient struct {
-	grpc.ClientStream
-}
-
-func (x *vtctldShowAllKeyspacesClient) Recv() (*vtctldata.Keyspace, error) {
-	m := new(vtctldata.Keyspace)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // VtctldServer is the server API for Vtctld service.
 type VtctldServer interface {
 	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.Keyspace, error)
-	// GetKeyspaces returns the names of all keyspaces in the topo.
+	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
 	GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error)
-	// ShowAllKeyspaces returns the keyspace struct of each keyspace in the topo.
-	ShowAllKeyspaces(*vtctldata.ShowAllKeyspacesRequest, Vtctld_ShowAllKeyspacesServer) error
 }
 
 // UnimplementedVtctldServer can be embedded to have forward compatible implementations.
@@ -243,9 +205,6 @@ func (*UnimplementedVtctldServer) GetKeyspace(ctx context.Context, req *vtctldat
 }
 func (*UnimplementedVtctldServer) GetKeyspaces(ctx context.Context, req *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspaces not implemented")
-}
-func (*UnimplementedVtctldServer) ShowAllKeyspaces(req *vtctldata.ShowAllKeyspacesRequest, srv Vtctld_ShowAllKeyspacesServer) error {
-	return status.Errorf(codes.Unimplemented, "method ShowAllKeyspaces not implemented")
 }
 
 func RegisterVtctldServer(s *grpc.Server, srv VtctldServer) {
@@ -288,27 +247,6 @@ func _Vtctld_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_ShowAllKeyspaces_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(vtctldata.ShowAllKeyspacesRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(VtctldServer).ShowAllKeyspaces(m, &vtctldShowAllKeyspacesServer{stream})
-}
-
-type Vtctld_ShowAllKeyspacesServer interface {
-	Send(*vtctldata.Keyspace) error
-	grpc.ServerStream
-}
-
-type vtctldShowAllKeyspacesServer struct {
-	grpc.ServerStream
-}
-
-func (x *vtctldShowAllKeyspacesServer) Send(m *vtctldata.Keyspace) error {
-	return x.ServerStream.SendMsg(m)
-}
-
 var _Vtctld_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "vtctlservice.Vtctld",
 	HandlerType: (*VtctldServer)(nil),
@@ -322,12 +260,6 @@ var _Vtctld_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_GetKeyspaces_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "ShowAllKeyspaces",
-			Handler:       _Vtctld_ShowAllKeyspaces_Handler,
-			ServerStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "vtctlservice.proto",
 }

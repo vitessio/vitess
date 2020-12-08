@@ -41,7 +41,7 @@ message GetKeyspacesRequest {
 }
 
 message GetKeyspacesResponse {
-  repeated string keyspaces = 1; 
+  repeated Keyspace keyspaces = 1; 
 }
 
 message GetKeyspaceRequest {
@@ -52,8 +52,6 @@ message Keyspace {
   string name = 1;
   topodata.Keyspace keyspace = 2;
 }
-
-message ShowAllKeyspacesRequest {}
 
 // TableMaterializeSttings contains the settings for one table.
 message TableMaterializeSettings {
