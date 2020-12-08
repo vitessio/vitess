@@ -20,6 +20,27 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	return &VtctldServer{ts: ts}
 }
 
+// FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
+	result, err := s.ts.FindAllShardsInKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	shards := map[string]*vtctldatapb.Shard{}
+	for _, shard := range result {
+		shards[shard.ShardName()] = &vtctldatapb.Shard{
+			Keyspace: req.Keyspace,
+			Name:     shard.ShardName(),
+			Shard:    shard.Shard,
+		}
+	}
+
+	return &vtctldatapb.FindAllShardsInKeyspaceResponse{
+		Shards: shards,
+	}, nil
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.Keyspace, error) {
 	keyspace, err := s.ts.GetKeyspace(ctx, req.Keyspace)

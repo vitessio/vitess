@@ -69,6 +69,14 @@ func (client *gRPCVtctldClient) Close() error {
 // (TODO:@amason) - This boilerplate should end up the same for all ~70 commands
 // .... we should do this with code gen.
 
+func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
+}
+
 func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.Keyspace, error) {
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)

@@ -14,6 +14,45 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+func TestFindAllShardsInKeyspace(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	vtctld := NewVtctldServer(ts)
+
+	ks := &vtctldatapb.Keyspace{
+		Name:     "testkeyspace",
+		Keyspace: &topodatapb.Keyspace{},
+	}
+	addKeyspace(ctx, t, ts, ks)
+
+	si1, err := ts.GetOrCreateShard(ctx, ks.Name, "-80")
+	require.NoError(t, err)
+	si2, err := ts.GetOrCreateShard(ctx, ks.Name, "80-")
+	require.NoError(t, err)
+
+	resp, err := vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: ks.Name})
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	expected := map[string]*vtctldatapb.Shard{
+		"-80": {
+			Keyspace: ks.Name,
+			Name:     "-80",
+			Shard:    si1.Shard,
+		},
+		"80-": {
+			Keyspace: ks.Name,
+			Name:     "80-",
+			Shard:    si2.Shard,
+		},
+	}
+
+	assert.Equal(t, expected, resp.Shards)
+
+	_, err = vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: "nothing"})
+	assert.Error(t, err)
+}
+
 func TestGetKeyspace(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")

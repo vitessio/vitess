@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -9,6 +10,12 @@ import (
 )
 
 var (
+	findAllShardsInKeyspaceCmd = &cobra.Command{
+		Use:     "FindAllShardsInKeyspace keyspace",
+		Aliases: []string{"findallshardsinkeyspace"},
+		Args:    cobra.ExactArgs(1),
+		RunE:    commandFindAllShardsInKeyspace,
+	}
 	getKeyspaceCmd = &cobra.Command{
 		Use:     "GetKeyspace keyspace",
 		Aliases: []string{"getkeyspace"},
@@ -22,6 +29,25 @@ var (
 		RunE:    commandGetKeyspaces,
 	}
 )
+
+func commandFindAllShardsInKeyspace(cmd *cobra.Command, args []string) error {
+	ks := cmd.Flags().Arg(0)
+	resp, err := client.FindAllShardsInKeyspace(commandCtx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
+		Keyspace: ks,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(&resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
 
 func commandGetKeyspace(cmd *cobra.Command, args []string) error {
 	ks := cmd.Flags().Arg(0)
@@ -48,6 +74,7 @@ func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	rootCmd.AddCommand(findAllShardsInKeyspaceCmd)
 	rootCmd.AddCommand(getKeyspaceCmd)
 	rootCmd.AddCommand(getKeyspacesCmd)
 }
