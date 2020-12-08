@@ -223,7 +223,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	switchWrites(t, ksWorkflow)
 	ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 	printShardPositions(vc, ksShards)
-	insertQuery2 := "insert into customer(name) values('tempCustomer2')"
+	insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
 	matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
 	require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
@@ -371,7 +371,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
-	counts := map[string]int{"zone1-1000": 7, "zone1-1100": 9, "zone1-1200": 5}
+	counts := map[string]int{"zone1-1000": 8, "zone1-1100": 8, "zone1-1200": 5}
 	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts, nil, nil, "")
 }
 
