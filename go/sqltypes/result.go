@@ -25,10 +25,11 @@ import (
 
 // Result represents a query result.
 type Result struct {
-	Fields       []*querypb.Field `json:"fields"`
-	RowsAffected uint64           `json:"rows_affected"`
-	InsertID     uint64           `json:"insert_id"`
-	Rows         [][]Value        `json:"rows"`
+	Fields              []*querypb.Field `json:"fields"`
+	RowsAffected        uint64           `json:"rows_affected"`
+	InsertID            uint64           `json:"insert_id"`
+	Rows                [][]Value        `json:"rows"`
+	SessionStateChanges string           `json:"session_state_changes"`
 }
 
 // ResultStream is an interface for receiving Result. It is used for

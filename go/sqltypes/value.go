@@ -216,6 +216,15 @@ func (v Value) ToInt64() (int64, error) {
 	return strconv.ParseInt(v.ToString(), 10, 64)
 }
 
+// ToFloat64 returns the value as MySQL would return it as a float64.
+func (v Value) ToFloat64() (float64, error) {
+	if !IsNumber(v.typ) {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	return strconv.ParseFloat(v.ToString(), 64)
+}
+
 // ToUint64 returns the value as MySQL would return it as a uint64.
 func (v Value) ToUint64() (uint64, error) {
 	if !v.IsIntegral() {
@@ -324,6 +333,12 @@ func (v Value) IsText() bool {
 // IsBinary returns true if Value is binary.
 func (v Value) IsBinary() bool {
 	return IsBinary(v.typ)
+}
+
+// IsDateTime returns true if Value is datetime.
+func (v Value) IsDateTime() bool {
+	dt := int(querypb.Type_DATETIME)
+	return int(v.typ)&dt == dt
 }
 
 // MarshalJSON should only be used for testing.

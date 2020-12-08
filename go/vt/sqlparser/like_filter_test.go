@@ -36,7 +36,7 @@ func TestLikePrefixRegexp(t *testing.T) {
 	}
 
 	want := "^key.*$"
-	got := LikeToRegexp(show.(*Show).ShowTablesOpt.Filter.Like).String()
+	got := LikeToRegexp(show.(*Show).Internal.(*ShowLegacy).ShowTablesOpt.Filter.Like).String()
 
 	assert.Equal(t, want, got)
 }
@@ -48,7 +48,7 @@ func TestLikeAnyCharsRegexp(t *testing.T) {
 	}
 
 	want := "^.*val1.*val2.*$"
-	got := LikeToRegexp(show.(*Show).ShowTablesOpt.Filter.Like).String()
+	got := LikeToRegexp(show.(*Show).Internal.(*ShowLegacy).ShowTablesOpt.Filter.Like).String()
 
 	assert.Equal(t, want, got)
 }
@@ -60,7 +60,7 @@ func TestSingleAndMultipleCharsRegexp(t *testing.T) {
 	}
 
 	want := "^.val1.val2.*$"
-	got := LikeToRegexp(show.(*Show).ShowTablesOpt.Filter.Like).String()
+	got := LikeToRegexp(show.(*Show).Internal.(*ShowLegacy).ShowTablesOpt.Filter.Like).String()
 
 	assert.Equal(t, want, got)
 }
@@ -72,7 +72,7 @@ func TestSpecialCharactersRegexp(t *testing.T) {
 	}
 
 	want := "^\\?\\.\\*\\?$"
-	got := LikeToRegexp(show.(*Show).ShowTablesOpt.Filter.Like).String()
+	got := LikeToRegexp(show.(*Show).Internal.(*ShowLegacy).ShowTablesOpt.Filter.Like).String()
 
 	assert.Equal(t, want, got)
 }
@@ -84,7 +84,7 @@ func TestQuoteLikeSpecialCharacters(t *testing.T) {
 	}
 
 	want := "^part1.part2%part3.part4_part5.*$"
-	got := LikeToRegexp(show.(*Show).ShowTablesOpt.Filter.Like).String()
+	got := LikeToRegexp(show.(*Show).Internal.(*ShowLegacy).ShowTablesOpt.Filter.Like).String()
 
 	assert.Equal(t, want, got)
 }

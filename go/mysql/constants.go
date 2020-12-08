@@ -16,6 +16,8 @@ limitations under the License.
 
 package mysql
 
+import "strings"
+
 const (
 	// MaxPacketSize is the maximum payload length of a packet
 	// the server supports.
@@ -126,13 +128,55 @@ const (
 	// Not yet supported.
 
 	// CLIENT_SESSION_TRACK 1 << 23
-	// Can set SERVER_SESSION_STATE_CHANGED in the Status Flags
+	// Can set ServerSessionStateChanged in the Status Flags
 	// and send session-state change data after a OK packet.
 	// Not yet supported.
+	CapabilityClientSessionTrack = 1 << 23
 
 	// CapabilityClientDeprecateEOF is CLIENT_DEPRECATE_EOF
 	// Expects an OK (instead of EOF) after the resultset rows of a Text Resultset.
 	CapabilityClientDeprecateEOF = 1 << 24
+)
+
+// Status flags. They are returned by the server in a few cases.
+// Originally found in include/mysql/mysql_com.h
+// See http://dev.mysql.com/doc/internals/en/status-flags.html
+const (
+	// a transaction is active
+	ServerStatusInTrans   uint16 = 0x0001
+	NoServerStatusInTrans uint16 = 0xFFFE
+
+	// auto-commit is enabled
+	ServerStatusAutocommit   uint16 = 0x0002
+	NoServerStatusAutocommit uint16 = 0xFFFD
+
+	ServerMoreResultsExists     uint16 = 0x0008
+	ServerStatusNoGoodIndexUsed uint16 = 0x0010
+	ServerStatusNoIndexUsed     uint16 = 0x0020
+	// Used by Binary Protocol Resultset to signal that COM_STMT_FETCH must be used to fetch the row-data.
+	ServerStatusCursorExists       uint16 = 0x0040
+	ServerStatusLastRowSent        uint16 = 0x0080
+	ServerStatusDbDropped          uint16 = 0x0100
+	ServerStatusNoBackslashEscapes uint16 = 0x0200
+	ServerStatusMetadataChanged    uint16 = 0x0400
+	ServerQueryWasSlow             uint16 = 0x0800
+	ServerPsOutParams              uint16 = 0x1000
+	// in a read-only transaction
+	ServerStatusInTransReadonly uint16 = 0x2000
+	// connection state information has changed
+	ServerSessionStateChanged uint16 = 0x4000
+)
+
+// State Change Information
+const (
+	// one or more system variables changed.
+	SessionTrackSystemVariables uint8 = 0x00
+	// schema changed.
+	SessionTrackSchema uint8 = 0x01
+	// "track state change" changed.
+	SessionTrackStateChange uint8 = 0x02
+	// "track GTIDs" changed.
+	SessionTrackGtids uint8 = 0x03
 )
 
 // Packet types.
@@ -457,6 +501,9 @@ const (
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
 
+	//SSSyntaxErrorOrAccessViolation is the state on syntax errors or access violations
+	SSSyntaxErrorOrAccessViolation = "42000"
+
 	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
 	SSUnknownComError = "08S01"
 
@@ -490,22 +537,6 @@ const (
 
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
-)
-
-// Status flags. They are returned by the server in a few cases.
-// Originally found in include/mysql/mysql_com.h
-// See http://dev.mysql.com/doc/internals/en/status-flags.html
-const (
-	// ServerStatusInTransaction is SERVER_STATUS_IN_TRANS
-	ServerStatusInTransaction   = 0x0001
-	NoServerStatusInTransaction = 0xFFFE
-
-	// ServerStatusAutocommit is SERVER_STATUS_AUTOCOMMIT
-	ServerStatusAutocommit   = 0x0002
-	NoServerStatusAutocommit = 0xFFFD
-
-	// ServerMoreResultsExists is SERVER_MORE_RESULTS_EXISTS
-	ServerMoreResultsExists = 0x0008
 )
 
 // A few interesting character set values.
@@ -573,9 +604,39 @@ func IsNum(typ uint8) bool {
 
 // IsConnErr returns true if the error is a connection error.
 func IsConnErr(err error) bool {
+	if IsTooManyConnectionsErr(err) {
+		return false
+	}
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		return (num >= CRUnknownError && num <= CRNamedPipeStateError) || num == ERQueryInterrupted
+	}
+	return false
+}
+
+// IsTooManyConnectionsErr returns true if the error is due to too many connections.
+func IsTooManyConnectionsErr(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		if sqlErr.Number() == CRServerHandshakeErr && strings.Contains(sqlErr.Message, "Too many connections") {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSchemaApplyError returns true when given error is a MySQL error applying schema change
+func IsSchemaApplyError(err error) bool {
+	merr, isSQLErr := err.(*SQLError)
+	if !isSQLErr {
+		return false
+	}
+	switch merr.Num {
+	case
+		ERDupKeyName,
+		ERCantDropFieldOrKey,
+		ERTableExists,
+		ERDupFieldName:
+		return true
 	}
 	return false
 }

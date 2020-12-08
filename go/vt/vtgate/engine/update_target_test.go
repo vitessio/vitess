@@ -54,15 +54,13 @@ func TestUpdateTargetTable(t *testing.T) {
 			_, err := updateTarget.Execute(vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
 			vc.ExpectLog(t, tc.expectedQueryLog)
+
+			vc = &loggingVCursor{}
+			_, err = wrapStreamExecute(updateTarget, vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			vc.ExpectLog(t, tc.expectedQueryLog)
 		})
 	}
-}
-
-func TestUpdateTargetStreamExecute(t *testing.T) {
-	updateTarget := &UpdateTarget{}
-	vc := &noopVCursor{}
-	err := updateTarget.StreamExecute(vc, map[string]*querypb.BindVariable{}, false, nil)
-	require.EqualError(t, err, "use cannot be used for streaming")
 }
 
 func TestUpdateTargetGetFields(t *testing.T) {

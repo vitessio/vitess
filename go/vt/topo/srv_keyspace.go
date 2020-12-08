@@ -401,7 +401,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 		return err
 	}
 
-	// The caller intents to update all cells in this case
+	// The caller intends to update all cells in this case
 	if len(cells) == 0 {
 		cells, err = ts.GetCellInfoNames(ctx)
 		if err != nil {

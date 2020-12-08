@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -170,6 +171,12 @@ func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string
 	}
 }
 
+func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+		return trace.NoopSpan{}, context.Background(), fmt.Errorf("")
+	}
+}
+
 func newFromStringExpect(t *testing.T, expected string) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 		assert.Equal(t, expected, parentSpan)
@@ -204,6 +211,18 @@ func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
 		newSpanFail(t),
 		newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
+}
+
+func TestSpanContextNotParsable(t *testing.T) {
+	hasRun := false
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			hasRun = true
+			return trace.NoopSpan{}, context.Background()
+		},
+		newFromStringError(t))
+	assert.NoError(t, err)
+	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
 }
 
 func newTestAuthServerStatic() *mysql.AuthServerStatic {

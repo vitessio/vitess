@@ -256,7 +256,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "update user set val = 1 where name = 'foo' and id = 1",
+    "Query": "update user set val = 1 where `name` = 'foo' and id = 1",
     "Table": "user",
     "Values": [
       1
@@ -279,11 +279,11 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "email_user_map"
+      "email_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
+    "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
     "Table": "user_metadata",
     "Values": [
@@ -311,12 +311,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "address_user_map",
-      "email_user_map"
+      "address_user_map:4",
+      "email_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
+    "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
     "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
     "Table": "user_metadata",
     "Values": [
@@ -340,11 +340,11 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "email_user_map"
+      "email_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
+    "OwnedVindexQuery": "select user_id, email, address, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
     "Table": "user_metadata",
     "Values": [
@@ -415,7 +415,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id = 1 for update",
     "Query": "delete from user where id = 1",
     "Table": "user",
     "Values": [
@@ -494,7 +494,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id = 1 for update",
     "Query": "delete from user as route1 where id = 1",
     "Table": "user",
     "Values": [
@@ -875,8 +875,27 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded values ((select 1 from dual), 1)",
+    "Query": "insert into unsharded values (1, 1)",
     "TableName": "unsharded"
+  }
+}
+
+# sharded insert subquery in insert value
+"insert into user(id, val) values((select 1), 1)"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(id, val) values((select 1), 1)",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
+    "Query": "insert into user(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
+    "TableName": "user"
   }
 }
 
@@ -894,7 +913,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -924,7 +943,22 @@
 
 # insert sharded, no values
 "insert into user values()"
-"no column list"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user values()",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "MASTER",
+    "MultiShardAutocommit": false,
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "TableName": "user"
+  }
+}
 
 # insert with one vindex
 "insert into user(id) values (1)"
@@ -940,7 +974,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -959,7 +993,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert ignore into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert ignore into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -978,7 +1012,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
     "TableName": "user"
   }
 }
@@ -997,7 +1031,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1016,7 +1050,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1035,7 +1069,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, nonid, Name, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1054,7 +1088,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
+    "Query": "insert into user(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1073,7 +1107,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
+    "Query": "insert into user(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
     "TableName": "user"
   }
 }
@@ -1165,7 +1199,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+    "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
   }
 }
@@ -1184,7 +1218,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "QueryTimeout": 1,
     "TableName": "user"
   }
@@ -1204,7 +1238,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": true,
-    "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
+    "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
   }
 }
@@ -1412,11 +1446,11 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "colb_colc_map"
+      "colb_colc_map:4"
     ],
     "KsidVindex": "kid_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
     "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
     "Table": "multicolvin",
     "Values": [
@@ -1440,12 +1474,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "cola_map",
-      "colb_colc_map"
+      "cola_map:4",
+      "colb_colc_map:5"
     ],
     "KsidVindex": "kid_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_a = 0, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
     "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
     "Table": "multicolvin",
     "Values": [
@@ -1591,7 +1625,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "update user_extra set val = 1 where name = 'foo'",
+    "Query": "update user_extra set val = 1 where `name` = 'foo'",
     "Table": "user_extra"
   }
 }
@@ -1629,7 +1663,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "update user_extra set val = 1 where name = 'foo' or id = 1",
+    "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
     "Table": "user_extra"
   }
 }
@@ -1705,7 +1739,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "delete from user_extra where name = 'jose'",
+    "Query": "delete from user_extra where `name` = 'jose'",
     "Table": "user_extra"
   }
 }
@@ -1724,7 +1758,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": true,
-    "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
+    "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'",
     "Table": "user_extra"
   }
 }
@@ -1743,7 +1777,7 @@
     },
     "TargetTabletType": "MASTER",
     "MultiShardAutocommit": false,
-    "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+    "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
     "QueryTimeout": 1,
     "Table": "user_extra"
   }
@@ -1825,12 +1859,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "name_user_map"
+      "name_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
-    "Query": "update user set name = null where id = 1",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user where id = 1 for update",
+    "Query": "update user set `name` = null where id = 1",
     "Table": "user",
     "Values": [
       1
@@ -1872,12 +1906,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "name_user_map"
+      "name_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
-    "Query": "update user set name = null where id in (1, 2, 3)",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user where id in (1, 2, 3) for update",
+    "Query": "update user set `name` = null where id in (1, 2, 3)",
     "Table": "user",
     "Values": [
       [
@@ -1904,12 +1938,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "name_user_map"
+      "name_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
-    "Query": "update user set name = null",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user for update",
+    "Query": "update user set `name` = null",
     "Table": "user"
   }
 }
@@ -1928,12 +1962,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "name_user_map"
+      "name_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
-    "Query": "update user set name = null where id + 1 = 2",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from user where id + 1 = 2 for update",
+    "Query": "update user set `name` = null where id + 1 = 2",
     "Table": "user"
   }
 }
@@ -1953,7 +1987,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id in (1, 2, 3) for update",
     "Query": "delete from user where id in (1, 2, 3)",
     "Table": "user",
     "Values": [
@@ -1982,7 +2016,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where id + 1 = 2 for update",
     "Query": "delete from user where id + 1 = 2",
     "Table": "user"
   }
@@ -2003,7 +2037,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user for update",
     "Query": "delete from user",
     "Table": "user"
   }
@@ -2068,7 +2102,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user for update",
     "Query": "delete from user",
     "Table": "user"
   }
@@ -2088,11 +2122,11 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "colb_colc_map"
+      "colb_colc_map:4"
     ],
     "KsidVindex": "kid_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_c = 2 from multicolvin where kid = 1 for update",
     "Query": "update multicolvin set column_c = 2 where kid = 1",
     "Table": "multicolvin",
     "Values": [
@@ -2116,12 +2150,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "name_user_map"
+      "name_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
-    "Query": "update user set name = _binary 'abc' where id = 1",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from user where id = 1 for update",
+    "Query": "update user set `name` = _binary 'abc' where id = 1",
     "Table": "user",
     "Values": [
       1
@@ -2145,8 +2179,8 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user where name = _binary 'abc' for update",
-    "Query": "delete from user where name = _binary 'abc'",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user where `name` = _binary 'abc' for update",
+    "Query": "delete from user where `name` = _binary 'abc'",
     "Table": "user"
   }
 }
@@ -2166,7 +2200,7 @@
     "TargetTabletType": "MASTER",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from user for update",
     "Query": "delete from user",
     "Table": "user"
   }
@@ -2186,12 +2220,12 @@
     },
     "TargetTabletType": "MASTER",
     "ChangedVindexValues": [
-      "name_user_map"
+      "name_user_map:3"
     ],
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
-    "Query": "update user set name = 'myname'",
+    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'myname' from user for update",
+    "Query": "update user set `name` = 'myname'",
     "Table": "user"
   }
 }

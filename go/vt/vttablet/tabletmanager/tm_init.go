@@ -429,7 +429,7 @@ func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Dur
 				return
 			}
 		}
-		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell})
+		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell}, false)
 		if err == nil {
 			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
 			if err == nil {
@@ -631,6 +631,7 @@ func (tm *TabletManager) exportStats() {
 	tablet := tm.Tablet()
 	statsKeyspace.Set(tablet.Keyspace)
 	statsShard.Set(tablet.Shard)
+	statsTabletType.Set(topoproto.TabletTypeLString(tm.tmState.tablet.Type))
 	if key.KeyRangeIsPartial(tablet.KeyRange) {
 		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))

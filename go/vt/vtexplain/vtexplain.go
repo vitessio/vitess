@@ -144,7 +144,7 @@ type Explain struct {
 }
 
 // Init sets up the fake execution environment
-func Init(vSchemaStr, sqlSchema string, opts *Options) error {
+func Init(vSchemaStr, sqlSchema, ksShardMapStr string, opts *Options) error {
 	// Verify options
 	if opts.ReplicationMode != "ROW" && opts.ReplicationMode != "STATEMENT" {
 		return fmt.Errorf("invalid replication mode \"%s\"", opts.ReplicationMode)
@@ -160,7 +160,7 @@ func Init(vSchemaStr, sqlSchema string, opts *Options) error {
 		return fmt.Errorf("initTabletEnvironment: %v", err)
 	}
 
-	err = initVtgateExecutor(vSchemaStr, opts)
+	err = initVtgateExecutor(vSchemaStr, ksShardMapStr, opts)
 	if err != nil {
 		return fmt.Errorf("initVtgateExecutor: %v", err)
 	}
@@ -181,8 +181,8 @@ func Stop() {
 	}
 }
 
-func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
-	parsedDDLs := make([]*sqlparser.DDL, 0, 16)
+func parseSchema(sqlSchema string, opts *Options) ([]sqlparser.DDLStatement, error) {
+	parsedDDLs := make([]sqlparser.DDLStatement, 0, 16)
 	for {
 		sql, rem, err := sqlparser.SplitStatement(sqlSchema)
 		sqlSchema = rem
@@ -210,16 +210,16 @@ func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 				continue
 			}
 		}
-		ddl, ok := stmt.(*sqlparser.DDL)
+		ddl, ok := stmt.(sqlparser.DDLStatement)
 		if !ok {
 			log.Infof("ignoring non-DDL statement: %s", sql)
 			continue
 		}
-		if ddl.Action != sqlparser.CreateStr {
-			log.Infof("ignoring %s table statement", ddl.Action)
+		if ddl.GetAction() != sqlparser.CreateDDLAction {
+			log.Infof("ignoring %s table statement", ddl.GetAction().ToString())
 			continue
 		}
-		if ddl.TableSpec == nil && ddl.OptLike == nil {
+		if ddl.GetTableSpec() == nil && ddl.GetOptLike() == nil {
 			log.Errorf("invalid create table statement: %s", sql)
 			continue
 		}

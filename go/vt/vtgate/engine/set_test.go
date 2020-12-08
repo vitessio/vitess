@@ -31,7 +31,7 @@ import (
 )
 
 func TestSetSystemVariableAsString(t *testing.T) {
-	setOp := SysVarSet{
+	setOp := SysVarReservedConn{
 		Name: "x",
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
@@ -72,6 +72,7 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog []string
 		expectedWarning  []*querypb.QueryWarning
 		expectedError    string
+		input            Primitive
 	}
 
 	tests := []testCase{
@@ -89,6 +90,36 @@ func TestSetTable(t *testing.T) {
 			},
 			expectedQueryLog: []string{
 				`UDV set with (x,INT64(42))`,
+			},
+		},
+		{
+			testName: "udv with input",
+			setOps: []SetOp{
+				&UserDefinedVariable{
+					Name: "x",
+					Expr: evalengine.NewColumn(0),
+				},
+			},
+			qr: []*sqltypes.Result{sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col0",
+					"datetime",
+				),
+				"2020-10-28",
+			)},
+			expectedQueryLog: []string{
+				`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+				`ExecuteMultiShard ks.-20: select now() from dual {} false false`,
+				`UDV set with (x,DATETIME("2020-10-28"))`,
+			},
+			input: &Send{
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: true,
+				},
+				TargetDestination: key.DestinationAnyShard{},
+				Query:             "select now() from dual",
+				SingleShardOnly:   true,
 			},
 		},
 		{
@@ -198,7 +229,7 @@ func TestSetTable(t *testing.T) {
 		{
 			testName: "sysvar set without destination",
 			setOps: []SetOp{
-				&SysVarSet{
+				&SysVarReservedConn{
 					Name: "x",
 					Keyspace: &vindexes.Keyspace{
 						Name:    "ks",
@@ -216,7 +247,7 @@ func TestSetTable(t *testing.T) {
 		{
 			testName: "sysvar set not modifying setting",
 			setOps: []SetOp{
-				&SysVarSet{
+				&SysVarReservedConn{
 					Name: "x",
 					Keyspace: &vindexes.Keyspace{
 						Name:    "ks",
@@ -233,7 +264,7 @@ func TestSetTable(t *testing.T) {
 		{
 			testName: "sysvar set modifying setting",
 			setOps: []SetOp{
-				&SysVarSet{
+				&SysVarReservedConn{
 					Name: "x",
 					Keyspace: &vindexes.Keyspace{
 						Name:    "ks",
@@ -259,9 +290,12 @@ func TestSetTable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
+			if tc.input == nil {
+				tc.input = &SingleRow{}
+			}
 			set := &Set{
 				Ops:   tc.setOps,
-				Input: &SingleRow{},
+				Input: tc.input,
 			}
 			vc := &loggingVCursor{
 				shards:  []string{"-20", "20-"},
@@ -282,7 +316,7 @@ func TestSetTable(t *testing.T) {
 
 func TestSysVarSetErr(t *testing.T) {
 	setOps := []SetOp{
-		&SysVarSet{
+		&SysVarReservedConn{
 			Name: "x",
 			Keyspace: &vindexes.Keyspace{
 				Name:    "ks",

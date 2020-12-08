@@ -39,6 +39,16 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.BytesBindVariable([]byte("aa")),
 		},
 	}, {
+		// placeholder
+		in:      "select * from t where col=?",
+		outstmt: "select * from t where col = :v1",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
+		// qualified table name
+		in:      "select * from `t` where col=?",
+		outstmt: "select * from t where col = :v1",
+		outbv:   map[string]*querypb.BindVariable{},
+	}, {
 		// str val in select
 		in:      "select 'aa' from t",
 		outstmt: "select :bv1 from t",
@@ -201,6 +211,15 @@ func TestNormalize(t *testing.T) {
 		outstmt: `select convert(:bv1, CHAR(60)) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
+		},
+	}, {
+		// insert syntax
+		in:      "insert into a (v1, v2, v3) values (1, '2', 3)",
+		outstmt: "insert into a(v1, v2, v3) values (:bv1, :bv2, :bv3)",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.Int64BindVariable(1),
+			"bv2": sqltypes.StringBindVariable("2"),
+			"bv3": sqltypes.Int64BindVariable(3),
 		},
 	}}
 	for _, tc := range testcases {

@@ -840,6 +840,7 @@
           "Sharded": true
         },
         "FieldQuery": "select user_id from music where 1 != 1",
+        "OrderBy": "0 ASC",
         "Query": "select user_id from music order by user_id asc limit :__upper_limit",
         "Table": "music"
       }
@@ -860,7 +861,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where name = 'abc' and id = 4 limit 5",
+    "Query": "select * from user where `name` = 'abc' and id = 4 limit 5",
     "Table": "user",
     "Values": [
       4
@@ -882,7 +883,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -904,7 +905,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -970,7 +971,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name = true limit 5",
+    "Query": "select * from user where id = 1 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       1
@@ -992,7 +993,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name limit 5",
+    "Query": "select * from user where id = 1 and `name` limit 5",
     "Table": "user",
     "Values": [
       1
@@ -1014,7 +1015,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 and name = true limit 5",
+    "Query": "select * from user where id = 5 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       5
@@ -1236,8 +1237,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select id, name from unsharded where 1 != 1",
-    "Query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+    "FieldQuery": "select id, `name` from unsharded where 1 != 1",
+    "Query": "select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
     "Table": "unsharded"
   }
 }
@@ -1287,8 +1288,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)",
-    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1)",
+    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)",
     "Table": "unsharded"
   }
 }
@@ -1349,6 +1350,24 @@
   }
 }
 
+# don't filter on the vtgate
+"select 42 from dual where false"
+{
+  "QueryType": "SELECT",
+  "Original": "select 42 from dual where false",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 42 from dual where 1 != 1",
+    "Query": "select 42 from dual where false",
+    "Table": "dual"
+  }
+}
+
 # testing SingleRow Projection with arithmetics
 "select 42+2"
 {
@@ -1365,6 +1384,279 @@
     "Inputs": [
       {
         "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows without limit
+"select sql_calc_found_rows * from music where user_id = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from music where 1 != 1",
+    "Query": "select * from music where user_id = 1",
+    "Table": "music",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# sql_calc_found_rows with limit
+"select sql_calc_found_rows * from music limit 100"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music limit 100",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 100,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from music where 1 != 1",
+            "Query": "select * from music limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Distinct": "false",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from music where 1 != 1",
+            "Query": "select count(*) from music",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows with SelectEqualUnique plans
+"select sql_calc_found_rows * from music where user_id = 1 limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music where 1 != 1",
+        "Query": "select * from music where user_id = 1 limit 2",
+        "Table": "music",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from music where 1 != 1",
+        "Query": "select count(*) from music where user_id = 1",
+        "Table": "music",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows with group by and having
+"select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, count(id) from music where 1 != 1 group by user_id",
+            "OrderBy": "0 ASC",
+            "Query": "select user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Distinct": "false",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from (select user_id, count(id) from music where 1 != 1 group by user_id) as t where 1 != 1",
+            "Query": "select count(*) from (select user_id, count(id) from music group by user_id having count(user_id) = 1) as t",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows in sub queries
+"select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)"
+"Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS' (errno 1234) (sqlstate 42000)"
+
+# sql_calc_found_rows in derived table
+"select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1"
+"Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS' (errno 1234) (sqlstate 42000)"
+
+# select from unsharded keyspace into dumpfile
+"select * from main.unsharded into Dumpfile 'x.txt'"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from main.unsharded into Dumpfile 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from unsharded where 1 != 1",
+    "Query": "select * from unsharded into dumpfile 'x.txt'",
+    "Table": "unsharded"
+  }
+}
+
+# select from unsharded keyspace into outfile
+"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from unsharded where 1 != 1",
+    "Query": "select * from unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+    "Table": "unsharded"
+  }
+}
+
+# select from unsharded keyspace into outfile s3
+"select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from unsharded where 1 != 1",
+    "Query": "select * from unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+    "Table": "unsharded"
+  }
+}
+
+# Union after into outfile is incorrect
+"select id from user into outfile 'out_file_name' union all select id from music"
+"Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
+
+# Into outfile s3 in sub-query is incorrect
+"select id from (select id from user into outfile s3 'inner_outfile') as t2"
+"Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
+
+# Distinct with cross shard query
+"select distinct user.a from user join user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.a from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "TableName": "user_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user.a from user where 1 != 1",
+            "Query": "select user.a from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
       }
     ]
   }

@@ -19,7 +19,10 @@ package vstreamer
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -86,6 +89,8 @@ type ColExpr struct {
 	VindexColumns []int
 
 	Field *querypb.Field
+
+	FixedValue sqltypes.Value
 }
 
 // Table contains the metadata for a table.
@@ -129,6 +134,10 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
+		if colExpr.ColNum == -1 {
+			result[i] = colExpr.FixedValue
+			continue
+		}
 		if colExpr.ColNum >= len(values) {
 			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
@@ -182,18 +191,18 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 		return true
 	}
 	switch stmt := ast.(type) {
-	case *sqlparser.DBDDL:
+	case sqlparser.DBDDLStatement:
 		return false
-	case *sqlparser.DDL:
-		if !stmt.Table.IsEmpty() {
-			return tableMatches(stmt.Table, dbname, filter)
+	case sqlparser.DDLStatement:
+		if !stmt.GetTable().IsEmpty() {
+			return tableMatches(stmt.GetTable(), dbname, filter)
 		}
-		for _, table := range stmt.FromTables {
+		for _, table := range stmt.GetFromTables() {
 			if tableMatches(table, dbname, filter) {
 				return true
 			}
 		}
-		for _, table := range stmt.ToTables {
+		for _, table := range stmt.GetToTables() {
 			if tableMatches(table, dbname, filter) {
 				return true
 			}
@@ -203,16 +212,12 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 	return true
 }
 
-// tableMatches is similar to buildPlan below and MatchTable in vreplication/table_plan_builder.go.
-func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
-	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
-		return false
-	}
+func ruleMatches(tableName string, filter *binlogdatapb.Filter) bool {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
 			expr := strings.Trim(rule.Match, "/")
-			result, err := regexp.MatchString(expr, table.Name.String())
+			result, err := regexp.MatchString(expr, tableName)
 			if err != nil {
 				return false
 			}
@@ -220,11 +225,19 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 				continue
 			}
 			return true
-		case table.Name.String() == rule.Match:
+		case tableName == rule.Match:
 			return true
 		}
 	}
 	return false
+}
+
+// tableMatches is similar to buildPlan below and MatchTable in vreplication/table_plan_builder.go.
+func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
+	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+		return false
+	}
+	return ruleMatches(table.Name.String(), filter)
 }
 
 func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
@@ -295,9 +308,11 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
+		log.Errorf("%s", err.Error())
 		return nil, err
 	}
 	if fromTable.String() != ti.Name {
+		log.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 		return nil, fmt.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
@@ -305,9 +320,11 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 		Table: ti,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
+		log.Errorf("%s", err.Error())
 		return nil, err
 	}
 	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
+		log.Errorf("%s", err.Error())
 		return nil, err
 	}
 
@@ -477,7 +494,28 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Vindex:        cv.Vindex,
 			VindexColumns: vindexColumns,
 		}, nil
+	case *sqlparser.Literal:
+		//allow only intval 1
+		if inner.Type != sqlparser.IntVal {
+			return ColExpr{}, fmt.Errorf("only integer literals are supported")
+		}
+		num, err := strconv.ParseInt(string(inner.Val), 0, 64)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		if num != 1 {
+			return ColExpr{}, fmt.Errorf("only the integer literal 1 is supported")
+		}
+		return ColExpr{
+			Field: &querypb.Field{
+				Name: "1",
+				Type: querypb.Type_INT64,
+			},
+			ColNum:     -1,
+			FixedValue: sqltypes.NewInt64(num),
+		}, nil
 	default:
+		log.Infof("Unsupported expression: %v", inner)
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
 }

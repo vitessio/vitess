@@ -37,6 +37,7 @@ func (uvs *uvstreamer) copy(ctx context.Context) error {
 		tableName := uvs.tablesToCopy[0]
 		log.V(2).Infof("Copystate not empty starting catchupAndCopy on table %s", tableName)
 		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
+			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}
 	}
@@ -50,6 +51,7 @@ func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) err
 	if !uvs.pos.IsZero() {
 		if err := uvs.catchup(ctx); err != nil {
 			log.Infof("catchupAndCopy: catchup returned %v", err)
+			uvs.vse.errorCounts.Add("Catchup", 1)
 			return err
 		}
 	}
@@ -265,6 +267,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		return nil
 	})
 	if err != nil {
+		uvs.vse.errorCounts.Add("StreamRows", 1)
 		return err
 	}
 

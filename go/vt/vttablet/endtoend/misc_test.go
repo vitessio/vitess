@@ -279,12 +279,12 @@ func TestConsolidation(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
-			query := fmt.Sprintf("select sleep(%v) from dual /* query: 1 */", sleep)
+			query := fmt.Sprintf("/* query: 1 */ select sleep(%v) from dual /* query: 1 */", sleep)
 			framework.NewClient().Execute(query, nil)
 			wg.Done()
 		}()
 		go func() {
-			query := fmt.Sprintf("select sleep(%v) from dual /* query: 2 */", sleep)
+			query := fmt.Sprintf("/* query: 2 */ select sleep(%v) from dual /* query: 2 */", sleep)
 			framework.NewClient().Execute(query, nil)
 			wg.Done()
 		}()

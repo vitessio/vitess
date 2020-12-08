@@ -125,8 +125,8 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 		log.Info("mysqld is unmanaged or remote. Skipping flavor detection")
 		return result
 	}
-	version, getErr := getVersionString()
-	f, v, err := parseVersionString(version)
+	version, getErr := GetVersionString()
+	f, v, err := ParseVersionString(version)
 
 	/*
 	 By default Vitess searches in vtenv.VtMysqlRoot() for a mysqld binary.
@@ -147,7 +147,7 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	*/
 
 	if getErr != nil || err != nil {
-		f, v, err = getVersionFromEnv()
+		f, v, err = GetVersionFromEnv()
 		if err != nil {
 			vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
 			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set your PATH so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
@@ -172,31 +172,32 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 }
 
 /*
-getVersionFromEnv returns the flavor and an assumed version based on the legacy
+GetVersionFromEnv returns the flavor and an assumed version based on the legacy
 MYSQL_FLAVOR environment variable.
 
 The assumed version may not be accurate since the legacy variable only specifies
 broad families of compatible versions. However, the differences between those
 versions should only matter if Vitess is managing the lifecycle of mysqld, in which
 case we should have a local copy of the mysqld binary from which we can fetch
-the accurate version instead of falling back to this function (see getVersionString).
+the accurate version instead of falling back to this function (see GetVersionString).
 */
-func getVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
+func GetVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
 	env := os.Getenv("MYSQL_FLAVOR")
 	switch env {
 	case "MariaDB":
-		return flavorMariaDB, serverVersion{10, 0, 10}, nil
+		return FlavorMariaDB, serverVersion{10, 0, 10}, nil
 	case "MariaDB103":
-		return flavorMariaDB, serverVersion{10, 3, 7}, nil
+		return FlavorMariaDB, serverVersion{10, 3, 7}, nil
 	case "MySQL80":
-		return flavorMySQL, serverVersion{8, 0, 11}, nil
+		return FlavorMySQL, serverVersion{8, 0, 11}, nil
 	case "MySQL56":
-		return flavorMySQL, serverVersion{5, 7, 10}, nil
+		return FlavorMySQL, serverVersion{5, 7, 10}, nil
 	}
 	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
 
-func getVersionString() (string, error) {
+// GetVersionString runs mysqld --version and returns its output as a string
+func GetVersionString() (string, error) {
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return "", err
@@ -212,16 +213,16 @@ func getVersionString() (string, error) {
 	return version, nil
 }
 
-// parse the output of mysqld --version into a flavor and version
-func parseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
+// ParseVersionString parses the output of mysqld --version into a flavor and version
+func ParseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
 	if strings.Contains(version, "Percona") {
-		flavor = flavorPercona
+		flavor = FlavorPercona
 	} else if strings.Contains(version, "MariaDB") {
-		flavor = flavorMariaDB
+		flavor = FlavorMariaDB
 	} else {
 		// OS distributed MySQL releases have a version string like:
 		// mysqld  Ver 5.7.27-0ubuntu0.19.04.1 for Linux on x86_64 ((Ubuntu))
-		flavor = flavorMySQL
+		flavor = FlavorMySQL
 	}
 	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
@@ -511,7 +512,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 
 	// try the mysqld shutdown hook, if any
 	h := hook.NewSimpleHook("mysqld_shutdown")
-	hr := h.Execute()
+	hr := h.ExecuteContext(ctx)
 	switch hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
@@ -813,9 +814,9 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 
 	// mysql version specific file.
 	// master_{flavor}{major}{minor}.cnf
-	f := flavorMariaDB
+	f := FlavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
-		f = flavorMySQL
+		f = FlavorMySQL
 	}
 	fn := fmt.Sprintf("mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
 	b, err = riceBox.Bytes(fn)

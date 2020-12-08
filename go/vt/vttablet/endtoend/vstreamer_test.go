@@ -58,6 +58,8 @@ func TestSchemaVersioning(t *testing.T) {
 	tsv := framework.Server
 	tsv.EnableHistorian(false)
 	tsv.SetTracking(false)
+	tsv.EnableHeartbeat(false)
+	defer tsv.EnableHeartbeat(true)
 	defer tsv.EnableHistorian(true)
 	defer tsv.SetTracking(true)
 
@@ -80,12 +82,12 @@ func TestSchemaVersioning(t *testing.T) {
 
 	var cases = []test{
 		{
-			query: "create table vitess_version (id1 int, id2 int)",
+			query: "create table vitess_version (\n\tid1 int,\n\tid2 int\n)",
 			output: append(append([]string{
 				`gtid`, //gtid+other => vstream current pos
 				`other`,
 				`gtid`, //gtid+ddl => actual query
-				`type:DDL statement:"create table vitess_version (id1 int, id2 int)" `},
+				`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)" `},
 				getSchemaVersionTableCreationEvents()...),
 				`version`,
 				`gtid`,
@@ -215,7 +217,7 @@ func TestSchemaVersioning(t *testing.T) {
 	// playing events from the past: same events as original since historian is providing the latest schema
 	output := append(append([]string{
 		`gtid`,
-		`type:DDL statement:"create table vitess_version (id1 int, id2 int)" `},
+		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)" `},
 		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,
@@ -279,7 +281,7 @@ func TestSchemaVersioning(t *testing.T) {
 	// playing events from the past: same as earlier except one below, see comments
 	output = append(append([]string{
 		`gtid`,
-		`type:DDL statement:"create table vitess_version (id1 int, id2 int)" `},
+		`type:DDL statement:"create table vitess_version (\n\tid1 int,\n\tid2 int\n)" `},
 		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,

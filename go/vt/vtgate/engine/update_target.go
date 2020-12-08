@@ -44,22 +44,22 @@ func (updTarget *UpdateTarget) description() PrimitiveDescription {
 }
 
 // RouteType implements the Primitive interface
-func (updTarget UpdateTarget) RouteType() string {
+func (updTarget *UpdateTarget) RouteType() string {
 	return "UpdateTarget"
 }
 
 // GetKeyspaceName implements the Primitive interface
-func (updTarget UpdateTarget) GetKeyspaceName() string {
+func (updTarget *UpdateTarget) GetKeyspaceName() string {
 	return updTarget.Target
 }
 
 // GetTableName implements the Primitive interface
-func (updTarget UpdateTarget) GetTableName() string {
+func (updTarget *UpdateTarget) GetTableName() string {
 	return ""
 }
 
 // Execute implements the Primitive interface
-func (updTarget UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (updTarget *UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.Session().SetTarget(updTarget.Target)
 	if err != nil {
 		return nil, err
@@ -68,11 +68,15 @@ func (updTarget UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*quer
 }
 
 // StreamExecute implements the Primitive interface
-func (updTarget UpdateTarget) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "use cannot be used for streaming")
+func (updTarget *UpdateTarget) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := updTarget.Execute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(result)
 }
 
 // GetFields implements the Primitive interface
-func (updTarget UpdateTarget) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (updTarget *UpdateTarget) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "use cannot be used for get fields")
 }

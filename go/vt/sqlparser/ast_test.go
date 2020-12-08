@@ -177,19 +177,18 @@ func TestSetLimit(t *testing.T) {
 func TestDDL(t *testing.T) {
 	testcases := []struct {
 		query    string
-		output   *DDL
+		output   DDLStatement
 		affected []string
 	}{{
 		query: "create table a",
-		output: &DDL{
-			Action: CreateStr,
-			Table:  TableName{Name: NewTableIdent("a")},
+		output: &CreateTable{
+			Table: TableName{Name: NewTableIdent("a")},
 		},
 		affected: []string{"a"},
 	}, {
 		query: "rename table a to b",
 		output: &DDL{
-			Action: RenameStr,
+			Action: RenameDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 			},
@@ -201,7 +200,7 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "rename table a to b, c to d",
 		output: &DDL{
-			Action: RenameStr,
+			Action: RenameDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 				TableName{Name: NewTableIdent("c")},
@@ -215,7 +214,7 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "drop table a",
 		output: &DDL{
-			Action: DropStr,
+			Action: DropDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 			},
@@ -224,7 +223,7 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "drop table a, b",
 		output: &DDL{
-			Action: DropStr,
+			Action: DropDDLAction,
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 				TableName{Name: NewTableIdent("b")},
@@ -244,7 +243,7 @@ func TestDDL(t *testing.T) {
 		for _, t := range tcase.affected {
 			want = append(want, TableName{Name: NewTableIdent(t)})
 		}
-		if affected := got.(*DDL).AffectedTables(); !reflect.DeepEqual(affected, want) {
+		if affected := got.(DDLStatement).AffectedTables(); !reflect.DeepEqual(affected, want) {
 			t.Errorf("Affected(%s): %v, want %v", tcase.query, affected, want)
 		}
 	}
@@ -362,7 +361,7 @@ func TestWhere(t *testing.T) {
 	if buf.String() != "" {
 		t.Errorf("w.Format(nil): %q, want \"\"", buf.String())
 	}
-	w = NewWhere(WhereStr, nil)
+	w = NewWhere(WhereClause, nil)
 	buf = NewTrackedBuffer(nil)
 	w.Format(buf)
 	if buf.String() != "" {
@@ -389,7 +388,7 @@ func TestIsAggregate(t *testing.T) {
 
 func TestIsImpossible(t *testing.T) {
 	f := ComparisonExpr{
-		Operator: NotEqualStr,
+		Operator: NotEqualOp,
 		Left:     newIntLiteral("1"),
 		Right:    newIntLiteral("1"),
 	}
@@ -398,7 +397,7 @@ func TestIsImpossible(t *testing.T) {
 	}
 
 	f = ComparisonExpr{
-		Operator: EqualStr,
+		Operator: EqualOp,
 		Left:     newIntLiteral("1"),
 		Right:    newIntLiteral("1"),
 	}
@@ -407,7 +406,7 @@ func TestIsImpossible(t *testing.T) {
 	}
 
 	f = ComparisonExpr{
-		Operator: NotEqualStr,
+		Operator: NotEqualOp,
 		Left:     newIntLiteral("1"),
 		Right:    newIntLiteral("2"),
 	}
@@ -747,6 +746,9 @@ func TestSplitStatementToPieces(t *testing.T) {
 		input  string
 		output string
 	}{{
+		input:  "select * from table1; \t; \n; \n\t\t ;select * from table1;",
+		output: "select * from table1;select * from table1",
+	}, {
 		input: "select * from table",
 	}, {
 		input:  "select * from table1; select * from table2;",
@@ -770,20 +772,17 @@ func TestSplitStatementToPieces(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
 
-		stmtPieces, err := SplitStatementToPieces(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
+			stmtPieces, err := SplitStatementToPieces(tcase.input)
+			require.NoError(t, err)
 
-		out := strings.Join(stmtPieces, ";")
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+			out := strings.Join(stmtPieces, ";")
+			require.Equal(t, tcase.output, out)
+		})
 	}
 }
 
@@ -797,4 +796,11 @@ func TestDefaultStatus(t *testing.T) {
 	assert.Equal(t,
 		String(&Default{ColName: "status"}),
 		"default(`status`)")
+}
+
+func TestShowTableStatus(t *testing.T) {
+	query := "Show Table Status FROM customer"
+	tree, err := Parse(query)
+	require.NoError(t, err)
+	require.NotNil(t, tree)
 }

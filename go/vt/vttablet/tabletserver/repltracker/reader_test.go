@@ -21,6 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -53,21 +58,25 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	tr.readHeartbeat()
 	lag, err := tr.Status()
 
-	if err != nil {
-		t.Fatalf("Should not be in error: %v", tr.lastKnownError)
+	require.NoError(t, err)
+	expectedLag := 10 * time.Second
+	assert.Equal(t, expectedLag, lag, "wrong latest lag")
+	expectedCumLag := 10 * time.Second.Nanoseconds()
+	assert.Equal(t, expectedCumLag, cumulativeLagNs.Get(), "wrong cumulative lag")
+	assert.Equal(t, int64(1), reads.Get(), "wrong read count")
+	assert.Equal(t, int64(0), readErrors.Get(), "wrong read error count")
+	expectedHisto := map[string]int64{
+		"0":      int64(0),
+		"1ms":    int64(0),
+		"10ms":   int64(0),
+		"100ms":  int64(0),
+		"1s":     int64(0),
+		"10s":    int64(1),
+		"100s":   int64(0),
+		"1000s":  int64(0),
+		">1000s": int64(0),
 	}
-	if got, want := lag, 10*time.Second; got != want {
-		t.Fatalf("wrong latest lag: got = %v, want = %v", tr.lastKnownLag, want)
-	}
-	if got, want := cumulativeLagNs.Get(), 10*time.Second.Nanoseconds(); got != want {
-		t.Fatalf("wrong cumulative lag: got = %v, want = %v", got, want)
-	}
-	if got, want := reads.Get(), int64(1); got != want {
-		t.Fatalf("wrong read count: got = %v, want = %v", got, want)
-	}
-	if got, want := readErrors.Get(), int64(0); got != want {
-		t.Fatalf("wrong read error count: got = %v, want = %v", got, want)
-	}
+	utils.MustMatch(t, expectedHisto, heartbeatLagNsHistogram.Counts(), "wrong counts in histogram")
 }
 
 // TestReaderReadHeartbeatError tests that we properly account for errors
@@ -84,18 +93,11 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	tr.readHeartbeat()
 	lag, err := tr.Status()
 
-	if err == nil {
-		t.Fatalf("Should be in error: %v", tr.lastKnownError)
-	}
-	if got, want := lag, 0*time.Second; got != want {
-		t.Fatalf("wrong lastKnownLag: got = %v, want = %v", got, want)
-	}
-	if got, want := cumulativeLagNs.Get(), int64(0); got != want {
-		t.Fatalf("wrong cumulative lag: got = %v, want = %v", got, want)
-	}
-	if got, want := readErrors.Get(), int64(1); got != want {
-		t.Fatalf("wrong read error count: got = %v, want = %v", got, want)
-	}
+	require.Error(t, err)
+	assert.EqualError(t, err, tr.lastKnownError.Error(), "expected error")
+	assert.Equal(t, 0*time.Second, lag, "wrong lastKnownLag")
+	assert.Equal(t, int64(0), cumulativeLagNs.Get(), "wrong cumulative lag")
+	assert.Equal(t, int64(1), readErrors.Get(), "wrong read error count")
 }
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatReader {

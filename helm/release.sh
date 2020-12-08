@@ -1,51 +1,68 @@
 #!/bin/bash
+set -ex
 
-version_tag=1.0.7-5
+vt_base_version='v7.0.2'
+orchestrator_version='3.2.3'
+pmm_client_version='1.17.4'
 
-docker pull vitess/k8s:latest
-docker tag vitess/k8s:latest vitess/k8s:helm-$version_tag
-docker push vitess/k8s:helm-$version_tag
+docker pull vitess/base:$vt_base_version
 
-docker pull vitess/vtgate:latest
-docker tag vitess/vtgate:latest vitess/vtgate:helm-$version_tag
-docker push vitess/vtgate:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/k8s:$vt_base_version-buster .
+docker tag vitess/k8s:$vt_base_version-buster vitess/k8s:$vt_base_version
+docker push vitess/k8s:$vt_base_version-buster
+docker push vitess/k8s:$vt_base_version
 
-docker pull vitess/vttablet:latest
-docker tag vitess/vttablet:latest vitess/vttablet:helm-$version_tag
-docker push vitess/vttablet:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/vtgate:$vt_base_version-buster vtgate
+docker tag vitess/vtgate:$vt_base_version-buster vitess/vtgate:$vt_base_version
+docker push vitess/vtgate:$vt_base_version-buster
+docker push vitess/vtgate:$vt_base_version
 
-docker pull vitess/mysqlctld:latest
-docker tag vitess/mysqlctld:latest vitess/mysqlctld:helm-$version_tag
-docker push vitess/mysqlctld:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/vttablet:$vt_base_version-buster vttablet
+docker tag vitess/vttablet:$vt_base_version-buster vitess/vttablet:$vt_base_version
+docker push vitess/vttablet:$vt_base_version-buster
+docker push vitess/vttablet:$vt_base_version
 
-docker pull vitess/vtctl:latest
-docker tag vitess/vtctl:latest vitess/vtctl:helm-$version_tag
-docker push vitess/vtctl:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/mysqlctld:$vt_base_version-buster mysqlctld
+docker tag vitess/mysqlctld:$vt_base_version-buster vitess/mysqlctld:$vt_base_version
+docker push vitess/mysqlctld:$vt_base_version-buster
+docker push vitess/mysqlctld:$vt_base_version
 
-docker pull vitess/vtctlclient:latest
-docker tag vitess/vtctlclient:latest vitess/vtctlclient:helm-$version_tag
-docker push vitess/vtctlclient:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/vtctl:$vt_base_version-buster vtctl
+docker tag vitess/vtctl:$vt_base_version-buster vitess/vtctl:$vt_base_version
+docker push vitess/vtctl:$vt_base_version-buster
+docker push vitess/vtctl:$vt_base_version
 
-docker pull vitess/vtctld:latest
-docker tag vitess/vtctld:latest vitess/vtctld:helm-$version_tag
-docker push vitess/vtctld:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/vtctlclient:$vt_base_version-buster vtctlclient
+docker tag vitess/vtctlclient:$vt_base_version-buster vitess/vtctlclient:$vt_base_version
+docker push vitess/vtctlclient:$vt_base_version-buster
+docker push vitess/vtctlclient:$vt_base_version
 
-docker pull vitess/vtworker:latest
-docker tag vitess/vtworker:latest vitess/vtworker:helm-$version_tag
-docker push vitess/vtworker:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/vtctld:$vt_base_version-buster vtctld
+docker tag vitess/vtctld:$vt_base_version-buster vitess/vtctld:$vt_base_version
+docker push vitess/vtctld:$vt_base_version-buster
+docker push vitess/vtctld:$vt_base_version
 
-docker pull vitess/logrotate:latest
-docker tag vitess/logrotate:latest vitess/logrotate:helm-$version_tag
-docker push vitess/logrotate:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/vtworker:$vt_base_version-buster vtworker
+docker tag vitess/vtworker:$vt_base_version-buster vitess/vtworker:$vt_base_version
+docker push vitess/vtworker:$vt_base_version-buster
+docker push vitess/vtworker:$vt_base_version
 
-docker pull vitess/logtail:latest
-docker tag vitess/logtail:latest vitess/logtail:helm-$version_tag
-docker push vitess/logtail:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/logrotate:$vt_base_version-buster logrotate
+docker tag vitess/logrotate:$vt_base_version-buster vitess/logrotate:$vt_base_version
+docker push vitess/logrotate:$vt_base_version-buster
+docker push vitess/logrotate:$vt_base_version
 
-docker pull vitess/pmm-client:latest
-docker tag vitess/pmm-client:latest vitess/pmm-client:helm-$version_tag
-docker push vitess/pmm-client:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/logtail:$vt_base_version-buster logtail
+docker tag vitess/logtail:$vt_base_version-buster vitess/logtail:$vt_base_version
+docker push vitess/logtail:$vt_base_version-buster
+docker push vitess/logtail:$vt_base_version
 
-docker pull vitess/orchestrator:latest
-docker tag vitess/orchestrator:latest vitess/orchestrator:helm-$version_tag
-docker push vitess/orchestrator:helm-$version_tag
+docker build --build-arg VT_BASE_VER=$vt_base_version --build-arg PMM_CLIENT_VER=$pmm_client_version -t vitess/pmm-client:v$pmm_client_version-buster pmm-client
+docker tag vitess/pmm-client:v$pmm_client_version-buster vitess/pmm-client:v$pmm_client_version
+docker push vitess/pmm-client:v$pmm_client_version-buster
+docker push vitess/pmm-client:v$pmm_client_version
+
+docker build --build-arg VT_BASE_VER=$vt_base_version --build-arg ORC_VER=$orchestrator_version -t vitess/orchestrator:v$orchestrator_version-buster orchestrator
+docker tag vitess/orchestrator:v$orchestrator_version-buster vitess/orchestrator:v$orchestrator_version
+docker push vitess/orchestrator:v$orchestrator_version-buster
+docker push vitess/orchestrator:v$orchestrator_version

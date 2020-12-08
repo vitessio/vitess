@@ -592,7 +592,7 @@ func TestHistogram(t *testing.T) {
 	ebd := NewExporter("", "")
 	g := ebd.NewHistogram("ghistogram", "", []int64{10})
 	g.Add(1)
-	assert.Contains(t, expvar.Get("ghistogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`)
+	assert.Contains(t, expvar.Get("ghistogram").String(), `{"10": 1, "inf": 0, "Count": 1, "Total": 1}`)
 
 	ebd = NewExporter("i1", "label")
 
@@ -607,13 +607,13 @@ func TestHistogram(t *testing.T) {
 	g.Add(1)
 	g.Add(1)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i1`)
-	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 2, "inf": 2, "Count": 2, "Total": 2}`)
+	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 2, "inf": 0, "Count": 2, "Total": 2}`)
 
 	// Ensure var gets replaced.
 	g = ebd.NewHistogram("lhistogram", "", []int64{10})
 	g.Add(1)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i1`)
-	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`)
+	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 1, "inf": 0, "Count": 1, "Total": 1}`)
 }
 
 func TestPublish(t *testing.T) {

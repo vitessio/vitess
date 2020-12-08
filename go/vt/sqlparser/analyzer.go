@@ -56,6 +56,7 @@ const (
 	StmtSavepoint
 	StmtSRollback
 	StmtRelease
+	StmtVStream
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -73,11 +74,11 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case *DDL, *DBDDL:
+	case DDLStatement, DBDDLStatement:
 		return StmtDDL
 	case *Use:
 		return StmtUse
-	case *OtherRead, *OtherAdmin:
+	case *OtherRead, *OtherAdmin, *Load:
 		return StmtOther
 	case *Explain:
 		return StmtExplain
@@ -138,6 +139,8 @@ func Preview(sql string) StatementType {
 		return StmtSelect
 	case "stream":
 		return StmtStream
+	case "vstream":
+		return StmtVStream
 	case "insert":
 		return StmtInsert
 	case "replace":
@@ -192,6 +195,8 @@ func (s StatementType) String() string {
 		return "SELECT"
 	case StmtStream:
 		return "STREAM"
+	case StmtVStream:
+		return "VSTREAM"
 	case StmtInsert:
 		return "INSERT"
 	case StmtReplace:
@@ -251,10 +256,13 @@ func IsDMLStatement(stmt Statement) bool {
 }
 
 //IsVschemaDDL returns true if the query is an Vschema alter ddl.
-func IsVschemaDDL(ddl *DDL) bool {
-	switch ddl.Action {
-	case CreateVindexStr, DropVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
-		return true
+func IsVschemaDDL(ddl DDLStatement) bool {
+	switch ddlStatement := ddl.(type) {
+	case *DDL:
+		switch ddlStatement.Action {
+		case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
+			return true
+		}
 	}
 	return false
 }
@@ -402,7 +410,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return sqltypes.PlanValue{}, nil
 	case *UnaryExpr:
 		switch node.Operator {
-		case UBinaryStr, Utf8mb4Str, Utf8Str, Latin1Str: // for some charset introducers, we can just ignore them
+		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
 			return NewPlanValue(node.Expr)
 		}
 	}

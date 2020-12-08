@@ -315,7 +315,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		err                 string
 	}{
 		{true, ""},
-		{false, "in-memory row count exceeded allowed limit of 3"},
+		{false, "in-memory row count exceeded allowed limit of 3 (errno 1153) (sqlstate HY000)"},
 	}
 
 	for _, test := range testCases {

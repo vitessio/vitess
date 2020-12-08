@@ -21,14 +21,16 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	"golang.org/x/sync/errgroup"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -51,6 +53,7 @@ type (
 		// Context returns the context of the current request.
 		Context() context.Context
 
+		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
 
@@ -63,7 +66,7 @@ type (
 		SetContextTimeout(timeout time.Duration) context.CancelFunc
 
 		// ErrorGroupCancellableContext updates context that can be cancelled.
-		ErrorGroupCancellableContext() *errgroup.Group
+		ErrorGroupCancellableContext() (*errgroup.Group, func())
 
 		// V3 functions.
 		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
@@ -81,13 +84,19 @@ type (
 		// Will replace all of the Topo functions.
 		ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 
-		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error
+		ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error
+
+		SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error
 
 		Session() SessionActions
 
 		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
+
+		LookupRowLockShardSession() vtgatepb.CommitOrder
+
+		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -111,11 +120,20 @@ type (
 		ShardSession() []*srvtopo.ResolvedShard
 
 		SetAutocommit(bool) error
-		SetClientFoundRows(bool)
-		SetSkipQueryPlanCache(bool)
-		SetSQLSelectLimit(int64)
+		SetClientFoundRows(bool) error
+		SetSkipQueryPlanCache(bool) error
+		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
+		SetFoundRows(uint64)
+
+		SetDDLStrategy(string)
+		GetDDLStrategy() string
+
+		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
+		SetReadAfterWriteGTID(string)
+		SetReadAfterWriteTimeout(float64)
+		SetSessionTrackGTIDs(bool)
 	}
 
 	// Plan represents the execution strategy for a given query.
@@ -124,10 +142,10 @@ type (
 	// each node does its part by combining the results of the
 	// sub-nodes.
 	Plan struct {
-		Type                   sqlparser.StatementType // The type of query we have
-		Original               string                  // Original is the original query.
-		Instructions           Primitive               // Instructions contains the instructions needed to fulfil the query.
-		sqlparser.BindVarNeeds                         // Stores BindVars needed to be provided as part of expression rewriting
+		Type         sqlparser.StatementType // The type of query we have
+		Original     string                  // Original is the original query.
+		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
+		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
 
 		mu           sync.Mutex    // Mutex to protect the fields below
 		ExecCount    uint64        // Count of times this plan was executed

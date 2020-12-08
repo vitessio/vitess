@@ -21,8 +21,12 @@ import (
 	"fmt"
 	"log/syslog"
 	"os"
+	"runtime"
 	"runtime/debug"
+	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // LogLevel indicates the severity of a log entry
@@ -123,6 +127,11 @@ func SetSyslogLevel(logLevel LogLevel) {
 
 // logFormattedEntry nicely formats and emits a log entry
 func logFormattedEntry(logLevel LogLevel, message string, args ...interface{}) string {
+	return logDepth(logLevel, 0, message, args...)
+}
+
+// logFormattedEntry nicely formats and emits a log entry
+func logDepth(logLevel LogLevel, depth int, message string, args ...interface{}) string {
 	if logLevel > globalLogLevel {
 		return ""
 	}
@@ -137,7 +146,8 @@ func logFormattedEntry(logLevel LogLevel, message string, args ...interface{}) s
 	}
 
 	msgArgs := fmt.Sprintf(message, args...)
-	entryString := fmt.Sprintf("%s %s %s", localizedTime.Format(TimeFormat), logLevel, msgArgs)
+	sourceFile, pos := callerPos(depth)
+	entryString := fmt.Sprintf("%s %8s %s:%d] %s", localizedTime.Format(TimeFormat), logLevel, sourceFile, pos, msgArgs)
 	fmt.Fprintln(os.Stderr, entryString)
 
 	if syslogWriter != nil {
@@ -167,13 +177,27 @@ func logFormattedEntry(logLevel LogLevel, message string, args ...interface{}) s
 	return entryString
 }
 
+func callerPos(depth int) (string, int) {
+	_, file, line, ok := runtime.Caller(4 + depth)
+	if !ok {
+		file = "???"
+		line = 1
+	} else {
+		slash := strings.LastIndex(file, "/")
+		if slash >= 0 {
+			file = file[slash+1:]
+		}
+	}
+	return file, line
+}
+
 // logEntry emits a formatted log entry
 func logEntry(logLevel LogLevel, message string, args ...interface{}) string {
 	entryString := message
 	for _, s := range args {
 		entryString += fmt.Sprintf(" %s", s)
 	}
-	return logFormattedEntry(logLevel, entryString)
+	return logDepth(logLevel, 1, entryString)
 }
 
 // logErrorEntry emits a log entry based on given error object
@@ -199,7 +223,8 @@ func Debugf(message string, args ...interface{}) string {
 }
 
 func Info(message string, args ...interface{}) string {
-	return logEntry(INFO, message, args...)
+	log.Infof(message, args...)
+	return fmt.Sprintf(message, args...)
 }
 
 func Infof(message string, args ...interface{}) string {
@@ -227,7 +252,8 @@ func Error(message string, args ...interface{}) error {
 }
 
 func Errorf(message string, args ...interface{}) error {
-	return errors.New(logFormattedEntry(ERROR, message, args...))
+	log.Infof(message, args...)
+	return fmt.Errorf(message, args...)
 }
 
 func Errore(err error) error {

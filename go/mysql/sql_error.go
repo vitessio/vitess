@@ -120,7 +120,7 @@ func NewSQLErrorFromError(err error) error {
 		case vtrpcpb.Code_UNAUTHENTICATED:
 			num = ERAccessDeniedError
 		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-			num = ERTooManyUserConnections
+			num = demuxResourceExhaustedErrors(err.Error())
 		case vtrpcpb.Code_FAILED_PRECONDITION:
 			num = ERUnknownError
 		case vtrpcpb.Code_ABORTED:
@@ -160,4 +160,15 @@ func NewSQLErrorFromError(err error) error {
 		Message: msg,
 	}
 	return serr
+}
+
+var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
+
+func demuxResourceExhaustedErrors(msg string) int {
+	switch {
+	case isGRPCOverflowRE.Match([]byte(msg)):
+		return ERNetPacketTooLarge
+	default:
+		return ERTooManyUserConnections
+	}
 }

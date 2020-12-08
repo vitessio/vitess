@@ -38,6 +38,7 @@ type VCursor interface {
 	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 	InTransactionAndIsDML() bool
+	LookupRowLockShardSession() vtgatepb.CommitOrder
 }
 
 // Vindex defines the interface required to register a vindex.

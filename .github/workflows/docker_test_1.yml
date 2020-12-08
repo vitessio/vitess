@@ -16,6 +16,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run tests which requires docker 1
+    - name: Run tests which require docker - 1
       run: |
         go run test.go -docker=true --follow -shard 10

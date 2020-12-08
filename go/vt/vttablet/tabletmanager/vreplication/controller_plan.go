@@ -83,10 +83,10 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
 	}
-	if ins.Action != sqlparser.InsertStr {
+	if ins.Action != sqlparser.InsertAct {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
-	if ins.Ignore != "" {
+	if ins.Ignore {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
 	if ins.Partitions != nil {
@@ -148,10 +148,10 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v", vreplicationTableName, upd.Where)
 	upd.Where = &sqlparser.Where{
-		Type: sqlparser.WhereStr,
+		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
-			Operator: sqlparser.InStr,
+			Operator: sqlparser.InOp,
 			Right:    sqlparser.ListArg("::ids"),
 		},
 	}
@@ -190,10 +190,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v", vreplicationTableName, del.Where)
 	del.Where = &sqlparser.Where{
-		Type: sqlparser.WhereStr,
+		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
-			Operator: sqlparser.InStr,
+			Operator: sqlparser.InOp,
 			Right:    sqlparser.ListArg("::ids"),
 		},
 	}
@@ -202,10 +202,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	buf2.Myprintf("%v", del)
 
 	copyStateWhere := &sqlparser.Where{
-		Type: sqlparser.WhereStr,
+		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("vrepl_id")},
-			Operator: sqlparser.InStr,
+			Operator: sqlparser.InOp,
 			Right:    sqlparser.ListArg("::ids"),
 		},
 	}

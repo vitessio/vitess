@@ -131,6 +131,7 @@ oltpReadPool:
   size: 16
 queryCacheSize: 5000
 replicationTracker:
+  heartbeatIntervalSeconds: 0.25
   mode: disable
 schemaReloadIntervalSeconds: 1800
 streamBufferSize: 32768
@@ -190,7 +191,7 @@ func TestFlags(t *testing.T) {
 		StreamBufferSize:            32768,
 		QueryCacheSize:              5000,
 		SchemaReloadIntervalSeconds: 1800,
-		TrackSchemaVersions:         true,
+		TrackSchemaVersions:         false,
 		MessagePostponeParallelism:  4,
 		CacheResultFields:           true,
 		TxThrottlerConfig:           "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
@@ -215,6 +216,7 @@ func TestFlags(t *testing.T) {
 	want.Healthcheck.IntervalSeconds = 20
 	want.Healthcheck.DegradedThresholdSeconds = 30
 	want.Healthcheck.UnhealthyThresholdSeconds = 7200
+	want.ReplicationTracker.HeartbeatIntervalSeconds = 1
 	want.ReplicationTracker.Mode = Disable
 	assert.Equal(t, want.DB, currentConfig.DB)
 	assert.Equal(t, want, currentConfig)
@@ -282,7 +284,7 @@ func TestFlags(t *testing.T) {
 	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	Init()
 	want.ReplicationTracker.Mode = Disable
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 0
+	want.ReplicationTracker.HeartbeatIntervalSeconds = 1
 	assert.Equal(t, want, currentConfig)
 
 	enableReplicationReporter = true
@@ -291,7 +293,7 @@ func TestFlags(t *testing.T) {
 	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds = 0
 	Init()
 	want.ReplicationTracker.Mode = Polling
-	want.ReplicationTracker.HeartbeatIntervalSeconds = 0
+	want.ReplicationTracker.HeartbeatIntervalSeconds = 1
 	assert.Equal(t, want, currentConfig)
 
 	healthCheckInterval = 1 * time.Second

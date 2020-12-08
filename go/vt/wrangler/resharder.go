@@ -63,7 +63,6 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
 		return err
 	}
-
 	rs, err := wr.buildResharder(ctx, keyspace, workflow, sources, targets, cell, tabletTypes)
 	if err != nil {
 		return vterrors.Wrap(err, "buildResharder")
@@ -79,6 +78,7 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	if err := rs.startStreams(ctx); err != nil {
 		return vterrors.Wrap(err, "startStream")
 	}
+
 	return nil
 }
 
@@ -162,7 +162,7 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 	err := rs.forAll(rs.sourceShards, func(source *topo.ShardInfo) error {
 		sourceMaster := rs.sourceMasters[source.ShardName()]
 
-		query := fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name=%s", encodeString(sourceMaster.DbName()))
+		query := fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name=%s and message != 'FROZEN'", encodeString(sourceMaster.DbName()))
 		p3qr, err := rs.wr.tmc.VReplicationExec(ctx, sourceMaster.Tablet, query)
 		if err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", sourceMaster.Tablet, query)
@@ -185,6 +185,7 @@ func (rs *resharder) readRefStreams(ctx context.Context) error {
 			}
 		}
 		for _, row := range qr.Rows {
+
 			workflow := row[0].ToString()
 			if workflow == "" {
 				return fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s", source.Keyspace(), source.ShardName())

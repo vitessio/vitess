@@ -55,7 +55,7 @@ func init() {
 }
 
 func BenchmarkExecuteVarBinary(b *testing.B) {
-	db, tsv := setupTabletServerTest(nil)
+	db, tsv := setupTabletServerTest(nil, "")
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -77,7 +77,7 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 }
 
 func BenchmarkExecuteExpression(b *testing.B) {
-	db, tsv := setupTabletServerTest(nil)
+	db, tsv := setupTabletServerTest(nil, "")
 	defer db.Close()
 	defer tsv.StopService()
 
