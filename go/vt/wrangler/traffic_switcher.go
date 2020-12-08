@@ -741,18 +741,11 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, disallowWrites)
-		if err != nil {
-			log.Infof("Error: %s", err)
-		}
-
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.sourceKeyspace, ts.sourceShards(), disallowWrites)
-		if err != nil {
-			log.Infof("Error: %s", err)
-		}
 	}
 	if err != nil {
-		log.Infof("Error: %s", err)
+		log.Warningf("Error: %s", err)
 		return err
 	}
 	return ts.forAllSources(func(source *tsSource) error {
@@ -760,7 +753,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		source.position, err = ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
 		ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.si.ShardName(), source.position)
 		if err != nil {
-			log.Infof("Error: %s", err)
+			log.Warningf("Error: %s", err)
 		}
 		return err
 	})
