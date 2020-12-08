@@ -101,7 +101,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	defer vc.TearDown()
+	//defer vc.TearDown()
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -128,7 +128,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	defer vc.TearDown()
+	//defer vc.TearDown()
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -232,6 +232,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 	insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" //ID 102, hence due to reverse_bits in shard -80
 	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
+	time.Sleep(1 * time.Second) // wait for vreplication to catchup
+
 	reverseKsWorkflow := "product.p2c_reverse"
 	if testReverse {
 		//Reverse Replicate
@@ -246,6 +248,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1))
 		insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
+
+		time.Sleep(1 * time.Second) // wait for vreplication to catchup
 
 		//Go forward again
 		switchReads(t, allCellNames, ksWorkflow)
@@ -668,6 +672,7 @@ func switchWrites(t *testing.T, ksWorkflow string) {
 		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
 		queries := []string{
 			"select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from _vt.vreplication",
+			"select * from _vt.copy_state",
 			"select * from _vt.resharding_journal",
 		}
 		for _, tab := range tabs {
