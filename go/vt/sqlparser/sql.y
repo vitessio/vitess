@@ -240,6 +240,9 @@ func skipToEnd(yylex interface{}) {
 // Explain tokens
 %token <bytes> FORMAT TREE VITESS TRADITIONAL
 
+// Lock type tokens
+%token <bytes> LOCAL LOW_PRIORITY
+
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
 %type <statement> explain_statement explainable_statement
@@ -255,6 +258,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolean> default_optional
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
+%type <statement> lock_statement unlock_statement
 %type <bytes2> comment_opt comment_list
 %type <str> wild_opt
 %type <explainType> explain_format_opt
@@ -366,6 +370,10 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> alter_object_type database_or_schema
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
+%type <tableAndLockTypes> lock_table_list
+%type <tableAndLockType> lock_table
+%type <lockType> lock_type
+
 
 %start any_command
 
@@ -411,6 +419,8 @@ command:
 | flush_statement
 | do_statement
 | load_statement
+| lock_statement
+| unlock_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -2184,13 +2194,51 @@ other_statement:
   {
     $$ = &OtherAdmin{}
   }
-| LOCK TABLES skip_to_end
+
+lock_statement:
+  LOCK TABLES lock_table_list
   {
-    $$ = &OtherAdmin{}
+    $$ = &LockTables{Tables: $3}
   }
-| UNLOCK TABLES skip_to_end
+
+lock_table_list:
+  lock_table
   {
-    $$ = &OtherAdmin{}
+    $$ = TableAndLockTypes{$1}
+  }
+| lock_table_list ',' lock_table
+  {
+    $$ = append($1, $3)
+  }
+
+lock_table:
+  aliased_table_name lock_type
+  {
+    $$ = TableAndLockType{$1, $2}
+  }
+
+lock_type:
+  READ
+  {
+    $$ = Read
+  }
+| READ LOCAL
+  {
+    $$ = ReadLocal
+  }
+| WRITE
+  {
+    $$ = Write
+  }
+| LOW_PRIORITY WRITE
+  {
+    $$ = LowPriorityWrite
+  }
+
+unlock_statement:
+  UNLOCK TABLES
+  {
+    $$ = &UnlockTables{}
   }
 
 flush_statement:
