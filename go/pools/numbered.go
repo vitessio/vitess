@@ -154,6 +154,24 @@ func (nu *Numbered) GetAll() (vals []interface{}) {
 	return vals
 }
 
+// GetByFilter returns a list of resources that match the filter.
+// It does not return any resources that are already locked.
+func (nu *Numbered) GetByFilter(purpose string, match func(val interface{}) bool) (vals []interface{}) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	for _, nw := range nu.resources {
+		if nw.inUse || !nw.enforceTimeout {
+			continue
+		}
+		if match(nw.val) {
+			nw.inUse = true
+			nw.purpose = purpose
+			vals = append(vals, nw.val)
+		}
+	}
+	return vals
+}
+
 // GetOutdated returns a list of resources that are older than age, and locks them.
 // It does not return any resources that are already locked.
 func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []interface{}) {

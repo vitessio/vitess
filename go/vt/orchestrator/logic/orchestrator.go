@@ -272,32 +272,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 		InstanceLatency: instanceLatency,
 		Err:             nil,
 	})
-
-	if !IsLeaderOrActive() {
-		// Maybe this node was elected before, but isn't elected anymore.
-		// If not elected, stop drilling up/down the topology
-		return
-	}
-
-	// Investigate replicas and members of the same replication group:
-	for _, replicaKey := range append(instance.ReplicationGroupMembers.GetInstanceKeys(), instance.Replicas.GetInstanceKeys()...) {
-		replicaKey := replicaKey // not needed? no concurrency here?
-
-		// Avoid noticing some hosts we would otherwise discover
-		if inst.RegexpMatchPatterns(replicaKey.StringCode(), config.Config.DiscoveryIgnoreReplicaHostnameFilters) {
-			continue
-		}
-
-		if replicaKey.IsValid() {
-			discoveryQueue.Push(replicaKey)
-		}
-	}
-	// Investigate master:
-	if instance.MasterKey.IsValid() {
-		if !inst.RegexpMatchPatterns(instance.MasterKey.StringCode(), config.Config.DiscoveryIgnoreMasterHostnameFilters) {
-			discoveryQueue.Push(instance.MasterKey)
-		}
-	}
 }
 
 // onHealthTick handles the actions to take to discover/poll instances
@@ -492,6 +466,7 @@ func ContinuousDiscovery() {
 	raftCaretakingTick := time.Tick(10 * time.Minute)
 	recoveryTick := time.Tick(time.Duration(config.RecoveryPollSeconds) * time.Second)
 	autoPseudoGTIDTick := time.Tick(time.Duration(config.PseudoGTIDIntervalSeconds) * time.Second)
+	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.Config.SnapshotTopologiesIntervalHours > 0 {
@@ -508,6 +483,7 @@ func ContinuousDiscovery() {
 	go ometrics.InitGraphiteMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
+	inst.SetDurabilityPolicy(config.Config.Durability)
 	if config.Config.RaftEnabled {
 		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
 			log.Fatale(err)
@@ -615,6 +591,8 @@ func ContinuousDiscovery() {
 					go inst.SnapshotTopologies()
 				}
 			}()
+		case <-tabletTopoTick:
+			go RefreshTablets()
 		}
 	}
 }

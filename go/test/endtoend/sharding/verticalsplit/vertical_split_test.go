@@ -290,9 +290,6 @@ func TestVerticalSplit(t *testing.T) {
 		"destination_keyspace/0")
 	require.NoError(t, err)
 
-	// get status for destination master tablet, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, destinationMasterTablet, 700, 300)
-
 	// check query service is off on destination master, as filtered
 	// replication is enabled. Even health check should not interfere.
 	destinationMasterTabletVars := destinationMasterTablet.VttabletProcess.GetVars()

@@ -50,6 +50,10 @@ type vcursor struct {
 	keys        []sqltypes.Value
 }
 
+func (vc *vcursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	panic("implement me")
+}
+
 func (vc *vcursor) InTransactionAndIsDML() bool {
 	return false
 }

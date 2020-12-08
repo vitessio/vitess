@@ -82,7 +82,6 @@ func NewTabletPicker(ts *topo.Server, cells []string, keyspace, shard, tabletTyp
 		missingFields = append(missingFields, "Cells")
 	}
 	if len(missingFields) > 0 {
-		//log.Errorf("missing picker fields %s", debug.Stack()) //FIXME: remove after all tests run
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			fmt.Sprintf("Missing required field(s) for tablet picker: %s", strings.Join(missingFields, ", ")))
 	}
@@ -108,10 +107,18 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		default:
 		}
 		candidates := tp.getMatchingTablets(ctx)
+
 		if len(candidates) == 0 {
 			// if no candidates were found, sleep and try again
-			log.Infof("No tablet found for streaming, sleeping for %d seconds", int(GetTabletPickerRetryDelay()/1e9))
-			time.Sleep(GetTabletPickerRetryDelay())
+			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %d seconds",
+				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, int(GetTabletPickerRetryDelay()/1e9))
+			timer := time.NewTimer(GetTabletPickerRetryDelay())
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+			case <-timer.C:
+			}
 			continue
 		}
 		// try at most len(candidate) times to find a healthy tablet
@@ -131,6 +138,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			// OK to use ctx here because it is not actually used by the underlying Close implementation
 			_ = conn.Close(ctx)
+			log.Infof("tablet picker found tablet %s", ti.Tablet.String())
 			return ti.Tablet, nil
 		}
 	}

@@ -191,7 +191,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 	if err := tc.wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, false); err != nil {
 		tc.t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
 	}
-	if err := tc.wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil); err != nil {
+	if err := tc.wi.wr.RebuildKeyspaceGraph(ctx, "ks", nil, false); err != nil {
 		tc.t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 

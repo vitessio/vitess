@@ -158,6 +158,7 @@ func (r *heartbeatReader) readHeartbeat() {
 	lag := r.now().Sub(time.Unix(0, ts))
 	cumulativeLagNs.Add(lag.Nanoseconds())
 	currentLagNs.Set(lag.Nanoseconds())
+	heartbeatLagNsHistogram.Add(lag.Nanoseconds())
 	reads.Add(1)
 
 	r.lagMu.Lock()

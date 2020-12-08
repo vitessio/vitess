@@ -22,6 +22,6 @@ import (
 )
 
 // RebuildKeyspaceGraph rebuilds the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, cells []string) error {
-	return topotools.RebuildKeyspace(ctx, wr.logger, wr.ts, keyspace, cells)
+func (wr *Wrangler) RebuildKeyspaceGraph(ctx context.Context, keyspace string, cells []string, allowPartial bool) error {
+	return topotools.RebuildKeyspace(ctx, wr.logger, wr.ts, keyspace, cells, allowPartial)
 }

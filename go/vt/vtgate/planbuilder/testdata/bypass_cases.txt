@@ -65,7 +65,7 @@
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
+    "Query": "insert into USER(ID, `NAME`) values (42, 'ms X')",
     "SingleShardOnly": false
   }
 }
@@ -85,5 +85,74 @@
     "IsDML": true,
     "Query": "insert into user(nonid) values (2)",
     "SingleShardOnly": false
+  }
+}
+
+# bypass query for into outfile s3
+"select count(*), col from unsharded into outfile S3 'x.txt'"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*), col from unsharded into outfile S3 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": false,
+    "Query": "select count(*), col from unsharded into outfile s3 'x.txt'",
+    "SingleShardOnly": false
+  }
+}
+
+"select * from user into outfile S3 'x.txt'"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user into outfile S3 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": false,
+    "Query": "select * from user into outfile s3 'x.txt'",
+    "SingleShardOnly": false
+  }
+}
+
+"load data from s3 'x.txt' into table x"
+{
+  "QueryType": "OTHER",
+  "Original": "load data from s3 'x.txt' into table x",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": true,
+    "Query": "load data from s3 'x.txt' into table x",
+    "SingleShardOnly": true
+  }
+}
+
+"load data from s3 'x.txt'"
+{
+  "QueryType": "OTHER",
+  "Original": "load data from s3 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": true,
+    "Query": "load data from s3 'x.txt'",
+    "SingleShardOnly": true
   }
 }

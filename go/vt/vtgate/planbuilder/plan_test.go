@@ -153,7 +153,11 @@ func TestPlan(t *testing.T) {
 
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
 	// table, which come from vschema. In the test vschema,
@@ -215,7 +219,7 @@ func TestBypassPlanningFromFile(t *testing.T) {
 	testFile(t, "bypass_cases.txt", testOutputTempDir, vschema)
 }
 
-func TestDDLPlanningFromFile(t *testing.T) {
+func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
@@ -230,6 +234,7 @@ func TestDDLPlanningFromFile(t *testing.T) {
 	}
 
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "show_cases.txt", testOutputTempDir, vschema)
 }
 
 func TestOtherPlanningFromFile(t *testing.T) {
@@ -275,6 +280,13 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
+}
+
+func (vw *vschemaWrapper) KeyspaceExists(keyspace string) bool {
+	if vw.keyspace != nil {
+		return vw.keyspace.Name == keyspace
+	}
+	return false
 }
 
 func (vw *vschemaWrapper) SysVarSetEnabled() bool {

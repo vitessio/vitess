@@ -42,11 +42,16 @@ var (
 	cumulativeLagNs = stats.NewCounter("HeartbeatCumulativeLagNs", "Incremented by the current lag at each heartbeat read interval")
 	// HeartbeatCurrentLagNs is a point-in-time calculation of the lag, updated at each heartbeat read interval.
 	currentLagNs = stats.NewGauge("HeartbeatCurrentLagNs", "Point in time calculation of the heartbeat lag")
+	// HeartbeatLagNsHistogram is a histogram of the lag values. Cutoffs are 0, 1ms, 10ms, 100ms, 1s, 10s, 100s, 1000s
+	heartbeatLagNsHistogram = stats.NewGenericHistogram("HeartbeatLagNsHistogram",
+		"Histogram of lag values in nanoseconds", []int64{0, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12},
+		[]string{"0", "1ms", "10ms", "100ms", "1s", "10s", "100s", "1000s", ">1000s"}, "Count", "Total")
 )
 
 // ReplTracker tracks replication lag.
 type ReplTracker struct {
-	mode string
+	mode           string
+	forceHeartbeat bool
 
 	mu       sync.Mutex
 	isMaster bool
@@ -59,10 +64,11 @@ type ReplTracker struct {
 // NewReplTracker creates a new ReplTracker.
 func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
-		mode:   env.Config().ReplicationTracker.Mode,
-		hw:     newHeartbeatWriter(env, alias),
-		hr:     newHeartbeatReader(env),
-		poller: &poller{},
+		mode:           env.Config().ReplicationTracker.Mode,
+		forceHeartbeat: env.Config().EnableLagThrottler,
+		hw:             newHeartbeatWriter(env, alias),
+		hr:             newHeartbeatReader(env),
+		poller:         &poller{},
 	}
 }
 
@@ -84,6 +90,9 @@ func (rt *ReplTracker) MakeMaster() {
 		rt.hr.Close()
 		rt.hw.Open()
 	}
+	if rt.forceHeartbeat {
+		rt.hw.Open()
+	}
 }
 
 // MakeNonMaster must be called if the tablet type becomes non-MASTER.
@@ -100,6 +109,9 @@ func (rt *ReplTracker) MakeNonMaster() {
 	case tabletenv.Polling:
 		// Run the status once to pre-initialize values.
 		rt.poller.Status()
+	}
+	if rt.forceHeartbeat {
+		rt.hw.Close()
 	}
 }
 
@@ -123,4 +135,10 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	}
 	// rt.mode == tabletenv.Poller
 	return rt.poller.Status()
+}
+
+// EnableHeartbeat enables or disables writes of heartbeat. This functionality
+// is only used by tests.
+func (rt *ReplTracker) EnableHeartbeat(enable bool) {
+	rt.hw.enableWrites(enable)
 }

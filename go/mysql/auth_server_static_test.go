@@ -207,10 +207,6 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 
-	if aStatic.getEntries()[oldStr][0].Password != oldStr {
-		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
-	}
-
 	time.Sleep(20 * time.Millisecond) // wait for signal handler
 
 	if aStatic.getEntries()[oldStr] != nil {

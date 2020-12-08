@@ -576,7 +576,7 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, commonTabletArg...)
 
-	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	err = localCluster.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	assert.Nil(t, err)
 
 	// Start MySql

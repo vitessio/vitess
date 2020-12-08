@@ -17,16 +17,15 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*subquery)(nil)
+var _ logicalPlan = (*subquery)(nil)
 
-// subquery is a builder that wraps a subquery.
+// subquery is a logicalPlan that wraps a subquery.
 // This primitive wraps any subquery that results
 // in something that's not a route. It builds a
 // 'table' for the subquery allowing higher level
@@ -36,16 +35,16 @@ var _ builder = (*subquery)(nil)
 // clause, because a route is more versatile than
 // a subquery.
 type subquery struct {
-	builderCommon
+	logicalPlanCommon
 	resultColumns []*resultColumn
 	esubquery     *engine.Subquery
 }
 
 // newSubquery builds a new subquery.
-func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
+func newSubquery(alias sqlparser.TableIdent, plan logicalPlan) (*subquery, *symtab, error) {
 	sq := &subquery{
-		builderCommon: newBuilderCommon(bldr),
-		esubquery:     &engine.Subquery{},
+		logicalPlanCommon: newBuilderCommon(plan),
+		esubquery:         &engine.Subquery{},
 	}
 
 	// Create a 'table' that represents the subquery.
@@ -55,7 +54,7 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, 
 	}
 
 	// Create column symbols based on the result column names.
-	for _, rc := range bldr.ResultColumns() {
+	for _, rc := range plan.ResultColumns() {
 		if _, ok := t.columns[rc.alias.Lowered()]; ok {
 			return nil, nil, fmt.Errorf("duplicate column names in subquery: %s", sqlparser.String(rc.alias))
 		}
@@ -68,72 +67,18 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, 
 	return sq, st, nil
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (sq *subquery) Primitive() engine.Primitive {
 	sq.esubquery.Subquery = sq.input.Primitive()
 	return sq.esubquery
 }
 
-// PushLock satisfies the builder interface.
-func (sq *subquery) PushLock(lock string) error {
-	return sq.input.PushLock(lock)
-}
-
-// First satisfies the builder interface.
-func (sq *subquery) First() builder {
-	return sq
-}
-
-// ResultColumns satisfies the builder interface.
+// ResultColumns implements the logicalPlan interface
 func (sq *subquery) ResultColumns() []*resultColumn {
 	return sq.resultColumns
 }
 
-// PushFilter satisfies the builder interface.
-func (sq *subquery) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	return errors.New("unsupported: filtering on results of cross-shard subquery")
-}
-
-// PushSelect satisfies the builder interface.
-func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
-	col, ok := expr.Expr.(*sqlparser.ColName)
-	if !ok {
-		return nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
-	}
-
-	// colNumber should already be set for subquery columns.
-	inner := col.Metadata.(*column).colNumber
-	sq.esubquery.Cols = append(sq.esubquery.Cols, inner)
-
-	// Build a new column reference to represent the result column.
-	rc = newResultColumn(expr, sq)
-	sq.resultColumns = append(sq.resultColumns, rc)
-
-	return rc, len(sq.resultColumns) - 1, nil
-}
-
-// MakeDistinct satisfies the builder interface.
-func (sq *subquery) MakeDistinct() error {
-	return errors.New("unsupported: distinct on cross-shard subquery")
-}
-
-// PushGroupBy satisfies the builder interface.
-func (sq *subquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	if (groupBy) == nil {
-		return nil
-	}
-	return errors.New("unsupported: group by on cross-shard subquery")
-}
-
-// PushOrderBy satisfies the builder interface.
-func (sq *subquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	if len(orderBy) == 0 {
-		return sq, nil
-	}
-	return newMemorySort(sq, orderBy)
-}
-
-// SupplyCol satisfies the builder interface.
+// SupplyCol implements the logicalPlan interface
 func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range sq.resultColumns {

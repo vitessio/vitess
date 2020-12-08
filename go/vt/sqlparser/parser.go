@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime/debug"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -93,6 +94,7 @@ func Parse(sql string) (Statement, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	if tokenizer.ParseTree == nil {
+		log.Infof("Empty Statement: %s", debug.Stack())
 		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
@@ -106,6 +108,8 @@ func ParseStrictDDL(sql string) (Statement, error) {
 		return nil, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {
+		log.Infof("Empty Statement DDL: %s", debug.Stack())
+
 		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
@@ -188,21 +192,29 @@ func SplitStatementToPieces(blob string) (pieces []string, err error) {
 	tkn := 0
 	var stmt string
 	stmtBegin := 0
+	emptyStatement := true
+loop:
 	for {
 		tkn, _ = tokenizer.Scan()
-		if tkn == ';' {
+		switch tkn {
+		case ';':
 			stmt = blob[stmtBegin : tokenizer.Position-2]
-			pieces = append(pieces, stmt)
+			if !emptyStatement {
+				pieces = append(pieces, stmt)
+				emptyStatement = true
+			}
 			stmtBegin = tokenizer.Position - 1
-
-		} else if tkn == 0 || tkn == eofChar {
+		case 0, eofChar:
 			blobTail := tokenizer.Position - 2
-
 			if stmtBegin < blobTail {
 				stmt = blob[stmtBegin : blobTail+1]
-				pieces = append(pieces, stmt)
+				if !emptyStatement {
+					pieces = append(pieces, stmt)
+				}
 			}
-			break
+			break loop
+		default:
+			emptyStatement = false
 		}
 	}
 

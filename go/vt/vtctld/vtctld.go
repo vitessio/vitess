@@ -179,6 +179,9 @@ func InitVtctld(ts *topo.Server) {
 	// Init workflow manager.
 	initWorkflowManager(ts)
 
+	// Init online DDL schema manager
+	initSchemaManager(ts)
+
 	// Setup reverse proxy for all vttablets through /vttablet/.
 	initVTTabletRedirection(ts)
 }

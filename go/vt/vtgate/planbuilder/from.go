@@ -20,6 +20,9 @@ import (
 	"errors"
 	"fmt"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -33,7 +36,7 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*r
 	if err := pb.processTableExprs(tableExprs); err != nil {
 		return nil, err
 	}
-	rb, ok := pb.bldr.(*route)
+	rb, ok := pb.plan.(*route)
 	if !ok {
 		return nil, errors.New("unsupported: multi-shard or vindex write statement")
 	}
@@ -43,7 +46,7 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*r
 	return rb, nil
 }
 
-// processTableExprs analyzes the FROM clause. It produces a builder
+// processTableExprs analyzes the FROM clause. It produces a logicalPlan
 // with all the routes identified.
 func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs) error {
 	if len(tableExprs) == 1 {
@@ -60,7 +63,7 @@ func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs) e
 	return pb.join(rpb, nil)
 }
 
-// processTableExpr produces a builder subtree for the given TableExpr.
+// processTableExpr produces a logicalPlan subtree for the given TableExpr.
 func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) error {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
@@ -70,8 +73,12 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) erro
 		// If it's a route, preserve the parenthesis so things
 		// don't associate differently when more things are pushed
 		// into it. FROM a, (b, c) should not become FROM a, b, c.
-		if rb, ok := pb.bldr.(*route); ok {
-			sel := rb.Select.(*sqlparser.Select)
+		if rb, ok := pb.plan.(*route); ok {
+			sel, ok := rb.Select.(*sqlparser.Select)
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rb.Select))
+			}
+
 			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
 		}
 		return err
@@ -81,7 +88,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) erro
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
 
-// processAliasedTable produces a builder subtree for the given AliasedTableExpr.
+// processAliasedTable produces a logicalPlan subtree for the given AliasedTableExpr.
 // If the expression is a subquery, then the primitive will create a table
 // for it in the symtab. If the subquery is a route, then we build a route
 // primitive with the subquery in the From clause, because a route is more
@@ -92,11 +99,11 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
-	case *sqlparser.Subquery:
+	case *sqlparser.DerivedTable:
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
 		case *sqlparser.Select:
-			if err := spb.processSelect(stmt, nil); err != nil {
+			if err := spb.processSelect(stmt, nil, ""); err != nil {
 				return err
 			}
 		case *sqlparser.Union:
@@ -107,14 +114,14 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			return fmt.Errorf("BUG: unexpected SELECT type: %T", stmt)
 		}
 
-		subroute, ok := spb.bldr.(*route)
+		subroute, ok := spb.plan.(*route)
 		if !ok {
 			var err error
-			pb.bldr, pb.st, err = newSubquery(tableExpr.As, spb.bldr)
+			pb.plan, pb.st, err = newSubquery(tableExpr.As, spb.plan)
 			if err != nil {
 				return err
 			}
-			pb.bldr.Reorder(0)
+			pb.plan.Reorder(0)
 			return nil
 		}
 
@@ -158,7 +165,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 
-		pb.bldr, pb.st = rb, st
+		pb.plan, pb.st = rb, st
 		return nil
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr.Expr)
@@ -179,7 +186,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		}
 		rb, st := newRoute(sel)
 		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
-		pb.bldr, pb.st = rb, st
+		pb.plan, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
 			alias:  alias,
@@ -196,12 +203,12 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		if !ok {
 			return fmt.Errorf("multi-column vindexes not supported")
 		}
-		pb.bldr, pb.st = newVindexFunc(alias, single)
+		pb.plan, pb.st = newVindexFunc(alias, single)
 		return nil
 	}
 
 	rb, st := newRoute(sel)
-	pb.bldr, pb.st = rb, st
+	pb.plan, pb.st = rb, st
 	if err := st.AddVSchemaTable(alias, vschemaTable, rb); err != nil {
 		return err
 	}
@@ -258,16 +265,16 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	return nil
 }
 
-// processJoin produces a builder subtree for the given Join.
+// processJoin produces a logicalPlan subtree for the given Join.
 // If the left and right nodes can be part of the same route,
 // then it's a route. Otherwise, it's a join.
 func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
 	switch ajoin.Join {
-	case sqlparser.JoinStr, sqlparser.StraightJoinStr, sqlparser.LeftJoinStr:
-	case sqlparser.RightJoinStr:
+	case sqlparser.NormalJoinType, sqlparser.StraightJoinType, sqlparser.LeftJoinType:
+	case sqlparser.RightJoinType:
 		convertToLeftJoin(ajoin)
 	default:
-		return fmt.Errorf("unsupported: %s", ajoin.Join)
+		return fmt.Errorf("unsupported: %s", ajoin.Join.ToString())
 	}
 	if err := pb.processTableExpr(ajoin.LeftExpr); err != nil {
 		return err
@@ -290,7 +297,7 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 		}
 	}
 	ajoin.LeftExpr, ajoin.RightExpr = ajoin.RightExpr, newRHS
-	ajoin.Join = sqlparser.LeftJoinStr
+	ajoin.Join = sqlparser.LeftJoinType
 }
 
 func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
@@ -303,8 +310,8 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		return err
 	}
 
-	lRoute, leftIsRoute := pb.bldr.(*route)
-	rRoute, rightIsRoute := rpb.bldr.(*route)
+	lRoute, leftIsRoute := pb.plan.(*route)
+	rRoute, rightIsRoute := rpb.plan.(*route)
 	if !leftIsRoute || !rightIsRoute {
 		return newJoin(pb, rpb, ajoin)
 	}
@@ -323,9 +330,15 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	rRoute.Redirect = lRoute
 
 	// Merge the AST.
-	sel := lRoute.Select.(*sqlparser.Select)
+	sel, ok := lRoute.Select.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(lRoute.Select))
+	}
 	if ajoin == nil {
-		rhsSel := rRoute.Select.(*sqlparser.Select)
+		rhsSel, ok := rRoute.Select.(*sqlparser.Select)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rRoute.Select))
+		}
 		sel.From = append(sel.From, rhsSel.From...)
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}

@@ -26,25 +26,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 )
-
-func TestListStreams(t *testing.T) {
-	ctx := context.Background()
-	workflow := "wrWorkflow"
-	keyspace := "target"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
-	defer env.close()
-	var logger = logutil.NewMemoryLogger()
-	wr := New(logger, env.topoServ, env.tmc)
-	//query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, message from _vt.vreplication where workflow = 'wrWorkflow' and db_name = 'vt_target'"
-
-	wr.WorkflowAction(ctx, workflow, keyspace, "ListStreams", false)
-
-}
 
 func TestVExec(t *testing.T) {
 	ctx := context.Background()
@@ -68,7 +53,8 @@ func TestVExec(t *testing.T) {
 	}
 	sort.Strings(shards)
 	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
-	plan, err := vx.buildVExecPlan()
+
+	plan, err := vx.parseAndPlan(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 
@@ -84,8 +70,8 @@ func TestVExec(t *testing.T) {
 	want := addWheres(query)
 	require.Equal(t, want, plan.parsedQuery.Query)
 
-	query = plan.parsedQuery.Query
-	vx.exec(query)
+	vx.plannedQuery = plan.parsedQuery.Query
+	vx.exec()
 
 	type TestCase struct {
 		name        string
@@ -132,7 +118,7 @@ func TestVExec(t *testing.T) {
 		errorString: errorString,
 	})
 
-	errorString = "invalid table name"
+	errorString = "table not supported by vexec"
 	testCases = append(testCases, &TestCase{
 		name:        "delete invalid-other-table",
 		query:       "delete from _vt.copy_state",
@@ -176,9 +162,11 @@ func TestVExec(t *testing.T) {
 }
 
 func TestWorkflowStatusUpdate(t *testing.T) {
-	require.Equal(t, "Error", updateState("master tablet not contactable", "Running", nil, 0))
+	require.Equal(t, "Running", updateState("for vdiff", "Running", nil, int64(time.Now().Second())))
+	require.Equal(t, "Running", updateState("", "Running", nil, int64(time.Now().Second())))
 	require.Equal(t, "Lagging", updateState("", "Running", nil, int64(time.Now().Second())-100))
 	require.Equal(t, "Copying", updateState("", "Running", []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
+	require.Equal(t, "Error", updateState("error: master tablet not contactable", "Running", nil, 0))
 }
 
 func TestWorkflowListStreams(t *testing.T) {
@@ -190,8 +178,17 @@ func TestWorkflowListStreams(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.ShowWorkflow(ctx, workflow, keyspace)
-	require.Nil(t, err)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
+	require.NoError(t, err)
+
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false)
+	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
+
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false)
+	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
+	logger.Clear()
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	require.NoError(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
 	"SourceLocation": {
@@ -236,8 +233,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Message": "",
 					"CopyState": [
 						{
-							"Table": "t",
-							"LastPK": "1"
+							"Table": "t1",
+							"LastPK": "pk1"
 						}
 					]
 				}
@@ -272,8 +269,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Message": "",
 					"CopyState": [
 						{
-							"Table": "t",
-							"LastPK": "1"
+							"Table": "t1",
+							"LastPK": "pk1"
 						}
 					]
 				}
@@ -293,7 +290,16 @@ func TestWorkflowListStreams(t *testing.T) {
 
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false)
 	require.Nil(t, err)
-	require.Equal(t, "map[Tablet{zone1-0000000200}:rows_affected:1  Tablet{zone1-0000000210}:rows_affected:1 ]", fmt.Sprintf("%v", results))
+
+	// convert map to list and sort it for comparison
+	var gotResults []string
+	for key, result := range results {
+		gotResults = append(gotResults, fmt.Sprintf("%s:%v", key.String(), result))
+	}
+	sort.Strings(gotResults)
+	wantResults := []string{"Tablet{zone1-0000000200}:rows_affected:1 ", "Tablet{zone1-0000000210}:rows_affected:1 "}
+	sort.Strings(wantResults)
+	require.ElementsMatch(t, wantResults, gotResults)
 
 	logger.Clear()
 	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true)
@@ -329,9 +335,13 @@ func TestWorkflowListAll(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	workflows, err := wr.ListAllWorkflows(ctx, keyspace)
+	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
 	require.Nil(t, err)
 	require.Equal(t, []string{workflow}, workflows)
+
+	workflows, err = wr.ListAllWorkflows(ctx, keyspace, false)
+	require.Nil(t, err)
+	require.Equal(t, []string{workflow, "wrWorkflow2"}, workflows)
 }
 
 func TestVExecValidations(t *testing.T) {
@@ -360,7 +370,7 @@ func TestVExecValidations(t *testing.T) {
 		{
 			name:        "incorrect table",
 			query:       "select * from _vt.vreplication2",
-			errorString: "invalid table name: _vt.vreplication2",
+			errorString: "table not supported by vexec: _vt.vreplication2",
 		},
 		{
 			name:        "unsupported query",
@@ -371,7 +381,7 @@ func TestVExecValidations(t *testing.T) {
 	for _, bq := range badQueries {
 		t.Run(bq.name, func(t *testing.T) {
 			vx.query = bq.query
-			plan, err := vx.buildVExecPlan()
+			plan, err := vx.parseAndPlan(ctx)
 			require.EqualError(t, err, bq.errorString)
 			require.Nil(t, plan)
 		})

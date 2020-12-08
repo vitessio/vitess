@@ -292,6 +292,16 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	// Password encryption.
 	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
 
+	// Client Session Tracking Capability.
+	if params.Flags&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		// If client asked for ClientSessionTrack, but server doesn't support it,
+		// stop right here.
+		if capabilities&CapabilityClientSessionTrack == 0 {
+			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
+		}
+		c.Capabilities |= CapabilityClientSessionTrack
+	}
+
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
 	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, characterSet, params); err != nil {
@@ -517,16 +527,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 // HandshakeResponse41.
 func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *ConnParams) error {
 	// Build our flags, with CapabilityClientSSL.
-	var flags uint32 = CapabilityClientLongPassword |
-		CapabilityClientLongFlag |
-		CapabilityClientProtocol41 |
-		CapabilityClientTransactions |
-		CapabilityClientSecureConnection |
-		CapabilityClientMultiStatements |
-		CapabilityClientMultiResults |
-		CapabilityClientPluginAuth |
-		CapabilityClientPluginAuthLenencClientData |
-		CapabilityClientSSL |
+	capabilityFlags := CapabilityFlagsSsl |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
@@ -541,13 +542,13 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		flags |= CapabilityClientConnectWithDB
+		capabilityFlags |= CapabilityClientConnectWithDB
 	}
 
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, flags)
+	pos = writeUint32(data, pos, capabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)
@@ -562,24 +563,34 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	return nil
 }
 
+// CapabilityFlags are client capability flag sent to mysql on connect
+const CapabilityFlags uint32 = CapabilityClientLongPassword |
+	CapabilityClientLongFlag |
+	CapabilityClientProtocol41 |
+	CapabilityClientTransactions |
+	CapabilityClientSecureConnection |
+	CapabilityClientMultiStatements |
+	CapabilityClientMultiResults |
+	CapabilityClientPluginAuth |
+	CapabilityClientPluginAuthLenencClientData
+
+// CapabilityFlagsSsl signals that we can handle SSL as well
+const CapabilityFlagsSsl = CapabilityFlags |
+	CapabilityClientSSL
+
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a SQLError.
 func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword []byte, characterSet uint8, params *ConnParams) error {
 	// Build our flags.
-	var flags uint32 = CapabilityClientLongPassword |
-		CapabilityClientLongFlag |
-		CapabilityClientProtocol41 |
-		CapabilityClientTransactions |
-		CapabilityClientSecureConnection |
-		CapabilityClientMultiStatements |
-		CapabilityClientMultiResults |
-		CapabilityClientPluginAuth |
-		CapabilityClientPluginAuthLenencClientData |
+	capabilityFlags := CapabilityFlags |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
 		// Pass-through ClientFoundRows flag.
-		CapabilityClientFoundRows&uint32(params.Flags)
+		CapabilityClientFoundRows&uint32(params.Flags) |
+		// If the server supported
+		// CapabilityClientSessionTrack, we also support it.
+		c.Capabilities&CapabilityClientSessionTrack
 
 	// FIXME(alainjobart) add multi statement.
 
@@ -596,7 +607,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		flags |= CapabilityClientConnectWithDB
+		capabilityFlags |= CapabilityClientConnectWithDB
 		length += lenNullString(params.DbName)
 	}
 
@@ -609,7 +620,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, flags)
+	pos = writeUint32(data, pos, capabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)

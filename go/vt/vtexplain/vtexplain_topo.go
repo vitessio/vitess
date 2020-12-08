@@ -22,7 +22,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -37,6 +36,8 @@ type ExplainTopo struct {
 
 	// Map of ks/shard to test tablet connection
 	TabletConns map[string]*explainTablet
+
+	KeyspaceShards map[string]map[string]*topodatapb.ShardReference
 
 	// Synchronization lock
 	Lock sync.Mutex
@@ -83,68 +84,31 @@ func (et *ExplainTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string
 		return nil, fmt.Errorf("no vschema for keyspace %s", keyspace)
 	}
 
-	var srvKeyspace *topodatapb.SrvKeyspace
+	shards := make([]*topodatapb.ShardReference, 0, len(et.KeyspaceShards[keyspace]))
+	for _, shard := range et.KeyspaceShards[keyspace] {
+		shards = append(shards, shard)
+	}
+
+	srvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType:      topodatapb.TabletType_MASTER,
+				ShardReferences: shards,
+			},
+			{
+				ServedType:      topodatapb.TabletType_REPLICA,
+				ShardReferences: shards,
+			},
+			{
+				ServedType:      topodatapb.TabletType_RDONLY,
+				ShardReferences: shards,
+			},
+		},
+	}
+
 	if vschema.Sharded {
-		shards := make([]*topodatapb.ShardReference, 0, et.NumShards)
-		for i := 0; i < et.NumShards; i++ {
-			kr, err := key.EvenShardsKeyRange(i, et.NumShards)
-			if err != nil {
-				return nil, err
-			}
-
-			shard := &topodatapb.ShardReference{
-				Name:     key.KeyRangeString(kr),
-				KeyRange: kr,
-			}
-			shards = append(shards, shard)
-		}
-
-		srvKeyspace = &topodatapb.SrvKeyspace{
-			ShardingColumnName: "", // exact value is ignored
-			ShardingColumnType: 0,
-			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-				{
-					ServedType:      topodatapb.TabletType_MASTER,
-					ShardReferences: shards,
-				},
-				{
-					ServedType:      topodatapb.TabletType_REPLICA,
-					ShardReferences: shards,
-				},
-				{
-					ServedType:      topodatapb.TabletType_RDONLY,
-					ShardReferences: shards,
-				},
-			},
-		}
-
-	} else {
-		// unsharded
-		kr, err := key.EvenShardsKeyRange(0, 1)
-		if err != nil {
-			return nil, err
-		}
-
-		shard := &topodatapb.ShardReference{
-			Name: key.KeyRangeString(kr),
-		}
-
-		srvKeyspace = &topodatapb.SrvKeyspace{
-			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
-				{
-					ServedType:      topodatapb.TabletType_MASTER,
-					ShardReferences: []*topodatapb.ShardReference{shard},
-				},
-				{
-					ServedType:      topodatapb.TabletType_REPLICA,
-					ShardReferences: []*topodatapb.ShardReference{shard},
-				},
-				{
-					ServedType:      topodatapb.TabletType_RDONLY,
-					ShardReferences: []*topodatapb.ShardReference{shard},
-				},
-			},
-		}
+		srvKeyspace.ShardingColumnName = "" // exact value is ignored
+		srvKeyspace.ShardingColumnType = 0
 	}
 
 	return srvKeyspace, nil

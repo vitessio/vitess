@@ -19,6 +19,7 @@ package vtgate
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -130,6 +132,82 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	if len(tsl) != 1 || !topo.TabletEquality(tsl[0].Tablet, ep1) {
 		t.Errorf("want %+v, got %+v", ep1, tsl)
 	}
+}
+
+func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
+	keyspace := "ks"
+	shard := "0"
+	cell := "local"
+	hc := discovery.NewFakeLegacyHealthCheck()
+	ts := memorytopo.NewServer("local")
+	srvTopo := srvtopotest.NewPassthroughSrvTopoServer()
+	srvTopo.TopoServer = ts
+	srvTopo.SrvKeyspaceNames = []string{keyspace}
+	srvTopo.SrvKeyspace = &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodata.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name: shard,
+					},
+				},
+			},
+			{
+				ServedType: topodata.TabletType_REPLICA,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name: shard,
+					},
+				},
+			},
+			{
+				ServedType: topodata.TabletType_RDONLY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name: shard,
+					},
+				},
+			},
+		},
+	}
+
+	dg := NewDiscoveryGateway(context.Background(), hc, srvTopo, "local", 2)
+
+	// replica should only use local ones
+	hc.Reset()
+	dg.tsc.ResetForTesting()
+	hc.AddTestTablet(cell, "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
+	hc.AddTestTablet(cell, "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_MASTER})
+	if err != nil {
+		t.Errorf("want %+v, got %+v", nil, err)
+	}
+
+	// fails if there are no available tablets for the desired TabletType
+	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_RDONLY})
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	// errors because there is no primary on  ks2
+	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second)
+	srvTopo.SrvKeyspaceNames = []string{keyspace, "ks2"}
+	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	discovery.KeyspacesToWatch = []string{keyspace}
+	// does not wait for ks2 if it's not part of the filter
+	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second)
+	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+	if err != nil {
+		t.Errorf("want %+v, got %+v", nil, err)
+	}
+
+	discovery.KeyspacesToWatch = []string{}
 }
 
 func TestShuffleTablets(t *testing.T) {

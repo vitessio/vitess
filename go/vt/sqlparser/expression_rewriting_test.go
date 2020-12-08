@@ -19,13 +19,19 @@ package sqlparser
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/sysvars"
+
 	"github.com/stretchr/testify/require"
 )
 
 type myTestCase struct {
-	in, expected                  string
-	liid, db, foundRows, rowCount bool
-	udv                           int
+	in, expected                                                      string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID bool
+	ddlStrategy                                                       bool
+	udv                                                               int
+	autocommit, clientFoundRows, skipQueryPlanCache                   bool
+	sqlSelectLimit, transactionMode, workload                         bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -54,16 +60,18 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
 		db:       true, liid: true,
 	}, {
+		// unnest database() call
 		in:       "select (select database()) from test",
-		expected: "select (select database() from dual) from test",
+		expected: "select database() as `(select database() from dual)` from test",
 		// no bindvar needs
 	}, {
+		// unnest database() call
 		in:       "select (select database() from dual) from test",
-		expected: "select (select database() from dual) from test",
+		expected: "select database() as `(select database() from dual)` from test",
 		// no bindvar needs
 	}, {
 		in:       "select (select database() from dual) from dual",
-		expected: "select (select :__vtdbname as `database()` from dual) as `(select database() from dual)` from dual",
+		expected: "select :__vtdbname as `(select database() from dual)` from dual",
 		db:       true,
 	}, {
 		in:       "select id from user where database()",
@@ -102,6 +110,51 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT lower(:__vtdbname) as `lower(database())`",
 		db:       true,
 	}, {
+		in:         "SELECT @@autocommit",
+		expected:   "SELECT :__vtautocommit as `@@autocommit`",
+		autocommit: true,
+	}, {
+		in:              "SELECT @@client_found_rows",
+		expected:        "SELECT :__vtclient_found_rows as `@@client_found_rows`",
+		clientFoundRows: true,
+	}, {
+		in:                 "SELECT @@skip_query_plan_cache",
+		expected:           "SELECT :__vtskip_query_plan_cache as `@@skip_query_plan_cache`",
+		skipQueryPlanCache: true,
+	}, {
+		in:             "SELECT @@sql_select_limit",
+		expected:       "SELECT :__vtsql_select_limit as `@@sql_select_limit`",
+		sqlSelectLimit: true,
+	}, {
+		in:              "SELECT @@transaction_mode",
+		expected:        "SELECT :__vttransaction_mode as `@@transaction_mode`",
+		transactionMode: true,
+	}, {
+		in:       "SELECT @@workload",
+		expected: "SELECT :__vtworkload as `@@workload`",
+		workload: true,
+	}, {
+		in:       "select (select 42) from dual",
+		expected: "select 42 as `(select 42 from dual)` from dual",
+	}, {
+		in:       "select * from user where col = (select 42)",
+		expected: "select * from user where col = 42",
+	}, {
+		in:       "select * from (select 42) as t", // this is not an expression, and should not be rewritten
+		expected: "select * from (select 42) as t",
+	}, {
+		in:       `select (select (select (select (select (select last_insert_id()))))) as x`,
+		expected: "select :__lastInsertId as x from dual",
+		liid:     true,
+	}, {
+		in:          `select * from user where col = @@ddl_strategy`,
+		expected:    "select * from user where col = :__vtddl_strategy",
+		ddlStrategy: true,
+	}, {
+		in:       `select * from user where col = @@read_after_write_gtid OR col = @@read_after_write_timeout OR col = @@session_track_gtids`,
+		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
+		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
+	}, {
 		in:       "SELECT a.col, b.col FROM A JOIN B USING (id)",
 		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id = B.id",
 	}, {
@@ -115,22 +168,34 @@ func TestRewrites(in *testing.T) {
 
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
 			stmt, err := Parse(tc.in)
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := RewriteAST(stmt)
-			require.NoError(t, err)
+			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
-			require.NoError(t, err, "test expectation does not parse [%s]", tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
 			s := String(expected)
-			require.Equal(t, s, String(result.AST))
-			require.Equal(t, tc.liid, result.NeedLastInsertID, "should need last insert id")
-			require.Equal(t, tc.db, result.NeedDatabase, "should need database name")
-			require.Equal(t, tc.foundRows, result.NeedFoundRows, "should need found rows")
-			require.Equal(t, tc.rowCount, result.NeedRowCount, "should need row count")
-			require.Equal(t, tc.udv, len(result.NeedUserDefinedVariables), "should need row count")
+			assert := assert.New(t)
+			assert.Equal(s, String(result.AST))
+			assert.Equal(tc.liid, result.NeedsFuncResult(LastInsertIDName), "should need last insert id")
+			assert.Equal(tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
+			assert.Equal(tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
+			assert.Equal(tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
+			assert.Equal(tc.udv, len(result.NeedUserDefinedVariables), "count of user defined variables")
+			assert.Equal(tc.autocommit, result.NeedsSysVar(sysvars.Autocommit.Name), "should need :__vtautocommit")
+			assert.Equal(tc.clientFoundRows, result.NeedsSysVar(sysvars.ClientFoundRows.Name), "should need :__vtclientFoundRows")
+			assert.Equal(tc.skipQueryPlanCache, result.NeedsSysVar(sysvars.SkipQueryPlanCache.Name), "should need :__vtskipQueryPlanCache")
+			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
+			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
+			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
+			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
+			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
+			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
+			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
 		})
 	}
 }

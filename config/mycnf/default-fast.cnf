@@ -20,3 +20,6 @@ innodb_doublewrite=0
 # https://github.com/vitessio/vitess/issues/5396
 
 sql_mode = STRICT_TRANS_TABLES
+
+# set a short heartbeat interval in order to detect failures quickly
+slave_net_timeout = 4

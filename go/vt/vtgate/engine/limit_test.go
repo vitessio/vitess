@@ -432,6 +432,49 @@ func TestLimitStreamExecute(t *testing.T) {
 	}
 }
 
+func TestOffsetStreamExecute(t *testing.T) {
+	bindVars := make(map[string]*querypb.BindVariable)
+	fields := sqltypes.MakeTestFields(
+		"col1|col2",
+		"int64|varchar",
+	)
+	inputResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"b|2",
+		"c|3",
+		"d|4",
+		"e|5",
+		"f|6",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{inputResult},
+	}
+
+	l := &Limit{
+		Offset: int64PlanValue(2),
+		Count:  int64PlanValue(3),
+		Input:  fp,
+	}
+
+	var results []*sqltypes.Result
+	err := l.StreamExecute(nil, bindVars, false, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+	wantResults := sqltypes.MakeTestStreamingResults(
+		fields,
+		"c|3",
+		"d|4",
+		"---",
+		"e|5",
+	)
+	if !reflect.DeepEqual(results, wantResults) {
+		t.Errorf("l.StreamExecute:\n%s, want\n%s", sqltypes.PrintResults(results), sqltypes.PrintResults(wantResults))
+	}
+}
+
 func TestLimitGetFields(t *testing.T) {
 	result := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(

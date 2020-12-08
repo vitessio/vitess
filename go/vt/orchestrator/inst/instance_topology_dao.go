@@ -209,36 +209,25 @@ func purgeBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, err
 	return ReadTopologyInstance(instanceKey)
 }
 
-func SetSemiSyncMaster(instanceKey *InstanceKey, enableMaster bool) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, err
+// TODO(sougou): implement count
+func SetSemiSyncMaster(instanceKey *InstanceKey, enableMaster bool) error {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, enableMaster, false); err != nil {
+		return log.Errore(err)
 	}
-	if _, err := ExecInstance(instanceKey, "set @@global.rpl_semi_sync_master_enabled=?", enableMaster); err != nil {
-		return instance, log.Errore(err)
-	}
-	return ReadTopologyInstance(instanceKey)
+	return nil
 }
 
-func SetSemiSyncReplica(instanceKey *InstanceKey, enableReplica bool) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, err
+// TODO(sougou): This function may be used later for fixing semi-sync
+func SetSemiSyncReplica(instanceKey *InstanceKey, enableReplica bool) error {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, enableReplica); err != nil {
+		return log.Errore(err)
 	}
-	if instance.SemiSyncReplicaEnabled == enableReplica {
-		return instance, nil
+	// Need to apply change by stopping starting IO thread
+	ExecInstance(instanceKey, "stop slave io_thread")
+	if _, err := ExecInstance(instanceKey, "start slave io_thread"); err != nil {
+		return log.Errore(err)
 	}
-	if _, err := ExecInstance(instanceKey, "set @@global.rpl_semi_sync_slave_enabled=?", enableReplica); err != nil {
-		return instance, log.Errore(err)
-	}
-	if instance.ReplicationIOThreadRuning {
-		// Need to apply change by stopping starting IO thread
-		ExecInstance(instanceKey, "stop slave io_thread")
-		if _, err := ExecInstance(instanceKey, "start slave io_thread"); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
-	return ReadTopologyInstance(instanceKey)
+	return nil
 }
 
 func RestartReplicationQuick(instanceKey *InstanceKey) error {
@@ -389,10 +378,6 @@ func StopReplication(instanceKey *InstanceKey) (*Instance, error) {
 	if err != nil {
 		return instance, log.Errore(err)
 	}
-
-	if !instance.IsReplica() {
-		return instance, fmt.Errorf("instance is not a replica: %+v", instanceKey)
-	}
 	_, err = ExecInstance(instanceKey, `stop slave`)
 	if err != nil {
 		// Patch; current MaxScale behavior for STOP SLAVE is to throw an error if replica already stopped.
@@ -441,20 +426,6 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 
 	if !instance.IsReplica() {
 		return instance, fmt.Errorf("instance is not a replica: %+v", instanceKey)
-	}
-
-	// If async fallback is disallowed, we'd better make sure to enable replicas to
-	// send ACKs before START SLAVE. Replica ACKing is off at mysqld startup because
-	// some replicas (those that must never be promoted) should never ACK.
-	// Note: We assume that replicas use 'skip-slave-start' so they won't
-	//       START SLAVE on their own upon restart.
-	if instance.SemiSyncEnforced {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		// Always disable master setting, in case we're converting a former master.
-		if err := EnableSemiSync(instanceKey, false, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
 	}
 
 	_, err = ExecInstance(instanceKey, `start slave`)
@@ -542,15 +513,6 @@ func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoor
 
 	log.Infof("Will start replication on %+v until coordinates: %+v", instanceKey, masterCoordinates)
 
-	if instance.SemiSyncEnforced {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		// Always disable master setting, in case we're converting a former master.
-		if err := EnableSemiSync(instanceKey, false, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
-
 	// MariaDB has a bug: a CHANGE MASTER TO statement does not work properly with prepared statement... :P
 	// See https://mariadb.atlassian.net/browse/MDEV-7640
 	// This is the reason for ExecInstance
@@ -573,47 +535,6 @@ func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoor
 		return instance, log.Errore(err)
 	}
 
-	return instance, err
-}
-
-// EnableSemiSync sets the rpl_semi_sync_(master|replica)_enabled variables
-// on a given instance.
-func EnableSemiSync(instanceKey *InstanceKey, master, replica bool) error {
-	log.Infof("instance %+v rpl_semi_sync_master_enabled: %t, rpl_semi_sync_slave_enabled: %t", instanceKey, master, replica)
-	_, err := ExecInstance(instanceKey,
-		`set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`,
-		master, replica)
-	return err
-}
-
-// ChangeMasterCredentials issues a CHANGE MASTER TO... MASTER_USER=, MASTER_PASSWORD=...
-func ChangeMasterCredentials(instanceKey *InstanceKey, masterUser string, masterPassword string) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-	if masterUser == "" {
-		return instance, log.Errorf("Empty user in ChangeMasterCredentials() for %+v", *instanceKey)
-	}
-
-	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("ChangeMasterTo: Cannot change master on: %+v because replication is running", *instanceKey)
-	}
-	log.Debugf("ChangeMasterTo: will attempt changing master credentials on %+v", *instanceKey)
-
-	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong.", *instanceKey)
-	}
-	_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?",
-		masterUser, masterPassword)
-
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-
-	log.Infof("ChangeMasterTo: Changed master credentials on %+v", *instanceKey)
-
-	instance, err = ReadTopologyInstance(instanceKey)
 	return instance, err
 }
 
@@ -661,7 +582,9 @@ func workaroundBug83713(instanceKey *InstanceKey) {
 }
 
 // ChangeMasterTo changes the given instance's master according to given input.
+// TODO(sougou): deprecate ReplicationCredentialsQuery, and all other credential discovery.
 func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinlogCoordinates *BinlogCoordinates, skipUnresolve bool, gtidHint OperationGTIDHint) (*Instance, error) {
+	user, password := config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -696,16 +619,16 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 	if instance.UsingMariaDBGTID && gtidHint != GTIDHintDeny {
 		// Keep on using GTID
 		changeMasterFunc = func() error {
-			_, err := ExecInstance(instanceKey, "change master to master_host=?, master_port=?",
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err := ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingMariaDBGTID && gtidHint == GTIDHintDeny {
 		// Make sure to not use GTID
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_use_gtid=no",
-				changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_use_gtid=no",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.IsMariaDB() && gtidHint == GTIDHintForce {
@@ -720,39 +643,39 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 			mariadbGTIDHint = "current_pos"
 		}
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_host=?, master_port=?, master_use_gtid=%s", mariadbGTIDHint),
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_user=?, master_password=?, master_host=?, master_port=?, master_use_gtid=%s", mariadbGTIDHint),
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingOracleGTID && gtidHint != GTIDHintDeny {
 		// Is Oracle; already uses GTID; keep using it.
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?",
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingOracleGTID && gtidHint == GTIDHintDeny {
 		// Is Oracle; already uses GTID
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_auto_position=0",
-				changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_auto_position=0",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.SupportsOracleGTID && gtidHint == GTIDHintForce {
 		// Is Oracle; not using GTID right now; turn into GTID
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_auto_position=1",
-				changeToMasterKey.Hostname, changeToMasterKey.Port)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_auto_position=1",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else {
 		// Normal binlog file:pos
 		changeMasterFunc = func() error {
-			_, err = ExecInstance(instanceKey, "change master to master_host=?, master_port=?, master_log_file=?, master_log_pos=?",
-				changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?",
+				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
 			return err
 		}
 	}
@@ -765,6 +688,12 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 	if err != nil {
 		return instance, log.Errore(err)
 	}
+
+	semiSync := ReplicaSemiSync(*masterKey, *instanceKey)
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
+		return instance, log.Errore(err)
+	}
+
 	WriteMasterPositionEquivalence(&originalMasterKey, &originalExecBinlogCoordinates, changeToMasterKey, masterBinlogCoordinates)
 	ResetInstanceRelaylogCoordinatesHistory(instanceKey)
 
@@ -877,7 +806,8 @@ func injectEmptyGTIDTransaction(instanceKey *InstanceKey, gtidEntry *OracleGtidS
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.InstanceDBExecContextTimeoutSeconds)*time.Second)
+	defer cancel()
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
@@ -980,36 +910,6 @@ func MasterPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinate
 	return instance, err
 }
 
-// Attempt to read and return replication credentials from the mysql.slave_master_info system table
-func ReadReplicationCredentials(instanceKey *InstanceKey) (replicationUser string, replicationPassword string, err error) {
-	if config.Config.ReplicationCredentialsQuery != "" {
-		err = ScanInstanceRow(instanceKey, config.Config.ReplicationCredentialsQuery, &replicationUser, &replicationPassword)
-		if err == nil && replicationUser == "" {
-			err = fmt.Errorf("Empty username retrieved by ReplicationCredentialsQuery")
-		}
-		if err == nil {
-			return replicationUser, replicationPassword, nil
-		}
-		log.Errore(err)
-	}
-	// Didn't get credentials from ReplicationCredentialsQuery, or ReplicationCredentialsQuery doesn't exist in the first place?
-	// We brute force our way through mysql.slave_master_info
-	{
-		query := `
-			select
-				ifnull(max(User_name), '') as user,
-				ifnull(max(User_password), '') as password
-			from
-				mysql.slave_master_info
-		`
-		err = ScanInstanceRow(instanceKey, query, &replicationUser, &replicationPassword)
-		if err == nil && replicationUser == "" {
-			err = fmt.Errorf("Empty username found in mysql.slave_master_info")
-		}
-	}
-	return replicationUser, replicationPassword, log.Errore(err)
-}
-
 // SetReadOnly sets or clears the instance's global read_only variable
 func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
@@ -1019,16 +919,6 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 
 	if *config.RuntimeCLIFlags.Noop {
 		return instance, fmt.Errorf("noop: aborting set-read-only operation on %+v; signalling error but nothing went wrong.", *instanceKey)
-	}
-
-	// If async fallback is disallowed, we're responsible for flipping the master
-	// semi-sync switch ON before accepting writes. The setting is off by default.
-	if instance.SemiSyncEnforced && !readOnly {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		if err := EnableSemiSync(instanceKey, true, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
 	}
 
 	if _, err := ExecInstance(instanceKey, "set global read_only = ?", readOnly); err != nil {
@@ -1044,16 +934,6 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 		}
 	}
 	instance, err = ReadTopologyInstance(instanceKey)
-
-	// If we just went read-only, it's safe to flip the master semi-sync switch
-	// OFF, which is the default value so that replicas can make progress.
-	if instance.SemiSyncEnforced && readOnly {
-		// Send ACK only from promotable instances.
-		sendACK := instance.PromotionRule != MustNotPromoteRule
-		if err := EnableSemiSync(instanceKey, false, sendACK); err != nil {
-			return instance, log.Errore(err)
-		}
-	}
 
 	log.Infof("instance %+v read_only: %t", instanceKey, readOnly)
 	AuditOperation("read-only", instanceKey, fmt.Sprintf("set as %t", readOnly))

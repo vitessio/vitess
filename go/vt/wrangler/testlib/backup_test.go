@@ -23,6 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/discovery"
 
 	"golang.org/x/net/context"
@@ -74,9 +78,7 @@ func TestBackupRestore(t *testing.T) {
 
 	// Initialize our temp dirs
 	root, err := ioutil.TempDir("", "backuptest")
-	if err != nil {
-		t.Fatalf("os.TempDir failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(root)
 
 	// Initialize BackupStorage
@@ -90,19 +92,11 @@ func TestBackupRestore(t *testing.T) {
 	sourceDataDir := path.Join(root, "source_data")
 	sourceDataDbDir := path.Join(sourceDataDir, "vt_db")
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
-		if err := os.MkdirAll(s, os.ModePerm); err != nil {
-			t.Fatalf("failed to create directory %v: %v", s, err)
-		}
+		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
-	if err := ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_data_1: %v", err)
-	}
-	if err := ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_log_1: %v", err)
-	}
-	if err := ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file db.opt: %v", err)
-	}
+	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
+	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a master tablet, set its master position
 	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
@@ -150,20 +144,12 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// run the backup
-	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
-		t.Fatalf("Backup failed: %v", err)
-	}
+	require.NoError(t, vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}))
 
 	// verify the full status
-	if err := sourceTablet.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Errorf("sourceTablet.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if !sourceTablet.FakeMysqlDaemon.Replicating {
-		t.Errorf("sourceTablet.FakeMysqlDaemon.Replicating not set")
-	}
-	if !sourceTablet.FakeMysqlDaemon.Running {
-		t.Errorf("sourceTablet.FakeMysqlDaemon.Running not set")
-	}
+	require.NoError(t, sourceTablet.FakeMysqlDaemon.CheckSuperQueryList())
+	assert.True(t, sourceTablet.FakeMysqlDaemon.Replicating)
+	assert.True(t, sourceTablet.FakeMysqlDaemon.Running)
 
 	// create a destination tablet, set it up so we can do restores
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
@@ -204,21 +190,59 @@ func TestBackupRestore(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	if err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */); err != nil {
-		t.Fatalf("RestoreData failed: %v", err)
-	}
-
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */))
 	// verify the full status
-	if err := destTablet.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Errorf("destTablet.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if !destTablet.FakeMysqlDaemon.Replicating {
-		t.Errorf("destTablet.FakeMysqlDaemon.Replicating not set")
-	}
-	if !destTablet.FakeMysqlDaemon.Running {
-		t.Errorf("destTablet.FakeMysqlDaemon.Running not set")
+	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
+	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
+	assert.True(t, destTablet.FakeMysqlDaemon.Running)
+
+	// Initialize mycnf, required for restore
+	masterInnodbDataDir := path.Join(root, "master_innodb_data")
+	masterInnodbLogDir := path.Join(root, "master_innodb_log")
+	masterDataDir := path.Join(root, "master_data")
+	master.TM.Cnf = &mysqlctl.Mycnf{
+		DataDir:               masterDataDir,
+		InnodbDataHomeDir:     masterInnodbDataDir,
+		InnodbLogGroupHomeDir: masterInnodbLogDir,
+		BinLogPath:            path.Join(root, "bin-logs/filename_prefix"),
+		RelayLogPath:          path.Join(root, "relay-logs/filename_prefix"),
+		RelayLogIndexPath:     path.Join(root, "relay-log.index"),
+		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
+	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES": {},
+	}
+	master.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL",
+		"FAKE SET SLAVE POSITION",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+
+	master.FakeMysqlDaemon.SetReplicationPositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
+
+	// restore master from backup
+	require.NoError(t, master.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
+	// tablet was created as MASTER, so it's baseTabletType is MASTER
+	assert.Equal(t, topodatapb.TabletType_MASTER, master.Tablet.Type)
+	assert.False(t, master.FakeMysqlDaemon.Replicating)
+	assert.True(t, master.FakeMysqlDaemon.Running)
+
+	// restore master when database already exists
+	// checkNoDb should return false
+	// so fake the necessary queries
+	master.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		"SHOW DATABASES":                      {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("vt_test_keyspace")}}},
+		"SHOW TABLES FROM `vt_test_keyspace`": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}},
+	}
+
+	require.NoError(t, master.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */), "RestoreData failed")
+	// Tablet type should not change
+	assert.Equal(t, topodatapb.TabletType_MASTER, master.Tablet.Type)
+	assert.False(t, master.FakeMysqlDaemon.Replicating)
+	assert.True(t, master.FakeMysqlDaemon.Running)
 }
 
 func TestRestoreUnreachableMaster(t *testing.T) {
@@ -252,9 +276,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 
 	// Initialize our temp dirs
 	root, err := ioutil.TempDir("", "backuptest")
-	if err != nil {
-		t.Fatalf("os.TempDir failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.RemoveAll(root)
 
 	// Initialize BackupStorage
@@ -268,19 +290,11 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	sourceDataDir := path.Join(root, "source_data")
 	sourceDataDbDir := path.Join(sourceDataDir, "vt_db")
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
-		if err := os.MkdirAll(s, os.ModePerm); err != nil {
-			t.Fatalf("failed to create directory %v: %v", s, err)
-		}
+		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
-	if err := ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_data_1: %v", err)
-	}
-	if err := ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_log_1: %v", err)
-	}
-	if err := ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file db.opt: %v", err)
-	}
+	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
+	require.NoError(t, ioutil.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	require.NoError(t, ioutil.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a master tablet, set its master position
 	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
@@ -327,9 +341,7 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	}
 
 	// run the backup
-	if err := vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}); err != nil {
-		t.Fatalf("Backup failed: %v", err)
-	}
+	require.NoError(t, vp.Run([]string{"Backup", topoproto.TabletAliasString(sourceTablet.Tablet.Alias)}))
 
 	// create a destination tablet, set it up so we can do restores
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
@@ -376,19 +388,9 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	// set a short timeout so that we don't have to wait 30 seconds
 	*topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
-	if err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */); err != nil {
-		t.Fatalf("RestoreData failed: %v", err)
-	}
-
+	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */))
 	// verify the full status
-	if err := destTablet.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Errorf("destTablet.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
-	}
-	if !destTablet.FakeMysqlDaemon.Replicating {
-		t.Errorf("destTablet.FakeMysqlDaemon.Replicating not set")
-	}
-	if !destTablet.FakeMysqlDaemon.Running {
-		t.Errorf("destTablet.FakeMysqlDaemon.Running not set")
-	}
-
+	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
+	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
+	assert.True(t, destTablet.FakeMysqlDaemon.Running)
 }
