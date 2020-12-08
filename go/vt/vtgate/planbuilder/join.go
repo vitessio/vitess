@@ -98,7 +98,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 				return err
 			}
 		case ajoin.Condition.Using != nil:
-			return errors.New("unsupported: join with USING(column_list) clause")
+			return errors.New("unsupported: join with USING(column_list) clause for complex queries")
 		}
 	}
 	lpb.plan = &join{
