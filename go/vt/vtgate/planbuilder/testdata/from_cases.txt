@@ -2221,3 +2221,40 @@
     ]
   }
 }
+
+# rails query
+"select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'"
+{
+  "QueryType": "SELECT",
+  "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,2,3,4,-1,-2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where 1 != 1",
+        "Query": "select rc.update_rule as on_update, rc.delete_rule as on_delete, rc.constraint_schema, rc.constraint_name from information_schema.referential_constraints as rc where rc.constraint_schema = database() and rc.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\":vtg1\")"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where 1 != 1",
+        "Query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as `name` from information_schema.key_column_usage as fk where fk.constraint_schema = :rc_constraint_schema and fk.constraint_name = :rc_constraint_name and fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = :__vttablename",
+        "SysTableTableName": "VARBINARY(\":vtg1\")"
+      }
+    ]
+  }
+}
