@@ -267,21 +267,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 
 		ts.wr.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
-			ts.wr.Logger().Errorf("waitForCatchup failed, printing positions and canceling migration: %v", err)
-
-			// print source and target positions to help debug failures
-			ctx := context.Background()
-			ts.forAllSources(func(source *tsSource) error {
-				pos, err := ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
-				ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.si.ShardName(), pos)
-				return err
-			})
-			ts.forAllTargets(func(target *tsTarget) error {
-				pos, err := ts.wr.tmc.MasterPosition(ctx, target.master.Tablet)
-				ts.wr.Logger().Infof("Position for target %v:%v: %v", ts.targetKeyspace, target.si.ShardName(), pos)
-				return err
-			})
-
+			ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
@@ -755,16 +741,27 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, disallowWrites)
+		if err != nil {
+			log.Infof("Error: %s", err)
+		}
+
 	} else {
 		err = ts.changeShardsAccess(ctx, ts.sourceKeyspace, ts.sourceShards(), disallowWrites)
+		if err != nil {
+			log.Infof("Error: %s", err)
+		}
 	}
 	if err != nil {
+		log.Infof("Error: %s", err)
 		return err
 	}
 	return ts.forAllSources(func(source *tsSource) error {
 		var err error
 		source.position, err = ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
 		ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.si.ShardName(), source.position)
+		if err != nil {
+			log.Infof("Error: %s", err)
+		}
 		return err
 	})
 }
