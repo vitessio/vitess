@@ -65,6 +65,15 @@ func buildDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema Conte
 		if err != nil {
 			return nil, err
 		}
+	case *sqlparser.CreateTable:
+		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+		// Remove the keyspace name as the database name might be different.
+		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", ddlStatement)
 	}
 
 	if destination == nil {
