@@ -101,7 +101,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	//defer vc.TearDown()
+	defer vc.TearDown()
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -128,7 +128,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	//defer vc.TearDown()
+	defer vc.TearDown()
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
