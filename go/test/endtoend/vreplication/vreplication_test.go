@@ -653,7 +653,36 @@ func switchWrites(t *testing.T, ksWorkflow string) {
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
 		"-filtered_replication_wait_time="+SwitchWritesTimeout, ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
+
+	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
+	debug := true
+	if debug && strings.Contains(ksWorkflow, ".p2c") {
+		fmt.Printf("------------------- START Extra debug info for a p2c SwitchWrites\n")
+		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
+		printShardPositions(vc, ksShards)
+		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+		productKs := vc.Cells[defaultCell.Name].Keyspaces["product"]
+		productTab := productKs.Shards["0"].Tablets["zone1-100"].Vttablet
+		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
+		queries := []string{
+			"select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from _vt.vreplication",
+			"select * from _vt.resharding_journal",
+		}
+		for _, tab := range tabs {
+			for _, query := range queries {
+				qr, err := tab.QueryTablet(query, "", false)
+				require.NoError(t, err)
+				fmt.Printf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n\n",
+					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
+			}
+		}
+		fmt.Printf("------------------- END Extra debug info for a p2c SwitchWrites\n")
+	}
+	if err != nil {
+		require.FailNow(t, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
+	}
 }
 
 func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {

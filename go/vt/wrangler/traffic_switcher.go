@@ -267,7 +267,21 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 
 		ts.wr.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
-			ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
+			ts.wr.Logger().Errorf("waitForCatchup failed, printing positions and canceling migration: %v", err)
+
+			// print source and target positions to help debug failures
+			ctx := context.Background()
+			ts.forAllSources(func(source *tsSource) error {
+				pos, err := ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
+				ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.si.ShardName(), pos)
+				return err
+			})
+			ts.forAllTargets(func(target *tsTarget) error {
+				pos, err := ts.wr.tmc.MasterPosition(ctx, target.master.Tablet)
+				ts.wr.Logger().Infof("Position for target %v:%v: %v", ts.targetKeyspace, target.si.ShardName(), pos)
+				return err
+			})
+
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
