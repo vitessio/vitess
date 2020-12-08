@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/spf13/cobra"
 
@@ -21,12 +20,6 @@ var (
 		Aliases: []string{"getkeyspaces"},
 		Args:    cobra.NoArgs,
 		RunE:    commandGetKeyspaces,
-	}
-	showAllKeyspacesCmd = &cobra.Command{
-		Use:     "ShowAllKeyspaces",
-		Aliases: []string{"showallkeyspaces"},
-		Args:    cobra.NoArgs,
-		RunE:    commandShowAllKeyspaces,
 	}
 )
 
@@ -54,30 +47,7 @@ func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func commandShowAllKeyspaces(cmd *cobra.Command, args []string) error {
-	resp, err := client.ShowAllKeyspaces(commandCtx, &vtctldatapb.ShowAllKeyspacesRequest{})
-	if err != nil {
-		return err
-	}
-
-	for {
-		ks, err := resp.Recv()
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("%+v\n", ks)
-	}
-
-	return nil
-}
-
 func init() {
 	rootCmd.AddCommand(getKeyspaceCmd)
 	rootCmd.AddCommand(getKeyspacesCmd)
-	rootCmd.AddCommand(showAllKeyspacesCmd)
 }
