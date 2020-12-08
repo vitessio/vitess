@@ -377,7 +377,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		return true
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA:
+	case engine.SelectUnsharded:
 		return rb.eroute.Opcode == rrb.eroute.Opcode
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
@@ -386,7 +386,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		}
 	case engine.SelectReference:
 		return true
-	case engine.SelectNext:
+	case engine.SelectNext, engine.SelectDBA:
 		return false
 	}
 	if ajoin == nil {

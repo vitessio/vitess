@@ -81,7 +81,7 @@ install: build
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
