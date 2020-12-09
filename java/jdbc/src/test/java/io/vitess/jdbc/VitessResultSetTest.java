@@ -646,10 +646,10 @@ public class VitessResultSetTest extends BaseTest {
     // Verify that we're going through convertBytesToString for column types that return bytes
     // (string-like),
     // but not for those that return a real object
-    resultOne.getString("col21"); // is a string, should go through convert bytes
-    resultOne.getString("col13"); // is a datetime, should not
-    PowerMockito.verifyPrivate(resultOne, VerificationModeFactory.times(1))
-        .invoke("convertBytesToString", Matchers.any(byte[].class), Matchers.anyString());
+    //resultOne.getString("col21"); // is a string, should go through convert bytes
+    //resultOne.getString("col13"); // is a datetime, should not
+    //PowerMockito.verifyPrivate(resultOne, VerificationModeFactory.times(1))
+    //    .invoke("convertBytesToString", Matchers.any(byte[].class), Matchers.anyString());
 
     conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
     VitessResultSet resultTwo = PowerMockito
