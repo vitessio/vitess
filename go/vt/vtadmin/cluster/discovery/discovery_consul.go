@@ -11,6 +11,7 @@ import (
 
 	consul "github.com/hashicorp/consul/api"
 
+	"vitess.io/vitess/go/trace"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -107,7 +108,14 @@ func NewConsul(cluster string, args []string) (Discovery, error) { // nolint:fun
 
 // DiscoverVTGate is part of the Discovery interface.
 func (c *ConsulDiscovery) DiscoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VTGate, error) {
-	vtgates, err := c.DiscoverVTGates(ctx, tags)
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGate")
+	defer span.Finish()
+
+	return c.discoverVTGate(ctx, tags)
+}
+
+func (c *ConsulDiscovery) discoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VTGate, error) {
+	vtgates, err := c.discoverVTGates(ctx, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +129,10 @@ func (c *ConsulDiscovery) DiscoverVTGate(ctx context.Context, tags []string) (*v
 
 // DiscoverVTGateAddr is part of the Discovery interface.
 func (c *ConsulDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string) (string, error) {
-	vtgate, err := c.DiscoverVTGate(ctx, tags)
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGateAddr")
+	defer span.Finish()
+
+	vtgate, err := c.discoverVTGate(ctx, tags)
 	if err != nil {
 		return "", err
 	}
@@ -136,6 +147,13 @@ func (c *ConsulDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string)
 
 // DiscoverVTGates is part of the Discovery interface.
 func (c *ConsulDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVTGates")
+	defer span.Finish()
+
+	return c.discoverVTGates(ctx, tags)
+}
+
+func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
 	opts := c.getQueryOptions()
 	opts.Datacenter = c.vtgateDatacenter
 
