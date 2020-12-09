@@ -37,7 +37,7 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 
 	if isTableSchema {
 		if rut.eroute.SysTableTableSchema != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_schema not supported")
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for specifying the database are not supported")
 		}
 		rut.eroute.SysTableTableSchema = out
 	} else {
@@ -70,7 +70,7 @@ func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool
 	if !ok {
 		return false, false
 	}
-	return col.Name.EqualString("table_schema"), col.Name.EqualString("table_name")
+	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name"), col.Name.EqualString("table_name")
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr, error) {
