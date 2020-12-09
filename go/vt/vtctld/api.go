@@ -615,6 +615,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		req := struct {
 			Keyspace, SQL         string
 			ReplicaTimeoutSeconds int
+			DDLStrategy           string `json:"ddl_strategy,omitempty"`
 		}{}
 		if err := unmarshalRequest(r, &req); err != nil {
 			return fmt.Errorf("can't unmarshal request: %v", err)
@@ -634,6 +635,10 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 		}
 		requestContext := fmt.Sprintf("vtctld/api:%s", apiCallUUID)
 		executor := schemamanager.NewTabletExecutor(requestContext, wr, time.Duration(req.ReplicaTimeoutSeconds)*time.Second)
+
+		if err := executor.SetDDLStrategy(req.DDLStrategy); err != nil {
+			return fmt.Errorf("error setting DDL strategy: %v", err)
+		}
 
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)

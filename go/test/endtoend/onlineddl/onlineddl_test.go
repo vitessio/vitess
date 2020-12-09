@@ -49,33 +49,41 @@ var (
 	ddlStrategyUnchanged  = "-"
 	createTable           = `
 		CREATE TABLE %s (
-		id BIGINT(20) not NULL,
-		msg varchar(64),
-		PRIMARY KEY (id)
+			id bigint(20) NOT NULL,
+			msg varchar(64),
+			PRIMARY KEY (id)
 		) ENGINE=InnoDB;`
 	// To verify non online-DDL behavior
 	alterTableNormalStatement = `
 		ALTER TABLE %s
-		ADD COLUMN non_online INT UNSIGNED NOT NULL`
+			ADD COLUMN non_online int UNSIGNED NOT NULL`
 	// A trivial statement which must succeed and does not change the schema
 	alterTableTrivialStatement = `
 		ALTER TABLE %s
-		ENGINE=InnoDB`
+			ENGINE=InnoDB`
 	// The following statement is valid
 	alterTableSuccessfulStatement = `
 		ALTER TABLE %s
-		MODIFY id BIGINT UNSIGNED NOT NULL,
-		ADD COLUMN ghost_col INT NOT NULL,
-		ADD INDEX idx_msg(msg)`
+			MODIFY id bigint UNSIGNED NOT NULL,
+			ADD COLUMN ghost_col int NOT NULL,
+			ADD INDEX idx_msg(msg)`
 	// The following statement will fail because gh-ost requires some shared unique key
 	alterTableFailedStatement = `
 		ALTER TABLE %s
-		DROP PRIMARY KEY,
-		DROP COLUMN ghost_col`
+			DROP PRIMARY KEY,
+			DROP COLUMN ghost_col`
 	// We will run this query with "gh-ost --max-load=Threads_running=1"
 	alterTableThrottlingStatement = `
 		ALTER TABLE %s
-		DROP COLUMN ghost_col`
+			DROP COLUMN ghost_col`
+	onlineDDLCreateTableStatement = `
+		CREATE TABLE %s (
+			id bigint NOT NULL,
+			online_ddl_create_col INT NOT NULL,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB;`
+	onlineDDLDropTableStatement = `
+		DROP TABLE %s`
 )
 
 func fullWordUUIDRegexp(uuid, searchWord string) *regexp.Regexp {
@@ -157,29 +165,29 @@ func TestSchemaChange(t *testing.T) {
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
 	{
-		_ = testAlterTable(t, alterTableNormalStatement, string(schema.DDLStrategyNormal), "vtctl", "non_online")
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyNormal), "vtctl", "non_online")
 	}
 	{
-		uuid := testAlterTable(t, alterTableSuccessfulStatement, ddlStrategyUnchanged, "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, ddlStrategyUnchanged, "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
 	}
 	{
-		uuid := testAlterTable(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
 	}
 	{
-		uuid := testAlterTable(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
 		checkCancelMigration(t, uuid, true)
 		time.Sleep(2 * time.Second)
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 	}
 	{
-		uuid := testAlterTable(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, true)
@@ -204,6 +212,18 @@ func TestSchemaChange(t *testing.T) {
 		wg.Wait()
 		checkCancelAllMigrations(t, count)
 	}
+	{
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtctl", "")
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
+	}
+	{
+		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "gh-ost", "vtctl", "online_ddl_create_col")
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
+	}
 }
 
 func testWithInitialSchema(t *testing.T) {
@@ -219,8 +239,8 @@ func testWithInitialSchema(t *testing.T) {
 	checkTables(t, totalTableCount)
 }
 
-// testAlterTable runs an online DDL, ALTER statement
-func testAlterTable(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
+// testOnlineDDLStatement runs an online DDL, ALTER statement
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
@@ -245,7 +265,9 @@ func testAlterTable(t *testing.T, alterStatement string, ddlStrategy string, exe
 		time.Sleep(time.Second * 20)
 	}
 
-	checkMigratedTable(t, tableName, expectColumn)
+	if expectColumn != "" {
+		checkMigratedTable(t, tableName, expectColumn)
+	}
 	return uuid
 }
 
