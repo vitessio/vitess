@@ -368,7 +368,7 @@ func (rb *route) isSingleShard() bool {
 // JoinCanMerge, SubqueryCanMerge and unionCanMerge have subtly different behaviors.
 // The difference in behavior is around SelectReference.
 // It's not worth trying to reuse the code between them.
-func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr) bool {
+func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr, where sqlparser.Expr) bool {
 	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
 		return false
 	}
@@ -377,7 +377,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		return true
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA:
+	case engine.SelectUnsharded:
 		return rb.eroute.Opcode == rrb.eroute.Opcode
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
@@ -388,6 +388,22 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		return true
 	case engine.SelectNext:
 		return false
+	case engine.SelectDBA:
+		if rrb.eroute.Opcode != engine.SelectDBA {
+			return false
+		}
+		if where == nil {
+			return true
+		}
+		hasRuntimeRoutingPredicates := false
+		sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			col, ok := node.(*sqlparser.ColName)
+			if ok {
+				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)
+			}
+			return !hasRuntimeRoutingPredicates, nil
+		}, where)
+		return !hasRuntimeRoutingPredicates
 	}
 	if ajoin == nil {
 		return false

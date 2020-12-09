@@ -21,6 +21,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -337,6 +340,20 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	return &noHints
 }
 
+//TableName returns a TableName pointing to this table expr
+func (node *AliasedTableExpr) TableName() (TableName, error) {
+	if !node.As.IsEmpty() {
+		return TableName{Name: node.As}, nil
+	}
+
+	tableName, ok := node.Expr.(TableName)
+	if !ok {
+		return TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: the AST has changed. This should not be possible")
+	}
+
+	return tableName, nil
+}
+
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.
@@ -506,6 +523,17 @@ func NewColIdent(str string) ColIdent {
 func NewColName(str string) *ColName {
 	return &ColName{
 		Name: NewColIdent(str),
+	}
+}
+
+// NewColNameWithQualifier makes a new ColName pointing to a specific table
+func NewColNameWithQualifier(identifier string, table TableName) *ColName {
+	return &ColName{
+		Name: NewColIdent(identifier),
+		Qualifier: TableName{
+			Name:      NewTableIdent(table.Name.String()),
+			Qualifier: NewTableIdent(table.Qualifier.String()),
+		},
 	}
 }
 

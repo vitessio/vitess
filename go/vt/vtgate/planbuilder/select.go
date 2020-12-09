@@ -118,7 +118,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 		return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSSyntaxErrorOrAccessViolation, "Incorrect usage/placement of 'INTO'")
 	}
 
-	if err := pb.processTableExprs(sel.From); err != nil {
+	var where sqlparser.Expr
+	if sel.Where != nil {
+		where = sel.Where.Expr
+	}
+	if err := pb.processTableExprs(sel.From, where); err != nil {
 		return err
 	}
 

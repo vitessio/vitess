@@ -637,7 +637,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "create table a (\n\ta int,\n\tb varchar(8)\n)"
 }
 
 # create index
