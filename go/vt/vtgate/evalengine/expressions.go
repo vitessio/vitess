@@ -327,3 +327,15 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 func (e *EvalResult) debugString() string {
 	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
 }
+
+// AreExprEqual checks if the provided Expr are the same or not
+func AreExprEqual(expr1 Expr, expr2 Expr) bool {
+	// Check the types of the two expressions, if they don't match then the two are not equal
+	if fmt.Sprintf("%T", expr1) != fmt.Sprintf("%T", expr2) {
+		return false
+	}
+	if expr1.String() == expr2.String() {
+		return true
+	}
+	return false
+}
