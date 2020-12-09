@@ -2464,3 +2464,22 @@
     "SysTableTableSchema": "VARBINARY(\"table_schema\")"
   }
 }
+
+# two predicates specifying the database for the same table work if the database is the same
+"SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.table_schema = 'a'"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.table_schema = 'a'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
+    "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
+    "SysTableTableSchema": "VARBINARY(\"a\")"
+  }
+}
+
