@@ -70,7 +70,15 @@ func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool
 	if !ok {
 		return false, false
 	}
-	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name"), col.Name.EqualString("table_name")
+	return isDbNameCol(col), isTableNameCol(col)
+}
+
+func isDbNameCol(col *sqlparser.ColName) bool {
+	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name")
+}
+
+func isTableNameCol(col *sqlparser.ColName) bool {
+	return col.Name.EqualString("table_name")
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr, error) {

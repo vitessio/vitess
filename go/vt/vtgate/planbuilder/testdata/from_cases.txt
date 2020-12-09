@@ -301,32 +301,14 @@
   "QueryType": "SELECT",
   "Original": "select a.id,b.id from information_schema.a as a, information_schema.b as b",
   "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
-    "TableName": "_",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select a.id from information_schema.a as a where 1 != 1",
-        "Query": "select a.id from information_schema.a as a"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select b.id from information_schema.b as b where 1 != 1",
-        "Query": "select b.id from information_schema.b as b"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select a.id, b.id from information_schema.a as a, information_schema.b as b where 1 != 1",
+    "Query": "select a.id, b.id from information_schema.a as a, information_schema.b as b"
   }
 }
 
@@ -2188,37 +2170,19 @@
 }
 
 # information schema join
-"select 42 from information_schema.a join information_schema.b"
+"select * from information_schema.a join information_schema.b"
 {
   "QueryType": "SELECT",
-  "Original": "select 42 from information_schema.a join information_schema.b",
+  "Original": "select * from information_schema.a join information_schema.b",
   "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "TableName": "_",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 42 from information_schema.a where 1 != 1",
-        "Query": "select 42 from information_schema.a"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from information_schema.b where 1 != 1",
-        "Query": "select 1 from information_schema.b"
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from information_schema.a join information_schema.b where 1 != 1",
+    "Query": "select * from information_schema.a join information_schema.b"
   }
 }
 
