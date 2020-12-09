@@ -18,7 +18,7 @@ import (
 // ConsulDiscovery implements the Discovery interface for consul.
 type ConsulDiscovery struct {
 	cluster      string
-	client       *consul.Client
+	client       ConsulClient
 	queryOptions *consul.QueryOptions
 
 	/* misc options */
@@ -51,7 +51,7 @@ func NewConsul(cluster string, args []string) (Discovery, error) { // nolint:fun
 
 	disco := &ConsulDiscovery{
 		cluster:      cluster,
-		client:       c,
+		client:       &consulClient{c},
 		queryOptions: qopts,
 	}
 
@@ -207,6 +207,32 @@ func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string) ([]*
 // If we were to set it directly, we'd need a mutex to guard against concurrent
 // vtgate and (soon) vtctld queries.
 func (c *ConsulDiscovery) getQueryOptions() consul.QueryOptions {
+	if c.queryOptions == nil {
+		return consul.QueryOptions{}
+	}
+
 	opts := *c.queryOptions
+
 	return opts
+}
+
+// ConsulClient defines an interface for the subset of the consul API used by
+// discovery, so we can swap in an implementation for testing.
+type ConsulClient interface {
+	Health() ConsulHealth
+}
+
+// ConsulHealth defines an interface for the subset of the (*consul.Health) struct
+// used by discovery, so we can swap in an implementation for testing.
+type ConsulHealth interface {
+	ServiceMultipleTags(service string, tags []string, passingOnly bool, q *consul.QueryOptions) ([]*consul.ServiceEntry, *consul.QueryMeta, error) // nolint:lll
+}
+
+// consulClient is our shim wrapper around the upstream consul client.
+type consulClient struct {
+	*consul.Client
+}
+
+func (c *consulClient) Health() ConsulHealth {
+	return c.Client.Health()
 }
