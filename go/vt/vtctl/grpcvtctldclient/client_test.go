@@ -45,17 +45,20 @@ func TestGetKeyspace(t *testing.T) {
 		client, err := vtctldclient.New("grpc", addr)
 		require.NoError(t, err)
 
-		expected := &vtctldatapb.Keyspace{
-			Name: "testkeyspace",
-			Keyspace: &topodatapb.Keyspace{
-				ShardingColumnName: "col1",
+		expected := &vtctldatapb.GetKeyspaceResponse{
+			Keyspace: &vtctldatapb.Keyspace{
+				Name: "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{
+					ShardingColumnName: "col1",
+				},
 			},
 		}
-		in := *expected.Keyspace
+		in := *expected.Keyspace.Keyspace
 
-		ts.CreateKeyspace(ctx, expected.Name, &in)
+		err = ts.CreateKeyspace(ctx, expected.Keyspace.Name, &in)
+		require.NoError(t, err)
 
-		resp, err := client.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Name})
+		resp, err := client.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 		assert.NoError(t, err)
 		assert.Equal(t, expected, resp)
 

@@ -19,15 +19,17 @@ func TestGetKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	vtctld := NewVtctldServer(ts)
 
-	expected := &vtctldatapb.Keyspace{
-		Name: "testkeyspace",
-		Keyspace: &topodatapb.Keyspace{
-			ShardingColumnName: "col1",
+	expected := &vtctldatapb.GetKeyspaceResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name: "testkeyspace",
+			Keyspace: &topodatapb.Keyspace{
+				ShardingColumnName: "col1",
+			},
 		},
 	}
-	addKeyspace(ctx, t, ts, expected)
+	addKeyspace(ctx, t, ts, expected.Keyspace)
 
-	ks, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Name})
+	ks, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 	assert.NoError(t, err)
 	assert.Equal(t, expected, ks)
 
