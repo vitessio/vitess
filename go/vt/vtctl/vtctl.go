@@ -2513,8 +2513,12 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				string(schema.OnlineDDLStatusFailed):
 				condition = fmt.Sprintf("migration_status='%s'", arg)
 			default:
-				uuid = arg
-				condition = fmt.Sprintf("migration_uuid='%s'", uuid)
+				if schema.IsOnlineDDLUUID(arg) {
+					uuid = arg
+					condition = fmt.Sprintf("migration_uuid='%s'", uuid)
+				} else {
+					condition = fmt.Sprintf("migration_context='%s'", arg)
+				}
 			}
 			query = fmt.Sprintf(`select
 				shard, mysql_schema, mysql_table, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status 
