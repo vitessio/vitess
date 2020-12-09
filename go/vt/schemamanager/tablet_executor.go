@@ -157,9 +157,6 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(ddl sqlparser.DDLStatement) (isOnl
 	if ddl == nil {
 		return false, strategy, options
 	}
-	if ddl.GetAction() != sqlparser.AlterDDLAction {
-		return false, strategy, options
-	}
 	strategy, options, _ = schema.ParseDDLStrategy(exec.ddlStrategy)
 	if strategy != schema.DDLStrategyNormal {
 		return true, strategy, options
@@ -260,7 +257,14 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		tableName := ""
 		switch ddl := stat.(type) {
 		case sqlparser.DDLStatement:
-			tableName = ddl.GetTable().Name.String()
+			switch ddl.GetAction() {
+			case sqlparser.DropDDLAction:
+				// TODO (shlomi): break into distinct per-table DROP statements; on a future PR where
+				// we implement lazy DROP TABLE on Online DDL
+				tableName = ddl.GetFromTables()[0].Name.String()
+			default:
+				tableName = ddl.GetTable().Name.String()
+			}
 			isOnlineDDL, strategy, options = exec.isOnlineSchemaDDL(ddl)
 		}
 		exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)

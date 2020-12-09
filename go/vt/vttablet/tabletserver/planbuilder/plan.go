@@ -67,6 +67,8 @@ const (
 	PlanShowTables
 	// PlanLoad is for Load data statements
 	PlanLoad
+	PlanLockTables
+	PlanUnlockTables
 	NumPlans
 )
 
@@ -93,6 +95,8 @@ var planName = []string{
 	"RollbackSavepoint",
 	"ShowTables",
 	"Load",
+	"LockTables",
+	"UnlockTables",
 }
 
 func (pt PlanType) String() string {

@@ -1683,7 +1683,7 @@
 
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
-"two predicates for table_schema not supported"
+"two predicates for specifying the database are not supported"
 
 # information_schema query using database() func
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
