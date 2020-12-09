@@ -2554,9 +2554,9 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 
 // Format formats the LockTables node.
 func (node *LockTables) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "lock tables %v %v", node.Tables[0].Table, node.Tables[1].Lock)
+	buf.astPrintf(node, "lock tables %v %s", node.Tables[0].Table, node.Tables[0].Lock.ToString())
 	for i := 1; i < len(node.Tables); i++ {
-		buf.astPrintf(node, ", %v %v", node.Tables)
+		buf.astPrintf(node, ", %v %s", node.Tables[i].Table, node.Tables[i].Lock.ToString())
 	}
 }
 
