@@ -136,6 +136,7 @@ func skipToEnd(yylex interface{}) {
   alterDatabase  *AlterDatabase
   collateAndCharset CollateAndCharset
   collateAndCharsets []CollateAndCharset
+  createTable      *CreateTable
   createView	  *CreateView
 }
 
@@ -209,7 +210,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
 %token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS
 
 // SET tokens
@@ -245,7 +246,8 @@ func skipToEnd(yylex interface{}) {
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <ddl> create_table_prefix rename_list
+%type <ddl> rename_list
+%type <createTable> create_table_prefix
 %type <createIndex> create_index_prefix
 %type <createView> create_view_prefix
 %type <createDatabase> create_database_prefix
@@ -700,12 +702,14 @@ create_statement:
   create_table_prefix table_spec
   {
     $1.TableSpec = $2
+    $1.FullyParsed = true
     $$ = $1
   }
 | create_table_prefix create_like
   {
     // Create table [name] like [name]
     $1.OptLike = $2
+    $1.FullyParsed = true
     $$ = $1
   }
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
@@ -784,7 +788,7 @@ vindex_param:
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateDDLAction, Table: $4}
+    $$ = &CreateTable{Table: $4, IfNotExists: $3}
     setDDL(yylex, $$)
   }
 
@@ -1838,6 +1842,11 @@ show_statement:
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW DATABASES like_opt
+  {
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+  }
+| SHOW SCHEMAS like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $3}
     $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
@@ -4095,6 +4104,7 @@ reserved_keyword:
 | RIGHT
 | ROW_NUMBER
 | SCHEMA
+| SCHEMAS
 | SELECT
 | SEPARATOR
 | SET

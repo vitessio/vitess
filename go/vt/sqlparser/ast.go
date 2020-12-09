@@ -297,6 +297,15 @@ type (
 		FullyParsed bool
 	}
 
+	// CreateTable represents a CREATE TABLE statement.
+	CreateTable struct {
+		Table       TableName
+		IfNotExists bool
+		TableSpec   *TableSpec
+		OptLike     *OptLike
+		FullyParsed bool
+	}
+
 	// CreateView represents a CREATE VIEW query
 	CreateView struct {
 		ViewName    TableName
@@ -406,11 +415,13 @@ func (*Load) iStatement()              {}
 func (*CreateIndex) iStatement()       {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
+func (*CreateTable) iStatement()       {}
 func (*CreateView) iStatement()        {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
 func (*CreateView) iDDLStatement()  {}
+func (*CreateTable) iDDLStatement() {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -423,12 +434,22 @@ func (node *CreateIndex) IsFullyParsed() bool {
 }
 
 // IsFullyParsed implements the DDLStatement interface
+func (node *CreateTable) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// IsFullyParsed implements the DDLStatement interface
 func (node *CreateView) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
 // GetTable implements the DDLStatement interface
 func (node *CreateIndex) GetTable() TableName {
+	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *CreateTable) GetTable() TableName {
 	return node.Table
 }
 
@@ -453,12 +474,22 @@ func (node *CreateIndex) GetAction() DDLAction {
 }
 
 // GetAction implements the DDLStatement interface
+func (node *CreateTable) GetAction() DDLAction {
+	return CreateDDLAction
+}
+
+// GetAction implements the DDLStatement interface
 func (node *CreateView) GetAction() DDLAction {
 	return CreateDDLAction
 }
 
 // GetOptLike implements the DDLStatement interface
 func (node *DDL) GetOptLike() *OptLike {
+	return node.OptLike
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *CreateTable) GetOptLike() *OptLike {
 	return node.OptLike
 }
 
@@ -474,6 +505,11 @@ func (node *CreateView) GetOptLike() *OptLike {
 
 // GetTableSpec implements the DDLStatement interface
 func (node *DDL) GetTableSpec() *TableSpec {
+	return node.TableSpec
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
 }
 
@@ -498,6 +534,11 @@ func (node *CreateIndex) GetVindexSpec() *VindexSpec {
 }
 
 // GetVindexSpec implements the DDLStatement interface
+func (node *CreateTable) GetVindexSpec() *VindexSpec {
+	return nil
+}
+
+// GetVindexSpec implements the DDLStatement interface
 func (node *CreateView) GetVindexSpec() *VindexSpec {
 	return nil
 }
@@ -509,6 +550,11 @@ func (node *DDL) GetFromTables() TableNames {
 
 // GetFromTables implements the DDLStatement interface
 func (node *CreateIndex) GetFromTables() TableNames {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *CreateTable) GetFromTables() TableNames {
 	return nil
 }
 
@@ -532,6 +578,11 @@ func (node *CreateView) GetToTables() TableNames {
 	return nil
 }
 
+// GetToTables implements the DDLStatement interface
+func (node *CreateTable) GetToTables() TableNames {
+	return nil
+}
+
 // GetAutoIncSpec implements the DDLStatement interface
 func (node *DDL) GetAutoIncSpec() *AutoIncSpec {
 	return node.AutoIncSpec
@@ -539,6 +590,11 @@ func (node *DDL) GetAutoIncSpec() *AutoIncSpec {
 
 // GetAutoIncSpec implements the DDLStatement interface
 func (node *CreateIndex) GetAutoIncSpec() *AutoIncSpec {
+	return nil
+}
+
+// GetAutoIncSpec implements the DDLStatement interface
+func (node *CreateTable) GetAutoIncSpec() *AutoIncSpec {
 	return nil
 }
 
@@ -554,6 +610,11 @@ func (node *DDL) GetVindexCols() []ColIdent {
 
 // GetVindexCols implements the DDLStatement interface
 func (node *CreateIndex) GetVindexCols() []ColIdent {
+	return nil
+}
+
+// GetVindexCols implements the DDLStatement interface
+func (node *CreateTable) GetVindexCols() []ColIdent {
 	return nil
 }
 
@@ -579,6 +640,11 @@ func (node *CreateIndex) AffectedTables() TableNames {
 }
 
 // AffectedTables implements DDLStatement.
+func (node *CreateTable) AffectedTables() TableNames {
+	return TableNames{node.Table}
+}
+
+// AffectedTables implements DDLStatement.
 func (node *CreateView) AffectedTables() TableNames {
 	return TableNames{node.ViewName}
 }
@@ -591,6 +657,12 @@ func (node *CreateIndex) SetTable(qualifier string, name string) {
 
 // SetTable implements DDLStatement.
 func (node *DDL) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *CreateTable) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
 	node.Table.Name = NewTableIdent(name)
 }
@@ -1752,7 +1824,7 @@ func (node *ShowColumns) Format(buf *TrackedBuffer) {
 func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
+		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
@@ -2520,6 +2592,17 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 			buf.WriteString(createOption.Type.ToString())
 			buf.WriteString(" " + createOption.Value)
 		}
+	}
+}
+
+// Format formats the node.
+func (node *CreateTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "create table %v", node.Table)
+	if node.OptLike != nil {
+		buf.astPrintf(node, " %v", node.OptLike)
+	}
+	if node.TableSpec != nil {
+		buf.astPrintf(node, " %v", node.TableSpec)
 	}
 }
 
