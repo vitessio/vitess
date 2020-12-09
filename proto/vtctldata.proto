@@ -48,6 +48,10 @@ message GetKeyspaceRequest {
   string keyspace = 1;
 }
 
+message GetKeyspaceResponse {
+  Keyspace keyspace = 1;
+}
+
 message Keyspace {
   string name = 1;
   topodata.Keyspace keyspace = 2;
