@@ -19,10 +19,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/tlstest"
 
@@ -60,6 +63,47 @@ func TestRunsVschemaMigrations(t *testing.T) {
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on test_table1 add vindex my_vdx (id)")
 	assert.NoError(t, err)
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table1", vindex: "my_vdx", vindexType: "hash", column: "id"})
+}
+
+func TestCanVtGateExecute(t *testing.T) {
+	cluster, err := startCluster()
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+	args := os.Args
+	defer resetFlags(args)
+
+	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
+	assert.NoError(t, err)
+	defer client.Close()
+	stream, err := client.ExecuteVtctlCommand(
+		context.Background(),
+		[]string{
+			"VtGateExecute",
+			"-server",
+			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
+			"select 'success';",
+		},
+		30*time.Second,
+	)
+	assert.NoError(t, err)
+
+	var b strings.Builder
+	b.Grow(1024)
+
+Out:
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			b.WriteString(e.Value)
+		case io.EOF:
+			break Out
+		default:
+			assert.FailNow(t, err.Error())
+		}
+	}
+
+	assert.Contains(t, b.String(), "success")
 }
 
 func TestMtlsAuth(t *testing.T) {
@@ -103,7 +147,7 @@ func TestMtlsAuth(t *testing.T) {
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
 }
 
-func TestMtlsAuthUnaothorizedFails(t *testing.T) {
+func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	// Our test root.
 	root, err := ioutil.TempDir("", "tlstest")
 	if err != nil {
