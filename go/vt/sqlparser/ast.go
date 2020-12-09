@@ -372,19 +372,24 @@ type (
 	// the full AST for the statement.
 	OtherAdmin struct{}
 
+	// LockType is an enum for Lock Types
 	LockType int8
 
+	// TableAndLockType contains table and lock association
 	TableAndLockType struct {
-		Table TableName
+		Table TableExpr
 		Lock  LockType
 	}
 
-	TableAndLockTypes []TableAndLockType
+	// TableAndLockTypes is a slice of TableAndLockType
+	TableAndLockTypes []*TableAndLockType
 
+	// LockTables represents the lock statement
 	LockTables struct {
 		Tables TableAndLockTypes
 	}
 
+	// UnlockTables represents the unlock statement
 	UnlockTables struct{}
 )
 

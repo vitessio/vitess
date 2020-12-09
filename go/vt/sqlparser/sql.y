@@ -137,6 +137,9 @@ func skipToEnd(yylex interface{}) {
   collateAndCharset CollateAndCharset
   collateAndCharsets []CollateAndCharset
   createTable      *CreateTable
+  tableAndLockTypes []*TableAndLockType
+  tableAndLockType *TableAndLockType
+  lockType LockType
 }
 
 %token LEX_ERROR
@@ -2214,7 +2217,7 @@ lock_table_list:
 lock_table:
   aliased_table_name lock_type
   {
-    $$ = TableAndLockType{$1, $2}
+    $$ = &TableAndLockType{Table:$1, Lock:$2}
   }
 
 lock_type:
