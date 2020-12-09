@@ -127,7 +127,16 @@ create table t7_xxhash_idx(
 	phone bigint,
 	keyspace_id varbinary(50),
 	primary key(phone, keyspace_id)
-) Engine=InnoDB;`
+) Engine=InnoDB;
+
+create table t7_fk(
+	id bigint,
+	t7_uid varchar(50),
+    primary key(id),
+    CONSTRAINT t7_fk_ibfk_1 foreign key (t7_uid) references t7_xxhash(uid)
+    on delete set null on update cascade
+) Engine=InnoDB;
+`
 
 	VSchema = `
 {
@@ -350,6 +359,14 @@ create table t7_xxhash_idx(
       "column_vindexes": [
         {
           "column": "phone",
+          "name": "unicode_loose_xxhash"
+        }
+      ]
+    },
+	"t7_fk": {
+      "column_vindexes": [
+        {
+          "column": "t7_uid",
           "name": "unicode_loose_xxhash"
         }
       ]

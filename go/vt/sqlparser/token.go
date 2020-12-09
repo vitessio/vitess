@@ -346,6 +346,7 @@ var keywords = map[string]int{
 	"s3":                  S3,
 	"savepoint":           SAVEPOINT,
 	"schema":              SCHEMA,
+	"schemas":             SCHEMAS,
 	"second_microsecond":  UNUSED,
 	"security":            SECURITY,
 	"select":              SELECT,
