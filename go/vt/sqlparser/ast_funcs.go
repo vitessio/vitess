@@ -1182,6 +1182,22 @@ func (node CollateAndCharsetType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
+func (ty LockType) ToString() string {
+	switch ty {
+	case Read:
+		return ReadStr
+	case ReadLocal:
+		return ReadLocalStr
+	case Write:
+		return WriteStr
+	case LowPriorityWrite:
+		return LowPriorityWriteStr
+	default:
+		return "Unknown LockType"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
