@@ -745,12 +745,16 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		err = ts.changeShardsAccess(ctx, ts.sourceKeyspace, ts.sourceShards(), disallowWrites)
 	}
 	if err != nil {
+		log.Warningf("Error: %s", err)
 		return err
 	}
 	return ts.forAllSources(func(source *tsSource) error {
 		var err error
 		source.position, err = ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
 		ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.si.ShardName(), source.position)
+		if err != nil {
+			log.Warningf("Error: %s", err)
+		}
 		return err
 	})
 }

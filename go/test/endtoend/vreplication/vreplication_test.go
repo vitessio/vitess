@@ -223,7 +223,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	switchWrites(t, ksWorkflow)
 	ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 	printShardPositions(vc, ksShards)
-	insertQuery2 := "insert into customer(name) values('tempCustomer2')"
+	insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
 	matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
 	require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
@@ -232,6 +232,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 	insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" //ID 102, hence due to reverse_bits in shard -80
 	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
+	time.Sleep(1 * time.Second) // wait for vreplication to catchup
+
 	reverseKsWorkflow := "product.p2c_reverse"
 	if testReverse {
 		//Reverse Replicate
@@ -246,6 +248,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1))
 		insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
+
+		time.Sleep(1 * time.Second) // wait for vreplication to catchup
 
 		//Go forward again
 		switchReads(t, allCellNames, ksWorkflow)
@@ -371,7 +375,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
-	counts := map[string]int{"zone1-1000": 7, "zone1-1100": 9, "zone1-1200": 5}
+	counts := map[string]int{"zone1-1000": 8, "zone1-1100": 8, "zone1-1200": 5}
 	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts, nil, nil, "")
 }
 
@@ -653,7 +657,37 @@ func switchWrites(t *testing.T, ksWorkflow string) {
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
 		"-filtered_replication_wait_time="+SwitchWritesTimeout, ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
+
+	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
+	debug := true
+	if debug && strings.Contains(ksWorkflow, ".p2c") {
+		fmt.Printf("------------------- START Extra debug info for a p2c SwitchWrites\n")
+		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
+		printShardPositions(vc, ksShards)
+		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+		productKs := vc.Cells[defaultCell.Name].Keyspaces["product"]
+		productTab := productKs.Shards["0"].Tablets["zone1-100"].Vttablet
+		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
+		queries := []string{
+			"select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from _vt.vreplication",
+			"select * from _vt.copy_state",
+			"select * from _vt.resharding_journal",
+		}
+		for _, tab := range tabs {
+			for _, query := range queries {
+				qr, err := tab.QueryTablet(query, "", false)
+				require.NoError(t, err)
+				fmt.Printf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n\n",
+					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
+			}
+		}
+		fmt.Printf("------------------- END Extra debug info for a p2c SwitchWrites\n")
+	}
+	if err != nil {
+		require.FailNow(t, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
+	}
 }
 
 func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {
