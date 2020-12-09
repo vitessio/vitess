@@ -316,7 +316,6 @@ type (
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
-		FullyParsed bool
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -440,7 +439,7 @@ func (node *CreateTable) IsFullyParsed() bool {
 
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateView) IsFullyParsed() bool {
-	return node.FullyParsed
+	return true
 }
 
 // GetTable implements the DDLStatement interface
@@ -2622,10 +2621,8 @@ func (node *CreateView) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " sql security %s", node.Security)
 	}
 	buf.astPrintf(node, " view %v", node.ViewName)
-	if node.FullyParsed {
-		buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
-		if node.CheckOption != "" {
-			buf.astPrintf(node, " with %s check option", node.CheckOption)
-		}
+	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
+	if node.CheckOption != "" {
+		buf.astPrintf(node, " with %s check option", node.CheckOption)
 	}
 }

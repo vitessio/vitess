@@ -137,7 +137,6 @@ func skipToEnd(yylex interface{}) {
   collateAndCharset CollateAndCharset
   collateAndCharsets []CollateAndCharset
   createTable      *CreateTable
-  createView	  *CreateView
 }
 
 %token LEX_ERROR
@@ -249,7 +248,6 @@ func skipToEnd(yylex interface{}) {
 %type <ddl> rename_list
 %type <createTable> create_table_prefix
 %type <createIndex> create_index_prefix
-%type <createView> create_view_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
@@ -719,13 +717,9 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
-| create_view_prefix column_list_opt AS select_statement check_option_opt
+| CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $1.FullyParsed = true
-    $1.Columns = $2
-    $1.Select = $4
-    $1.CheckOption = $5
-    $$ = $1
+    $$ = &CreateView{ViewName: $7.ToViewName(), IsReplace:$2, Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 | create_database_prefix create_options_opt
   {
@@ -816,13 +810,6 @@ alter_database_prefix:
 database_or_schema:
   DATABASE
 | SCHEMA
-
-create_view_prefix:
-CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name
-  {
-    $$ = &CreateView{ViewName: $7.ToViewName(), IsReplace:$2, Algorithm:$3, Definer: $4 ,Security:$5 }
-    setDDL(yylex, $$)
-  }
 
 table_spec:
   '(' table_column_list ')' table_option_list
