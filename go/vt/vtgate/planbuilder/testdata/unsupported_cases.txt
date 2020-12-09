@@ -42,6 +42,14 @@
 "select * from user natural join user_extra"
 "unsupported: natural join"
 
+# join with USING construct
+"select * from user join user_extra using(id)"
+"unsupported: join with USING(column_list) clause for complex queries"
+
+# join with USING construct with 3 tables
+"select user.id from user join user_extra using(id) join music using(id2)"
+"unsupported: join with USING(column_list) clause for complex queries"
+
 # natural left join
 "select * from user natural left join user_extra"
 "unsupported: natural left join"
@@ -49,10 +57,6 @@
 # natural right join
 "select * from user natural right join user_extra"
 "unsupported: natural right join"
-
-# join with USING construct
-"select * from user join user_extra using(id)"
-"unsupported: join with USING(column_list) clause"
 
 # left join with expressions
 "select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
@@ -373,3 +377,7 @@
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
 "unsupported: this construct is not supported on sharded keyspace"
+
+# unsupported two predicates specifying the database for the same table if they are different
+"SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'"
+"two predicates for specifying the database are not supported"
