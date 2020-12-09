@@ -377,3 +377,7 @@
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
 "unsupported: this construct is not supported on sharded keyspace"
+
+# unsupported two predicates specifying the database for the same table
+"SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'"
+"two predicates for specifying the database are not supported"
