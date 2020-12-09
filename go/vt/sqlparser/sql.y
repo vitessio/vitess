@@ -4032,6 +4032,7 @@ reserved_keyword:
 | OVER
 | PERCENT_RANK
 | RANK
+| READ
 | RECURSIVE
 | REGEXP
 | RENAME
@@ -4065,6 +4066,7 @@ reserved_keyword:
 | WHEN
 | WHERE
 | WINDOW
+| WRITE
 | XOR
 
 /*
@@ -4205,7 +4207,6 @@ non_reserved_keyword:
 | PROCESSLIST
 | QUERY
 | RANDOM
-| READ
 | REAL
 | REFERENCE
 | REFERENCES
@@ -4275,7 +4276,6 @@ non_reserved_keyword:
 | VSCHEMA
 | WARNINGS
 | WITH
-| WRITE
 | YEAR
 | ZEROFILL
 
