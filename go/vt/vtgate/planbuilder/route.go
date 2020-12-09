@@ -399,8 +399,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			col, ok := node.(*sqlparser.ColName)
 			if ok {
-				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates ||
-					col.Name.EqualString("table_schema") || col.Name.EqualString("table_name")
+				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)
 			}
 			return !hasRuntimeRoutingPredicates, nil
 		}, where)
