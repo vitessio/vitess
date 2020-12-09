@@ -188,6 +188,12 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
+
+	// Lock Types
+	ReadStr             = "read"
+	ReadLocalStr        = "read local"
+	WriteStr            = "write"
+	LowPriorityWriteStr = "low_priority write"
 )
 
 // Constants for Enum type - AccessMode
@@ -379,4 +385,12 @@ const (
 const (
 	CollateType CollateAndCharsetType = iota
 	CharacterSetType
+)
+
+const (
+	UnknownType LockType = iota
+	Read
+	ReadLocal
+	Write
+	LowPriorityWrite
 )
