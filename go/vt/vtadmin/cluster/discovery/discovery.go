@@ -67,3 +67,7 @@ func New(impl string, cluster string, args []string) (Discovery, error) {
 
 	return factory(cluster, args)
 }
+
+func init() { // nolint:gochecknoinits
+	Register("consul", NewConsul)
+}
