@@ -174,26 +174,26 @@
   }
 }
 
-# Create View
-"create view a as select* from user"
+# Create View with qualifier
+"create view user.a as select* from user"
 {
   "QueryType": "DDL",
-  "Original": "create view a as select* from user",
+  "Original": "create view user.a as select* from user",
   "Instructions": {
     "OperatorType": "DDL",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
     "Query": "create view a as select * from user"
   }
 }
 
-# create view with qualifier
-"create view user.a as select* from user"
+# create view with qualifier in select as well
+"create view user.a as select* from user.user"
 {
   "QueryType": "DDL",
-  "Original": "create view user.a as select* from user",
+  "Original": "create view user.a as select* from user.user",
   "Instructions": {
     "OperatorType": "DDL",
     "Keyspace": {
