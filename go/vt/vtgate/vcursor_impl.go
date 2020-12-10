@@ -275,7 +275,7 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 // if there is one. If the keyspace specified in the target cannot be
 // identified, it returns an error.
 func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
-	if vc.keyspace == "" {
+	if ignoreKeyspace(vc.keyspace) {
 		return nil, errNoKeyspace
 	}
 	ks, ok := vc.vschema.Keyspaces[vc.keyspace]
