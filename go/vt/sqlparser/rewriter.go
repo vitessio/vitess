@@ -1193,6 +1193,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Load:
 
+	case *LockTables:
+
 	case *MatchExpr:
 		a.apply(node, n.Columns, replaceMatchExprColumns)
 		a.apply(node, n.Expr, replaceMatchExprExpr)
@@ -1423,6 +1425,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *UnionSelect:
 		a.apply(node, n.Statement, replaceUnionSelectStatement)
+
+	case *UnlockTables:
 
 	case *Update:
 		a.apply(node, n.Comments, replaceUpdateComments)

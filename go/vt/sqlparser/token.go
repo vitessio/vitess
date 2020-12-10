@@ -268,7 +268,7 @@ var keywords = map[string]int{
 	"longblob":            LONGBLOB,
 	"longtext":            LONGTEXT,
 	"loop":                UNUSED,
-	"low_priority":        UNUSED,
+	"low_priority":        LOW_PRIORITY,
 	"manifest":            MANIFEST,
 	"master_bind":         UNUSED,
 	"match":               MATCH,

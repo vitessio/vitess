@@ -136,6 +136,10 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return nil, nil
 	case *sqlparser.Show:
 		return buildShowPlan(stmt, vschema)
+	case *sqlparser.LockTables:
+		return buildRoutePlan(stmt, vschema, buildLockPlan)
+	case *sqlparser.UnlockTables:
+		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
