@@ -433,7 +433,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	if err != nil {
 		return nil, err
 	}
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, nil, "vtg", false)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, nil, "vtg", false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1361,7 +1361,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize)
+		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize, vcursor.keyspace)
 		if err != nil {
 			return nil, err
 		}
