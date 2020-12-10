@@ -2521,7 +2521,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				}
 			}
 			query = fmt.Sprintf(`select
-				shard, mysql_schema, mysql_table, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status 
+				shard, mysql_schema, mysql_table, ddl_action, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status
 				from _vt.schema_migrations where %s`, condition)
 		}
 	case "retry":

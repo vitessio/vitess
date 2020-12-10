@@ -50,27 +50,30 @@ func TestJoinCanMerge(t *testing.T) {
 		{false, false, false, false, false, false, false, false, true, false},
 		{false, false, false, false, false, false, false, false, true, false},
 		{false, false, false, false, false, false, false, false, true, false},
-		{false, false, false, false, false, false, false, false, true, false},
+		{false, false, false, false, false, false, false, true, true, false},
 		{true, true, true, true, true, true, true, true, true, true},
 		{false, false, false, false, false, false, false, false, true, false},
 	}
 
 	ks := &vindexes.Keyspace{}
-	lRoute := &route{
-		// Setting condition will make SelectEqualUnique match itself.
-		condition: &sqlparser.ColName{},
-	}
-	pb := &primitiveBuilder{
-		plan: lRoute,
-	}
-	rRoute := &route{
-		condition: &sqlparser.ColName{},
-	}
 	for left, vals := range testcases {
-		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
-			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
-			assert.Equal(t, val, lRoute.JoinCanMerge(pb, rRoute, nil), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
+			name := fmt.Sprintf("%d:%d", left, right)
+			t.Run(name, func(t *testing.T) {
+				lRoute := &route{
+					// Setting condition will make SelectEqualUnique match itself.
+					condition: &sqlparser.ColName{},
+				}
+				pb := &primitiveBuilder{
+					plan: lRoute,
+				}
+				rRoute := &route{
+					condition: &sqlparser.ColName{},
+				}
+				lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
+				rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
+				assert.Equal(t, val, lRoute.JoinCanMerge(pb, rRoute, nil, nil), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
+			})
 		}
 	}
 }

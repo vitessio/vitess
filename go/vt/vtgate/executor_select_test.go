@@ -2417,7 +2417,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	// check failure when trying to query two keyspaces
 	_, err := exec(executor, session, "SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'TestExecutor' AND A.TABLE_SCHEMA = 'TestXBadSharding'")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "two predicates for table_schema not supported")
+	require.Contains(t, err.Error(), "two predicates for specifying the database are not supported")
 
 	// we pick a keyspace and query for table_schema = database(). should be routed to the picked keyspace
 	session.TargetString = "TestExecutor"
