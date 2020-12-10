@@ -36,7 +36,9 @@ type ReplicationStatus struct {
 	MasterServerID       uint
 	IOThreadRunning      bool
 	SQLThreadRunning     bool
+	LastSQLErrno         uint
 	SecondsBehindMaster  uint
+	SkipCounter          uint
 	MasterHost           string
 	MasterPort           int
 	MasterConnectRetry   int
@@ -49,6 +51,14 @@ func (s *ReplicationStatus) ReplicationRunning() bool {
 	return s.IOThreadRunning && s.SQLThreadRunning
 }
 
+// HasReplicationSQLThreadError returns true if the replication SQL thread stopped on an
+// error (ie: Slave_SQL_Running: no + Last_SQL_Errno > 0) and sql_slave_skip_counter is
+// disabled (0). This suggests the replication SQL thread stopped on an error that can't
+// be recovered/skipped automatically. A node in this state may have inconsistent data.
+func (s *ReplicationStatus) HasReplicationSQLThreadError() bool {
+	return !s.SQLThreadRunning && s.LastSQLErrno > 0 && s.SkipCounter == 0
+}
+
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 	return &replicationdatapb.Status{
@@ -59,6 +69,8 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		MasterServerId:       uint32(s.MasterServerID),
 		IoThreadRunning:      s.IOThreadRunning,
 		SqlThreadRunning:     s.SQLThreadRunning,
+		LastSqlErrno:         uint32(s.LastSQLErrno),
+		SkipCounter:          uint32(s.SkipCounter),
 		SecondsBehindMaster:  uint32(s.SecondsBehindMaster),
 		MasterHost:           s.MasterHost,
 		MasterPort:           int32(s.MasterPort),

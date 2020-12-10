@@ -42,6 +42,17 @@ func TestStatusIOThreadNotRunning(t *testing.T) {
 	}
 }
 
+func TestStatusHasReplicationSQLThreadError(t *testing.T) {
+	input := &ReplicationStatus{
+		LastSQLErrno:     1032,
+		SQLThreadRunning: false,
+	}
+	want := true
+	if got := input.HasReplicationSQLThreadError(); got != want {
+		t.Errorf("%v#v.HasReplicationSQLThreadError() = %v, want %v", input, got, want)
+	}
+}
+
 func TestStatusSQLThreadNotRunning(t *testing.T) {
 	input := &ReplicationStatus{
 		IOThreadRunning:  true,

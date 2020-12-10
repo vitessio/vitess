@@ -299,8 +299,12 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status.MasterPort = int(parseInt)
 	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
 	status.MasterConnectRetry = int(parseInt)
-	parseUint, _ := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	parseUint, _ := strconv.ParseUint(fields["Last_SQL_Errno"], 10, 0)
+	status.LastSQLErrno = uint(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
 	status.SecondsBehindMaster = uint(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["Skip_Counter"], 10, 0)
+	status.SkipCounter = uint(parseUint)
 	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
 	status.MasterServerID = uint(parseUint)
 
