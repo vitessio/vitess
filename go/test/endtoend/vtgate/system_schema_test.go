@@ -131,9 +131,9 @@ func TestConnectWithSystemSchema(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
-		vtParams := vtParams
-		vtParams.DbName = dbname
-		conn, err := mysql.Connect(ctx, &vtParams)
+		connParams := vtParams
+		connParams.DbName = dbname
+		conn, err := mysql.Connect(ctx, &connParams)
 		require.NoError(t, err)
 		conn.Close()
 	}
@@ -158,25 +158,25 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	queryWithQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type " +
-		"from information_schema.tables t " +
-		"join information_schema.columns c " +
-		"on c.table_schema = t.table_schema and c.table_name = t.table_name " +
+	queryWithQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
+		"from information_schema.tables t "+
+		"join information_schema.columns c "+
+		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
 	qr1 := exec(t, conn, queryWithQualifier)
 
-	queryWithoutQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type " +
-		"from tables t " +
-		"join columns c " +
-		"on c.table_schema = t.table_schema and c.table_name = t.table_name " +
+	queryWithoutQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
+		"from tables t "+
+		"join columns c "+
+		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
 	exec(t, conn, "use information_schema")
 	qr2 := exec(t, conn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
 
-	vtParams := vtParams
-	vtParams.DbName = "information_schema"
-	conn2, err := mysql.Connect(ctx, &vtParams)
+	connParams := vtParams
+	connParams.DbName = "information_schema"
+	conn2, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 

@@ -172,7 +172,7 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "")
+			result, err := RewriteAST(stmt, "ks") // passing `ks` just to test that no rewriting happens as it is not system schema
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -209,22 +209,22 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		expected: "SELECT x.col as c from x.test", // no change
 	}, {
 		in:       "SELECT 1 from test",
-		expected: "SELECT 1 from ks.test",
+		expected: "SELECT 1 from sys.test",
 	}, {
 		in:       "SELECT 1 from test as t",
-		expected: "SELECT 1 from ks.test as t",
+		expected: "SELECT 1 from sys.test as t",
 	}, {
 		in:       "SELECT 1 from `test 24` as t",
-		expected: "SELECT 1 from ks.`test 24` as t",
+		expected: "SELECT 1 from sys.`test 24` as t",
 	}, {
 		in:       "SELECT 1, (select 1 from test) from x.y",
-		expected: "SELECT 1, (select 1 from ks.test) from x.y",
+		expected: "SELECT 1, (select 1 from sys.test) from x.y",
 	}, {
 		in:       "SELECT 1 from (select 2 from test) t",
-		expected: "SELECT 1 from (select 2 from ks.test) t",
+		expected: "SELECT 1 from (select 2 from sys.test) t",
 	}, {
 		in:       "SELECT 1 from test where exists (select 2 from test)",
-		expected: "SELECT 1 from ks.test where exists (select 2 from ks.test)",
+		expected: "SELECT 1 from sys.test where exists (select 2 from sys.test)",
 	}}
 
 	for _, tc := range tests {
@@ -233,7 +233,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks")
+			result, err := RewriteAST(stmt, "sys")
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)

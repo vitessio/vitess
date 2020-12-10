@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"strings"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -190,7 +188,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 				return
 			}
 		case sqlparser.TableName:
-			if !systemTable(node.Qualifier.String()) {
+			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
@@ -204,13 +202,6 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	rb.eroute.Query = buf.ParsedQuery().Query
 	rb.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
-}
-
-func systemTable(qualifier string) bool {
-	return strings.EqualFold(qualifier, "information_schema") ||
-		strings.EqualFold(qualifier, "performance_schema") ||
-		strings.EqualFold(qualifier, "sys") ||
-		strings.EqualFold(qualifier, "mysql")
 }
 
 // procureValues procures and converts the input into
@@ -252,7 +243,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				return
 			}
 		case sqlparser.TableName:
-			if !systemTable(node.Qualifier.String()) {
+			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
