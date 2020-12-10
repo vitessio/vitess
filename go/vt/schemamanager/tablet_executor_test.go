@@ -236,7 +236,8 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		{
 			query:       "CREATE TABLE t(id int)",
 			ddlStrategy: "gh-ost",
-			isOnlineDDL: false,
+			isOnlineDDL: true,
+			strategy:    schema.DDLStrategyGhost,
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
