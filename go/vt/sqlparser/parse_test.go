@@ -1156,20 +1156,28 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input: "create index a on b (col1)",
+		input:  "create index a on b (col1)",
+		output: "alter table b add index a (col1)",
 	}, {
-		input: "create unique index a on b (col1)",
+		input:  "create unique index a on b (col1)",
+		output: "alter table b add unique index a (col1)",
 	}, {
-		input: "create unique index a using foo on b (col1 desc)",
+		input:  "create unique index a using foo on b (col1 desc)",
+		output: "alter table b add unique index a using foo (col1 desc)",
 	}, {
-		input: "create fulltext index a using foo on b (col1)",
+		input:  "create fulltext index a using foo on b (col1)",
+		output: "alter table b add fulltext index a using foo (col1)",
 	}, {
-		input: "create spatial index a using foo on b (col1)",
+		input:  "create spatial index a using foo on b (col1)",
+		output: "alter table b add spatial index a using foo (col1)",
 	}, {
-		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+		input: "create index a on b (col1) using btree key_block_size=12 with parser 'a' comment 'string' algorithm inplace lock none",
+		// This is actually an incorrect output: should be the one commented
+		output: "alter table b add index a (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+		// output: "alter table b add index a using btree (col1) key_block_size=12 with parser 'a' comment 'string' algorithm inplace lock none",
 	}, {
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "create index a on b ()",
+		output:     "alter table b add index a ()",
 		partialDDL: true,
 	}, {
 		input:  "create view a",
@@ -1883,7 +1891,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input: "create index b on A (col1 desc)",
+		input:  "create index b on A (col1 desc)",
+		output: "alter table A add index b (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",

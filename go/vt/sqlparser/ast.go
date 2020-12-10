@@ -70,6 +70,7 @@ type (
 		GetVindexCols() []ColIdent
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
+		SetFromTables(tables TableNames)
 		Statement
 	}
 
@@ -528,6 +529,21 @@ func (node *CreateIndex) GetFromTables() TableNames {
 // GetFromTables implements the DDLStatement interface
 func (node *CreateTable) GetFromTables() TableNames {
 	return nil
+}
+
+// SetFromTables implements DDLStatement.
+func (node *DDL) SetFromTables(tables TableNames) {
+	node.FromTables = tables
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateIndex) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateTable) SetFromTables(tables TableNames) {
+	// irrelevant
 }
 
 // GetToTables implements the DDLStatement interface
@@ -2470,7 +2486,7 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateIndex) Format(buf *TrackedBuffer) {
-	buf.WriteString("create")
+	buf.astPrintf(node, "alter table %v add", node.Table)
 	if node.Constraint != "" {
 		buf.WriteString(" " + node.Constraint)
 	}
@@ -2478,7 +2494,8 @@ func (node *CreateIndex) Format(buf *TrackedBuffer) {
 	if node.IndexType != "" {
 		buf.WriteString(" using " + node.IndexType)
 	}
-	buf.astPrintf(node, " on %v (", node.Table)
+
+	buf.WriteString(" (")
 	for i, col := range node.Columns {
 		if i != 0 {
 			buf.astPrintf(node, ", %v", col.Column)
