@@ -254,22 +254,20 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			return &execResult
 		}
 		isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(nil)
-		tableName := ""
 		switch ddl := stat.(type) {
 		case sqlparser.DDLStatement:
-			switch ddl.GetAction() {
-			case sqlparser.DropDDLAction:
-				// TODO (shlomi): break into distinct per-table DROP statements; on a future PR where
-				// we implement lazy DROP TABLE on Online DDL
-				tableName = ddl.GetFromTables()[0].Name.String()
-			default:
-				tableName = ddl.GetTable().Name.String()
-			}
 			isOnlineDDL, strategy, options = exec.isOnlineSchemaDDL(ddl)
 		}
 		exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
 		if isOnlineDDL {
-			exec.executeOnlineDDL(ctx, &execResult, sql, tableName, strategy, options)
+			normalizedQueries, err := schema.NormalizeOnlineDDL(sql)
+			if err != nil {
+				execResult.ExecutorErr = err.Error()
+				return &execResult
+			}
+			for _, normalized := range normalizedQueries {
+				exec.executeOnlineDDL(ctx, &execResult, normalized.SQL, normalized.TableName.Name.String(), strategy, options)
+			}
 		} else {
 			exec.executeOnAllTablets(ctx, &execResult, sql)
 		}
