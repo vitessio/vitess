@@ -80,11 +80,12 @@ var vexecInsertTemplates = []string{
 		migration_statement,
 		strategy,
 		options,
+		ddl_action,
 		requested_timestamp,
 		migration_context,
 		migration_status
 	) VALUES (
-		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val', 'val'
+		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val', 'val'
 	)`,
 }
 
@@ -992,42 +993,35 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return err
 	}
 
-	stmt, err := sqlparser.Parse(onlineDDL.SQL)
+	ddlAction, err := onlineDDL.GetAction()
 	if err != nil {
-		return failMigration(fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", onlineDDL.SQL, err))
+		return failMigration(err)
 	}
-	switch stmt := stmt.(type) {
-	case sqlparser.DDLStatement:
-		switch stmt.GetAction() {
-		case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
+	switch ddlAction {
+	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
+		go func() {
+			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
+	case sqlparser.AlterDDLAction:
+		switch onlineDDL.Strategy {
+		case schema.DDLStrategyGhost:
 			go func() {
-				if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+				if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
 					failMigration(err)
 				}
 			}()
-		case sqlparser.AlterDDLAction:
-			switch onlineDDL.Strategy {
-			case schema.DDLStrategyGhost:
-				go func() {
-					if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
-						failMigration(err)
-					}
-				}()
-			case schema.DDLStrategyPTOSC:
-				go func() {
-					if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
-						failMigration(err)
-					}
-				}()
-			default:
-				{
-					return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
+		case schema.DDLStrategyPTOSC:
+			go func() {
+				if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+					failMigration(err)
 				}
+			}()
+		default:
+			{
+				return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
 			}
-		}
-	default:
-		{
-			return failMigration(fmt.Errorf("Unsupported query type: %+v", onlineDDL.SQL))
 		}
 	}
 	return nil
