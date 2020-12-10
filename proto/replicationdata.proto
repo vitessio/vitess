@@ -37,6 +37,8 @@ message Status {
   string file_relay_log_position = 10;
   uint32 master_server_id = 11;
   string master_uuid = 12;
+  uint32 last_sql_errno = 13;
+  uint32 skip_counter = 14;
 }
 
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after
