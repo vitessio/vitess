@@ -82,7 +82,14 @@ func New(cluster string, cfg *Config) *VTGateProxy {
 // Caller IDs set, so queries do not passed to vttablet as the application RW
 // user. All calls to to vtgate.conn should pass a context wrapped with this
 // function.
+//
+// It returns the original context unchanged if the vtgate has no credentials
+// configured.
 func (vtgate *VTGateProxy) getQueryContext(ctx context.Context) context.Context {
+	if vtgate.creds == nil {
+		return ctx
+	}
+
 	return callerid.NewContext(
 		ctx,
 		callerid.NewEffectiveCallerID(vtgate.creds.GetEffectiveUsername(), "vtadmin", ""),
@@ -116,13 +123,17 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	}
 
 	conf := vitessdriver.Configuration{
-		Protocol: fmt.Sprintf("grpc_%s", vtgate.cluster),
-		Address:  vtgate.host,
-		Target:   target,
-		GRPCDialOptions: append([]grpc.DialOption{
+		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster),
+		Address:         vtgate.host,
+		Target:          target,
+		GRPCDialOptions: opts,
+	}
+
+	if vtgate.creds != nil {
+		conf.GRPCDialOptions = append([]grpc.DialOption{
 			grpc.WithPerRPCCredentials(vtgate.creds),
 			grpc.WithInsecure(),
-		}, opts...),
+		}, conf.GRPCDialOptions...)
 	}
 
 	db, err := vitessdriver.OpenWithConfiguration(conf)
