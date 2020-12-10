@@ -360,10 +360,15 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 			// irrelevant table
 			continue
 		}
-		if timeNow.Before(t) {
-			// net yet time to operate on this table
-			continue
+		if _, ok := collector.lifecycleStates[state]; ok {
+			// this state is in our expected lifecycle. Let's check table's time hint:
+			if timeNow.Before(t) {
+				// net yet time to operate on this table
+				continue
+			}
+			// If the state is not in our expected lifecycle, we ignore the time hint and just move it to the next phase
 		}
+
 		log.Infof("TableGC: will operate on table %s", tableName)
 
 		if state == schema.HoldTableGCState {
