@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	schema2 "vitess.io/vitess/go/vt/schema"
+
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -502,6 +504,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, vs.buildVersionPlan(id, tm)
 		}
 		if tm.Database != "" && tm.Database != params.DbName {
+			vs.plans[id] = nil
+			return nil, nil
+		}
+		if schema2.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
 			vs.plans[id] = nil
 			return nil, nil
 		}
