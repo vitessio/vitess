@@ -326,6 +326,7 @@ func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState
 	}()
 }
 
+// shouldTransitionTable checks if the given table is a GC table and if it's time to transition it to next state
 func (collector *TableGC) shouldTransitionTable(tableName string) (shouldTransition bool, state schema.TableGCState, err error) {
 	isGCTable, state, t, err := schema.AnalyzeGCTableName(tableName)
 	if err != nil {
