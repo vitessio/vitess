@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -164,7 +165,7 @@ func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...i
 }
 
 func handleAPI(pattern string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
-	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
 				httpErrorf(w, r, "uncaught panic: %v", x)

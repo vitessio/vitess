@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/httputil2"
 )
 
 var mu sync.Mutex
@@ -32,7 +34,7 @@ var mu sync.Mutex
 const statsFileName = "stats.json"
 
 func main() {
-	http.HandleFunc("/travis/stats", func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc("/travis/stats", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			test := r.FormValue("test")
 			result := r.FormValue("result")

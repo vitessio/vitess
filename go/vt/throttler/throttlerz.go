@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strings"
 
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -49,7 +50,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/throttlerz/", func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc("/throttlerz/", func(w http.ResponseWriter, r *http.Request) {
 		throttlerzHandler(w, r, GlobalManager)
 	})
 }

@@ -18,6 +18,8 @@ package main
 
 import (
 	"net/http"
+
+	"vitess.io/vitess/go/httputil2"
 )
 
 // This is a separate file so it can be selectively included/excluded from
@@ -25,7 +27,8 @@ import (
 
 func init() {
 	// Anything unrecognized gets redirected to the status page.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mx := httputil2.GetMux()
+	mx.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/debug/status", http.StatusFound)
 	})
 }

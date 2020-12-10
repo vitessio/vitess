@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
@@ -72,7 +73,7 @@ var (
 )
 
 func init() {
-	http.HandleFunc("/txlogz", txlogzHandler)
+	httputil2.GetMux().HandleFunc("/txlogz", txlogzHandler)
 }
 
 // txlogzHandler serves a human readable snapshot of the

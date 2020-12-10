@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -226,7 +227,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 }
 
 func (vtg *VTGate) registerDebugHealthHandler() {
-	http.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return

@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
@@ -289,7 +290,7 @@ func main() {
 	flag.Parse()
 
 	go servenv.RunDefault()
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/throttlerz", http.StatusTemporaryRedirect)
 	})
 

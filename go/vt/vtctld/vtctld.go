@@ -27,6 +27,7 @@ import (
 	rice "github.com/GeertJohan/go.rice"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/acl"
@@ -123,12 +124,12 @@ func InitVtctld(ts *topo.Server) {
 		})
 
 	// Anything unrecognized gets redirected to the main app page.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, appPrefix, http.StatusFound)
 	})
 
 	// Serve the static files for the vtctld2 web app
-	http.HandleFunc(appPrefix, func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc(appPrefix, func(w http.ResponseWriter, r *http.Request) {
 		// Strip the prefix.
 		parts := strings.SplitN(r.URL.Path, "/", 3)
 		if len(parts) != 3 {

@@ -45,6 +45,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -298,7 +299,8 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 
 	hc.topoWatchers = topoWatchers
 	healthcheckOnce.Do(func() {
-		http.Handle("/debug/gateway", hc)
+		mx := httputil2.GetMux()
+		mx.Handle("/debug/gateway", hc)
 	})
 
 	// start the topo watches here

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -154,8 +155,9 @@ func (e *Exporter) URLPrefix() string {
 // url remapped from /path to /name/path. If name is empty, the request
 // is passed through to http.HandleFunc.
 func (e *Exporter) HandleFunc(url string, f func(w http.ResponseWriter, r *http.Request)) {
+	mx := httputil2.GetMux()
 	if e.name == "" {
-		http.HandleFunc(url, f)
+		mx.HandleFunc(url, f)
 		return
 	}
 
@@ -166,7 +168,7 @@ func (e *Exporter) HandleFunc(url string, f func(w http.ResponseWriter, r *http.
 	hf := &handleFunc{f: f}
 	e.handleFuncs[url] = hf
 
-	http.HandleFunc(e.URLPrefix()+url, func(w http.ResponseWriter, r *http.Request) {
+	mx.HandleFunc(e.URLPrefix()+url, func(w http.ResponseWriter, r *http.Request) {
 		if f := hf.Get(); f != nil {
 			f(w, r)
 		}

@@ -39,10 +39,8 @@ import (
 	"syscall"
 	"time"
 
-	// register the HTTP handlers for profiling
-	_ "net/http/pprof"
-
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -61,6 +59,7 @@ var (
 	memProfileRate       = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
 	mutexProfileFraction = flag.Int("mutex-profile-fraction", 0, "profile every n mutex contention events (see runtime.SetMutexProfileFraction)")
 	catchSigpipe         = flag.Bool("catch-sigpipe", false, "catch and ignore SIGPIPE on stdout and stderr if specified")
+	enablePprof          = flag.Bool("pprof.enabled", true, "enable pprof for debug")
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -91,6 +90,11 @@ func Init() {
 			log.Warning("Caught SIGPIPE (ignoring all future SIGPIPEs)")
 			signal.Ignore(syscall.SIGPIPE)
 		}()
+	}
+
+	// Register pprof handlers if pprof is enabled
+	if *enablePprof {
+		httputil2.RegisterPprof(httputil2.GetMux())
 	}
 
 	// Add version tag to every info log

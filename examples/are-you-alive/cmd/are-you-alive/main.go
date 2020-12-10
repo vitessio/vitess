@@ -5,6 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -12,12 +18,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/ratelimit"
 	"gopkg.in/yaml.v2"
-	"math/rand"
-	"net/http"
-	"os"
-	"os/signal"
-	"sync"
 	"vitess.io/vitess/examples/are-you-alive/pkg/client"
+	"vitess.io/vitess/go/httputil2"
 )
 
 /*
@@ -208,7 +210,7 @@ func waitForCtrlC() {
 }
 
 func runPrometheus() {
-	http.Handle("/metrics", promhttp.Handler())
+	httputil2.GetMux().Handle("/metrics", promhttp.Handler())
 	logrus.Fatal(http.ListenAndServe(*prometheusMetricsAddress, nil))
 }
 

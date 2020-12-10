@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -82,7 +83,7 @@ func (wi *Instance) InitInteractiveMode() {
 	subIndexTemplate := mustParseTemplate("subIndex", subIndexHTML)
 
 	// toplevel menu
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	httputil2.GetMux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 			acl.SendError(w, err)
 			return
@@ -96,7 +97,7 @@ func (wi *Instance) InitInteractiveMode() {
 		// keep a local copy of the Command pointer for the
 		// closure.
 		pcg := cg
-		http.HandleFunc("/"+cg.Name, func(w http.ResponseWriter, r *http.Request) {
+		httputil2.GetMux().HandleFunc("/"+cg.Name, func(w http.ResponseWriter, r *http.Request) {
 			if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 				acl.SendError(w, err)
 				return
@@ -108,7 +109,7 @@ func (wi *Instance) InitInteractiveMode() {
 		for _, c := range cg.Commands {
 			// keep a local copy of the Command pointer for the closure.
 			pc := c
-			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
+			httputil2.GetMux().HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
 				if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 					acl.SendError(w, err)
 					return
