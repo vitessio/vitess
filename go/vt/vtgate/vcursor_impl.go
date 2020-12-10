@@ -451,7 +451,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := vc.vschema.Keyspaces[keyspace]; keyspace != "" && !ok {
+	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
 		return mysql.NewSQLError(mysql.ERBadDb, mysql.SSSyntaxErrorOrAccessViolation, "Unknown database '%s'", keyspace)
 	}
 
@@ -460,6 +460,17 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 	}
 	vc.safeSession.SetTargetString(target)
 	return nil
+}
+
+func ignoreKeyspace(keyspace string) bool {
+	return keyspace == "" || systemSchema(keyspace)
+}
+
+func systemSchema(schema string) bool {
+	return strings.EqualFold(schema, "information_schema") ||
+		strings.EqualFold(schema, "performance_schema") ||
+		strings.EqualFold(schema, "sys") ||
+		strings.EqualFold(schema, "mysql")
 }
 
 func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {
