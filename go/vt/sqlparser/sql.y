@@ -311,7 +311,7 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <selectInto> into_option
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt using_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list
 %type <partitions> opt_partition_clause partition_list
@@ -361,8 +361,8 @@ func skipToEnd(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
-%type <indexOption> index_option lock_index algorithm_index
-%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt
+%type <indexOption> index_option lock_index algorithm_index using_index_type
+%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -725,7 +725,8 @@ create_statement:
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
     $1.Columns = $3
-    $1.Options = append($5,$6...)
+    $1.Options = append($1.Options,$5...)
+    $1.Options = append($1.Options,$6...)
     $1.FullyParsed = true
     $$ = $1
   }
@@ -796,7 +797,7 @@ create_table_prefix:
 create_index_prefix:
   CREATE constraint_opt INDEX id_or_var using_opt ON table_name
   {
-    $$ = &CreateIndex{Constraint: $2, Name: $4, IndexType: $5, Table: $7}
+    $$ = &CreateIndex{Constraint: $2, Name: $4, Options: $5, Table: $7}
     setDDL(yylex, $$)
   }
 
@@ -1334,9 +1335,9 @@ index_option_list:
   }
 
 index_option:
-  USING id_or_var
+  using_index_type
   {
-    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+    $$ = $1
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
@@ -1347,9 +1348,9 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
   }
-| WITH PARSER STRING
+| WITH PARSER id_or_var
   {
-    $$ = &IndexOption{Name: string($1) + " " + string($2), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
   }
 
 equal_opt:
@@ -3900,9 +3901,15 @@ constraint_opt:
   { $$ = string($1) }
 
 using_opt:
-  { $$ = "" }
-| USING sql_id
-  { $$ = $2.val }
+  { $$ = nil }
+| using_index_type
+  { $$ = []*IndexOption{$1} }
+
+using_index_type:
+  USING sql_id
+  {
+    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+  }
 
 sql_id:
   id_or_var
