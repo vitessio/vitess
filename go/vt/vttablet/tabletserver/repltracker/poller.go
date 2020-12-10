@@ -48,7 +48,8 @@ func (p *poller) Status() (time.Duration, error) {
 
 	if status.HasReplicationSQLThreadError() {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "replication sql thread error")
-	} else if !status.ReplicationRunning() {
+	}
+	if !status.ReplicationRunning() {
 		if p.timeRecorded.IsZero() {
 			return 0, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "replication is not running")
 		}
