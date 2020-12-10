@@ -5,10 +5,8 @@ go 1.13
 require (
 	cloud.google.com/go v0.45.1
 	github.com/Azure/azure-pipeline-go v0.2.2
-	github.com/Azure/azure-sdk-for-go v46.4.0+incompatible
 	github.com/Azure/azure-storage-blob-go v0.10.0
-	github.com/Azure/go-autorest/autorest v0.10.0
-	github.com/Azure/go-autorest/autorest/validation v0.3.0 // indirect
+	github.com/Azure/go-autorest/autorest v0.10.0 // indirect
 	github.com/DataDog/datadog-go v2.2.0+incompatible
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/PuerkitoBio/goquery v1.5.1
@@ -62,7 +60,6 @@ require (
 	github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
 	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
-	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
 	github.com/montanaflynn/stats v0.6.3
@@ -82,7 +79,7 @@ require (
 	github.com/prometheus/common v0.9.1
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/samuel/go-zookeeper v0.0.0-20200724154423-2164a8ac840e
-	github.com/satori/go.uuid v1.2.0
+	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sjmudd/stopwatch v0.0.0-20170613150411-f380bf8a9be1
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/spyzhov/ajson v0.4.2

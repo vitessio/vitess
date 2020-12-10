@@ -34,7 +34,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
-	rb, err := pb.processDMLTable(exprs)
+	rb, err := pb.processDMLTable(exprs, nil)
 	if err != nil {
 		return nil, err
 	}
