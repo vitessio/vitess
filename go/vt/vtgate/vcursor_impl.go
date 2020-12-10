@@ -463,14 +463,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 }
 
 func ignoreKeyspace(keyspace string) bool {
-	return keyspace == "" || systemSchema(keyspace)
-}
-
-func systemSchema(schema string) bool {
-	return strings.EqualFold(schema, "information_schema") ||
-		strings.EqualFold(schema, "performance_schema") ||
-		strings.EqualFold(schema, "sys") ||
-		strings.EqualFold(schema, "mysql")
+	return keyspace == "" || sqlparser.SystemSchema(keyspace)
 }
 
 func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {

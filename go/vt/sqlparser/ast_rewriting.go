@@ -162,6 +162,9 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 	case JoinCondition:
 		er.rewriteJoinCondition(cursor, node)
 	case *AliasedTableExpr:
+		if !SystemSchema(er.keyspace) {
+			break
+		}
 		aliasTableName, ok := node.Expr.(TableName)
 		if !ok {
 			return true
@@ -300,4 +303,12 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 
 func bindVarExpression(name string) Expr {
 	return NewArgument([]byte(":" + name))
+}
+
+// SystemSchema returns true if the schema passed is system schema
+func SystemSchema(schema string) bool {
+	return strings.EqualFold(schema, "information_schema") ||
+		strings.EqualFold(schema, "performance_schema") ||
+		strings.EqualFold(schema, "sys") ||
+		strings.EqualFold(schema, "mysql")
 }
