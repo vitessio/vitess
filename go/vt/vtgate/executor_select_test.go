@@ -1290,6 +1290,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	//gotResultAs, errAs := executorExec(executor, queryAs, nil)
 	//t.Logf("queryAs: %v, gotResultAs: %v", queryAs, gotResultAs)
 	qfResult, errAs := executorPrepare(executor, queryAs, nil)
+	t.Logf("errAs: %v", errAs)
 	t.Logf("queryAs: %v, qfResult: %v", queryAs, qfResult)
 	require.NoError(t, errAs)
 

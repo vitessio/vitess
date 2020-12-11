@@ -1659,6 +1659,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		skipQueryPlanCache(safeSession),
 		logStats,
 	)
+	log.Info(">>>>> handlePrepare plan got : %v", plan)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
