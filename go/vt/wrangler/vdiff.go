@@ -1042,7 +1042,7 @@ func wrapWeightString(expr sqlparser.SelectExpr) *sqlparser.AliasedExpr {
 
 	return &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
-			Name:  sqlparser.NewColIdent("weight_string"),
+			Name: sqlparser.NewColIdent("weight_string"),
 			//Exprs: []sqlparser.SelectExpr{expr},
 			Exprs: []sqlparser.SelectExpr{exprAliased},
 		},
