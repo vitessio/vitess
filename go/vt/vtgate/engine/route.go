@@ -584,6 +584,17 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 				return true
 			}
 			var cmp int
+			//	--- FAIL: TestSelectScatterOrderByVarChar (0.00s)
+			//panic: runtime error: index out of range [2] with length 2 [recovered]
+			//panic: runtime error: index out of range [2] with length 2
+			//
+			//	goroutine 566 [running]:
+			//	testing.tRunner.func1(0xc0004e7400)
+			//	/opt/hostedtoolcache/go/1.13.15/x64/src/testing/testing.go:874 +0x3a3
+			//	panic(0xf469e0, 0xc000d207c0)
+			//	/opt/hostedtoolcache/go/1.13.15/x64/src/runtime/panic.go:679 +0x1b2
+			//	vitess.io/vitess/go/vt/vtgate/engine.(*Route).sort.func1(0x6, 0x0, 0xc000b90ec0)
+			//	/home/runner/work/vitess/vitess/go/vt/vtgate/engine/route.go:587 +0x262
 			cmp, err = evalengine.NullsafeCompare(out.Rows[i][order.Col], out.Rows[j][order.Col])
 			if err != nil {
 				return true
