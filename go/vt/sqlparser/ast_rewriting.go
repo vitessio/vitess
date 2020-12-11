@@ -169,6 +169,10 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 		if !ok {
 			return true
 		}
+		// Qualifier should not be added to dual table
+		if aliasTableName.Name.String() == "dual" {
+			break
+		}
 		if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
 			aliasTableName.Qualifier = NewTableIdent(er.keyspace)
 			node.Expr = aliasTableName
