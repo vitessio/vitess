@@ -1,7 +1,6 @@
 package vtsql
 
 import (
-	"bytes"
 	"encoding/json"
 	"io/ioutil"
 
@@ -39,40 +38,16 @@ func (creds *StaticAuthCredentials) GetUsername() string {
 	return creds.Username
 }
 
-// credentialsFlag adds the pflag.Value interface to a
-// grpcclient.StaticAuthClientCreds struct, and is used in (*Config).Parse().
-// The effective user component of vtsql's StaticAuthCredentials is parsed
-// separately.
-type credentialsFlag struct {
-	*grpcclient.StaticAuthClientCreds
-	parsed bool
-}
-
-func (cf *credentialsFlag) Set(path string) error {
+func loadCredentials(path string) (*grpcclient.StaticAuthClientCreds, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := json.Unmarshal(data, cf); err != nil {
-		return err
+	var creds grpcclient.StaticAuthClientCreds
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return nil, err
 	}
 
-	cf.parsed = true
-
-	return nil
-}
-
-func (cf *credentialsFlag) String() string {
-	buf := bytes.NewBuffer(nil)
-
-	buf.WriteString("&grpcclient.StaticAuthClientCreds{Username:")
-	buf.WriteString(cf.Username)
-	buf.WriteString(", Password: ******}") // conditionally show this value
-
-	return buf.String()
-}
-
-func (cf *credentialsFlag) Type() string {
-	return "vtsql.credentialsFlag"
+	return &creds, nil
 }

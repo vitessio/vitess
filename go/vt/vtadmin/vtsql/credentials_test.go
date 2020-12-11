@@ -9,7 +9,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 )
 
-func TestCredentialsFlagSet(t *testing.T) {
+func Test_loadCredentials(t *testing.T) {
 	tests := []struct {
 		name      string
 		contents  []byte
@@ -50,15 +50,14 @@ func TestCredentialsFlagSet(t *testing.T) {
 				f.Close()
 			}
 
-			cf := credentialsFlag{}
-			err := cf.Set(path)
+			creds, err := loadCredentials(path)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, *cf.StaticAuthClientCreds)
+			assert.Equal(t, tt.expected, *creds)
 		})
 	}
 }
