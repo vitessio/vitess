@@ -2,6 +2,7 @@ package vtsql
 
 import (
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,6 +49,7 @@ func Test_loadCredentials(t *testing.T) {
 
 				path = f.Name()
 				f.Close()
+				defer os.Remove(path)
 			}
 
 			creds, err := loadCredentials(path)
