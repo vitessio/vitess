@@ -39,7 +39,7 @@ func (c *Config) Parse(args []string) error {
 		"Go template used to specify a path to a credentials file, which is a json file containing "+
 			"a Username and Password. Templates are given the context of the vtsql.Config, and primarily "+
 			"interoplate the cluster name and ID variables.")
-	effectiveUser := fs.String("effective-username", "", "username to send queries on behalf of")
+	effectiveUser := fs.String("effective-user", "", "username to send queries on behalf of")
 
 	if err := fs.Parse(args); err != nil {
 		return err
