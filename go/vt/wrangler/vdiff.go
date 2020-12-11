@@ -1020,15 +1020,30 @@ func isFuncKeyrange(expr sqlparser.Expr) bool {
 	return ok && funcExpr.Name.EqualString("in_keyrange")
 }
 
+/*
+// SelectExpr represents a SELECT expression.
+SelectExpr interface {
+	iSelectExpr()
+	SQLNode
+}
+
+FuncExpr struct {
+	Qualifier TableIdent
+	Name      ColIdent
+	Distinct  bool
+	Exprs     SelectExprs
+}
+*/
+
 func wrapWeightString(expr sqlparser.SelectExpr) *sqlparser.AliasedExpr {
+	//exprAliased := &sqlparser.AliasedExpr{
+	//	Expr: expr.(*sqlparser.AliasedExpr).Expr,
+	//}
+
 	return &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
-			Name: sqlparser.NewColIdent("weight_string"),
-			Exprs: []sqlparser.SelectExpr{
-				&sqlparser.AliasedExpr{
-					Expr: expr.(*sqlparser.AliasedExpr).Expr,
-				},
-			},
+			Name:  sqlparser.NewColIdent("weight_string"),
+			Exprs: []sqlparser.SelectExpr{expr},
 		},
 	}
 }
