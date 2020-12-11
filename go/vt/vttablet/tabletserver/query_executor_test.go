@@ -1312,20 +1312,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Type: sqltypes.Int64,
 			}},
 		},
-
-		// verify wrapping with `weight_string(dtid as dtid)
-		//"select dtid as dtid, state from _vt.dt_state where dtid = 'aa' order by dtid asc limit 1": {
-		//	// aabbccdd
-		//	Fields: []*querypb.Field{
-		//		{Type: sqltypes.VarBinary},
-		//		{Type: sqltypes.Uint64},
-		//	},
-		//	Rows: [][]sqltypes.Value{{
-		//		sqltypes.NewVarBinary("aa"),
-		//		sqltypes.NewInt64(int64(querypb.TransactionState_PREPARE)),
-		//	}},
-		//	RowsAffected: 1,
-		//},
 		"begin":    {},
 		"commit":   {},
 		"rollback": {},

@@ -1036,14 +1036,15 @@ FuncExpr struct {
 */
 
 func wrapWeightString(expr sqlparser.SelectExpr) *sqlparser.AliasedExpr {
-	//exprAliased := &sqlparser.AliasedExpr{
-	//	Expr: expr.(*sqlparser.AliasedExpr).Expr,
-	//}
+	exprAliased := &sqlparser.AliasedExpr{
+		Expr: expr.(*sqlparser.AliasedExpr).Expr,
+	}
 
 	return &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
 			Name:  sqlparser.NewColIdent("weight_string"),
-			Exprs: []sqlparser.SelectExpr{expr},
+			//Exprs: []sqlparser.SelectExpr{expr},
+			Exprs: []sqlparser.SelectExpr{exprAliased},
 		},
 	}
 }
