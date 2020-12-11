@@ -12,7 +12,6 @@ import (
 
 // Error messages for CreateView queries
 const (
-	CreateViewNotRoute          string = "Select query cannot be routed correctly"
 	CreateViewDifferentKeyspace string = "Select query does not belong to the same keyspace as the view statement"
 	CreateViewComplex           string = "Complex select queries are not supported in create view statements"
 )
@@ -82,7 +81,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		}
 		routePlan, isRoute := selectPlan.(*engine.Route)
 		if !isRoute {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, CreateViewNotRoute)
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, CreateViewComplex)
 		}
 		if keyspace.Name != routePlan.GetKeyspaceName() {
 			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, CreateViewDifferentKeyspace)
