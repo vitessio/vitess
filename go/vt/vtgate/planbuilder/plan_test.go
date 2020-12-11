@@ -366,7 +366,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 		fail := false
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
-				plan, err := Build(tcase.input, vschema)
+				plan, err := TestBuilder(tcase.input, vschema)
 
 				out := getPlanOrErrorOutput(err, plan)
 

@@ -172,7 +172,7 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt)
+			result, err := RewriteAST(stmt, "ks") // passing `ks` just to test that no rewriting happens as it is not system schema
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -196,6 +196,52 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
+		})
+	}
+}
+
+func TestRewritesWithDefaultKeyspace(in *testing.T) {
+	tests := []myTestCase{{
+		in:       "SELECT 1 from x.test",
+		expected: "SELECT 1 from x.test", // no change
+	}, {
+		in:       "SELECT x.col as c from x.test",
+		expected: "SELECT x.col as c from x.test", // no change
+	}, {
+		in:       "SELECT 1 from test",
+		expected: "SELECT 1 from sys.test",
+	}, {
+		in:       "SELECT 1 from test as t",
+		expected: "SELECT 1 from sys.test as t",
+	}, {
+		in:       "SELECT 1 from `test 24` as t",
+		expected: "SELECT 1 from sys.`test 24` as t",
+	}, {
+		in:       "SELECT 1, (select 1 from test) from x.y",
+		expected: "SELECT 1, (select 1 from sys.test) from x.y",
+	}, {
+		in:       "SELECT 1 from (select 2 from test) t",
+		expected: "SELECT 1 from (select 2 from sys.test) t",
+	}, {
+		in:       "SELECT 1 from test where exists (select 2 from test)",
+		expected: "SELECT 1 from sys.test where exists (select 2 from sys.test)",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "sys")
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			s := String(expected)
+			assert := assert.New(t)
+			assert.Equal(s, String(result.AST))
 		})
 	}
 }

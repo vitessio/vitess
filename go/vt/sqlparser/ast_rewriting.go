@@ -33,16 +33,16 @@ type RewriteASTResult struct {
 }
 
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool) (*RewriteASTResult, error) {
+func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool, keyspace string) (*RewriteASTResult, error) {
 	if parameterize {
 		Normalize(in, bindVars, prefix)
 	}
-	return RewriteAST(in)
+	return RewriteAST(in, keyspace)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
-func RewriteAST(in Statement) (*RewriteASTResult, error) {
-	er := newExpressionRewriter()
+func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
+	er := newExpressionRewriter(keyspace)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
 	out, ok := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp).(Statement)
@@ -86,10 +86,12 @@ type expressionRewriter struct {
 
 	// we need to know this to make a decision if we can safely rewrite JOIN USING => JOIN ON
 	hasStarInSelect bool
+
+	keyspace string
 }
 
-func newExpressionRewriter() *expressionRewriter {
-	return &expressionRewriter{bindVars: &BindVarNeeds{}}
+func newExpressionRewriter(keyspace string) *expressionRewriter {
+	return &expressionRewriter{bindVars: &BindVarNeeds{}, keyspace: keyspace}
 }
 
 const (
@@ -110,7 +112,7 @@ const (
 )
 
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newExpressionRewriter()
+	inner := newExpressionRewriter(er.keyspace)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
@@ -157,50 +159,65 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
-
 	case JoinCondition:
-		if node.Using != nil && !er.hasStarInSelect {
-			joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
-			if !ok {
-				// this is not possible with the current AST
-				break
-			}
-			leftTable, leftOk := joinTableExpr.LeftExpr.(*AliasedTableExpr)
-			rightTable, rightOk := joinTableExpr.RightExpr.(*AliasedTableExpr)
-			if !(leftOk && rightOk) {
-				// we only deal with simple FROM A JOIN B USING queries at the moment
-				break
-			}
-			lft, err := leftTable.TableName()
-			if err != nil {
-				er.err = err
-				break
-			}
-			rgt, err := rightTable.TableName()
-			if err != nil {
-				er.err = err
-				break
-			}
-			newCondition := JoinCondition{}
-			for _, colIdent := range node.Using {
-				lftCol := NewColNameWithQualifier(colIdent.String(), lft)
-				rgtCol := NewColNameWithQualifier(colIdent.String(), rgt)
-				cmp := &ComparisonExpr{
-					Operator: EqualOp,
-					Left:     lftCol,
-					Right:    rgtCol,
-				}
-				if newCondition.On == nil {
-					newCondition.On = cmp
-				} else {
-					newCondition.On = &AndExpr{Left: newCondition.On, Right: cmp}
-				}
-			}
-			cursor.Replace(newCondition)
+		er.rewriteJoinCondition(cursor, node)
+	case *AliasedTableExpr:
+		if !SystemSchema(er.keyspace) {
+			break
 		}
-
+		aliasTableName, ok := node.Expr.(TableName)
+		if !ok {
+			return true
+		}
+		if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
+			aliasTableName.Qualifier = NewTableIdent(er.keyspace)
+			node.Expr = aliasTableName
+			cursor.Replace(node)
+		}
 	}
 	return true
+}
+
+func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node JoinCondition) {
+	if node.Using != nil && !er.hasStarInSelect {
+		joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
+		if !ok {
+			// this is not possible with the current AST
+			return
+		}
+		leftTable, leftOk := joinTableExpr.LeftExpr.(*AliasedTableExpr)
+		rightTable, rightOk := joinTableExpr.RightExpr.(*AliasedTableExpr)
+		if !(leftOk && rightOk) {
+			// we only deal with simple FROM A JOIN B USING queries at the moment
+			return
+		}
+		lft, err := leftTable.TableName()
+		if err != nil {
+			er.err = err
+			return
+		}
+		rgt, err := rightTable.TableName()
+		if err != nil {
+			er.err = err
+			return
+		}
+		newCondition := JoinCondition{}
+		for _, colIdent := range node.Using {
+			lftCol := NewColNameWithQualifier(colIdent.String(), lft)
+			rgtCol := NewColNameWithQualifier(colIdent.String(), rgt)
+			cmp := &ComparisonExpr{
+				Operator: EqualOp,
+				Left:     lftCol,
+				Right:    rgtCol,
+			}
+			if newCondition.On == nil {
+				newCondition.On = cmp
+			} else {
+				newCondition.On = &AndExpr{Left: newCondition.On, Right: cmp}
+			}
+		}
+		cursor.Replace(newCondition)
+	}
 }
 
 func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
@@ -286,4 +303,12 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 
 func bindVarExpression(name string) Expr {
 	return NewArgument([]byte(":" + name))
+}
+
+// SystemSchema returns true if the schema passed is system schema
+func SystemSchema(schema string) bool {
+	return strings.EqualFold(schema, "information_schema") ||
+		strings.EqualFold(schema, "performance_schema") ||
+		strings.EqualFold(schema, "sys") ||
+		strings.EqualFold(schema, "mysql")
 }
