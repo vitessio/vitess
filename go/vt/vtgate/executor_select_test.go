@@ -1286,9 +1286,9 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify wrapping with `weight_string` works
-	queryAs := "select col1, textcol as textcol2 from user order by textcol2 desc"
-	gotResultAs, errAs := executorExec(executor, queryAs, nil)
-	t.Logf("queryAs: %v, gotResultAs: %v", queryAs, gotResultAs)
+	queryAs := "select col1, textcol as textcol from user order by textcol desc"
+	_, errAs := executorExec(executor, queryAs, nil)
+	//t.Logf("queryAs: %v, gotResultAs: %v", queryAs, gotResultAs)
 	require.NoError(t, errAs)
 
 	wantQueries := []*querypb.BoundQuery{{
