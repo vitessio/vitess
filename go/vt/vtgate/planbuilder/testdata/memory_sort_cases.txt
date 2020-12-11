@@ -491,3 +491,60 @@
     ]
   }
 }
+
+# unary expression
+"select a from user order by binary a desc"
+{
+  "QueryType": "SELECT",
+  "Original": "select a from user order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a from user where 1 != 1",
+    "OrderBy": "0 DESC",
+    "Query": "select a from user order by binary a desc",
+    "Table": "user"
+  }
+}
+
+# unary expression in join query
+"select u.a from user u join music m on u.a = m.a order by binary a desc"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a from user as u where 1 != 1",
+        "OrderBy": "0 DESC",
+        "Query": "select u.a from user as u order by binary a desc",
+        "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music as m where 1 != 1",
+        "Query": "select 1 from music as m where m.a = :u_a",
+        "Table": "music"
+      }
+    ]
+  }
+}
