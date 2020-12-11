@@ -191,6 +191,9 @@ var (
 		input:  "select /* column alias as string without as */ a \"b\" from t",
 		output: "select /* column alias as string without as */ a as b from t",
 	}, {
+		input:  "select /* column alias with non_reserved keyword */ a as auto_increment from t",
+		output: "select /* column alias with non_reserved keyword */ a as `auto_increment` from t",
+	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
 		input:  "select next value for t",
