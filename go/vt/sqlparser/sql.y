@@ -3953,7 +3953,6 @@ reserved_keyword:
 | AND
 | AS
 | ASC
-| AUTO_INCREMENT
 | BETWEEN
 | BINARY
 | BY
@@ -4086,6 +4085,7 @@ non_reserved_keyword:
 | ACTIVE
 | ADMIN
 | ALGORITHM
+| AUTO_INCREMENT
 | BEGIN
 | BIGINT
 | BIT
