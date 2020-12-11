@@ -25,6 +25,23 @@ type Config struct {
 	ClusterName string
 }
 
+// Parse returns a new config with the given cluster ID and name, after
+// attempting to parse the command-line pflags into that Config. See
+// (*Config).Parse() for more details.
+func Parse(clusterID string, clusterName string, args []string) (*Config, error) {
+	cfg := &Config{
+		ClusterID:   clusterID,
+		ClusterName: clusterName,
+	}
+
+	err := cfg.Parse(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
 // Parse reads options specified as command-line pflags (--key=value, note the
 // double-dash!) into a vtsql.Config. It is meant to be called from
 // (*cluster.Cluster).New().
