@@ -4,10 +4,15 @@
 package vtadmin
 
 import (
+	context "context"
 	fmt "fmt"
 	math "math"
 
 	proto "github.com/golang/protobuf/proto"
+	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
+	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -20,6 +25,103 @@ var _ = math.Inf
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+
+// Cluster represents information about a Vitess cluster.
+type Cluster struct {
+	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                 string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *Cluster) Reset()         { *m = Cluster{} }
+func (m *Cluster) String() string { return proto.CompactTextString(m) }
+func (*Cluster) ProtoMessage()    {}
+func (*Cluster) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{0}
+}
+
+func (m *Cluster) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Cluster.Unmarshal(m, b)
+}
+func (m *Cluster) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Cluster.Marshal(b, m, deterministic)
+}
+func (m *Cluster) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Cluster.Merge(m, src)
+}
+func (m *Cluster) XXX_Size() int {
+	return xxx_messageInfo_Cluster.Size(m)
+}
+func (m *Cluster) XXX_DiscardUnknown() {
+	xxx_messageInfo_Cluster.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Cluster proto.InternalMessageInfo
+
+func (m *Cluster) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *Cluster) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+// Tablet groups the topo information of a tablet together with the Vitess
+// cluster it belongs to.
+type Tablet struct {
+	Cluster              *Cluster         `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Tablet               *topodata.Tablet `protobuf:"bytes,2,opt,name=tablet,proto3" json:"tablet,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
+	XXX_unrecognized     []byte           `json:"-"`
+	XXX_sizecache        int32            `json:"-"`
+}
+
+func (m *Tablet) Reset()         { *m = Tablet{} }
+func (m *Tablet) String() string { return proto.CompactTextString(m) }
+func (*Tablet) ProtoMessage()    {}
+func (*Tablet) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{1}
+}
+
+func (m *Tablet) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Tablet.Unmarshal(m, b)
+}
+func (m *Tablet) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Tablet.Marshal(b, m, deterministic)
+}
+func (m *Tablet) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Tablet.Merge(m, src)
+}
+func (m *Tablet) XXX_Size() int {
+	return xxx_messageInfo_Tablet.Size(m)
+}
+func (m *Tablet) XXX_DiscardUnknown() {
+	xxx_messageInfo_Tablet.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Tablet proto.InternalMessageInfo
+
+func (m *Tablet) GetCluster() *Cluster {
+	if m != nil {
+		return m.Cluster
+	}
+	return nil
+}
+
+func (m *Tablet) GetTablet() *topodata.Tablet {
+	if m != nil {
+		return m.Tablet
+	}
+	return nil
+}
 
 // VTGate represents information about a single VTGate host.
 type VTGate struct {
@@ -44,7 +146,7 @@ func (m *VTGate) Reset()         { *m = VTGate{} }
 func (m *VTGate) String() string { return proto.CompactTextString(m) }
 func (*VTGate) ProtoMessage()    {}
 func (*VTGate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{0}
+	return fileDescriptor_609739e22a0a50b3, []int{2}
 }
 
 func (m *VTGate) XXX_Unmarshal(b []byte) error {
@@ -100,23 +202,411 @@ func (m *VTGate) GetKeyspaces() []string {
 	return nil
 }
 
+type GetGatesRequest struct {
+	ClusterIds           []string `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetGatesRequest) Reset()         { *m = GetGatesRequest{} }
+func (m *GetGatesRequest) String() string { return proto.CompactTextString(m) }
+func (*GetGatesRequest) ProtoMessage()    {}
+func (*GetGatesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{3}
+}
+
+func (m *GetGatesRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetGatesRequest.Unmarshal(m, b)
+}
+func (m *GetGatesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetGatesRequest.Marshal(b, m, deterministic)
+}
+func (m *GetGatesRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetGatesRequest.Merge(m, src)
+}
+func (m *GetGatesRequest) XXX_Size() int {
+	return xxx_messageInfo_GetGatesRequest.Size(m)
+}
+func (m *GetGatesRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetGatesRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetGatesRequest proto.InternalMessageInfo
+
+func (m *GetGatesRequest) GetClusterIds() []string {
+	if m != nil {
+		return m.ClusterIds
+	}
+	return nil
+}
+
+type GetGatesResponse struct {
+	Gates                []*VTGate `protobuf:"bytes,1,rep,name=gates,proto3" json:"gates,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
+}
+
+func (m *GetGatesResponse) Reset()         { *m = GetGatesResponse{} }
+func (m *GetGatesResponse) String() string { return proto.CompactTextString(m) }
+func (*GetGatesResponse) ProtoMessage()    {}
+func (*GetGatesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{4}
+}
+
+func (m *GetGatesResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetGatesResponse.Unmarshal(m, b)
+}
+func (m *GetGatesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetGatesResponse.Marshal(b, m, deterministic)
+}
+func (m *GetGatesResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetGatesResponse.Merge(m, src)
+}
+func (m *GetGatesResponse) XXX_Size() int {
+	return xxx_messageInfo_GetGatesResponse.Size(m)
+}
+func (m *GetGatesResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetGatesResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetGatesResponse proto.InternalMessageInfo
+
+func (m *GetGatesResponse) GetGates() []*VTGate {
+	if m != nil {
+		return m.Gates
+	}
+	return nil
+}
+
+type GetTabletRequest struct {
+	Hostname string `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	// ClusterIDs is an optional parameter to narrow the scope of the search, if
+	// the caller knows which cluster the tablet may be in, or, to disamiguate if
+	// multiple clusters have a tablet with the same hostname.
+	ClusterIds           []string `protobuf:"bytes,2,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetTabletRequest) Reset()         { *m = GetTabletRequest{} }
+func (m *GetTabletRequest) String() string { return proto.CompactTextString(m) }
+func (*GetTabletRequest) ProtoMessage()    {}
+func (*GetTabletRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{5}
+}
+
+func (m *GetTabletRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetTabletRequest.Unmarshal(m, b)
+}
+func (m *GetTabletRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetTabletRequest.Marshal(b, m, deterministic)
+}
+func (m *GetTabletRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetTabletRequest.Merge(m, src)
+}
+func (m *GetTabletRequest) XXX_Size() int {
+	return xxx_messageInfo_GetTabletRequest.Size(m)
+}
+func (m *GetTabletRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetTabletRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetTabletRequest proto.InternalMessageInfo
+
+func (m *GetTabletRequest) GetHostname() string {
+	if m != nil {
+		return m.Hostname
+	}
+	return ""
+}
+
+func (m *GetTabletRequest) GetClusterIds() []string {
+	if m != nil {
+		return m.ClusterIds
+	}
+	return nil
+}
+
+type GetTabletsRequest struct {
+	ClusterIds           []string `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetTabletsRequest) Reset()         { *m = GetTabletsRequest{} }
+func (m *GetTabletsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetTabletsRequest) ProtoMessage()    {}
+func (*GetTabletsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{6}
+}
+
+func (m *GetTabletsRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetTabletsRequest.Unmarshal(m, b)
+}
+func (m *GetTabletsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetTabletsRequest.Marshal(b, m, deterministic)
+}
+func (m *GetTabletsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetTabletsRequest.Merge(m, src)
+}
+func (m *GetTabletsRequest) XXX_Size() int {
+	return xxx_messageInfo_GetTabletsRequest.Size(m)
+}
+func (m *GetTabletsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetTabletsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetTabletsRequest proto.InternalMessageInfo
+
+func (m *GetTabletsRequest) GetClusterIds() []string {
+	if m != nil {
+		return m.ClusterIds
+	}
+	return nil
+}
+
+type GetTabletsResponse struct {
+	Tablets              []*Tablet `protobuf:"bytes,1,rep,name=tablets,proto3" json:"tablets,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
+}
+
+func (m *GetTabletsResponse) Reset()         { *m = GetTabletsResponse{} }
+func (m *GetTabletsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetTabletsResponse) ProtoMessage()    {}
+func (*GetTabletsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{7}
+}
+
+func (m *GetTabletsResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetTabletsResponse.Unmarshal(m, b)
+}
+func (m *GetTabletsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetTabletsResponse.Marshal(b, m, deterministic)
+}
+func (m *GetTabletsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetTabletsResponse.Merge(m, src)
+}
+func (m *GetTabletsResponse) XXX_Size() int {
+	return xxx_messageInfo_GetTabletsResponse.Size(m)
+}
+func (m *GetTabletsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetTabletsResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetTabletsResponse proto.InternalMessageInfo
+
+func (m *GetTabletsResponse) GetTablets() []*Tablet {
+	if m != nil {
+		return m.Tablets
+	}
+	return nil
+}
+
 func init() {
+	proto.RegisterType((*Cluster)(nil), "vtadmin.Cluster")
+	proto.RegisterType((*Tablet)(nil), "vtadmin.Tablet")
 	proto.RegisterType((*VTGate)(nil), "vtadmin.VTGate")
+	proto.RegisterType((*GetGatesRequest)(nil), "vtadmin.GetGatesRequest")
+	proto.RegisterType((*GetGatesResponse)(nil), "vtadmin.GetGatesResponse")
+	proto.RegisterType((*GetTabletRequest)(nil), "vtadmin.GetTabletRequest")
+	proto.RegisterType((*GetTabletsRequest)(nil), "vtadmin.GetTabletsRequest")
+	proto.RegisterType((*GetTabletsResponse)(nil), "vtadmin.GetTabletsResponse")
 }
 
 func init() { proto.RegisterFile("vtadmin.proto", fileDescriptor_609739e22a0a50b3) }
 
 var fileDescriptor_609739e22a0a50b3 = []byte{
-	// 171 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2d, 0x2b, 0x49, 0x4c,
-	0xc9, 0xcd, 0xcc, 0xd3, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x87, 0x72, 0x95, 0x5a, 0x18,
-	0xb9, 0xd8, 0xc2, 0x42, 0xdc, 0x13, 0x4b, 0x52, 0x85, 0xa4, 0xb8, 0x38, 0x32, 0xf2, 0x8b, 0x4b,
-	0xf2, 0x12, 0x73, 0x53, 0x25, 0x18, 0x15, 0x18, 0x35, 0x38, 0x83, 0xe0, 0x7c, 0x21, 0x21, 0x2e,
-	0x96, 0x82, 0xfc, 0xfc, 0x1c, 0x09, 0x26, 0xb0, 0x38, 0x98, 0x0d, 0x12, 0x4b, 0x4e, 0xcd, 0xc9,
-	0x91, 0x60, 0x86, 0x88, 0x81, 0xd8, 0x42, 0x12, 0x5c, 0xec, 0xc9, 0x39, 0xa5, 0xc5, 0x25, 0xa9,
-	0x45, 0x12, 0x2c, 0x60, 0x61, 0x18, 0x57, 0x48, 0x86, 0x8b, 0x33, 0x3b, 0xb5, 0xb2, 0xb8, 0x20,
-	0x31, 0x39, 0xb5, 0x58, 0x82, 0x55, 0x81, 0x59, 0x83, 0x33, 0x08, 0x21, 0xe0, 0xa4, 0x16, 0xa5,
-	0x52, 0x96, 0x59, 0x92, 0x5a, 0x5c, 0xac, 0x97, 0x99, 0xaf, 0x0f, 0x61, 0xe9, 0xa7, 0xe7, 0xeb,
-	0x97, 0x95, 0xe8, 0x83, 0xdd, 0xab, 0x0f, 0x75, 0x6e, 0x12, 0x1b, 0x98, 0x6b, 0x0c, 0x08, 0x00,
-	0x00, 0xff, 0xff, 0xc6, 0x5b, 0xcf, 0x4e, 0xcf, 0x00, 0x00, 0x00,
+	// 407 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x93, 0x4f, 0xaf, 0xd2, 0x40,
+	0x14, 0xc5, 0x69, 0x81, 0x96, 0x5e, 0x22, 0xe0, 0x5d, 0xd5, 0x6a, 0x22, 0x99, 0xa8, 0x41, 0x13,
+	0x69, 0x52, 0xdd, 0xb0, 0x32, 0xe8, 0x82, 0xb8, 0x32, 0x69, 0x08, 0x0b, 0x17, 0x9a, 0x42, 0x27,
+	0xd8, 0x58, 0x98, 0xca, 0x0c, 0x24, 0xee, 0xfd, 0x80, 0x7e, 0xa4, 0x97, 0xf9, 0xd3, 0xe9, 0xe3,
+	0x4f, 0x5e, 0xde, 0x6e, 0xe6, 0x9c, 0x7b, 0xee, 0xfc, 0xee, 0x6d, 0x0a, 0x4f, 0x4e, 0x22, 0xcb,
+	0x77, 0xc5, 0x7e, 0x5a, 0x1d, 0x98, 0x60, 0xe8, 0x9b, 0x6b, 0x34, 0x10, 0xac, 0x62, 0x79, 0x26,
+	0x32, 0x6d, 0x90, 0xf7, 0xe0, 0x7f, 0x29, 0x8f, 0x5c, 0xd0, 0x03, 0x0e, 0xc0, 0x2d, 0xf2, 0xd0,
+	0x19, 0x3b, 0x93, 0x20, 0x75, 0x8b, 0x1c, 0x11, 0x3a, 0xfb, 0x6c, 0x47, 0x43, 0x57, 0x29, 0xea,
+	0x4c, 0x7e, 0x80, 0xb7, 0xcc, 0xd6, 0x25, 0x15, 0xf8, 0x0e, 0xfc, 0x8d, 0x0e, 0xaa, 0x48, 0x3f,
+	0x19, 0x4d, 0xeb, 0x27, 0x4d, 0xc3, 0xb4, 0x2e, 0xc0, 0x09, 0x78, 0x42, 0xa5, 0x54, 0x2f, 0x59,
+	0x6a, 0x29, 0x74, 0xb7, 0xd4, 0xf8, 0xe4, 0x9f, 0x03, 0xde, 0x6a, 0xb9, 0xc8, 0x04, 0xc5, 0x08,
+	0x7a, 0xbf, 0x18, 0x17, 0x0a, 0x41, 0x43, 0xd9, 0xbb, 0x44, 0xab, 0x18, 0x2b, 0x6b, 0x34, 0x79,
+	0x96, 0xda, 0x86, 0x96, 0x65, 0xd8, 0xd6, 0x9a, 0x3c, 0x63, 0xd8, 0x40, 0x76, 0x94, 0x6c, 0x91,
+	0x5e, 0x40, 0xf0, 0x9b, 0xfe, 0xe5, 0x55, 0xb6, 0xa1, 0x3c, 0xec, 0x8e, 0xdb, 0x93, 0x20, 0x6d,
+	0x04, 0x92, 0xc0, 0x70, 0x41, 0x85, 0xc4, 0xe0, 0x29, 0xfd, 0x73, 0xa4, 0x5c, 0xe0, 0x4b, 0xe8,
+	0x9b, 0xec, 0xcf, 0x22, 0xe7, 0xa1, 0xa3, 0x22, 0x60, 0xa4, 0xaf, 0x39, 0x27, 0x33, 0x18, 0x35,
+	0x19, 0x5e, 0xb1, 0x3d, 0xa7, 0xf8, 0x1a, 0xba, 0x5b, 0x29, 0xa8, 0xf2, 0x7e, 0x32, 0xb4, 0x2b,
+	0xd2, 0x33, 0xa6, 0xda, 0x25, 0xdf, 0x54, 0xd4, 0xac, 0xc2, 0xbc, 0xf7, 0xd0, 0xf8, 0x17, 0x2c,
+	0xee, 0x15, 0xcb, 0x47, 0x78, 0x6a, 0x1b, 0x3e, 0x7e, 0x82, 0x4f, 0x80, 0xf7, 0x53, 0x66, 0x86,
+	0xb7, 0xe0, 0xeb, 0x8f, 0x73, 0x3d, 0x85, 0x21, 0xae, 0xfd, 0xe4, 0xbf, 0x03, 0xfe, 0x6a, 0x39,
+	0x97, 0x1e, 0xce, 0xa1, 0x57, 0xaf, 0x03, 0x43, 0x9b, 0xb8, 0xd8, 0x6a, 0xf4, 0xec, 0x86, 0xa3,
+	0xdf, 0x25, 0x2d, 0x9c, 0x41, 0x60, 0x79, 0xf0, 0xac, 0xf2, 0x6c, 0x55, 0xd1, 0x25, 0x10, 0x69,
+	0xe1, 0x02, 0xa0, 0x19, 0x05, 0xa3, 0xeb, 0xac, 0x25, 0x78, 0x7e, 0xd3, 0xab, 0x19, 0x3e, 0xbf,
+	0xf9, 0xfe, 0xea, 0x54, 0x08, 0xca, 0xf9, 0xb4, 0x60, 0xb1, 0x3e, 0xc5, 0x5b, 0x16, 0x9f, 0x44,
+	0xac, 0xfe, 0x9f, 0xd8, 0x84, 0xd7, 0x9e, 0xba, 0x7e, 0xb8, 0x0b, 0x00, 0x00, 0xff, 0xff, 0xc2,
+	0xb1, 0xce, 0x36, 0x78, 0x03, 0x00, 0x00,
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ context.Context
+var _ grpc.ClientConn
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion4
+
+// VTAdminClient is the client API for VTAdmin service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type VTAdminClient interface {
+	// GetGates returns all gates across all the specified clusters.
+	GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error)
+	// GetTablet looks up a tablet by hostname across all clusters and returns
+	// the result.
+	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
+	// GetTablets returns all tablets across all the specified clusters.
+	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
+}
+
+type vTAdminClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewVTAdminClient(cc *grpc.ClientConn) VTAdminClient {
+	return &vTAdminClient{cc}
+}
+
+func (c *vTAdminClient) GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error) {
+	out := new(GetGatesResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetGates", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error) {
+	out := new(Tablet)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTablet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error) {
+	out := new(GetTabletsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTablets", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// VTAdminServer is the server API for VTAdmin service.
+type VTAdminServer interface {
+	// GetGates returns all gates across all the specified clusters.
+	GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error)
+	// GetTablet looks up a tablet by hostname across all clusters and returns
+	// the result.
+	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
+	// GetTablets returns all tablets across all the specified clusters.
+	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
+}
+
+// UnimplementedVTAdminServer can be embedded to have forward compatible implementations.
+type UnimplementedVTAdminServer struct {
+}
+
+func (*UnimplementedVTAdminServer) GetGates(ctx context.Context, req *GetGatesRequest) (*GetGatesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGates not implemented")
+}
+func (*UnimplementedVTAdminServer) GetTablet(ctx context.Context, req *GetTabletRequest) (*Tablet, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTablet not implemented")
+}
+func (*UnimplementedVTAdminServer) GetTablets(ctx context.Context, req *GetTabletsRequest) (*GetTabletsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
+}
+
+func RegisterVTAdminServer(s *grpc.Server, srv VTAdminServer) {
+	s.RegisterService(&_VTAdmin_serviceDesc, srv)
+}
+
+func _VTAdmin_GetGates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetGates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetGates",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetGates(ctx, req.(*GetGatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetTablet(ctx, req.(*GetTabletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTabletsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetTablets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetTablets",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetTablets(ctx, req.(*GetTabletsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _VTAdmin_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "vtadmin.VTAdmin",
+	HandlerType: (*VTAdminServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetGates",
+			Handler:    _VTAdmin_GetGates_Handler,
+		},
+		{
+			MethodName: "GetTablet",
+			Handler:    _VTAdmin_GetTablet_Handler,
+		},
+		{
+			MethodName: "GetTablets",
+			Handler:    _VTAdmin_GetTablets_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "vtadmin.proto",
 }

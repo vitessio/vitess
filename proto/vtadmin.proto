@@ -21,6 +21,37 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "topodata.proto";
+
+/* Services */
+
+// VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
+// across a range of Vitess clusters.
+service VTAdmin {
+    // GetGates returns all gates across all the specified clusters.
+    rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
+    // GetTablet looks up a tablet by hostname across all clusters and returns
+    // the result.
+    rpc GetTablet(GetTabletRequest) returns (Tablet) {};
+    // GetTablets returns all tablets across all the specified clusters.
+    rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
+}
+
+/* Data types */
+
+// Cluster represents information about a Vitess cluster.
+message Cluster {
+    string id = 1;
+    string name = 2;
+}
+
+// Tablet groups the topo information of a tablet together with the Vitess
+// cluster it belongs to.
+message Tablet {
+    Cluster cluster = 1;
+    topodata.Tablet tablet = 2;
+}
+
 // VTGate represents information about a single VTGate host.
 message VTGate {
     // Hostname is the shortname of the VTGate.
@@ -35,4 +66,30 @@ message VTGate {
     string cluster = 4;
     // Keyspaces is the list of keyspaces-to-watch for the VTGate.
     repeated string keyspaces = 5;
+}
+
+/* Request/Response types */
+
+message GetGatesRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetGatesResponse {
+    repeated VTGate gates = 1;
+}
+
+message GetTabletRequest {
+    string hostname = 1;
+    // ClusterIDs is an optional parameter to narrow the scope of the search, if
+    // the caller knows which cluster the tablet may be in, or, to disamiguate if
+    // multiple clusters have a tablet with the same hostname.
+    repeated string cluster_ids = 2;
+}
+
+message GetTabletsRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetTabletsResponse {
+    repeated Tablet tablets = 1;
 }
