@@ -34,8 +34,8 @@ var (
 )
 
 func run(cmd *cobra.Command, args []string) {
-	clusters := make([]*cluster.Cluster, len(clusterConfigs))
 	configs := clusterFileConfig.Combine(defaultClusterConfig, clusterConfigs)
+	clusters := make([]*cluster.Cluster, len(configs))
 
 	if len(configs) == 0 {
 		log.Fatal("must specify at least one cluster")
