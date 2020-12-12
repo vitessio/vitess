@@ -55,6 +55,11 @@ func (cf *ClustersFlag) String() string {
 	return buf.String()
 }
 
+// Type is part of the pflag.Value interface.
+func (cf *ClustersFlag) Type() string {
+	return "cluster.ClustersFlag"
+}
+
 // Set is part of the flag.Value interface. It merges the parsed config into the
 // map, allowing ClustersFlag to power a repeated flag. See (*Config).Set for
 // details on flag parsing.

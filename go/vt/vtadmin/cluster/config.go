@@ -11,8 +11,16 @@ type Config struct {
 	VtSQLFlags           map[string]string
 }
 
+// Cluster returns a new cluster instance from the given config.
+func (cfg Config) Cluster() (*Cluster, error) {
+	return New(cfg)
+}
+
 // String is part of the flag.Value interface.
 func (cfg *Config) String() string { return fmt.Sprintf("%T:%+v", cfg, *cfg) }
+
+// Type is part of the pflag.Value interface.
+func (cfg *Config) Type() string { return "cluster.Config" }
 
 // Set is part of the flag.Value interface. Each flag is parsed according to the
 // following DSN:

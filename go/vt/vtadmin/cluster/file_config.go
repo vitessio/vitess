@@ -66,6 +66,11 @@ func (fc *FileConfig) String() string {
 	return buf.String()
 }
 
+// Type is part of the pflag.Value interface.
+func (fc *FileConfig) Type() string {
+	return "cluster.FileConfig"
+}
+
 // Set is part of the flag.Value interface. It loads the file configuration
 // found at the path passed to the flag.
 func (fc *FileConfig) Set(value string) error {
