@@ -127,7 +127,12 @@ func parseOne(cfg *Config, name string, val string) error {
 		cfg.DiscoveryImpl = val
 	default:
 		if strings.HasPrefix(name, "vtsql-") {
+			if cfg.VtSQLFlags == nil {
+				cfg.VtSQLFlags = map[string]string{}
+			}
+
 			cfg.VtSQLFlags[strings.TrimPrefix(name, "vtsql-")] = val
+
 			return nil
 		}
 
