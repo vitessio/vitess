@@ -354,10 +354,6 @@
   }
 }
 
-# create view with Cannot auto-resolve for cross-shard joins
-"create view user.view_a as select col from user join user_extra"
-"symbol col not found"
-
 # create view with join that can be solved in each shard separately
 "create view user.view_a as select user.id from user join user_extra on user.id = user_extra.user_id"
 {
@@ -402,10 +398,6 @@
     "Query": "create view view_a as select * from pin_test"
   }
 }
-
-# create view with join that cannot be served in each shard separately
-"create view user.view_a as select user_extra.id from user join user_extra"
-"Complex select queries are not supported in create view statements"
 
 # create view with Expression with single-route reference
 "create view user.view_a as select user.col, user_extra.id + user_extra.col from user join user_extra on user.id = user_extra.user_id"
@@ -485,10 +477,6 @@
     "Query": "create view view_a as select * from user where id = 0x04"
   }
 }
-
-# create view with sharded limit
-"create view user.view_a as select id from user order by id limit 10"
-"Complex select queries are not supported in create view statements"
 
 # create view with limit works if it can be dropped
 "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5"
@@ -579,10 +567,6 @@
     "Query": "create view view_a as select * from user where id = 1 and `name` = true"
   }
 }
-
-# create view with top level subquery in select
-"create view user.view_a as select a, (select col from user) from unsharded"
-"Complex select queries are not supported in create view statements"
 
 # create view with union with the same target shard
 "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1"
@@ -703,11 +687,3 @@
     "Query": "create view view_a as select * from music where user_id = 1"
   }
 }
-
-# create view with sql_calc_found_rows with limit
-"create view user.view_a as select sql_calc_found_rows * from music limit 100"
-"Complex select queries are not supported in create view statements"
-
-# create view with sql_calc_found_rows with group by and having
-"create view user.view_a as select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
-"Complex select queries are not supported in create view statements"
