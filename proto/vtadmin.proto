@@ -50,6 +50,14 @@ message Cluster {
 message Tablet {
     Cluster cluster = 1;
     topodata.Tablet tablet = 2;
+
+    enum ServingState {
+        UNKNOWN = 0;
+        SERVING = 1;
+        NOT_SERVING = 2;
+    }
+
+    ServingState state = 3;
 }
 
 // VTGate represents information about a single VTGate host.
