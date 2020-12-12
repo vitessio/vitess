@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spf13/pflag"
+
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -39,7 +41,10 @@ type Discovery interface {
 
 // Factory represents a function that can create a Discovery implementation.
 // This package will provide several implementations and register them for use.
-type Factory func(cluster string, args []string) (Discovery, error)
+// The flags FlagSet is provided for convenience, but also to hint to plugin
+// developers that they should expect the args to be in a format compatible with
+// pflag.
+type Factory func(cluster string, flags *pflag.FlagSet, args []string) (Discovery, error)
 
 // nolint:gochecknoglobals
 var registry = map[string]Factory{}
@@ -65,7 +70,7 @@ func New(impl string, cluster string, args []string) (Discovery, error) {
 		return nil, fmt.Errorf("%w %s", ErrImplementationNotRegistered, impl)
 	}
 
-	return factory(cluster, args)
+	return factory(cluster, pflag.NewFlagSet("discovery:"+impl, pflag.ContinueOnError), args)
 }
 
 func init() { // nolint:gochecknoinits
