@@ -2,6 +2,7 @@ package vtadmin
 
 import (
 	"context"
+	"net/http"
 	"sync"
 
 	"github.com/gorilla/handlers"
@@ -41,6 +42,10 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	}).Sort(clusters)
 
 	serv := grpcserver.New("vtadmin", opts)
+	serv.Router().HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok\n"))
+	})
+
 	router := serv.Router().PathPrefix("/api").Subrouter()
 
 	api := &API{
