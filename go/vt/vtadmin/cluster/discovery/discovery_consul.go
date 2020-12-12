@@ -3,15 +3,15 @@ package discovery
 import (
 	"bytes"
 	"context"
-	"flag"
 	"math/rand"
 	"strings"
 	"text/template"
 	"time"
 
 	consul "github.com/hashicorp/consul/api"
-
+	"github.com/spf13/pflag"
 	"vitess.io/vitess/go/trace"
+
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -36,7 +36,7 @@ type ConsulDiscovery struct {
 // NewConsul returns a ConsulDiscovery for the given cluster. Args are a slice
 // of command-line flags (e.g. "-key=value") that are parsed by a consul-
 // specific flag set.
-func NewConsul(cluster string, args []string) (Discovery, error) { // nolint:funlen
+func NewConsul(cluster string, flags *pflag.FlagSet, args []string) (Discovery, error) { // nolint:funlen
 	c, err := consul.NewClient(consul.DefaultConfig())
 	if err != nil {
 		return nil, err
@@ -54,8 +54,6 @@ func NewConsul(cluster string, args []string) (Discovery, error) { // nolint:fun
 		client:       &consulClient{c},
 		queryOptions: qopts,
 	}
-
-	flags := flag.NewFlagSet("", flag.ContinueOnError)
 
 	flags.DurationVar(&disco.queryOptions.MaxAge, "max-age", time.Second*30,
 		"how old a cached value can be before consul queries stop using it")
