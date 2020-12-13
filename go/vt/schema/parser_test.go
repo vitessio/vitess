@@ -64,22 +64,24 @@ func TestNormalizeOnlineDDL(t *testing.T) {
 		"create index i_idx on t(name(12))":             {sqls: []string{"alter table t add index i_idx (`name`(12))"}},
 		"create index i_idx on t(id, `ts`, name(12))":   {sqls: []string{"alter table t add index i_idx (id, ts, `name`(12))"}},
 		"create unique index i_idx on t(id)":            {sqls: []string{"alter table t add unique index i_idx (id)"}},
-		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add index i_idx using btree (id)"}},
+		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add index i_idx (id) using btree"}},
 		"create index with syntax error i_idx on t(id)": {isError: true},
 		"select * from t":                               {isError: true},
 		"drop database t":                               {isError: true},
 	}
 	for query, expect := range tests {
-		normalized, err := NormalizeOnlineDDL(query)
-		if expect.isError {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-			sqls := []string{}
-			for _, n := range normalized {
-				sqls = append(sqls, n.SQL)
+		t.Run(query, func(t *testing.T) {
+			normalized, err := NormalizeOnlineDDL(query)
+			if expect.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				sqls := []string{}
+				for _, n := range normalized {
+					sqls = append(sqls, n.SQL)
+				}
+				assert.Equal(t, expect.sqls, sqls)
 			}
-			assert.Equal(t, expect.sqls, sqls)
-		}
+		})
 	}
 }
