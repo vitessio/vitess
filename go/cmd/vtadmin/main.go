@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
-	"log"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
@@ -69,7 +69,16 @@ func main() {
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
 
+	// glog flags, no better way to do this
+	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
+	rootCmd.Flags().AddGoFlag(flag.Lookup("logtostderr"))
+	rootCmd.Flags().AddGoFlag(flag.Lookup("alsologtostderr"))
+	rootCmd.Flags().AddGoFlag(flag.Lookup("stderrthreshold"))
+	rootCmd.Flags().AddGoFlag(flag.Lookup("log_dir"))
+
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
+
+	log.Flush()
 }
