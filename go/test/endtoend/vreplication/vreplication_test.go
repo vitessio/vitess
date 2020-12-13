@@ -51,7 +51,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	allCellNames = "zone1"
 	vc = InitCluster(t, []string{defaultCellName})
-	assert.NotNil(t, vc)
+	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
 	defer func() { defaultReplicas = 1 }()
 
@@ -60,7 +60,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 	vtgate = defaultCell.Vtgates[0]
-	assert.NotNil(t, vtgate)
+	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 
 	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
@@ -97,7 +97,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	allCellNames = "zone1,zone2"
 
 	vc = InitCluster(t, cells)
-	assert.NotNil(t, vc)
+	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
@@ -108,7 +108,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 
 	vtgate = cell1.Vtgates[0]
-	assert.NotNil(t, vtgate)
+	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
@@ -117,21 +117,13 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name)
-
-	// commenting lines below because of resource constraints
-	//insertMoreCustomers(t, 16)
-	//reshardCustomer2to4Split(t, []*Cell{cell1, cell2}, cell2.Name)
-	//validateCount(t, vtgateConn, "customer:-40", "customer", 5)
-	//validateCount(t, vtgateConn, "customer:40-80", "customer", 5)
-	//validateCount(t, vtgateConn, "customer:80-c0", "customer", 6)
-	//validateCount(t, vtgateConn, "customer:c0-", "customer", 5)
 }
 
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 
 	vc = InitCluster(t, cells)
-	assert.NotNil(t, vc)
+	require.NotNil(t, vc)
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
@@ -147,7 +139,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	require.NoError(t, err, "command failed with output: %v", result)
 
 	vtgate = cell1.Vtgates[0]
-	assert.NotNil(t, vtgate)
+	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
@@ -156,14 +148,6 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
-
-	// commenting lines below because of resource constraints
-	//insertMoreCustomers(t, 16)
-	//reshardCustomer2to4Split(t, []*Cell{cell1, cell2}, "alias")
-	//validateCount(t, vtgateConn, "customer:-40", "customer", 5)
-	//validateCount(t, vtgateConn, "customer:40-80", "customer", 5)
-	//validateCount(t, vtgateConn, "customer:80-c0", "customer", 6)
-	//validateCount(t, vtgateConn, "customer:c0-", "customer", 5)
 }
 
 func insertInitialData(t *testing.T) {
@@ -200,6 +184,10 @@ func insertMoreProducts(t *testing.T) {
 
 // FIXME: if testReverse if false we don't dropsources and that creates a problem later on in the test due to existence of blacklisted tables
 func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string) {
+	workflow := "p2c"
+	sourceKs := "product"
+	targetKs := "customer"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
 	}
@@ -209,126 +197,75 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "80-"), 1); err != nil {
 		t.Fatal(err)
 	}
-
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+sourceCellOrAlias, "-workflow=p2c",
-		"-tablet_types="+"master,replica,rdonly", "product", "customer", "customer"); err != nil {
-		t.Fatalf("MoveTables command failed with %+v\n", err)
-	}
+	tables := "customer"
+	moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 	// Assume we are operating on first cell
 	defaultCell := cells[0]
+	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+	customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+	customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 
-	customerTab1 := vc.Cells[defaultCell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
-	customerTab2 := vc.Cells[defaultCell.Name].Keyspaces["customer"].Shards["80-"].Tablets["zone1-300"].Vttablet
-
-	if vc.WaitForVReplicationToCatchup(customerTab1, "p2c", "vt_customer", 5*time.Second) != nil {
-		t.Fatal("MoveTables timed out for customer.p2c -80")
-
-	}
-	if vc.WaitForVReplicationToCatchup(customerTab2, "p2c", "vt_customer", 5*time.Second) != nil {
-		t.Fatal("MoveTables timed out for customer.p2c 80-")
-	}
+	catchup(t, customerTab1, workflow, "MoveTables")
+	catchup(t, customerTab2, workflow, "MoveTables")
 
 	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 	query := "select * from customer"
-	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 	insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
-	matchInsertQuery1 := "insert into customer(cid, name) values (:vtg1, :vtg2)"
-	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
-	vdiff(t, "customer.p2c")
-	var output string
-	var err error
-
-	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=rdonly", "customer.p2c"); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-	want := dryRunResultsReadCustomerShard
-	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "-dry_run", "customer.p2c"); err != nil {
-		t.Fatalf("SwitchReads Dry Run error: %s\n", output)
-	}
-	validateDryRunResults(t, output, want)
-	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "customer.p2c"); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-
-	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
-	want = dryRunResultsSwitchWritesCustomerShard
-	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", "customer.p2c"); err != nil {
-		t.Fatalf("SwitchWrites error: %s\n", output)
-	}
-	validateDryRunResults(t, output, want)
-
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "customer.p2c"); err != nil {
-		t.Fatalf("SwitchWrites error: %s\n", output)
-	}
+	matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+	vdiff(t, ksWorkflow)
+	switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
+	switchReads(t, allCellNames, ksWorkflow)
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
+	switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
+	switchWrites(t, ksWorkflow)
 	ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 	printShardPositions(vc, ksShards)
-	insertQuery2 := "insert into customer(name) values('tempCustomer2')"
-	matchInsertQuery2 := "insert into customer(name, cid) values (:vtg1, :_cid0)"
-	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
+	insertQuery2 := "insert into customer(name, cid) values('tempCustomer2', 100)"
+	matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
+	require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
 	insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" //ID 101, hence due to reverse_bits in shard 80-
-	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
 
 	insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" //ID 102, hence due to reverse_bits in shard -80
-	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
+	time.Sleep(1 * time.Second) // wait for vreplication to catchup
 
+	reverseKsWorkflow := "product.p2c_reverse"
 	if testReverse {
 		//Reverse Replicate
-		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=rdonly", "product.p2c_reverse"); err != nil {
-			t.Fatalf("SwitchReads error: %s\n", output)
-		}
-		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "product.p2c_reverse"); err != nil {
-			t.Fatalf("SwitchReads error: %s\n", output)
-		}
+		switchReads(t, allCellNames, reverseKsWorkflow)
 		printShardPositions(vc, ksShards)
-		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "product.p2c_reverse"); err != nil {
-			t.Fatalf("SwitchWrites error: %s\n", output)
-		}
+		switchWrites(t, reverseKsWorkflow)
+
 		insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
-		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 		// both inserts go into 80-, this tests the edge-case where a stream (-80) has no relevant new events after the previous switch
 		insertQuery1 = "insert into customer(cid, name) values(1003, 'tempCustomer6')"
-		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1))
+		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1))
 		insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
-		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
+		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
+
+		time.Sleep(1 * time.Second) // wait for vreplication to catchup
 
 		//Go forward again
-		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=rdonly", "customer.p2c"); err != nil {
-			t.Fatalf("SwitchReads error: %s\n", output)
-		}
-		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "customer.p2c"); err != nil {
-			t.Fatalf("SwitchReads error: %s\n", output)
-		}
-		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "customer.p2c"); err != nil {
-			t.Fatalf("SwitchWrites error: %s\n", output)
-		}
-		want = dryRunResultsDropSourcesDropCustomerShard
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "-dry_run", "customer.p2c"); err != nil {
-			t.Fatalf("DropSources dry run error: %s\n", output)
-		}
-		validateDryRunResults(t, output, want)
-
-		want = dryRunResultsDropSourcesRenameCustomerShard
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "-dry_run", "-rename_tables", "customer.p2c"); err != nil {
-			t.Fatalf("DropSources dry run with rename error: %s\n", output)
-		}
-		validateDryRunResults(t, output, want)
+		switchReads(t, allCellNames, ksWorkflow)
+		switchWrites(t, ksWorkflow)
+		dropSourcesDryRun(t, ksWorkflow, false, dryRunResultsDropSourcesDropCustomerShard)
+		dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
 		var exists bool
-		if exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer"); err != nil {
-			t.Fatal("Error getting blacklist for customer:0")
-		}
-		assert.True(t, exists)
+		exists, err := checkIfBlacklistExists(t, vc, "product:0", "customer")
+		require.NoError(t, err, "Error getting blacklist for customer:0")
+		require.True(t, exists)
+		dropSources(t, ksWorkflow)
 
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "customer.p2c"); err != nil {
-			t.Fatalf("DropSources error: %s\n", output)
-		}
-
-		if exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer"); err != nil {
-			t.Fatal("Error getting blacklist for customer:0")
-		}
-		assert.False(t, exists)
+		exists, err = checkIfBlacklistExists(t, vc, "product:0", "customer")
+		require.NoError(t, err, "Error getting blacklist for customer:0")
+		require.False(t, exists)
 
 		for _, shard := range strings.Split("-80,80-", ",") {
 			expectNumberOfStreams(t, vtgateConn, "shardCustomerTargetStreams", "p2c", "customer:"+shard, 0)
@@ -339,58 +276,58 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		var found bool
 		found, err = checkIfTableExists(t, vc, "zone1-100", "customer")
 		assert.NoError(t, err, "Customer table not deleted from zone1-100")
-		assert.False(t, found)
+		require.False(t, found)
 
 		found, err = checkIfTableExists(t, vc, "zone1-200", "customer")
 		assert.NoError(t, err, "Customer table not deleted from zone1-200")
-		assert.True(t, found)
+		require.True(t, found)
 
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" //ID 103, hence due to reverse_bits in shard 80-
-		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
+		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer10', 104)" //ID 105, hence due to reverse_bits in shard -80
-		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
+		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer9', 105)" //ID 104, hence due to reverse_bits in shard 80-
-		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
+		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
 
 		execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
-		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
-		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 2))
-		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 3))
+		validateCountInTablet(t, customerTab1, "customer", "customer", 1)
+		validateCountInTablet(t, customerTab2, "customer", "customer", 2)
+		validateCount(t, vtgateConn, "customer", "customer.customer", 3)
 
 		query = "insert into customer (name, cid) values('george', 5)"
 		execVtgateQuery(t, vtgateConn, "customer", query)
-		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
-		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 3))
-		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 4))
+		validateCountInTablet(t, customerTab1, "customer", "customer", 1)
+		validateCountInTablet(t, customerTab2, "customer", "customer", 3)
+		validateCount(t, vtgateConn, "customer", "customer.customer", 4)
 	}
 }
 
 func validateRollupReplicates(t *testing.T) {
 	insertMoreProducts(t)
 	time.Sleep(1 * time.Second)
-	assert.Empty(t, validateCount(t, vtgateConn, "product", "rollup", 1))
-	assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
-		`[[VARCHAR("total") INT32(5)]]`))
+	validateCount(t, vtgateConn, "product", "rollup", 1)
+	validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		`[[VARCHAR("total") INT32(5)]]`)
 }
 
 func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias string) {
 	ksName := "customer"
 	counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 	reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts, nil, cells, sourceCellOrAlias)
-	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
+	validateCount(t, vtgateConn, ksName, "customer", 20)
 	query := "insert into customer (name) values('yoko')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
-	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 21))
+	validateCount(t, vtgateConn, ksName, "customer", 21)
 }
 
 func reshardMerchant2to3SplitMerge(t *testing.T) {
 	ksName := "merchant"
 	counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
 	reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryrunresultsswitchwritesM2m3, nil, "")
-	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 2))
+	validateCount(t, vtgateConn, ksName, "merchant", 2)
 	query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
-	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 3))
+	validateCount(t, vtgateConn, ksName, "merchant", 3)
 
 	var output string
 	var err error
@@ -419,10 +356,10 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 	var found bool
 	found, err = checkIfTableExists(t, vc, "zone1-1600", "customer")
 	assert.NoError(t, err, "Customer table found incorrectly in zone1-1600")
-	assert.False(t, found)
+	require.False(t, found)
 	found, err = checkIfTableExists(t, vc, "zone1-1600", "merchant")
 	assert.NoError(t, err, "Merchant table not found in zone1-1600")
-	assert.True(t, found)
+	require.True(t, found)
 
 }
 
@@ -430,15 +367,15 @@ func reshardMerchant3to1Merge(t *testing.T) {
 	ksName := "merchant"
 	counts := map[string]int{"zone1-2000": 3}
 	reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts, nil, nil, "")
-	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 3))
+	validateCount(t, vtgateConn, ksName, "merchant", 3)
 	query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
-	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 4))
+	validateCount(t, vtgateConn, ksName, "merchant", 4)
 }
 
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
-	counts := map[string]int{"zone1-1000": 7, "zone1-1100": 9, "zone1-1200": 5}
+	counts := map[string]int{"zone1-1000": 8, "zone1-1100": 8, "zone1-1200": 5}
 	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts, nil, nil, "")
 }
 
@@ -473,83 +410,59 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	for _, tab := range tablets {
 		if strings.Contains(targetShards, ","+tab.Shard+",") {
 			fmt.Printf("Waiting for vrepl to catch up on %s since it IS a target shard\n", tab.Shard)
-			if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_"+ksName, 10*time.Second) != nil {
-				t.Fatal("Reshard timed out")
-			}
+			catchup(t, tab, workflow, "Reshard")
 		} else {
 			fmt.Printf("Not waiting for vrepl to catch up on %s since it is NOT a target shard\n", tab.Shard)
 			continue
 		}
 	}
 	vdiff(t, ksWorkflow)
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=rdonly", ksWorkflow); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", ksWorkflow); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-
+	switchReads(t, allCellNames, ksWorkflow)
 	if dryRunResultswitchWrites != nil {
-		var output string
-		var err error
-		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", ksWorkflow); err != nil {
-			t.Fatalf("SwitchWrites dry run error: %s\n", output)
-		}
-		validateDryRunResults(t, output, dryRunResultswitchWrites)
+		switchWritesDryRun(t, ksWorkflow, dryRunResultswitchWrites)
 	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", ksWorkflow); err != nil {
-		t.Fatalf("SwitchWrites error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", ksWorkflow); err != nil {
-		t.Fatalf("DropSources error: %s\n", output)
-	}
+	switchWrites(t, ksWorkflow)
+	dropSources(t, ksWorkflow)
 
 	for tabletName, count := range counts {
 		if tablets[tabletName] == nil {
 			continue
 		}
-		assert.Empty(t, validateCountInTablet(t, tablets[tabletName], ksName, tableName, count))
+		validateCountInTablet(t, tablets[tabletName], ksName, tableName, count)
 	}
 }
 
 func shardOrders(t *testing.T) {
-	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", ordersVSchema, "customer"); err != nil {
-		t.Fatal(err)
-	}
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+defaultCell.Name, "-workflow=o2c",
-		"-tablet_types="+"master,replica,rdonly", "product", "customer", "orders"); err != nil {
-		t.Fatal(err)
-	}
-	customerTab1 := vc.Cells[defaultCell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
-	customerTab2 := vc.Cells[defaultCell.Name].Keyspaces["customer"].Shards["80-"].Tablets["zone1-300"].Vttablet
-	if vc.WaitForVReplicationToCatchup(customerTab1, "o2c", "vt_customer", 5*time.Second) != nil {
-		assert.Fail(t, "MoveTables timed out for customer.o2c -80")
+	workflow := "o2c"
+	cell := defaultCell.Name
+	sourceKs := "product"
+	targetKs := "customer"
+	tables := "orders"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+	applyVSchema(t, ordersVSchema, targetKs)
+	moveTables(t, cell, workflow, sourceKs, targetKs, tables)
 
-	}
-	if vc.WaitForVReplicationToCatchup(customerTab2, "o2c", "vt_customer", 5*time.Second) != nil {
-		assert.Fail(t, "MoveTables timed out for customer.o2c 80-")
-	}
-
-	vdiff(t, "customer.o2c")
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=rdonly", "customer.o2c"); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "customer.o2c"); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "customer.o2c"); err != nil {
-		t.Fatalf("SwitchWrites error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "customer.o2c"); err != nil {
-		t.Fatalf("DropSources error: %s\n", output)
-	}
-
-	assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "orders", 1))
-	assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "orders", 2))
-	assert.Empty(t, validateCount(t, vtgateConn, "customer", "orders", 3))
+	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+	customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+	customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+	catchup(t, customerTab1, workflow, "MoveTables")
+	catchup(t, customerTab2, workflow, "MoveTables")
+	vdiff(t, ksWorkflow)
+	switchReads(t, allCellNames, ksWorkflow)
+	switchWrites(t, ksWorkflow)
+	dropSources(t, ksWorkflow)
+	validateCountInTablet(t, customerTab1, "customer", "orders", 1)
+	validateCountInTablet(t, customerTab2, "customer", "orders", 2)
+	validateCount(t, vtgateConn, "customer", "orders", 3)
 }
 
 func shardMerchant(t *testing.T) {
+	workflow := "p2m"
+	cell := defaultCell.Name
+	sourceKs := "product"
+	targetKs := "merchant"
+	tables := "merchant"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, "merchant", "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400); err != nil {
 		t.Fatal(err)
 	}
@@ -559,54 +472,36 @@ func shardMerchant(t *testing.T) {
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "merchant", "80-"), 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+defaultCell.Name, "-workflow=p2m",
-		"-tablet_types="+"master,replica,rdonly", "product", "merchant", "merchant"); err != nil {
-		t.Fatal(err)
-	}
-
-	merchantTab1 := vc.Cells[defaultCell.Name].Keyspaces["merchant"].Shards["-80"].Tablets["zone1-400"].Vttablet
-	merchantTab2 := vc.Cells[defaultCell.Name].Keyspaces["merchant"].Shards["80-"].Tablets["zone1-500"].Vttablet
-	if vc.WaitForVReplicationToCatchup(merchantTab1, "p2m", "vt_merchant", 5*time.Second) != nil {
-		t.Fatal("MoveTables timed out for merchant.p2m -80")
-
-	}
-	if vc.WaitForVReplicationToCatchup(merchantTab2, "p2m", "vt_merchant", 5*time.Second) != nil {
-		t.Fatal("MoveTables timed out for merchant.p2m 80-")
-	}
+	moveTables(t, cell, workflow, sourceKs, targetKs, tables)
+	merchantKs := vc.Cells[defaultCell.Name].Keyspaces["merchant"]
+	merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet
+	merchantTab2 := merchantKs.Shards["80-"].Tablets["zone1-500"].Vttablet
+	catchup(t, merchantTab1, workflow, "MoveTables")
+	catchup(t, merchantTab2, workflow, "MoveTables")
 
 	vdiff(t, "merchant.p2m")
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=rdonly", "merchant.p2m"); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+allCellNames, "-tablet_type=replica", "merchant.p2m"); err != nil {
-		t.Fatalf("SwitchReads error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "merchant.p2m"); err != nil {
-		t.Fatalf("SwitchWrites error: %s\n", output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", "merchant.p2m"); err != nil {
-		t.Fatalf("DropSources error: %s\n", output)
-	}
+	switchReads(t, allCellNames, ksWorkflow)
+	switchWrites(t, ksWorkflow)
+	dropSources(t, ksWorkflow)
 
-	assert.Empty(t, validateCountInTablet(t, merchantTab1, "merchant", "merchant", 1))
-	assert.Empty(t, validateCountInTablet(t, merchantTab2, "merchant", "merchant", 1))
-	assert.Empty(t, validateCount(t, vtgateConn, "merchant", "merchant", 2))
+	validateCountInTablet(t, merchantTab1, "merchant", "merchant", 1)
+	validateCountInTablet(t, merchantTab2, "merchant", "merchant", 1)
+	validateCount(t, vtgateConn, "merchant", "merchant", 2)
 
 }
 
 func vdiff(t *testing.T, workflow string) {
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-format", "json", workflow)
 	fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
-	assert.Nil(t, err)
-	assert.NotNil(t, output)
+	require.Nil(t, err)
+	require.NotNil(t, output)
 	diffReports := make([]*wrangler.DiffReport, 0)
 	err = json.Unmarshal([]byte(output), &diffReports)
-	assert.Nil(t, err)
-	//fmt.Printf("Number of diffReports is %d\n", len(diffReports))
+	require.Nil(t, err)
 	if len(diffReports) < 1 {
 		t.Fatal("VDiff did not return a valid json response " + output + "\n")
 	}
-	assert.True(t, len(diffReports) > 0)
+	require.True(t, len(diffReports) > 0)
 	for key, diffReport := range diffReports {
 		if diffReport.ProcessedRows != diffReport.MatchingRows {
 			t.Errorf("vdiff error for %d : %#v\n", key, diffReport)
@@ -614,93 +509,72 @@ func vdiff(t *testing.T, workflow string) {
 	}
 }
 
+func materialize(t *testing.T, spec string) {
+	err := vc.VtctlClient.ExecuteCommand("Materialize", spec)
+	require.NoError(t, err, "Materialize")
+}
+
 func materializeProduct(t *testing.T) {
 	workflow := "cproduct"
-	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeProductVSchema, "customer"); err != nil {
-		t.Fatal(err)
-	}
-	if err := vc.VtctlClient.ExecuteCommand("Materialize", materializeProductSpec); err != nil {
-		t.Fatal(err)
-	}
-	customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, "customer", "master")
+	keyspace := "customer"
+	applyVSchema(t, materializeProductVSchema, keyspace)
+	materialize(t, materializeProductSpec)
+	customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "master")
 	for _, tab := range customerTablets {
-		if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_customer", 5*time.Second) != nil {
-			t.Fatal("Materialize timed out")
-		}
+		catchup(t, tab, workflow, "Materialize")
 	}
 	for _, tab := range customerTablets {
-		assert.Empty(t, validateCountInTablet(t, tab, "customer", "cproduct", 5))
+		validateCountInTablet(t, tab, keyspace, workflow, 5)
 	}
 }
 
 func materializeRollup(t *testing.T) {
-	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeSalesVSchema, "product"); err != nil {
-		t.Fatal(err)
-	}
+	keyspace := "product"
+	workflow := "rollup"
+	applyVSchema(t, materializeSalesVSchema, keyspace)
 	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	if err := vc.VtctlClient.ExecuteCommand("Materialize", materializeRollupSpec); err != nil {
-		t.Fatal(err)
-	}
-	if vc.WaitForVReplicationToCatchup(productTab, "rollup", "vt_product", 1*time.Second) != nil {
-		assert.Fail(t, "Materialize timed out for product.rollup")
-	}
-	assert.Empty(t, validateCount(t, vtgateConn, "product", "rollup", 1))
-	assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
-		`[[VARCHAR("total") INT32(2)]]`))
+	materialize(t, materializeRollupSpec)
+	catchup(t, productTab, workflow, "Materialize")
+	validateCount(t, vtgateConn, "product", "rollup", 1)
+	validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		`[[VARCHAR("total") INT32(2)]]`)
 }
 
 func materializeSales(t *testing.T) {
-	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeSalesVSchema, "product"); err != nil {
-		t.Fatal(err)
-	}
-	if err := vc.VtctlClient.ExecuteCommand("Materialize", materializeSalesSpec); err != nil {
-		t.Fatal(err)
-	}
+	keyspace := "product"
+	applyVSchema(t, materializeSalesVSchema, keyspace)
+	materialize(t, materializeSalesSpec)
 	productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	if vc.WaitForVReplicationToCatchup(productTab, "sales", "vt_product", 10*time.Second) != nil {
-		assert.Fail(t, "Materialize timed out for product.sales")
-	}
-	assert.Empty(t, validateCount(t, vtgateConn, "product", "sales", 2))
-	assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select kount, amount from sales",
-		`[[INT32(1) INT32(10)] [INT32(2) INT32(35)]]`))
+	catchup(t, productTab, "sales", "Materialize")
+	validateCount(t, vtgateConn, "product", "sales", 2)
+	validateQuery(t, vtgateConn, "product:0", "select kount, amount from sales",
+		`[[INT32(1) INT32(10)] [INT32(2) INT32(35)]]`)
 }
 
 func materializeMerchantSales(t *testing.T) {
 	workflow := "msales"
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Materialize", materializeMerchantSalesSpec); err != nil {
-		fmt.Printf("Materialize MerchantSales error is %+v", output)
-		t.Fatal(err)
-	}
+	materialize(t, materializeMerchantSalesSpec)
 	merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "master")
 	for _, tab := range merchantTablets {
-		if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_merchant", 5*time.Second) != nil {
-			t.Fatal("Materialize timed out")
-		}
+		catchup(t, tab, workflow, "Materialize")
 	}
-	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "msales", 1))
-	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "msales", 1))
-	assert.Empty(t, validateCount(t, vtgateConn, "merchant", "msales", 2))
+	validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "msales", 1)
+	validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "msales", 1)
+	validateCount(t, vtgateConn, "merchant", "msales", 2)
 }
 
 func materializeMerchantOrders(t *testing.T) {
 	workflow := "morders"
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyVSchema", "-vschema", merchantOrdersVSchema, "merchant"); err != nil {
-		fmt.Printf("ApplyVSchema error: %+v", output)
-		t.Fatal(err)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Materialize", materializeMerchantOrdersSpec); err != nil {
-		fmt.Printf("MerchantOrders error is %+v", output)
-		t.Fatal(err)
-	}
+	keyspace := "merchant"
+	applyVSchema(t, merchantOrdersVSchema, keyspace)
+	materialize(t, materializeMerchantOrdersSpec)
 	merchantTablets := vc.getVttabletsInKeyspace(t, defaultCell, "merchant", "master")
 	for _, tab := range merchantTablets {
-		if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_merchant", 5*time.Second) != nil {
-			t.Fatal("Materialize timed out")
-		}
+		catchup(t, tab, workflow, "Materialize")
 	}
-	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "morders", 2))
-	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "morders", 1))
-	assert.Empty(t, validateCount(t, vtgateConn, "merchant", "morders", 3))
+	validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "morders", 2)
+	validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "morders", 1)
+	validateCount(t, vtgateConn, "merchant", "morders", 3)
 }
 
 func checkVtgateHealth(t *testing.T, cell *Cell) {
@@ -737,8 +611,97 @@ func iterateCells(t *testing.T, f func(t *testing.T, cell *Cell)) {
 	}
 }
 
-// Should check health of key components vtgate, vtctld, tablets, look for etcd keys
 func verifyClusterHealth(t *testing.T) {
 	iterateCells(t, checkVtgateHealth)
 	iterateTablets(t, checkTabletHealth)
+}
+
+func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
+	const MaxWait = 10 * time.Second
+	err := vc.WaitForVReplicationToCatchup(vttablet, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
+	require.NoError(nil, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
+}
+
+func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "-cells="+cell, "-workflow="+workflow,
+		"-tablet_types="+"master,replica,rdonly", sourceKs, targetKs, tables); err != nil {
+		t.Fatalf("MoveTables command failed with %+v\n", err)
+	}
+}
+
+func applyVSchema(t *testing.T, vschema, keyspace string) {
+	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", vschema, keyspace)
+	require.NoError(t, err)
+}
+
+func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []string) {
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells, "-tablet_type=replica", "-dry_run", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("SwitchReads DryRun Error: %s: %s", err, output))
+	validateDryRunResults(t, output, dryRunResults)
+}
+
+func switchReads(t *testing.T, cells, ksWorkflow string) {
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells, "-tablet_type=rdonly", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "-cells="+cells, "-tablet_type=replica", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
+}
+
+func switchWritesDryRun(t *testing.T, ksWorkflow string, dryRunResults []string) {
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "-dry_run", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("SwitchWrites DryRun Error: %s: %s", err, output))
+	validateDryRunResults(t, output, dryRunResults)
+}
+
+func switchWrites(t *testing.T, ksWorkflow string) {
+	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
+		"-filtered_replication_wait_time="+SwitchWritesTimeout, ksWorkflow)
+
+	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
+	debug := true
+	if debug && strings.Contains(ksWorkflow, ".p2c") {
+		fmt.Printf("------------------- START Extra debug info for a p2c SwitchWrites\n")
+		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
+		printShardPositions(vc, ksShards)
+		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
+		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+		productKs := vc.Cells[defaultCell.Name].Keyspaces["product"]
+		productTab := productKs.Shards["0"].Tablets["zone1-100"].Vttablet
+		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
+		queries := []string{
+			"select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from _vt.vreplication",
+			"select * from _vt.copy_state",
+			"select * from _vt.resharding_journal",
+		}
+		for _, tab := range tabs {
+			for _, query := range queries {
+				qr, err := tab.QueryTablet(query, "", false)
+				require.NoError(t, err)
+				fmt.Printf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n\n",
+					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
+			}
+		}
+		fmt.Printf("------------------- END Extra debug info for a p2c SwitchWrites\n")
+	}
+	if err != nil {
+		require.FailNow(t, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
+	}
+}
+
+func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {
+	args := []string{"DropSources", "-dry_run"}
+	if renameTables {
+		args = append(args, "-rename_tables")
+	}
+	args = append(args, ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
+	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
+	validateDryRunResults(t, output, dryRunResults)
+}
+
+func dropSources(t *testing.T, ksWorkflow string) {
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
 }

@@ -17,49 +17,73 @@ limitations under the License.
 package onlineddl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
 	clusterInstance       *cluster.LocalProcessCluster
+	vtParams              mysql.ConnParams
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	totalTableCount       = 4
+	ddlStrategyUnchanged  = "-"
 	createTable           = `
 		CREATE TABLE %s (
-		id BIGINT(20) not NULL,
-		msg varchar(64),
-		PRIMARY KEY (id)
+			id bigint(20) NOT NULL,
+			msg varchar(64),
+			PRIMARY KEY (id)
 		) ENGINE=InnoDB;`
+	// To verify non online-DDL behavior
+	alterTableNormalStatement = `
+		ALTER TABLE %s
+			ADD COLUMN non_online int UNSIGNED NOT NULL`
+	// A trivial statement which must succeed and does not change the schema
+	alterTableTrivialStatement = `
+		ALTER TABLE %s
+			ENGINE=InnoDB`
 	// The following statement is valid
-	alterTableSuccessfulStatament = `
-		ALTER WITH 'gh-ost' TABLE %s
-		MODIFY id BIGINT UNSIGNED NOT NULL,
-		ADD COLUMN ghost_col INT NOT NULL,
-		ADD INDEX idx_msg(msg)`
+	alterTableSuccessfulStatement = `
+		ALTER TABLE %s
+			MODIFY id bigint UNSIGNED NOT NULL,
+			ADD COLUMN ghost_col int NOT NULL,
+			ADD INDEX idx_msg(msg)`
 	// The following statement will fail because gh-ost requires some shared unique key
-	alterTableFailedStatament = `
-		ALTER WITH 'gh-ost' TABLE %s
-		DROP PRIMARY KEY,
-		DROP COLUMN ghost_col`
-	alterTableThrottlingStatament = `
-		ALTER WITH 'gh-ost' '--max-load=Threads_running=1' TABLE %s
-		DROP COLUMN ghost_col`
+	alterTableFailedStatement = `
+		ALTER TABLE %s
+			DROP PRIMARY KEY,
+			DROP COLUMN ghost_col`
+	// We will run this query with "gh-ost --max-load=Threads_running=1"
+	alterTableThrottlingStatement = `
+		ALTER TABLE %s
+			DROP COLUMN ghost_col`
+	onlineDDLCreateTableStatement = `
+		CREATE TABLE %s (
+			id bigint NOT NULL,
+			online_ddl_create_col INT NOT NULL,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB;`
+	onlineDDLDropTableStatement = `
+		DROP TABLE %s`
 )
 
 func fullWordUUIDRegexp(uuid, searchWord string) *regexp.Regexp {
@@ -91,6 +115,9 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-migration_check_interval", "5s",
 		}
+		clusterInstance.VtGateExtraArgs = []string{
+			"-ddl_strategy", "gh-ost",
+		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
@@ -107,6 +134,21 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
 			return 1, err
 		}
+
+		vtgateInstance := clusterInstance.NewVtgateInstance()
+		// set the gateway we want to use
+		vtgateInstance.GatewayImplementation = "tabletgateway"
+		// Start vtgate
+		if err := vtgateInstance.Setup(); err != nil {
+			return 1, err
+		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
+		vtParams = mysql.ConnParams{
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+
 		return m.Run(), nil
 	}()
 	if err != nil {
@@ -123,23 +165,64 @@ func TestSchemaChange(t *testing.T) {
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
 	{
-		uuid := testAlterTable(t, alterTableSuccessfulStatament)
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyNormal), "vtctl", "non_online")
+	}
+	{
+		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, ddlStrategyUnchanged, "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
 	}
 	{
-		uuid := testAlterTable(t, alterTableThrottlingStatament)
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
+	}
+	{
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
 		checkCancelMigration(t, uuid, true)
 		time.Sleep(2 * time.Second)
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 	}
 	{
-		uuid := testAlterTable(t, alterTableFailedStatament)
+		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, true)
+		// migration will fail again
+	}
+	{
+		// no migrations pending at this time
+		time.Sleep(10 * time.Second)
+		checkCancelAllMigrations(t, 0)
+	}
+	{
+		// spawn n migrations; cancel them via cancel-all
+		var wg sync.WaitGroup
+		count := 4
+		for i := 0; i < count; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+			}()
+		}
+		wg.Wait()
+		checkCancelAllMigrations(t, count)
+	}
+	{
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtctl", "")
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
+	}
+	{
+		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "gh-ost", "vtctl", "online_ddl_create_col")
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
 	}
 }
 
@@ -156,17 +239,35 @@ func testWithInitialSchema(t *testing.T) {
 	checkTables(t, totalTableCount)
 }
 
-// testAlterTable runs an online DDL, ALTER statement
-func testAlterTable(t *testing.T, alterStatement string) (uuid string) {
+// testOnlineDDLStatement runs an online DDL, ALTER statement
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
-	uuid, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery)
-	require.Nil(t, err)
+	if executeStrategy == "vtgate" {
+		row := vtgateExec(t, ddlStrategy, sqlQuery, "").Named().Row()
+		if row != nil {
+			uuid = row.AsString("uuid", "")
+		}
+	} else {
+		var err error
+		ddlStrategyArg := ""
+		if ddlStrategy != ddlStrategyUnchanged {
+			ddlStrategyArg = ddlStrategy
+		}
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategyArg)
+		assert.NoError(t, err)
+	}
 	uuid = strings.TrimSpace(uuid)
-	require.NotEmpty(t, uuid)
-	// Migration is asynchronous. Give it some time.
-	time.Sleep(time.Second * 20)
-	checkMigratedTable(t, tableName)
+	fmt.Println("# Generated UUID (for debug purposes):")
+	fmt.Printf("<%s>\n", uuid)
+
+	if ddlStrategy != string(schema.DDLStrategyNormal) {
+		time.Sleep(time.Second * 20)
+	}
+
+	if expectColumn != "" {
+		checkMigratedTable(t, tableName, expectColumn)
+	}
 	return uuid
 }
 
@@ -221,6 +322,18 @@ func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) 
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
+// checkCancelAllMigrations all pending migrations
+func checkCancelAllMigrations(t *testing.T, expectCount int) {
+	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelAllMigrations(keyspaceName)
+	fmt.Println("# 'vtctlclient OnlineDDL cancel-all' output (for debug purposes):")
+	fmt.Println(result)
+	assert.NoError(t, err)
+
+	r := fullWordRegexp(fmt.Sprintf("%d", expectCount))
+	m := r.FindAllString(result, -1)
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
+}
+
 // checkRetryMigration attempts to retry a migration, and expects rejection
 func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLRetryMigration(keyspaceName, uuid)
@@ -239,11 +352,10 @@ func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
-func checkMigratedTable(t *testing.T, tableName string) {
-	expect := "ghost_col"
+func checkMigratedTable(t *testing.T, tableName, expectColumn string) {
 	for i := range clusterInstance.Keyspaces[0].Shards {
 		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
-		assert.Contains(t, createStatement, expect)
+		assert.Contains(t, createStatement, expectColumn)
 	}
 }
 
@@ -256,4 +368,27 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
+}
+
+func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
+	t.Helper()
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	if ddlStrategy != ddlStrategyUnchanged {
+		setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
+		_, err := conn.ExecuteFetch(setSession, 1000, true)
+		assert.NoError(t, err)
+	}
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.Error(t, err, "error should not be nil")
+		assert.Contains(t, err.Error(), expectError, "Unexpected error")
+	}
+	return qr
 }

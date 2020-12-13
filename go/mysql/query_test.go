@@ -22,6 +22,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -161,6 +164,50 @@ func TestComStmtPrepare(t *testing.T) {
 	}
 }
 
+func TestComStmtPrepareUpdStmt(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "UPDATE test SET __bit = ?, __tinyInt = ?, __tinyIntU = ?, __smallInt = ?, __smallIntU = ?, __mediumInt = ?, __mediumIntU = ?, __int = ?, __intU = ?, __bigInt = ?, __bigIntU = ?, __decimal = ?, __float = ?, __double = ?, __date = ?, __datetime = ?, __timestamp = ?, __time = ?, __year = ?, __char = ?, __varchar = ?, __binary = ?, __varbinary = ?, __tinyblob = ?, __tinytext = ?, __blob = ?, __text = ?, __enum = ?, __set = ? WHERE __id = 0"
+	mockData := MockQueryPackets(t, sql)
+
+	err := cConn.writePacket(mockData)
+	require.NoError(t, err, "writePacket failed")
+
+	data, err := sConn.ReadPacket()
+	require.NoError(t, err, "sConn.ReadPacket - ComPrepare failed")
+
+	parsedQuery := sConn.parseComPrepare(data)
+	require.Equal(t, sql, parsedQuery, "Received incorrect query")
+
+	paramsCount := uint16(29)
+	prepare := &PrepareData{
+		StatementID: 1,
+		PrepareStmt: sql,
+		ParamsCount: paramsCount,
+	}
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	// write the response to the client
+	err = sConn.writePrepare(nil, prepare)
+	require.NoError(t, err, "sConn.writePrepare failed")
+
+	resp, err := cConn.ReadPacket()
+	require.NoError(t, err, "cConn.ReadPacket failed")
+	require.EqualValues(t, prepare.StatementID, resp[1], "Received incorrect Statement ID")
+
+	for i := uint16(0); i < paramsCount; i++ {
+		resp, err := cConn.ReadPacket()
+		require.NoError(t, err, "cConn.ReadPacket failed")
+		require.EqualValues(t, 0xfd, resp[17], "Received incorrect Statement ID")
+	}
+}
+
 func TestComStmtSendLongData(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
@@ -220,6 +267,83 @@ func TestComStmtExecute(t *testing.T) {
 	if stmtID != 18 {
 		t.Fatalf("Parsed incorrect values")
 	}
+}
+
+func TestComStmtExecuteUpdStmt(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepareDataMap := map[uint32]*PrepareData{
+		1: {
+			StatementID: 1,
+			ParamsCount: 29,
+			ParamsType:  make([]int32, 29),
+			BindVars:    map[string]*querypb.BindVariable{},
+		}}
+
+	// This is simulated packets for update query
+	data := []byte{
+		0x29, 0x01, 0x00, 0x00, 0x17, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x01, 0x10, 0x00, 0x01, 0x00, 0x01, 0x80, 0x02, 0x00, 0x02, 0x80, 0x03, 0x00, 0x03,
+		0x80, 0x03, 0x00, 0x03, 0x80, 0x08, 0x00, 0x08, 0x80, 0x00, 0x00, 0x04, 0x00, 0x05, 0x00, 0x0a,
+		0x00, 0x0c, 0x00, 0x07, 0x00, 0x0b, 0x00, 0x0d, 0x80, 0xfe, 0x00, 0xfe, 0x00, 0xfc, 0x00, 0xfc,
+		0x00, 0xfc, 0x00, 0xfe, 0x00, 0xfc, 0x00, 0xfe, 0x00, 0xfe, 0x00, 0xfe, 0x00, 0x08, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0xaa, 0xe0, 0x80, 0xff, 0x00, 0x80, 0xff, 0xff, 0x00, 0x00, 0x80, 0xff,
+		0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x80, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x80, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x15, 0x31, 0x32, 0x33,
+		0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x2e, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+		0x38, 0x39, 0xd0, 0x0f, 0x49, 0x40, 0x44, 0x17, 0x41, 0x54, 0xfb, 0x21, 0x09, 0x40, 0x04, 0xe0,
+		0x07, 0x08, 0x08, 0x0b, 0xe0, 0x07, 0x08, 0x08, 0x11, 0x19, 0x3b, 0x00, 0x00, 0x00, 0x00, 0x0b,
+		0xe0, 0x07, 0x08, 0x08, 0x11, 0x19, 0x3b, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x01, 0x08, 0x00, 0x00,
+		0x00, 0x07, 0x3b, 0x3b, 0x00, 0x00, 0x00, 0x00, 0x04, 0x31, 0x39, 0x39, 0x39, 0x08, 0x31, 0x32,
+		0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x0c, 0xe9, 0x9f, 0xa9, 0xe5, 0x86, 0xac, 0xe7, 0x9c, 0x9f,
+		0xe8, 0xb5, 0x9e, 0x08, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x08, 0x31, 0x32, 0x33,
+		0x34, 0x35, 0x36, 0x37, 0x38, 0x08, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x0c, 0xe9,
+		0x9f, 0xa9, 0xe5, 0x86, 0xac, 0xe7, 0x9c, 0x9f, 0xe8, 0xb5, 0x9e, 0x08, 0x31, 0x32, 0x33, 0x34,
+		0x35, 0x36, 0x37, 0x38, 0x0c, 0xe9, 0x9f, 0xa9, 0xe5, 0x86, 0xac, 0xe7, 0x9c, 0x9f, 0xe8, 0xb5,
+		0x9e, 0x03, 0x66, 0x6f, 0x6f, 0x07, 0x66, 0x6f, 0x6f, 0x2c, 0x62, 0x61, 0x72}
+
+	stmtID, _, err := sConn.parseComStmtExecute(prepareDataMap, data[4:]) // first 4 are header
+	require.NoError(t, err)
+	require.EqualValues(t, 1, stmtID)
+
+	prepData := prepareDataMap[stmtID]
+	assert.EqualValues(t, querypb.Type_BIT, prepData.ParamsType[0], "got: %s", querypb.Type(prepData.ParamsType[0]))
+	assert.EqualValues(t, querypb.Type_INT8, prepData.ParamsType[1], "got: %s", querypb.Type(prepData.ParamsType[1]))
+	assert.EqualValues(t, querypb.Type_INT8, prepData.ParamsType[2], "got: %s", querypb.Type(prepData.ParamsType[2]))
+	assert.EqualValues(t, querypb.Type_INT16, prepData.ParamsType[3], "got: %s", querypb.Type(prepData.ParamsType[3]))
+	assert.EqualValues(t, querypb.Type_INT16, prepData.ParamsType[4], "got: %s", querypb.Type(prepData.ParamsType[4]))
+	assert.EqualValues(t, querypb.Type_INT32, prepData.ParamsType[5], "got: %s", querypb.Type(prepData.ParamsType[5]))
+	assert.EqualValues(t, querypb.Type_INT32, prepData.ParamsType[6], "got: %s", querypb.Type(prepData.ParamsType[6]))
+	assert.EqualValues(t, querypb.Type_INT32, prepData.ParamsType[7], "got: %s", querypb.Type(prepData.ParamsType[7]))
+	assert.EqualValues(t, querypb.Type_INT32, prepData.ParamsType[8], "got: %s", querypb.Type(prepData.ParamsType[8]))
+	assert.EqualValues(t, querypb.Type_INT64, prepData.ParamsType[9], "got: %s", querypb.Type(prepData.ParamsType[9]))
+	assert.EqualValues(t, querypb.Type_INT64, prepData.ParamsType[10], "got: %s", querypb.Type(prepData.ParamsType[10]))
+	assert.EqualValues(t, querypb.Type_DECIMAL, prepData.ParamsType[11], "got: %s", querypb.Type(prepData.ParamsType[11]))
+	assert.EqualValues(t, querypb.Type_FLOAT32, prepData.ParamsType[12], "got: %s", querypb.Type(prepData.ParamsType[12]))
+	assert.EqualValues(t, querypb.Type_FLOAT64, prepData.ParamsType[13], "got: %s", querypb.Type(prepData.ParamsType[13]))
+	assert.EqualValues(t, querypb.Type_DATE, prepData.ParamsType[14], "got: %s", querypb.Type(prepData.ParamsType[14]))
+	assert.EqualValues(t, querypb.Type_DATETIME, prepData.ParamsType[15], "got: %s", querypb.Type(prepData.ParamsType[15]))
+	assert.EqualValues(t, querypb.Type_TIMESTAMP, prepData.ParamsType[16], "got: %s", querypb.Type(prepData.ParamsType[16]))
+	assert.EqualValues(t, querypb.Type_TIME, prepData.ParamsType[17], "got: %s", querypb.Type(prepData.ParamsType[17]))
+
+	// this is year but in binary it is changed to varbinary
+	assert.EqualValues(t, querypb.Type_VARBINARY, prepData.ParamsType[18], "got: %s", querypb.Type(prepData.ParamsType[18]))
+
+	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[19], "got: %s", querypb.Type(prepData.ParamsType[19]))
+	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[20], "got: %s", querypb.Type(prepData.ParamsType[20]))
+	assert.EqualValues(t, querypb.Type_TEXT, prepData.ParamsType[21], "got: %s", querypb.Type(prepData.ParamsType[21]))
+	assert.EqualValues(t, querypb.Type_TEXT, prepData.ParamsType[22], "got: %s", querypb.Type(prepData.ParamsType[22]))
+	assert.EqualValues(t, querypb.Type_TEXT, prepData.ParamsType[23], "got: %s", querypb.Type(prepData.ParamsType[23]))
+	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[24], "got: %s", querypb.Type(prepData.ParamsType[24]))
+	assert.EqualValues(t, querypb.Type_TEXT, prepData.ParamsType[25], "got: %s", querypb.Type(prepData.ParamsType[25]))
+	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[26], "got: %s", querypb.Type(prepData.ParamsType[26]))
+	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[27], "got: %s", querypb.Type(prepData.ParamsType[27]))
+	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[28], "got: %s", querypb.Type(prepData.ParamsType[28]))
 }
 
 func TestComStmtClose(t *testing.T) {

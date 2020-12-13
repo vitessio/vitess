@@ -840,6 +840,7 @@
           "Sharded": true
         },
         "FieldQuery": "select user_id from music where 1 != 1",
+        "OrderBy": "0 ASC",
         "Query": "select user_id from music order by user_id asc limit :__upper_limit",
         "Table": "music"
       }
@@ -860,7 +861,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where name = 'abc' and id = 4 limit 5",
+    "Query": "select * from user where `name` = 'abc' and id = 4 limit 5",
     "Table": "user",
     "Values": [
       4
@@ -882,7 +883,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -904,7 +905,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -970,7 +971,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name = true limit 5",
+    "Query": "select * from user where id = 1 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       1
@@ -992,7 +993,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name limit 5",
+    "Query": "select * from user where id = 1 and `name` limit 5",
     "Table": "user",
     "Values": [
       1
@@ -1014,7 +1015,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 and name = true limit 5",
+    "Query": "select * from user where id = 5 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       5
@@ -1236,8 +1237,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select id, name from unsharded where 1 != 1",
-    "Query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+    "FieldQuery": "select id, `name` from unsharded where 1 != 1",
+    "Query": "select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
     "Table": "unsharded"
   }
 }
@@ -1287,8 +1288,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)",
-    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1)",
+    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)",
     "Table": "unsharded"
   }
 }
@@ -1520,6 +1521,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_id, count(id) from music where 1 != 1 group by user_id",
+            "OrderBy": "0 ASC",
             "Query": "select user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
             "Table": "music"
           }
@@ -1617,3 +1619,45 @@
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
 "Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
+
+# Distinct with cross shard query
+"select distinct user.a from user join user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.a from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "TableName": "user_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user.a from user where 1 != 1",
+            "Query": "select user.a from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}

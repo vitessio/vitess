@@ -453,6 +453,20 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 	return nil
 }
 
+// SetDDLStrategy set the DDLStrategy setting.
+func (session *SafeSession) SetDDLStrategy(strategy string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.DDLStrategy = strategy
+}
+
+// GetDDLStrategy returns the DDLStrategy value.
+func (session *SafeSession) GetDDLStrategy() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.DDLStrategy
+}
+
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
 func (session *SafeSession) SetReadAfterWriteGTID(vtgtid string) {
 	session.mu.Lock()

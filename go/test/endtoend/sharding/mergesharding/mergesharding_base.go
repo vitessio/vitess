@@ -319,9 +319,9 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	// Change tablet, which was taken offline, back to rdonly.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard0Rdonly.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard0Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Rdonly.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard1Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
 
 	// Terminate worker daemon because it is no longer needed.
@@ -391,9 +391,9 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		shard3Ks)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard0Rdonly.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard0Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard3Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
 
 	log.Debug("Running vtworker SplitDiff on second half")
@@ -408,9 +408,9 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		shard3Ks)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Rdonly.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard1Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard3Rdonly.Alias, "rdonly")
 	require.NoError(t, err)
 
 	sharding.CheckTabletQueryService(t, *shard3Master, "NOT_SERVING", false, *clusterInstance)

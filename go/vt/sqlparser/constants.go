@@ -149,6 +149,9 @@ const (
 	NoOperatorStr   = ""
 	CharsetStr      = "charset"
 
+	// CollateAndCharset.Type
+	CollateStr = " collate"
+
 	// MatchExpr.Option
 	NoOptionStr                              = ""
 	BooleanModeStr                           = " in boolean mode"
@@ -185,6 +188,12 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
+
+	// Lock Types
+	ReadStr             = "read"
+	ReadLocalStr        = "read local"
+	WriteStr            = "write"
+	LowPriorityWriteStr = "low_priority write"
 )
 
 // Constants for Enum type - AccessMode
@@ -205,13 +214,6 @@ const (
 const (
 	InsertAct InsertAction = iota
 	ReplaceAct
-)
-
-// Constants for Enum Type - DBDDL.Action
-const (
-	CreateDBDDLAction DBDDLAction = iota
-	AlterDBDDLAction
-	DropDBDDLAction
 )
 
 // Constants for Enum Type - DDL.Action
@@ -377,4 +379,18 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
+)
+
+// Constant for Enum Type - CollateAndCharsetType
+const (
+	CollateType CollateAndCharsetType = iota
+	CharacterSetType
+)
+
+const (
+	UnknownType LockType = iota
+	Read
+	ReadLocal
+	Write
+	LowPriorityWrite
 )

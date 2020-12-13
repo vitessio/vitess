@@ -42,8 +42,8 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 
 type subqueryInfo struct {
 	ast    *sqlparser.Subquery
-	bldr   builder
-	origin builder
+	plan   logicalPlan
+	origin logicalPlan
 }
 
 // findOrigin identifies the right-most origin referenced by expr. In situations where
@@ -69,10 +69,10 @@ type subqueryInfo struct {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pulloutSubquery, origin builder, pushExpr sqlparser.Expr, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
 	// highestOrigin tracks the highest origin referenced by the expression.
 	// Default is the First.
-	highestOrigin := pb.bldr.First()
+	highestOrigin := First(pb.plan)
 
 	// subqueries tracks the list of subqueries encountered.
 	var subqueries []subqueryInfo
@@ -116,7 +116,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 			sqi := subqueryInfo{
 				ast:  node,
-				bldr: spb.bldr,
+				plan: spb.plan,
 			}
 			for _, extern := range spb.st.Externs {
 				// No error expected. These are resolved externs.
@@ -144,7 +144,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 
 	highestRoute, _ := highestOrigin.(*route)
 	for _, sqi := range subqueries {
-		subroute, _ := sqi.bldr.(*route)
+		subroute, _ := sqi.plan.(*route)
 		if highestRoute != nil && subroute != nil && highestRoute.MergeSubquery(pb, subroute) {
 			continue
 		}
@@ -157,7 +157,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 		if !ok {
 			// (subquery) -> :_sq
 			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument([]byte(":"+sqName)))
-			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.bldr))
+			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.plan))
 			continue
 		}
 		switch construct := construct.(type) {
@@ -179,7 +179,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 					Right: right,
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
-				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.bldr))
+				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutIn, sqName, hasValues, sqi.plan))
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
 				left := &sqlparser.ComparisonExpr{
@@ -197,12 +197,12 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 					Right: right,
 				}
 				expr = sqlparser.ReplaceExpr(expr, construct, newExpr)
-				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.bldr))
+				pullouts = append(pullouts, newPulloutSubquery(engine.PulloutNotIn, sqName, hasValues, sqi.plan))
 			}
 		case *sqlparser.ExistsExpr:
 			// exists (subquery) -> :__sq_has_values
 			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument([]byte(":"+hasValues)))
-			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.bldr))
+			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.plan))
 		}
 	}
 	return pullouts, highestOrigin, expr, nil
@@ -211,7 +211,8 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 func hasSubquery(node sqlparser.SQLNode) bool {
 	has := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
+		switch node.(type) {
+		case *sqlparser.DerivedTable, *sqlparser.Subquery:
 			has = true
 			return false, errors.New("dummy")
 		}
@@ -222,7 +223,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 
 func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
-	if rb, ok := pb.bldr.(*route); ok {
+	if rb, ok := pb.plan.(*route); ok {
 		keyspace = rb.eroute.Keyspace.Name
 	} else {
 		// This code is unreachable because the caller checks.
@@ -246,7 +247,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := spb.bldr.(*route)
+				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
 					return false, errors.New("dummy")
@@ -267,7 +268,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := spb.bldr.(*route)
+				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
 					return false, errors.New("dummy")

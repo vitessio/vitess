@@ -328,7 +328,8 @@ func TestSelectSystemVariables(t *testing.T) {
 
 	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
-		"@@read_after_write_timeout, @@session_track_gtids"
+		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy"
+
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -341,6 +342,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@read_after_write_gtid", Type: sqltypes.VarBinary},
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64},
 			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
+			{Name: "@@ddl_strategy", Type: sqltypes.VarBinary},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -355,6 +357,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewVarBinary("a fine gtid"),
 			sqltypes.NewFloat64(13),
 			sqltypes.NewVarBinary("own_gtid"),
+			sqltypes.NewVarBinary(""),
 		}},
 	}
 	require.NoError(t, err)
@@ -457,7 +460,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported: UNION cannot be executed as a single route")
+	assert.Contains(t, err.Error(), "types does not support hashcode yet: VARCHAR")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
@@ -597,7 +600,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where name in ::__vals",
+		Sql: "select id from user where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
@@ -619,7 +622,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where name in ::__vals",
+		Sql: "select id from user where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
@@ -665,7 +668,7 @@ func TestSelectBindvars(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("nonexistent")})
 	require.NoError(t, err)
 	wantLookupQueries := []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
@@ -737,7 +740,7 @@ func TestSelectEqual(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from user where name = 'foo'",
+		Sql:           "select id from user where `name` = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -746,7 +749,7 @@ func TestSelectEqual(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
@@ -979,7 +982,7 @@ func TestSelectIN(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from user where name = 'foo'",
+		Sql:           "select id from user where `name` = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -988,7 +991,7 @@ func TestSelectIN(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
@@ -1035,7 +1038,7 @@ func TestStreamSelectIN(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
@@ -2414,7 +2417,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	// check failure when trying to query two keyspaces
 	_, err := exec(executor, session, "SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'TestExecutor' AND A.TABLE_SCHEMA = 'TestXBadSharding'")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "two predicates for table_schema not supported")
+	require.Contains(t, err.Error(), "two predicates for specifying the database are not supported")
 
 	// we pick a keyspace and query for table_schema = database(). should be routed to the picked keyspace
 	session.TargetString = "TestExecutor"

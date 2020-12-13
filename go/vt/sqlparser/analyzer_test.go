@@ -87,6 +87,7 @@ func TestPreview(t *testing.T) {
 
 		{"/* leading comment no end select ...", StmtUnknown},
 		{"-- leading single line comment no end select ...", StmtUnknown},
+		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", StmtComment},
 	}
 	for _, tcase := range testcases {
 		if got := Preview(tcase.sql); got != tcase.want {

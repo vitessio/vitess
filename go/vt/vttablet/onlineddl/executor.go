@@ -65,6 +65,7 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
+	`update _vt.schema_migrations set migration_status='val' where mysql_schema='val'`,
 	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val'`,
 	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val' and shard='val'`,
 }
@@ -79,10 +80,12 @@ var vexecInsertTemplates = []string{
 		migration_statement,
 		strategy,
 		options,
+		ddl_action,
 		requested_timestamp,
+		migration_context,
 		migration_status
 	) VALUES (
-		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
+		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val', 'val'
 	)`,
 }
 
@@ -93,10 +96,12 @@ var emptyResult = &sqltypes.Result{
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
+var migrationNextCheckInterval = 5 * time.Second
 
 const (
-	maxPasswordLength     = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes = 10
+	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
+	staleMigrationMinutes         = 10
+	progressPctFull       float64 = 100.0
 )
 
 var (
@@ -117,10 +122,11 @@ type Executor struct {
 	shard    string
 	dbName   string
 
-	initMutex         sync.Mutex
-	migrationMutex    sync.Mutex
-	migrationRunning  int64
-	lastMigrationUUID string
+	initMutex          sync.Mutex
+	migrationMutex     sync.Mutex
+	migrationRunning   int64
+	lastMigrationUUID  string
+	tickReentranceFlag int64
 
 	ticks             *timer.Timer
 	isOpen            bool
@@ -221,6 +227,7 @@ func (e *Executor) Open() error {
 	}
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 	e.ticks.Start(e.onMigrationCheckTick)
+	e.triggerNextCheckInterval()
 
 	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
 		// this validates vexecUpdateTemplates
@@ -243,6 +250,11 @@ func (e *Executor) Close() {
 	e.ticks.Stop()
 	e.pool.Close()
 	e.isOpen = false
+}
+
+// triggerNextCheckInterval the next tick sooner than normal
+func (e *Executor) triggerNextCheckInterval() {
+	e.ticks.TriggerAfter(migrationNextCheckInterval)
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -347,6 +359,25 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 	}
 	row := rs.Named().Row()
 	return (row != nil), nil
+}
+
+// executeDirectly runs a DDL query directly on the backend MySQL server
+func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch(onlineDDL.SQL, 0, false); err != nil {
+		return err
+	}
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
+
+	return nil
 }
 
 // ExecuteWithGhost validates and runs a gh-ost process.
@@ -798,7 +829,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		Schema:      row["mysql_schema"].ToString(),
 		SQL:         row["migration_statement"].ToString(),
 		UUID:        row["migration_uuid"].ToString(),
-		Strategy:    sqlparser.DDLStrategy(row["strategy"].ToString()),
+		Strategy:    schema.DDLStrategy(row["strategy"].ToString()),
 		Options:     row["options"].ToString(),
 		Status:      schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		Retries:     row.AsInt64("retries", 0),
@@ -883,6 +914,43 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 	return result, nil
 }
 
+// cancelMigrations attempts to abort a list of migrations
+func (e *Executor) cancelMigrations(ctx context.Context, uuids []string) (err error) {
+	for _, uuid := range uuids {
+		log.Infof("cancelMigrations: cancelling %s", uuid)
+		if _, err := e.cancelMigration(ctx, uuid, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// cancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
+// for this keyspace
+func (e *Executor) cancelPendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	parsed := sqlparser.BuildParsedQuery(sqlSelectPendingMigrations, "_vt")
+	r, err := e.execQuery(ctx, parsed.Query)
+	if err != nil {
+		return result, err
+	}
+	var uuids []string
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		uuids = append(uuids, uuid)
+	}
+
+	result = &sqltypes.Result{}
+	for _, uuid := range uuids {
+		log.Infof("cancelPendingMigrations: cancelling %s", uuid)
+		res, err := e.cancelMigration(ctx, uuid, true)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	return result, nil
+}
+
 // scheduleNextMigration attemps to schedule a single migration to run next.
 // possibly there's no migrations to run. Possibly there's a migration running right now,
 // in which cases nothing happens.
@@ -900,11 +968,13 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		row := r.Named().Row()
 		countReady, err := row.ToInt64("count_ready")
 		if err != nil {
 			return err
 		}
+
 		if countReady > 0 {
 			// seems like there's already one migration that's good to go
 			return nil
@@ -915,6 +985,46 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	_, err := e.execQuery(ctx, parsed.Query)
 
 	return err
+}
+
+func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	failMigration := func(err error) error {
+		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+		return err
+	}
+
+	ddlAction, err := onlineDDL.GetAction()
+	if err != nil {
+		return failMigration(err)
+	}
+	switch ddlAction {
+	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
+		go func() {
+			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
+	case sqlparser.AlterDDLAction:
+		switch onlineDDL.Strategy {
+		case schema.DDLStrategyGhost:
+			go func() {
+				if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
+					failMigration(err)
+				}
+			}()
+		case schema.DDLStrategyPTOSC:
+			go func() {
+				if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+					failMigration(err)
+				}
+			}()
+		default:
+			{
+				return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
+			}
+		}
+	}
+	return nil
 }
 
 func (e *Executor) runNextMigration(ctx context.Context) error {
@@ -938,29 +1048,11 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Schema:   row["mysql_schema"].ToString(),
 			SQL:      row["migration_statement"].ToString(),
 			UUID:     row["migration_uuid"].ToString(),
-			Strategy: sqlparser.DDLStrategy(row["strategy"].ToString()),
+			Strategy: schema.DDLStrategy(row["strategy"].ToString()),
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
-		switch onlineDDL.Strategy {
-		case schema.DDLStrategyGhost:
-			go func() {
-				if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
-					_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-				}
-			}()
-		case schema.DDLStrategyPTOSC:
-			go func() {
-				if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
-					_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-				}
-			}()
-		default:
-			{
-				_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-				return fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy)
-			}
-		}
+		e.executeMigration(ctx, onlineDDL)
 		// the query should only ever return a single row at the most
 		// but let's make it also explicit here that we only run a single migration
 		if i == 0 {
@@ -1038,18 +1130,21 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 
 // reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
 // actually running).
-func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, err error) {
+func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, runningNotByThisProcess []string, err error) {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
 	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, "_vt", ":strategy")
 	bindVars := map[string]*querypb.BindVariable{
 		"strategy": sqltypes.StringBindVariable(string(schema.DDLStrategyPTOSC)),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
-		return countRunnning, err
+		return countRunnning, runningNotByThisProcess, err
 	}
 	r, err := e.execQuery(ctx, bound)
 	if err != nil {
-		return countRunnning, err
+		return countRunnning, runningNotByThisProcess, err
 	}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
@@ -1059,8 +1154,16 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 		}
 		countRunnning++
+
+		if uuid != e.lastMigrationUUID {
+			// This executor can only run one migration at a time. And that
+			// migration is identified by e.lastMigrationUUID.
+			// If we find a _running_ migration that does not have this UUID, it _must_
+			// mean the migration was started by a former vttablet (ie vttablet crashed and restarted)
+			runningNotByThisProcess = append(runningNotByThisProcess, uuid)
+		}
 	}
-	return countRunnning, err
+	return countRunnning, runningNotByThisProcess, err
 }
 
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
@@ -1170,6 +1273,20 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 
 // onMigrationCheckTick runs all migrations life cycle
 func (e *Executor) onMigrationCheckTick() {
+	// This function can be called by multiple triggers. First, there's the normal ticker.
+	// Then, any time a migration completes, we set a timer to trigger this function.
+	// also, any time a new INSERT arrives, we set a timer to trigger this function.
+	// Some of these may be correlated. To avoid spamming of this function we:
+	// - ensure the function is non-reentrant, using tickReentranceFlag
+	// - clean up tickReentranceFlag 1 second after function completes; this throttles calls to
+	//   this function at no more than 1/sec rate.
+	if atomic.CompareAndSwapInt64(&e.tickReentranceFlag, 0, 1) {
+		defer time.AfterFunc(time.Second, func() { atomic.StoreInt64(&e.tickReentranceFlag, 0) })
+	} else {
+		// An instance of this function is already running
+		return
+	}
+
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
 		return
 	}
@@ -1177,6 +1294,7 @@ func (e *Executor) onMigrationCheckTick() {
 		log.Errorf("Executor.onMigrationCheckTick(): empty keyspace")
 		return
 	}
+
 	ctx := context.Background()
 	if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
@@ -1191,7 +1309,9 @@ func (e *Executor) onMigrationCheckTick() {
 	if err := e.runNextMigration(ctx); err != nil {
 		log.Error(err)
 	}
-	if _, err := e.reviewRunningMigrations(ctx); err != nil {
+	if _, runningNotByThisProcess, err := e.reviewRunningMigrations(ctx); err != nil {
+		log.Error(err)
+	} else if err := e.cancelMigrations(ctx, runningNotByThisProcess); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
@@ -1336,6 +1456,54 @@ func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result
 	return result, err
 }
 
+// onSchemaMigrationStatus is called when a status is set/changed for a running migration
+func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64) (err error) {
+	if dryRun && status != schema.OnlineDDLStatusFailed {
+		// We don't consider dry-run reports unless there's a failure
+		return nil
+	}
+	switch status {
+	case schema.OnlineDDLStatusReady:
+		{
+			err = e.updateMigrationTimestamp(ctx, "ready_timestamp", uuid)
+		}
+	case schema.OnlineDDLStatusRunning:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+		}
+	case schema.OnlineDDLStatusComplete:
+		{
+			progressPct = progressPctFull
+			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+		}
+	case schema.OnlineDDLStatusFailed:
+		{
+			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
+			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if err = e.updateMigrationStatus(ctx, uuid, status); err != nil {
+		return err
+	}
+	if err = e.updateMigrationProgress(ctx, uuid, progressPct); err != nil {
+		return err
+	}
+
+	if !dryRun {
+		switch status {
+		case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+			e.triggerNextCheckInterval()
+		}
+	}
+
+	return nil
+}
+
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
 func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statusParam, dryrunParam, progressParam string) (err error) {
 	status := schema.OnlineDDLStatus(statusParam)
@@ -1345,42 +1513,7 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 		progressPct = pct
 	}
 
-	if dryRun && status != schema.OnlineDDLStatusFailed {
-		// We don't consider dry-run reports unless there's a failure
-		return nil
-	}
-	switch status {
-	case schema.OnlineDDLStatusReady:
-		{
-			err = e.updateMigrationTimestamp(ctx, "ready_timestamp", uuidParam)
-		}
-	case schema.OnlineDDLStatusRunning:
-		{
-			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
-			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuidParam)
-		}
-	case schema.OnlineDDLStatusComplete:
-		{
-			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
-			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuidParam)
-		}
-	case schema.OnlineDDLStatusFailed:
-		{
-			_ = e.updateMigrationStartedTimestamp(ctx, uuidParam)
-			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuidParam)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	if err = e.updateMigrationStatus(ctx, uuidParam, status); err != nil {
-		return err
-	}
-	if err = e.updateMigrationProgress(ctx, uuidParam, progressPct); err != nil {
-		return err
-	}
-
-	return nil
+	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct)
 }
 
 // VExec is called by a VExec invocation
@@ -1410,6 +1543,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
 		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
 		vx.AddOrReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
+		e.triggerNextCheckInterval()
 		return response(e.execQuery(ctx, vx.Query))
 	case *sqlparser.Update:
 		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
@@ -1417,7 +1551,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			return nil, err
 		}
 		if !match {
-			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(vexecUpdateTemplates, "; "))
+			return nil, fmt.Errorf("Query must match one of these templates: %s; query=%s", strings.Join(vexecUpdateTemplates, "; "), vx.Query)
 		}
 		if shard, _ := vx.ColumnStringVal(vx.WhereCols, "shard"); shard != "" {
 			// shard is specified.
@@ -1438,7 +1572,16 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			if err != nil {
 				return nil, err
 			}
+			if !schema.IsOnlineDDLUUID(uuid) {
+				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
+			}
 			return response(e.cancelMigration(ctx, uuid, true))
+		case cancelAllMigrationHint:
+			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
+			if uuid != "" {
+				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
+			}
+			return response(e.cancelPendingMigrations(ctx))
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				statusVal, retryMigrationHint, cancelMigrationHint)

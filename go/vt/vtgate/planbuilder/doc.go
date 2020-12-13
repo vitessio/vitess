@@ -66,7 +66,7 @@ any qualified or implicit column reference of a table
 is valid and we rely on the underlying vttablet/MySQL
 to eventually validate such references.
 
-Every 'builder' primitive must satisfy the builder
+Every 'logicalPlan' primitive must satisfy the logicalPlan
 interface. This allows the planbuilder to outsource
 primitive-specific handling into those implementations.
 
@@ -75,7 +75,7 @@ are three different worlds that use overloaded
 names that are contextually similar, but different.
 For example a join is:
 	Join is the AST node that represents the SQL construct
-	join is a builder in the current package
+	join is a logicalPlan in the current package
 	Join is a primitive in the engine package
 In order to disambiguate, we'll use the 'a' prefix
 for AST vars, and the 'e' prefix for engine vars.

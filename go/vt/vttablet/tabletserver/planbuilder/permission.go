@@ -49,7 +49,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Set, *sqlparser.Show, *sqlparser.OtherRead, *sqlparser.Explain:
 		// no-op
-	case *sqlparser.DDL:
+	case sqlparser.DDLStatement:
 		for _, t := range node.AffectedTables() {
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
 		}
@@ -94,7 +94,7 @@ func buildTableExprPermissions(node sqlparser.TableExpr, role tableacl.Role, per
 		switch node := node.Expr.(type) {
 		case sqlparser.TableName:
 			permissions = buildTableNamePermissions(node, role, permissions)
-		case *sqlparser.Subquery:
+		case *sqlparser.DerivedTable:
 			permissions = buildSubqueryPermissions(node.Select, role, permissions)
 		}
 	case *sqlparser.ParenTableExpr:

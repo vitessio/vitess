@@ -1015,6 +1015,15 @@ func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warn
 	return nil
 }
 
+// PacketComStmtPrepareOK contains the COM_STMT_PREPARE_OK packet details
+type PacketComStmtPrepareOK struct {
+	status       uint8
+	stmtID       uint32
+	numCols      uint16
+	numParams    uint16
+	warningCount uint16
+}
+
 // writePrepare writes a prepare query response to the wire.
 func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	paramsCount := prepare.ParamsCount
@@ -1026,14 +1035,21 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 		prepare.ColumnNames = make([]string, columnCount)
 	}
 
-	data, pos := c.startEphemeralPacketWithHeader(12)
-
-	pos = writeByte(data, pos, 0x00)
-	pos = writeUint32(data, pos, uint32(prepare.StatementID))
-	pos = writeUint16(data, pos, uint16(columnCount))
-	pos = writeUint16(data, pos, uint16(paramsCount))
-	pos = writeByte(data, pos, 0x00)
-	writeUint16(data, pos, 0x0000)
+	ok := PacketComStmtPrepareOK{
+		status:       OKPacket,
+		stmtID:       prepare.StatementID,
+		numCols:      (uint16)(columnCount),
+		numParams:    paramsCount,
+		warningCount: 0,
+	}
+	bytes, pos := c.startEphemeralPacketWithHeader(12)
+	data := &coder{data: bytes, pos: pos}
+	data.writeByte(ok.status)
+	data.writeUint32(ok.stmtID)
+	data.writeUint16(ok.numCols)
+	data.writeUint16(ok.numParams)
+	data.writeByte(0x00) // reserved 1 byte
+	data.writeUint16(ok.warningCount)
 
 	if err := c.writeEphemeralPacket(); err != nil {
 		return err

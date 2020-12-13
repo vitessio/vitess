@@ -21,6 +21,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -75,8 +78,9 @@ func Append(buf *strings.Builder, node SQLNode) {
 
 // IndexColumn describes a column in an index definition with optional length
 type IndexColumn struct {
-	Column ColIdent
-	Length *Literal
+	Column    ColIdent
+	Length    *Literal
+	Direction OrderDirection
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -86,11 +90,11 @@ type LengthScaleOption struct {
 	Scale  *Literal
 }
 
-// IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING
+// IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING, WITH PARSER
 type IndexOption struct {
-	Name  string
-	Value *Literal
-	Using string
+	Name   string
+	Value  *Literal
+	String string
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -101,6 +105,7 @@ const (
 	colKeyNone ColumnKeyOption = iota
 	colKeyPrimary
 	colKeySpatialKey
+	colKeyFulltextKey
 	colKeyUnique
 	colKeyUniqueKey
 	colKey
@@ -145,17 +150,6 @@ const (
 	HexVal
 	BitVal
 )
-
-// AffectedTables returns the list table names affected by the DDL.
-func (node *DDL) AffectedTables() TableNames {
-	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
-		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
-		list = append(list, node.FromTables...)
-		list = append(list, node.ToTables...)
-		return list
-	}
-	return TableNames{node.Table}
-}
 
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
@@ -346,6 +340,20 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	return &noHints
 }
 
+//TableName returns a TableName pointing to this table expr
+func (node *AliasedTableExpr) TableName() (TableName, error) {
+	if !node.As.IsEmpty() {
+		return TableName{Name: node.As}, nil
+	}
+
+	tableName, ok := node.Expr.(TableName)
+	if !ok {
+		return TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: the AST has changed. This should not be possible")
+	}
+
+	return tableName, nil
+}
+
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.
@@ -515,6 +523,17 @@ func NewColIdent(str string) ColIdent {
 func NewColName(str string) *ColName {
 	return &ColName{
 		Name: NewColIdent(str),
+	}
+}
+
+// NewColNameWithQualifier makes a new ColName pointing to a specific table
+func NewColNameWithQualifier(identifier string, table TableName) *ColName {
+	return &ColName{
+		Name: NewColIdent(identifier),
+		Qualifier: TableName{
+			Name:      NewTableIdent(table.Name.String()),
+			Qualifier: NewTableIdent(table.Qualifier.String()),
+		},
 	}
 }
 
@@ -732,6 +751,11 @@ func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// MakeDistinct makes the statement distinct
+func (node *Select) MakeDistinct() {
+	node.Distinct = true
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
@@ -779,6 +803,11 @@ func (node *ParenSelect) SetLock(lock Lock) {
 	node.Select.SetLock(lock)
 }
 
+// MakeDistinct implements the SelectStatement interface
+func (node *ParenSelect) MakeDistinct() {
+	node.Select.MakeDistinct()
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -792,6 +821,11 @@ func (node *Union) SetLimit(limit *Limit) {
 // SetLock sets the lock clause
 func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
+}
+
+// MakeDistinct implements the SelectStatement interface
+func (node *Union) MakeDistinct() {
+	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
@@ -1122,6 +1156,7 @@ func (ty ExplainType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
 func (sel SelectIntoType) ToString() string {
 	switch sel {
 	case IntoOutfile:
@@ -1132,6 +1167,34 @@ func (sel SelectIntoType) ToString() string {
 		return IntoDumpfileStr
 	default:
 		return "Unknown Select Into Type"
+	}
+}
+
+// ToString returns the type as a string
+func (node CollateAndCharsetType) ToString() string {
+	switch node {
+	case CharacterSetType:
+		return CharacterSetStr
+	case CollateType:
+		return CollateStr
+	default:
+		return "Unknown CollateAndCharsetType Type"
+	}
+}
+
+// ToString returns the type as a string
+func (ty LockType) ToString() string {
+	switch ty {
+	case Read:
+		return ReadStr
+	case ReadLocal:
+		return ReadLocalStr
+	case Write:
+		return WriteStr
+	case LowPriorityWrite:
+		return LowPriorityWriteStr
+	default:
+		return "Unknown LockType"
 	}
 }
 

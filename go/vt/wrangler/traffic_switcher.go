@@ -745,12 +745,16 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		err = ts.changeShardsAccess(ctx, ts.sourceKeyspace, ts.sourceShards(), disallowWrites)
 	}
 	if err != nil {
+		log.Warningf("Error: %s", err)
 		return err
 	}
 	return ts.forAllSources(func(source *tsSource) error {
 		var err error
 		source.position, err = ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
 		ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.si.ShardName(), source.position)
+		if err != nil {
+			log.Warningf("Error: %s", err)
+		}
 		return err
 	})
 }
@@ -774,6 +778,8 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	return ts.forAllUids(func(target *tsTarget, uid uint32) error {
 		ts.wr.Logger().Infof("uid: %d, target master %s, target position %s, shard %s", uid,
 			target.master.AliasString(), target.position, target.si.String())
+		log.Infof("uid: %d, target master %s, target position %s, shard %s", uid,
+			target.master.AliasString(), target.position, target.si.String())
 		bls := target.sources[uid]
 		source := ts.sources[bls.Shard]
 		ts.wr.Logger().Infof("waiting for keyspace:shard: %v:%v, source position %v, uid %d",
@@ -781,7 +787,10 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 		if err := ts.wr.tmc.VReplicationWaitForPos(ctx, target.master.Tablet, int(uid), source.position); err != nil {
 			return err
 		}
+		log.Infof("waiting for keyspace:shard: %v:%v, source position %v, uid %d",
+			ts.targetKeyspace, target.si.ShardName(), source.position, uid)
 		ts.wr.Logger().Infof("position for keyspace:shard: %v:%v reached, uid %d", ts.targetKeyspace, target.si.ShardName(), uid)
+		log.Infof("position for keyspace:shard: %v:%v reached, uid %d", ts.targetKeyspace, target.si.ShardName(), uid)
 		if _, err := ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
 			log.Infof("error marking stopped for cutover on %s, uid %d", target.master.AliasString(), uid)
 			return err
@@ -796,6 +805,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 		var err error
 		target.position, err = ts.wr.tmc.MasterPosition(ctx, target.master.Tablet)
 		ts.wr.Logger().Infof("Position for target master %s, uid %v: %v", target.master.AliasString(), uid, target.position)
+		log.Infof("Position for target master %s, uid %v: %v", target.master.AliasString(), uid, target.position)
 		return err
 	})
 }

@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"vitess.io/vitess/go/textutil"
 )
 
@@ -44,10 +42,6 @@ const (
 	DropTableGCState TableGCState = "DROP"
 )
 
-const (
-	readableTimeFormat = "20060102150405"
-)
-
 var (
 	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|EVAC|DROP)_[0-f]{32}_([0-9]{14})$`)
 
@@ -59,27 +53,8 @@ var (
 	}
 )
 
-// CreateUUID creates a globally unique ID, returned as non-delimited string
-// example result: 55d00cdce6ab11eabfe60242ac1c000d
-func createUUID() (string, error) {
-	u, err := uuid.NewUUID()
-	if err != nil {
-		return "", err
-	}
-	result := u.String()
-	result = strings.Replace(result, "-", "", -1)
-	return result, nil
-}
-
-// ToReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
-// (as opposed to unix timestamp which is just a number)
-// Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
-func ToReadableTimestamp(t time.Time) string {
-	return t.Format(readableTimeFormat)
-}
-
 func generateGCTableName(state TableGCState, t time.Time) (string, error) {
-	uuid, err := createUUID()
+	uuid, err := createUUID("")
 	if err != nil {
 		return "", err
 	}

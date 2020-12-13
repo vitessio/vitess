@@ -4,15 +4,12 @@
   "QueryType": "DDL",
   "Original": "create table t1(id bigint, primary key(id))",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "create table t1(id bigint, primary key(id))",
-    "SingleShardOnly": false
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
   }
 }
 
@@ -22,15 +19,12 @@
   "QueryType": "DDL",
   "Original": "create table user.t1(id bigint, primary key(id))",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "create table user.t1(id bigint, primary key(id))",
-    "SingleShardOnly": false
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
   }
 }
 
@@ -40,15 +34,12 @@
   "QueryType": "DDL",
   "Original": "create table a(id int)",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "create table a(id int)",
-    "SingleShardOnly": false
+    "Query": "create table a (\n\tid int\n)"
   }
 }
 
@@ -62,15 +53,12 @@
   "QueryType": "DDL",
   "Original": "alter table a ADD id int",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter table a ADD id int",
-    "SingleShardOnly": false
+    "Query": "alter table a ADD id int"
   }
 }
 
@@ -80,18 +68,108 @@
   "QueryType": "DDL",
   "Original": "alter table user.b ADD id int",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter table user.b ADD id int",
-    "SingleShardOnly": false
+    "Query": "alter table user.b ADD id int"
   }
 }
 
 #Alter table with unknown qualifier
 "alter table a.b ADD id int"
 "no keyspace with name [a] found"
+
+# create db foo
+"create database foo"
+"create database not allowed"
+
+# create db main
+"create database main"
+"cannot create database 'main'; database exists"
+
+# create db if not exists main
+"create database if not exists main"
+{
+  "QueryType": "DDL",
+  "Original": "create database if not exists main",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# alter db foo
+"alter database foo collate utf8"
+"cannot alter database 'foo'; database does not exists"
+
+# alter db main
+"alter database main collate utf8"
+"alter database not allowed"
+
+# drop db foo
+"drop database foo"
+"cannot drop database 'foo'; database does not exists"
+
+# drop db main
+"drop database main"
+"drop database not allowed"
+
+# drop db if exists main
+"drop database if exists main"
+"drop database not allowed"
+
+# drop db if exists foo
+"drop schema if exists foo"
+{
+  "QueryType": "DDL",
+  "Original": "drop schema if exists foo",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# DDL
+"create index a on user(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on user(id)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create index a on user (id)"
+  }
+}
+
+# DDL with qualifier
+"create index a on user.user(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on user.user(id)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create index a on user (id)"
+  }
+}
+
+# DDL with qualifier for a table not in vschema of an unsharded keyspace
+"create index a on main.unknown(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on main.unknown(id)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create index a on unknown (id)"
+  }
+}

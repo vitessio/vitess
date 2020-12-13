@@ -586,7 +586,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 22,
-			"RetryMax": 0,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -595,7 +595,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 23,
-			"RetryMax": 0,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vreplication_basic": {
@@ -604,7 +604,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 24,
-			"RetryMax": 0,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"orchestrator": {

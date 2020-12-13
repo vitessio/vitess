@@ -57,6 +57,8 @@ const (
 	StmtSRollback
 	StmtRelease
 	StmtVStream
+	StmtLockTables
+	StmtUnlockTables
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -74,7 +76,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case *DDL, *DBDDL:
+	case DDLStatement, DBDDLStatement:
 		return StmtDDL
 	case *Use:
 		return StmtUse
@@ -94,6 +96,10 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSRollback
 	case *Release:
 		return StmtRelease
+	case *LockTables:
+		return StmtLockTables
+	case *UnlockTables:
+		return StmtUnlockTables
 	default:
 		return StmtUnknown
 	}
@@ -151,6 +157,10 @@ func Preview(sql string) StatementType {
 		return StmtDelete
 	case "savepoint":
 		return StmtSavepoint
+	case "lock":
+		return StmtLockTables
+	case "unlock":
+		return StmtUnlockTables
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements
@@ -231,6 +241,10 @@ func (s StatementType) String() string {
 		return "SAVEPOINT_ROLLBACK"
 	case StmtRelease:
 		return "RELEASE"
+	case StmtLockTables:
+		return "LOCK_TABLES"
+	case StmtUnlockTables:
+		return "UNLOCK_TABLES"
 	default:
 		return "UNKNOWN"
 	}
@@ -256,20 +270,12 @@ func IsDMLStatement(stmt Statement) bool {
 }
 
 //IsVschemaDDL returns true if the query is an Vschema alter ddl.
-func IsVschemaDDL(ddl *DDL) bool {
-	switch ddl.Action {
-	case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
-		return true
-	}
-	return false
-}
-
-// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func IsOnlineSchemaDDL(ddl *DDL, sql string) bool {
-	switch ddl.Action {
-	case AlterDDLAction:
-		if ddl.OnlineHint != nil {
-			return ddl.OnlineHint.Strategy != ""
+func IsVschemaDDL(ddl DDLStatement) bool {
+	switch ddlStatement := ddl.(type) {
+	case *DDL:
+		switch ddlStatement.Action {
+		case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
+			return true
 		}
 	}
 	return false

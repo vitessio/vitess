@@ -168,6 +168,26 @@ func replaceConvertUsingExprExpr(newNode, parent SQLNode) {
 	parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 }
 
+func replaceCreateIndexName(newNode, parent SQLNode) {
+	parent.(*CreateIndex).Name = newNode.(ColIdent)
+}
+
+func replaceCreateIndexTable(newNode, parent SQLNode) {
+	parent.(*CreateIndex).Table = newNode.(TableName)
+}
+
+func replaceCreateTableOptLike(newNode, parent SQLNode) {
+	parent.(*CreateTable).OptLike = newNode.(*OptLike)
+}
+
+func replaceCreateTableTable(newNode, parent SQLNode) {
+	parent.(*CreateTable).Table = newNode.(TableName)
+}
+
+func replaceCreateTableTableSpec(newNode, parent SQLNode) {
+	parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
+}
+
 func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 }
@@ -244,6 +264,10 @@ func replaceDeleteTargets(newNode, parent SQLNode) {
 
 func replaceDeleteWhere(newNode, parent SQLNode) {
 	parent.(*Delete).Where = newNode.(*Where)
+}
+
+func replaceDerivedTableSelect(newNode, parent SQLNode) {
+	parent.(*DerivedTable).Select = newNode.(SelectStatement)
 }
 
 func replaceExistsExprSubquery(newNode, parent SQLNode) {
@@ -934,6 +958,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Hints, replaceAliasedTableExprHints)
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
 
+	case *AlterDatabase:
+
 	case *AndExpr:
 		a.apply(node, n.Left, replaceAndExprLeft)
 		a.apply(node, n.Right, replaceAndExprRight)
@@ -1015,11 +1041,20 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ConvertUsingExpr:
 		a.apply(node, n.Expr, replaceConvertUsingExprExpr)
 
+	case *CreateDatabase:
+
+	case *CreateIndex:
+		a.apply(node, n.Name, replaceCreateIndexName)
+		a.apply(node, n.Table, replaceCreateIndexTable)
+
+	case *CreateTable:
+		a.apply(node, n.OptLike, replaceCreateTableOptLike)
+		a.apply(node, n.Table, replaceCreateTableTable)
+		a.apply(node, n.TableSpec, replaceCreateTableTableSpec)
+
 	case *CurTimeFuncExpr:
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
-
-	case *DBDDL:
 
 	case *DDL:
 		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
@@ -1047,6 +1082,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.TableExprs, replaceDeleteTableExprs)
 		a.apply(node, n.Targets, replaceDeleteTargets)
 		a.apply(node, n.Where, replaceDeleteWhere)
+
+	case *DerivedTable:
+		a.apply(node, n.Select, replaceDerivedTableSelect)
+
+	case *DropDatabase:
 
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
@@ -1135,6 +1175,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *Literal:
 
 	case *Load:
+
+	case *LockTables:
 
 	case *MatchExpr:
 		a.apply(node, n.Columns, replaceMatchExprColumns)
@@ -1366,6 +1408,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *UnionSelect:
 		a.apply(node, n.Statement, replaceUnionSelectStatement)
+
+	case *UnlockTables:
 
 	case *Update:
 		a.apply(node, n.Comments, replaceUpdateComments)

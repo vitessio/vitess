@@ -21,18 +21,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
-
-	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	migrationBasePath   = "schema-migration"
-	onlineDdlUUIDRegexp = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
+	migrationBasePath                 = "schema-migration"
+	onlineDdlUUIDRegexp               = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
+	strategyParserRegexp              = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
+	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new)$`)
+	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -75,28 +75,48 @@ const (
 	OnlineDDLStatusFailed    OnlineDDLStatus = "failed"
 )
 
+// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
+type DDLStrategy string
+
 const (
 	// DDLStrategyNormal means not an online-ddl migration. Just a normal MySQL ALTER TABLE
-	DDLStrategyNormal sqlparser.DDLStrategy = ""
+	DDLStrategyNormal DDLStrategy = ""
 	// DDLStrategyGhost requests gh-ost to run the migration
-	DDLStrategyGhost sqlparser.DDLStrategy = "gh-ost"
+	DDLStrategyGhost DDLStrategy = "gh-ost"
 	// DDLStrategyPTOSC requests pt-online-schema-change to run the migration
-	DDLStrategyPTOSC sqlparser.DDLStrategy = "pt-osc"
+	DDLStrategyPTOSC DDLStrategy = "pt-osc"
 )
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace    string                `json:"keyspace,omitempty"`
-	Table       string                `json:"table,omitempty"`
-	Schema      string                `json:"schema,omitempty"`
-	SQL         string                `json:"sql,omitempty"`
-	UUID        string                `json:"uuid,omitempty"`
-	Strategy    sqlparser.DDLStrategy `json:"strategy,omitempty"`
-	Options     string                `json:"options,omitempty"`
-	RequestTime int64                 `json:"time_created,omitempty"`
-	Status      OnlineDDLStatus       `json:"status,omitempty"`
-	TabletAlias string                `json:"tablet,omitempty"`
-	Retries     int64                 `json:"retries,omitempty"`
+	Keyspace       string          `json:"keyspace,omitempty"`
+	Table          string          `json:"table,omitempty"`
+	Schema         string          `json:"schema,omitempty"`
+	SQL            string          `json:"sql,omitempty"`
+	UUID           string          `json:"uuid,omitempty"`
+	Strategy       DDLStrategy     `json:"strategy,omitempty"`
+	Options        string          `json:"options,omitempty"`
+	RequestTime    int64           `json:"time_created,omitempty"`
+	RequestContext string          `json:"context,omitempty"`
+	Status         OnlineDDLStatus `json:"status,omitempty"`
+	TabletAlias    string          `json:"tablet,omitempty"`
+	Retries        int64           `json:"retries,omitempty"`
+}
+
+// ParseDDLStrategy validates the given ddl_strategy variable value , and parses the strategy and options parts.
+func ParseDDLStrategy(strategyVariable string) (strategy DDLStrategy, options string, err error) {
+	strategyName := strategyVariable
+	if submatch := strategyParserRegexp.FindStringSubmatch(strategyVariable); len(submatch) > 0 {
+		strategyName = submatch[1]
+		options = submatch[2]
+	}
+
+	switch strategy = DDLStrategy(strategyName); strategy {
+	case DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyNormal:
+		return strategy, options, nil
+	default:
+		return strategy, options, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
+	}
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -120,20 +140,21 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, strategy sqlparser.DDLStrategy, options string) (*OnlineDDL, error) {
-	u, err := CreateUUID()
+func NewOnlineDDL(keyspace string, table string, sql string, strategy DDLStrategy, options string, requestContext string) (*OnlineDDL, error) {
+	u, err := createUUID("_")
 	if err != nil {
 		return nil, err
 	}
 	return &OnlineDDL{
-		Keyspace:    keyspace,
-		Table:       table,
-		SQL:         sql,
-		UUID:        u,
-		Strategy:    strategy,
-		Options:     options,
-		RequestTime: time.Now().UnixNano(),
-		Status:      OnlineDDLStatusRequested,
+		Keyspace:       keyspace,
+		Table:          table,
+		SQL:            sql,
+		UUID:           u,
+		Strategy:       strategy,
+		Options:        options,
+		RequestTime:    time.Now().UnixNano(),
+		RequestContext: requestContext,
+		Status:         OnlineDDLStatusRequested,
 	}, nil
 }
 
@@ -150,6 +171,36 @@ func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
 // ToJSON exports this onlineDDL to JSON
 func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
+}
+
+// GetAction extracts the DDL action type from the online DDL statement
+func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
+	stmt, err := sqlparser.Parse(onlineDDL.SQL)
+	if err != nil {
+		return action, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", onlineDDL.SQL, err)
+	}
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		return stmt.GetAction(), nil
+	}
+	return action, fmt.Errorf("Unsupported query type: %s", onlineDDL.SQL)
+}
+
+// GetActionStr returns a string representation of the DDL action
+func (onlineDDL *OnlineDDL) GetActionStr() (actionStr string, err error) {
+	action, err := onlineDDL.GetAction()
+	if err != nil {
+		return actionStr, err
+	}
+	switch action {
+	case sqlparser.CreateDDLAction:
+		return sqlparser.CreateStr, nil
+	case sqlparser.AlterDDLAction:
+		return sqlparser.AlterStr, nil
+	case sqlparser.DropDDLAction:
+		return sqlparser.DropStr, nil
+	}
+	return "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
 }
 
 // ToString returns a simple string representation of this instance
@@ -173,20 +224,22 @@ func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, baseP
 	return nil
 }
 
-// CreateUUID creates a globally unique ID, returned as string
-// example result: 55d00cdc_e6ab_11ea_bfe6_0242ac1c000d
-func CreateUUID() (string, error) {
-	u, err := uuid.NewUUID()
-	if err != nil {
-		return "", err
-	}
-	result := u.String()
-	result = strings.Replace(result, "-", "_", -1)
-	return result, nil
-}
-
 // IsOnlineDDLUUID answers 'true' when the given string is an online-ddl UUID, e.g.:
 // a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a
 func IsOnlineDDLUUID(uuid string) bool {
 	return onlineDdlUUIDRegexp.MatchString(uuid)
+}
+
+// IsOnlineDDLTableName answers 'true' when the given table name _appears to be_ a name
+// generated by an online DDL operation; either the name determined by the online DDL Executor, or
+// by pt-online-schema-change.
+// There is no guarantee that the tables _was indeed_ generated by an online DDL flow.
+func IsOnlineDDLTableName(tableName string) bool {
+	if onlineDDLGeneratedTableNameRegexp.MatchString(tableName) {
+		return true
+	}
+	if ptOSCGeneratedTableNameRegexp.MatchString(tableName) {
+		return true
+	}
+	return false
 }

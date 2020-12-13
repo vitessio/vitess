@@ -32,8 +32,9 @@ import (
 
 var (
 	validSQL = []struct {
-		input  string
-		output string
+		input      string
+		output     string
+		partialDDL bool
 	}{{
 		input:  "select 1",
 		output: "select 1 from dual",
@@ -189,6 +190,9 @@ var (
 	}, {
 		input:  "select /* column alias as string without as */ a \"b\" from t",
 		output: "select /* column alias as string without as */ a as b from t",
+	}, {
+		input:  "select /* column alias with non_reserved keyword */ a as auto_increment from t",
+		output: "select /* column alias with non_reserved keyword */ a as `auto_increment` from t",
 	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
@@ -767,10 +771,10 @@ var (
 		output: "update (select id from foo) as subqalias set id = 4",
 	}, {
 		input:  "update foo f, bar b set f.id = b.id where b.name = 'test'",
-		output: "update foo as f, bar as b set f.id = b.id where b.name = 'test'",
+		output: "update foo as f, bar as b set f.id = b.id where b.`name` = 'test'",
 	}, {
 		input:  "update foo f join bar b on f.name = b.name set f.id = b.id where b.name = 'test'",
-		output: "update foo as f join bar as b on f.name = b.name set f.id = b.id where b.name = 'test'",
+		output: "update foo as f join bar as b on f.`name` = b.`name` set f.id = b.id where b.`name` = 'test'",
 	}, {
 		input: "update /* ignore */ ignore a set b = 3",
 	}, {
@@ -784,9 +788,11 @@ var (
 	}, {
 		input: "delete /* limit */ from a limit b",
 	}, {
-		input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+		input:  "delete a from a join b on a.id = b.id where b.name = 'test'",
+		output: "delete a from a join b on a.id = b.id where b.`name` = 'test'",
 	}, {
-		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+		input:  "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from a, b where a.id = b.id and b.`name` = 'test'",
 	}, {
 		input: "delete /* simple */ ignore from a",
 	}, {
@@ -902,6 +908,9 @@ var (
 		input:  "alter table a add spatial key foo (column1)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add fulltext key foo (column1)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a",
 	}, {
@@ -986,6 +995,9 @@ var (
 		input:  "alter table a add spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add fulltext index idx (id)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add foreign key",
 		output: "alter table a",
 	}, {
@@ -1013,6 +1025,9 @@ var (
 		input:  "alter table a drop spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a drop fulltext index idx (id)",
+		output: "alter table a",
+	}, {
 		input:  "alter table a add check ch_1",
 		output: "alter table a",
 	}, {
@@ -1031,29 +1046,30 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
-		input:  "alter database d default character set = charset",
-		output: "alter database d",
+		input: "alter database character set geostd8",
 	}, {
-		input:  "alter database d character set = charset",
-		output: "alter database d",
+		input: "alter database d character set geostd8",
 	}, {
-		input:  "alter database d default collate = collation",
-		output: "alter database d",
+		input: "alter database d default collate 'utf8_bin'",
 	}, {
-		input:  "alter database d collate = collation",
-		output: "alter database d",
+		input: "alter database default collate 'utf8_bin'",
 	}, {
-		input:  "alter schema d default character set = charset",
-		output: "alter database d",
+		input: "alter database d upgrade data directory name",
 	}, {
-		input:  "alter schema d character set = charset",
-		output: "alter database d",
+		input:  "alter database d collate = 'utf8_bin'",
+		output: "alter database d collate 'utf8_bin'",
 	}, {
-		input:  "alter schema d default collate = collation",
-		output: "alter database d",
+		input:  "alter schema d default character set = geostd8",
+		output: "alter database d default character set geostd8",
 	}, {
-		input:  "alter schema d collate = collation",
-		output: "alter database d",
+		input:  "alter schema d character set = geostd8",
+		output: "alter database d character set geostd8",
+	}, {
+		input:  "alter schema d default collate = 'utf8_bin'",
+		output: "alter database d default collate 'utf8_bin'",
+	}, {
+		input:  "alter schema d collate = 'utf8_bin' character set = geostd8 character set = geostd8",
+		output: "alter database d collate 'utf8_bin' character set geostd8 character set geostd8",
 	}, {
 		input: "create table a",
 	}, {
@@ -1124,10 +1140,11 @@ var (
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
 		output: "alter vschema on a add vindex hash (id) using hash",
 	}, {
-		input: "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		output: "alter vschema on user add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
+		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter vschema on a drop vindex hash",
 	}, {
@@ -1142,20 +1159,21 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input:  "create index a on b",
-		output: "alter table b",
+		input: "create index a on b (col1)",
 	}, {
-		input:  "create unique index a on b",
-		output: "alter table b",
+		input: "create unique index a on b (col1)",
 	}, {
-		input:  "create unique index a using foo on b",
-		output: "alter table b",
+		input: "create unique index a using foo on b (col1 desc)",
 	}, {
-		input:  "create fulltext index a using foo on b",
-		output: "alter table b",
+		input: "create fulltext index a using foo on b (col1)",
 	}, {
-		input:  "create spatial index a using foo on b",
-		output: "alter table b",
+		input: "create spatial index a using foo on b (col1)",
+	}, {
+		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+	}, {
+		input:      "create index a on b ((col1 + col2), (col1*col2))",
+		output:     "create index a on b ()",
+		partialDDL: true,
 	}, {
 		input:  "create view a",
 		output: "create table a",
@@ -1256,8 +1274,14 @@ var (
 		input:  "show databases",
 		output: "show databases",
 	}, {
+		input:  "show databases like '%'",
+		output: "show databases like '%'",
+	}, {
 		input:  "show schemas",
 		output: "show schemas",
+	}, {
+		input:  "show schemas like '%'",
+		output: "show schemas like '%'",
 	}, {
 		input:  "show engine INNODB",
 		output: "show engine",
@@ -1495,11 +1519,20 @@ var (
 		input:  "optimize foo",
 		output: "otheradmin",
 	}, {
-		input:  "lock tables foo",
-		output: "otheradmin",
+		input:  "lock tables foo read",
+		output: "lock tables foo read",
 	}, {
-		input:  "unlock tables foo",
-		output: "otheradmin",
+		input:  "lock tables foo write",
+		output: "lock tables foo write",
+	}, {
+		input:  "lock tables foo read local",
+		output: "lock tables foo read local",
+	}, {
+		input:  "lock tables foo low_priority write",
+		output: "lock tables foo low_priority write",
+	}, {
+		input:  "unlock tables",
+		output: "unlock tables",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
 	}, {
@@ -1592,13 +1625,17 @@ var (
 	}, {
 		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 	}, {
-		input: "select name, group_concat(score) from t group by name",
+		input:  "select name, group_concat(score) from t group by name",
+		output: "select `name`, group_concat(score) from t group by `name`",
 	}, {
-		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+		input:  "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
+		output: "select `name`, group_concat(distinct id, score order by id desc separator ':') from t group by `name`",
 	}, {
-		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+		input:  "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+		output: "select `name`, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by `name`",
 	}, {
-		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
+		input:  "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
+		output: "select `name`, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by `name`",
 	}, {
 		input: "select * from t partition (p0)",
 	}, {
@@ -1646,6 +1683,14 @@ var (
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",
 	}, {
+		input: "create database test_db default collate 'utf8mb4_general_ci' collate utf8mb4_general_ci",
+	}, {
+		input: "create database test_db character set geostd8",
+	}, {
+		input:      "create database test_db character set * unparsable",
+		output:     "create database test_db",
+		partialDDL: true,
+	}, {
 		input: "drop database test_db",
 	}, {
 		input:  "drop schema test_db",
@@ -1654,7 +1699,7 @@ var (
 		input: "drop database if exists test_db",
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
-		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
 		output: "select distinct a.* from (select 1 from dual union all select 1 from dual) as a",
@@ -1757,6 +1802,18 @@ func TestValid(t *testing.T) {
 			if tcase.output != out {
 				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 			}
+
+			// CREATE INDEX currently only has 5.7 specifications.
+			// For mysql 8.0 syntax, the query is not entirely parsed.
+			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
+			switch x := tree.(type) {
+			case *CreateIndex:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			case *CreateDatabase:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			case *AlterDatabase:
+				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
 			// all its children. But we can examine code coverage and
@@ -1829,8 +1886,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input:  "create index b on A",
-		output: "alter table A",
+		input: "create index b on A (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -1992,7 +2048,7 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ write, varying from t where trailing = 'foo'",
+		input:  "select /* unused keywords as cols */ `write`, varying from t where trailing = 'foo'",
 		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
 	}, {
 		input:  "select status from t",
@@ -2136,7 +2192,7 @@ func TestSelectInto(t *testing.T) {
 		output string
 	}{{
 		input:  "select * from t order by name limit 100 into outfile s3 'out_file_name'",
-		output: "select * from t order by name asc limit 100 into outfile s3 'out_file_name'",
+		output: "select * from t order by `name` asc limit 100 into outfile s3 'out_file_name'",
 	}, {
 		input: "select * from t into dumpfile 'out_file_name'",
 	}, {
@@ -2144,7 +2200,8 @@ func TestSelectInto(t *testing.T) {
 	}, {
 		input: "select * from t into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
 	}, {
-		input: "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
+		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
+		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
 	}, {
 		// Invalid queries but these are parsed and errors caught in planbuilder
 		input: "select * from t limit 100 into outfile s3 'out_file_name' union select * from t2",
@@ -2382,6 +2439,7 @@ func TestCreateTable(t *testing.T) {
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id),\n" +
 			"	spatial key geom (geom),\n" +
+			"	fulltext key fts (full_name),\n" +
 			"	unique key by_username (username),\n" +
 			"	unique by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +
@@ -2492,20 +2550,21 @@ func TestCreateTable(t *testing.T) {
 			t.Errorf("input: %s, err: %v", sql, err)
 			continue
 		}
-		got := String(tree.(*DDL))
-
+		got := String(tree.(*CreateTable))
+		assert.True(t, tree.(*CreateTable).FullyParsed)
 		if sql != got {
 			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
 		}
 	}
 
 	sql := "create table t garbage"
-	_, err := Parse(sql)
+	tree, err := Parse(sql)
 	if err != nil {
 		t.Errorf("input: %s, err: %v", sql, err)
 	}
+	assert.True(t, !tree.(*CreateTable).FullyParsed)
 
-	tree, err := ParseStrictDDL(sql)
+	tree, err = ParseStrictDDL(sql)
 	if tree != nil || err == nil {
 		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
 	}
@@ -2709,7 +2768,8 @@ func TestCreateTable(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		assert.True(t, tree.(*CreateTable).FullyParsed)
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}
@@ -2740,7 +2800,8 @@ func TestCreateTableLike(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		assert.True(t, tree.(*CreateTable).FullyParsed)
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}
@@ -2769,7 +2830,7 @@ func TestCreateTableEscaped(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}

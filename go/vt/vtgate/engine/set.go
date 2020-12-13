@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -398,6 +399,15 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
 		}
 		vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
+	case sysvars.DDLStrategy.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		if _, _, err := schema.ParseDDLStrategy(str); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid DDL strategy: %s", str)
+		}
+		vcursor.Session().SetDDLStrategy(str)
 	case sysvars.Charset.Name, sysvars.Names.Name:
 		str, err := svss.evalAsString(env)
 		if err != nil {

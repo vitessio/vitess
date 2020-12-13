@@ -49,10 +49,10 @@ func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (en
 		if err := pb.processSelect(sel, nil, query); err != nil {
 			return nil, err
 		}
-		if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
+		if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
 			return nil, err
 		}
-		return pb.bldr.Primitive(), nil
+		return pb.plan.Primitive(), nil
 	}
 }
 
@@ -61,7 +61,7 @@ func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (en
 //
 // The leaf nodes can be a route, vindexFunc or subquery. In the symtab,
 // the tables map has columns that point to these leaf nodes. A subquery
-// itself contains a builder tree, but it's opaque and is made to look
+// itself contains a logicalPlan tree, but it's opaque and is made to look
 // like a table for the analysis of the current tree.
 //
 // The leaf nodes are usually tied together by join nodes. While the join
@@ -104,11 +104,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
-			builder, err := buildSQLCalcFoundRowsPlan(query, sel, outer, pb.vschema)
+			plan, err := buildSQLCalcFoundRowsPlan(query, sel, outer, pb.vschema)
 			if err != nil {
 				return err
 			}
-			pb.bldr = builder
+			pb.plan = plan
 			return nil
 		}
 	}
@@ -118,11 +118,15 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 		return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSSyntaxErrorOrAccessViolation, "Incorrect usage/placement of 'INTO'")
 	}
 
-	if err := pb.processTableExprs(sel.From); err != nil {
+	var where sqlparser.Expr
+	if sel.Where != nil {
+		where = sel.Where.Expr
+	}
+	if err := pb.processTableExprs(sel.From, where); err != nil {
 		return err
 	}
 
-	if rb, ok := pb.bldr.(*route); ok {
+	if rb, ok := pb.plan.(*route); ok {
 		// TODO(sougou): this can probably be improved.
 		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 		rb.eroute.QueryTimeout = queryTimeout(directives)
@@ -160,10 +164,38 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	if err := pb.pushLimit(sel.Limit); err != nil {
 		return err
 	}
-	return pb.bldr.PushMisc(sel)
+
+	return setMiscFunc(pb.plan, sel)
 }
 
-func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (builder, error) {
+func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
+	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
+		switch node := plan.(type) {
+		case *route:
+			query, ok := node.Select.(*sqlparser.Select)
+			if !ok {
+				return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %T", node.Select)
+			}
+			query.Comments = sel.Comments
+			query.Lock = sel.Lock
+			if sel.Into != nil {
+				if node.eroute.Opcode != engine.SelectUnsharded {
+					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+				}
+				query.Into = sel.Into
+			}
+			return true, node, nil
+		}
+		return true, plan, nil
+	})
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symtab, vschema ContextVSchema) (logicalPlan, error) {
 	ljt := newJointab(sqlparser.GetBindvars(sel))
 	frpb := newPrimitiveBuilder(vschema, ljt)
 	err := frpb.processSelect(sel, outer, "")
@@ -199,7 +231,7 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symta
 			SelectExprs: countStartExpr,
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
-					Expr: &sqlparser.Subquery{Select: sel2},
+					Expr: &sqlparser.DerivedTable{Select: sel2},
 					As:   sqlparser.NewTableIdent("t"),
 				},
 			},
@@ -213,7 +245,7 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, outer *symta
 	if err != nil {
 		return nil, err
 	}
-	return &sqlCalcFoundRows{LimitQuery: frpb.bldr, CountQuery: countpb.bldr, ljt: ljt, cjt: cjt}, nil
+	return &sqlCalcFoundRows{LimitQuery: frpb.plan, CountQuery: countpb.plan, ljt: ljt, cjt: cjt}, nil
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
@@ -300,7 +332,8 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) erro
 		}
 		// The returned expression may be complex. Resplit before pushing.
 		for _, subexpr := range splitAndExpression(nil, expr) {
-			if err := pb.bldr.PushFilter(pb, subexpr, whereType, origin); err != nil {
+			pb.plan, err = planFilter(pb, pb.plan, subexpr, whereType, origin)
+			if err != nil {
 				return err
 			}
 		}
@@ -332,9 +365,9 @@ func reorderBySubquery(filters []sqlparser.Expr) {
 // addPullouts adds the pullout subqueries to the primitiveBuilder.
 func (pb *primitiveBuilder) addPullouts(pullouts []*pulloutSubquery) {
 	for _, pullout := range pullouts {
-		pullout.setUnderlying(pb.bldr)
-		pb.bldr = pullout
-		pb.bldr.Reorder(0)
+		pullout.setUnderlying(pb.plan)
+		pb.plan = pullout
+		pb.plan.Reorder(0)
 	}
 }
 
@@ -361,10 +394,11 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				return nil, err
 			}
 			node.Expr = expr
-			rc, _, err := pb.bldr.PushSelect(pb, node, origin)
+			newBuilder, rc, _, err := planProjection(pb, pb.plan, node, origin)
 			if err != nil {
 				return nil, err
 			}
+			pb.plan = newBuilder
 			resultColumns = append(resultColumns, rc)
 			pb.addPullouts(pullouts)
 		case *sqlparser.StarExpr:
@@ -378,7 +412,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				continue
 			}
 			// We'll allow select * for simple routes.
-			rb, ok := pb.bldr.(*route)
+			rb, ok := pb.plan.(*route)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
@@ -390,7 +424,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		case sqlparser.Nextval:
-			rb, ok := pb.bldr.(*route)
+			rb, ok := pb.plan.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
@@ -454,11 +488,12 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 						As: col,
 					}
 				}
-				rc, _, err := pb.bldr.PushSelect(pb, expr, t.Origin())
+				newBuilder, rc, _, err := planProjection(pb, pb.plan, expr, t.Origin())
 				if err != nil {
 					// Unreachable because PushSelect won't fail on ColName.
 					return inrcs, false, err
 				}
+				pb.plan = newBuilder
 				inrcs = append(inrcs, rc)
 			}
 		}
@@ -481,11 +516,12 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 				Qualifier: expr.TableName,
 			},
 		}
-		rc, _, err := pb.bldr.PushSelect(pb, expr, t.Origin())
+		newBuilder, rc, _, err := planProjection(pb, pb.plan, expr, t.Origin())
 		if err != nil {
 			// Unreachable because PushSelect won't fail on ColName.
 			return inrcs, false, err
 		}
+		pb.plan = newBuilder
 		inrcs = append(inrcs, rc)
 	}
 	return inrcs, true, nil

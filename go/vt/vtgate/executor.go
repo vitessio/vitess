@@ -290,6 +290,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				v = options.GetWorkload().String()
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.DDLStrategy.Name:
+			bindVars[key] = sqltypes.StringBindVariable(session.DDLStrategy)
 		case sysvars.ReadAfterWriteGTID.Name:
 			var v string
 			ifReadAfterWriteExist(session, func(raw *vtgatepb.ReadAfterWrite) {
@@ -431,7 +433,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	if err != nil {
 		return nil, err
 	}
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, nil, "vtg", false)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, nil, "vtg", false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -718,7 +720,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			show.ShowTablesOpt.DbName = ""
 		}
 		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES), sqlparser.KeywordString(sqlparser.KEYSPACES):
+	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.SCHEMAS), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES), sqlparser.KeywordString(sqlparser.KEYSPACES):
 		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 		if err != nil {
 			return nil, err
@@ -742,7 +744,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Databases"),
+			Fields:       buildVarCharFields("Database"),
 			Rows:         rows,
 			RowsAffected: uint64(len(rows)),
 		}, nil
@@ -1359,7 +1361,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize)
+		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize, vcursor.keyspace)
 		if err != nil {
 			return nil, err
 		}
