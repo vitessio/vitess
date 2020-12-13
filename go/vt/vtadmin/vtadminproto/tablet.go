@@ -11,3 +11,13 @@ func ParseTabletServingState(state string) vtadminpb.Tablet_ServingState {
 
 	return vtadminpb.Tablet_UNKNOWN
 }
+
+// TabletServingStateString returns a ServingState represented as a string. If
+// the state does not map to a valid value, this function returns "UNKNOWN".
+func TabletServingStateString(state vtadminpb.Tablet_ServingState) string {
+	if s, ok := vtadminpb.Tablet_ServingState_name[int32(state)]; ok {
+		return s
+	}
+
+	return "UNKNOWN"
+}
