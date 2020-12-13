@@ -28,3 +28,11 @@ import "vtctldata.proto";
 service Vtctl {
   rpc ExecuteVtctlCommand (vtctldata.ExecuteVtctlCommandRequest) returns (stream vtctldata.ExecuteVtctlCommandResponse) {};
 }
+
+// Service Vtctld exposes gRPC endpoints for each vt command.
+service Vtctld {
+  // GetKeyspace reads the given keyspace from the topo and returns it.
+  rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
+  // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
+  rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+}
