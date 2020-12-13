@@ -119,7 +119,7 @@ func TestConfigParse(t *testing.T) {
 			CredentialsPath: path,
 		}
 
-		cfg, err := Parse("cid", "testcluster", args)
+		cfg, err := Parse("cid", "testcluster", nil, args)
 		assert.NoError(t, err)
 		assert.Equal(t, expected, cfg)
 	})
