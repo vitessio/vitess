@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	schema2 "vitess.io/vitess/go/vt/schema"
+	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
@@ -507,7 +507,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
-		if schema2.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
+		if vtschema.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
 			vs.plans[id] = nil
 			return nil, nil
 		}
