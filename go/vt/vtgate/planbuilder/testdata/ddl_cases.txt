@@ -155,7 +155,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create index a on user (id)"
+    "Query": "alter table user add index a (id)"
   }
 }
 
@@ -170,6 +170,6 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "create index a on unknown (id)"
+    "Query": "alter table unknown add index a (id)"
   }
 }
