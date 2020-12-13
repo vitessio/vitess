@@ -80,13 +80,6 @@ func NormalizeOnlineDDL(sql string) (normalized []*NormalizedDDLQuery, err error
 		return normalized, err
 	}
 	switch action {
-	case sqlparser.AlterDDLAction:
-		switch ddlStmt.(type) {
-		case *sqlparser.CreateIndex:
-			if ddlStmt.IsFullyParsed() {
-				sql = sqlparser.String(ddlStmt)
-			}
-		}
 	case sqlparser.DropDDLAction:
 		tables := ddlStmt.GetFromTables()
 		for _, table := range tables {
@@ -94,6 +87,9 @@ func NormalizeOnlineDDL(sql string) (normalized []*NormalizedDDLQuery, err error
 			normalized = append(normalized, &NormalizedDDLQuery{SQL: sqlparser.String(ddlStmt), TableName: table})
 		}
 		return normalized, nil
+	}
+	if ddlStmt.IsFullyParsed() {
+		sql = sqlparser.String(ddlStmt)
 	}
 	n := &NormalizedDDLQuery{SQL: sql, TableName: ddlStmt.GetTable()}
 	return []*NormalizedDDLQuery{n}, nil
