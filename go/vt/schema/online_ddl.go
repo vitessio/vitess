@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -170,6 +171,36 @@ func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
 // ToJSON exports this onlineDDL to JSON
 func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
+}
+
+// GetAction extracts the DDL action type from the online DDL statement
+func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
+	stmt, err := sqlparser.Parse(onlineDDL.SQL)
+	if err != nil {
+		return action, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", onlineDDL.SQL, err)
+	}
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		return stmt.GetAction(), nil
+	}
+	return action, fmt.Errorf("Unsupported query type: %s", onlineDDL.SQL)
+}
+
+// GetActionStr returns a string representation of the DDL action
+func (onlineDDL *OnlineDDL) GetActionStr() (actionStr string, err error) {
+	action, err := onlineDDL.GetAction()
+	if err != nil {
+		return actionStr, err
+	}
+	switch action {
+	case sqlparser.CreateDDLAction:
+		return sqlparser.CreateStr, nil
+	case sqlparser.AlterDDLAction:
+		return sqlparser.AlterStr, nil
+	case sqlparser.DropDDLAction:
+		return sqlparser.DropStr, nil
+	}
+	return "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
 }
 
 // ToString returns a simple string representation of this instance

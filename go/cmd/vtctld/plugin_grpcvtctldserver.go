@@ -16,9 +16,15 @@ limitations under the License.
 
 package main
 
-// Imports and register the gRPC vtgateservice server
-
 import (
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 )
+
+func init() {
+	servenv.OnRun(func() {
+		if servenv.GRPCCheckServiceMap("vtctld") {
+			grpcvtctldserver.StartServer(servenv.GRPCServer, ts)
+		}
+	})
+}

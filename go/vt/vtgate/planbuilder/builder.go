@@ -53,14 +53,14 @@ type truncater interface {
 	SetTruncateColumnCount(int)
 }
 
-// Build builds a plan for a query based on the specified vschema.
+// TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
-func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
+func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt)
+	result, err := sqlparser.RewriteAST(stmt, "")
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +136,10 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return nil, nil
 	case *sqlparser.Show:
 		return buildShowPlan(stmt, vschema)
+	case *sqlparser.LockTables:
+		return buildRoutePlan(stmt, vschema, buildLockPlan)
+	case *sqlparser.UnlockTables:
+		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)

@@ -207,7 +207,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
 		ct.sourceTablet.Set(tablet.Alias.String())
 	}
-
 	switch {
 	case len(ct.source.Tables) > 0:
 		// Table names can have search patterns. Resolve them against the schema.

@@ -191,6 +191,9 @@ var (
 		input:  "select /* column alias as string without as */ a \"b\" from t",
 		output: "select /* column alias as string without as */ a as b from t",
 	}, {
+		input:  "select /* column alias with non_reserved keyword */ a as auto_increment from t",
+		output: "select /* column alias with non_reserved keyword */ a as `auto_increment` from t",
+	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
 		input:  "select next value for t",
@@ -1516,11 +1519,20 @@ var (
 		input:  "optimize foo",
 		output: "otheradmin",
 	}, {
-		input:  "lock tables foo",
-		output: "otheradmin",
+		input:  "lock tables foo read",
+		output: "lock tables foo read",
 	}, {
-		input:  "unlock tables foo",
-		output: "otheradmin",
+		input:  "lock tables foo write",
+		output: "lock tables foo write",
+	}, {
+		input:  "lock tables foo read local",
+		output: "lock tables foo read local",
+	}, {
+		input:  "lock tables foo low_priority write",
+		output: "lock tables foo low_priority write",
+	}, {
+		input:  "unlock tables",
+		output: "unlock tables",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
 	}, {
@@ -2036,7 +2048,7 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ write, varying from t where trailing = 'foo'",
+		input:  "select /* unused keywords as cols */ `write`, varying from t where trailing = 'foo'",
 		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
 	}, {
 		input:  "select status from t",

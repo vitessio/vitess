@@ -16,9 +16,8 @@ limitations under the License.
 
 package main
 
-// Imports and register the gRPC vtgateservice server
+// Imports and register the gRPC vtctld client.
 
 import (
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
+	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
 )
