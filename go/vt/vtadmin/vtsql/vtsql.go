@@ -48,6 +48,11 @@ type VTGateProxy struct {
 	discoveryTags []string
 	creds         Credentials
 
+	// DialFunc is called to open a new database connection. In production this
+	// should always be vitessdriver.OpenWithConfiguration, but it is exported
+	// for testing purposes.
+	DialFunc func(cfg vitessdriver.Configuration) (*sql.DB, error)
+
 	host string
 	conn *sql.DB
 }
@@ -75,6 +80,7 @@ func New(cluster string, cfg *Config) *VTGateProxy {
 		discovery:     cfg.Discovery,
 		discoveryTags: discoveryTags,
 		creds:         cfg.Credentials,
+		DialFunc:      vitessdriver.OpenWithConfiguration,
 	}
 }
 
@@ -136,7 +142,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		}, conf.GRPCDialOptions...)
 	}
 
-	db, err := vitessdriver.OpenWithConfiguration(conf)
+	db, err := vtgate.DialFunc(conf)
 	if err != nil {
 		return err
 	}
