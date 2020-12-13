@@ -371,6 +371,26 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
+
+	// LockType is an enum for Lock Types
+	LockType int8
+
+	// TableAndLockType contains table and lock association
+	TableAndLockType struct {
+		Table TableExpr
+		Lock  LockType
+	}
+
+	// TableAndLockTypes is a slice of TableAndLockType
+	TableAndLockTypes []*TableAndLockType
+
+	// LockTables represents the lock statement
+	LockTables struct {
+		Tables TableAndLockTypes
+	}
+
+	// UnlockTables represents the unlock statement
+	UnlockTables struct{}
 )
 
 func (*Union) iStatement()             {}
@@ -403,6 +423,8 @@ func (*CreateIndex) iStatement()       {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
 func (*CreateTable) iStatement()       {}
+func (*LockTables) iStatement()        {}
+func (*UnlockTables) iStatement()      {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
@@ -2528,4 +2550,17 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 	if node.TableSpec != nil {
 		buf.astPrintf(node, " %v", node.TableSpec)
 	}
+}
+
+// Format formats the LockTables node.
+func (node *LockTables) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "lock tables %v %s", node.Tables[0].Table, node.Tables[0].Lock.ToString())
+	for i := 1; i < len(node.Tables); i++ {
+		buf.astPrintf(node, ", %v %s", node.Tables[i].Table, node.Tables[i].Lock.ToString())
+	}
+}
+
+// Format formats the UnlockTables node.
+func (node *UnlockTables) Format(buf *TrackedBuffer) {
+	buf.WriteString("unlock tables")
 }

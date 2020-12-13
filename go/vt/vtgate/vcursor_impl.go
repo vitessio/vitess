@@ -275,7 +275,7 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 // if there is one. If the keyspace specified in the target cannot be
 // identified, it returns an error.
 func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
-	if vc.keyspace == "" {
+	if ignoreKeyspace(vc.keyspace) {
 		return nil, errNoKeyspace
 	}
 	ks, ok := vc.vschema.Keyspaces[vc.keyspace]
@@ -451,7 +451,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := vc.vschema.Keyspaces[keyspace]; keyspace != "" && !ok {
+	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
 		return mysql.NewSQLError(mysql.ERBadDb, mysql.SSSyntaxErrorOrAccessViolation, "Unknown database '%s'", keyspace)
 	}
 
@@ -460,6 +460,10 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 	}
 	vc.safeSession.SetTargetString(target)
 	return nil
+}
+
+func ignoreKeyspace(keyspace string) bool {
+	return keyspace == "" || sqlparser.SystemSchema(keyspace)
 }
 
 func (vc *vcursorImpl) SetUDV(key string, value interface{}) error {

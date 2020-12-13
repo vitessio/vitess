@@ -33,7 +33,7 @@ import (
 )
 
 // The default values used by these flags cannot be taken from wrangler and
-// actionnode modules, as we do't want to depend on them at all.
+// actionnode modules, as we don't want to depend on them at all.
 var (
 	actionTimeout = flag.Duration("action_timeout", time.Hour, "timeout for the total command")
 	server        = flag.String("server", "", "server to use for connection")
