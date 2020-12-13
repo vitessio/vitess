@@ -227,7 +227,7 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 		}(c)
 	}
 
-	wg.Done()
+	wg.Wait()
 
 	if er.HasErrors() {
 		return nil, er.Error()

@@ -28,10 +28,11 @@ type Config struct {
 // Parse returns a new config with the given cluster ID and name, after
 // attempting to parse the command-line pflags into that Config. See
 // (*Config).Parse() for more details.
-func Parse(clusterID string, clusterName string, args []string) (*Config, error) {
+func Parse(clusterID string, clusterName string, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
 		ClusterID:   clusterID,
 		ClusterName: clusterName,
+		Discovery:   disco,
 	}
 
 	err := cfg.Parse(args)
