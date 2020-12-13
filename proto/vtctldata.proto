@@ -23,6 +23,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 package vtctldata;
 
 import "logutil.proto";
+import "topodata.proto";
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -34,6 +35,26 @@ message ExecuteVtctlCommandRequest {
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
+}
+
+message GetKeyspacesRequest {
+}
+
+message GetKeyspacesResponse {
+  repeated Keyspace keyspaces = 1; 
+}
+
+message GetKeyspaceRequest {
+  string keyspace = 1;
+}
+
+message GetKeyspaceResponse {
+  Keyspace keyspace = 1;
+}
+
+message Keyspace {
+  string name = 1;
+  topodata.Keyspace keyspace = 2;
 }
 
 // TableMaterializeSttings contains the settings for one table.
