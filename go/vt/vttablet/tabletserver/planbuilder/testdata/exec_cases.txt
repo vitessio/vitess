@@ -652,7 +652,7 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery":"create index a on b (id)"
+  "FullQuery":"alter table b add index a (id)"
 }
 
 
