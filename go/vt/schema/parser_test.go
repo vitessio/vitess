@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,7 +56,7 @@ func TestNormalizeOnlineDDL(t *testing.T) {
 	}
 	tests := map[string]expect{
 		"alter table t add column i int, drop column d": {sqls: []string{"alter table t add column i int, drop column d"}},
-		"create table t(id int primary key)":            {sqls: []string{"create table t(id int primary key)"}},
+		"create table t (id int primary key)":           {sqls: []string{"create table t (id int primary key)"}},
 		"drop table t":                                  {sqls: []string{"drop table t"}},
 		"drop table if exists t":                        {sqls: []string{"drop table if exists t"}},
 		"drop table t1, t2, t3":                         {sqls: []string{"drop table t1", "drop table t2", "drop table t3"}},
@@ -78,7 +79,10 @@ func TestNormalizeOnlineDDL(t *testing.T) {
 				assert.NoError(t, err)
 				sqls := []string{}
 				for _, n := range normalized {
-					sqls = append(sqls, n.SQL)
+					sql := n.SQL
+					sql = strings.ReplaceAll(sql, "\n", "")
+					sql = strings.ReplaceAll(sql, "\t", "")
+					sqls = append(sqls, sql)
 				}
 				assert.Equal(t, expect.sqls, sqls)
 			}
