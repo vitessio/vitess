@@ -53,6 +53,7 @@ type Server struct {
 	gRPCServer   *grpc.Server
 	healthServer *health.Server
 	router       *mux.Router
+	serving      bool
 
 	opts Options
 }
@@ -118,6 +119,9 @@ func (s *Server) MustListenAndServe() {
 	}
 }
 
+// listenFunc is extracted to mock out in tests.
+var listenFunc = net.Listen // nolint:gochecknoglobals
+
 // ListenAndServe sets up a listener, multiplexes it into gRPC and non-gRPC
 // requests, and binds the gRPC server and mux.Router to them, respectively. It
 // then installs a signal handler on SIGTERM and SIGQUIT, and runs until either
@@ -126,7 +130,7 @@ func (s *Server) MustListenAndServe() {
 // On shutdown, it may begin a lame duck period (see Options) before beginning
 // a graceful shutdown of the gRPC server and closing listeners.
 func (s *Server) ListenAndServe() error { // nolint:funlen
-	lis, err := net.Listen("tcp", s.opts.Addr)
+	lis, err := listenFunc("tcp", s.opts.Addr)
 	if err != nil {
 		return err
 	}
@@ -177,6 +181,11 @@ func (s *Server) ListenAndServe() error { // nolint:funlen
 		shutdown <- err
 	}()
 
+	// (TODO:@amason) Figure out a good abstraction to have other services
+	// register themselves.
+	s.healthServer.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
+
+	s.serving = true
 	log.Infof("server %s listening on %s", s.name, s.opts.Addr)
 
 	reason := <-shutdown
@@ -193,6 +202,8 @@ func (s *Server) ListenAndServe() error { // nolint:funlen
 	log.Info("beginning graceful shutdown")
 	s.gRPCServer.GracefulStop()
 	log.Info("graceful shutdown complete")
+
+	s.serving = false
 
 	return nil
 }
