@@ -48,7 +48,7 @@ func parseTablet(rows *sql.Rows, c *cluster.Cluster) (*vtadminpb.Tablet, error) 
 		servingStateStr string
 		aliasStr        string
 		mtstStr         string
-		topotablet      *topodatapb.Tablet
+		topotablet      topodatapb.Tablet
 
 		err error
 	)
@@ -71,7 +71,7 @@ func parseTablet(rows *sql.Rows, c *cluster.Cluster) (*vtadminpb.Tablet, error) 
 			Id:   c.ID,
 			Name: c.Name,
 		},
-		Tablet: topotablet,
+		Tablet: &topotablet,
 	}
 
 	topotablet.Type, err = topoproto.ParseTabletType(tabletTypeStr)
