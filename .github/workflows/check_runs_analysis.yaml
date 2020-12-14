@@ -1,16 +1,16 @@
 on:
   pull_request:
     branches:
-    - master
+      - master
   # schedule:
   #   - cron:  '*/5 * * * *'
 
 jobs:
   analyze:
-    name: Analyze and report failed check runs
+    name: analyze_check_runs
     runs-on: ubuntu-latest
     steps:
-    - name: analyze check run
+    - name: analyze check runs
       run: |
         GITHUB_REPOSITORY="vitessio/vitess"
         RUNS_FILE="/tmp/failed_runs.json"
