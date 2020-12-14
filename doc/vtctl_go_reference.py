@@ -65,7 +65,7 @@ def create_reference_doc(root_directory, commands, arg_definitions):
       if ('definition' in commands[group][command] and
           commands[group][command]['definition'] != '' and
           re.search(r'HIDDEN', commands[group][command]['definition'])):
-        print '\n\n****** ' + command + ' is hidden *******\n\n'
+        print('\n\n******', command, 'is hidden *******\n')
         continue
       command_link = anchor_id(command)
       doc.write('* [' + command + '](#' + command_link + ')\n')
