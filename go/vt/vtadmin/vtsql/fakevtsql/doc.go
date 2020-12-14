@@ -7,10 +7,12 @@
 //		disco := fakediscovery.New()
 //		disco.AddTaggedGates(nil, []*vtadminpb.VTGate{Hostname: "gate"})
 //
-// Then, you will call vtsql.Parse(), passing the faked discovery implementation:
+// Then, you will call vtsql.New(), passing the faked discovery implementation
+// into the config:
 //
-//		vtsqlCfg, err := vtsql.Parse("clusterID", "clusterName", disco, []string{})
-//		db := vtsql.New("clusterID", vtsqlCfg)
+//		db := vtsql.New("clusterID", &vtsql.Config{
+//			Discovery: disco,
+//		})
 //
 // Finally, with your instantiated VTGateProxy instance, you can mock out the
 // DialFunc to always return a fakevtsql.Connector. The Tablets and ShouldErr
