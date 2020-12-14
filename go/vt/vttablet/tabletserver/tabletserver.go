@@ -216,6 +216,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
+	tsv.registerDebugEnvHandler()
 
 	return tsv
 }
@@ -1621,6 +1622,12 @@ func (tsv *TabletServer) registerThrottlerHandlers() {
 	tsv.registerThrottlerStatusHandler()
 }
 
+func (tsv *TabletServer) registerDebugEnvHandler() {
+	tsv.exporter.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+		debugEnvHandler(tsv, w, r)
+	})
+}
+
 // EnableHeartbeat forces heartbeat to be on or off.
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
@@ -1642,6 +1649,9 @@ func (tsv *TabletServer) EnableHistorian(enabled bool) {
 // SetPoolSize changes the pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetPoolSize(val int) {
+	if val <= 0 {
+		return
+	}
 	tsv.qe.conns.SetCapacity(val)
 }
 
