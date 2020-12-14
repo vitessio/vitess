@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
@@ -74,10 +73,6 @@ func TestGetGates(t *testing.T) {
 }
 
 func TestGetTablets(t *testing.T) {
-	type dbcfg struct {
-		shouldErr bool
-	}
-
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
@@ -237,33 +232,8 @@ func TestGetTablets(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
-			for i, tablets := range tt.clusterTablets { // nolint:dupl
-				tablets := tablets // avoid loop shadowing in the dialer closure below
-
-				disco := fakediscovery.New()
-				disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("cluster%d-gate", i)})
-
-				cluster := &cluster.Cluster{
-					ID:        fmt.Sprintf("c%d", i),
-					Name:      fmt.Sprintf("cluster%d", i),
-					Discovery: disco,
-				}
-
-				vtsqlCfg, err := vtsql.Parse(cluster.ID, cluster.Name, disco, []string{})
-				require.NoError(t, err)
-
-				dbconfig, ok := tt.dbconfigs[cluster.ID]
-				if !ok {
-					dbconfig = &dbcfg{shouldErr: false}
-				}
-
-				db := vtsql.New(cluster.ID, vtsqlCfg)
-				db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-					return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: dbconfig.shouldErr}), nil
-				}
-
-				cluster.DB = db
-
+			for i, tablets := range tt.clusterTablets {
+				cluster := buildCluster(i, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -287,25 +257,20 @@ func Test_getTablets(t *testing.T) {
 	disco := fakediscovery.New()
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
 
-	dbcfg, err := vtsql.Parse("1", "one", disco, []string{})
-	require.NoError(t, err)
-
-	db := vtsql.New("one", dbcfg)
+	db := vtsql.New("one", &vtsql.Config{
+		Discovery: disco,
+	})
 	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
 		return nil, assert.AnError
 	}
 
-	_, err = api.getTablets(context.Background(), &cluster.Cluster{
+	_, err := api.getTablets(context.Background(), &cluster.Cluster{
 		DB: db,
 	})
 	assert.Error(t, err)
 }
 
 func TestGetTabet(t *testing.T) {
-	type dbcfg struct {
-		shouldErr bool
-	}
-
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
@@ -524,33 +489,8 @@ func TestGetTabet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
-			for i, tablets := range tt.clusterTablets { // nolint:dupl
-				tablets := tablets // avoid loop shadowing in the dialer closure below
-
-				disco := fakediscovery.New()
-				disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("cluster%d-gate", i)})
-
-				cluster := &cluster.Cluster{
-					ID:        fmt.Sprintf("c%d", i),
-					Name:      fmt.Sprintf("cluster%d", i),
-					Discovery: disco,
-				}
-
-				vtsqlCfg, err := vtsql.Parse(cluster.ID, cluster.Name, disco, []string{})
-				require.NoError(t, err)
-
-				dbconfig, ok := tt.dbconfigs[cluster.ID]
-				if !ok {
-					dbconfig = &dbcfg{shouldErr: false}
-				}
-
-				db := vtsql.New(cluster.ID, vtsqlCfg)
-				db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-					return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: dbconfig.shouldErr}), nil
-				}
-
-				cluster.DB = db
-
+			for i, tablets := range tt.clusterTablets {
+				cluster := buildCluster(i, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -565,4 +505,38 @@ func TestGetTabet(t *testing.T) {
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
+}
+
+type dbcfg struct {
+	shouldErr bool
+}
+
+// shared helper for building a cluster that contains the given tablets.
+// dbconfigs contains an optional config for controlling the behavior of the
+// cluster's DB at the package sql level.
+func buildCluster(i int, tablets []*vtadminpb.Tablet, dbconfigs map[string]*dbcfg) *cluster.Cluster {
+	disco := fakediscovery.New()
+	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("cluster%d-gate", i)})
+
+	cluster := &cluster.Cluster{
+		ID:        fmt.Sprintf("c%d", i),
+		Name:      fmt.Sprintf("cluster%d", i),
+		Discovery: disco,
+	}
+
+	dbconfig, ok := dbconfigs[cluster.ID]
+	if !ok {
+		dbconfig = &dbcfg{shouldErr: false}
+	}
+
+	db := vtsql.New(cluster.ID, &vtsql.Config{
+		Discovery: disco,
+	})
+	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
+		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: dbconfig.shouldErr}), nil
+	}
+
+	cluster.DB = db
+
+	return cluster
 }
