@@ -33,7 +33,7 @@ for line in sys.stdin:
     continue
 
   m = coverage_pattern.search(line)
-  if m != None:
+  if m is not None:
     coverage_count += 1
     coverage_sum += float(m.group(1) + "." + m.group(2))
     continue
