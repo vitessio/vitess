@@ -266,7 +266,7 @@ def parse_arg_list(arguments, current_command):
   arg_count = 0
   char_count = 1
   for char in arguments:
-    if (last_char == '' or last_char == ' ') and char == '[':
+    if last_char in ('', ' ') and char == '[':
       find_closing_square_bracket =  True
     elif (last_char == '[' and
           find_closing_square_bracket and
@@ -292,7 +292,7 @@ def parse_arg_list(arguments, current_command):
           has_multiple = True
         elif not has_comma:
           current_argument += char
-    elif char == '<' and (last_char == '' or last_char == ' '):
+    elif char == '<' and last_char in ('', ' '):
       is_required_argument = True
       current_argument += char
     elif char == ',':
@@ -516,7 +516,7 @@ def main(root_directory):
             arg_count = 0
             char_count = 1
             for char in arguments[0]:
-              if (last_char == '' or last_char == ' ') and char == '[':
+              if last_char in ('', ' ') and char == '[':
                 find_closing_square_bracket =  True
               elif (last_char == '[' and
                     find_closing_square_bracket and
@@ -542,7 +542,7 @@ def main(root_directory):
                     has_multiple = True
                   elif not has_comma:
                     current_argument += char
-              elif char == '<' and (last_char == '' or last_char == ' '):
+              elif char == '<' and last_char in ('', ' '):
                 is_required_argument = True
                 current_argument += char
               elif char == ',':
@@ -639,7 +639,7 @@ def main(root_directory):
               [arg_type, arg_name, arg_default, arg_definition] = argument_data[0]
               if arg_type == 'Bool':
                 arg_type = 'Boolean'
-              if arg_type == 'String' or arg_type == 'int':
+              if arg_type in ('String', 'int'):
                 arg_type = arg_type.lower()
 
               arg_default = arg_default.strip().strip('"')
