@@ -132,14 +132,3 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 			SQL:      query,
 		}, nil
 }
-
-func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema ContextVSchema) (engine.Primitive, error) {
-	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
-	if err != nil {
-		return nil, err
-	}
-	return &engine.AlterVSchema{
-		Keyspace:        keyspace,
-		AlterVschemaDDL: stmt,
-	}, nil
-}
