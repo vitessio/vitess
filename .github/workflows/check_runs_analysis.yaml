@@ -1,5 +1,7 @@
 on:
-  push
+  pull_request:
+    branches:
+    - master
   # schedule:
   #   - cron:  '*/5 * * * *'
 
@@ -8,12 +10,7 @@ jobs:
     name: Analyze and report failed check runs
     runs-on: ubuntu-latest
     steps:
-      - name: analyze check run
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        CONCLUSION1: ${{ github.event.check_run[conclusion] }}
-        CONCLUSION2: ${{ github.event.check_run.conclusion }}
-        CHECK_RUN: ${{ github.event.check_run }}
+    - name: analyze check run
       run: |
         GITHUB_REPOSITORY="vitessio/vitess"
         RUNS_FILE="/tmp/failed_runs.json"
