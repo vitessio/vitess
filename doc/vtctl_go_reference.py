@@ -250,7 +250,6 @@ def create_reference_doc(root_directory, commands, arg_definitions):
   #write_footer(doc)
   doc.close()
   #print json.dumps(not_found_arguments, sort_keys=True, indent=4)
-  return
 
 def parse_arg_list(arguments, current_command):
   last_char = ''
@@ -794,8 +793,6 @@ def main(root_directory):
   #print json.dumps(commands["Generic"], sort_keys=True, indent=4)
 
   create_reference_doc(root_directory, commands, new_arg_definitions)
-
-  return
 
 if __name__ == '__main__':
 
