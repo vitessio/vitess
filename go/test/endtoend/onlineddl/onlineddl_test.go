@@ -165,7 +165,7 @@ func TestSchemaChange(t *testing.T) {
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
 	{
-		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyNormal), "vtctl", "non_online")
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online")
 	}
 	{
 		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, ddlStrategyUnchanged, "vtgate", "ghost_col")
@@ -261,7 +261,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	if ddlStrategy != string(schema.DDLStrategyNormal) {
+	if !schema.DDLStrategy(ddlStrategy).IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
 
