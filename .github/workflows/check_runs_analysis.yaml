@@ -20,7 +20,6 @@ jobs:
           -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
           -H "Accept: application/vnd.github.v3+json" \
           -H "Content-type: application/json" \
-          -H "Accept: application/json" \
           "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100&status=failure" \
           > "$RUNS_FILE"
 
