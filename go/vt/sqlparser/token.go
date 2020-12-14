@@ -114,6 +114,7 @@ var keywords = map[string]int{
 	"by":                  BY,
 	"call":                UNUSED,
 	"cascade":             CASCADE,
+	"cascaded":            CASCADED,
 	"case":                CASE,
 	"cast":                CAST,
 	"change":              UNUSED,
@@ -141,7 +142,7 @@ var keywords = map[string]int{
 	"current_date":        CURRENT_DATE,
 	"current_time":        CURRENT_TIME,
 	"current_timestamp":   CURRENT_TIMESTAMP,
-	"current_user":        UNUSED,
+	"current_user":        CURRENT_USER,
 	"cursor":              UNUSED,
 	"data":                DATA,
 	"database":            DATABASE,
@@ -156,6 +157,7 @@ var keywords = map[string]int{
 	"decimal":             DECIMAL,
 	"declare":             UNUSED,
 	"default":             DEFAULT,
+	"definer":             DEFINER,
 	"delayed":             UNUSED,
 	"delete":              DELETE,
 	"desc":                DESC,
@@ -237,6 +239,7 @@ var keywords = map[string]int{
 	"is":                  IS,
 	"isolation":           ISOLATION,
 	"iterate":             UNUSED,
+	"invoker":             INVOKER,
 	"join":                JOIN,
 	"json":                JSON,
 	"key":                 KEY,
@@ -273,6 +276,7 @@ var keywords = map[string]int{
 	"mediumblob":          MEDIUMBLOB,
 	"mediumint":           MEDIUMINT,
 	"mediumtext":          MEDIUMTEXT,
+	"merge":               MERGE,
 	"middleint":           UNUSED,
 	"minute_microsecond":  UNUSED,
 	"minute_second":       UNUSED,
@@ -299,7 +303,7 @@ var keywords = map[string]int{
 	"only":                ONLY,
 	"optimize":            OPTIMIZE,
 	"optimizer_costs":     UNUSED,
-	"option":              UNUSED,
+	"option":              OPTION,
 	"optionally":          OPTIONALLY,
 	"or":                  OR,
 	"order":               ORDER,
@@ -344,6 +348,7 @@ var keywords = map[string]int{
 	"schema":              SCHEMA,
 	"schemas":             SCHEMAS,
 	"second_microsecond":  UNUSED,
+	"security":            SECURITY,
 	"select":              SELECT,
 	"sensitive":           UNUSED,
 	"separator":           SEPARATOR,
@@ -359,7 +364,7 @@ var keywords = map[string]int{
 	"smallint":            SMALLINT,
 	"spatial":             SPATIAL,
 	"specific":            UNUSED,
-	"sql":                 UNUSED,
+	"sql":                 SQL,
 	"sqlexception":        UNUSED,
 	"sqlstate":            UNUSED,
 	"sqlwarning":          UNUSED,
@@ -378,6 +383,7 @@ var keywords = map[string]int{
 	"vstream":             VSTREAM,
 	"table":               TABLE,
 	"tables":              TABLES,
+	"temptable":           TEMPTABLE,
 	"terminated":          TERMINATED,
 	"text":                TEXT,
 	"than":                THAN,
@@ -398,6 +404,7 @@ var keywords = map[string]int{
 	"true":                TRUE,
 	"truncate":            TRUNCATE,
 	"uncommitted":         UNCOMMITTED,
+	"undefined":           UNDEFINED,
 	"undo":                UNUSED,
 	"union":               UNION,
 	"unique":              UNIQUE,
@@ -710,6 +717,9 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isVariable bool) (int, []by
 		isDigit(tkn.lastChar) ||
 		tkn.lastChar == '@' ||
 		(isVariable && isCarat(tkn.lastChar)) {
+		if tkn.lastChar == '@' {
+			isVariable = true
+		}
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
