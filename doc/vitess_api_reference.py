@@ -17,10 +17,8 @@
 """
 """
 
-import json
 import os
 import optparse
-import pprint
 import re
 
 #def print_api_summary(doc, service_summary):
