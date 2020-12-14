@@ -10,14 +10,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-// ErrUnrecognizedQuery is returned when QueryCnotext is given a query
-// string the mock is not set up to handle.
-var ErrUnrecognizedQuery = errors.New("unrecognized query")
+var (
+	// ErrConnClosed is returend when attempting to query a closed connection.
+	// It is the identical message to vtsql.ErrConnClosed, but redefined to
+	// prevent an import cycle in package vtsql's tests.
+	ErrConnClosed = errors.New("use of closed connection")
+	// ErrUnrecognizedQuery is returned when QueryCnotext is given a query
+	// string the mock is not set up to handle.
+	ErrUnrecognizedQuery = errors.New("unrecognized query")
+)
 
 type conn struct {
 	tablets   []*vtadminpb.Tablet
@@ -47,7 +52,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 
 	if c == nil {
-		return nil, vtsql.ErrConnClosed
+		return nil, ErrConnClosed
 	}
 
 	switch strings.ToLower(query) {
