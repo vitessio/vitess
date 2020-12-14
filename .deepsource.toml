@@ -1,0 +1,35 @@
+version = 1
+
+test_patterns = ["*/test**", "*_test.go"]
+
+exclude_patterns = ["*/examples**"]
+
+[[analyzers]]
+name = "python"
+enabled = true
+
+  [analyzers.meta]
+  runtime_version = "3.x.x"
+
+[[analyzers]]
+name = "go"
+enabled = true
+
+  [analyzers.meta]
+  import_paths = ["github.com/vitessio/vitess"]
+
+[[analyzers]]
+name = "javascript"
+enabled = true
+
+  [analyzers.meta]
+  environment = ["nodejs"]
+  style_guide = "google"
+  dialect = "typescript"
+
+[[analyzers]]
+name = "docker"
+enabled = true
+
+  [analyzers.meta]
+  dockerfile_paths = ["docker/Dockerfile.release", "docker/*/Dockerfile.*"]
