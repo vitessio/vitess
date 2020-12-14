@@ -1,0 +1,32 @@
+on:
+  push
+  # schedule:
+  #   - cron:  '*/5 * * * *'
+
+jobs:
+  analyze:
+    name: Analyze and report failed check runs
+    runs-on: ubuntu-latest
+    steps:
+      - name: analyze check run
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CONCLUSION1: ${{ github.event.check_run[conclusion] }}
+        CONCLUSION2: ${{ github.event.check_run.conclusion }}
+        CHECK_RUN: ${{ github.event.check_run }}
+      run: |
+        GITHUB_REPOSITORY="vitessio/vitess"
+        RUNS_FILE="/tmp/failed_runs.json"
+        COMMENT_FILE="/tmp/failed_runs_comment.md"
+
+        curl \
+          -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Content-type: application/json" \
+          -H "Accept: application/json" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100&status=failure" \
+          > "$RUNS_FILE"
+
+        cat "$RUNS_FILE" | 
+          jq -r '.workflow_runs[] | (.name + " " + .created_at + " "+  .html_url)' |
+          awk '{print $2 " [" $1 "](" $3 ")"}' | tee "$COMMENT_FILE"
