@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -34,21 +35,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// compareIntDiff returns an error if end[tag] != start[tag]+diff.
-func compareIntDiff(t *testing.T, end map[string]interface{}, tag string, start map[string]interface{}, diff int) {
-	t.Helper()
-	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
-}
-
-// verifyIntValue returns an error if values[tag] != want.
-func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, want int) {
-	t.Helper()
-	require.Equal(t, want, framework.FetchInt(values, tag), tag)
-}
-
 func TestPoolSize(t *testing.T) {
-	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
-	framework.Server.SetPoolSize(1)
+	revert := changeVar(t, "PoolSize", "1")
+	defer revert()
 
 	vstart := framework.DebugVars()
 	verifyIntValue(t, vstart, "ConnPoolCapacity", 1)
@@ -251,4 +240,39 @@ func TestQueryTimeout(t *testing.T) {
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryTimeout", int(100*time.Millisecond))
 	compareIntDiff(t, vend, "Kills/Queries", vstart, 1)
+}
+
+func changeVar(t *testing.T, name, value string) (revert func()) {
+	t.Helper()
+
+	vals := framework.FetchJSON("/debug/env?format=json")
+	initial, ok := vals[name]
+	if !ok {
+		t.Fatalf("%s not found in: %v", name, vals)
+	}
+	vals = framework.FetchJSON(fmt.Sprintf("/debug/env?format=json&varname=%s&value=%s", name, value))
+	verifyMapValue(t, vals, name, value)
+	return func() {
+		vals := framework.FetchJSON(fmt.Sprintf("/debug/env?format=json&varname=%s&value=%s", name, initial))
+		verifyMapValue(t, vals, name, initial)
+	}
+}
+
+func verifyMapValue(t *testing.T, values map[string]interface{}, tag string, want interface{}) {
+	t.Helper()
+	val, ok := values[tag]
+	if !ok {
+		t.Fatalf("%s not found in: %v", tag, values)
+	}
+	assert.Equal(t, want, val)
+}
+
+func compareIntDiff(t *testing.T, end map[string]interface{}, tag string, start map[string]interface{}, diff int) {
+	t.Helper()
+	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
+}
+
+func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, want int) {
+	t.Helper()
+	require.Equal(t, want, framework.FetchInt(values, tag), tag)
 }
