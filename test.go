@@ -312,7 +312,7 @@ func main() {
 				wg.Add(1)
 				go func(flavor string) {
 					defer wg.Done()
-					image := "vitess/bootstrap:" + bootstrapVersion + "-" + flavor
+					image := "vitess/bootstrap:" + *bootstrapVersion + "-" + flavor
 					pullTime := time.Now()
 					log.Printf("Pulling %v...", image)
 					cmd := exec.Command("docker", "pull", image)
@@ -390,7 +390,7 @@ func main() {
 		for _, flavor := range flavors {
 			start := time.Now()
 			log.Printf("Creating Docker cache image for flavor '%s'...", flavor)
-			if out, err := exec.Command("docker/test/run.sh", "--create_docker_cache", cacheImage(flavor), flavor, bootstrapVersion, "make build").CombinedOutput(); err != nil {
+			if out, err := exec.Command("docker/test/run.sh", "--create_docker_cache", cacheImage(flavor), flavor, *bootstrapVersion, "make build").CombinedOutput(); err != nil {
 				log.Fatalf("Failed to create Docker cache image for flavor '%s': %v\n%s", flavor, err, out)
 			}
 			log.Printf("Creating Docker cache image took %v", round(time.Since(start)))
