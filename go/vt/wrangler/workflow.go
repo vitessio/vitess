@@ -17,7 +17,7 @@ import (
 
 /*
 	TODO
-	* Actions: Abort, Complete, Status
+	* Actions: Abort, Complete
 	* Unit Tests (lots of!)
     * expand e2e for testing all possible transitions
 
@@ -53,7 +53,7 @@ const (
 	WorkflowEventReverseWrites      = "ReverseWrites"
 )
 
-type Workflow struct {
+type reshardingWorkflowInfo struct {
 	name      string
 	wsm       *fsm.FSM
 	typ       string
@@ -165,8 +165,8 @@ func (mtwf *MoveTablesWorkflow) getCallbacks() map[string]fsm.Callback {
 	return callbacks
 }
 
-func NewWorkflow(name, typ string, callbacks map[string]fsm.Callback) (*Workflow, error) {
-	wf := &Workflow{
+func newWorkflow(name, typ string, callbacks map[string]fsm.Callback) (*reshardingWorkflowInfo, error) {
+	wf := &reshardingWorkflowInfo{
 		name: name, typ: typ,
 	}
 
@@ -178,9 +178,10 @@ func NewWorkflow(name, typ string, callbacks map[string]fsm.Callback) (*Workflow
 
 // region Move Tables Public API
 
+// MoveTablesWorkflow stores various internal objects for a workflow
 type MoveTablesWorkflow struct {
 	ctx    context.Context
-	wf     *Workflow
+	wf     *reshardingWorkflowInfo
 	wr     *Wrangler
 	action string
 	params *MoveTablesParams
@@ -189,11 +190,17 @@ type MoveTablesWorkflow struct {
 }
 
 func (mtwf *MoveTablesWorkflow) String() string {
-	s := fmt.Sprintf("%s Workflow %s from keyspace %s to keyspace %s. Current State: %s\n",
+	s := fmt.Sprintf("%s workflow %s from keyspace %s to keyspace %s.\nCurrent State: %s",
 		mtwf.wf.typ, mtwf.wf.name, mtwf.params.SourceKeyspace, mtwf.params.TargetKeyspace, mtwf.wf.wsm.Current())
 	return s
 }
 
+// AvailableActions returns all available actions for a workflow, for display purposes
+func (mtwf *MoveTablesWorkflow) AvailableActions() string {
+	return strings.Join(mtwf.wf.wsm.AvailableTransitions(), ",")
+}
+
+// MoveTablesParams stores args and options passed to a MoveTables command
 type MoveTablesParams struct {
 	Workflow, SourceKeyspace, TargetKeyspace, Tables string
 	Cells, TabletTypes, ExcludeTables                string
@@ -203,6 +210,8 @@ type MoveTablesParams struct {
 	Direction TrafficSwitchDirection
 }
 
+// NewMoveTablesWorkflow sets up a MoveTables workflow object based on options provided, deduces the state of the
+// workflow from the persistent state stored in the vreplication table and the topo
 func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTablesParams) (*MoveTablesWorkflow, error) {
 	log.Infof("NewMoveTablesWorkflow with params %+v", params)
 	mtwf := &MoveTablesWorkflow{wr: wr, ctx: ctx, params: params}
@@ -211,7 +220,7 @@ func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTable
 		return nil, err
 	}
 	log.Infof("Workflow state is %+v", ws)
-	wf, err := NewWorkflow(params.Workflow, "MoveTables", mtwf.getCallbacks())
+	wf, err := newWorkflow(params.Workflow, "MoveTables", mtwf.getCallbacks())
 	if err != nil {
 		return nil, err
 	}
@@ -251,23 +260,24 @@ func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTable
 	return mtwf, nil
 }
 
+// FireEvent causes the transition of the workflow by applying a valid action specified in MoveTables
 func (mtwf *MoveTablesWorkflow) FireEvent(ev string) error {
-	log.Infof("Firing Event %s", ev)
 	ev = eventNameMap[strings.ToLower(ev)]
-	log.Infof("Firing Event, converted %s", ev)
 	return mtwf.wf.wsm.Event(ev)
 }
 
+// IsActionValid checks if a MoveTables subcommand is a valid event for the current state of the workflow
 func (mtwf *MoveTablesWorkflow) IsActionValid(ev string) bool {
 	ev = eventNameMap[strings.ToLower(ev)]
-	log.Infof("IsActionValid for %s, %t", ev, mtwf.wf.wsm.Can(ev))
 	return mtwf.wf.wsm.Can(ev)
 }
 
+// CurrentState returns the current state of the workflow's finite state machine
 func (mtwf *MoveTablesWorkflow) CurrentState() string {
 	return mtwf.wf.wsm.Current()
 }
 
+// Visualize returns a graphViz script for the (static) resharding workflow state machine
 func (mtwf *MoveTablesWorkflow) Visualize() string {
 	return fsm.Visualize(mtwf.wf.wsm)
 }
@@ -322,36 +332,40 @@ func (mtwf *MoveTablesWorkflow) switchWrites() error {
 		mtwf.params.Workflow = reverseName(mtwf.params.Workflow)
 		log.Infof("In MoveTablesWorkflow.switchWrites(reverse) for %+v", mtwf)
 	}
-	journalId, _, err := mtwf.wr.SwitchWrites(mtwf.ctx, mtwf.params.TargetKeyspace, mtwf.params.Workflow, mtwf.params.Timeout,
+	journalID, _, err := mtwf.wr.SwitchWrites(mtwf.ctx, mtwf.params.TargetKeyspace, mtwf.params.Workflow, mtwf.params.Timeout,
 		false, mtwf.params.Direction == DirectionBackward, mtwf.params.EnableReverseReplication, false)
 	if err != nil {
 		return err
 	}
-	log.Infof("switchWrites succeeded with journal id %s", journalId)
+	log.Infof("switchWrites succeeded with journal id %s", journalID)
 	return nil
 }
 
 // endregion
 
 // region Copy Progress
+
+// TableCopyProgress stores the row counts and disk sizes of the source and target tables
 type TableCopyProgress struct {
-	targetRowCount, targetTableSize int64
-	sourceRowCount, sourceTableSize int64
+	TargetRowCount, TargetTableSize int64
+	SourceRowCount, SourceTableSize int64
 }
 
+// CopyProgress stores the TableCopyProgress for all tables still being copied
 type CopyProgress map[string]*TableCopyProgress
 
+// GetCopyProgress returns the progress of all tables being copied in the workflow
 func (mtwf *MoveTablesWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	ctx := context.Background()
-	getTablesQuery := "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id == cs.vrepl_id and vr.id = %d"
-	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = database() and table_name in (%s)"
+	getTablesQuery := "select table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
+	getRowCountQuery := "select table_name, table_rows, data_length from information_schema.tables where table_schema = %s and table_name in (%s)"
 	tables := make(map[string]bool)
+	const MaxRows = 1000
 	sourceMasters := make(map[*topodatapb.TabletAlias]bool)
-	for shard, target := range mtwf.ts.targets {
-		log.Infof("GCP: %s, %v", shard, target)
+	for _, target := range mtwf.ts.targets {
 		for id, bls := range target.sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := mtwf.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+			p3qr, err := mtwf.wr.tmc.ExecuteFetchAsDba(ctx, target.master.Tablet, true, []byte(query), MaxRows, false, false)
 			if err != nil {
 				return nil, err
 			}
@@ -360,7 +374,7 @@ func (mtwf *MoveTablesWorkflow) GetCopyProgress() (*CopyProgress, error) {
 			}
 			qr := sqltypes.Proto3ToResult(p3qr)
 			for i := 0; i < len(p3qr.Rows); i++ {
-				tables[qr.Rows[0][0].String()] = true
+				tables[qr.Rows[0][0].ToString()] = true
 			}
 			sourcesi, err := mtwf.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
 			if err != nil {
@@ -368,6 +382,9 @@ func (mtwf *MoveTablesWorkflow) GetCopyProgress() (*CopyProgress, error) {
 			}
 			sourceMasters[sourcesi.MasterAlias] = true
 		}
+	}
+	if len(tables) == 0 {
+		return nil, nil
 	}
 	tableList := ""
 	targetRowCounts := make(map[string]int64)
@@ -385,18 +402,15 @@ func (mtwf *MoveTablesWorkflow) GetCopyProgress() (*CopyProgress, error) {
 		targetTableSizes[table] = 0
 		sourceTableSizes[table] = 0
 	}
-	log.Infof("table list is %s", tableList)
-	query := fmt.Sprintf(getRowCountQuery, tableList)
-	log.Infof("query is %s", query)
 
-	var getTableMetrics = func(tablet *topodatapb.Tablet, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
+	var getTableMetrics = func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
 		p3qr, err := mtwf.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, []byte(query), len(tables), false, false)
 		if err != nil {
 			return err
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for i := 0; i < len(qr.Rows); i++ {
-			table := qr.Rows[0][0].String()
+			table := qr.Rows[0][0].ToString()
 			rowCount, err := evalengine.ToInt64(qr.Rows[0][1])
 			if err != nil {
 				return err
@@ -405,24 +419,46 @@ func (mtwf *MoveTablesWorkflow) GetCopyProgress() (*CopyProgress, error) {
 			if err != nil {
 				return err
 			}
-			targetRowCounts[table] += rowCount
-			targetTableSizes[table] += tableSize
+			(*rowCounts)[table] += rowCount
+			(*tableSizes)[table] += tableSize
 		}
 		return nil
 	}
+	sourceDbName := ""
+	for _, tsSource := range mtwf.ts.sources {
+		sourceDbName = tsSource.master.DbName()
+		break
+	}
+	if sourceDbName == "" {
+		return nil, fmt.Errorf("no sources found for workflow %s.%s", mtwf.ws.TargetKeyspace, mtwf.ws.Workflow)
+	}
+	targetDbName := ""
+	for _, tsTarget := range mtwf.ts.targets {
+		targetDbName = tsTarget.master.DbName()
+		break
+	}
+	if sourceDbName == "" || targetDbName == "" {
+		return nil, fmt.Errorf("workflow %s.%s is incorrectly configured", mtwf.ws.TargetKeyspace, mtwf.ws.Workflow)
+	}
+
+	query := fmt.Sprintf(getRowCountQuery, encodeString(targetDbName), tableList)
+	log.Infof("query is %s", query)
 	for _, target := range mtwf.ts.targets {
 		tablet := target.master.Tablet
-		if err := getTableMetrics(tablet, &targetRowCounts, &targetTableSizes); err != nil {
+		if err := getTableMetrics(tablet, query, &targetRowCounts, &targetTableSizes); err != nil {
 			return nil, err
 		}
 	}
+
+	query = fmt.Sprintf(getRowCountQuery, encodeString(sourceDbName), tableList)
+	log.Infof("query is %s", query)
 	for source := range sourceMasters {
 		ti, err := mtwf.wr.ts.GetTablet(ctx, source)
 		tablet := ti.Tablet
 		if err != nil {
 			return nil, err
 		}
-		if err := getTableMetrics(tablet, &sourceRowCounts, &sourceTableSizes); err != nil {
+		if err := getTableMetrics(tablet, query, &sourceRowCounts, &sourceTableSizes); err != nil {
 			return nil, err
 		}
 	}
@@ -430,10 +466,10 @@ func (mtwf *MoveTablesWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	copyProgress := CopyProgress{}
 	for table, rowCount := range targetRowCounts {
 		copyProgress[table] = &TableCopyProgress{
-			targetRowCount:  rowCount,
-			targetTableSize: targetTableSizes[table],
-			sourceRowCount:  sourceRowCounts[table],
-			sourceTableSize: sourceTableSizes[table],
+			TargetRowCount:  rowCount,
+			TargetTableSize: targetTableSizes[table],
+			SourceRowCount:  sourceRowCounts[table],
+			SourceTableSize: sourceTableSizes[table],
 		}
 	}
 	return &copyProgress, nil

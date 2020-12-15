@@ -527,7 +527,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		optCells:        optCells,
 		optTabletTypes:  optTabletTypes,
 	}
-	ts.wr.Logger().Infof("Migration ID for workflow %s: %d", workflow, ts.id)
+	log.Infof("Migration ID for workflow %s: %d", workflow, ts.id)
 
 	// Build the sources
 	for _, target := range targets {
@@ -1447,7 +1447,7 @@ func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, e
 }
 
 func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]string) error {
-	wr.Logger().Infof("Saving routing rules %v\n", rules)
+	log.Infof("Saving routing rules %v\n", rules)
 	rrs := &vschemapb.RoutingRules{Rules: make([]*vschemapb.RoutingRule, 0, len(rules))}
 	for from, to := range rules {
 		rrs.Rules = append(rrs.Rules, &vschemapb.RoutingRule{
