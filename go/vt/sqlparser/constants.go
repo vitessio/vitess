@@ -194,6 +194,14 @@ const (
 	ReadLocalStr        = "read local"
 	WriteStr            = "write"
 	LowPriorityWriteStr = "low_priority write"
+
+	// ShowCommand Types
+	CollationStr     = " collation"
+	DatabaseStr      = " databases"
+	FunctionStr      = " function status"
+	ProcedureStr     = " procedure status"
+	StatusGlobalStr  = " global status"
+	StatusSessionStr = " session status"
 )
 
 // Constants for Enum type - AccessMode
@@ -387,10 +395,24 @@ const (
 	CharacterSetType
 )
 
+// LockType constants
 const (
-	UnknownType LockType = iota
+	UnknownLockType LockType = iota
 	Read
 	ReadLocal
 	Write
 	LowPriorityWrite
+)
+
+// ShowCommandType constants
+const (
+	UnknownCommandType ShowCommandType = iota
+	CharacterSet
+	Collation
+	Database
+	Function
+	Procedure
+	StatusGlobal
+	StatusSession
+	Variable
 )
