@@ -1,4 +1,7 @@
-FROM vitess/bootstrap:common
+ARG bootstrap_version=0
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM "${image}"
 
 RUN apt-get update
 RUN apt-get install -y sudo curl vim jq mysql-server
