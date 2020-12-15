@@ -213,8 +213,7 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a", "c", "b", "d"},
 	}, {
 		query: "drop table a",
-		output: &DDL{
-			Action: DropDDLAction,
+		output: &DropTable{
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 			},
@@ -222,8 +221,7 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a"},
 	}, {
 		query: "drop table a, b",
-		output: &DDL{
-			Action: DropDDLAction,
+		output: &DropTable{
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 				TableName{Name: NewTableIdent("b")},
