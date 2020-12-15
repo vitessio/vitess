@@ -29,9 +29,9 @@ func (cfg *Config) Type() string { return "cluster.Config" }
 //		name= // Name of the cluster.
 // 		discovery= // Name of the discovery implementation
 // 		discovery-.*= // Per-discovery-implementation flags. These are passed to
-//					 // a given discovery implementation's constructor.
+//		              // a given discovery implementation's constructor.
 //		vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
-// 				// to the vtsql package.
+// 		          // to the vtsql package.
 func (cfg *Config) Set(value string) error {
 	if cfg.DiscoveryFlagsByImpl == nil {
 		cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
