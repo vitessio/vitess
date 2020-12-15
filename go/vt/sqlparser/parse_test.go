@@ -1278,10 +1278,10 @@ var (
 		output: "show databases like '%'",
 	}, {
 		input:  "show schemas",
-		output: "show schemas",
+		output: "show databases",
 	}, {
 		input:  "show schemas like '%'",
-		output: "show schemas like '%'",
+		output: "show databases like '%'",
 	}, {
 		input:  "show engine INNODB",
 		output: "show engine",
@@ -1325,11 +1325,9 @@ var (
 		input:  "show privileges",
 		output: "show privileges",
 	}, {
-		input:  "show procedure code p",
-		output: "show procedure",
+		input: "show procedure code p",
 	}, {
-		input:  "show procedure status",
-		output: "show procedure",
+		input: "show procedure status",
 	}, {
 		input:  "show processlist",
 		output: "show processlist",
@@ -1359,7 +1357,7 @@ var (
 		output: "show global status",
 	}, {
 		input:  "show session status",
-		output: "show session status",
+		output: "show status",
 	}, {
 		input: "show table status",
 	}, {
@@ -1422,11 +1420,13 @@ var (
 		output: "show global variables",
 	}, {
 		input:  "show session variables",
-		output: "show session variables",
+		output: "show variables",
 	}, {
-		input: "show vitess_keyspaces",
+		input:  "show vitess_keyspaces",
+		output: "show databases",
 	}, {
-		input: "show vitess_keyspaces like '%'",
+		input:  "show vitess_keyspaces like '%'",
+		output: "show databases like '%'",
 	}, {
 		input: "show vitess_shards",
 	}, {
