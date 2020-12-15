@@ -182,10 +182,10 @@
 
 # scatter aggregate with memory sort and order by number, reuse weight_string
 # we have to use a meaningless construct to test this.
-"select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
+"select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
 {
   "QueryType": "SELECT",
-  "Original": "select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
+  "Original": "select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
@@ -205,9 +205,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select textcol1, count(*) as k, weight_string(textcol1) from user where 1 != 1 group by textcol1",
+            "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from user where 1 != 1 group by textcol1",
             "OrderBy": "2 ASC, 2 ASC",
-            "Query": "select textcol1, count(*) as k, weight_string(textcol1) from user group by textcol1 order by textcol1 asc, textcol1 asc",
+            "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from user group by textcol1 order by textcol1 asc, textcol1 asc",
             "Table": "user"
           }
         ]
