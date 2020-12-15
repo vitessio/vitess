@@ -201,9 +201,9 @@ const (
 	FunctionStr        = " function status"
 	ProcedureStr       = " procedure status"
 	StatusGlobalStr    = " global status"
-	StatusSessionStr   = " session status"
+	StatusSessionStr   = " status"
 	VariableGlobalStr  = " global variables"
-	VariableSessionStr = " session variables"
+	VariableSessionStr = " variables"
 )
 
 // Constants for Enum type - AccessMode
