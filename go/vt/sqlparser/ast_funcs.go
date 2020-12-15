@@ -1201,8 +1201,8 @@ func (ty LockType) ToString() string {
 // ToString returns ShowCommandType as a string
 func (ty ShowCommandType) ToString() string {
 	switch ty {
-	case CharacterSet:
-		return CharacterSetStr
+	case Charset:
+		return CharsetStr
 	case Collation:
 		return CollationStr
 	case Database:
@@ -1215,8 +1215,10 @@ func (ty ShowCommandType) ToString() string {
 		return StatusGlobalStr
 	case StatusSession:
 		return StatusSessionStr
-	case Variable:
-		return VariableStr
+	case VariableGlobal:
+		return VariableGlobalStr
+	case VariableSession:
+		return VariableSessionStr
 	default:
 		return "Unknown ShowCommandType"
 	}
