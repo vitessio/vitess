@@ -106,6 +106,26 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		if err != nil {
 			return nil, nil, err
 		}
+	case *sqlparser.DropTable:
+
+		for i, tab := range ddlStatement.GetFromTables() {
+			table, _, _, _, destinationTab, err := vschema.FindTableOrVindex(tab)
+			if err != nil {
+				return nil, nil, err
+			}
+			keyspaceTab := table.Keyspace
+			if destination == nil && keyspace == nil {
+				destination = destinationTab
+				keyspace = keyspaceTab
+			}
+			if destination != destinationTab || keyspace != keyspaceTab {
+				return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Tables specified in the query do not belong to the same destination")
+			}
+			ddlStatement.GetFromTables()[i] = sqlparser.TableName{
+				Name: tab.Name,
+			}
+		}
+
 	default:
 		return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", ddlStatement)
 	}
