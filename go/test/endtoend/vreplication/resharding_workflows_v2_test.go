@@ -63,19 +63,35 @@ func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, acti
 		args = append(args, "-cells", cells)
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-	args = append(args, ksWorkflow, action)
-	if err := vc.VtctlClient.ExecuteCommand(args...)
-		err != nil {
+	args = append(args, action, ksWorkflow)
+	if err := vc.VtctlClient.ExecuteCommand(args...); err != nil {
 		t.Fatalf("MoveTables command failed with %+v\n", err)
 	}
 }
 
-func moveTablesSwitchReads(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchReads)
+func moveTablesSwitchReads(t *testing.T, typ string) {
+	var action string
+	switch typ {
+	case "replica":
+		action = wrangler.WorkflowEventSwitchReplicaReads
+	case "rdonly":
+		action = wrangler.WorkflowEventSwitchRdonlyReads
+	default:
+		action = wrangler.WorkflowEventSwitchReads
+	}
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", action)
 }
 
 func moveTablesSwitchWrites(t *testing.T) {
 	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchWrites)
+}
+
+func moveTablesReverseWrites(t *testing.T) {
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventReverseWrites)
+}
+
+func moveTablesReverseReads(t *testing.T) {
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventReverseReads)
 }
 
 func validateReadsRouteToSource(t *testing.T) {
@@ -129,14 +145,45 @@ func TestMoveTablesV2Workflow(t *testing.T) {
 
 	setupCustomerKeyspace(t)
 	moveTablesStart(t)
-
+	printRoutingRules(t, vc, "After MoveTables Started")
 	validateReadsRouteToSource(t)
-	moveTablesSwitchReads(t)
-	validateReadsRouteToTarget(t)
-
 	validateWritesRouteToSource(t)
-	moveTablesSwitchWrites(t)
+
+	moveTablesSwitchReads(t, "")
+	printRoutingRules(t, vc, "After SwitchReads")
 	validateReadsRouteToTarget(t)
+	validateWritesRouteToSource(t)
+
+	moveTablesSwitchWrites(t)
+	printRoutingRules(t, vc, "After SwitchWrites")
+	validateReadsRouteToTarget(t)
+	validateWritesRouteToTarget(t)
+
+	moveTablesReverseReads(t)
+	printRoutingRules(t, vc, "After ReverseReads")
+	validateReadsRouteToSource(t)
+	validateWritesRouteToTarget(t)
+
+	moveTablesReverseWrites(t)
+	validateReadsRouteToSource(t)
+	validateWritesRouteToSource(t)
+	printRoutingRules(t, vc, "After ReverseWrites")
+
+	moveTablesSwitchWrites(t)
+	validateReadsRouteToSource(t)
+	validateWritesRouteToTarget(t)
+
+	moveTablesReverseWrites(t)
+	validateReadsRouteToSource(t)
+	validateWritesRouteToSource(t)
+
+	moveTablesSwitchReads(t, "")
+	validateReadsRouteToTarget(t)
+	validateWritesRouteToSource(t)
+
+	moveTablesReverseReads(t)
+	validateReadsRouteToSource(t)
+	validateWritesRouteToSource(t)
 }
 
 func setupCluster(t *testing.T) *VitessCluster {

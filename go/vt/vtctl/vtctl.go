@@ -1912,7 +1912,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	for _, arg := range args {
 		if arg == "-v2" {
-			wr.Logger().Infof("*** Using MoveTables v2 flow ***")
+			fmt.Printf("*** Using MoveTables v2 flow ***")
 			return commandMoveTables2(ctx, wr, subFlags, args)
 		}
 	}
@@ -2013,19 +2013,77 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		log.Warningf("NewMoveTablesWorkflow returned error %+v", wf)
 		return err
 	}
-	if action == "visualize" { // outputs a GraphViz of the workflow's state machine. Remove?
+
+	printDetails := func() error {
+		s := ""
+		res, err := wr.ShowWorkflow(ctx, workflow, target)
+		if err != nil {
+			return err
+		}
+		s += "Following vreplication streams are running for this workflow:\n\n"
+		for ksShard := range res.ShardStatuses {
+			statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
+			for _, st := range statuses {
+				//status.State, status.TransactionTimestamp, status.TimeUpdated, status.Tablet, status.ID, status.Message, status.Pos
+				now := time.Now().Nanosecond()
+				msg := ""
+				updateLag := int64(now) - st.TimeUpdated
+				if updateLag > 0*1e9 {
+					msg += " Vstream may not be running."
+				}
+				txLag := int64(now) - st.TransactionTimestamp
+				msg += fmt.Sprintf(" VStream Lag: %ds", txLag/1e9)
+				s += fmt.Sprintf("Stream %s (id=%d) :: Status: %s.%s\n", ksShard, st.ID, st.State, msg)
+			}
+		}
+		wr.Logger().Printf("\n%s\n\n", s)
+		return nil
+	}
+	switch action {
+	case "show":
+		wr.Logger().Printf("\n%s.\nAvailable actions are: %s\n", wf.String(), wf.AvailableActions())
+		return printDetails()
+	case "progress":
+		wr.Logger().Printf("%s.\nAvailable actions are: %s\n", wf.String(), wf.AvailableActions())
+		copyProgress, err := wf.GetCopyProgress()
+		if err != nil {
+			return err
+		}
+		if copyProgress == nil {
+			wr.Logger().Printf("\nCopy Completed.\n")
+		} else {
+			wr.Logger().Printf("\nCopy Progress (approx.):\n")
+			var tables []string
+			for table := range *copyProgress {
+				tables = append(tables, table)
+			}
+			sort.Strings(tables)
+			s := ""
+			var progress wrangler.TableCopyProgress
+			for table := range *copyProgress {
+				progress = *(*copyProgress)[table]
+				rowCountPct := 100.0 * progress.TargetRowCount / progress.SourceRowCount
+				tableSizePct := 100.0 * progress.TargetTableSize / progress.SourceTableSize
+				s += fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
+					table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
+					progress.TargetTableSize, progress.SourceTableSize, tableSizePct)
+			}
+			wr.Logger().Printf("\n%s\n", s)
+		}
+		return printDetails()
+	case "visualize":
 		wr.Logger().Printf("%s", wf.Visualize())
 		return nil
 	}
 	if !wf.IsActionValid(action) {
-		return fmt.Errorf("invalid Action: %s. Workflow %s.%s is currently in state: %s",
-			originalAction, target, workflow, wf.CurrentState())
+		return fmt.Errorf("invalid Action: %s. Workflow %s.%s is currently in state: %s.\nAvailable actions are: %s",
+			originalAction, target, workflow, wf.CurrentState(), wf.AvailableActions())
 	}
 	if err := wf.FireEvent(action); err != nil {
 		log.Warningf("NewMoveTablesWorkflow %s error: %+v", action, wf)
 		return err
 	}
-	wr.Logger().Printf("MoveTables %s was successful\n\n%s", action, wf)
+	wr.Logger().Printf("MoveTables %s was successful\n\n%s\n\n", action, wf)
 	return nil
 }
 
