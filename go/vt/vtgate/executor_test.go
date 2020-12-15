@@ -1141,7 +1141,6 @@ func TestExecutorDDL(t *testing.T) {
 		"alter table t1 add primary key id",
 		"rename table t1 to t2",
 		"truncate table t2",
-		"drop table t2",
 		`create table test_partitioned (
 			id bigint,
 			date_create int,		
