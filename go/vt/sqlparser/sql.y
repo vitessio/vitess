@@ -263,7 +263,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement
 %type <bytes2> comment_opt comment_list
-%type <str> wild_opt check_option_opt cascade_or_local_opt
+%type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <bytes> explain_synonyms
@@ -1536,6 +1536,19 @@ fk_reference_action:
     $$ = SetNull
   }
 
+restrict_or_cascade_opt:
+  {
+    $$ = ""
+  }
+| RESTRICT
+  {
+    $$ = string($1)
+  }
+| CASCADE
+  {
+    $$ = string($1)
+  }
+
 enforced_opt:
   {
     $$ = true
@@ -1767,9 +1780,9 @@ rename_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list
+  DROP TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DDL{Action: DropDDLAction, FromTables: $4, IfExists: $3}
+    $$ = &DropTable{FromTables: $4, IfExists: $3}
   }
 | DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {

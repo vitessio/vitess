@@ -282,6 +282,10 @@ func replaceDerivedTableSelect(newNode, parent SQLNode) {
 	parent.(*DerivedTable).Select = newNode.(SelectStatement)
 }
 
+func replaceDropTableFromTables(newNode, parent SQLNode) {
+	parent.(*DropTable).FromTables = newNode.(TableNames)
+}
+
 func replaceExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
@@ -1104,6 +1108,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Select, replaceDerivedTableSelect)
 
 	case *DropDatabase:
+
+	case *DropTable:
+		a.apply(node, n.FromTables, replaceDropTableFromTables)
 
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)

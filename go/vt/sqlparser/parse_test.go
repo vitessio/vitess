@@ -1212,8 +1212,8 @@ var (
 		input:  "drop table a, b",
 		output: "drop table a, b",
 	}, {
-		input:  "drop table if exists a",
-		output: "drop table if exists a",
+		input:  "drop table if exists a,b restrict",
+		output: "drop table if exists a, b",
 	}, {
 		input:  "drop view if exists a",
 		output: "drop table if exists a",
