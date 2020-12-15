@@ -687,3 +687,37 @@
     "Query": "create view view_a as select * from music where user_id = 1"
   }
 }
+
+# drop table with qualifier in one
+"drop table user.user, user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "drop table user.user, user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "drop table user, user_extra"
+  }
+}
+
+# drop table without qualifier
+"drop table unsharded_a"
+{
+  "QueryType": "DDL",
+  "Original": "drop table unsharded_a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop table unsharded_a"
+  }
+}
+
+# drop table with incompatible tables
+"drop table user, unsharded_a"
+"Tables specified in the query do not belong to the same destination"
