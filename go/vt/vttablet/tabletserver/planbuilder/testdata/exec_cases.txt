@@ -751,7 +751,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "drop table a"
 }
 
 # multi-drop
@@ -768,7 +769,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "drop table a, b"
 }
 
 # analyze
