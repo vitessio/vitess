@@ -166,6 +166,16 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 	return conn.(*StatefulConnection), nil
 }
 
+// GetUnsafeAndLock gets the connection even if it is in use.
+// This should only be called for the purpose to close the underlying db connection.
+func (sf *StatefulConnectionPool) GetUnsafeAndLock(id int64, reason string) (*StatefulConnection, error) {
+	conn, err := sf.active.Get(id, reason)
+	if err != nil {
+		return nil, err
+	}
+	return conn.(*StatefulConnection), nil
+}
+
 // NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 // the found_rows pool, depending on the options provided
 func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {

@@ -211,6 +211,24 @@ func (nu *Numbered) GetIdle(timeout time.Duration, purpose string) (vals []inter
 	return vals
 }
 
+// GetUnsafe gets the connection even if it is in use.
+// This should only be called for the purpose to close the underlying db connection.
+func (nu *Numbered) GetUnsafe(id int64, purpose string) (val interface{}, err error) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	nw, ok := nu.resources[id]
+	if !ok {
+		if val, ok := nu.recentlyUnregistered.Get(fmt.Sprintf("%v", id)); ok {
+			unreg := val.(*unregistered)
+			return nil, fmt.Errorf("ended at %v (%v)", unreg.timeUnregistered.Format("2006-01-02 15:04:05.000 MST"), unreg.reason)
+		}
+		return nil, fmt.Errorf("not found")
+	}
+	nw.inUse = true
+	nw.purpose = purpose
+	return nw.val, nil
+}
+
 // WaitForEmpty returns as soon as the pool becomes empty
 func (nu *Numbered) WaitForEmpty() {
 	nu.mu.Lock()

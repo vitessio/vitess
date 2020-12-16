@@ -565,11 +565,12 @@ func (te *TxEngine) taintConn(ctx context.Context, conn *StatefulConnection, pre
 
 // Release closes the underlying connection.
 func (te *TxEngine) Release(connID int64) error {
-	conn, err := te.txPool.GetAndLock(connID, "for release")
+	conn, err := te.txPool.GetUnsafeAndLock(connID, "for release")
 	if err != nil {
 		return err
 	}
 
+	conn.Close()
 	conn.Release(tx.ConnRelease)
 
 	return nil

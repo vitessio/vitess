@@ -172,6 +172,16 @@ func (tp *TxPool) GetAndLock(connID tx.ConnID, reason string) (*StatefulConnecti
 	return conn, nil
 }
 
+// GetUnsafeAndLock gets the connection even if it is in use.
+// This should only be called for the purpose to close the underlying db connection.
+func (tp *TxPool) GetUnsafeAndLock(connID tx.ConnID, reason string) (*StatefulConnection, error) {
+	conn, err := tp.scp.GetUnsafeAndLock(connID, reason)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", connID, err)
+	}
+	return conn, nil
+}
+
 // Commit commits the transaction on the connection.
 func (tp *TxPool) Commit(ctx context.Context, txConn *StatefulConnection) (string, error) {
 	if !txConn.IsInTransaction() {

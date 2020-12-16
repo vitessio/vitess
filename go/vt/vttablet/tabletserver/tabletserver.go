@@ -1187,13 +1187,8 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 			defer tsv.stats.QueryTimings.Record("RELEASE", time.Now())
 			logStats.TransactionID = transactionID
 			logStats.ReservedID = reservedID
-			if reservedID != 0 {
-				//Release to close the underlying connection.
-				return tsv.te.Release(reservedID)
-			}
-			// Rollback to cleanup the transaction before returning to the pool.
-			_, err := tsv.te.Rollback(ctx, transactionID)
-			return err
+			//Release to close the underlying connection.
+			return tsv.te.Release(transactionID)
 		},
 	)
 }
