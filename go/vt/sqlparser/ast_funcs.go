@@ -1209,6 +1209,8 @@ func (ty ShowCommandType) ToString() string {
 		return DatabaseStr
 	case Function:
 		return FunctionStr
+	case Privilege:
+		return PrivilegeStr
 	case Procedure:
 		return ProcedureStr
 	case StatusGlobal:

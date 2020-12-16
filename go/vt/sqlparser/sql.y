@@ -211,9 +211,9 @@ func skipToEnd(yylex interface{}) {
 // Type Modifiers
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
-// Supported SHOW tokens
+// SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -1831,6 +1831,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
   }
+| SHOW FUNCTION STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
+  }
 | SHOW PRIVILEGES
   {
     $$ = &Show{&ShowBasic{Command: Privilege}}
@@ -1871,6 +1875,10 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
+| SHOW CREATE FUNCTION table_name
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
+  }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE id_or_var ddl_skip_to_end
   {
@@ -1895,6 +1903,10 @@ show_statement:
 | SHOW ENGINES
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+  }
+| SHOW FUNCTION CODE table_name
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
@@ -4250,6 +4262,7 @@ non_reserved_keyword:
 | FOREIGN
 | FORMAT
 | FULLTEXT
+| FUNCTION
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION

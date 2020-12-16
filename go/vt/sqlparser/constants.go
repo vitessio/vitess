@@ -199,6 +199,7 @@ const (
 	CollationStr       = " collation"
 	DatabaseStr        = " databases"
 	FunctionStr        = " function status"
+	PrivilegeStr       = " privileges"
 	ProcedureStr       = " procedure status"
 	StatusGlobalStr    = " global status"
 	StatusSessionStr   = " status"
@@ -413,6 +414,7 @@ const (
 	Collation
 	Database
 	Function
+	Privilege
 	Procedure
 	StatusGlobal
 	StatusSession
