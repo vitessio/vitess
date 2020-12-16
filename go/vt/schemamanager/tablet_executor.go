@@ -211,6 +211,31 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 	return err
 }
 
+// executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
+// In online DDL case, the query may be exploded into multiple queries during
+func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResult *ExecuteResult) error {
+	stat, err := sqlparser.Parse(sql)
+	if err != nil {
+		return err
+	}
+	switch ddl := stat.(type) {
+	case sqlparser.DDLStatement:
+		if isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(ddl); isOnlineDDL {
+			exec.wr.Logger().Infof("Received online DDL request. strategy=%+v", strategy)
+			normalizedQueries, err := schema.NormalizeOnlineDDL(sql)
+			if err != nil {
+				return err
+			}
+			for _, normalized := range normalizedQueries {
+				exec.executeOnlineDDL(ctx, execResult, normalized.SQL, normalized.TableName.Name.String(), strategy, options)
+			}
+			return nil
+		}
+	}
+	exec.executeOnAllTablets(ctx, execResult, sql)
+	return nil
+}
+
 // Execute applies schema changes
 func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *ExecuteResult {
 	execResult := ExecuteResult{}
@@ -247,32 +272,11 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
-
-		stat, err := sqlparser.Parse(sql)
-		if err != nil {
+		if err := exec.executeSQL(ctx, sql, &execResult); err != nil {
 			execResult.ExecutorErr = err.Error()
 			return &execResult
 		}
-		isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(nil)
-		tableName := ""
-		switch ddl := stat.(type) {
-		case sqlparser.DDLStatement:
-			switch ddl.GetAction() {
-			case sqlparser.DropDDLAction:
-				// TODO (shlomi): break into distinct per-table DROP statements; on a future PR where
-				// we implement lazy DROP TABLE on Online DDL
-				tableName = ddl.GetFromTables()[0].Name.String()
-			default:
-				tableName = ddl.GetTable().Name.String()
-			}
-			isOnlineDDL, strategy, options = exec.isOnlineSchemaDDL(ddl)
-		}
-		exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
-		if isOnlineDDL {
-			exec.executeOnlineDDL(ctx, &execResult, sql, tableName, strategy, options)
-		} else {
-			exec.executeOnAllTablets(ctx, &execResult, sql)
-		}
+
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
