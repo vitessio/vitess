@@ -21,6 +21,8 @@ jobs:
         FAILED_RUNS_COMBINED="/tmp/failed_runs.csv"
         WORKFLOW_FAILURES_FILE=".metrics/workflow-failures"
 
+        ls -l $WORKFLOW_FAILURES_FILE
+
         curl \
           -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
           -H "Accept: application/vnd.github.v3+json" \
