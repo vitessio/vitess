@@ -1198,6 +1198,32 @@ func (ty LockType) ToString() string {
 	}
 }
 
+// ToString returns ShowCommandType as a string
+func (ty ShowCommandType) ToString() string {
+	switch ty {
+	case Charset:
+		return CharsetStr
+	case Collation:
+		return CollationStr
+	case Database:
+		return DatabaseStr
+	case Function:
+		return FunctionStr
+	case Procedure:
+		return ProcedureStr
+	case StatusGlobal:
+		return StatusGlobalStr
+	case StatusSession:
+		return StatusSessionStr
+	case VariableGlobal:
+		return VariableGlobalStr
+	case VariableSession:
+		return VariableSessionStr
+	default:
+		return "Unknown ShowCommandType"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
