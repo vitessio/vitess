@@ -35,8 +35,8 @@ jobs:
 
         tmpfile="$(mktemp)"
         cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq > $tmpfile
+        cp $tmpfile $WORKFLOW_FAILURES_FILE
 
-        cat $tmpfile
     - name: push to metrics branch
       uses: github-actions-x/commit@v2.7
       with:
