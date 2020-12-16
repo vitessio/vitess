@@ -10,6 +10,13 @@ jobs:
     name: analyze_check_runs
     runs-on: ubuntu-latest
     steps:
+    - name: get hub
+      run: |
+        cd /tmp
+        curl -s -L https://github.com/github/hub/releases/download/v2.12.3/hub-linux-amd64-2.12.3.tgz > hub-linux-amd64-2.12.3.tgz
+        tar xzf hub-linux-amd64-2.12.3.tgz hub-linux-amd64-2.12.3/bin/hub
+        mv hub-linux-amd64-2.12.3/bin/hub hub
+
     - uses: actions/checkout@v2
       with:
         ref: metrics
@@ -35,7 +42,7 @@ jobs:
 
         # now combine back into $WORKFLOW_FAILURES_FILE, skipping duplicates
         tmpfile="$(mktemp)"
-        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | base64 -e > $tmpfile
+        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | base64 > $tmpfile
         # cp $tmpfile $WORKFLOW_FAILURES_FILE
 
         json="
