@@ -2115,11 +2115,11 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 			case 0:
 				savedSize := relayLogMaxSize
 				defer func() { relayLogMaxSize = savedSize }()
-				relayLogMaxSize = 10
+				*relayLogMaxSize = 10
 			case 1:
 				savedLen := relayLogMaxItems
 				defer func() { relayLogMaxItems = savedLen }()
-				relayLogMaxItems = 2
+				*relayLogMaxItems = 2
 			}
 
 			execStatements(t, []string{

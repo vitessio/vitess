@@ -1181,11 +1181,24 @@ var (
 		output:     "alter table b add index a ()",
 		partialDDL: true,
 	}, {
-		input:  "create view a",
-		output: "create table a",
+		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
-		input:  "create or replace view a",
-		output: "create table a",
+		input: "create view ks.a as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e with cascaded check option",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e with cascaded check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
+		output: "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
+		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
 	}, {
 		input:  "alter view a",
 		output: "alter table a",
@@ -1952,8 +1965,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A",
-		output: "create table a",
+		input:  "create view A as select * from b",
+		output: "create view a as select * from b",
 	}, {
 		input:  "alter view A",
 		output: "alter table a",

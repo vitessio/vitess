@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 	"time"
@@ -42,8 +43,8 @@ var (
 	// between the two timeouts.
 	idleTimeout         = 1100 * time.Millisecond
 	dbLockRetryDelay    = 1 * time.Second
-	relayLogMaxSize     = 30000
-	relayLogMaxItems    = 1000
+	relayLogMaxSize     = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
+	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 	copyTimeout         = 1 * time.Hour
 	replicaLagTolerance = 10 * time.Second
 )
