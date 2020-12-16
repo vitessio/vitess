@@ -70,6 +70,7 @@ type (
 		GetVindexCols() []ColIdent
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
+		SetFromTables(tables TableNames)
 		Statement
 	}
 
@@ -290,7 +291,6 @@ type (
 	CreateIndex struct {
 		Constraint  string
 		Name        ColIdent
-		IndexType   string
 		Table       TableName
 		Columns     []*IndexColumn
 		Options     []*IndexOption
@@ -582,6 +582,26 @@ func (node *CreateTable) GetFromTables() TableNames {
 // GetFromTables implements the DDLStatement interface
 func (node *CreateView) GetFromTables() TableNames {
 	return nil
+}
+
+// SetFromTables implements DDLStatement.
+func (node *DDL) SetFromTables(tables TableNames) {
+	node.FromTables = tables
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateIndex) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateTable) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateView) SetFromTables(tables TableNames) {
+	// irrelevant
 }
 
 // GetToTables implements the DDLStatement interface
@@ -2545,15 +2565,13 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateIndex) Format(buf *TrackedBuffer) {
-	buf.WriteString("create")
+	buf.astPrintf(node, "alter table %v add", node.Table)
 	if node.Constraint != "" {
 		buf.WriteString(" " + node.Constraint)
 	}
 	buf.astPrintf(node, " index %v", node.Name)
-	if node.IndexType != "" {
-		buf.WriteString(" using " + node.IndexType)
-	}
-	buf.astPrintf(node, " on %v (", node.Table)
+
+	buf.WriteString(" (")
 	for i, col := range node.Columns {
 		if i != 0 {
 			buf.astPrintf(node, ", %v", col.Column)
@@ -2569,6 +2587,9 @@ func (node *CreateIndex) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, ")")
 	for _, opt := range node.Options {
+		//if opt == nil {
+		//	continue
+		//}
 		buf.WriteString(" " + strings.ToLower(opt.Name))
 		if opt.String != "" {
 			buf.WriteString(" " + opt.String)
