@@ -687,3 +687,36 @@
     "Query": "create view view_a as select * from music where user_id = 1"
   }
 }
+
+# Drop view
+"drop view main.a"
+{
+  "QueryType": "DDL",
+  "Original": "drop view main.a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop view a"
+  }
+}
+
+"drop view user.user, user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "drop view user.user, user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "drop view user, user_extra"
+  }
+}
+
+# drop view with incompatible views
+"drop view user, unsharded_a"
+"Tables or Views specified in the query do not belong to the same destination"
