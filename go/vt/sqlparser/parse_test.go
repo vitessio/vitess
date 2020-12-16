@@ -1159,27 +1159,46 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input: "create index a on b (col1)",
+		input:  "create index a on b (col1)",
+		output: "alter table b add index a (col1)",
 	}, {
-		input: "create unique index a on b (col1)",
+		input:  "create unique index a on b (col1)",
+		output: "alter table b add unique index a (col1)",
 	}, {
-		input: "create unique index a using foo on b (col1 desc)",
+		input:  "create unique index a using foo on b (col1 desc)",
+		output: "alter table b add unique index a (col1 desc) using foo",
 	}, {
-		input: "create fulltext index a using foo on b (col1)",
+		input:  "create fulltext index a on b (col1) with parser a",
+		output: "alter table b add fulltext index a (col1) with parser a",
 	}, {
-		input: "create spatial index a using foo on b (col1)",
+		input:  "create spatial index a on b (col1)",
+		output: "alter table b add spatial index a (col1)",
 	}, {
-		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
+		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string' algorithm inplace lock none",
 	}, {
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "create index a on b ()",
+		output:     "alter table b add index a ()",
 		partialDDL: true,
 	}, {
-		input:  "create view a",
-		output: "create table a",
+		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
-		input:  "create or replace view a",
-		output: "create table a",
+		input: "create view ks.a as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e with cascaded check option",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e with cascaded check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
+		output: "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
+		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
 	}, {
 		input:  "alter view a",
 		output: "alter table a",
@@ -1886,7 +1905,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input: "create index b on A (col1 desc)",
+		input:  "create index b on A (col1 desc)",
+		output: "alter table A add index b (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -1945,8 +1965,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A",
-		output: "create table a",
+		input:  "create view A as select * from b",
+		output: "create view a as select * from b",
 	}, {
 		input:  "alter view A",
 		output: "alter table a",

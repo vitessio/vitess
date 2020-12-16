@@ -193,8 +193,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
-%token <bytes> STATUS VARIABLES WARNINGS
-%token <bytes> SEQUENCE
+%token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
+%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -220,7 +220,7 @@ func skipToEnd(yylex interface{}) {
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
-%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
+%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
 %token <bytes> CONVERT CAST
@@ -263,18 +263,19 @@ func skipToEnd(yylex interface{}) {
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement
 %type <bytes2> comment_opt comment_list
-%type <str> wild_opt
+%type <str> wild_opt check_option_opt cascade_or_local_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <bytes> explain_synonyms
 %type <str> cache_opt separator_opt
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt union_op
+%type <boolean> distinct_opt union_op replace_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
 %type <strs> select_options
-%type <str> select_option
+%type <str> select_option algorithm_view security_view security_view_opt
+%type <str> definer_opt user
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -311,9 +312,9 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <selectInto> into_option
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt using_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt
 %type <lock> lock_opt
-%type <columns> ins_column_list column_list
+%type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -361,8 +362,8 @@ func skipToEnd(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
-%type <indexOption> index_option lock_index algorithm_index
-%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt
+%type <indexOption> index_option lock_index algorithm_index using_index_type
+%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -726,23 +727,29 @@ create_statement:
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
     $1.Columns = $3
-    $1.Options = append($5,$6...)
+    $1.Options = append($1.Options,$5...)
+    $1.Options = append($1.Options,$6...)
     $1.FullyParsed = true
     $$ = $1
   }
-| CREATE VIEW table_name ddl_skip_to_end
+| CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &DDL{Action: CreateDDLAction, Table: $3.ToViewName()}
-  }
-| CREATE OR REPLACE VIEW table_name ddl_skip_to_end
-  {
-    $$ = &DDL{Action: CreateDDLAction, Table: $5.ToViewName()}
+    $$ = &CreateView{ViewName: $7.ToViewName(), IsReplace:$2, Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 | create_database_prefix create_options_opt
   {
     $1.FullyParsed = true
     $1.CreateOptions = $2
     $$ = $1
+  }
+
+replace_opt:
+  {
+    $$ = false
+  }
+| OR REPLACE
+  {
+    $$ = true
   }
 
 vindex_type_opt:
@@ -797,7 +804,7 @@ create_table_prefix:
 create_index_prefix:
   CREATE constraint_opt INDEX id_or_var using_opt ON table_name
   {
-    $$ = &CreateIndex{Constraint: $2, Name: $4, IndexType: $5, Table: $7}
+    $$ = &CreateIndex{Constraint: $2, Name: $4, Options: $5, Table: $7}
     setDDL(yylex, $$)
   }
 
@@ -1335,9 +1342,9 @@ index_option_list:
   }
 
 index_option:
-  USING id_or_var
+  using_index_type
   {
-    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+    $$ = $1
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
@@ -1348,9 +1355,9 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
   }
-| WITH PARSER STRING
+| WITH PARSER id_or_var
   {
-    $$ = &IndexOption{Name: string($1) + " " + string($2), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
   }
 
 equal_opt:
@@ -2467,6 +2474,15 @@ table_name as_opt_id index_hint_list
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
 
+column_list_opt:
+  {
+    $$ = nil
+  }
+| '(' column_list ')'
+  {
+    $$ = $2
+  }
+
 column_list:
   sql_id
   {
@@ -3527,6 +3543,91 @@ algorithm_index:
     $$ = &IndexOption{Name: string($1), String: string($3)}
   }
 
+algorithm_view:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' UNDEFINED
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' MERGE
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' TEMPTABLE
+  {
+    $$ = string($3)
+  }
+
+security_view_opt:
+  {
+    $$ = ""
+  }
+| SQL SECURITY security_view
+  {
+    $$ = $3
+  }
+
+security_view:
+  DEFINER
+  {
+    $$ = string($1)
+  }
+| INVOKER
+  {
+    $$ = string($1)
+  }
+
+check_option_opt:
+  {
+    $$ = ""
+  }
+| WITH cascade_or_local_opt CHECK OPTION
+  {
+    $$ = $2
+  }
+
+cascade_or_local_opt:
+  {
+    $$ = "cascaded"
+  }
+| CASCADED
+  {
+    $$ = string($1)
+  }
+| LOCAL
+  {
+    $$ = string($1)
+  }
+
+definer_opt:
+  {
+    $$ = ""
+  }
+| DEFINER '=' user
+  {
+    $$ = $3
+  }
+
+user:
+CURRENT_USER
+  {
+    $$ = string($1)
+  }
+| CURRENT_USER '(' ')'
+  {
+    $$ = string($1)
+  }
+| STRING AT_ID
+  {
+    $$ = "'" + string($1) + "'@" + string($2)
+  }
+| ID
+  {
+    $$ = string($1)
+  }
+
 lock_opt:
   {
     $$ = NoLock
@@ -3902,9 +4003,15 @@ constraint_opt:
   { $$ = string($1) }
 
 using_opt:
-  { $$ = "" }
-| USING sql_id
-  { $$ = $2.val }
+  { $$ = nil }
+| using_index_type
+  { $$ = []*IndexOption{$1} }
+
+using_index_type:
+  USING sql_id
+  {
+    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+  }
 
 sql_id:
   id_or_var
@@ -3939,7 +4046,6 @@ reserved_table_id:
   {
     $$ = NewTableIdent(string($1))
   }
-
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -3967,6 +4073,7 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
+| CURRENT_USER
 | SUBSTR
 | SUBSTRING
 | DATABASE
@@ -4068,6 +4175,7 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| WITH
 | WHEN
 | WHERE
 | WINDOW
@@ -4096,6 +4204,7 @@ non_reserved_keyword:
 | BOOLEAN
 | BUCKETS
 | CASCADE
+| CASCADED
 | CHAR
 | CHARACTER
 | CHARSET
@@ -4114,6 +4223,7 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DECIMAL
+| DEFINER
 | DEFINITION
 | DESCRIPTION
 | DIRECTORY
@@ -4149,6 +4259,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INVOKER
 | INDEXES
 | ISOLATION
 | JSON
@@ -4174,6 +4285,7 @@ non_reserved_keyword:
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
+| MERGE
 | MODE
 | MULTILINESTRING
 | MULTIPOINT
@@ -4191,6 +4303,7 @@ non_reserved_keyword:
 | OFFSET
 | OJ
 | OLD
+| OPTION
 | OPTIONAL
 | OPTIONALLY
 | ORDINALITY
@@ -4235,6 +4348,7 @@ non_reserved_keyword:
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
+| SECURITY
 | SEQUENCE
 | SESSION
 | SERIALIZABLE
@@ -4244,11 +4358,13 @@ non_reserved_keyword:
 | SKIP
 | SMALLINT
 | SPATIAL
+| SQL
 | SRID
 | START
 | STARTING
 | STATUS
 | TABLES
+| TEMPTABLE
 | TERMINATED
 | TEXT
 | THAN
@@ -4265,6 +4381,7 @@ non_reserved_keyword:
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
+| UNDEFINED
 | UNSIGNED
 | UNUSED
 | UPGRADE
@@ -4283,7 +4400,6 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA
 | WARNINGS
-| WITH
 | YEAR
 | ZEROFILL
 
