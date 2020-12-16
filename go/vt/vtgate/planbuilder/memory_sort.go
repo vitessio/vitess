@@ -60,6 +60,18 @@ func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, er
 					break
 				}
 			}
+		case *sqlparser.UnaryExpr:
+			colName, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
+			}
+			c := colName.Metadata.(*column)
+			for i, rc := range ms.ResultColumns() {
+				if rc.column == c {
+					colNumber = i
+					break
+				}
+			}
 		default:
 			return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
 		}

@@ -182,10 +182,10 @@
 
 # scatter aggregate with memory sort and order by number, reuse weight_string
 # we have to use a meaningless construct to test this.
-"select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
+"select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
 {
   "QueryType": "SELECT",
-  "Original": "select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
+  "Original": "select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
@@ -205,9 +205,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select textcol1, count(*) as k, weight_string(textcol1) from user where 1 != 1 group by textcol1",
+            "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from user where 1 != 1 group by textcol1",
             "OrderBy": "2 ASC, 2 ASC",
-            "Query": "select textcol1, count(*) as k, weight_string(textcol1) from user group by textcol1 order by textcol1 asc, textcol1 asc",
+            "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from user group by textcol1 order by textcol1 asc, textcol1 asc",
             "Table": "user"
           }
         ]
@@ -487,6 +487,63 @@
         },
         "Value": ":id",
         "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# unary expression
+"select a from user order by binary a desc"
+{
+  "QueryType": "SELECT",
+  "Original": "select a from user order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a from user where 1 != 1",
+    "OrderBy": "0 DESC",
+    "Query": "select a from user order by binary a desc",
+    "Table": "user"
+  }
+}
+
+# unary expression in join query
+"select u.a from user u join music m on u.a = m.a order by binary a desc"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a from user as u where 1 != 1",
+        "OrderBy": "0 DESC",
+        "Query": "select u.a from user as u order by binary a desc",
+        "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music as m where 1 != 1",
+        "Query": "select 1 from music as m where m.a = :u_a",
+        "Table": "music"
       }
     ]
   }
