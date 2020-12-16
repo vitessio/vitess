@@ -21,8 +21,7 @@ jobs:
         FAILED_RUNS_COMBINED="/tmp/failed_runs.csv"
         WORKFLOW_FAILURES_FILE=".metrics/workflow-failures"
 
-        ls -l $WORKFLOW_FAILURES_FILE
-
+        # Get latest failed check runs
         curl \
           -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
           -H "Accept: application/vnd.github.v3+json" \
@@ -30,9 +29,11 @@ jobs:
           "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100&status=failure" \
           > "$FAILED_RUNS_JSON"
 
+        # extract .created_at, .name, .html_url for each failed check run
         cat "$FAILED_RUNS_JSON" |
           jq -r '.workflow_runs[] | (.created_at + "," + .name + "," + .html_url)' > "$FAILED_RUNS_CSV"
 
+        # now combine back into $WORKFLOW_FAILURES_FILE, skipping duplicates
         tmpfile="$(mktemp)"
         cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq > $tmpfile
         cp $tmpfile $WORKFLOW_FAILURES_FILE
