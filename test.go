@@ -131,9 +131,10 @@ type Test struct {
 	// Tags is a list of tags that can be used to filter tests.
 	Tags []string
 
-	name     string
-	flavor   string
-	runIndex int
+	name             string
+	flavor           string
+	bootstrapVersion string
+	runIndex         int
 
 	pass, fail int
 }
@@ -187,7 +188,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			args = []string{"--use_docker_cache", cacheImage(t.flavor), t.flavor, testArgs}
 		} else {
 			// If there is no cache, we have to call 'make build' before each test.
-			args = []string{t.flavor, "make build && " + testArgs}
+			args = []string{t.flavor, t.bootstrapVersion, "make build && " + testArgs}
 		}
 
 		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), args...)
@@ -355,6 +356,7 @@ func main() {
 		for _, t := range tests {
 			test := *t
 			test.flavor = flavor
+			test.bootstrapVersion = *bootstrapVersion
 			dup = append(dup, &test)
 		}
 	}
