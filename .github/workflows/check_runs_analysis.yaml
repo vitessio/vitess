@@ -38,13 +38,9 @@ jobs:
         cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq > $tmpfile
         cp $tmpfile $WORKFLOW_FAILURES_FILE
 
-    - name: push to metrics branch
-      uses: github-actions-x/commit@v2.7
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        push-branch: 'metrics'
-        commit-message: 'append failed workflow runs metrics'
-        force-add: 'true'
-        files: .metrics/workflow-failures
-        name: planetscalebot
-        email: planetscalebot@planetscale.com
+    - name: Commit report
+      run: |
+        git config --global user.name 'planetscalebot'
+        git config --global user.email 'planetscalebot@planetscale.com'
+        git commit -am "Automated: append failed workflow runs metrics" .metrics/workflow-failures
+        git push
