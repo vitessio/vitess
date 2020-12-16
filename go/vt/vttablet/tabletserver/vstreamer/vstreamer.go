@@ -42,7 +42,7 @@ import (
 )
 
 // PacketSize is the suggested packet size for VReplication streamer.
-var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+var PacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts

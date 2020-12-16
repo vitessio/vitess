@@ -225,6 +225,12 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 	}, {
 		in:       "SELECT 1 from test where exists (select 2 from test)",
 		expected: "SELECT 1 from sys.test where exists (select 2 from sys.test)",
+	}, {
+		in:       "SELECT 1 from dual",
+		expected: "SELECT 1 from dual",
+	}, {
+		in:       "SELECT (select 2 from dual) from DUAL",
+		expected: "SELECT 2 as `(select 2 from dual)` from DUAL",
 	}}
 
 	for _, tc := range tests {
@@ -239,9 +245,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			expected, err := Parse(tc.expected)
 			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
-			s := String(expected)
-			assert := assert.New(t)
-			assert.Equal(s, String(result.AST))
+			assert.Equal(t, String(expected), String(result.AST))
 		})
 	}
 }
