@@ -47,6 +47,7 @@ type ContextVSchema interface {
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
 	KeyspaceExists(keyspace string) bool
+	AllKeyspace() ([]*vindexes.Keyspace, error)
 }
 
 type truncater interface {
