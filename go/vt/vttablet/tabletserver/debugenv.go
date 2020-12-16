@@ -62,21 +62,49 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	varname := r.FormValue("varname")
 	value := r.FormValue("value")
 	var msg string
-	switch varname {
-	case "PoolSize":
+	setIntVal := func(f func(int)) {
 		ival, err := strconv.Atoi(value)
 		if err != nil {
-			msg = fmt.Sprintf("Failed setting value for PoolSize: %v", err)
-		} else {
-			tsv.SetPoolSize(ival)
-			msg = fmt.Sprintf("SetPoolSize has been executed for value: %v", value)
+			msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+			return
 		}
+		f(ival)
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+	}
+	switch varname {
+	case "PoolSize":
+		setIntVal(tsv.SetPoolSize)
+	case "StreamPoolSize":
+		setIntVal(tsv.SetStreamPoolSize)
+	case "TxPoolSize":
+		setIntVal(tsv.SetTxPoolSize)
+	case "QueryCacheCapacity":
+		setIntVal(tsv.SetQueryPlanCacheCap)
+	case "MaxResultSize":
+		setIntVal(tsv.SetMaxResultSize)
+	case "WarnResultSize":
+		setIntVal(tsv.SetWarnResultSize)
+	case "Consolidator":
+		tsv.SetConsolidatorMode(value)
+		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 	}
 
 	var vars []envValue
+	addIntVar := func(varname string, f func() int) {
+		vars = append(vars, envValue{
+			VarName: varname,
+			Value:   fmt.Sprintf("%v", f()),
+		})
+	}
+	addIntVar("PoolSize", tsv.PoolSize)
+	addIntVar("StreamPoolSize", tsv.StreamPoolSize)
+	addIntVar("TxPoolSize", tsv.TxPoolSize)
+	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
+	addIntVar("MaxResultSize", tsv.MaxResultSize)
+	addIntVar("WarnResultSize", tsv.WarnResultSize)
 	vars = append(vars, envValue{
-		VarName: "PoolSize",
-		Value:   fmt.Sprintf("%v", tsv.PoolSize()),
+		VarName: "Consolidator",
+		Value:   tsv.ConsolidatorMode(),
 	})
 
 	format := r.FormValue("format")

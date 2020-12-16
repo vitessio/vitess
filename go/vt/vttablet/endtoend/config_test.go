@@ -64,6 +64,22 @@ func TestPoolSize(t *testing.T) {
 	assert.LessOrEqual(t, want, got)
 }
 
+func TestStreamPoolSize(t *testing.T) {
+	revert := changeVar(t, "StreamPoolSize", "1")
+	defer revert()
+
+	vstart := framework.DebugVars()
+	verifyIntValue(t, vstart, "StreamConnPoolCapacity", 1)
+}
+
+func TestQueryCacheCapacity(t *testing.T) {
+	revert := changeVar(t, "QueryCacheCapacity", "1")
+	defer revert()
+
+	vstart := framework.DebugVars()
+	verifyIntValue(t, vstart, "QueryCacheCapacity", 1)
+}
+
 func TestDisableConsolidator(t *testing.T) {
 	totalConsolidationsTag := "Waits/Histograms/Consolidations/Count"
 	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
@@ -81,8 +97,8 @@ func TestDisableConsolidator(t *testing.T) {
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	framework.Server.SetConsolidatorMode(tabletenv.Disable)
-	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
+	revert := changeVar(t, "Consolidator", tabletenv.Disable)
+	defer revert()
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -115,8 +131,8 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	framework.Server.SetConsolidatorMode(tabletenv.NotOnMaster)
-	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
+	revert := changeVar(t, "Consolidator", tabletenv.NotOnMaster)
+	defer revert()
 
 	// master should not do query consolidation
 	var wg2 sync.WaitGroup
@@ -190,8 +206,8 @@ func TestQueryPlanCache(t *testing.T) {
 }
 
 func TestMaxResultSize(t *testing.T) {
-	defer framework.Server.SetMaxResultSize(framework.Server.MaxResultSize())
-	framework.Server.SetMaxResultSize(2)
+	revert := changeVar(t, "MaxResultSize", "2")
+	defer revert()
 
 	client := framework.NewClient()
 	query := "select * from vitess_test"
@@ -206,8 +222,8 @@ func TestMaxResultSize(t *testing.T) {
 }
 
 func TestWarnResultSize(t *testing.T) {
-	defer framework.Server.SetWarnResultSize(framework.Server.WarnResultSize())
-	framework.Server.SetWarnResultSize(2)
+	revert := changeVar(t, "WarnResultSize", "2")
+	defer revert()
 	client := framework.NewClient()
 
 	originalWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
