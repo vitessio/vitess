@@ -1616,9 +1616,9 @@ alter_statement:
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterDDLAction, Table: $3}
   }
-| ALTER VIEW table_name ddl_skip_to_end
+| ALTER algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
+    $$ = &AlterView{ViewName: $6.ToViewName(), Algorithm:$2, Definer: $3 ,Security:$4, Columns:$7, Select: $9, CheckOption: $10 }
   }
 | ALTER TABLE table_name partition_operation
   {
