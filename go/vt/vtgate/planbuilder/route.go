@@ -295,11 +295,17 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
 	}
 
+	aliasExpr, ok := s.SelectExprs[colNumber].(*sqlparser.AliasedExpr)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
+	}
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
 			Name: sqlparser.NewColIdent("weight_string"),
 			Exprs: []sqlparser.SelectExpr{
-				s.SelectExprs[colNumber],
+				&sqlparser.AliasedExpr{
+					Expr: aliasExpr.Expr,
+				},
 			},
 		},
 	}

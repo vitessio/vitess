@@ -91,6 +91,12 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 			orderByCol = oa.resultColumns[num].column
 		case *sqlparser.ColName:
 			orderByCol = expr.Metadata.(*column)
+		case *sqlparser.UnaryExpr:
+			col, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+			}
+			orderByCol = col.Metadata.(*column)
 		default:
 			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
 		}
@@ -257,6 +263,18 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 			}
 		case *sqlparser.ColName:
 			c := expr.Metadata.(*column)
+			for i, rc := range node.resultColumns {
+				if rc.column == c {
+					colNumber = i
+					break
+				}
+			}
+		case *sqlparser.UnaryExpr:
+			col, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+			}
+			c := col.Metadata.(*column)
 			for i, rc := range node.resultColumns {
 				if rc.column == c {
 					colNumber = i

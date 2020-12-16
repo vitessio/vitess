@@ -188,6 +188,18 @@ func replaceCreateTableTableSpec(newNode, parent SQLNode) {
 	parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
 }
 
+func replaceCreateViewColumns(newNode, parent SQLNode) {
+	parent.(*CreateView).Columns = newNode.(Columns)
+}
+
+func replaceCreateViewSelect(newNode, parent SQLNode) {
+	parent.(*CreateView).Select = newNode.(SelectStatement)
+}
+
+func replaceCreateViewViewName(newNode, parent SQLNode) {
+	parent.(*CreateView).ViewName = newNode.(TableName)
+}
+
 func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 }
@@ -1055,6 +1067,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.OptLike, replaceCreateTableOptLike)
 		a.apply(node, n.Table, replaceCreateTableTable)
 		a.apply(node, n.TableSpec, replaceCreateTableTableSpec)
+
+	case *CreateView:
+		a.apply(node, n.Columns, replaceCreateViewColumns)
+		a.apply(node, n.Select, replaceCreateViewSelect)
+		a.apply(node, n.ViewName, replaceCreateViewViewName)
 
 	case *CurTimeFuncExpr:
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)

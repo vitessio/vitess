@@ -70,6 +70,7 @@ type (
 		GetVindexCols() []ColIdent
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
+		SetFromTables(tables TableNames)
 		Statement
 	}
 
@@ -290,7 +291,6 @@ type (
 	CreateIndex struct {
 		Constraint  string
 		Name        ColIdent
-		IndexType   string
 		Table       TableName
 		Columns     []*IndexColumn
 		Options     []*IndexOption
@@ -304,6 +304,18 @@ type (
 		TableSpec   *TableSpec
 		OptLike     *OptLike
 		FullyParsed bool
+	}
+
+	// CreateView represents a CREATE VIEW query
+	CreateView struct {
+		ViewName    TableName
+		Algorithm   string
+		Definer     string
+		Security    string
+		Columns     Columns
+		Select      SelectStatement
+		CheckOption string
+		IsReplace   bool
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -423,11 +435,13 @@ func (*CreateIndex) iStatement()       {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
 func (*CreateTable) iStatement()       {}
+func (*CreateView) iStatement()        {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
+func (*CreateView) iDDLStatement()  {}
 func (*CreateTable) iDDLStatement() {}
 
 // IsFullyParsed implements the DDLStatement interface
@@ -445,6 +459,11 @@ func (node *CreateTable) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateView) IsFullyParsed() bool {
+	return true
+}
+
 // GetTable implements the DDLStatement interface
 func (node *CreateIndex) GetTable() TableName {
 	return node.Table
@@ -456,8 +475,18 @@ func (node *CreateTable) GetTable() TableName {
 }
 
 // GetTable implements the DDLStatement interface
+func (node *CreateView) GetTable() TableName {
+	return node.ViewName
+}
+
+// GetTable implements the DDLStatement interface
 func (node *DDL) GetTable() TableName {
 	return node.Table
+}
+
+// GetAction implements the DDLStatement interface
+func (node *DDL) GetAction() DDLAction {
+	return node.Action
 }
 
 // GetAction implements the DDLStatement interface
@@ -467,6 +496,11 @@ func (node *CreateIndex) GetAction() DDLAction {
 
 // GetAction implements the DDLStatement interface
 func (node *CreateTable) GetAction() DDLAction {
+	return CreateDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *CreateView) GetAction() DDLAction {
 	return CreateDDLAction
 }
 
@@ -485,6 +519,11 @@ func (node *CreateIndex) GetOptLike() *OptLike {
 	return nil
 }
 
+// GetOptLike implements the DDLStatement interface
+func (node *CreateView) GetOptLike() *OptLike {
+	return nil
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *DDL) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -497,6 +536,11 @@ func (node *CreateTable) GetTableSpec() *TableSpec {
 
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateIndex) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *CreateView) GetTableSpec() *TableSpec {
 	return nil
 }
 
@@ -515,6 +559,11 @@ func (node *CreateTable) GetVindexSpec() *VindexSpec {
 	return nil
 }
 
+// GetVindexSpec implements the DDLStatement interface
+func (node *CreateView) GetVindexSpec() *VindexSpec {
+	return nil
+}
+
 // GetFromTables implements the DDLStatement interface
 func (node *DDL) GetFromTables() TableNames {
 	return node.FromTables
@@ -530,6 +579,31 @@ func (node *CreateTable) GetFromTables() TableNames {
 	return nil
 }
 
+// GetFromTables implements the DDLStatement interface
+func (node *CreateView) GetFromTables() TableNames {
+	return nil
+}
+
+// SetFromTables implements DDLStatement.
+func (node *DDL) SetFromTables(tables TableNames) {
+	node.FromTables = tables
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateIndex) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateTable) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateView) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
 // GetToTables implements the DDLStatement interface
 func (node *DDL) GetToTables() TableNames {
 	return node.ToTables
@@ -537,6 +611,11 @@ func (node *DDL) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *CreateIndex) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *CreateView) GetToTables() TableNames {
 	return nil
 }
 
@@ -560,6 +639,11 @@ func (node *CreateTable) GetAutoIncSpec() *AutoIncSpec {
 	return nil
 }
 
+// GetAutoIncSpec implements the DDLStatement interface
+func (node *CreateView) GetAutoIncSpec() *AutoIncSpec {
+	return nil
+}
+
 // GetVindexCols implements the DDLStatement interface
 func (node *DDL) GetVindexCols() []ColIdent {
 	return node.VindexCols
@@ -575,9 +659,9 @@ func (node *CreateTable) GetVindexCols() []ColIdent {
 	return nil
 }
 
-// GetAction implements the DDLStatement interface
-func (node *DDL) GetAction() DDLAction {
-	return node.Action
+// GetVindexCols implements the DDLStatement interface
+func (node *CreateView) GetVindexCols() []ColIdent {
+	return nil
 }
 
 // AffectedTables returns the list table names affected by the DDLStatement.
@@ -601,6 +685,11 @@ func (node *CreateTable) AffectedTables() TableNames {
 	return TableNames{node.Table}
 }
 
+// AffectedTables implements DDLStatement.
+func (node *CreateView) AffectedTables() TableNames {
+	return TableNames{node.ViewName}
+}
+
 // SetTable implements DDLStatement.
 func (node *CreateIndex) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
@@ -617,6 +706,12 @@ func (node *DDL) SetTable(qualifier string, name string) {
 func (node *CreateTable) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
 	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *CreateView) SetTable(qualifier string, name string) {
+	node.ViewName.Qualifier = NewTableIdent(qualifier)
+	node.ViewName.Name = NewTableIdent(name)
 }
 
 func (*DropDatabase) iDBDDLStatement()   {}
@@ -2488,15 +2583,13 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateIndex) Format(buf *TrackedBuffer) {
-	buf.WriteString("create")
+	buf.astPrintf(node, "alter table %v add", node.Table)
 	if node.Constraint != "" {
 		buf.WriteString(" " + node.Constraint)
 	}
 	buf.astPrintf(node, " index %v", node.Name)
-	if node.IndexType != "" {
-		buf.WriteString(" using " + node.IndexType)
-	}
-	buf.astPrintf(node, " on %v (", node.Table)
+
+	buf.WriteString(" (")
 	for i, col := range node.Columns {
 		if i != 0 {
 			buf.astPrintf(node, ", %v", col.Column)
@@ -2512,6 +2605,9 @@ func (node *CreateIndex) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, ")")
 	for _, opt := range node.Options {
+		//if opt == nil {
+		//	continue
+		//}
 		buf.WriteString(" " + strings.ToLower(opt.Name))
 		if opt.String != "" {
 			buf.WriteString(" " + opt.String)
@@ -2567,6 +2663,28 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 	}
 	if node.TableSpec != nil {
 		buf.astPrintf(node, " %v", node.TableSpec)
+	}
+}
+
+// Format formats the node.
+func (node *CreateView) Format(buf *TrackedBuffer) {
+	buf.WriteString("create")
+	if node.IsReplace {
+		buf.WriteString(" or replace")
+	}
+	if node.Algorithm != "" {
+		buf.astPrintf(node, " algorithm = %s", node.Algorithm)
+	}
+	if node.Definer != "" {
+		buf.astPrintf(node, " definer = %s", node.Definer)
+	}
+	if node.Security != "" {
+		buf.astPrintf(node, " sql security %s", node.Security)
+	}
+	buf.astPrintf(node, " view %v", node.ViewName)
+	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
+	if node.CheckOption != "" {
+		buf.astPrintf(node, " with %s check option", node.CheckOption)
 	}
 }
 
