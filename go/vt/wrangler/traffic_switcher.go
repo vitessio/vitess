@@ -128,9 +128,8 @@ type tsSource struct {
 }
 
 const (
-	workflowTypeReshard     = "Reshard"
-	workflowTypeMoveTables  = "MoveTables"
-	workflowTypeMaterialize = "Materialize"
+	workflowTypeReshard    = "Reshard"
+	workflowTypeMoveTables = "MoveTables"
 )
 
 type workflowState struct {
@@ -225,7 +224,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedTypes []topodatapb.TabletType,
 	cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
 
-	log.Infof("SwitchReads: targetKeyspace %s, direction %d", targetKeyspace, direction)
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("getWorkflowState failed: %v", err)
@@ -266,9 +264,10 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		sw = &switcher{ts: ts, wr: wr}
 	}
 
-	if ts.frozen {
-		//return nil, fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
-	}
+	// FIXME: revisit marking streams frozen
+	//if ts.frozen {
+	//return nil, fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
+	//}
 	if err := ts.validate(ctx, false /* isWrite */); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
 		return nil, err
@@ -705,11 +704,11 @@ func (ts *trafficSwitcher) validate(ctx context.Context, isWrite bool) error {
 			}
 		}
 		if isWrite {
-			//return ts.validateTableForWrite(ctx)
+			return ts.validateTableForWrite(ctx)
 		}
 	} else { // binlogdatapb.MigrationType_SHARDS
 		if isWrite {
-			//return ts.validateShardForWrite(ctx)
+			return ts.validateShardForWrite(ctx)
 		}
 	}
 	return nil
@@ -1189,7 +1188,11 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
 		return err
 	}
-	return ts.wr.ts.RebuildSrvVSchema(ctx, nil)
+	var cells []string
+	if len(ts.optCells) > 0 {
+		cells = strings.Split(ts.optCells, ",")
+	}
+	return ts.wr.ts.RebuildSrvVSchema(ctx, cells)
 }
 
 func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
