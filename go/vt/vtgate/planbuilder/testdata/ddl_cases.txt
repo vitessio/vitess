@@ -687,3 +687,22 @@
     "Query": "create view view_a as select * from music where user_id = 1"
   }
 }
+
+# Alter View
+"alter view user_extra as select* from user"
+{
+  "QueryType": "DDL",
+  "Original": "alter view user_extra as select* from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter view user_extra as select * from user"
+  }
+}
+
+# Alter View with unknown view
+"alter view unknown as select* from user"
+"table unknown not found"
