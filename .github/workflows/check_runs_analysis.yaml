@@ -42,5 +42,5 @@ jobs:
       run: |
         git config --global user.name 'planetscalebot'
         git config --global user.email 'planetscalebot@planetscale.com'
-        git commit -am "Automated: append failed workflow runs metrics" .metrics/workflow-failures
+        git commit -m "Automated: append failed workflow runs metrics" .metrics/workflow-failures
         git push
