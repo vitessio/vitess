@@ -167,3 +167,97 @@
 # show columns fails as table does not exists in user keyspace
 "show full columns from user.unsharded"
 "table unsharded not found"
+
+# show charset
+"show charset"
+{
+  "QueryType": "SHOW",
+  "Original": "show charset",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# show function
+"show function status"
+{
+  "QueryType": "SHOW",
+  "Original": "show function status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show function status",
+    "SingleShardOnly": true
+  }
+}
+
+# show privileges
+"show privileges"
+{
+  "QueryType": "SHOW",
+  "Original": "show privileges",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show privileges",
+    "SingleShardOnly": true
+  }
+}
+
+# show procedure status
+"show procedure status"
+{
+  "QueryType": "SHOW",
+  "Original": "show procedure status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show procedure status",
+    "SingleShardOnly": true
+  }
+}
+
+
+# show variables
+"show variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show variables",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show variables",
+    "SingleShardOnly": true
+  }
+}
+
+
+# show databases
+"show databases"
+{
+  "QueryType": "SHOW",
+  "Original": "show databases",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
