@@ -514,6 +514,48 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	KeyspacesToWatch = []string{}
 }
 
+// TestRemoveTablet tests the behavior when a tablet goes away.
+func TestRemoveTablet(t *testing.T) {
+	ts := memorytopo.NewServer("cell")
+	hc := createTestHc(ts)
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(tablet, input)
+
+	// create a channel and subscribe to healthcheck
+	resultChan := hc.Subscribe()
+	hc.AddTablet(tablet)
+	// there will be a first result, get and discard it
+	<-resultChan
+
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want := []*TabletHealth{{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 0,
+	}}
+	input <- shr
+	<-resultChan
+	// check it's there
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	mustMatch(t, want, a, "unexpected result")
+
+	// delete the tablet
+	hc.RemoveTablet(tablet)
+	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Empty(t, a, "wrong result, expected empty list")
+}
+
 // TestGetHealthyTablets tests the functionality of GetHealthyTabletStats.
 func TestGetHealthyTablets(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
