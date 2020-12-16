@@ -369,6 +369,40 @@ func TestUpdateLookupUniqueVindex(t *testing.T) {
 
 }
 
+func TestTrxRollbackOnDisconnect(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn1, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn1.Close()
+
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+
+	exec(t, conn1, `begin`)
+	exec(t, conn1, `insert into t1(c1, c2, c3) values (300,100,300)`)
+
+	exec(t, conn2, `begin`)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		exec(t, conn2, `insert into t1(c1, c2, c3) values (1000,2000,3000)`)
+		_, err := conn2.ExecuteFetch(`insert into t1(c1, c2, c3) values (300,200,400)`, 1000, true)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "use of closed network")
+	}()
+	wg.Wait()
+	time.Sleep(2 * time.Second)
+	conn2.Close()
+
+	exec(t, conn1, `insert into t1(c1, c2, c3) values (1000,2000,3000)`)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
