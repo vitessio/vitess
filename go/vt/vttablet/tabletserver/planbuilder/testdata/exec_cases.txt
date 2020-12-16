@@ -853,3 +853,17 @@ options:PassthroughDMLs
     "PlanID":"Load",
     "TableName":""
 }
+
+# alter view
+"alter view a as select * from b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"alter view a as select * from b"
+}
