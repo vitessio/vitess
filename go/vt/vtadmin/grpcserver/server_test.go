@@ -32,7 +32,7 @@ func TestServer(t *testing.T) {
 	readyCh := make(chan bool)
 
 	go func() {
-		for !s.serving { // nolint:staticcheck
+		for !s.isServing() {
 		}
 		readyCh <- true
 	}()
@@ -72,7 +72,7 @@ func TestLameduck(t *testing.T) {
 	readyCh := make(chan bool)
 
 	go func() {
-		for !s.serving { // nolint:staticcheck
+		for !s.isServing() {
 		}
 		readyCh <- true
 	}()
@@ -88,7 +88,7 @@ func TestLameduck(t *testing.T) {
 	stoppedCh := make(chan bool)
 
 	go func() {
-		for s.serving { // nolint:staticcheck
+		for s.isServing() {
 		}
 		stoppedCh <- true
 	}()
