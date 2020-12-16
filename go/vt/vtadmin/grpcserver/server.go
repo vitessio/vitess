@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -54,6 +55,7 @@ type Server struct {
 	healthServer *health.Server
 	router       *mux.Router
 	serving      bool
+	m            sync.RWMutex // this locks the serving bool
 
 	opts Options
 }
@@ -185,7 +187,7 @@ func (s *Server) ListenAndServe() error { // nolint:funlen
 	// register themselves.
 	s.healthServer.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
 
-	s.serving = true
+	s.setServing(true)
 	log.Infof("server %s listening on %s", s.name, s.opts.Addr)
 
 	reason := <-shutdown
@@ -203,7 +205,21 @@ func (s *Server) ListenAndServe() error { // nolint:funlen
 	s.gRPCServer.GracefulStop()
 	log.Info("graceful shutdown complete")
 
-	s.serving = false
+	s.setServing(false)
 
 	return nil
+}
+
+func (s *Server) setServing(state bool) {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	s.serving = state
+}
+
+func (s *Server) isServing() bool {
+	s.m.RLock()
+	defer s.m.RUnlock()
+
+	return s.serving
 }
