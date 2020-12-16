@@ -113,6 +113,9 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 			if err != nil {
 				return nil, nil, err
 			}
+			if table == nil {
+				return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", tab.Name.String())
+			}
 			keyspaceTab := table.Keyspace
 			if destination == nil && keyspace == nil {
 				destination = destinationTab
