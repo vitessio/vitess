@@ -114,6 +114,16 @@ func CanNormalize(stmt Statement) bool {
 	return false
 }
 
+// CachePlan takes Statement and returns true if the query plan should be cached
+func CachePlan(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Select, *Union, *ParenSelect,
+		*Insert, *Update, *Delete:
+		return true
+	}
+	return false
+}
+
 //IsSetStatement takes Statement and returns if the statement is set statement.
 func IsSetStatement(stmt Statement) bool {
 	switch stmt.(type) {
