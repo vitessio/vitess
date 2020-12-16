@@ -150,12 +150,12 @@ func (dc *fakeDBClient) verifyQueries(t *testing.T) {
 	t.Helper()
 	for query, dbrs := range dc.queries {
 		if !dbrs.exhausted() {
-			assert.FailNow(t, "expected query: %v did not get executed during the test", query)
+			assert.FailNowf(t, "expected query did not get executed during the test", query)
 		}
 	}
 	for query, dbrs := range dc.queriesRE {
 		if !dbrs.exhausted() {
-			assert.FailNow(t, "expected regex query: %v did not get executed during the test", query)
+			assert.FailNowf(t, "expected regex query did not get executed during the test", query)
 		}
 	}
 }

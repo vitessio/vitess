@@ -17,6 +17,7 @@ import (
 
 /*
 	TODO
+	* use SwitchTraffic and ReverseTraffic
 	* Actions: Abort, Complete
 	* Unit Tests (lots of!)
     * expand e2e for testing all possible transitions
@@ -54,10 +55,9 @@ const (
 )
 
 type reshardingWorkflowInfo struct {
-	name      string
-	wsm       *fsm.FSM
-	typ       string
-	hasErrors bool
+	name string
+	wsm  *fsm.FSM
+	typ  string
 }
 
 var eventNameMap map[string]string
@@ -183,7 +183,6 @@ type MoveTablesWorkflow struct {
 	ctx    context.Context
 	wf     *reshardingWorkflowInfo
 	wr     *Wrangler
-	action string
 	params *MoveTablesParams
 	ts     *trafficSwitcher
 	ws     *workflowState
