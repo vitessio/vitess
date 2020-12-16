@@ -35,12 +35,21 @@ jobs:
 
         # now combine back into $WORKFLOW_FAILURES_FILE, skipping duplicates
         tmpfile="$(mktemp)"
-        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq > $tmpfile
-        cp $tmpfile $WORKFLOW_FAILURES_FILE
+        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | base64 -e > $tmpfile
+        # cp $tmpfile $WORKFLOW_FAILURES_FILE
 
-    - name: Commit report
-      run: |
-        git config --global user.name 'planetscalebot'
-        git config --global user.email 'planetscalebot@planetscale.com'
-        git commit -m "Automated: append failed workflow runs metrics" .metrics/workflow-failures
-        git push
+        json="
+          {
+            \"message\": \"automated merge of failed check runs\",
+            \"branch\": \"metrics\",
+            \"content\": \"$(cat $tmpfile)\"
+          }
+        "
+
+        curl \
+          -X PUT \
+          -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Content-type: application/json" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${WORKFLOW_FAILURES_FILE}" \
+          -d "$json"
