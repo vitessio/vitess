@@ -10,19 +10,28 @@ jobs:
     name: analyze_check_runs
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: metrics
     - name: analyze check runs
       run: |
         GITHUB_REPOSITORY="vitessio/vitess"
-        RUNS_FILE="/tmp/failed_runs.json"
-        COMMENT_FILE="/tmp/failed_runs_comment.md"
+        FAILED_RUNS_JSON="/tmp/failed_runs.json"
+        FAILED_RUNS_CSV="/tmp/failed_runs.csv"
+        FAILED_RUNS_COMBINED="/tmp/failed_runs.csv"
+        WORKFLOW_FAILURES_FILE=".metrics/workflow-failures"
 
         curl \
           -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
           -H "Accept: application/vnd.github.v3+json" \
           -H "Content-type: application/json" \
           "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100&status=failure" \
-          > "$RUNS_FILE"
+          > "$FAILED_RUNS_JSON"
 
-        cat "$RUNS_FILE" | 
-          jq -r '.workflow_runs[] | (.name + " " + .created_at + " "+  .html_url)' |
-          awk '{print $2 " [" $1 "](" $3 ")"}' | tee "$COMMENT_FILE"
+        cat "$FAILED_RUNS_JSON" |
+          jq -r '.workflow_runs[] | (.created_at + "," + .name + "," + .html_url)' > "$FAILED_RUNS_CSV"
+
+        tmpfile="$(mktemp)"
+        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq > $tmpfile
+
+        cat $tmpfile
