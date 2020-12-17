@@ -276,7 +276,7 @@ install_all() {
 
   # chromedriver
   if [ "$BUILD_CHROME" == 1 ] ; then
-    install_dep "chromedriver" "83.0.4103.116" "$VTROOT/dist/chromedriver" install_chromedriver
+    install_dep "chromedriver" "83.0.4103.14" "$VTROOT/dist/chromedriver" install_chromedriver
   fi
 
   echo
