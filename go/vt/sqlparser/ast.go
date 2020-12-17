@@ -293,6 +293,12 @@ type (
 		IfExists bool
 	}
 
+	// DropView represents a DROP VIEW statement.
+	DropView struct {
+		FromTables TableNames
+		IfExists   bool
+	}
+
 	// CreateIndex represents a CREATE INDEX query
 	CreateIndex struct {
 		Constraint  string
@@ -446,12 +452,14 @@ func (*CreateView) iStatement()        {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 func (*DropTable) iStatement()         {}
+func (*DropView) iStatement()          {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
 func (*CreateView) iDDLStatement()  {}
 func (*CreateTable) iDDLStatement() {}
 func (*DropTable) iDDLStatement()   {}
+func (*DropView) iDDLStatement()    {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -470,6 +478,11 @@ func (node *CreateTable) IsFullyParsed() bool {
 
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateView) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *DropView) IsFullyParsed() bool {
 	return true
 }
 
@@ -496,6 +509,11 @@ func (node *CreateView) GetTable() TableName {
 // GetTable implements the DDLStatement interface
 func (node *DDL) GetTable() TableName {
 	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *DropView) GetTable() TableName {
+	return TableName{}
 }
 
 // GetTable implements the DDLStatement interface
@@ -528,6 +546,11 @@ func (node *DropTable) GetAction() DDLAction {
 	return DropDDLAction
 }
 
+// GetAction implements the DDLStatement interface
+func (node *DropView) GetAction() DDLAction {
+	return DropDDLAction
+}
+
 // GetOptLike implements the DDLStatement interface
 func (node *DDL) GetOptLike() *OptLike {
 	return node.OptLike
@@ -550,6 +573,11 @@ func (node *CreateView) GetOptLike() *OptLike {
 
 // GetOptLike implements the DDLStatement interface
 func (node *DropTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *DropView) GetOptLike() *OptLike {
 	return nil
 }
 
@@ -578,6 +606,11 @@ func (node *DropTable) GetTableSpec() *TableSpec {
 	return nil
 }
 
+// GetTableSpec implements the DDLStatement interface
+func (node *DropView) GetTableSpec() *TableSpec {
+	return nil
+}
+
 // GetVindexSpec implements the DDLStatement interface
 func (node *DDL) GetVindexSpec() *VindexSpec {
 	return node.VindexSpec
@@ -600,6 +633,11 @@ func (node *CreateView) GetVindexSpec() *VindexSpec {
 
 // GetVindexSpec implements the DDLStatement interface
 func (node *DropTable) GetVindexSpec() *VindexSpec {
+	return nil
+}
+
+// GetVindexSpec implements the DDLStatement interface
+func (node *DropView) GetVindexSpec() *VindexSpec {
 	return nil
 }
 
@@ -628,6 +666,11 @@ func (node *DropTable) GetFromTables() TableNames {
 	return node.FromTables
 }
 
+// GetFromTables implements the DDLStatement interface
+func (node *DropView) GetFromTables() TableNames {
+	return node.FromTables
+}
+
 // GetToTables implements the DDLStatement interface
 func (node *DDL) GetToTables() TableNames {
 	return node.ToTables
@@ -650,6 +693,11 @@ func (node *CreateTable) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *DropTable) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *DropView) GetToTables() TableNames {
 	return nil
 }
 
@@ -678,6 +726,11 @@ func (node *DropTable) GetAutoIncSpec() *AutoIncSpec {
 	return nil
 }
 
+// GetAutoIncSpec implements the DDLStatement interface
+func (node *DropView) GetAutoIncSpec() *AutoIncSpec {
+	return nil
+}
+
 // GetVindexCols implements the DDLStatement interface
 func (node *DDL) GetVindexCols() []ColIdent {
 	return node.VindexCols
@@ -700,6 +753,11 @@ func (node *CreateView) GetVindexCols() []ColIdent {
 
 // GetVindexCols implements the DDLStatement interface
 func (node *DropTable) GetVindexCols() []ColIdent {
+	return nil
+}
+
+// GetVindexCols implements the DDLStatement interface
+func (node *DropView) GetVindexCols() []ColIdent {
 	return nil
 }
 
@@ -734,6 +792,11 @@ func (node *DropTable) AffectedTables() TableNames {
 	return node.FromTables
 }
 
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *DropView) AffectedTables() TableNames {
+	return node.FromTables
+}
+
 // SetTable implements DDLStatement.
 func (node *CreateIndex) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
@@ -760,6 +823,9 @@ func (node *CreateView) SetTable(qualifier string, name string) {
 
 // SetTable implements DDLStatement.
 func (node *DropTable) SetTable(qualifier string, name string) {}
+
+// SetTable implements DDLStatement.
+func (node *DropView) SetTable(qualifier string, name string) {}
 
 func (*DropDatabase) iDBDDLStatement()   {}
 func (*CreateDatabase) iDBDDLStatement() {}
@@ -2736,4 +2802,13 @@ func (node *DropTable) Format(buf *TrackedBuffer) {
 		exists = " if exists"
 	}
 	buf.astPrintf(node, "drop table%s %v", exists, node.FromTables)
+}
+
+// Format formats the node.
+func (node *DropView) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = " if exists"
+	}
+	buf.astPrintf(node, "drop view%s %v", exists, node.FromTables)
 }

@@ -855,3 +855,35 @@ options:PassthroughDMLs
     "PlanID":"Load",
     "TableName":""
 }
+
+# drop view
+"drop view a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"drop view a"
+}
+
+# multi-drop views
+"drop view a, b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"drop view a, b"
+}

@@ -371,7 +371,12 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 	showTableRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
 		table := ddl.GetTable().Name.String()
-		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, ""))
+		options := ""
+		spec := ddl.GetTableSpec()
+		if spec != nil && strings.Contains(spec.Options, "vitess_sequence") {
+			options = "vitess_sequence"
+		}
+		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
 	}
 	schemaQueries[mysql.BaseShowTables] = &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,

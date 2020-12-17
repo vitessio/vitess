@@ -280,7 +280,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
-%type <tableNames> table_name_list delete_table_list
+%type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
@@ -611,6 +611,16 @@ delete_statement:
 from_or_using:
   FROM {}
 | USING {}
+
+view_name_list:
+  table_name
+  {
+    $$ = TableNames{$1.ToViewName()}
+  }
+| view_name_list ',' table_name
+  {
+    $$ = append($$, $3.ToViewName())
+  }
 
 table_name_list:
   table_name
@@ -1789,9 +1799,9 @@ drop_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterDDLAction, Table: $5}
   }
-| DROP VIEW exists_opt table_name ddl_skip_to_end
+| DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DDL{Action: DropDDLAction, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
+    $$ = &DropView{FromTables: $4, IfExists: $3}
   }
 | DROP database_or_schema exists_opt id_or_var
   {

@@ -174,6 +174,10 @@
   }
 }
 
+# DDL with qualifier for a unknown table
+"create index a on unknown(id)"
+"table unknown not found"
+
 # Create View with qualifier
 "create view user.a as select* from user"
 {
@@ -724,4 +728,41 @@
 
 # drop table with unknown table
 "drop table unknown"
+"table unknown not found"
+
+# Drop view
+"drop view main.a"
+{
+  "QueryType": "DDL",
+  "Original": "drop view main.a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop view a"
+  }
+}
+
+"drop view user.user, user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "drop view user.user, user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "drop view user, user_extra"
+  }
+}
+
+# drop view with incompatible views
+"drop view user, unsharded_a"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# drop view with unknown view
+"drop view unknown"
 "table unknown not found"

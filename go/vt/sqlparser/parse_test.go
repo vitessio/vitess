@@ -1203,8 +1203,8 @@ var (
 		input:  "rename table a to b, b to c",
 		output: "rename table a to b, b to c",
 	}, {
-		input:  "drop view a",
-		output: "drop table a",
+		input:  "drop view a,B,c",
+		output: "drop view a, b, c",
 	}, {
 		input:  "drop table a",
 		output: "drop table a",
@@ -1215,8 +1215,8 @@ var (
 		input:  "drop table if exists a,b restrict",
 		output: "drop table if exists a, b",
 	}, {
-		input:  "drop view if exists a",
-		output: "drop table if exists a",
+		input:  "drop view if exists a cascade",
+		output: "drop view if exists a",
 	}, {
 		input:  "drop index b on a",
 		output: "alter table a",
@@ -1965,10 +1965,10 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table a",
 	}, {
 		input:  "drop view A",
-		output: "drop table a",
+		output: "drop view a",
 	}, {
 		input:  "drop view if exists A",
-		output: "drop table if exists a",
+		output: "drop view if exists a",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
