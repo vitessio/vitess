@@ -12,8 +12,8 @@ import (
 
 // Error messages for CreateView queries
 const (
-	CreateViewDifferentKeyspace string = "Select query does not belong to the same keyspace as the view statement"
-	CreateViewComplex           string = "Complex select queries are not supported in create view statements"
+	ViewDifferentKeyspace string = "Select query does not belong to the same keyspace as the view statement"
+	ViewComplex           string = "Complex select queries are not supported in create or alter view statements"
 )
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
@@ -81,13 +81,52 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		}
 		routePlan, isRoute := selectPlan.(*engine.Route)
 		if !isRoute {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, CreateViewComplex)
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
 		}
 		if keyspace.Name != routePlan.GetKeyspaceName() {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, CreateViewDifferentKeyspace)
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
 		}
 		if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, CreateViewComplex)
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		}
+		sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
+			switch tableName := cursor.Node().(type) {
+			case sqlparser.TableName:
+				cursor.Replace(sqlparser.TableName{
+					Name: tableName.Name,
+				})
+			}
+			return true
+		}, nil)
+
+	case *sqlparser.AlterView:
+		// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
+		// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
+		table, _, _, _, destination, err = vschema.FindTableOrVindex(ddl.ViewName)
+		if err != nil {
+			return nil, nil, err
+		}
+		if table == nil {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", ddl.ViewName.Name.String())
+		}
+		keyspace = table.Keyspace
+
+		ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
+
+		var selectPlan engine.Primitive
+		selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
+		if err != nil {
+			return nil, nil, err
+		}
+		routePlan, isRoute := selectPlan.(*engine.Route)
+		if !isRoute {
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		}
+		if keyspace.Name != routePlan.GetKeyspaceName() {
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
+		}
+		if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
 		}
 		sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 			switch tableName := cursor.Node().(type) {

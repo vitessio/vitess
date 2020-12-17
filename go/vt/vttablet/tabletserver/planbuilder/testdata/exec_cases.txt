@@ -652,7 +652,7 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery":"create index a on b (id)"
+  "FullQuery":"alter table b add index a (id)"
 }
 
 # create view
@@ -854,6 +854,20 @@ options:PassthroughDMLs
 {
     "PlanID":"Load",
     "TableName":""
+}
+
+# alter view
+"alter view a as select * from b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"alter view a as select * from b"
 }
 
 # drop view

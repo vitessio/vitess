@@ -1159,20 +1159,26 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input: "create index a on b (col1)",
+		input:  "create index a on b (col1)",
+		output: "alter table b add index a (col1)",
 	}, {
-		input: "create unique index a on b (col1)",
+		input:  "create unique index a on b (col1)",
+		output: "alter table b add unique index a (col1)",
 	}, {
-		input: "create unique index a using foo on b (col1 desc)",
+		input:  "create unique index a using foo on b (col1 desc)",
+		output: "alter table b add unique index a (col1 desc) using foo",
 	}, {
-		input: "create fulltext index a using foo on b (col1)",
+		input:  "create fulltext index a on b (col1) with parser a",
+		output: "alter table b add fulltext index a (col1) with parser a",
 	}, {
-		input: "create spatial index a using foo on b (col1)",
+		input:  "create spatial index a on b (col1)",
+		output: "alter table b add spatial index a (col1)",
 	}, {
-		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
+		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string' algorithm inplace lock none",
 	}, {
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "create index a on b ()",
+		output:     "alter table b add index a ()",
 		partialDDL: true,
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
@@ -1194,8 +1200,9 @@ var (
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
 	}, {
-		input:  "alter view a",
-		output: "alter table a",
+		input: "alter view a as select * from t",
+	}, {
+		input: "alter algorithm = merge definer = m@172.0.1.01 sql security definer view a as select * from t with local check option",
 	}, {
 		input:  "rename table a to b",
 		output: "rename table a to b",
@@ -1899,7 +1906,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input: "create index b on A (col1 desc)",
+		input:  "create index b on A (col1 desc)",
+		output: "alter table A add index b (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -1908,8 +1916,8 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table A",
 	}, {
 		// View names get lower-cased.
-		input:  "alter view A foo",
-		output: "alter table a",
+		input:  "alter view A as select * from t",
+		output: "alter view a as select * from t",
 	}, {
 		input:  "alter table A rename to B",
 		output: "rename table A to B",
@@ -1960,9 +1968,6 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "create view A as select * from b",
 		output: "create view a as select * from b",
-	}, {
-		input:  "alter view A",
-		output: "alter table a",
 	}, {
 		input:  "drop view A",
 		output: "drop view a",

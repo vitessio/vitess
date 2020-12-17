@@ -140,7 +140,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create index a on user (id)"
+    "Query": "alter table user add index a (id)"
   }
 }
 
@@ -155,7 +155,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create index a on user (id)"
+    "Query": "alter table user add index a (id)"
   }
 }
 
@@ -170,7 +170,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "create index a on unknown (id)"
+    "Query": "alter table unknown add index a (id)"
   }
 }
 
@@ -691,6 +691,25 @@
     "Query": "create view view_a as select * from music where user_id = 1"
   }
 }
+
+# Alter View
+"alter view user_extra as select* from user"
+{
+  "QueryType": "DDL",
+  "Original": "alter view user_extra as select* from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter view user_extra as select * from user"
+  }
+}
+
+# Alter View with unknown view
+"alter view unknown as select* from user"
+"table unknown not found"
 
 # drop table with qualifier in one
 "drop table user.user, user_extra"

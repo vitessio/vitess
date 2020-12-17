@@ -40,6 +40,18 @@ func replaceAliasedTableExprPartitions(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 }
 
+func replaceAlterViewColumns(newNode, parent SQLNode) {
+	parent.(*AlterView).Columns = newNode.(Columns)
+}
+
+func replaceAlterViewSelect(newNode, parent SQLNode) {
+	parent.(*AlterView).Select = newNode.(SelectStatement)
+}
+
+func replaceAlterViewViewName(newNode, parent SQLNode) {
+	parent.(*AlterView).ViewName = newNode.(TableName)
+}
+
 func replaceAndExprLeft(newNode, parent SQLNode) {
 	parent.(*AndExpr).Left = newNode.(Expr)
 }
@@ -979,6 +991,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
 
 	case *AlterDatabase:
+
+	case *AlterView:
+		a.apply(node, n.Columns, replaceAlterViewColumns)
+		a.apply(node, n.Select, replaceAlterViewSelect)
+		a.apply(node, n.ViewName, replaceAlterViewViewName)
 
 	case *AndExpr:
 		a.apply(node, n.Left, replaceAndExprLeft)
