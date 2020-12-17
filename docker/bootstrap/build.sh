@@ -34,5 +34,5 @@ chmod -R o=g *
 arch=$(uname -m)
 [ "$arch" == "aarch64" ] && [ $flavor != "common" ] && arch_ext='-arm64v8'
 if [ -f "docker/bootstrap/Dockerfile.$flavor$arch_ext" ]; then
-    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$version-$flavor$arch_ext .
+    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$version-$flavor$arch_ext --build-arg bootstrap_version=$version .
 fi
