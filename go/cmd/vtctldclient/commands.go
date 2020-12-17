@@ -75,7 +75,8 @@ func commandGetKeyspace(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("%+v\n", resp)
+	fmt.Printf("%+v\n", resp.Keyspace)
+
 	return nil
 }
 
@@ -86,6 +87,7 @@ func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%+v\n", resp.Keyspaces)
+
 	return nil
 }
 

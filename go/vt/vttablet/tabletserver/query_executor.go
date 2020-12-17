@@ -361,6 +361,12 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 			qre.tsv.Stats().TableaclPseudoDenied.Add(statsKey, 1)
 			return nil
 		}
+
+		// Skip ACL check for queries against the dummy dual table
+		if tableName == "dual" {
+			return nil
+		}
+
 		if qre.tsv.qe.strictTableACL {
 			errStr := fmt.Sprintf("table acl error: %q %v cannot run %v on table %q", callerID.Username, callerID.Groups, qre.plan.PlanID, tableName)
 			qre.tsv.Stats().TableaclDenied.Add(statsKey, 1)

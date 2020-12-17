@@ -1773,7 +1773,7 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	// Pass the embedded proto directly or jsonpb will panic.
-	return printJSON(wr.Logger(), keyspaceInfo.Keyspace)
+	return printJSON(wr.Logger(), keyspaceInfo.Keyspace.Keyspace)
 }
 
 func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2529,7 +2529,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				condition = fmt.Sprintf("migration_uuid='%s'", uuid)
 			}
 			query = fmt.Sprintf(`select
-				shard, mysql_schema, mysql_table, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status 
+				shard, mysql_schema, mysql_table, ddl_action, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status
 				from _vt.schema_migrations where %s`, condition)
 		}
 	case "retry":
@@ -2771,7 +2771,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		if err != nil {
 			return fmt.Errorf("error parsing vschema statement `%s`: %v", *sql, err)
 		}
-		ddl, ok := stmt.(sqlparser.DDLStatement)
+		ddl, ok := stmt.(*sqlparser.AlterVschema)
 		if !ok {
 			return fmt.Errorf("error parsing vschema statement `%s`: not a ddl statement", *sql)
 		}

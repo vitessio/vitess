@@ -1182,6 +1182,50 @@ func (node CollateAndCharsetType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
+func (ty LockType) ToString() string {
+	switch ty {
+	case Read:
+		return ReadStr
+	case ReadLocal:
+		return ReadLocalStr
+	case Write:
+		return WriteStr
+	case LowPriorityWrite:
+		return LowPriorityWriteStr
+	default:
+		return "Unknown LockType"
+	}
+}
+
+// ToString returns ShowCommandType as a string
+func (ty ShowCommandType) ToString() string {
+	switch ty {
+	case Charset:
+		return CharsetStr
+	case Collation:
+		return CollationStr
+	case Database:
+		return DatabaseStr
+	case Function:
+		return FunctionStr
+	case Privilege:
+		return PrivilegeStr
+	case Procedure:
+		return ProcedureStr
+	case StatusGlobal:
+		return StatusGlobalStr
+	case StatusSession:
+		return StatusSessionStr
+	case VariableGlobal:
+		return VariableGlobalStr
+	case VariableSession:
+		return VariableSessionStr
+	default:
+		return "Unknown ShowCommandType"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

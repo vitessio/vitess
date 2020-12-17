@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	vtschema "vitess.io/vitess/go/vt/schema"
+
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,7 +42,7 @@ import (
 )
 
 // PacketSize is the suggested packet size for VReplication streamer.
-var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+var PacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
@@ -502,6 +504,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, vs.buildVersionPlan(id, tm)
 		}
 		if tm.Database != "" && tm.Database != params.DbName {
+			vs.plans[id] = nil
+			return nil, nil
+		}
+		if vtschema.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
 			vs.plans[id] = nil
 			return nil, nil
 		}
