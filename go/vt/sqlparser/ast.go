@@ -82,6 +82,12 @@ type (
 		Statement
 	}
 
+	// AlterOption is an interface that represents the various options in ALTER TABLE statements
+	AlterOption interface {
+		iAlterOption()
+		SQLNode
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -287,6 +293,14 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// AlterTable represents a ALTER TABLE statement.
+	AlterTable struct {
+		Table          TableName
+		AlterOptions   []AlterOption
+		PartitionSpecs []*PartitionSpec
+		FullyParsed    bool
+	}
+
 	// CreateIndex represents a CREATE INDEX query
 	CreateIndex struct {
 		Constraint  string
@@ -438,11 +452,13 @@ func (*CreateTable) iStatement()       {}
 func (*CreateView) iStatement()        {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
+func (*AlterTable) iStatement()        {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
 func (*CreateView) iDDLStatement()  {}
 func (*CreateTable) iDDLStatement() {}
+func (*AlterTable) iDDLStatement()  {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -460,6 +476,11 @@ func (node *CreateTable) IsFullyParsed() bool {
 }
 
 // IsFullyParsed implements the DDLStatement interface
+func (node *AlterTable) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// IsFullyParsed implements the DDLStatement interface
 func (node *CreateView) IsFullyParsed() bool {
 	return true
 }
@@ -471,6 +492,11 @@ func (node *CreateIndex) GetTable() TableName {
 
 // GetTable implements the DDLStatement interface
 func (node *CreateTable) GetTable() TableName {
+	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *AlterTable) GetTable() TableName {
 	return node.Table
 }
 
@@ -491,6 +517,11 @@ func (node *DDL) GetAction() DDLAction {
 
 // GetAction implements the DDLStatement interface
 func (node *CreateIndex) GetAction() DDLAction {
+	return AlterDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *AlterTable) GetAction() DDLAction {
 	return AlterDDLAction
 }
 
@@ -520,6 +551,11 @@ func (node *CreateIndex) GetOptLike() *OptLike {
 }
 
 // GetOptLike implements the DDLStatement interface
+func (node *AlterTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
 func (node *CreateView) GetOptLike() *OptLike {
 	return nil
 }
@@ -536,6 +572,11 @@ func (node *CreateTable) GetTableSpec() *TableSpec {
 
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateIndex) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *AlterTable) GetTableSpec() *TableSpec {
 	return nil
 }
 
@@ -564,6 +605,11 @@ func (node *CreateView) GetVindexSpec() *VindexSpec {
 	return nil
 }
 
+// GetVindexSpec implements the DDLStatement interface
+func (node *AlterTable) GetVindexSpec() *VindexSpec {
+	return nil
+}
+
 // GetFromTables implements the DDLStatement interface
 func (node *DDL) GetFromTables() TableNames {
 	return node.FromTables
@@ -571,6 +617,11 @@ func (node *DDL) GetFromTables() TableNames {
 
 // GetFromTables implements the DDLStatement interface
 func (node *CreateIndex) GetFromTables() TableNames {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *AlterTable) GetFromTables() TableNames {
 	return nil
 }
 
@@ -595,6 +646,11 @@ func (node *CreateIndex) SetFromTables(tables TableNames) {
 }
 
 // SetFromTables implements DDLStatement.
+func (node *AlterTable) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
 func (node *CreateTable) SetFromTables(tables TableNames) {
 	// irrelevant
 }
@@ -611,6 +667,11 @@ func (node *DDL) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *CreateIndex) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *AlterTable) GetToTables() TableNames {
 	return nil
 }
 
@@ -635,6 +696,11 @@ func (node *CreateIndex) GetAutoIncSpec() *AutoIncSpec {
 }
 
 // GetAutoIncSpec implements the DDLStatement interface
+func (node *AlterTable) GetAutoIncSpec() *AutoIncSpec {
+	return nil
+}
+
+// GetAutoIncSpec implements the DDLStatement interface
 func (node *CreateTable) GetAutoIncSpec() *AutoIncSpec {
 	return nil
 }
@@ -651,6 +717,11 @@ func (node *DDL) GetVindexCols() []ColIdent {
 
 // GetVindexCols implements the DDLStatement interface
 func (node *CreateIndex) GetVindexCols() []ColIdent {
+	return nil
+}
+
+// GetVindexCols implements the DDLStatement interface
+func (node *AlterTable) GetVindexCols() []ColIdent {
 	return nil
 }
 
@@ -672,6 +743,12 @@ func (node *DDL) AffectedTables() TableNames {
 		list = append(list, node.ToTables...)
 		return list
 	}
+	return TableNames{node.Table}
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *AlterTable) AffectedTables() TableNames {
+	// TODO (Manan): change according to more implemented alter options before merging
 	return TableNames{node.Table}
 }
 
@@ -698,6 +775,12 @@ func (node *CreateIndex) SetTable(qualifier string, name string) {
 
 // SetTable implements DDLStatement.
 func (node *DDL) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *AlterTable) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
 	node.Table.Name = NewTableIdent(name)
 }
@@ -2699,4 +2782,12 @@ func (node *LockTables) Format(buf *TrackedBuffer) {
 // Format formats the UnlockTables node.
 func (node *UnlockTables) Format(buf *TrackedBuffer) {
 	buf.WriteString("unlock tables")
+}
+
+// Format formats the AlterTable node.
+func (node *AlterTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter table %v", node.Table)
+	for _, option := range node.AlterOptions {
+		buf.astPrintf(node, " %v", option)
+	}
 }

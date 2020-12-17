@@ -40,6 +40,30 @@ func replaceAliasedTableExprPartitions(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 }
 
+type replaceAlterTableAlterOptions int
+
+func (r *replaceAlterTableAlterOptions) replace(newNode, container SQLNode) {
+	container.(*AlterTable).AlterOptions[int(*r)] = newNode.(AlterOption)
+}
+
+func (r *replaceAlterTableAlterOptions) inc() {
+	*r++
+}
+
+type replaceAlterTablePartitionSpecs int
+
+func (r *replaceAlterTablePartitionSpecs) replace(newNode, container SQLNode) {
+	container.(*AlterTable).PartitionSpecs[int(*r)] = newNode.(*PartitionSpec)
+}
+
+func (r *replaceAlterTablePartitionSpecs) inc() {
+	*r++
+}
+
+func replaceAlterTableTable(newNode, parent SQLNode) {
+	parent.(*AlterTable).Table = newNode.(TableName)
+}
+
 func replaceAndExprLeft(newNode, parent SQLNode) {
 	parent.(*AndExpr).Left = newNode.(Expr)
 }
@@ -975,6 +999,21 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
 
 	case *AlterDatabase:
+
+	case *AlterTable:
+		replacerAlterOptions := replaceAlterTableAlterOptions(0)
+		replacerAlterOptionsB := &replacerAlterOptions
+		for _, item := range n.AlterOptions {
+			a.apply(node, item, replacerAlterOptionsB.replace)
+			replacerAlterOptionsB.inc()
+		}
+		replacerPartitionSpecs := replaceAlterTablePartitionSpecs(0)
+		replacerPartitionSpecsB := &replacerPartitionSpecs
+		for _, item := range n.PartitionSpecs {
+			a.apply(node, item, replacerPartitionSpecsB.replace)
+			replacerPartitionSpecsB.inc()
+		}
+		a.apply(node, n.Table, replaceAlterTableTable)
 
 	case *AndExpr:
 		a.apply(node, n.Left, replaceAndExprLeft)
