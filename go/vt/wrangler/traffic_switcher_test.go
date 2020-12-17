@@ -487,7 +487,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 // TestShardMigrate tests table mode migrations.
 // This has to be kept in sync with TestTableMigrate.
 func TestShardMigrateMainflow(t *testing.T) {
-	t.Skip() // FIXME: skipping since resharding not fully implemented
+	//t.Skip("To be fixed before release") //FIXME
 	ctx := context.Background()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
@@ -849,7 +849,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 	}
 	dropSourcesInvalid()
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false, false, false)
 	require.Error(t, err, "Workflow has not completed, cannot DropSources")
 
 	tme.dbSourceClients[0].addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
@@ -879,7 +879,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
-	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, true)
+	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
@@ -905,7 +905,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
-	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", RenameTable, true)
+	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", RenameTable, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunRenameSources, *results))
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
@@ -921,7 +921,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	}
 	dropSources()
 
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false, false, false)
 	require.NoError(t, err)
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
 
@@ -1687,7 +1687,7 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 	), nil)
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, DirectionForward, false)
-	want := "no rule defined for table /.*"
+	want := "cannot migrate streams with wild card table names: /.*"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchReads: %v, must contain %v", err, want)
 	}

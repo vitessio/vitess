@@ -1957,6 +1957,8 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
 	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
+	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
+	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
 	_ = subFlags.Bool("v2", true, "")
 
 	_, _, _ = dryRun, timeout, reverseReplication
@@ -1985,7 +1987,7 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	//TODO: check if invalid parameters were passed in that do not apply to this action
-	originalAction := action
+	//originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
 	case "start":
@@ -2000,18 +2002,25 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		mtp.AllTables = *allTables
 		mtp.ExcludeTables = *excludes
 		mtp.TabletTypes = *tabletTypes
-	case "switchreads", "switchrdonlyreads", "switchreplicareads":
+	case "switchtraffic", "reversetraffic":
 		mtp.Cells = *cells
 		mtp.TabletTypes = *tabletTypes
-	case "switchwrites", "reversewrites":
 		mtp.Timeout = *timeout
 		mtp.EnableReverseReplication = *reverseReplication
+	case "abort":
+		mtp.KeepData = *keepData
+	case "complete":
+		mtp.RenameTables = *renameTables
+		mtp.KeepData = *keepData
 	}
 
 	wf, err := wr.NewMoveTablesWorkflow(ctx, mtp)
 	if err != nil {
 		log.Warningf("NewMoveTablesWorkflow returned error %+v", wf)
 		return err
+	}
+	if !wf.Exists() && action != "start" {
+		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
 	printDetails := func() error {
@@ -2041,10 +2050,8 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 	switch action {
 	case "show":
-		wr.Logger().Printf("\n%s.\nAvailable actions are: %s\n", wf.String(), wf.AvailableActions())
 		return printDetails()
 	case "progress":
-		wr.Logger().Printf("%s.\nAvailable actions are: %s\n", wf.String(), wf.AvailableActions())
 		copyProgress, err := wf.GetCopyProgress()
 		if err != nil {
 			return err
@@ -2071,17 +2078,16 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			wr.Logger().Printf("\n%s\n", s)
 		}
 		return printDetails()
-	case "visualize":
-		wr.Logger().Printf("%s", wf.Visualize())
-		return nil
-	}
-	if !wf.IsActionValid(action) {
-		return fmt.Errorf("invalid Action: %s. Workflow %s.%s is currently in state: %s.\nAvailable actions are: %s",
-			originalAction, target, workflow, wf.CurrentState(), wf.AvailableActions())
-	}
-	if err := wf.FireEvent(action); err != nil {
-		log.Warningf("NewMoveTablesWorkflow %s error: %+v", action, wf)
-		return err
+	case "switchtraffic":
+		if err := wf.SwitchTraffic(); err != nil {
+			log.Warningf("SwitchTraffic %s error: %+v", action, wf)
+			return err
+		}
+	case "reversetraffic":
+		if err := wf.ReverseTraffic(); err != nil {
+			log.Warningf("ReverseTraffic %s error: %+v", action, wf)
+			return err
+		}
 	}
 	wr.Logger().Printf("MoveTables %s was successful\n\n%s\n\n", action, wf)
 	return nil
@@ -2255,6 +2261,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
 	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
+	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2272,7 +2279,7 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	_, _, _ = dryRun, keyspace, workflow
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, removalType, *dryRun)
+	dryRunResults, err := wr.DropSources(ctx, keyspace, workflow, removalType, *keepData, false, *dryRun)
 	if err != nil {
 		return err
 	}

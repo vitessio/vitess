@@ -46,5 +46,7 @@ type iswitcher interface {
 	freezeTargetVReplication(ctx context.Context) error
 	dropSourceReverseVReplicationStreams(ctx context.Context) error
 	dropTargetVReplicationStreams(ctx context.Context) error
+	removeTargetTables(ctx context.Context) error
+	dropTargetShards(ctx context.Context) error
 	logs() *[]string
 }
