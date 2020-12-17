@@ -286,6 +286,10 @@ func replaceDropTableFromTables(newNode, parent SQLNode) {
 	parent.(*DropTable).FromTables = newNode.(TableNames)
 }
 
+func replaceDropViewFromTables(newNode, parent SQLNode) {
+	parent.(*DropView).FromTables = newNode.(TableNames)
+}
+
 func replaceExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
@@ -1111,6 +1115,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *DropTable:
 		a.apply(node, n.FromTables, replaceDropTableFromTables)
+
+	case *DropView:
+		a.apply(node, n.FromTables, replaceDropViewFromTables)
 
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)

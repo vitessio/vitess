@@ -49,13 +49,13 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		// For Create index, the table must already exist
 		// We should find the target of the query from this tables location
 		table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
-		keyspace = table.Keyspace
 		if err != nil {
 			return nil, nil, err
 		}
 		if table == nil {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", ddlStatement.GetTable().Name.String())
 		}
+		keyspace = table.Keyspace
 		ddlStatement.SetTable("", table.Name.String())
 	case *sqlparser.DDL:
 		// For DDL, it is only required that the keyspace exist
@@ -106,8 +106,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		if err != nil {
 			return nil, nil, err
 		}
-	case *sqlparser.DropTable:
-
+	case *sqlparser.DropView, *sqlparser.DropTable:
 		for i, tab := range ddlStatement.GetFromTables() {
 			table, _, _, _, destinationTab, err := vschema.FindTableOrVindex(tab)
 			if err != nil {
@@ -122,7 +121,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 				keyspace = keyspaceTab
 			}
 			if destination != destinationTab || keyspace != keyspaceTab {
-				return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Tables specified in the query do not belong to the same destination")
+				return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Tables or Views specified in the query do not belong to the same destination")
 			}
 			ddlStatement.GetFromTables()[i] = sqlparser.TableName{
 				Name: tab.Name,

@@ -49,7 +49,7 @@ RUN curl -L --retry-delay 10 --retry 3 -o /tmp/libev.rpm http://mirror.centos.or
  && curl -L --retry-delay 10 --retry 3 -o /tmp/gperf.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/gperftools-libs-2.6.1-1.el7.x86_64.rpm \
  && curl -L --retry-delay 10 --retry 3 -o /tmp/numactl.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/numactl-libs-2.0.12-5.el7.x86_64.rpm \
  && curl -L --retry-delay 10 --retry 3 -o /tmp/sysstat.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/sysstat-10.1.5-19.el7.x86_64.rpm \
- && curl -L --retry-delay 10 --retry 3 -o /tmp/strace.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/strace-4.24-4.el7.x86_64.rpm \
+ && curl -L --retry-delay 10 --retry 3 -o /tmp/strace.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/strace-4.24-6.el7.x86_64.rpm \
  && rpm -i --nodeps /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm \
  && rm -f /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm
 RUN yum update \
