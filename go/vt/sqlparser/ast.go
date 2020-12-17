@@ -975,40 +975,53 @@ func (node *AlterDatabase) GetDatabaseName() string {
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
 
-//ShowInternal will represent all the show statement types.
-type ShowInternal interface {
-	isShowInternal()
-	SQLNode
-}
+type (
 
-//ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
-type ShowLegacy struct {
-	Extended               string
-	Type                   string
-	OnTable                TableName
-	Table                  TableName
-	ShowTablesOpt          *ShowTablesOpt
-	Scope                  Scope
-	ShowCollationFilterOpt Expr
-}
+	// ShowInternal will represent all the show statement types.
+	ShowInternal interface {
+		isShowInternal()
+		SQLNode
+	}
 
-//ShowColumns is of ShowInternal type, holds the show columns statement.
-type ShowColumns struct {
-	Full   string
-	Table  TableName
-	DbName string
-	Filter *ShowFilter
-}
+	// ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
+	ShowLegacy struct {
+		Extended               string
+		Type                   string
+		OnTable                TableName
+		Table                  TableName
+		ShowTablesOpt          *ShowTablesOpt
+		Scope                  Scope
+		ShowCollationFilterOpt Expr
+	}
 
-// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
-type ShowTableStatus struct {
-	DatabaseName string
-	Filter       *ShowFilter
-}
+	// ShowColumns is of ShowInternal type, holds the show columns statement.
+	ShowColumns struct {
+		Full   string
+		Table  TableName
+		DbName string
+		Filter *ShowFilter
+	}
+
+	// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
+	ShowTableStatus struct {
+		DatabaseName string
+		Filter       *ShowFilter
+	}
+
+	// ShowCommandType represents the show statement type.
+	ShowCommandType int8
+
+	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
+	ShowBasic struct {
+		Command ShowCommandType
+		Filter  *ShowFilter
+	}
+)
 
 func (*ShowLegacy) isShowInternal()      {}
 func (*ShowColumns) isShowInternal()     {}
 func (*ShowTableStatus) isShowInternal() {}
+func (*ShowBasic) isShowInternal()       {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -2771,6 +2784,11 @@ func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
 		buf.WriteString(node.DatabaseName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+}
+
+// Format formats the node.
+func (node *ShowBasic) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show%s%v", node.Command.ToString(), node.Filter)
 }
 
 // Format formats the node.
