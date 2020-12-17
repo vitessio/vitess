@@ -741,12 +741,12 @@ func (node *CreateView) SetFromTables(tables TableNames) {
 
 // SetFromTables implements DDLStatement.
 func (node *DropTable) SetFromTables(tables TableNames) {
-	// irrelevant
+	node.FromTables = tables
 }
 
 // SetFromTables implements DDLStatement.
 func (node *DropView) SetFromTables(tables TableNames) {
-	// irrelevant
+	node.FromTables = tables
 }
 
 // SetFromTables implements DDLStatement.
