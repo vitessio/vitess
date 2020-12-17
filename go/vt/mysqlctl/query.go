@@ -225,7 +225,7 @@ func redactPassword(input string) string {
 		if j == -1 {
 			return input
 		}
-		input = input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
+		input = input[:i+len(masterPasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
 	}
 	// We also check if we have any password keyword in the query
 	i = strings.Index(input, passwordStart)
@@ -236,5 +236,5 @@ func redactPassword(input string) string {
 	if j == -1 {
 		return input
 	}
-	return input[:i+len(passwordStart)] + strings.Repeat("*", j) + input[i+len(passwordStart)+j:]
+	return input[:i+len(passwordStart)] + strings.Repeat("*", 4) + input[i+len(passwordStart)+j:]
 }
