@@ -941,6 +941,10 @@ table_column_list:
   {
     $$.AddConstraint($3)
   }
+| table_column_list ',' check_constraint_definition
+  {
+    $$.AddConstraint($3)
+  }
 
 column_definition:
   sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
@@ -1470,7 +1474,7 @@ index_column:
   }
 
 constraint_definition:
-  CONSTRAINT id_or_var constraint_info
+  CONSTRAINT id_or_var_opt constraint_info
   {
     $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
   }
@@ -1480,7 +1484,7 @@ constraint_definition:
   }
 
 check_constraint_definition:
-  CONSTRAINT id_or_var check_constraint_info
+  CONSTRAINT id_or_var_opt check_constraint_info
   {
     $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
   }
@@ -1505,10 +1509,6 @@ constraint_info:
 | FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
-  }
-| check_constraint_info
-  {
-    $$ = $1
   }
 
 check_constraint_info:
@@ -1627,9 +1627,17 @@ alter_options:
   }
 
 alter_option:
-  ALGORITHM
+  ADD check_constraint_definition
   {
-    $$ = nil
+    $$ = &AddConstraintDefinition{ConstraintDefinition: $2}
+  }
+| ADD constraint_definition
+  {
+    $$ = &AddConstraintDefinition{ConstraintDefinition: $2}
+  }
+| ADD index_definition
+  {
+    $$ = &AddIndexDefinition{IndexDefinition: $2}
   }
 
 alter_statement:

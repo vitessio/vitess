@@ -88,6 +88,16 @@ type (
 		SQLNode
 	}
 
+	// AddConstraintDefinition represents a ADD CONSTRAINT alter option
+	AddConstraintDefinition struct {
+		ConstraintDefinition *ConstraintDefinition
+	}
+
+	// AddIndexDefinition represents a ADD INDEX alter option
+	AddIndexDefinition struct {
+		IndexDefinition *IndexDefinition
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -459,6 +469,9 @@ func (*CreateIndex) iDDLStatement() {}
 func (*CreateView) iDDLStatement()  {}
 func (*CreateTable) iDDLStatement() {}
 func (*AlterTable) iDDLStatement()  {}
+
+func (node *AddConstraintDefinition) iAlterOption() {}
+func (node *AddIndexDefinition) iAlterOption()      {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -1933,7 +1946,7 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
-	buf.astPrintf(c, "check constraint on expression %v", c.Expr)
+	buf.astPrintf(c, "check (%v)", c.Expr)
 	if c.Enforced {
 		buf.astPrintf(c, " enforced")
 	} else {
@@ -2790,4 +2803,14 @@ func (node *AlterTable) Format(buf *TrackedBuffer) {
 	for _, option := range node.AlterOptions {
 		buf.astPrintf(node, " %v", option)
 	}
+}
+
+// Format formats the node.
+func (node *AddConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "add %v", node.ConstraintDefinition)
+}
+
+// Format formats the node.
+func (node *AddIndexDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "add %v", node.IndexDefinition)
 }
