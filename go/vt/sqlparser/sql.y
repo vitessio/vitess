@@ -211,9 +211,9 @@ func skipToEnd(yylex interface{}) {
 // Type Modifiers
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
-// Supported SHOW tokens
+// SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -339,7 +339,7 @@ func skipToEnd(yylex interface{}) {
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
-%type <scope> set_session_or_global show_session_or_global
+%type <scope> set_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
@@ -377,6 +377,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableAndLockTypes> lock_table_list
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
+%type <empty> session_or_local_opt
 
 
 %start any_command
@@ -1825,24 +1826,81 @@ analyze_statement:
   }
 
 show_statement:
-  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
+  SHOW CHARACTER SET like_or_where_opt
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
-  }
-/* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
-| SHOW CHARACTER SET like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{&ShowLegacy{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Charset, Filter: $4}}
   }
 | SHOW CHARSET like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Charset, Filter: $3}}
+  }
+| SHOW COLLATION like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Collation, Filter: $3}}
+  }
+| SHOW DATABASES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW SCHEMAS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW KEYSPACES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW VITESS_KEYSPACES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW FUNCTION STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
+  }
+| SHOW PRIVILEGES
+  {
+    $$ = &Show{&ShowBasic{Command: Privilege}}
+  }
+| SHOW PROCEDURE STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Procedure, Filter: $4}}
+  }
+| SHOW session_or_local_opt STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: StatusSession, Filter: $4}}
+  }
+| SHOW GLOBAL STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: StatusGlobal, Filter: $4}}
+  }
+| SHOW session_or_local_opt VARIABLES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VariableSession, Filter: $4}}
+  }
+| SHOW GLOBAL VARIABLES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VariableGlobal, Filter: $4}}
+  }
+| SHOW TABLE STATUS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
+  }
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
+  }
+|  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+  }
+| SHOW CREATE FUNCTION table_name
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE id_or_var ddl_skip_to_end
@@ -1865,29 +1923,13 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
-| SHOW DATABASES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-  }
-| SHOW SCHEMAS like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-  }
-| SHOW KEYSPACES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-  }
-| SHOW VITESS_KEYSPACES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-  }
 | SHOW ENGINES
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+  }
+| SHOW FUNCTION CODE table_name
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
@@ -1898,21 +1940,9 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
-| SHOW PROCEDURE ddl_skip_to_end
+| SHOW PROCEDURE CODE table_name
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-| SHOW show_session_or_global STATUS ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
-  }
-| SHOW TABLE STATUS from_database_opt like_or_where_opt
-  {
-    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
-  }
-| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
-  {
-    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
@@ -1923,18 +1953,6 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
       $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
     }
-  }
-| SHOW show_session_or_global VARIABLES ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
-  }
-| SHOW COLLATION
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-| SHOW COLLATION WHERE expression
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
@@ -2065,18 +2083,18 @@ like_opt:
       $$ = &ShowFilter{Like:string($2)}
     }
 
-show_session_or_global:
+session_or_local_opt:
   /* empty */
   {
-    $$ = ImplicitScope
+    $$ = struct{}{}
   }
 | SESSION
   {
-    $$ = SessionScope
+    $$ = struct{}{}
   }
-| GLOBAL
+| LOCAL
   {
-    $$ = GlobalScope
+    $$ = struct{}{}
   }
 
 use_statement:
@@ -4231,6 +4249,7 @@ non_reserved_keyword:
 | CHARSET
 | CHECK
 | CLONE
+| CODE
 | COLLATION
 | COLUMNS
 | COMMENT_KEYWORD
@@ -4266,6 +4285,7 @@ non_reserved_keyword:
 | FOREIGN
 | FORMAT
 | FULLTEXT
+| FUNCTION
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
@@ -4339,6 +4359,7 @@ non_reserved_keyword:
 | PERSIST_ONLY
 | PRECEDING
 | PRIVILEGE_CHECKS_USER
+| PRIVILEGES
 | PROCESS
 | PLUGINS
 | POINT

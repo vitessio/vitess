@@ -332,6 +332,17 @@ func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
 }
 
+func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+	}
+	var kss []*vindexes.Keyspace
+	for _, ks := range vc.vschema.Keyspaces {
+		kss = append(kss, ks.Keyspace)
+	}
+	return kss, nil
+}
+
 // TargetString returns the current TargetString of the session.
 func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
