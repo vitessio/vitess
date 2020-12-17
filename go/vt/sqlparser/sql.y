@@ -140,6 +140,9 @@ func skipToEnd(yylex interface{}) {
   tableAndLockTypes []*TableAndLockType
   tableAndLockType *TableAndLockType
   lockType LockType
+  alterTable       *AlterTable
+  alterOption      AlterOption
+  alterOptions	   []AlterOption
 }
 
 %token LEX_ERROR
@@ -253,6 +256,9 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
 %type <ddl> rename_list
 %type <createTable> create_table_prefix
+%type <alterTable> alter_table_prefix
+%type <alterOption> alter_option
+%type <alterOptions> alter_options alter_options_opt
 %type <createIndex> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
@@ -798,6 +804,13 @@ create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
     $$ = &CreateTable{Table: $4, IfNotExists: $3}
+    setDDL(yylex, $$)
+  }
+
+alter_table_prefix:
+  ALTER TABLE table_name
+  {
+    $$ = &AlterTable{Table: $3}
     setDDL(yylex, $$)
   }
 
@@ -1594,36 +1607,67 @@ table_opt_value:
     $$ = string($1)
   }
 
+alter_options_opt:
+  {
+    $$ = nil
+  }
+| alter_options
+  {
+    $$ = $1
+  }
+
+alter_options:
+  alter_option
+  {
+    $$ = []AlterOption{$1}
+  }
+| alter_options ',' alter_option
+  {
+    $$ = append($1,$3)
+  }
+
+alter_option:
+  ALGORITHM
+  {
+    $$ = nil
+  }
+
 alter_statement:
-  ALTER TABLE table_name non_add_drop_or_rename_operation skip_to_end
+  alter_table_prefix alter_options_opt
   {
-    $$ = &DDL{Action: AlterDDLAction, Table: $3}
+    $1.FullyParsed = true
+    $1.AlterOptions = $2
+    $$ = $1
   }
-| ALTER TABLE table_name ADD alter_object_type skip_to_end
-  {
-    $$ = &DDL{Action: AlterDDLAction, Table: $3}
-  }
-| ALTER TABLE table_name DROP alter_object_type skip_to_end
-  {
-    $$ = &DDL{Action: AlterDDLAction, Table: $3}
-  }
-| ALTER TABLE table_name RENAME to_opt table_name
-  {
-    // Change this to a rename statement
-    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$3}, ToTables: TableNames{$6}}
-  }
-| ALTER TABLE table_name RENAME index_opt skip_to_end
-  {
-    // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterDDLAction, Table: $3}
-  }
+//  ALTER TABLE table_name non_add_drop_or_rename_operation skip_to_end
+//  {
+//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
+//  }
+//| ALTER TABLE table_name ADD alter_object_type skip_to_end
+//  {
+//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
+//  }
+//| ALTER TABLE table_name DROP alter_object_type skip_to_end
+//  {
+//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
+//  }
+//| ALTER TABLE table_name RENAME to_opt table_name
+//  {
+//    // Change this to a rename statement
+//    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$3}, ToTables: TableNames{$6}}
+//  }
+//| ALTER TABLE table_name RENAME index_opt skip_to_end
+//  {
+//    // Rename an index can just be an alter
+//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
+//  }
+//| ALTER TABLE table_name partition_operation
+//  {
+//    $$ = &DDL{Action: AlterDDLAction, Table: $3, PartitionSpec: $4}
+//  }
 | ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
-  }
-| ALTER TABLE table_name partition_operation
-  {
-    $$ = &DDL{Action: AlterDDLAction, Table: $3, PartitionSpec: $4}
   }
 | alter_database_prefix id_or_var_opt create_options
   {
