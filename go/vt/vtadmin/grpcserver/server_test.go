@@ -93,9 +93,10 @@ func TestLameduck(t *testing.T) {
 		stoppedCh <- true
 	}()
 
+	shutdownStart := time.Now()
+
 	lis.Close()
 
-	shutdownStart := time.Now()
 	select {
 	case <-stoppedCh:
 	case <-time.After(ldd):
