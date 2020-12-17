@@ -905,14 +905,11 @@ var (
 		input:  "alter table a add foo",
 		output: "alter table a",
 	}, {
-		input:  "alter table a add spatial key foo (column1)",
-		output: "alter table a",
+		input: "alter table a add spatial key foo (column1)",
 	}, {
-		input:  "alter table a add fulltext key foo (column1)",
-		output: "alter table a",
+		input: "alter table a add fulltext key foo (column1)",
 	}, {
-		input:  "alter table a add unique key foo (column1)",
-		output: "alter table a",
+		input: "alter table a add unique key foo (column1)",
 	}, {
 		input:  "alter table `By` add foo",
 		output: "alter table `By`",
@@ -986,26 +983,20 @@ var (
 		input:  "alter table a add column id int",
 		output: "alter table a",
 	}, {
-		input:  "alter table a add index idx (id)",
-		output: "alter table a",
+		input: "alter table a add index idx (id)",
 	}, {
-		input:  "alter table a add fulltext index idx (id)",
-		output: "alter table a",
+		input: "alter table a add fulltext index idx (id)",
 	}, {
-		input:  "alter table a add spatial index idx (id)",
-		output: "alter table a",
+		input: "alter table a add spatial index idx (id)",
 	}, {
-		input:  "alter table a add fulltext index idx (id)",
-		output: "alter table a",
+		input: "alter table a add fulltext index idx (id)",
 	}, {
-		input:  "alter table a add foreign key",
-		output: "alter table a",
+		input: "alter table a add foreign key (id) references f (id)",
 	}, {
-		input:  "alter table a add primary key",
-		output: "alter table a",
+		input: "alter table a add primary key (id)",
 	}, {
-		input:  "alter table a add constraint",
-		output: "alter table a",
+		input:  "alter table a add constraint check (id)",
+		output: "alter table a add check (id) enforced",
 	}, {
 		input:  "alter table a add id",
 		output: "alter table a",
@@ -1028,8 +1019,7 @@ var (
 		input:  "alter table a drop fulltext index idx (id)",
 		output: "alter table a",
 	}, {
-		input:  "alter table a add check ch_1",
-		output: "alter table a",
+		input: "alter table a add check (ch_1) not enforced",
 	}, {
 		input:  "alter table a drop check ch_1",
 		output: "alter table a",
@@ -1755,12 +1745,12 @@ var (
 			"\tc1 int,\n" +
 			"\tc2 int,\n" +
 			"\tc3 int,\n" +
-			"\tcheck constraint on expression c1 != c2 enforced,\n" +
-			"\tcheck constraint on expression c1 > 10 enforced,\n" +
-			"\tconstraint c2_positive check constraint on expression c2 > 0 enforced,\n" +
-			"\tcheck constraint on expression c3 < 100 enforced,\n" +
-			"\tconstraint c1_nonzero check constraint on expression c1 != 0 enforced,\n" +
-			"\tcheck constraint on expression c1 > c3 enforced\n)",
+			"\tcheck (c1 != c2) enforced,\n" +
+			"\tcheck (c1 > 10) enforced,\n" +
+			"\tconstraint c2_positive check (c2 > 0) enforced,\n" +
+			"\tcheck (c3 < 100) enforced,\n" +
+			"\tconstraint c1_nonzero check (c1 != 0) enforced,\n" +
+			"\tcheck (c1 > c3) enforced\n)",
 	}, {
 		input:  "SHOW INDEXES FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
 		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",

@@ -16,6 +16,14 @@ type application struct {
 	cursor    Cursor
 }
 
+func replaceAddConstraintDefinitionConstraintDefinition(newNode, parent SQLNode) {
+	parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
+}
+
+func replaceAddIndexDefinitionIndexDefinition(newNode, parent SQLNode) {
+	parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
+}
+
 func replaceAliasedExprAs(newNode, parent SQLNode) {
 	parent.(*AliasedExpr).As = newNode.(ColIdent)
 }
@@ -987,6 +995,12 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	switch n := node.(type) {
 	case nil:
 	case AccessMode:
+
+	case *AddConstraintDefinition:
+		a.apply(node, n.ConstraintDefinition, replaceAddConstraintDefinitionConstraintDefinition)
+
+	case *AddIndexDefinition:
+		a.apply(node, n.IndexDefinition, replaceAddIndexDefinitionIndexDefinition)
 
 	case *AliasedExpr:
 		a.apply(node, n.As, replaceAliasedExprAs)
