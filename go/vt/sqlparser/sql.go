@@ -5809,7 +5809,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1643
 		{
-			yyVAL.statement = &DDL{
+			yyVAL.statement = &AlterVschema{
 				Action: CreateVindexDDLAction,
 				Table:  yyDollar[5].tableName,
 				VindexSpec: &VindexSpec{
@@ -5823,7 +5823,7 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1655
 		{
-			yyVAL.statement = &DDL{
+			yyVAL.statement = &AlterVschema{
 				Action: DropVindexDDLAction,
 				Table:  yyDollar[5].tableName,
 				VindexSpec: &VindexSpec{
@@ -5835,19 +5835,19 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1665
 		{
-			yyVAL.statement = &DDL{Action: AddVschemaTableDDLAction, Table: yyDollar[5].tableName}
+			yyVAL.statement = &AlterVschema{Action: AddVschemaTableDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 278:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1669
 		{
-			yyVAL.statement = &DDL{Action: DropVschemaTableDDLAction, Table: yyDollar[5].tableName}
+			yyVAL.statement = &AlterVschema{Action: DropVschemaTableDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 279:
 		yyDollar = yyS[yypt-12 : yypt+1]
 //line sql.y:1673
 		{
-			yyVAL.statement = &DDL{
+			yyVAL.statement = &AlterVschema{
 				Action: AddColVindexDDLAction,
 				Table:  yyDollar[4].tableName,
 				VindexSpec: &VindexSpec{
@@ -5862,7 +5862,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:1686
 		{
-			yyVAL.statement = &DDL{
+			yyVAL.statement = &AlterVschema{
 				Action: DropColVindexDDLAction,
 				Table:  yyDollar[4].tableName,
 				VindexSpec: &VindexSpec{
@@ -5874,13 +5874,13 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1696
 		{
-			yyVAL.statement = &DDL{Action: AddSequenceDDLAction, Table: yyDollar[5].tableName}
+			yyVAL.statement = &AlterVschema{Action: AddSequenceDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 282:
 		yyDollar = yyS[yypt-9 : yypt+1]
 //line sql.y:1700
 		{
-			yyVAL.statement = &DDL{
+			yyVAL.statement = &AlterVschema{
 				Action: AddAutoIncDDLAction,
 				Table:  yyDollar[4].tableName,
 				AutoIncSpec: &AutoIncSpec{
