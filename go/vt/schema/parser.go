@@ -19,7 +19,15 @@ package schema
 import (
 	"regexp"
 	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+// NormalizedDDLQuery contains a query which is online-ddl -normalized
+type NormalizedDDLQuery struct {
+	SQL       string
+	TableName sqlparser.TableName
+}
 
 var (
 	// ALTER TABLE
@@ -63,4 +71,26 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 		}
 	}
 	return explicitSchema, explicitTable, alterOptions
+}
+
+// NormalizeOnlineDDL normalizes a given query for OnlineDDL, possibly exploding it into multiple distinct queries
+func NormalizeOnlineDDL(sql string) (normalized []*NormalizedDDLQuery, err error) {
+	action, ddlStmt, err := getOnlineDDLAction(sql)
+	if err != nil {
+		return normalized, err
+	}
+	switch action {
+	case sqlparser.DropDDLAction:
+		tables := ddlStmt.GetFromTables()
+		for _, table := range tables {
+			ddlStmt.SetFromTables([]sqlparser.TableName{table})
+			normalized = append(normalized, &NormalizedDDLQuery{SQL: sqlparser.String(ddlStmt), TableName: table})
+		}
+		return normalized, nil
+	}
+	if ddlStmt.IsFullyParsed() {
+		sql = sqlparser.String(ddlStmt)
+	}
+	n := &NormalizedDDLQuery{SQL: sql, TableName: ddlStmt.GetTable()}
+	return []*NormalizedDDLQuery{n}, nil
 }
