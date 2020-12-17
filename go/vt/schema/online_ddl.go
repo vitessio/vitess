@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -138,6 +139,20 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 	return onlineDDL, nil
 }
 
+// getOnlineDDLAction parses the given SQL into a statement and returns the action type of the DDL statement, or error
+// if the statement is not a DDL
+func getOnlineDDLAction(sql string) (action sqlparser.DDLAction, ddlStmt sqlparser.DDLStatement, err error) {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		return action, ddlStmt, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", sql, err)
+	}
+	switch ddlStmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		return ddlStmt.GetAction(), ddlStmt, nil
+	}
+	return action, ddlStmt, fmt.Errorf("Unsupported query type: %s", sql)
+}
+
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
 func NewOnlineDDL(keyspace string, table string, sql string, strategy DDLStrategy, options string, requestContext string) (*OnlineDDL, error) {
 	u, err := createUUID("_")
@@ -170,6 +185,29 @@ func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
 // ToJSON exports this onlineDDL to JSON
 func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
+}
+
+// GetAction extracts the DDL action type from the online DDL statement
+func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
+	action, _, err = getOnlineDDLAction(onlineDDL.SQL)
+	return action, err
+}
+
+// GetActionStr returns a string representation of the DDL action
+func (onlineDDL *OnlineDDL) GetActionStr() (actionStr string, err error) {
+	action, err := onlineDDL.GetAction()
+	if err != nil {
+		return actionStr, err
+	}
+	switch action {
+	case sqlparser.CreateDDLAction:
+		return sqlparser.CreateStr, nil
+	case sqlparser.AlterDDLAction:
+		return sqlparser.AlterStr, nil
+	case sqlparser.DropDDLAction:
+		return sqlparser.DropStr, nil
+	}
+	return "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
 }
 
 // ToString returns a simple string representation of this instance

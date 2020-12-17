@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -114,15 +115,17 @@ func TestGetKeyspace(t *testing.T) {
 	vtctld := grpcvtctldserver.NewVtctldServer(ts)
 
 	withTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
-		expected := &vtctldatapb.Keyspace{
-			Name: "testkeyspace",
-			Keyspace: &topodatapb.Keyspace{
-				ShardingColumnName: "col1",
+		expected := &vtctldatapb.GetKeyspaceResponse{
+			Keyspace: &vtctldata.Keyspace{
+				Name: "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{
+					ShardingColumnName: "col1",
+				},
 			},
 		}
-		addKeyspace(ctx, t, ts, expected)
+		addKeyspace(ctx, t, ts, expected.Keyspace)
 
-		resp, err := client.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Name})
+		resp, err := client.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 		assert.NoError(t, err)
 		assert.Equal(t, expected, resp)
 

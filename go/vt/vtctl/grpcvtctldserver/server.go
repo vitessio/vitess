@@ -58,15 +58,17 @@ func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctlda
 }
 
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.Keyspace, error) {
+func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
 	keyspace, err := s.ts.GetKeyspace(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
 	}
 
-	return &vtctldatapb.Keyspace{
-		Name:     req.Keyspace,
-		Keyspace: keyspace.Keyspace,
+	return &vtctldatapb.GetKeyspaceResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Keyspace,
+			Keyspace: keyspace.Keyspace,
+		},
 	}, nil
 }
 
@@ -85,7 +87,7 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 			return nil, err
 		}
 
-		keyspaces[i] = ks
+		keyspaces[i] = ks.Keyspace
 	}
 
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil

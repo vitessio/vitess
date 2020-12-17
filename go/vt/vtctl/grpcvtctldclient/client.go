@@ -93,7 +93,7 @@ func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in 
 	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
 }
 
-func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.Keyspace, error) {
+func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)
 	}

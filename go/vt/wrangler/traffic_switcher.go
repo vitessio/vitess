@@ -745,12 +745,17 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 		err = ts.changeShardsAccess(ctx, ts.sourceKeyspace, ts.sourceShards(), disallowWrites)
 	}
 	if err != nil {
+		log.Warningf("Error: %s", err)
 		return err
 	}
 	return ts.forAllSources(func(source *tsSource) error {
 		var err error
 		source.position, err = ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
-		ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.si.ShardName(), source.position)
+		ts.wr.Logger().Infof("Stopped Source Writes. Position for source %v:%v: %v",
+			ts.sourceKeyspace, source.si.ShardName(), source.position)
+		if err != nil {
+			log.Warningf("Error: %s", err)
+		}
 		return err
 	})
 }
@@ -769,39 +774,34 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
-
-	var mu sync.Mutex
-	return ts.forAllUids(func(target *tsTarget, uid uint32) error {
-		ts.wr.Logger().Infof("uid: %d, target master %s, target position %s, shard %s", uid,
-			target.master.AliasString(), target.position, target.si.String())
-		log.Infof("uid: %d, target master %s, target position %s, shard %s", uid,
+	// source writes have been stopped, wait for all streams on targets to catch up
+	if err := ts.forAllUids(func(target *tsTarget, uid uint32) error {
+		ts.wr.Logger().Infof("Before Catchup: uid: %d, target master %s, target position %s, shard %s", uid,
 			target.master.AliasString(), target.position, target.si.String())
 		bls := target.sources[uid]
 		source := ts.sources[bls.Shard]
-		ts.wr.Logger().Infof("waiting for keyspace:shard: %v:%v, source position %v, uid %d",
+		ts.wr.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v to reach source position %v, uid %d",
 			ts.targetKeyspace, target.si.ShardName(), source.position, uid)
 		if err := ts.wr.tmc.VReplicationWaitForPos(ctx, target.master.Tablet, int(uid), source.position); err != nil {
 			return err
 		}
-		log.Infof("waiting for keyspace:shard: %v:%v, source position %v, uid %d",
+		log.Infof("After catchup: target keyspace:shard: %v:%v, source position %v, uid %d",
 			ts.targetKeyspace, target.si.ShardName(), source.position, uid)
-		ts.wr.Logger().Infof("position for keyspace:shard: %v:%v reached, uid %d", ts.targetKeyspace, target.si.ShardName(), uid)
-		log.Infof("position for keyspace:shard: %v:%v reached, uid %d", ts.targetKeyspace, target.si.ShardName(), uid)
+		ts.wr.Logger().Infof("After catchup: position for keyspace:shard: %v:%v reached, uid %d",
+			ts.targetKeyspace, target.si.ShardName(), uid)
 		if _, err := ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
 			log.Infof("error marking stopped for cutover on %s, uid %d", target.master.AliasString(), uid)
 			return err
 		}
-
-		// Need lock because a target can have multiple uids.
-		mu.Lock()
-		defer mu.Unlock()
-		if target.position != "" {
-			return nil
-		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	// all targets have caught up, record their positions for setting up reverse workflows
+	return ts.forAllTargets(func(target *tsTarget) error {
 		var err error
 		target.position, err = ts.wr.tmc.MasterPosition(ctx, target.master.Tablet)
-		ts.wr.Logger().Infof("Position for target master %s, uid %v: %v", target.master.AliasString(), uid, target.position)
-		log.Infof("Position for target master %s, uid %v: %v", target.master.AliasString(), uid, target.position)
+		ts.wr.Logger().Infof("After catchup, position for target master %s, %v", target.master.AliasString(), target.position)
 		return err
 	})
 }
@@ -894,7 +894,8 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 				Filter: filter,
 			})
 		}
-
+		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
+			source.master.Alias, ts.reverseWorkflow, target.position)
 		_, err := ts.wr.VReplicationExec(ctx, source.master.Alias, binlogplayer.CreateVReplicationState(ts.reverseWorkflow, reverseBls, target.position, binlogplayer.BlpStopped, source.master.DbName()))
 		if err != nil {
 			return err
@@ -903,6 +904,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		// if user has defined the cell/tablet_types parameters in the forward workflow, update the reverse workflow as well
 		updateQuery := ts.getReverseVReplicationUpdateQuery(target.master.Alias.Cell, source.master.Alias.Cell, source.master.DbName())
 		if updateQuery != "" {
+			log.Infof("Updating vreplication stream entry on %s with: %s", source.master.Alias, updateQuery)
 			_, err = ts.wr.VReplicationExec(ctx, source.master.Alias, updateQuery)
 			return err
 		}

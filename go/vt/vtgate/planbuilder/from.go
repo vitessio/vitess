@@ -32,8 +32,8 @@ import (
 // This file has functions to analyze the FROM clause.
 
 // processDMLTable analyzes the FROM clause for DMLs and returns a route.
-func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*route, error) {
-	if err := pb.processTableExprs(tableExprs); err != nil {
+func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, where sqlparser.Expr) (*route, error) {
+	if err := pb.processTableExprs(tableExprs, where); err != nil {
 		return nil, err
 	}
 	rb, ok := pb.plan.(*route)
@@ -48,28 +48,28 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*r
 
 // processTableExprs analyzes the FROM clause. It produces a logicalPlan
 // with all the routes identified.
-func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs) error {
+func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs, where sqlparser.Expr) error {
 	if len(tableExprs) == 1 {
-		return pb.processTableExpr(tableExprs[0])
+		return pb.processTableExpr(tableExprs[0], where)
 	}
 
-	if err := pb.processTableExpr(tableExprs[0]); err != nil {
+	if err := pb.processTableExpr(tableExprs[0], where); err != nil {
 		return err
 	}
 	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-	if err := rpb.processTableExprs(tableExprs[1:]); err != nil {
+	if err := rpb.processTableExprs(tableExprs[1:], where); err != nil {
 		return err
 	}
-	return pb.join(rpb, nil)
+	return pb.join(rpb, nil, where)
 }
 
 // processTableExpr produces a logicalPlan subtree for the given TableExpr.
-func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) error {
+func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, where sqlparser.Expr) error {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return pb.processAliasedTable(tableExpr)
 	case *sqlparser.ParenTableExpr:
-		err := pb.processTableExprs(tableExpr.Exprs)
+		err := pb.processTableExprs(tableExpr.Exprs, where)
 		// If it's a route, preserve the parenthesis so things
 		// don't associate differently when more things are pushed
 		// into it. FROM a, (b, c) should not become FROM a, b, c.
@@ -83,7 +83,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) erro
 		}
 		return err
 	case *sqlparser.JoinTableExpr:
-		return pb.processJoin(tableExpr)
+		return pb.processJoin(tableExpr, where)
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
@@ -179,7 +179,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	}
 	sel := &sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})}
 
-	if systemTable(tableName.Qualifier.String()) {
+	if sqlparser.SystemSchema(tableName.Qualifier.String()) {
 		ks, err := pb.vschema.AnyKeyspace()
 		if err != nil {
 			return err
@@ -268,7 +268,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 // processJoin produces a logicalPlan subtree for the given Join.
 // If the left and right nodes can be part of the same route,
 // then it's a route. Otherwise, it's a join.
-func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
+func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr, where sqlparser.Expr) error {
 	switch ajoin.Join {
 	case sqlparser.NormalJoinType, sqlparser.StraightJoinType, sqlparser.LeftJoinType:
 	case sqlparser.RightJoinType:
@@ -276,14 +276,14 @@ func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr) error {
 	default:
 		return fmt.Errorf("unsupported: %s", ajoin.Join.ToString())
 	}
-	if err := pb.processTableExpr(ajoin.LeftExpr); err != nil {
+	if err := pb.processTableExpr(ajoin.LeftExpr, where); err != nil {
 		return err
 	}
 	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-	if err := rpb.processTableExpr(ajoin.RightExpr); err != nil {
+	if err := rpb.processTableExpr(ajoin.RightExpr, where); err != nil {
 		return err
 	}
-	return pb.join(rpb, ajoin)
+	return pb.join(rpb, ajoin, where)
 }
 
 // convertToLeftJoin converts a right join into a left join.
@@ -300,7 +300,7 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 	ajoin.Join = sqlparser.LeftJoinType
 }
 
-func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, where sqlparser.Expr) error {
 	// Merge the symbol tables. In the case of a left join, we have to
 	// ideally create new symbols that originate from the join primitive.
 	// However, this is not worth it for now, because the Push functions
@@ -317,7 +317,7 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 
 	// Try merging the routes.
-	if !lRoute.JoinCanMerge(pb, rRoute, ajoin) {
+	if !lRoute.JoinCanMerge(pb, rRoute, ajoin, where) {
 		return newJoin(pb, rpb, ajoin)
 	}
 
