@@ -724,7 +724,7 @@
 
 # drop table with incompatible tables
 "drop table user, unsharded_a"
-"Tables specified in the query do not belong to the same destination"
+"Tables or Views specified in the query do not belong to the same destination"
 
 # drop table with unknown table
 "drop table unknown"
