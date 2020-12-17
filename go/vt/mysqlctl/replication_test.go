@@ -34,7 +34,7 @@ func TestRedactMasterPassword(t *testing.T) {
   MASTER_CONNECT_RETRY = 1
 `,
 		`CHANGE MASTER TO
-  MASTER_PASSWORD = '***',
+  MASTER_PASSWORD = '****',
   MASTER_CONNECT_RETRY = 1
 `)
 
@@ -44,7 +44,7 @@ func TestRedactMasterPassword(t *testing.T) {
   MASTER_CONNECT_RETRY = 1
 `,
 		`CHANGE MASTER TO
-  MASTER_PASSWORD = '',
+  MASTER_PASSWORD = '****',
   MASTER_CONNECT_RETRY = 1
 `)
 
@@ -60,11 +60,11 @@ func TestRedactMasterPassword(t *testing.T) {
 func TestRedactPassword(t *testing.T) {
 	// regular case
 	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = 'AAA'`,
-		`START xxx USER = 'vt_repl', PASSWORD = '***'`)
+		`START xxx USER = 'vt_repl', PASSWORD = '****'`)
 
 	// empty password
 	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = ''`,
-		`START xxx USER = 'vt_repl', PASSWORD = ''`)
+		`START xxx USER = 'vt_repl', PASSWORD = '****'`)
 
 	// no end match
 	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = 'AAA`,
@@ -76,7 +76,7 @@ func TestRedactPassword(t *testing.T) {
   PASSWORD = 'BBB'
 `,
 		`START xxx
-  MASTER_PASSWORD = '***',
-  PASSWORD = '***'
+  MASTER_PASSWORD = '****',
+  PASSWORD = '****'
 `)
 }
