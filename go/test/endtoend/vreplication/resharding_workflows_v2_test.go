@@ -35,32 +35,34 @@ const (
 	reverseKsWorkflow      = sourceKs + "." + moveTablesWorkflowName + "_reverse"
 	tablesToMove           = "customer"
 	defaultCellName        = "zone1"
-	query                  = "select * from customer"
+	readQuery              = "select * from customer"
 )
 
 var (
 	customerTab1, customerTab2, productReplicaTab, customerReplicaTab1, productTab *cluster.VttabletProcess
 )
 
-func moveTablesStart(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowEventStart)
+func moveTables2Start(t *testing.T) {
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowActionStart, "")
 	catchup(t, customerTab1, moveTablesWorkflowName, "MoveTables")
 	catchup(t, customerTab2, moveTablesWorkflowName, "MoveTables")
 	vdiff(t, ksWorkflow)
 }
 
-func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action string) {
+func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes string) {
 	var args []string
 	args = append(args, "MoveTables", "-v2")
-	action = strings.ToLower(action)
 	switch action {
-	case "start":
+	case wrangler.WorkflowActionStart:
 		args = append(args, "-source", sourceKs, "-tables", tables)
-	case "switchreads":
-	case "switchwrites":
+	case wrangler.WorkflowActionSwitchTraffic:
+	case wrangler.WorkflowActionReverseTraffic:
 	}
 	if cells != "" {
 		args = append(args, "-cells", cells)
+	}
+	if tabletTypes != "" {
+		args = append(args, "-tablet_types", tabletTypes)
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	args = append(args, action, ksWorkflow)
@@ -69,37 +71,47 @@ func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, acti
 	}
 }
 
-func moveTablesSwitchReads(t *testing.T, typ string) {
-	var action string
-	switch typ {
-	case "replica":
-		action = wrangler.WorkflowEventSwitchReplicaReads
-	case "rdonly":
-		action = wrangler.WorkflowEventSwitchRdonlyReads
-	default:
-		action = wrangler.WorkflowEventSwitchReads
-	}
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", action)
+func moveTablesSwitchReads(t *testing.T, tabletTypes string) {
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionSwitchTraffic, "replica,rdonly")
+}
+
+func moveTablesReverseReads(t *testing.T, tabletTypes string) {
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionReverseTraffic, "replica,rdonly")
 }
 
 func moveTablesSwitchWrites(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventSwitchWrites)
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionSwitchTraffic, "master")
 }
 
 func moveTablesReverseWrites(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventReverseWrites)
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionReverseTraffic, "master")
 }
 
-func moveTablesReverseReads(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowEventReverseReads)
+func moveTablesSwitchReadsAndWrites(t *testing.T) {
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionSwitchTraffic, "replica,rdonly,master")
 }
 
-func validateReadsRouteToSource(t *testing.T) {
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productReplicaTab, "product@replica", query, query))
+func moveTablesReverseReadsAndWrites(t *testing.T) {
+	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionReverseTraffic, "replica,rdonly,master")
 }
 
-func validateReadsRouteToTarget(t *testing.T) {
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerReplicaTab1, "product@replica", query, query))
+func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.VttabletProcess) {
+	if tabletTypes == "" {
+		tabletTypes = "replica,rdonly"
+	}
+	for _, tt := range []string{"replica", "rdonly"} {
+		if strings.Contains(tabletTypes, tt) {
+			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, tablet, "product@"+tt, readQuery, readQuery))
+		}
+	}
+}
+
+func validateReadsRouteToSource(t *testing.T, tabletTypes string) {
+	validateReadsRoute(t, tabletTypes, productReplicaTab)
+}
+
+func validateReadsRouteToTarget(t *testing.T, tabletTypes string) {
+	validateReadsRoute(t, tabletTypes, customerReplicaTab1)
 }
 
 func validateWritesRouteToSource(t *testing.T) {
@@ -121,7 +133,7 @@ func revert(t *testing.T) {
 	switchWrites(t, reverseKsWorkflow, false)
 	validateWritesRouteToSource(t)
 	switchReadsNew(t, allCellNames, ksWorkflow, true)
-	validateReadsRouteToSource(t)
+	validateReadsRouteToSource(t, "replica")
 	queries := []string{
 		"delete from _vt.vreplication",
 		"delete from _vt.resharding_journal",
@@ -144,46 +156,54 @@ func TestMoveTablesV2Workflow(t *testing.T) {
 	//defer vc.TearDown()
 
 	setupCustomerKeyspace(t)
-	moveTablesStart(t)
+	moveTables2Start(t)
 	printRoutingRules(t, vc, "After MoveTables Started")
-	validateReadsRouteToSource(t)
+	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
 	moveTablesSwitchReads(t, "")
 	printRoutingRules(t, vc, "After SwitchReads")
-	validateReadsRouteToTarget(t)
+	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToSource(t)
 
 	moveTablesSwitchWrites(t)
 	printRoutingRules(t, vc, "After SwitchWrites")
-	validateReadsRouteToTarget(t)
+	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
-	moveTablesReverseReads(t)
+	moveTablesReverseReads(t, "")
 	printRoutingRules(t, vc, "After ReverseReads")
-	validateReadsRouteToSource(t)
+	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	moveTablesReverseWrites(t)
-	validateReadsRouteToSource(t)
+	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 	printRoutingRules(t, vc, "After ReverseWrites")
 
 	moveTablesSwitchWrites(t)
-	validateReadsRouteToSource(t)
+	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	moveTablesReverseWrites(t)
-	validateReadsRouteToSource(t)
+	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
 	moveTablesSwitchReads(t, "")
-	validateReadsRouteToTarget(t)
+	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToSource(t)
 
-	moveTablesReverseReads(t)
-	validateReadsRouteToSource(t)
+	moveTablesReverseReads(t, "")
+	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
+
+	moveTablesSwitchReadsAndWrites(t)
+	validateReadsRouteToTarget(t, "replica")
+	validateWritesRouteToTarget(t)
+	moveTablesReverseReadsAndWrites(t)
+	validateReadsRouteToSource(t, "replica")
+	validateWritesRouteToSource(t)
+
 }
 
 func setupCluster(t *testing.T) *VitessCluster {
@@ -269,9 +289,9 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	var switchReadsFollowedBySwitchWrites = func() {
 		moveTablesAndWait()
 
-		validateReadsRouteToSource(t)
+		validateReadsRouteToSource(t, "replica")
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget(t)
+		validateReadsRouteToTarget(t, "replica")
 
 		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
@@ -286,9 +306,9 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		switchWrites(t, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		validateReadsRouteToSource(t)
+		validateReadsRouteToSource(t, "replica")
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget(t)
+		validateReadsRouteToTarget(t, "replica")
 
 		revert(t)
 	}
@@ -296,12 +316,12 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 	var switchReadsReverseSwitchWritesSwitchReads = func() {
 		moveTablesAndWait()
 
-		validateReadsRouteToSource(t)
+		validateReadsRouteToSource(t, "replica")
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget(t)
+		validateReadsRouteToTarget(t, "replica")
 
 		switchReadsNew(t, allCellNames, ksWorkflow, true)
-		validateReadsRouteToSource(t)
+		validateReadsRouteToSource(t, "replica")
 		printRoutingRules(t, vc, "After reversing SwitchReads")
 
 		validateWritesRouteToSource(t)
@@ -309,9 +329,9 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		validateWritesRouteToTarget(t)
 
 		printRoutingRules(t, vc, "After SwitchWrites and reversing SwitchReads")
-		validateReadsRouteToSource(t)
+		validateReadsRouteToSource(t, "replica")
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget(t)
+		validateReadsRouteToTarget(t, "replica")
 
 		revert(t)
 	}
@@ -326,9 +346,9 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		switchWrites(t, ksWorkflow, true)
 		validateWritesRouteToSource(t)
 
-		validateReadsRouteToSource(t)
+		validateReadsRouteToSource(t, "replica")
 		switchReadsNew(t, allCellNames, ksWorkflow, false)
-		validateReadsRouteToTarget(t)
+		validateReadsRouteToTarget(t, "replica")
 
 		validateWritesRouteToSource(t)
 		switchWrites(t, ksWorkflow, false)
