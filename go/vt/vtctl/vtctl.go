@@ -2014,6 +2014,7 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	wrapError := func(wf *wrangler.MoveTablesWorkflow, err error) error {
 		wr.Logger().Errorf("\n%s\n", err.Error())
+		log.Infof("In wrapError wf is %+v", wf)
 		wr.Logger().Infof("Workflow Status: %s\n", wf.CurrentState())
 		if wf.Exists() {
 			printDetails()
@@ -2088,14 +2089,20 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			wr.Logger().Printf("\n%s\n", s)
 		}
 		return printDetails()
+	case "start":
+		if err := wf.Start(); err != nil {
+			log.Warningf("Start %s error: %v", action, wf)
+
+			return wrapError(wf, err)
+		}
 	case "switchtraffic":
-		if err := wf.SwitchTraffic(); err != nil {
-			log.Warningf("SwitchTraffic %s error: %+v", action, wf)
+		if err := wf.SwitchTraffic(wrangler.DirectionForward); err != nil {
+			log.Warningf("SwitchTraffic %s error: %v", action, wf)
 			return wrapError(wf, err)
 		}
 	case "reversetraffic":
 		if err := wf.ReverseTraffic(); err != nil {
-			log.Warningf("ReverseTraffic %s error: %+v", action, wf)
+			log.Warningf("ReverseTraffic %s error: %v", action, wf)
 			return wrapError(wf, err)
 		}
 	}

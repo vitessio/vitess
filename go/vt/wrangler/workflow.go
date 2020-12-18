@@ -16,14 +16,20 @@ import (
 
 /*
 	TODO
-    * validations for each command
-	* implement/test Reshard same as MoveTables!
-    * test cells/tablet_types/etc options to MoveTables
-
-	* Unit Tests (run coverage first and identify)
     * expand e2e for testing all possible transitions
 
+	* Unit Tests (run coverage first and identify)
+
+	* implement/test Reshard same as MoveTables!
 */
+
+const (
+	WorkflowActionStart          = "Start"
+	WorkflowActionSwitchTraffic  = "SwitchTraffic"
+	WorkflowActionReverseTraffic = "ReverseTraffic"
+	WorkflowActionComplete       = "Complete"
+	WorkflowActionAbort          = "Abort"
+)
 
 type reshardingWorkflowInfo struct {
 	name string
@@ -84,8 +90,8 @@ func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTable
 		mtwf.params.TargetKeyspace = ts.targetKeyspace
 		mtwf.params.Workflow = ts.workflow
 		mtwf.params.SourceKeyspace = ts.sourceKeyspace
-		mtwf.ts = ts
 	}
+	mtwf.ts = ts
 	mtwf.ws = ws
 	mtwf.wf = wf
 	return mtwf, nil
@@ -93,11 +99,14 @@ func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTable
 
 // Exists checks if the workflow has already been initiated
 func (mtwf *MoveTablesWorkflow) Exists() bool {
-	return mtwf.ts == nil
+	log.Infof("mtwf %v", mtwf)
+
+	return mtwf.ws != nil
 }
 
 // CurrentState returns the current state of the workflow's finite state machine
 func (mtwf *MoveTablesWorkflow) CurrentState() string {
+	log.Infof("mtwf %v", mtwf)
 	var stateInfo []string
 	ws := mtwf.ws
 	s := ""
@@ -140,12 +149,11 @@ func (mtwf *MoveTablesWorkflow) Start() error {
 }
 
 // SwitchTraffic switches traffic forward for tablet_types passed
-func (mtwf *MoveTablesWorkflow) SwitchTraffic() error {
+func (mtwf *MoveTablesWorkflow) SwitchTraffic(direction TrafficSwitchDirection) error {
 	if !mtwf.Exists() {
 		return fmt.Errorf("workflow has not yet been started")
 	}
-	mtwf.params.Direction = DirectionForward
-
+	mtwf.params.Direction = direction
 	hasReplica, hasRdonly, hasMaster, err := mtwf.parseTabletTypes()
 	if err != nil {
 		return err
@@ -168,9 +176,7 @@ func (mtwf *MoveTablesWorkflow) ReverseTraffic() error {
 	if !mtwf.Exists() {
 		return fmt.Errorf("workflow has not yet been started")
 	}
-
-	mtwf.params.Direction = DirectionBackward
-	return mtwf.SwitchTraffic()
+	return mtwf.SwitchTraffic(DirectionBackward)
 }
 
 // Complete cleans up a successful workflow
