@@ -980,8 +980,7 @@ var (
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
 	}, {
-		input:  "alter table a add column id int",
-		output: "alter table a",
+		input: "alter table a add column (id int, id2 char(23))",
 	}, {
 		input: "alter table a add index idx (id)",
 	}, {
@@ -995,11 +994,24 @@ var (
 	}, {
 		input: "alter table a add primary key (id)",
 	}, {
+		input: "alter table a add constraint b primary key (id)",
+	}, {
+		input: "alter table a add constraint b primary key (id)",
+	}, {
+		input: "alter table a add constraint b unique key (id)",
+	}, {
+		input:  "alter table a add constraint b unique c (id)",
+		output: "alter table a add constraint b unique key c (id)",
+	}, {
 		input:  "alter table a add constraint check (id)",
 		output: "alter table a add check (id) enforced",
 	}, {
-		input:  "alter table a add id",
-		output: "alter table a",
+		input:  "alter table a add id int",
+		output: "alter table a add column id int",
+	}, {
+		input: "alter table a add column id int first id2",
+	}, {
+		input: "alter table a add column id int after id2",
 	}, {
 		input:  "alter table a drop column id int",
 		output: "alter table a",
@@ -2445,7 +2457,7 @@ func TestCreateTable(t *testing.T) {
 			"	spatial key geom (geom),\n" +
 			"	fulltext key fts (full_name),\n" +
 			"	unique key by_username (username),\n" +
-			"	unique by_username2 (username),\n" +
+			"	unique key by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +
 			"	index by_status (status_nonkeyword),\n" +
 			"	key by_full_name (full_name)\n" +
@@ -2460,7 +2472,7 @@ func TestCreateTable(t *testing.T) {
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id) using BTREE,\n" +
 			"	unique key by_username (username) using HASH,\n" +
-			"	unique by_username2 (username) using OTHER,\n" +
+			"	unique key by_username2 (username) using OTHER,\n" +
 			"	unique index by_username3 (username) using XYZ,\n" +
 			"	index by_status (status_nonkeyword) using PDQ,\n" +
 			"	key by_full_name (full_name) using OTHER\n" +
@@ -2590,7 +2602,7 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar,\n" +
 			"	unique key by_username (username) key_block_size 8,\n" +
 			"	unique key by_username2 (username) key_block_size 8,\n" +
-			"	unique by_username3 (username) key_block_size 4\n" +
+			"	unique key by_username3 (username) key_block_size 4\n" +
 			")",
 	}, {
 		// test defaults
