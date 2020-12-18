@@ -1986,6 +1986,41 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		DryRun:         *dryRun,
 	}
 
+	printDetails := func() error {
+		s := ""
+		res, err := wr.ShowWorkflow(ctx, workflow, target)
+		if err != nil {
+			return err
+		}
+		s += "Following vreplication streams are running for this workflow:\n\n"
+		for ksShard := range res.ShardStatuses {
+			statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
+			for _, st := range statuses {
+				//status.State, status.TransactionTimestamp, status.TimeUpdated, status.Tablet, status.ID, status.Message, status.Pos
+				now := time.Now().Nanosecond()
+				msg := ""
+				updateLag := int64(now) - st.TimeUpdated
+				if updateLag > 0*1e9 {
+					msg += " Vstream may not be running."
+				}
+				txLag := int64(now) - st.TransactionTimestamp
+				msg += fmt.Sprintf(" VStream Lag: %ds", txLag/1e9)
+				s += fmt.Sprintf("Stream %s (id=%d) :: Status: %s.%s\n", ksShard, st.ID, st.State, msg)
+			}
+		}
+		wr.Logger().Printf("\n%s\n\n", s)
+		return nil
+	}
+
+	wrapError := func(wf *wrangler.MoveTablesWorkflow, err error) error {
+		wr.Logger().Errorf("\n%s\n", err.Error())
+		wr.Logger().Infof("Workflow Status: %s\n", wf.CurrentState())
+		if wf.Exists() {
+			printDetails()
+		}
+		return err
+	}
+
 	//TODO: check if invalid parameters were passed in that do not apply to this action
 	//originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
@@ -2023,31 +2058,6 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
-	printDetails := func() error {
-		s := ""
-		res, err := wr.ShowWorkflow(ctx, workflow, target)
-		if err != nil {
-			return err
-		}
-		s += "Following vreplication streams are running for this workflow:\n\n"
-		for ksShard := range res.ShardStatuses {
-			statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
-			for _, st := range statuses {
-				//status.State, status.TransactionTimestamp, status.TimeUpdated, status.Tablet, status.ID, status.Message, status.Pos
-				now := time.Now().Nanosecond()
-				msg := ""
-				updateLag := int64(now) - st.TimeUpdated
-				if updateLag > 0*1e9 {
-					msg += " Vstream may not be running."
-				}
-				txLag := int64(now) - st.TransactionTimestamp
-				msg += fmt.Sprintf(" VStream Lag: %ds", txLag/1e9)
-				s += fmt.Sprintf("Stream %s (id=%d) :: Status: %s.%s\n", ksShard, st.ID, st.State, msg)
-			}
-		}
-		wr.Logger().Printf("\n%s\n\n", s)
-		return nil
-	}
 	switch action {
 	case "show":
 		return printDetails()
@@ -2081,15 +2091,15 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	case "switchtraffic":
 		if err := wf.SwitchTraffic(); err != nil {
 			log.Warningf("SwitchTraffic %s error: %+v", action, wf)
-			return err
+			return wrapError(wf, err)
 		}
 	case "reversetraffic":
 		if err := wf.ReverseTraffic(); err != nil {
 			log.Warningf("ReverseTraffic %s error: %+v", action, wf)
-			return err
+			return wrapError(wf, err)
 		}
 	}
-	wr.Logger().Printf("MoveTables %s was successful\n\n%s\n\n", action, wf)
+	wr.Logger().Printf("MoveTables %s was successful\n\nCurrent State: %s\n\n", action, wf.CurrentState())
 	return nil
 }
 
