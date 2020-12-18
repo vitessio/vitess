@@ -98,6 +98,13 @@ type (
 		IndexDefinition *IndexDefinition
 	}
 
+	// AddColumns represents a ADD COLUMN alter option
+	AddColumns struct {
+		Columns []*ColumnDefinition
+		First   *ColName
+		After   *ColName
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -472,6 +479,7 @@ func (*AlterTable) iDDLStatement()  {}
 
 func (node *AddConstraintDefinition) iAlterOption() {}
 func (node *AddIndexDefinition) iAlterOption()      {}
+func (node *AddColumns) iAlterOption()              {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -984,12 +992,13 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type     string
-	Name     ColIdent
-	Primary  bool
-	Spatial  bool
-	Fulltext bool
-	Unique   bool
+	Type           string
+	Name           ColIdent
+	ConstraintName ColIdent
+	Primary        bool
+	Spatial        bool
+	Fulltext       bool
+	Unique         bool
 }
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
@@ -1870,6 +1879,9 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (ii *IndexInfo) Format(buf *TrackedBuffer) {
+	if !ii.ConstraintName.IsEmpty() {
+		buf.astPrintf(ii, "constraint %v ", ii.ConstraintName)
+	}
 	if ii.Primary {
 		buf.astPrintf(ii, "%s", ii.Type)
 	} else {
@@ -2813,4 +2825,27 @@ func (node *AddConstraintDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AddIndexDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "add %v", node.IndexDefinition)
+}
+
+// Format formats the node.
+func (node *AddColumns) Format(buf *TrackedBuffer) {
+
+	if len(node.Columns) == 1 {
+		buf.astPrintf(node, "add column %v", node.Columns[0])
+		if node.First != nil {
+			buf.astPrintf(node, " first %v", node.First)
+		}
+		if node.After != nil {
+			buf.astPrintf(node, " after %v", node.After)
+		}
+	} else {
+		for i, col := range node.Columns {
+			if i == 0 {
+				buf.astPrintf(node, "add column (%v", col)
+			} else {
+				buf.astPrintf(node, ", %v", col)
+			}
+		}
+		buf.WriteString(")")
+	}
 }

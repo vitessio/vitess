@@ -103,6 +103,7 @@ func skipToEnd(yylex interface{}) {
   optVal        Expr
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
+  columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
   indexOption   *IndexOption
@@ -197,7 +198,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
-%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY
+%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY FIRST AFTER
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -306,7 +307,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> tuple_expression
 %type <subquery> subquery
 %type <derivedTable> derived_table
-%type <colName> column_name
+%type <colName> column_name first_opt after_opt
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt
@@ -357,10 +358,11 @@ func skipToEnd(yylex interface{}) {
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
+%type <columnDefinitions> column_definition_list
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition check_constraint_definition
-%type <str> index_or_key index_symbols from_or_in
-%type <str> name_opt
+%type <str> index_or_key index_symbols from_or_in index_or_key_opt
+%type <str> name_opt constraint_name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
 %type <optLike> create_like
@@ -377,7 +379,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
-%type <bytes> alter_object_type database_or_schema
+%type <bytes> alter_object_type database_or_schema column_opt
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 %type <tableAndLockTypes> lock_table_list
@@ -913,6 +915,16 @@ create_like:
     $$ = &OptLike{LikeTable: $3}
   }
 
+column_definition_list:
+  column_definition
+  {
+    $$ = []*ColumnDefinition{$1}
+  }
+| column_definition_list ',' column_definition
+  {
+    $$ = append($1,$3)
+  }
+
 table_column_list:
   column_definition
   {
@@ -1388,29 +1400,34 @@ equal_opt:
   }
 
 index_info:
-  PRIMARY KEY
+  constraint_name_opt PRIMARY KEY
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewColIdent($1), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| SPATIAL index_or_key name_opt
+| SPATIAL index_or_key_opt name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
   }
-| FULLTEXT index_or_key name_opt
+| FULLTEXT index_or_key_opt name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Fulltext: true, Unique: false}
   }
-| UNIQUE index_or_key name_opt
+| constraint_name_opt UNIQUE index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Unique: true}
-  }
-| UNIQUE name_opt
-  {
-    $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: true}
+    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewColIdent($1), Name: NewColIdent($4), Unique: true}
   }
 | index_or_key name_opt
   {
     $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: false}
+  }
+
+constraint_name_opt:
+  {
+    $$ = ""
+  }
+| CONSTRAINT name_opt
+  {
+    $$ = $2
   }
 
 index_symbols:
@@ -1436,6 +1453,15 @@ from_or_in:
 | IN
   {
     $$ = string($1)
+  }
+
+index_or_key_opt:
+  {
+    $$ = "key"
+  }
+| index_or_key
+  {
+    $$ = $1
   }
 
 index_or_key:
@@ -1607,6 +1633,30 @@ table_opt_value:
     $$ = string($1)
   }
 
+column_opt:
+  {
+    $$ = []byte("")
+  }
+| COLUMN
+
+first_opt:
+  {
+    $$ = nil
+  }
+| FIRST column_name
+  {
+    $$ = $2
+  }
+
+after_opt:
+  {
+    $$ = nil
+  }
+| AFTER column_name
+  {
+    $$ = $2
+  }
+
 alter_options_opt:
   {
     $$ = nil
@@ -1638,6 +1688,14 @@ alter_option:
 | ADD index_definition
   {
     $$ = &AddIndexDefinition{IndexDefinition: $2}
+  }
+| ADD column_opt '(' column_definition_list ')'
+  {
+    $$ = &AddColumns{Columns: $4}
+  }
+| ADD column_opt column_definition first_opt after_opt
+  {
+    $$ = &AddColumns{Columns: []*ColumnDefinition{$3}, First:$4, After:$5}
   }
 
 alter_statement:
@@ -4133,7 +4191,9 @@ reserved_keyword:
 | BINARY
 | BY
 | CASE
+| CHECK
 | COLLATE
+| COLUMN
 | CONVERT
 | CREATE
 | CROSS
@@ -4164,7 +4224,9 @@ reserved_keyword:
 | FIRST_VALUE
 | FOR
 | FORCE
+| FOREIGN
 | FROM
+| FULLTEXT
 | GROUP
 | GROUPING
 | GROUPS
@@ -4211,6 +4273,7 @@ reserved_keyword:
 | OUTFILE
 | OVER
 | PERCENT_RANK
+| PRIMARY
 | RANK
 | READ
 | RECURSIVE
@@ -4225,6 +4288,7 @@ reserved_keyword:
 | SEPARATOR
 | SET
 | SHOW
+| SPATIAL
 | STRAIGHT_JOIN
 | SYSTEM
 | TABLE
@@ -4262,6 +4326,7 @@ non_reserved_keyword:
 | ACTION
 | ACTIVE
 | ADMIN
+| AFTER
 | ALGORITHM
 | AUTO_INCREMENT
 | BEGIN
@@ -4276,7 +4341,6 @@ non_reserved_keyword:
 | CHAR
 | CHARACTER
 | CHARSET
-| CHECK
 | CLONE
 | CODE
 | COLLATION
@@ -4309,11 +4373,10 @@ non_reserved_keyword:
 | EXTENDED
 | FLOAT_TYPE
 | FIELDS
+| FIRST
 | FLUSH
 | FOLLOWING
-| FOREIGN
 | FORMAT
-| FULLTEXT
 | FUNCTION
 | GEOMCOLLECTION
 | GEOMETRY
@@ -4393,7 +4456,6 @@ non_reserved_keyword:
 | PLUGINS
 | POINT
 | POLYGON
-| PRIMARY
 | PROCEDURE
 | PROCESSLIST
 | QUERY
@@ -4427,7 +4489,6 @@ non_reserved_keyword:
 | SIGNED
 | SKIP
 | SMALLINT
-| SPATIAL
 | SQL
 | SRID
 | START

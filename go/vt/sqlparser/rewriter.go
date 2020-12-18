@@ -16,6 +16,24 @@ type application struct {
 	cursor    Cursor
 }
 
+func replaceAddColumnsAfter(newNode, parent SQLNode) {
+	parent.(*AddColumns).After = newNode.(*ColName)
+}
+
+type replaceAddColumnsColumns int
+
+func (r *replaceAddColumnsColumns) replace(newNode, container SQLNode) {
+	container.(*AddColumns).Columns[int(*r)] = newNode.(*ColumnDefinition)
+}
+
+func (r *replaceAddColumnsColumns) inc() {
+	*r++
+}
+
+func replaceAddColumnsFirst(newNode, parent SQLNode) {
+	parent.(*AddColumns).First = newNode.(*ColName)
+}
+
 func replaceAddConstraintDefinitionConstraintDefinition(newNode, parent SQLNode) {
 	parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
 }
@@ -398,6 +416,10 @@ func (r *replaceIndexHintsIndexes) replace(newNode, container SQLNode) {
 
 func (r *replaceIndexHintsIndexes) inc() {
 	*r++
+}
+
+func replaceIndexInfoConstraintName(newNode, parent SQLNode) {
+	parent.(*IndexInfo).ConstraintName = newNode.(ColIdent)
 }
 
 func replaceIndexInfoName(newNode, parent SQLNode) {
@@ -996,6 +1018,16 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case nil:
 	case AccessMode:
 
+	case *AddColumns:
+		a.apply(node, n.After, replaceAddColumnsAfter)
+		replacerColumns := replaceAddColumnsColumns(0)
+		replacerColumnsB := &replacerColumns
+		for _, item := range n.Columns {
+			a.apply(node, item, replacerColumnsB.replace)
+			replacerColumnsB.inc()
+		}
+		a.apply(node, n.First, replaceAddColumnsFirst)
+
 	case *AddConstraintDefinition:
 		a.apply(node, n.ConstraintDefinition, replaceAddConstraintDefinitionConstraintDefinition)
 
@@ -1213,6 +1245,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		}
 
 	case *IndexInfo:
+		a.apply(node, n.ConstraintName, replaceIndexInfoConstraintName)
 		a.apply(node, n.Name, replaceIndexInfoName)
 
 	case *Insert:
