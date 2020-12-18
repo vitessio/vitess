@@ -1,4 +1,7 @@
-FROM vitess/bootstrap:mariadb103
+ARG bootstrap_version=0
+ARG image="vitess/bootstrap:${bootstrap_version}-mariadb103"
+
+FROM "${image}"
 
 # Allows some docker builds to disable CGO
 ARG CGO_ENABLED=0
