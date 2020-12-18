@@ -98,16 +98,52 @@ func (mtwf *MoveTablesWorkflow) Exists() bool {
 
 // CurrentState returns the current state of the workflow's finite state machine
 func (mtwf *MoveTablesWorkflow) CurrentState() string {
-	return "" //FIXME
+	var stateInfo []string
+	ws := mtwf.ws
+	s := ""
+	if !mtwf.Exists() {
+		stateInfo = append(stateInfo, "Not Started")
+	} else {
+		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 {
+			s = "All Reads Switched"
+		} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
+			s = "Reads Not Switched"
+		} else {
+			s = "Reads Partially Switched: "
+			if len(ws.ReplicaCellsNotSwitched) == 0 {
+				s += "All Replica Reads Switched"
+			} else {
+				s += "Replicas switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+			}
+			if len(ws.RdonlyCellsNotSwitched) == 0 {
+				s += "All Rdonly Reads Switched"
+			} else {
+				s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
+			}
+		}
+		stateInfo = append(stateInfo, s)
+		if ws.WritesSwitched {
+			stateInfo = append(stateInfo, "Writes Switched")
+		} else {
+			stateInfo = append(stateInfo, "Writes Not Switched")
+		}
+	}
+	return strings.Join(stateInfo, ". ")
 }
 
 // Start initiates a workflow
 func (mtwf *MoveTablesWorkflow) Start() error {
+	if mtwf.Exists() {
+		return fmt.Errorf("workflow has already been started")
+	}
 	return mtwf.initMoveTables()
 }
 
 // SwitchTraffic switches traffic forward for tablet_types passed
 func (mtwf *MoveTablesWorkflow) SwitchTraffic() error {
+	if !mtwf.Exists() {
+		return fmt.Errorf("workflow has not yet been started")
+	}
 	mtwf.params.Direction = DirectionForward
 
 	hasReplica, hasRdonly, hasMaster, err := mtwf.parseTabletTypes()
@@ -129,12 +165,20 @@ func (mtwf *MoveTablesWorkflow) SwitchTraffic() error {
 
 // ReverseTraffic switches traffic backwards for tablet_types passed
 func (mtwf *MoveTablesWorkflow) ReverseTraffic() error {
+	if !mtwf.Exists() {
+		return fmt.Errorf("workflow has not yet been started")
+	}
+
 	mtwf.params.Direction = DirectionBackward
 	return mtwf.SwitchTraffic()
 }
 
 // Complete cleans up a successful workflow
 func (mtwf *MoveTablesWorkflow) Complete() error {
+	ws := mtwf.ws
+	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
+		return fmt.Errorf("cannot complete workflow because you have not yet switched all read and write traffic")
+	}
 	var renameTable TableRemovalType
 	if mtwf.params.RenameTables {
 		renameTable = RenameTable
@@ -149,6 +193,10 @@ func (mtwf *MoveTablesWorkflow) Complete() error {
 
 // Abort deletes all artifacts from a workflow which has not yet been switched
 func (mtwf *MoveTablesWorkflow) Abort() error {
+	ws := mtwf.ws
+	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
+		return fmt.Errorf("cannot abort workflow because you have already switched some or all read and write traffic")
+	}
 	if _, err := mtwf.wr.DropTargets(mtwf.ctx, mtwf.ws.TargetKeyspace, mtwf.ws.Workflow, mtwf.params.KeepData, false); err != nil {
 		return err
 	}

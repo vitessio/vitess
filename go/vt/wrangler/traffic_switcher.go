@@ -144,8 +144,7 @@ type workflowState struct {
 	RdonlyCellsSwitched    []string
 	RdonlyCellsNotSwitched []string
 
-	ReplicaReadsSwitched, RdonlyReadsSwitched bool
-	WritesSwitched                            bool
+	WritesSwitched bool
 }
 
 func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletType string) (
