@@ -230,7 +230,7 @@ func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKe
 func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, *workflowState, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 
-	if err != nil {
+	if ts == nil || err != nil {
 		if err.Error() == fmt.Sprintf(errorNoStreams, targetKeyspace, workflow) {
 			return nil, nil, nil
 		}
@@ -240,9 +240,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 	ws := &workflowState{Workflow: workflow, TargetKeyspace: targetKeyspace}
 	ws.SourceKeyspace = ts.sourceKeyspace
-	if ts.frozen {
-		ws.WritesSwitched = true
-	}
 	var cellsSwitched, cellsNotSwitched []string
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		ws.WorkflowType = workflowTypeMoveTables
@@ -264,6 +261,18 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
+
+		rules, err := ts.wr.getRoutingRules(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, table := range ts.tables {
+			rr := rules[table]
+			// if a rule exists for the table and points to the target keyspace, writes have been switched
+			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", ts.targetKeyspace, table) {
+				ws.WritesSwitched = true
+			}
+		}
 	} else {
 		ws.WorkflowType = workflowTypeReshard
 
@@ -279,6 +288,9 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
+		if ts.targetShards()[0].IsMasterServing {
+			ws.WritesSwitched = true
+		}
 	}
 
 	return ts, ws, nil
@@ -830,54 +842,6 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 			if strings.HasPrefix(table, "/") {
 				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
 			}
-		}
-	}
-	return nil
-}
-
-func (ts *trafficSwitcher) validateTableForWrite(ctx context.Context) error {
-	rules, err := ts.wr.getRoutingRules(ctx)
-	if err != nil {
-		return err
-	}
-	for _, table := range ts.tables {
-		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
-			tt := strings.ToLower(tabletType.String())
-			if rules[table+"@"+tt] == nil || rules[ts.targetKeyspace+"."+table+"@"+tt] == nil {
-				return fmt.Errorf("missing tablet type specific routing, read-only traffic must be switched before switching writes: %v", table)
-			}
-		}
-	}
-	return nil
-}
-
-func (ts *trafficSwitcher) validateShardForWrite(ctx context.Context) error {
-	srvKeyspaces, err := ts.wr.ts.GetSrvKeyspaceAllCells(ctx, ts.sourceKeyspace)
-	if err != nil {
-		return err
-	}
-
-	// Checking one shard is enough.
-	var si *topo.ShardInfo
-	for _, source := range ts.sources {
-		si = source.si
-		break
-	}
-
-	for _, srvKeyspace := range srvKeyspaces {
-		var shardServedTypes []string
-		for _, partition := range srvKeyspace.GetPartitions() {
-			if partition.GetServedType() == topodatapb.TabletType_MASTER {
-				continue
-			}
-			for _, shardReference := range partition.GetShardReferences() {
-				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
-					shardServedTypes = append(shardServedTypes, partition.GetServedType().String())
-				}
-			}
-		}
-		if len(shardServedTypes) > 0 {
-			return fmt.Errorf("cannot switch MASTER away from %v/%v until everything else is switched. Make sure that the following types are switched first: %v", si.Keyspace(), si.ShardName(), strings.Join(shardServedTypes, ", "))
 		}
 	}
 	return nil

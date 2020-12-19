@@ -2023,7 +2023,7 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	//TODO: check if invalid parameters were passed in that do not apply to this action
-	//originalAction := action
+	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
 	case "start":
@@ -2059,6 +2059,8 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
+	startState := wf.CachedState()
+	wr.Logger().Printf("\nCachedState: %s\n", startState)
 	switch action {
 	case "show":
 		return printDetails()
@@ -2090,23 +2092,23 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		}
 		return printDetails()
 	case "start":
-		if err := wf.Start(); err != nil {
-			log.Warningf("Start %s error: %v", action, wf)
-
-			return wrapError(wf, err)
-		}
+		err = wf.Start()
 	case "switchtraffic":
-		if err := wf.SwitchTraffic(wrangler.DirectionForward); err != nil {
-			log.Warningf("SwitchTraffic %s error: %v", action, wf)
-			return wrapError(wf, err)
-		}
+		err = wf.SwitchTraffic(wrangler.DirectionForward)
 	case "reversetraffic":
-		if err := wf.ReverseTraffic(); err != nil {
-			log.Warningf("ReverseTraffic %s error: %v", action, wf)
-			return wrapError(wf, err)
-		}
+		err = wf.ReverseTraffic()
+	case "complete":
+		err = wf.Complete()
+	case "abort":
+		err = wf.Abort()
+	default:
+		return fmt.Errorf("found unsupported action %s", originalAction)
 	}
-	wr.Logger().Printf("MoveTables %s was successful\n\nCurrent State: %s\n\n", action, wf.CurrentState())
+	if err != nil {
+		log.Warningf(" %s error: %v", originalAction, wf)
+		return wrapError(wf, err)
+	}
+	wr.Logger().Printf("MoveTables %s was successful\nStart State: %s\n\nCurrent State: %s\n\n", action, startState, wf.CurrentState())
 	return nil
 }
 
