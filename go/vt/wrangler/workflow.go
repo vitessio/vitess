@@ -26,14 +26,6 @@ import (
 	* implement/test Reshard same as MoveTables!
 */
 
-const (
-	WorkflowActionStart          = "Start"
-	WorkflowActionSwitchTraffic  = "SwitchTraffic"
-	WorkflowActionReverseTraffic = "ReverseTraffic"
-	WorkflowActionComplete       = "Complete"
-	WorkflowActionAbort          = "Abort"
-)
-
 type reshardingWorkflowInfo struct {
 	name string
 	typ  string
@@ -100,6 +92,23 @@ func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTable
 	return mtwf, nil
 }
 
+// CurrentState reloads and returns a human readable workflow state
+func (mtwf *MoveTablesWorkflow) CurrentState() string {
+	_, ws, err := mtwf.wr.getWorkflowState(mtwf.ctx, mtwf.params.TargetKeyspace, mtwf.params.Workflow)
+	if err != nil {
+		return err.Error()
+	}
+	if ws == nil {
+		return "Workflow Not Found"
+	}
+	return mtwf.stateAsString(ws)
+}
+
+// CachedState returns a human readable workflow state
+func (mtwf *MoveTablesWorkflow) CachedState() string {
+	return mtwf.stateAsString(mtwf.ws)
+}
+
 // Exists checks if the workflow has already been initiated
 func (mtwf *MoveTablesWorkflow) Exists() bool {
 	log.Infof("mtwf %+v", *mtwf)
@@ -107,16 +116,13 @@ func (mtwf *MoveTablesWorkflow) Exists() bool {
 	return mtwf.ws != nil
 }
 
-// CurrentState returns the current state of the workflow's finite state machine
-func (mtwf *MoveTablesWorkflow) CurrentState() string {
-	log.Infof("mtwf %v", mtwf)
+func (mtwf *MoveTablesWorkflow) stateAsString(ws *workflowState) string {
 	var stateInfo []string
-	ws := mtwf.ws
 	s := ""
 	if !mtwf.Exists() {
 		stateInfo = append(stateInfo, "Not Started")
 	} else {
-		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 {
+		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
 			s = "All Reads Switched"
 		} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
 			s = "Reads Not Switched"
@@ -183,15 +189,15 @@ func (mtwf *MoveTablesWorkflow) ReverseTraffic() error {
 }
 
 const (
-	ErrWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
-	ErrWorkflowPartiallySwitched = "cannot abort workflow because you have already switched some or all read and write traffic"
+	errWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
+	errWorkflowPartiallySwitched = "cannot abort workflow because you have already switched some or all read and write traffic"
 )
 
 // Complete cleans up a successful workflow
 func (mtwf *MoveTablesWorkflow) Complete() error {
 	ws := mtwf.ws
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
-		return fmt.Errorf(ErrWorkflowNotFullySwitched)
+		return fmt.Errorf(errWorkflowNotFullySwitched)
 	}
 	var renameTable TableRemovalType
 	if mtwf.params.RenameTables {
@@ -209,7 +215,7 @@ func (mtwf *MoveTablesWorkflow) Complete() error {
 func (mtwf *MoveTablesWorkflow) Abort() error {
 	ws := mtwf.ws
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
-		return fmt.Errorf(ErrWorkflowPartiallySwitched)
+		return fmt.Errorf(errWorkflowPartiallySwitched)
 	}
 	if _, err := mtwf.wr.DropTargets(mtwf.ctx, mtwf.ws.TargetKeyspace, mtwf.ws.Workflow, mtwf.params.KeepData, false); err != nil {
 		return err

@@ -21,10 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/wrangler"
-
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 const (
@@ -38,25 +36,40 @@ const (
 	readQuery              = "select * from customer"
 )
 
+const (
+	workflowActionStart          = "Start"
+	workflowActionSwitchTraffic  = "SwitchTraffic"
+	workflowActionReverseTraffic = "ReverseTraffic"
+	workflowActionComplete       = "Complete"
+	workflowActionAbort          = "Abort"
+)
+
 var (
 	customerTab1, customerTab2, productReplicaTab, customerReplicaTab1, productTab *cluster.VttabletProcess
 )
 
-func moveTables2Start(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, wrangler.WorkflowActionStart, "")
+func moveTables2Start(t *testing.T, tables string) error {
+	if tables == "" {
+		tables = tablesToMove
+	}
+	err := moveTables2(t, defaultCellName, moveTablesWorkflowName, sourceKs, targetKs, tables, workflowActionStart, "")
+	require.NoError(t, err)
 	catchup(t, customerTab1, moveTablesWorkflowName, "MoveTables")
 	catchup(t, customerTab2, moveTablesWorkflowName, "MoveTables")
 	vdiff(t, ksWorkflow)
+	return nil
 }
 
-func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes string) {
+func moveTables2Action(t *testing.T, action, tabletTypes, cells string) error {
+	return moveTables2(t, cells, moveTablesWorkflowName, sourceKs, targetKs, tablesToMove, action, tabletTypes)
+}
+
+func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, action, tabletTypes string) error {
 	var args []string
 	args = append(args, "MoveTables", "-v2")
 	switch action {
-	case wrangler.WorkflowActionStart:
+	case workflowActionStart:
 		args = append(args, "-source", sourceKs, "-tables", tables)
-	case wrangler.WorkflowActionSwitchTraffic:
-	case wrangler.WorkflowActionReverseTraffic:
 	}
 	if cells != "" {
 		args = append(args, "-cells", cells)
@@ -66,33 +79,43 @@ func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, acti
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	args = append(args, action, ksWorkflow)
-	if err := vc.VtctlClient.ExecuteCommand(args...); err != nil {
-		t.Fatalf("MoveTables command failed with %+v\n", err)
+	if output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...); err != nil {
+		t.Logf("MoveTables command failed with %+v\n", err)
+		return fmt.Errorf("%s: %s", err, output)
 	}
+	return nil
 }
 
 func moveTablesSwitchReads(t *testing.T, tabletTypes string) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionSwitchTraffic, "replica,rdonly")
+	require.NoError(t, moveTables2Action(t, workflowActionSwitchTraffic, "replica,rdonly", ""))
 }
 
 func moveTablesReverseReads(t *testing.T, tabletTypes string) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionReverseTraffic, "replica,rdonly")
+	require.NoError(t, moveTables2Action(t, workflowActionReverseTraffic, "replica,rdonly", ""))
 }
 
 func moveTablesSwitchWrites(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionSwitchTraffic, "master")
+	require.NoError(t, moveTables2Action(t, workflowActionSwitchTraffic, "master", ""))
 }
 
 func moveTablesReverseWrites(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionReverseTraffic, "master")
+	require.NoError(t, moveTables2Action(t, workflowActionReverseTraffic, "master", ""))
 }
 
 func moveTablesSwitchReadsAndWrites(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionSwitchTraffic, "replica,rdonly,master")
+	require.NoError(t, moveTables2Action(t, workflowActionSwitchTraffic, "replica,rdonly,master", ""))
 }
 
 func moveTablesReverseReadsAndWrites(t *testing.T) {
-	moveTables2(t, defaultCellName, moveTablesWorkflowName, "", targetKs, "", wrangler.WorkflowActionReverseTraffic, "replica,rdonly,master")
+	require.NoError(t, moveTables2Action(t, workflowActionReverseTraffic, "replica,rdonly,master", ""))
+}
+
+func moveTablesComplete(t *testing.T) error {
+	return moveTables2Action(t, workflowActionComplete, "", "")
+}
+
+func moveTablesAbort(t *testing.T) error {
+	return moveTables2Action(t, workflowActionAbort, "", "")
 }
 
 func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.VttabletProcess) {
@@ -153,33 +176,33 @@ func revert(t *testing.T) {
 func TestMoveTablesV2Workflow(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
-	defer vc.TearDown()
+	//defer vc.TearDown()
 
 	setupCustomerKeyspace(t)
-	moveTables2Start(t)
-	printRoutingRules(t, vc, "After MoveTables Started")
+	moveTables2Start(t, "customer")
+	//printRoutingRules(t, vc, "After MoveTables Started")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
 	moveTablesSwitchReads(t, "")
-	printRoutingRules(t, vc, "After SwitchReads")
+	//printRoutingRules(t, vc, "After SwitchReads")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToSource(t)
 
 	moveTablesSwitchWrites(t)
-	printRoutingRules(t, vc, "After SwitchWrites")
+	//printRoutingRules(t, vc, "After SwitchWrites")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	moveTablesReverseReads(t, "")
-	printRoutingRules(t, vc, "After ReverseReads")
+	//printRoutingRules(t, vc, "After ReverseReads")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	moveTablesReverseWrites(t)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
-	printRoutingRules(t, vc, "After ReverseWrites")
+	//printRoutingRules(t, vc, "After ReverseWrites")
 
 	moveTablesSwitchWrites(t)
 	validateReadsRouteToSource(t, "replica")
@@ -204,6 +227,33 @@ func TestMoveTablesV2Workflow(t *testing.T) {
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
+	var err error
+	var output string
+
+	err = moveTablesComplete(t)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot complete workflow because you have not yet switched all read and write traffic")
+
+	moveTablesSwitchReadsAndWrites(t)
+	validateReadsRouteToTarget(t, "replica")
+	validateWritesRouteToTarget(t)
+
+	err = moveTablesComplete(t)
+	require.NoError(t, err)
+
+	listAllArgs := []string{"workflow", "customer", "listall"}
+	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.Contains(t, output, "No workflows found in keyspace customer")
+
+	moveTables2Start(t, "customer2")
+	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.Contains(t, output, "Following workflow(s) found in keyspace customer: p2c")
+
+	err = moveTablesAbort(t)
+	require.NoError(t, err)
+
+	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
+	require.Contains(t, output, "No workflows found in keyspace customer")
 }
 
 func setupCluster(t *testing.T) *VitessCluster {
@@ -356,6 +406,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		validateWritesRouteToTarget(t)
 
 		revert(t)
+
 	}
 	_ = switchReadsFollowedBySwitchWrites
 	_ = switchWritesFollowedBySwitchReads

@@ -575,7 +575,7 @@ func dumpStreamListAsJSON(replStatus *ReplicationStatusResult, wr *Wrangler) err
 func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	list := strings.Join(workflows, ", ")
 	if list == "" {
-		wr.Logger().Printf("No workflows found in keyspace %s", keyspace)
+		wr.Logger().Printf("No workflows found in keyspace %s\n", keyspace)
 		return
 	}
 	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)

@@ -50,9 +50,9 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	require.False(t, mtwf.Exists())
 	mtwf.ws = &workflowState{}
 	require.True(t, mtwf.Exists())
-	require.Errorf(t, mtwf.Complete(), ErrWorkflowNotFullySwitched)
+	require.Errorf(t, mtwf.Complete(), errWorkflowNotFullySwitched)
 	mtwf.ws.WritesSwitched = true
-	require.Errorf(t, mtwf.Abort(), ErrWorkflowPartiallySwitched)
+	require.Errorf(t, mtwf.Abort(), errWorkflowPartiallySwitched)
 
 	require.ElementsMatch(t, mtwf.getCellsAsArray(), []string{"cell1", "cell2"})
 	require.ElementsMatch(t, mtwf.getTabletTypes(), []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
