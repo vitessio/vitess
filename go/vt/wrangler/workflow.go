@@ -17,8 +17,11 @@ import (
 /*
 	TODO
     * expand e2e for testing all possible transitions
+     (Complete/Abort Switch/Reverse Replica/Rdonly)
 
 	* Unit Tests (run coverage first and identify)
+      (CurrentState())
+    * dry run
 
 	* implement/test Reshard same as MoveTables!
 */
@@ -58,7 +61,7 @@ type MoveTablesWorkflow struct {
 }
 
 func (mtwf *MoveTablesWorkflow) String() string {
-	s := ""
+	s := "" //FIXME
 	return s
 }
 
@@ -99,7 +102,7 @@ func (wr *Wrangler) NewMoveTablesWorkflow(ctx context.Context, params *MoveTable
 
 // Exists checks if the workflow has already been initiated
 func (mtwf *MoveTablesWorkflow) Exists() bool {
-	log.Infof("mtwf %v", mtwf)
+	log.Infof("mtwf %+v", *mtwf)
 
 	return mtwf.ws != nil
 }
@@ -179,11 +182,16 @@ func (mtwf *MoveTablesWorkflow) ReverseTraffic() error {
 	return mtwf.SwitchTraffic(DirectionBackward)
 }
 
+const (
+	ErrWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
+	ErrWorkflowPartiallySwitched = "cannot abort workflow because you have already switched some or all read and write traffic"
+)
+
 // Complete cleans up a successful workflow
 func (mtwf *MoveTablesWorkflow) Complete() error {
 	ws := mtwf.ws
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
-		return fmt.Errorf("cannot complete workflow because you have not yet switched all read and write traffic")
+		return fmt.Errorf(ErrWorkflowNotFullySwitched)
 	}
 	var renameTable TableRemovalType
 	if mtwf.params.RenameTables {
@@ -201,7 +209,7 @@ func (mtwf *MoveTablesWorkflow) Complete() error {
 func (mtwf *MoveTablesWorkflow) Abort() error {
 	ws := mtwf.ws
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
-		return fmt.Errorf("cannot abort workflow because you have already switched some or all read and write traffic")
+		return fmt.Errorf(ErrWorkflowPartiallySwitched)
 	}
 	if _, err := mtwf.wr.DropTargets(mtwf.ctx, mtwf.ws.TargetKeyspace, mtwf.ws.Workflow, mtwf.params.KeepData, false); err != nil {
 		return err

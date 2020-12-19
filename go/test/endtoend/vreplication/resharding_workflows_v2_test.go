@@ -153,7 +153,7 @@ func revert(t *testing.T) {
 func TestMoveTablesV2Workflow(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
-	//defer vc.TearDown()
+	defer vc.TearDown()
 
 	setupCustomerKeyspace(t)
 	moveTables2Start(t)
@@ -259,6 +259,7 @@ func setupCustomerKeyspace(t *testing.T) {
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
 	vc = setupCluster(t)
+	defer vc.TearDown()
 	moveCustomerTableSwitchFlows(t, []*Cell{vc.Cells["zone1"]}, "zone1")
 }
 

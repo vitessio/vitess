@@ -601,14 +601,6 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch writes if REPLICA and RDONLY have not fully switched yet.
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
-	want = "cannot switch MASTER away"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("SwitchWrites err: %v, want %v", err, want)
-	}
-	verifyQueries(t, tme.allDBClients)
-	//-------------------------------------------------------------------------------------------------------------------
 	// Test SwitchWrites cancelation on failure.
 
 	tme.expectNoPreviousJournals()
