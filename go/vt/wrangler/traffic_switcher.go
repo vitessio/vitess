@@ -328,11 +328,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		sw = &switcher{ts: ts, wr: wr}
 	}
 
-	// FIXME: revisit marking streams frozen
-	//if ts.frozen {
-	//return nil, fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
-	//}
-	if err := ts.validate(ctx, false /* isWrite */); err != nil {
+	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
 		return nil, err
 	}
@@ -391,7 +387,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	}
 
 	ts.wr.Logger().Infof("Built switching metadata: %+v", ts)
-	if err := ts.validate(ctx, true /* isWrite */); err != nil {
+	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
 		return 0, nil, err
 	}
@@ -820,7 +816,7 @@ func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
 	return int64(hasher.Sum64() & math.MaxInt64)
 }
 
-func (ts *trafficSwitcher) validate(ctx context.Context, isWrite bool) error {
+func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		// All shards must be present.
 		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards()); err != nil {
@@ -834,13 +830,6 @@ func (ts *trafficSwitcher) validate(ctx context.Context, isWrite bool) error {
 			if strings.HasPrefix(table, "/") {
 				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
 			}
-		}
-		if isWrite {
-			return ts.validateTableForWrite(ctx)
-		}
-	} else { // binlogdatapb.MigrationType_SHARDS
-		if isWrite {
-			return ts.validateShardForWrite(ctx)
 		}
 	}
 	return nil
@@ -1294,23 +1283,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// We assume that the following rules were setup when the targets were created:
-	// table -> sourceKeyspace.table
-	// targetKeyspace.table -> sourceKeyspace.table
-	// Additionally, SwitchReads would have added rules like this:
-	// table@replica -> targetKeyspace.table
-	// targetKeyspace.table@replica -> targetKeyspace.table
-	// After this step, only the following rules will be left:
-	// table -> targetKeyspace.table
-	// sourceKeyspace.table -> targetKeyspace.table
 	for _, table := range ts.tables {
-		//for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
-		//	tt := strings.ToLower(tabletType.String())
-		//	delete(rules, table+"@"+tt)
-		//	delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
-		//	delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
-		//	ts.wr.Logger().Infof("Delete routing: %v %v %v", table+"@"+tt, ts.targetKeyspace+"."+table+"@"+tt, ts.sourceKeyspace+"."+table+"@"+tt)
-		//}
 		delete(rules, ts.targetKeyspace+"."+table)
 		ts.wr.Logger().Infof("Delete routing: %v", ts.targetKeyspace+"."+table)
 		rules[table] = []string{ts.targetKeyspace + "." + table}
@@ -1320,11 +1293,7 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
 		return err
 	}
-	var cells []string
-	if len(ts.optCells) > 0 {
-		cells = strings.Split(ts.optCells, ",")
-	}
-	return ts.wr.ts.RebuildSrvVSchema(ctx, cells)
+	return ts.wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 
 func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
