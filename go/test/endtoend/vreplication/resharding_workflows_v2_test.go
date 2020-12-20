@@ -46,6 +46,7 @@ const (
 
 var (
 	customerTab1, customerTab2, productReplicaTab, customerReplicaTab1, productTab *cluster.VttabletProcess
+	lastOutput                                                                     string
 )
 
 func moveTables2Start(t *testing.T, tables string) error {
@@ -79,10 +80,13 @@ func moveTables2(t *testing.T, cells, workflow, sourceKs, targetKs, tables, acti
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	args = append(args, action, ksWorkflow)
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...); err != nil {
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
+	lastOutput = output
+	if err != nil {
 		t.Logf("MoveTables command failed with %+v\n", err)
 		return fmt.Errorf("%s: %s", err, output)
 	}
+	fmt.Printf("----------\n%+v\n%s\n----------\n", args, output)
 	return nil
 }
 
@@ -173,38 +177,47 @@ func revert(t *testing.T) {
 	clearRoutingRules(t, vc)
 }
 
+func checkStates(t *testing.T, startState, endState string) {
+	require.Contains(t, lastOutput, fmt.Sprintf("Start State: %s", startState))
+	require.Contains(t, lastOutput, fmt.Sprintf("Current State: %s", endState))
+}
+
+// ideally this should be broken up into multiple tests for full flow, replica/rdonly flow, reverse flows etc
+// but CI currently fails on creating multiple clusters even after the previous ones are torn down
 func TestMoveTablesV2Workflow(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
 	//defer vc.TearDown()
 
+	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
 	moveTables2Start(t, "customer")
-	//printRoutingRules(t, vc, "After MoveTables Started")
+	checkStates(t, "Not Started", "Not Started")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
 	moveTablesSwitchReads(t, "")
-	//printRoutingRules(t, vc, "After SwitchReads")
+	checkStates(t, "Reads Not Switched. Writes Not Switched", "All Reads Switched. Writes Not Switched")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToSource(t)
 
 	moveTablesSwitchWrites(t)
-	//printRoutingRules(t, vc, "After SwitchWrites")
+	checkStates(t, "All Reads Switched. Writes Not Switched", "All Reads Switched. Writes Switched")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	moveTablesReverseReads(t, "")
-	//printRoutingRules(t, vc, "After ReverseReads")
+	checkStates(t, "All Reads Switched. Writes Switched", "Reads Not Switched. Writes Switched")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	moveTablesReverseWrites(t)
+	checkStates(t, "Reads Not Switched. Writes Switched", "Reads Not Switched. Writes Not Switched")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
-	//printRoutingRules(t, vc, "After ReverseWrites")
 
 	moveTablesSwitchWrites(t)
+	checkStates(t, "Reads Not Switched. Writes Not Switched", "Reads Not Switched. Writes Switched")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
@@ -227,6 +240,7 @@ func TestMoveTablesV2Workflow(t *testing.T) {
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
+	// test complete and abort
 	var err error
 	var output string
 
@@ -254,6 +268,7 @@ func TestMoveTablesV2Workflow(t *testing.T) {
 
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "No workflows found in keyspace customer")
+
 }
 
 func setupCluster(t *testing.T) *VitessCluster {
