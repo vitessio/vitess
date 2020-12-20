@@ -241,22 +241,31 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	ws := &workflowState{Workflow: workflow, TargetKeyspace: targetKeyspace}
 	ws.SourceKeyspace = ts.sourceKeyspace
 	var cellsSwitched, cellsNotSwitched []string
+	var keyspace string
+	var reverse bool
+	if strings.HasSuffix(workflow, "_reverse") {
+		reverse = true
+		keyspace = ws.SourceKeyspace
+		workflow = reverseName(workflow)
+	} else {
+		keyspace = targetKeyspace
+	}
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		ws.WorkflowType = workflowTypeMoveTables
 
 		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
 		if len(ts.tables) == 0 {
-			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", targetKeyspace, workflow)
+			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflow)
 
 		}
 		table := ts.tables[0]
 
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, targetKeyspace, table, "rdonly")
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "rdonly")
 		if err != nil {
 			return nil, nil, err
 		}
 		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, targetKeyspace, table, "replica")
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "replica")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -269,7 +278,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		for _, table := range ts.tables {
 			rr := rules[table]
 			// if a rule exists for the table and points to the target keyspace, writes have been switched
-			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", ts.targetKeyspace, table) {
+			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
 				ws.WritesSwitched = true
 			}
 		}
@@ -277,19 +286,24 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		ws.WorkflowType = workflowTypeReshard
 
 		// we assume a consistent state, so only choose one shard
-		oneSourceShard := ts.sourceShards()[0]
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, targetKeyspace, oneSourceShard, "rdonly")
+		var shard *topo.ShardInfo
+		if reverse {
+			shard = ts.targetShards()[0]
+		} else {
+			shard = ts.sourceShards()[0]
+		}
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "rdonly")
 		if err != nil {
 			return nil, nil, err
 		}
 		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, targetKeyspace, oneSourceShard, "replica")
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "replica")
 		if err != nil {
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		if ts.targetShards()[0].IsMasterServing {
-			ws.WritesSwitched = true
+		if shard.IsMasterServing {
+			ws.WritesSwitched = false
 		}
 	}
 

@@ -17,7 +17,7 @@ import (
 /*
 	TODO
     * expand e2e for testing all possible transitions
-     (Complete/Abort Switch/Reverse Replica/Rdonly)
+     (Switch/Reverse Replica/Rdonly)
 
 	* Unit Tests (run coverage first and identify)
       (CurrentState())
@@ -53,7 +53,9 @@ type MoveTablesWorkflow struct {
 }
 
 func (mtwf *MoveTablesWorkflow) String() string {
-	s := "" //FIXME
+	s := ""
+	s += fmt.Sprintf("Parameters: %+v\n", mtwf.params)
+	s += fmt.Sprintf("State: %+v", mtwf.CachedState())
 	return s
 }
 
