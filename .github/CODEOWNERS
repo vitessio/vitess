@@ -4,6 +4,7 @@
 /docker/ @derekperkins @dkhenry
 /examples/compose @shlomi-noach
 /examples/local @rohit-nayak-ps
+/go/cmd/vtctldclient @ajm188 @doeg
 /go/mysql @harshit-gangal @systay
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/orchestrator @deepthi @shlomi-noach
@@ -14,6 +15,10 @@
 /go/vt/schema @shlomi-noach
 /go/vt/sqlparser @harshit-gangal @systay
 /go/vt/vtctl @deepthi
+/go/vt/vtctl/vtctl.go @ajm188 @doeg
+/go/vt/vtctl/grpcvtctldclient @ajm188 @doeg
+/go/vt/vtctl/grpcvtctldserver @ajm188 @doeg
+/go/vt/vtctl/vtctldclient @ajm188 @doeg
 /go/vt/vtgate @harshit-gangal @systay
 /go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps
@@ -21,4 +26,6 @@
 /go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach
 /go/vt/wrangler @deepthi @rohit-nayak-ps
 /helm/ @derekperkins @dkhenry
+/proto/vtctldata.proto @ajm188 @doeg
+/proto/vtctlservice.proto @ajm188 @doeg
 /web/vtctld2 @rohit-nayak-ps

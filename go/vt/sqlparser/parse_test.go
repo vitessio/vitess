@@ -1272,8 +1272,7 @@ var (
 		input:  "show create event e",
 		output: "show create event",
 	}, {
-		input:  "show create function f",
-		output: "show create function",
+		input: "show create function f",
 	}, {
 		input:  "show create procedure p",
 		output: "show create procedure",
@@ -1297,31 +1296,26 @@ var (
 		output: "show databases like '%'",
 	}, {
 		input:  "show schemas",
-		output: "show schemas",
+		output: "show databases",
 	}, {
 		input:  "show schemas like '%'",
-		output: "show schemas like '%'",
+		output: "show databases like '%'",
 	}, {
 		input:  "show engine INNODB",
 		output: "show engine",
 	}, {
-		input:  "show engines",
-		output: "show engines",
+		input: "show engines",
 	}, {
 		input:  "show storage engines",
 		output: "show storage",
 	}, {
-		input:  "show errors",
-		output: "show errors",
+		input: "show errors",
 	}, {
-		input:  "show events",
-		output: "show events",
+		input: "show events",
 	}, {
-		input:  "show function code func",
-		output: "show function",
+		input: "show function code func",
 	}, {
-		input:  "show function status",
-		output: "show function",
+		input: "show function status",
 	}, {
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
@@ -1344,11 +1338,9 @@ var (
 		input:  "show privileges",
 		output: "show privileges",
 	}, {
-		input:  "show procedure code p",
-		output: "show procedure",
+		input: "show procedure code p",
 	}, {
-		input:  "show procedure status",
-		output: "show procedure",
+		input: "show procedure status",
 	}, {
 		input:  "show processlist",
 		output: "show processlist",
@@ -1378,7 +1370,7 @@ var (
 		output: "show global status",
 	}, {
 		input:  "show session status",
-		output: "show session status",
+		output: "show status",
 	}, {
 		input: "show table status",
 	}, {
@@ -1441,11 +1433,13 @@ var (
 		output: "show global variables",
 	}, {
 		input:  "show session variables",
-		output: "show session variables",
+		output: "show variables",
 	}, {
-		input: "show vitess_keyspaces",
+		input:  "show vitess_keyspaces",
+		output: "show databases",
 	}, {
-		input: "show vitess_keyspaces like '%'",
+		input:  "show vitess_keyspaces like '%'",
+		output: "show databases like '%'",
 	}, {
 		input: "show vitess_shards",
 	}, {
