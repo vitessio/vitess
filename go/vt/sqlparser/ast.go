@@ -63,11 +63,8 @@ type (
 		GetAction() DDLAction
 		GetOptLike() *OptLike
 		GetTableSpec() *TableSpec
-		GetVindexSpec() *VindexSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
-		GetAutoIncSpec() *AutoIncSpec
-		GetVindexCols() []ColIdent
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
@@ -276,6 +273,12 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
+	}
+
+	// AlterVschema represents a ALTER VSCHEMA statement.
+	AlterVschema struct {
+		Action DDLAction
+		Table  TableName
 
 		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
@@ -438,6 +441,7 @@ func (*CreateTable) iStatement()       {}
 func (*CreateView) iStatement()        {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
+func (*AlterVschema) iStatement()      {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
@@ -544,26 +548,6 @@ func (node *CreateView) GetTableSpec() *TableSpec {
 	return nil
 }
 
-// GetVindexSpec implements the DDLStatement interface
-func (node *DDL) GetVindexSpec() *VindexSpec {
-	return node.VindexSpec
-}
-
-// GetVindexSpec implements the DDLStatement interface
-func (node *CreateIndex) GetVindexSpec() *VindexSpec {
-	return nil
-}
-
-// GetVindexSpec implements the DDLStatement interface
-func (node *CreateTable) GetVindexSpec() *VindexSpec {
-	return nil
-}
-
-// GetVindexSpec implements the DDLStatement interface
-func (node *CreateView) GetVindexSpec() *VindexSpec {
-	return nil
-}
-
 // GetFromTables implements the DDLStatement interface
 func (node *DDL) GetFromTables() TableNames {
 	return node.FromTables
@@ -621,46 +605,6 @@ func (node *CreateView) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *CreateTable) GetToTables() TableNames {
-	return nil
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *DDL) GetAutoIncSpec() *AutoIncSpec {
-	return node.AutoIncSpec
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *CreateIndex) GetAutoIncSpec() *AutoIncSpec {
-	return nil
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *CreateTable) GetAutoIncSpec() *AutoIncSpec {
-	return nil
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *CreateView) GetAutoIncSpec() *AutoIncSpec {
-	return nil
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *DDL) GetVindexCols() []ColIdent {
-	return node.VindexCols
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *CreateIndex) GetVindexCols() []ColIdent {
-	return nil
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *CreateTable) GetVindexCols() []ColIdent {
-	return nil
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *CreateView) GetVindexCols() []ColIdent {
 	return nil
 }
 
@@ -753,40 +697,53 @@ func (node *AlterDatabase) GetDatabaseName() string {
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
 
-//ShowInternal will represent all the show statement types.
-type ShowInternal interface {
-	isShowInternal()
-	SQLNode
-}
+type (
 
-//ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
-type ShowLegacy struct {
-	Extended               string
-	Type                   string
-	OnTable                TableName
-	Table                  TableName
-	ShowTablesOpt          *ShowTablesOpt
-	Scope                  Scope
-	ShowCollationFilterOpt Expr
-}
+	// ShowInternal will represent all the show statement types.
+	ShowInternal interface {
+		isShowInternal()
+		SQLNode
+	}
 
-//ShowColumns is of ShowInternal type, holds the show columns statement.
-type ShowColumns struct {
-	Full   string
-	Table  TableName
-	DbName string
-	Filter *ShowFilter
-}
+	// ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
+	ShowLegacy struct {
+		Extended               string
+		Type                   string
+		OnTable                TableName
+		Table                  TableName
+		ShowTablesOpt          *ShowTablesOpt
+		Scope                  Scope
+		ShowCollationFilterOpt Expr
+	}
 
-// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
-type ShowTableStatus struct {
-	DatabaseName string
-	Filter       *ShowFilter
-}
+	// ShowColumns is of ShowInternal type, holds the show columns statement.
+	ShowColumns struct {
+		Full   string
+		Table  TableName
+		DbName string
+		Filter *ShowFilter
+	}
+
+	// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
+	ShowTableStatus struct {
+		DatabaseName string
+		Filter       *ShowFilter
+	}
+
+	// ShowCommandType represents the show statement type.
+	ShowCommandType int8
+
+	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
+	ShowBasic struct {
+		Command ShowCommandType
+		Filter  *ShowFilter
+	}
+)
 
 func (*ShowLegacy) isShowInternal()      {}
 func (*ShowColumns) isShowInternal()     {}
 func (*ShowTableStatus) isShowInternal() {}
+func (*ShowBasic) isShowInternal()       {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -1577,6 +1534,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case FlushDDLAction:
 		buf.astPrintf(node, "%s", FlushStr)
+	default:
+		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
+	}
+}
+
+// Format formats the node.
+func (node *AlterVschema) Format(buf *TrackedBuffer) {
+	switch node.Action {
 	case CreateVindexDDLAction:
 		buf.astPrintf(node, "alter vschema create vindex %v %v", node.Table, node.VindexSpec)
 	case DropVindexDDLAction:
@@ -2549,6 +2514,11 @@ func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
 		buf.WriteString(node.DatabaseName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+}
+
+// Format formats the node.
+func (node *ShowBasic) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show%s%v", node.Command.ToString(), node.Filter)
 }
 
 // Format formats the node.

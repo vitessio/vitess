@@ -15,11 +15,13 @@
 # limitations under the License.
 
 flavor=$1
-
 if [[ -z "$flavor" ]]; then
   echo "Flavor must be specified as first argument."
   exit 1
 fi
+
+# Set default version of 0
+version="${2:-0}"
 
 if [[ ! -f bootstrap.sh ]]; then
   echo "This script should be run from the root of the Vitess source tree - e.g. ~/src/vitess.io/vitess"
@@ -32,5 +34,5 @@ chmod -R o=g *
 arch=$(uname -m)
 [ "$arch" == "aarch64" ] && [ $flavor != "common" ] && arch_ext='-arm64v8'
 if [ -f "docker/bootstrap/Dockerfile.$flavor$arch_ext" ]; then
-    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$flavor$arch_ext .
+    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$version-$flavor$arch_ext --build-arg bootstrap_version=$version .
 fi

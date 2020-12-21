@@ -132,18 +132,3 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 			SQL:      query,
 		}, nil
 }
-
-func buildVSchemaDDLPlan(ddlStmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-	stmt, ok := ddlStmt.(*sqlparser.DDL)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "Incorrect type %T", ddlStmt)
-	}
-	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
-	if err != nil {
-		return nil, err
-	}
-	return &engine.AlterVSchema{
-		Keyspace: keyspace,
-		DDL:      stmt,
-	}, nil
-}
