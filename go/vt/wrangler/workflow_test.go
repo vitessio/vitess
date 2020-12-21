@@ -24,8 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *MoveTablesWorkflow {
-	mtp := &MoveTablesParams{
+func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
+	mtp := &VReplicationWorkflowParams{
 		Workflow:       "wf1",
 		SourceKeyspace: "sourceks",
 		TargetKeyspace: "targetks",
@@ -34,7 +34,7 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *MoveTablesW
 		TabletTypes:    tabletTypes,
 	}
 	wf, _ := newWorkflow("wf1", "MoveTables")
-	mtwf := &MoveTablesWorkflow{
+	mtwf := &VReplicationWorkflow{
 		ctx:    context.Background(),
 		wf:     wf,
 		wr:     nil,
