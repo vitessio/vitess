@@ -17,6 +17,7 @@ limitations under the License.
 package k8stopo
 
 import (
+	"fmt"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -36,5 +37,5 @@ func VersionFromInt(version int64) topo.Version {
 	if version == -1 {
 		return nil
 	}
-	return KubernetesVersion(version)
+	return KubernetesVersion(fmt.Sprint(version))
 }
