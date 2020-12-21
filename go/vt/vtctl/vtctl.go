@@ -1891,6 +1891,12 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	for _, arg := range args {
+		if arg == "-v2" {
+			fmt.Printf("*** Using Reshard v2 flow ***")
+			return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
+		}
+	}
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to targets")
@@ -1913,7 +1919,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	for _, arg := range args {
 		if arg == "-v2" {
 			fmt.Printf("*** Using MoveTables v2 flow ***")
-			return commandMoveTables2(ctx, wr, subFlags, args)
+			return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
 		}
 	}
 	workflow := subFlags.String("workflow", "", "Workflow name. Can be any descriptive string. Will be used to later migrate traffic via SwitchReads/SwitchWrites.")
@@ -1947,29 +1953,37 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
 }
 
-func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
-	tables := subFlags.String("tables", "", "A table spec or a list of tables")
+func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
+	workflowType wrangler.VReplicationWorkflowType) error {
+
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from (e.g. master, replica, rdonly). Defaults to -vreplication_tablet_type parameter value for the tablet, which has the default value of replica.")
-	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
-	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if -all is specified")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
 	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
-	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
+
+	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
+	tables := subFlags.String("tables", "", "A table spec or a list of tables")
+	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
+	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if -all is specified")
+	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
+
+	sourceShards := subFlags.String("source_shards", "", "Source shards")
+	targetShards := subFlags.String("target_shards", "", "Target shards")
+	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to target shards")
+
 	_ = subFlags.Bool("v2", true, "")
 
-	_, _, _ = dryRun, timeout, reverseReplication
-	_, _, _ = cells, tabletTypes, excludes
+	_, _, _ = dryRun, reverseReplication, skipSchemaCopy
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("two arguments are needed: action, keyspace.workflow")
 	}
-	action := subFlags.Arg(0) // TODO: actions will be SubCommands in the new cobra based vtctld implementation
+	action := subFlags.Arg(0)
 	ksWorkflow := subFlags.Arg(1)
 	target, workflow, err := splitKeyspaceWorkflow(ksWorkflow)
 	if err != nil {
@@ -1980,7 +1994,7 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		wr.Logger().Errorf("keyspace %s not found", target)
 	}
 
-	mtp := &wrangler.MoveTablesParams{
+	vrwp := &wrangler.VReplicationWorkflowParams{
 		TargetKeyspace: target,
 		Workflow:       workflow,
 		DryRun:         *dryRun,
@@ -2012,7 +2026,7 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return nil
 	}
 
-	wrapError := func(wf *wrangler.MoveTablesWorkflow, err error) error {
+	wrapError := func(wf *wrangler.VReplicationWorkflow, err error) error {
 		wr.Logger().Errorf("\n%s\n", err.Error())
 		log.Infof("In wrapError wf is %+v", wf)
 		wr.Logger().Infof("Workflow Status: %s\n", wf.CurrentState())
@@ -2026,45 +2040,62 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
-	case "start":
-		if *sourceKeyspace == "" {
-			return fmt.Errorf("source keyspace is not specified")
+	case wrangler.VReplicationWorkflowActionStart:
+		switch workflowType {
+		case wrangler.MoveTablesWorkflow:
+			if *sourceKeyspace == "" {
+				return fmt.Errorf("source keyspace is not specified")
+			}
+			if !*allTables && *tables == "" {
+				return fmt.Errorf("no tables specified to move")
+			}
+			vrwp.SourceKeyspace = *sourceKeyspace
+			vrwp.Tables = *tables
+			vrwp.AllTables = *allTables
+			vrwp.ExcludeTables = *excludes
+		case wrangler.ReshardWorkflow:
+			if *sourceShards == "" || *targetShards == "" {
+				return fmt.Errorf("source and target shards are not specified")
+			}
+			vrwp.SkipSchemaCopy = *skipSchemaCopy
+		default:
+			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
-		if !*allTables && *tables == "" {
-			return fmt.Errorf("no tables specified to move")
+
+		vrwp.Cells = *cells
+		vrwp.TabletTypes = *tabletTypes
+	case wrangler.VReplicationWorkflowActionSwitchTraffic, wrangler.VReplicationWorkflowActionReverseTraffic:
+		vrwp.Cells = *cells
+		vrwp.TabletTypes = *tabletTypes
+		vrwp.Timeout = *timeout
+		vrwp.EnableReverseReplication = *reverseReplication
+	case wrangler.VReplicationWorkflowActionAbort:
+		vrwp.KeepData = *keepData
+	case wrangler.VReplicationWorkflowActionComplete:
+		switch workflowType {
+		case wrangler.MoveTablesWorkflow:
+			vrwp.RenameTables = *renameTables
+		default:
+			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
-		mtp.SourceKeyspace = *sourceKeyspace
-		mtp.Tables = *tables
-		mtp.AllTables = *allTables
-		mtp.ExcludeTables = *excludes
-		mtp.TabletTypes = *tabletTypes
-	case "switchtraffic", "reversetraffic":
-		mtp.Cells = *cells
-		mtp.TabletTypes = *tabletTypes
-		mtp.Timeout = *timeout
-		mtp.EnableReverseReplication = *reverseReplication
-	case "abort":
-		mtp.KeepData = *keepData
-	case "complete":
-		mtp.RenameTables = *renameTables
-		mtp.KeepData = *keepData
+		vrwp.KeepData = *keepData
 	}
 
-	wf, err := wr.NewMoveTablesWorkflow(ctx, mtp)
+	wf, err := wr.NewVReplicationWorkflow(ctx, wrangler.MoveTablesWorkflow, vrwp)
 	if err != nil {
-		log.Warningf("NewMoveTablesWorkflow returned error %+v", wf)
+		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
 		return err
 	}
-	if !wf.Exists() && action != "start" {
+	if !wf.Exists() && action != wrangler.VReplicationWorkflowActionStart {
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
 	startState := wf.CachedState()
 	wr.Logger().Printf("\nCachedState: %s\n", startState)
 	switch action {
-	case "show":
+	case wrangler.VReplicationWorkflowActionShow:
 		return printDetails()
-	case "progress":
+	case wrangler.VReplicationWorkflowActionProgress:
 		copyProgress, err := wf.GetCopyProgress()
 		if err != nil {
 			return err
@@ -2091,15 +2122,15 @@ func commandMoveTables2(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			wr.Logger().Printf("\n%s\n", s)
 		}
 		return printDetails()
-	case "start":
+	case wrangler.VReplicationWorkflowActionStart:
 		err = wf.Start()
-	case "switchtraffic":
+	case wrangler.VReplicationWorkflowActionSwitchTraffic:
 		err = wf.SwitchTraffic(wrangler.DirectionForward)
-	case "reversetraffic":
+	case wrangler.VReplicationWorkflowActionReverseTraffic:
 		err = wf.ReverseTraffic()
-	case "complete":
+	case wrangler.VReplicationWorkflowActionComplete:
 		err = wf.Complete()
-	case "abort":
+	case wrangler.VReplicationWorkflowActionAbort:
 		err = wf.Abort()
 	default:
 		return fmt.Errorf("found unsupported action %s", originalAction)
