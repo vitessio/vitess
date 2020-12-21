@@ -221,7 +221,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 	switch stat.(type) {
 	case sqlparser.DDLStatement:
 		if isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(); isOnlineDDL {
-			exec.wr.Logger().Infof("Received online DDL request. strategy=%+v", strategy)
+			exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
 			normalizedQueries, err := schema.NormalizeOnlineDDL(sql)
 			if err != nil {
 				return err
@@ -232,6 +232,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 			return nil
 		}
 	}
+	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
 	exec.executeOnAllTablets(ctx, execResult, sql)
 	return nil
 }
