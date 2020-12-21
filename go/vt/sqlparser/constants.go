@@ -147,7 +147,6 @@ const (
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
 	NoOperatorStr   = ""
-	CharsetStr      = "charset"
 
 	// CollateAndCharset.Type
 	CollateStr = " collate"
@@ -194,6 +193,18 @@ const (
 	ReadLocalStr        = "read local"
 	WriteStr            = "write"
 	LowPriorityWriteStr = "low_priority write"
+
+	// ShowCommand Types
+	CharsetStr         = " charset"
+	CollationStr       = " collation"
+	DatabaseStr        = " databases"
+	FunctionStr        = " function status"
+	PrivilegeStr       = " privileges"
+	ProcedureStr       = " procedure status"
+	StatusGlobalStr    = " global status"
+	StatusSessionStr   = " status"
+	VariableGlobalStr  = " global variables"
+	VariableSessionStr = " variables"
 )
 
 // Constants for Enum type - AccessMode
@@ -387,10 +398,26 @@ const (
 	CharacterSetType
 )
 
+// LockType constants
 const (
-	UnknownType LockType = iota
+	UnknownLockType LockType = iota
 	Read
 	ReadLocal
 	Write
 	LowPriorityWrite
+)
+
+// ShowCommandType constants
+const (
+	UnknownCommandType ShowCommandType = iota
+	Charset
+	Collation
+	Database
+	Function
+	Privilege
+	Procedure
+	StatusGlobal
+	StatusSession
+	VariableGlobal
+	VariableSession
 )

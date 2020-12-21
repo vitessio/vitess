@@ -70,6 +70,8 @@ message EventToken {
 
 // Flags sent from the MySQL C API
 enum MySqlFlag {
+  option allow_alias = true;
+  
   EMPTY = 0;
   NOT_NULL_FLAG = 1;
   PRI_KEY_FLAG = 2;
@@ -90,8 +92,6 @@ enum MySqlFlag {
   GROUP_FLAG = 32768;
   UNIQUE_FLAG = 65536;
   BINCMP_FLAG = 131072;
-
-  option allow_alias = true;
 }
 
 // Flag allows us to qualify types by their common properties.

@@ -1,4 +1,7 @@
-FROM vitess/bootstrap:mysql80
+ARG bootstrap_version=0
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
+
+FROM "${image}"
 
 # Allows some docker builds to disable CGO
 ARG CGO_ENABLED=0
