@@ -31,7 +31,7 @@ var _ Primitive = (*AlterVSchema)(nil)
 type AlterVSchema struct {
 	Keyspace *vindexes.Keyspace
 
-	DDL sqlparser.DDLStatement
+	AlterVschemaDDL *sqlparser.AlterVschema
 
 	noTxNeeded
 
@@ -43,7 +43,7 @@ func (v *AlterVSchema) description() PrimitiveDescription {
 		OperatorType: "AlterVSchema",
 		Keyspace:     v.Keyspace,
 		Other: map[string]interface{}{
-			"query": sqlparser.String(v.DDL),
+			"query": sqlparser.String(v.AlterVschemaDDL),
 		},
 	}
 }
@@ -60,12 +60,12 @@ func (v *AlterVSchema) GetKeyspaceName() string {
 
 //GetTableName implements the Primitive interface
 func (v *AlterVSchema) GetTableName() string {
-	return v.DDL.GetTable().Name.String()
+	return v.AlterVschemaDDL.Table.Name.String()
 }
 
 //Execute implements the Primitive interface
 func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.DDL)
+	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.AlterVschemaDDL)
 	if err != nil {
 		return nil, err
 	}
