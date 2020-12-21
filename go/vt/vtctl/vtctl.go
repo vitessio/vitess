@@ -2508,6 +2508,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	}
 	query := ""
 	uuid := ""
+	var bindErr error
 	switch command {
 	case "show":
 		{
@@ -2524,13 +2525,13 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				string(schema.OnlineDDLStatusRunning),
 				string(schema.OnlineDDLStatusComplete),
 				string(schema.OnlineDDLStatusFailed):
-				condition = fmt.Sprintf("migration_status='%s'", arg)
+				condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
 			default:
 				if schema.IsOnlineDDLUUID(arg) {
 					uuid = arg
-					condition = fmt.Sprintf("migration_uuid='%s'", uuid)
+					condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
 				} else {
-					condition = fmt.Sprintf("migration_context='%s'", arg)
+					condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 				}
 			}
 			query = fmt.Sprintf(`select
@@ -2543,7 +2544,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				return fmt.Errorf("UUID required")
 			}
 			uuid = arg
-			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='retry' where migration_uuid='%s'`, uuid)
+			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='retry' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
 		}
 	case "cancel":
 		{
@@ -2551,7 +2552,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				return fmt.Errorf("UUID required")
 			}
 			uuid = arg
-			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid='%s'`, uuid)
+			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
 		}
 	case "cancel-all":
 		{
@@ -2562,6 +2563,9 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
+	}
+	if bindErr != nil {
+		return fmt.Errorf("Error generating OnlineDDL query: %+v", bindErr)
 	}
 
 	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
