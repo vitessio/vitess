@@ -18,4 +18,5 @@ jobs:
     - name: run ensure_bootstrap_version
       run: |
         make ensure_bootstrap_version
+        git status
         test -z "$(git diff-index --name-only HEAD --)" || exit 1
