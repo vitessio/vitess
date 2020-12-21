@@ -134,3 +134,18 @@ func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (
 
 	return supplied, false, nil
 }
+
+// ParseAndBind is a one step sweep that binds variables to an input query, in order of placeholders.
+func ParseAndBind(in string, binds ...*querypb.BindVariable) (query string, err error) {
+	vars := make([]interface{}, len(binds))
+	for i := range binds {
+		vars[i] = fmt.Sprintf(":var%d", i)
+	}
+	parsed := BuildParsedQuery(in, vars...)
+
+	bindVars := map[string]*querypb.BindVariable{}
+	for i := range binds {
+		bindVars[fmt.Sprintf("var%d", i)] = binds[i]
+	}
+	return parsed.GenerateQuery(bindVars, nil)
+}
