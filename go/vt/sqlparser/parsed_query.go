@@ -136,6 +136,9 @@ func FetchBindVar(name string, bindVariables map[string]*querypb.BindVariable) (
 }
 
 // ParseAndBind is a one step sweep that binds variables to an input query, in order of placeholders.
+// It it useful when one doesn't have any parser-variables, just bind variables.
+// Example:
+//   query, err := ParseAndBind("select * from tbl where name=%a", sqltypes.StringBindVariable("it's me"))
 func ParseAndBind(in string, binds ...*querypb.BindVariable) (query string, err error) {
 	vars := make([]interface{}, len(binds))
 	for i := range binds {
