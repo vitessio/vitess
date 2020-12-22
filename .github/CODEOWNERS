@@ -29,3 +29,4 @@
 /proto/vtctldata.proto @ajm188 @doeg
 /proto/vtctlservice.proto @ajm188 @doeg
 /web/vtctld2 @rohit-nayak-ps
+/web/vtadmin @ajm188 @doeg
