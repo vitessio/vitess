@@ -162,17 +162,6 @@ func (qg *queryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 	}
 }
 
-func (dpt dpTableT) bitSetsOfSize(wanted int) []joinTree {
-	var result []joinTree
-	for bs, jt := range dpt {
-		size := bs.NumberOfTables()
-		if size == wanted {
-			result = append(result, jt)
-		}
-	}
-	return result
-}
-
 func (qg *queryGraph) tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) joinTree {
 	aRoute, ok := a.(*routePlan)
 	if !ok {

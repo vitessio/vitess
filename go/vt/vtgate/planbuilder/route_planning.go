@@ -112,8 +112,44 @@ type (
 
 		lhs, rhs joinTree
 	}
-	dpTableT map[semantics.TableSet]joinTree
+	dpTableT struct {
+		// hash map of the best solution for each seen table
+		m map[semantics.TableSet]joinTree
+
+		highest semantics.TableSet
+	}
 )
+
+func makeDPTable() *dpTableT {
+	return &dpTableT{
+		m: map[semantics.TableSet]joinTree{},
+	}
+}
+
+func (dpt *dpTableT) add(tree joinTree) {
+	solved := tree.solves()
+	if dpt.highest < solved {
+		dpt.highest = solved
+	}
+	dpt.m[solved] = tree
+}
+
+func (dpt *dpTableT) planFor(id semantics.TableSet) joinTree {
+	return dpt.m[id]
+}
+
+func (dpt *dpTableT) bitSetsOfSize(wanted int) []joinTree {
+	var result []joinTree
+	for x := semantics.TableSet(1); x < dpt.highest; x++ {
+		if x.NumberOfTables() == wanted {
+			t, ok := dpt.m[x]
+			if ok {
+				result = append(result, t)
+			}
+		}
+	}
+	return result
+}
 
 func (rp *routePlan) solves() semantics.TableSet {
 	return rp.solved
@@ -221,7 +257,7 @@ func (jp *joinPlan) cost() int {
 */
 func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	size := len(qg.tables)
-	dpTable := make(dpTableT)
+	dpTable := makeDPTable()
 
 	var allTables semantics.TableSet
 
@@ -229,11 +265,11 @@ func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema)
 	for _, table := range qg.tables {
 		solves := semTable.TableSetFor(table.alias)
 		allTables |= solves
-		var err error
-		dpTable[solves], err = createRoutePlan(table, solves, vschema)
+		plan, err := createRoutePlan(table, solves, vschema)
 		if err != nil {
 			return nil, err
 		}
+		dpTable.add(plan)
 	}
 
 	for currentSize := 2; currentSize <= size; currentSize++ {
@@ -246,7 +282,7 @@ func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema)
 					continue
 				}
 				solves := lhs.solves() | rhs.solves()
-				oldPlan := dpTable[solves]
+				oldPlan := dpTable.planFor(solves)
 				if oldPlan != nil && oldPlan.cost() == 1 {
 					// we already have the perfect plan. keep it
 					continue
@@ -261,13 +297,13 @@ func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema)
 					}
 				}
 				if oldPlan == nil || newPlan.cost() < oldPlan.cost() {
-					dpTable[solves] = newPlan
+					dpTable.add(newPlan)
 				}
 			}
 		}
 	}
 
-	return dpTable[allTables], nil
+	return dpTable.planFor(allTables), nil
 }
 
 func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
