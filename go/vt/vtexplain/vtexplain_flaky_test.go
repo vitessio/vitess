@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -104,6 +105,7 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 			if testOutputTempDir == "" {
 				testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
 				require.NoError(t, err, "error getting tempdir")
+				defer os.RemoveAll(testOutputTempDir)
 			}
 			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
 			ioutil.WriteFile(gotFile, []byte(explainText), 0644)
