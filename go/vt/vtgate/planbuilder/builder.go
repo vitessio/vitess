@@ -50,6 +50,7 @@ type ContextVSchema interface {
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
+	NewPlanner() bool
 }
 
 type truncater interface {
