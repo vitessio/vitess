@@ -43,6 +43,10 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+const (
+	initShardMasterOperation = "InitShardMaster" // (TODO:@amason) Can I rename this to Primary?
+)
+
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	ts *topo.Server
@@ -140,7 +144,10 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 
 	ev := &events.Reparent{}
 
-	resp, err := s.initShardPrimaryLocked(ctx, ev, req, waitReplicasTimeout)
+	resp := &vtctldatapb.InitShardPrimaryResponse{}
+	err = s.InitShardPrimaryLocked(ctx, ev, req, waitReplicasTimeout, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		resp.Events = append(resp.Events, e)
+	}))
 	if err != nil {
 		event.DispatchUpdate(ev, "failed InitShardPrimary: "+err.Error())
 	} else {
@@ -150,13 +157,17 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 	return resp, err
 }
 
-func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Reparent, req *vtctldatapb.InitShardPrimaryRequest, waitReplicasTimeout time.Duration) (*vtctldatapb.InitShardPrimaryResponse, error) {
-	resp := &vtctldatapb.InitShardPrimaryResponse{}
-	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-		resp.Events = append(resp.Events, e)
-	})
-	tmc := tmclient.NewTabletManagerClient()
-
+// InitShardPrimaryLocked is the main work of doing an InitShardPrimary. It
+// should only called by callers that have already locked the shard in the topo.
+// It is only public so that it can be used in wrangler and legacy vtctl server.
+func (s *VtctldServer) InitShardPrimaryLocked(
+	ctx context.Context,
+	ev *events.Reparent,
+	req *vtctldatapb.InitShardPrimaryRequest,
+	waitReplicasTimeout time.Duration,
+	tmc tmclient.TabletManagerClient,
+	logger logutil.Logger,
+) error {
 	// (TODO:@amason) The code below this point is a verbatim copy of
 	// initShardMasterLocked in package wrangler, modulo the following:
 	// - s/keyspace/req.Keyspace
@@ -171,21 +182,21 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 	// acknowledgement of that, as well as a TODO marker for us to revisit this.
 	shardInfo, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	ev.ShardInfo = *shardInfo
 
 	event.DispatchUpdate(ev, "reading tablet map")
 	tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Check the master elect is in tabletMap.
 	masterElectTabletAliasStr := topoproto.TabletAliasString(req.PrimaryElectTabletAlias)
 	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
-		return resp, fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
 	ev.NewMaster = *masterElectTabletInfo.Tablet
 
@@ -193,14 +204,14 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
 	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, req.PrimaryElectTabletAlias) {
 		if !req.Force {
-			return resp, fmt.Errorf("master-elect tablet %v is not the shard master, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("master-elect tablet %v is not the shard master, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
 
 		logger.Warningf("master-elect tablet %v is not the shard master, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
 	if _, ok := masterTabletMap[masterElectTabletAliasStr]; !ok {
 		if !req.Force {
-			return resp, fmt.Errorf("master-elect tablet %v is not a master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("master-elect tablet %v is not a master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
 		logger.Warningf("master-elect tablet %v is not a master in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
@@ -212,7 +223,7 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 	}
 	if haveOtherMaster {
 		if !req.Force {
-			return resp, fmt.Errorf("master-elect tablet %v is not the only master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("master-elect tablet %v is not the only master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
 		logger.Warningf("master-elect tablet %v is not the only master in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
@@ -242,12 +253,12 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 	wg.Wait()
 	if err := rec.Error(); err != nil {
 		// if any of the replicas failed
-		return resp, err
+		return err
 	}
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, req.Keyspace, req.Shard); err != nil {
-		return resp, fmt.Errorf("lost topology lock, aborting: %v", err)
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Tell the new master to break its replicas, return its replication
@@ -256,12 +267,12 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 	event.DispatchUpdate(ev, "initializing master")
 	rp, err := tmc.InitMaster(ctx, masterElectTabletInfo.Tablet)
 	if err != nil {
-		return resp, err
+		return err
 	}
 
 	// Check we stil have the topology lock.
 	if err := topo.CheckShardLocked(ctx, req.Keyspace, req.Shard); err != nil {
-		return resp, fmt.Errorf("lost topology lock, aborting: %v", err)
+		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -287,7 +298,7 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 				defer wgMaster.Done()
 				logger.Infof("populating reparent journal on new master %v", alias)
 				masterErr = tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now,
-					"InitShardMaster", // (TODO:@amason), these are private constants in package wrangler
+					initShardMasterOperation,
 					req.PrimaryElectTabletAlias, rp)
 			}(alias, tabletInfo)
 		} else {
@@ -311,7 +322,7 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 		logger.Warningf("master failed to PopulateReparentJournal, canceling replicas")
 		replCancel()
 		wgReplicas.Wait()
-		return resp, fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
+		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
 	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, req.PrimaryElectTabletAlias) {
 		if _, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
@@ -319,7 +330,7 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 			return nil
 		}); err != nil {
 			wgReplicas.Wait()
-			return resp, fmt.Errorf("failed to update shard master record: %v", err)
+			return fmt.Errorf("failed to update shard master record: %v", err)
 		}
 	}
 
@@ -329,7 +340,7 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 	// expired, so the rebuild will fail anyway)
 	wgReplicas.Wait()
 	if err := rec.Error(); err != nil {
-		return resp, err
+		return err
 	}
 
 	// Create database if necessary on the master. replicas will get it too through
@@ -339,14 +350,14 @@ func (s *VtctldServer) initShardPrimaryLocked(ctx context.Context, ev *events.Re
 	// to begin serving with no data (i.e. first time initialization).
 	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(masterElectTabletInfo.Tablet)))
 	if _, err := tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
-		return resp, fmt.Errorf("failed to create database: %v", err)
+		return fmt.Errorf("failed to create database: %v", err)
 	}
 	// Refresh the state to force the tabletserver to reconnect after db has been created.
 	if err := tmc.RefreshState(ctx, masterElectTabletInfo.Tablet); err != nil {
 		log.Warningf("RefreshState failed: %v", err)
 	}
 
-	return resp, nil
+	return nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
