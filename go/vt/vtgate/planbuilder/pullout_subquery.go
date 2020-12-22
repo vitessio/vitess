@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*pulloutSubquery)(nil)
@@ -86,6 +87,14 @@ func (ps *pulloutSubquery) Wireup(plan logicalPlan, jt *jointab) error {
 	return ps.subquery.Wireup(plan, jt)
 }
 
+// Wireup2 implements the logicalPlan interface
+func (ps *pulloutSubquery) Wireup2(semTable *semantics.SemTable) error {
+	if err := ps.underlying.Wireup2(semTable); err != nil {
+		return err
+	}
+	return ps.subquery.Wireup2(semTable)
+}
+
 // SupplyVar implements the logicalPlan interface
 func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if from <= ps.subquery.Order() {
@@ -113,6 +122,11 @@ func (ps *pulloutSubquery) Rewrite(inputs ...logicalPlan) error {
 	ps.underlying = inputs[0]
 	ps.subquery = inputs[1]
 	return nil
+}
+
+// Solves implements the logicalPlan interface
+func (ps *pulloutSubquery) Solves() semantics.TableSet {
+	return ps.underlying.Solves().Merge(ps.subquery.Solves())
 }
 
 // Inputs implements the logicalPlan interface

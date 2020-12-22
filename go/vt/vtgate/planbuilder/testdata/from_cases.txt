@@ -151,6 +151,8 @@
     ]
   }
 }
+{
+}
 
 # routing rules where table name matches, and there's no alias.
 "select * from second_user.user"
@@ -289,6 +291,8 @@
       }
     ]
   }
+}
+{
 }
 
 # ',' join unsharded

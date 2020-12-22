@@ -31,6 +31,61 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+	semTable, err := semantics.Analyse(sel, nil) // TODO no nil no
+	if err != nil {
+		return nil, err
+	}
+
+	qgraph, err := createQGFromSelect(sel, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := solve(qgraph, semTable, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err := transformToLogicalPlan(tree)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := planProjections(sel, plan, semTable); err != nil {
+		return nil, err
+	}
+
+	if err := plan.Wireup2(semTable); err != nil {
+		return nil, err
+	}
+	return plan.Primitive(), nil
+}
+
+func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) error {
+	rb, ok := plan.(*route)
+	if ok {
+		rb.Select = sel
+	} else {
+		var projections []*sqlparser.AliasedExpr
+
+		// TODO real horizon planning to be done
+		for _, expr := range sel.SelectExprs {
+			switch e := expr.(type) {
+			case *sqlparser.AliasedExpr:
+				projections = append(projections, e)
+			default:
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", e)
+			}
+		}
+
+		if _, err := pushProjection(projections, plan, semTable); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type (
 	joinTree interface {
 		solves() semantics.TableSet
@@ -182,8 +237,8 @@ func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema)
 	}
 
 	for currentSize := 2; currentSize <= size; currentSize++ {
-		lefts := dpTable.bitSetsOfSize(1)
-		rights := dpTable.bitSetsOfSize(currentSize - 1)
+		lefts := dpTable.bitSetsOfSize(currentSize - 1)
+		rights := dpTable.bitSetsOfSize(1)
 		for _, lhs := range lefts {
 			for _, rhs := range rights {
 				if semantics.IsOverlapping(lhs.solves(), rhs.solves()) {
@@ -296,17 +351,23 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 				From:  tablesForSelect,
 				Where: where,
 			},
+			solvedTables: n.solved,
 		}, nil
 
 	case *joinPlan:
-		_, err := transformToLogicalPlan(n.lhs)
+		lhs, err := transformToLogicalPlan(n.lhs)
 		if err != nil {
 			return nil, err
 		}
-		_, err = transformToLogicalPlan(n.rhs)
+		rhs, err := transformToLogicalPlan(n.rhs)
 		if err != nil {
 			return nil, err
 		}
+		return &join2{
+			Left:  lhs,
+			Right: rhs,
+		}, nil
 	}
-	panic(42)
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type encountered: %T", tree)
 }
