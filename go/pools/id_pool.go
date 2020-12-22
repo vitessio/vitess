@@ -25,7 +25,7 @@ import (
 // contains any duplicates. The IDs start at 1 and increase without bound, but
 // will never be larger than the peak number of concurrent uses.
 //
-// IDPool's Get() and Set() methods can be used concurrently.
+// IDPool's Get() and Put() methods can be used concurrently.
 type IDPool struct {
 	sync.Mutex
 
