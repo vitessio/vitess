@@ -1,1 +1,2 @@
-src/proto
+src/proto/*.ts
+src/proto/*.js
