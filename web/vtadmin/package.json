@@ -25,8 +25,12 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "lint": "npm run lint:eslint",
+    "lint": "npm run lint:eslint && npm run lint:stylelint",
+    "lint:fix": "npm run lint:eslint:fix && npm run lint:stylelint:fix",
     "lint:eslint": "eslint --ext js,ts,tsx src",
+    "lint:eslint:fix": "npm run lint:eslint -- --fix",
+    "lint:stylelint": "stylelint \"**/*.{css,scss}\"",
+    "lint:stylelint:fix": "npm run lint:stylelint -- --fix",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -48,6 +52,8 @@
     ]
   },
   "devDependencies": {
-    "protobufjs": "^6.10.2"
+    "protobufjs": "^6.10.2",
+    "stylelint": "^13.8.0",
+    "stylelint-config-standard": "^20.0.0"
   }
 }
