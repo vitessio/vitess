@@ -957,6 +957,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
@@ -978,6 +980,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # Booleans and parenthesis

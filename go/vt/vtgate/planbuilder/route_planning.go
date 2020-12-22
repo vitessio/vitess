@@ -255,11 +255,11 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routePlan:
 		var tablesForSelect sqlparser.TableExprs
-		var tableNames []string
+		tableNameMap := map[string]interface{}{}
 
 		for _, t := range n.tables {
 			tablesForSelect = append(tablesForSelect, t.alias)
-			tableNames = append(tableNames, sqlparser.String(t.alias))
+			tableNameMap[sqlparser.String(t.alias.Expr)] = nil
 		}
 		predicates := n.Predicates()
 		var where *sqlparser.Where
@@ -277,6 +277,11 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 		var singleColumn vindexes.SingleColumn
 		if n.vindex != nil {
 			singleColumn = n.vindex.(vindexes.SingleColumn)
+		}
+
+		var tableNames []string
+		for name := range tableNameMap {
+			tableNames = append(tableNames, name)
 		}
 
 		return &route{
