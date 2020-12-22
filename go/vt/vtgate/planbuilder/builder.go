@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -48,6 +49,7 @@ type ContextVSchema interface {
 	SysVarSetEnabled() bool
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
+	GetSemTable() *semantics.SemTable
 }
 
 type truncater interface {
