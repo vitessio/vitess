@@ -27,6 +27,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"github.com/google/go-cmp/cmp"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -289,6 +291,10 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 		return nil, errors.New("keyspace not available")
 	}
 	return []*vindexes.Keyspace{vw.keyspace}, nil
+}
+
+func (vw *vschemaWrapper) GetSemTable() *semantics.SemTable {
+	return nil
 }
 
 func (vw *vschemaWrapper) KeyspaceExists(keyspace string) bool {

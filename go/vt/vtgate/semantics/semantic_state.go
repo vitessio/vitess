@@ -32,6 +32,7 @@ type (
 	// TableSet is how a set of tables is expressed.
 	// Tables get unique bits assigned in the order that they are encountered during semantic analysis
 	TableSet uint64 // we can only join 64 tables with this underlying data type
+	// TODO : change uint64 to struct to support arbitrary number of tables.
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {

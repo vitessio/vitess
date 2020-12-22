@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
@@ -97,6 +99,7 @@ type vcursorImpl struct {
 	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
+	semTable              *semantics.SemTable
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
@@ -341,6 +344,10 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 		kss = append(kss, ks.Keyspace)
 	}
 	return kss, nil
+}
+
+func (vc *vcursorImpl) GetSemTable() *semantics.SemTable {
+	return vc.semTable
 }
 
 // TargetString returns the current TargetString of the session.
