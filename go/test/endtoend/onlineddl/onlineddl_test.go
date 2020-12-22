@@ -46,7 +46,6 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	totalTableCount       = 4
-	ddlStrategyUnchanged  = "-"
 	createTable           = `
 		CREATE TABLE %s (
 			id bigint(20) NOT NULL,
@@ -113,7 +112,7 @@ func TestMain(m *testing.M) {
 			"-schema_change_check_interval", "1"}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-migration_check_interval", "2s",
+			"-migration_check_interval", "5s",
 			"-gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
 		}
 		clusterInstance.VtGateExtraArgs = []string{
@@ -169,7 +168,7 @@ func TestSchemaChange(t *testing.T) {
 		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online")
 	}
 	{
-		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, ddlStrategyUnchanged, "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "gh-ost", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
@@ -251,18 +250,16 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		ddlStrategyArg := ""
-		if ddlStrategy != ddlStrategyUnchanged {
-			ddlStrategyArg = ddlStrategy
-		}
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategyArg)
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategy)
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	if !schema.DDLStrategy(ddlStrategy).IsDirect() {
+	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
+	assert.NoError(t, err)
+	if !strategy.IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
 
@@ -379,11 +376,10 @@ func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError stri
 	require.Nil(t, err)
 	defer conn.Close()
 
-	if ddlStrategy != ddlStrategyUnchanged {
-		setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
-		_, err := conn.ExecuteFetch(setSession, 1000, true)
-		assert.NoError(t, err)
-	}
+	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
+	_, err = conn.ExecuteFetch(setSession, 1000, true)
+	assert.NoError(t, err)
+
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
 		require.NoError(t, err)
