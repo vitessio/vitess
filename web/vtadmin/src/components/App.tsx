@@ -71,7 +71,7 @@ const fakeTablets = [
     {
         cluster: { id: 'dev', name: 'dev' },
         tablet: {
-            hostname: 'tablet-prod-commerce-00-00-mnop',
+            hostname: 'tablet-dev-commerce-00-00-mnop',
             keyspace: 'commerce',
             shard: '-',
             type: topodata.TabletType.MASTER,
@@ -81,7 +81,7 @@ const fakeTablets = [
     {
         cluster: { id: 'dev', name: 'dev' },
         tablet: {
-            hostname: 'tablet-prod-commerce-00-00-qrst',
+            hostname: 'tablet-dev-commerce-00-00-qrst',
             keyspace: 'commerce',
             shard: '-',
             type: topodata.TabletType.REPLICA,
@@ -91,7 +91,7 @@ const fakeTablets = [
     {
         cluster: { id: 'dev', name: 'dev' },
         tablet: {
-            hostname: 'tablet-prod-commerce-00-00-uvwx',
+            hostname: 'tablet-dev-commerce-00-00-uvwx',
             keyspace: 'commerce',
             shard: '-',
             type: topodata.TabletType.REPLICA,
