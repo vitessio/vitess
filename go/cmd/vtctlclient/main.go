@@ -68,7 +68,7 @@ func main() {
 	if err != nil {
 		errStr := strings.Replace(err.Error(), "remote error: ", "", -1)
 		fmt.Printf("%s Error: %s\n", flag.Arg(0), errStr)
-		//log.Error(err)
+		log.Error(err)
 		os.Exit(1)
 	}
 }

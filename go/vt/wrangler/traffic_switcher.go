@@ -360,7 +360,6 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 	}
 	if journalsExist {
 		wr.Logger().Errorf("Found a previous journal entry for %d", ts.id)
-		//return nil, fmt.Errorf("found an entry from a previous run for migration id %d in _vt.resharding_journal, please review and delete it before proceeding", ts.id)
 	}
 	var sw iswitcher
 	if dryRun {
@@ -394,8 +393,6 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
-	x1, x2, err := wr.getCellsWithShardReadsSwitched(ctx, targetKeyspace, ts.sourceShards()[0], servedTypes[0].String())
-	wr.Logger().Infof("State: %+v,%+v,%v", x1, x2, err)
 	return sw.logs(), nil
 }
 
@@ -914,9 +911,6 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 				rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
 			} else {
 				log.Infof("Route direction backwards")
-				//delete(rules, table+"@"+tt)
-				//delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
-				//delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
 				rules[table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
 				rules[ts.targetKeyspace+"."+table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
 				rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
@@ -1484,6 +1478,7 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 	})
 }
 
+// FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
 func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 	return ts.forAllSources(func(source *tsSource) error {
 		ts.wr.Logger().Infof("Deleting shard %s.%s\n", source.si.Keyspace(), source.si.ShardName())

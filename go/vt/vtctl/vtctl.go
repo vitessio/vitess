@@ -1893,7 +1893,7 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	for _, arg := range args {
 		if arg == "-v2" {
-			fmt.Printf("*** Using Reshard v2 flow ***")
+			fmt.Println("*** Using Reshard v2 flow ***")
 			return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
 		}
 	}
@@ -1918,7 +1918,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	for _, arg := range args {
 		if arg == "-v2" {
-			fmt.Printf("*** Using MoveTables v2 flow ***")
+			fmt.Println("*** Using MoveTables v2 flow ***")
 			return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
 		}
 	}
@@ -1975,7 +1975,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	_ = subFlags.Bool("v2", true, "")
 
-	_, _, _ = dryRun, reverseReplication, skipSchemaCopy
+	_ = dryRun //TODO: add dry run functionality
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2006,11 +2006,10 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		if err != nil {
 			return err
 		}
-		s += "Following vreplication streams are running for this workflow:\n\n"
+		s += "Following vreplication streams are running in this workflow:\n\n"
 		for ksShard := range res.ShardStatuses {
 			statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
 			for _, st := range statuses {
-				//status.State, status.TransactionTimestamp, status.TimeUpdated, status.Tablet, status.ID, status.Message, status.Pos
 				now := time.Now().Nanosecond()
 				msg := ""
 				updateLag := int64(now) - st.TimeUpdated
@@ -2041,7 +2040,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
 	case wrangler.VReplicationWorkflowActionStart:
-
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
@@ -2068,7 +2066,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
-
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
 	case wrangler.VReplicationWorkflowActionSwitchTraffic, wrangler.VReplicationWorkflowActionReverseTraffic:
@@ -2098,12 +2095,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
-	startState := wf.CachedState()
-	wr.Logger().Printf("\nCachedState: %s\n", startState)
-	switch action {
-	case wrangler.VReplicationWorkflowActionShow:
-		return printDetails()
-	case wrangler.VReplicationWorkflowActionProgress:
+	printCopyProgress := func() error {
 		copyProgress, err := wf.GetCopyProgress()
 		if err != nil {
 			return err
@@ -2130,6 +2122,15 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			wr.Logger().Printf("\n%s\n", s)
 		}
 		return printDetails()
+
+	}
+	startState := wf.CachedState()
+	wr.Logger().Printf("\nCachedState: %s\n", startState)
+	switch action {
+	case wrangler.VReplicationWorkflowActionShow:
+		return printDetails()
+	case wrangler.VReplicationWorkflowActionProgress:
+		return printCopyProgress()
 	case wrangler.VReplicationWorkflowActionStart:
 		err = wf.Start()
 	case wrangler.VReplicationWorkflowActionSwitchTraffic:
@@ -2148,7 +2149,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return wrapError(wf, err)
 	}
 	time.Sleep(1 * time.Second)
-	wr.Logger().Printf("%s %s was successful\nStart State: %s\n\nCurrent State: %s\n\n", workflowType, action, startState, wf.CurrentState())
+	wr.Logger().Printf("%s %s was successful\nStart State: %s\n\nCurrent State: %s\n\n",
+		workflowType, action, startState, wf.CurrentState())
 	return nil
 }
 
@@ -2391,12 +2393,6 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	/*
-		if strings.HasSuffix(workflow, "_reverse") {
-			return fmt.Errorf("workflow cannot end with _reverse, it is reserved for vreplication to create a reverse workflow")
-		}
-
-	*/
 	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflow, servedTypes, cells, direction, *dryRun)
 	if err != nil {
 		return err
@@ -2426,14 +2422,6 @@ func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	/*
-		TODO: uncomment for subsequent release
-		if strings.HasSuffix(workflow, "_reverse") {
-			return fmt.Errorf("workflow cannot end with _reverse, it is reserved for vreplication to create a reverse workflow")
-		}
-
-	*/
-
 	if filteredReplicationWaitTime != timeout {
 		timeout = filteredReplicationWaitTime
 	}
