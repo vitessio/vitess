@@ -28,6 +28,16 @@ func TestCreateUUID(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestIsDirect(t *testing.T) {
+	assert.True(t, DDLStrategyDirect.IsDirect())
+	assert.False(t, DDLStrategyGhost.IsDirect())
+	assert.False(t, DDLStrategyPTOSC.IsDirect())
+	assert.True(t, DDLStrategy("").IsDirect())
+	assert.False(t, DDLStrategy("gh-ost").IsDirect())
+	assert.False(t, DDLStrategy("pt-osc").IsDirect())
+	assert.True(t, DDLStrategy("something").IsDirect())
+}
+
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable string
@@ -35,6 +45,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		options          string
 		err              error
 	}{
+		{
+			strategyVariable: "direct",
+			strategy:         DDLStrategyDirect,
+		},
 		{
 			strategyVariable: "gh-ost",
 			strategy:         DDLStrategyGhost,
@@ -44,7 +58,7 @@ func TestParseDDLStrategy(t *testing.T) {
 			strategy:         DDLStrategyPTOSC,
 		},
 		{
-			strategy: DDLStrategyNormal,
+			strategy: DDLStrategyDirect,
 		},
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
