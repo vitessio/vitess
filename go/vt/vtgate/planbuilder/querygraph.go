@@ -206,5 +206,5 @@ func (qg *queryGraph) tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) j
 	}
 
 	r.extraPredicates = append(r.extraPredicates, joinPredicates...)
-	return nil
+	return r
 }

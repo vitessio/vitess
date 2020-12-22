@@ -112,6 +112,8 @@
     "Table": "unsharded"
   }
 }
+{
+}
 
 # Multi-table, multi-chunk
 "select music.col from user join music"
@@ -306,6 +308,8 @@
     "Table": "unsharded"
   }
 }
+{
+}
 
 # ',' join information_schema
 "select a.id,b.id from information_schema.a as a, information_schema.b as b"
@@ -341,6 +345,8 @@
     "Table": "unsharded"
   }
 }
+{
+}
 
 # Left join, single chunk
 "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b"
@@ -358,6 +364,8 @@
     "Query": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a = m2.b",
     "Table": "unsharded"
   }
+}
+{
 }
 
 # Left join, multi-chunk
@@ -561,6 +569,8 @@
     "Table": "unsharded"
   }
 }
+{
+}
 
 # Three-way join
 "select user.col from user join unsharded as m1 join unsharded as m2"
@@ -726,6 +736,8 @@
     "Query": "select user.col from user use index (a)",
     "Table": "user"
   }
+}
+{
 }
 
 # mergeable sharded join on unique vindex
@@ -1053,6 +1065,8 @@
     "Query": "select r1.col from ref as r1 join ref",
     "Table": "ref"
   }
+}
+{
 }
 
 # reference table can merge with other opcodes left to right.
@@ -2032,6 +2046,8 @@
     "Query": "select u1.a from unsharded as u1 join unsharded as u2 on database()",
     "Table": "unsharded"
   }
+}
+{
 }
 
 # last_insert_id for dual

@@ -1280,6 +1280,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # cross-shard subquery in IN clause.
 # Note the improved Underlying plan as SelectIN.

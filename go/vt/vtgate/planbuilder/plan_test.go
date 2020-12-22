@@ -24,6 +24,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -451,7 +452,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 func getPlanOutput(tcase testCase, vschema *vschemaWrapper) (out string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			out = fmt.Sprintf("%v", r)
+			out = fmt.Sprintf("panicked: %v\n%s", r, string(debug.Stack()))
 		}
 	}()
 	plan, err := TestBuilder(tcase.input, vschema)
@@ -553,8 +554,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 						break
 					}
 				}
-				if string(output2Planner) == `{
-}` {
+				if string(output2Planner) == "{\n}" {
 					output2Planner = output
 				}
 			}
