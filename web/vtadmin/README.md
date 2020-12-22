@@ -29,3 +29,58 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 - [React](https://reactjs.org/)
 - [create-react-app](https://create-react-app.dev/) (generated with v.4.0.1)
 - [TypeScript](http://typescriptlang.org/)
+
+## Configuring your editor
+
+### VS Code
+
+To set up automatic formatting on save:
+
+1. Install the [Prettier VS Code plugin](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode).
+2. Add the following to your VS Code workspace:
+
+```js
+{
+	// ... other workspace config ...
+
+	"settings": {
+		// ... other settings ..
+
+		"prettier.useEditorConfig": false,
+
+		// You may have to adjust this depending on which folder is the root of your workspace.
+		// By default, this configuration assumes that you have your workspace settings 
+		// at `vitess/.vscode/settings.json`. 
+		"prettier.configPath": "web/vtadmin/.prettiercc",
+		
+		"[typescriptreact]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
+		},
+		
+		"[typescript]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
+		},
+		
+		"[javascript]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
+		},
+
+		"[css]": {
+			"editor.codeActionsOnSave": {
+				"source.fixAll.stylelint": true
+			}
+		},
+
+		"[scss]": {
+			"editor.codeActionsOnSave": {
+				"source.fixAll.stylelint": true
+			}
+		}
+	}
+}
+```
+
+For more, check out ["Setting Up Your Editor"](https://create-react-app.dev/docs/setting-up-your-editor/) in the create-react-app docs.
