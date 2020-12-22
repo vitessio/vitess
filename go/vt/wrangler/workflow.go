@@ -31,7 +31,9 @@ import (
 type VReplicationWorkflowType int
 
 const (
+	// MoveTablesWorkflow specifies that the workflow is for moving tables from one keyspace to another
 	MoveTablesWorkflow = VReplicationWorkflowType(iota)
+	// ReshardWorkflow specifies that the workflow is for resharding a keyspace
 	ReshardWorkflow
 )
 
@@ -175,7 +177,7 @@ func (vrw *VReplicationWorkflow) Start() error {
 	case ReshardWorkflow:
 		return vrw.initReshard()
 	default:
-		return fmt.Errorf("unknown workflow type %s", vrw.workflowType)
+		return fmt.Errorf("unknown workflow type %d", vrw.workflowType)
 	}
 }
 
