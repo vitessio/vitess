@@ -55,6 +55,8 @@
     "Table": "seq"
   }
 }
+{
+}
 
 # Select from reference
 "select * from ref"
@@ -72,6 +74,8 @@
     "Query": "select * from ref",
     "Table": "ref"
   }
+}
+{
 }
 
 # Single information_schema query
@@ -239,10 +243,14 @@
 # routing rules bad table
 "select * from bad_table"
 "keyspace noks not found in vschema"
+{
+}
 
 # routing rules disabled table
 "select * from disabled"
 "table disabled has been disabled"
+{
+}
 
 # ',' join
 "select music.col from user, music"
@@ -2064,6 +2072,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # last_insert_id for unsharded route
 "select last_insert_id() from main.unsharded"
@@ -2127,6 +2137,8 @@
 # first expression fails for ',' join (code coverage: ensure error is returned)
 "select user.foo.col from user.foo, user"
 "table foo not found"
+{
+}
 
 # table names should be case-sensitive
 "select unsharded.id from unsharded where Unsharded.val = 1"
@@ -2135,6 +2147,8 @@
 # implicit table reference for sharded keyspace
 "select user.foo.col from user.foo"
 "table foo not found"
+{
+}
 
 # duplicate symbols
 "select user.id from user join user"
@@ -2147,6 +2161,8 @@
 # non-existent table
 "select c from t"
 "table t not found"
+{
+}
 
 # non-existent table on left of join
 "select c from t join user"
@@ -2450,4 +2466,3 @@
     "SysTableTableSchema": "VARBINARY(\"a\")"
   }
 }
-
