@@ -246,13 +246,18 @@ func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, baseP
 
 // GetGCUUID gets this OnlineDDL UUID in GC UUID format
 func (onlineDDL *OnlineDDL) GetGCUUID() string {
-	return strings.Replace(onlineDDL.UUID, "_", "", -1)
+	return OnlineDDLToGCUUID(onlineDDL.UUID)
 }
 
 // IsOnlineDDLUUID answers 'true' when the given string is an online-ddl UUID, e.g.:
 // a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a
 func IsOnlineDDLUUID(uuid string) bool {
 	return onlineDdlUUIDRegexp.MatchString(uuid)
+}
+
+// OnlineDDLToGCUUID converts a UUID in online-ddl format to GC-table format
+func OnlineDDLToGCUUID(uuid string) string {
+	return strings.Replace(uuid, "_", "", -1)
 }
 
 // IsOnlineDDLTableName answers 'true' when the given table name _appears to be_ a name

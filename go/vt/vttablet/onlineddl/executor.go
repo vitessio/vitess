@@ -102,6 +102,7 @@ const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationMinutes         = 10
 	progressPctFull       float64 = 100.0
+	gcHoldHours                   = 72
 )
 
 var (
@@ -998,7 +999,19 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return failMigration(err)
 	}
 	switch ddlAction {
-	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
+	case sqlparser.DropDDLAction:
+		go func() {
+			onlineDDL.SQL, _, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(gcHoldHours*time.Hour))
+			if err != nil {
+				failMigration(err)
+				return
+			}
+
+			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
+	case sqlparser.CreateDDLAction:
 		go func() {
 			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
 				failMigration(err)
@@ -1220,7 +1233,7 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 }
 
 // gcArtifacts garbage-collects migration artifacts from completed/failed migrations
-func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable string) error {
+func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string) error {
 	tableExists, err := e.tableExists(ctx, artifactTable)
 	if err != nil {
 		return err
@@ -1228,7 +1241,7 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable string) er
 	if !tableExists {
 		return nil
 	}
-	renameStatement, _, err := schema.GenerateRenameStatement(artifactTable, schema.PurgeTableGCState, time.Now().UTC())
+	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), time.Now().UTC())
 	if err != nil {
 		return err
 	}
@@ -1258,7 +1271,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 
 		artifactTables := textutil.SplitDelimitedList(artifacts)
 		for _, artifactTable := range artifactTables {
-			if err := e.gcArtifactTable(ctx, artifactTable); err != nil {
+			if err := e.gcArtifactTable(ctx, artifactTable, uuid); err != nil {
 				return err
 			}
 			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)

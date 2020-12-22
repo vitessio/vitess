@@ -515,7 +515,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 		t = t.Add(evacHours * time.Hour)
 	}
 
-	renameStatement, toTableName, err := schema.GenerateRenameStatement(transition.fromTableName, transition.toGCState, t)
+	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(transition.fromTableName, transition.toGCState, transition.uuid, t)
 	if err != nil {
 		return err
 	}
