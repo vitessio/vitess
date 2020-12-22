@@ -78,6 +78,16 @@ func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (en
 			return nil, err
 		}
 
+		// minimal horizon planning
+		rb, ok := plan.(*route)
+		if ok {
+			rb.Select = sel
+			rb.eroute.Query = sqlparser.String(sel)
+			buffer := sqlparser.NewTrackedBuffer(nil)
+			sqlparser.FormatImpossibleQuery(buffer, sel)
+			rb.eroute.FieldQuery = buffer.ParsedQuery().Query
+		}
+
 		return plan.Primitive(), nil
 	}
 }

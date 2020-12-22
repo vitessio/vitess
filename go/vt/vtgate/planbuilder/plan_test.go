@@ -525,6 +525,10 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 						break
 					}
 				}
+				if string(output2Planner) == `{
+}` {
+					output2Planner = output
+				}
 			}
 
 			testCaseIterator <- testCase{

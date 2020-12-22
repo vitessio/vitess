@@ -15,6 +15,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # Single table unsharded
 "select col from unsharded"
@@ -32,6 +34,8 @@
     "Query": "select col from unsharded",
     "Table": "unsharded"
   }
+}
+{
 }
 
 # Select from sequence
