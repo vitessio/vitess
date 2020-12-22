@@ -192,9 +192,16 @@ func (qg *queryGraph) tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) j
 			return nil
 		}
 	case engine.SelectEqualUnique:
-
 		return nil
+	case engine.SelectScatter:
+		//if len(joinPredicates) == 0 {
+		// If we are doing two Scatters, we have to make sure that the
+		// joins are on the correct vindex to allow them to be merged
+		// no join predicates - no vindex
+		return nil
+		//}
 	}
+
 	newTabletSet := aRoute.solved | bRoute.solved
 	r := &routePlan{
 		routeOpCode:          aRoute.routeOpCode,

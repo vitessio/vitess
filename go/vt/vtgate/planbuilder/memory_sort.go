@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -124,4 +126,8 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 		}
 	}
 	return ms.input.Wireup(plan, jt)
+}
+
+func (ms *memorySort) Wireup2(semTable *semantics.SemTable) error {
+	return ms.input.Wireup2(semTable)
 }

@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // logicalPlan defines the interface that a primitive must
@@ -48,6 +49,9 @@ type logicalPlan interface {
 	// the lhs nodes.
 	Wireup(lp logicalPlan, jt *jointab) error
 
+	// Wireup2 does the wire up work for the new planner
+	Wireup2(semTable *semantics.SemTable) error
+
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
 	// If the primitive already has the column in its list, it should
@@ -74,6 +78,7 @@ type logicalPlan interface {
 
 	Inputs() []logicalPlan
 	Rewrite(inputs ...logicalPlan) error
+	Solves() semantics.TableSet
 }
 
 //-------------------------------------------------------------------------
@@ -147,6 +152,10 @@ func (bc *logicalPlanCommon) Wireup(plan logicalPlan, jt *jointab) error {
 	return bc.input.Wireup(plan, jt)
 }
 
+func (bc *logicalPlanCommon) Wireup2(semTable *semantics.SemTable) error {
+	return bc.input.Wireup2(semTable)
+}
+
 func (bc *logicalPlanCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	bc.input.SupplyVar(from, to, col, varname)
 }
@@ -171,6 +180,11 @@ func (bc *logicalPlanCommon) Rewrite(inputs ...logicalPlan) error {
 // Inputs implements the logicalPlan interface
 func (bc *logicalPlanCommon) Inputs() []logicalPlan {
 	return []logicalPlan{bc.input}
+}
+
+// Solves implements the logicalPlan interface
+func (bc *logicalPlanCommon) Solves() semantics.TableSet {
+	return bc.input.Solves()
 }
 
 //-------------------------------------------------------------------------

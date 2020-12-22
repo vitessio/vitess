@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"errors"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -151,6 +153,15 @@ func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
 	return jb.Left.Wireup(plan, jt)
 }
 
+// Wireup2 implements the logicalPlan interface
+func (jb *join) Wireup2(semTable *semantics.SemTable) error {
+	err := jb.Right.Wireup2(semTable)
+	if err != nil {
+		return err
+	}
+	return jb.Left.Wireup2(semTable)
+}
+
 // SupplyVar implements the logicalPlan interface
 func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if !jb.isOnLeft(from) {
@@ -233,6 +244,11 @@ func (jb *join) Rewrite(inputs ...logicalPlan) error {
 	jb.Left = inputs[0]
 	jb.Right = inputs[1]
 	return nil
+}
+
+// Solves implements the logicalPlan interface
+func (jb *join) Solves() semantics.TableSet {
+	return jb.Left.Solves().Merge(jb.Right.Solves())
 }
 
 // Inputs implements the logicalPlan interface

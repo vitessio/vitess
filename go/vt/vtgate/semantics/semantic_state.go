@@ -59,6 +59,11 @@ func (ts TableSet) NumberOfTables() int {
 	return count
 }
 
+// Merge creates a TableSet that contains both inputs
+func (ts TableSet) Merge(other TableSet) TableSet {
+	return ts | other
+}
+
 // TableSetFor returns the bitmask for this particular tableshoe
 func (st *SemTable) TableSetFor(t table) TableSet {
 	for idx, t2 := range st.Tables {

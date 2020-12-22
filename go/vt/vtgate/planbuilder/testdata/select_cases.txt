@@ -554,6 +554,8 @@
     ]
   }
 }
+{
+}
 
 # Both routes referenced
 "select user.col, user_extra.id from user join user_extra"
@@ -590,6 +592,8 @@
       }
     ]
   }
+}
+{
 }
 
 # Expression with single-route reference
@@ -628,6 +632,8 @@
     ]
   }
 }
+{
+}
 
 # Jumbled references
 "select user.col, user_extra.id, user.col2 from user join user_extra"
@@ -664,6 +670,8 @@
       }
     ]
   }
+}
+{
 }
 
 # Comments
@@ -812,6 +820,8 @@
       }
     ]
   }
+}
+{
 }
 
 # syntax error

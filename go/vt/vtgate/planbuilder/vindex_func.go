@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"errors"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -92,7 +94,12 @@ func (vf *vindexFunc) ResultColumns() []*resultColumn {
 }
 
 // Wireup implements the logicalPlan interface
-func (vf *vindexFunc) Wireup(plan logicalPlan, jt *jointab) error {
+func (vf *vindexFunc) Wireup(logicalPlan, *jointab) error {
+	return nil
+}
+
+// Wireup2 implements the logicalPlan interface
+func (vf *vindexFunc) Wireup2(*semantics.SemTable) error {
 	return nil
 }
 
@@ -135,6 +142,11 @@ func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindexFunc: wrong number of inputs")
 	}
 	return nil
+}
+
+// Solves implements the logicalPlan interface
+func (vf *vindexFunc) Solves() semantics.TableSet {
+	return 0
 }
 
 // Inputs implements the logicalPlan interface

@@ -38,57 +38,81 @@ import (
 func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
-		if !vschema.NewPlanner() {
 
-			p, err := handleDualSelects(sel, vschema)
-			if err != nil {
-				return nil, err
-			}
-			if p != nil {
-				return p, nil
-			}
-
-			pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
-			if err := pb.processSelect(sel, nil, query); err != nil {
-				return nil, err
-			}
-			if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
-				return nil, err
-			}
-			return pb.plan.Primitive(), nil
+		if vschema.NewPlanner() {
+			return newBuildSelectPlan(sel, vschema)
 		}
 
-		semTable, err := semantics.Analyse(sel, nil) // TODO no nil no
+		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
 			return nil, err
 		}
+		if p != nil {
+			return p, nil
+		}
 
-		qgraph, err := createQGFromSelect(sel, semTable)
-		if err != nil {
+		pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
+		if err := pb.processSelect(sel, nil, query); err != nil {
 			return nil, err
 		}
-
-		tree, err := solve(qgraph, semTable, vschema)
-		if err != nil {
+		if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
 			return nil, err
 		}
+		return pb.plan.Primitive(), nil
+	}
+}
 
-		plan, err := transformToLogicalPlan(tree)
+func pushProjection(expr []*sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {
+	switch node := plan.(type) {
+	case *route:
+		sel := node.Select.(*sqlparser.Select)
+		offset := len(sel.SelectExprs)
+		for _, e := range expr {
+			sel.SelectExprs = append(sel.SelectExprs, e)
+		}
+		return offset, nil
+	case *join2:
+		cols := make([]int, len(expr))
+		var lhs, rhs []*sqlparser.AliasedExpr
+		lhsSolves := node.Left.Solves()
+		rhsSolves := node.Right.Solves()
+		for i, e := range expr {
+			deps := semTable.Dependencies(e.Expr)
+			switch {
+			case semantics.IsContainedBy(deps, lhsSolves):
+				lhs = append(lhs, e)
+				cols[i] = -1
+			case semantics.IsContainedBy(deps, rhsSolves):
+				rhs = append(rhs, e)
+				cols[i] = 1
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(e.Expr))
+			}
+		}
+		lOffset, err := pushProjection(lhs, node.Left, semTable)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-
-		// minimal horizon planning
-		rb, ok := plan.(*route)
-		if ok {
-			rb.Select = sel
-			rb.eroute.Query = sqlparser.String(sel)
-			buffer := sqlparser.NewTrackedBuffer(nil)
-			sqlparser.FormatImpossibleQuery(buffer, sel)
-			rb.eroute.FieldQuery = buffer.ParsedQuery().Query
+		rOffset, err := pushProjection(rhs, node.Right, semTable)
+		if err != nil {
+			return 0, err
 		}
+		rOffset++
+		lOffset = -(lOffset + 1)
+		for i, col := range cols {
+			if col == -1 {
+				cols[i] = lOffset
+				lOffset--
+			} else {
+				cols[i] = rOffset
+				rOffset++
+			}
+		}
+		node.Cols = cols
+		return 0, nil
 
-		return plan.Primitive(), nil
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
 	}
 }
 
