@@ -113,7 +113,7 @@ func TestMain(m *testing.M) {
 			"-schema_change_check_interval", "1"}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-migration_check_interval", "5s",
+			"-migration_check_interval", "2s",
 			"-gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
 		}
 		clusterInstance.VtGateExtraArgs = []string{
