@@ -29,6 +29,7 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 - [React](https://reactjs.org/)
 - [create-react-app](https://create-react-app.dev/) (generated with v.4.0.1)
 - [TypeScript](http://typescriptlang.org/)
+- [protobufjs](https://github.com/protobufjs)
 
 ## Configuring your editor
 
