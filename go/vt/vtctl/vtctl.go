@@ -2041,6 +2041,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
 	case wrangler.VReplicationWorkflowActionStart:
+
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
@@ -2053,11 +2054,17 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			vrwp.Tables = *tables
 			vrwp.AllTables = *allTables
 			vrwp.ExcludeTables = *excludes
+			workflowType = wrangler.MoveTablesWorkflow
 		case wrangler.ReshardWorkflow:
 			if *sourceShards == "" || *targetShards == "" {
 				return fmt.Errorf("source and target shards are not specified")
 			}
+			vrwp.SourceShards = strings.Split(*sourceShards, ",")
+			vrwp.TargetShards = strings.Split(*targetShards, ",")
 			vrwp.SkipSchemaCopy = *skipSchemaCopy
+			vrwp.SourceKeyspace = target
+			workflowType = wrangler.ReshardWorkflow
+			log.Infof("params are %s, %s, %+v", *sourceShards, *targetShards, vrwp)
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
@@ -2075,13 +2082,14 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			vrwp.RenameTables = *renameTables
+		case wrangler.ReshardWorkflow:
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
 		vrwp.KeepData = *keepData
 	}
 
-	wf, err := wr.NewVReplicationWorkflow(ctx, wrangler.MoveTablesWorkflow, vrwp)
+	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
 	if err != nil {
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
 		return err
@@ -2139,7 +2147,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		log.Warningf(" %s error: %v", originalAction, wf)
 		return wrapError(wf, err)
 	}
-	wr.Logger().Printf("MoveTables %s was successful\nStart State: %s\n\nCurrent State: %s\n\n", action, startState, wf.CurrentState())
+	time.Sleep(1 * time.Second)
+	wr.Logger().Printf("%s %s was successful\nStart State: %s\n\nCurrent State: %s\n\n", workflowType, action, startState, wf.CurrentState())
 	return nil
 }
 

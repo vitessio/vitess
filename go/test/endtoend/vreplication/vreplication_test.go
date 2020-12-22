@@ -182,7 +182,6 @@ func insertMoreProducts(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
-// FIXME: if testReverse if false we don't dropsources and that creates a problem later on in the test due to existence of blacklisted tables
 func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAlias string) {
 	workflow := "p2c"
 	sourceKs := "product"

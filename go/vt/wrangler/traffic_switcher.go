@@ -154,7 +154,6 @@ func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKe
 	if err != nil {
 		return nil, nil, err
 	}
-
 	for _, cell := range cells {
 		wr.Logger().Infof("cell %s", cell)
 		srvKeyspace, err := wr.ts.GetSrvKeyspace(ctx, cell, targetKeyspace)
@@ -163,17 +162,32 @@ func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKe
 		}
 		// Checking one shard is enough.
 		var shardServedTypes []string
+		found := false
+		noControls := true
 		for _, partition := range srvKeyspace.GetPartitions() {
-			if partition.GetServedType().String() != tabletType {
+			if !strings.EqualFold(partition.GetServedType().String(), tabletType) {
 				continue
 			}
 			for _, shardReference := range partition.GetShardReferences() {
 				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
-					shardServedTypes = append(shardServedTypes, partition.GetServedType().String())
+					found = true
+					break
+				}
+			}
+			if len(partition.GetShardTabletControls()) == 0 {
+				noControls = true
+				break
+			}
+			for _, tabletControl := range partition.GetShardTabletControls() {
+				if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
+					if !tabletControl.GetQueryServiceDisabled() {
+						shardServedTypes = append(shardServedTypes, si.ShardName())
+					}
+					break
 				}
 			}
 		}
-		if len(shardServedTypes) > 0 {
+		if found && (len(shardServedTypes) > 0 || noControls) {
 			cellsNotSwitched = append(cellsNotSwitched, cell)
 		} else {
 			cellsSwitched = append(cellsSwitched, cell)
@@ -292,6 +306,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		} else {
 			shard = ts.sourceShards()[0]
 		}
+
 		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "rdonly")
 		if err != nil {
 			return nil, nil, err
@@ -302,8 +317,8 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		if shard.IsMasterServing {
-			ws.WritesSwitched = false
+		if !shard.IsMasterServing {
+			ws.WritesSwitched = true
 		}
 	}
 

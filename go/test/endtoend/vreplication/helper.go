@@ -10,9 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/buger/jsonparser"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -151,7 +150,7 @@ func getQueryCount(url string, query string) int {
 		foundQuery = strings.ReplaceAll(foundQuery, "_", "")
 		cleanQuery := re.ReplaceAllLiteralString(query, "")
 		cleanQuery = strings.ReplaceAll(cleanQuery, "_", "")
-		if foundQuery == cleanQuery {
+		if foundQuery == cleanQuery || strings.Contains(foundQuery, cleanQuery) {
 			count, _ = strconv.Atoi(row[countIndex])
 		}
 	}
