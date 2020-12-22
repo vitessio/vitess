@@ -33,4 +33,19 @@ body {
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table th {
+  padding: 8px;
+}
+
+table tbody td {
+  border: solid 1px #ddd;
+  padding: 12px;
 }
