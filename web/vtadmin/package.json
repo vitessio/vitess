@@ -25,10 +25,12 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "lint": "npm run lint:eslint && npm run lint:stylelint",
-    "lint:fix": "npm run lint:eslint:fix && npm run lint:stylelint:fix",
+    "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
+    "lint:fix": "npm run lint:eslint:fix && npm run lint:prettier:fix && npm run lint:stylelint:fix",
     "lint:eslint": "eslint --ext js,ts,tsx src",
     "lint:eslint:fix": "npm run lint:eslint -- --fix",
+    "lint:prettier": "prettier --config \"./.prettiercc\" --check \"src/**/*.{js,jsx,ts,tsx,css,scss}\"",
+    "lint:prettier:fix": "npm run lint:prettier -- --write",
     "lint:stylelint": "stylelint \"**/*.{css,scss}\"",
     "lint:stylelint:fix": "npm run lint:stylelint -- --fix",
     "eject": "react-scripts eject"
@@ -52,6 +54,7 @@
     ]
   },
   "devDependencies": {
+    "prettier": "^2.2.1",
     "protobufjs": "^6.10.2",
     "stylelint": "^13.8.0",
     "stylelint-config-standard": "^20.0.0"

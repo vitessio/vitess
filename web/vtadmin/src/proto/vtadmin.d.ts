@@ -1,10 +1,8 @@
-import * as $protobuf from "protobufjs";
+import * as $protobuf from 'protobufjs';
 /** Namespace vtadmin. */
 export namespace vtadmin {
-
     /** Represents a VTAdmin */
     class VTAdmin extends $protobuf.rpc.Service {
-
         /**
          * Constructs a new VTAdmin service.
          * @param rpcImpl RPC implementation
@@ -20,7 +18,11 @@ export namespace vtadmin {
          * @param [responseDelimited=false] Whether responses are length-delimited
          * @returns RPC service. Useful where requests and/or responses are streamed.
          */
-        public static create(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean): VTAdmin;
+        public static create(
+            rpcImpl: $protobuf.RPCImpl,
+            requestDelimited?: boolean,
+            responseDelimited?: boolean
+        ): VTAdmin;
 
         /**
          * Calls GetGates.
@@ -66,42 +68,39 @@ export namespace vtadmin {
     }
 
     namespace VTAdmin {
-
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getGates}.
          * @param error Error, if any
          * @param [response] GetGatesResponse
          */
-        type GetGatesCallback = (error: (Error|null), response?: vtadmin.GetGatesResponse) => void;
+        type GetGatesCallback = (error: Error | null, response?: vtadmin.GetGatesResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablet}.
          * @param error Error, if any
          * @param [response] Tablet
          */
-        type GetTabletCallback = (error: (Error|null), response?: vtadmin.Tablet) => void;
+        type GetTabletCallback = (error: Error | null, response?: vtadmin.Tablet) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getTablets}.
          * @param error Error, if any
          * @param [response] GetTabletsResponse
          */
-        type GetTabletsCallback = (error: (Error|null), response?: vtadmin.GetTabletsResponse) => void;
+        type GetTabletsCallback = (error: Error | null, response?: vtadmin.GetTabletsResponse) => void;
     }
 
     /** Properties of a Cluster. */
     interface ICluster {
-
         /** Cluster id */
-        id?: (string|null);
+        id?: string | null;
 
         /** Cluster name */
-        name?: (string|null);
+        name?: string | null;
     }
 
     /** Represents a Cluster. */
     class Cluster implements ICluster {
-
         /**
          * Constructs a new Cluster.
          * @param [properties] Properties to set
@@ -145,7 +144,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.Cluster;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.Cluster;
 
         /**
          * Decodes a Cluster message from the specified reader or buffer, length delimited.
@@ -154,14 +153,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.Cluster;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.Cluster;
 
         /**
          * Verifies a Cluster message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Cluster message from a plain object. Also converts values to their respective internal types.
@@ -187,20 +186,18 @@ export namespace vtadmin {
 
     /** Properties of a Tablet. */
     interface ITablet {
-
         /** Tablet cluster */
-        cluster?: (vtadmin.ICluster|null);
+        cluster?: vtadmin.ICluster | null;
 
         /** Tablet tablet */
-        tablet?: (topodata.ITablet|null);
+        tablet?: topodata.ITablet | null;
 
         /** Tablet state */
-        state?: (vtadmin.Tablet.ServingState|null);
+        state?: vtadmin.Tablet.ServingState | null;
     }
 
     /** Represents a Tablet. */
     class Tablet implements ITablet {
-
         /**
          * Constructs a new Tablet.
          * @param [properties] Properties to set
@@ -208,10 +205,10 @@ export namespace vtadmin {
         constructor(properties?: vtadmin.ITablet);
 
         /** Tablet cluster. */
-        public cluster?: (vtadmin.ICluster|null);
+        public cluster?: vtadmin.ICluster | null;
 
         /** Tablet tablet. */
-        public tablet?: (topodata.ITablet|null);
+        public tablet?: topodata.ITablet | null;
 
         /** Tablet state. */
         public state: vtadmin.Tablet.ServingState;
@@ -247,7 +244,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.Tablet;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.Tablet;
 
         /**
          * Decodes a Tablet message from the specified reader or buffer, length delimited.
@@ -256,14 +253,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.Tablet;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.Tablet;
 
         /**
          * Verifies a Tablet message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Tablet message from a plain object. Also converts values to their respective internal types.
@@ -288,37 +285,34 @@ export namespace vtadmin {
     }
 
     namespace Tablet {
-
         /** ServingState enum. */
         enum ServingState {
             UNKNOWN = 0,
             SERVING = 1,
-            NOT_SERVING = 2
+            NOT_SERVING = 2,
         }
     }
 
     /** Properties of a VTGate. */
     interface IVTGate {
-
         /** VTGate hostname */
-        hostname?: (string|null);
+        hostname?: string | null;
 
         /** VTGate pool */
-        pool?: (string|null);
+        pool?: string | null;
 
         /** VTGate cell */
-        cell?: (string|null);
+        cell?: string | null;
 
         /** VTGate cluster */
-        cluster?: (string|null);
+        cluster?: string | null;
 
         /** VTGate keyspaces */
-        keyspaces?: (string[]|null);
+        keyspaces?: string[] | null;
     }
 
     /** Represents a VTGate. */
     class VTGate implements IVTGate {
-
         /**
          * Constructs a new VTGate.
          * @param [properties] Properties to set
@@ -371,7 +365,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VTGate;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.VTGate;
 
         /**
          * Decodes a VTGate message from the specified reader or buffer, length delimited.
@@ -380,14 +374,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VTGate;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.VTGate;
 
         /**
          * Verifies a VTGate message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a VTGate message from a plain object. Also converts values to their respective internal types.
@@ -413,14 +407,12 @@ export namespace vtadmin {
 
     /** Properties of a GetGatesRequest. */
     interface IGetGatesRequest {
-
         /** GetGatesRequest cluster_ids */
-        cluster_ids?: (string[]|null);
+        cluster_ids?: string[] | null;
     }
 
     /** Represents a GetGatesRequest. */
     class GetGatesRequest implements IGetGatesRequest {
-
         /**
          * Constructs a new GetGatesRequest.
          * @param [properties] Properties to set
@@ -461,7 +453,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetGatesRequest;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.GetGatesRequest;
 
         /**
          * Decodes a GetGatesRequest message from the specified reader or buffer, length delimited.
@@ -470,14 +462,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetGatesRequest;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.GetGatesRequest;
 
         /**
          * Verifies a GetGatesRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a GetGatesRequest message from a plain object. Also converts values to their respective internal types.
@@ -492,7 +484,10 @@ export namespace vtadmin {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtadmin.GetGatesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: vtadmin.GetGatesRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this GetGatesRequest to JSON.
@@ -503,14 +498,12 @@ export namespace vtadmin {
 
     /** Properties of a GetGatesResponse. */
     interface IGetGatesResponse {
-
         /** GetGatesResponse gates */
-        gates?: (vtadmin.IVTGate[]|null);
+        gates?: vtadmin.IVTGate[] | null;
     }
 
     /** Represents a GetGatesResponse. */
     class GetGatesResponse implements IGetGatesResponse {
-
         /**
          * Constructs a new GetGatesResponse.
          * @param [properties] Properties to set
@@ -551,7 +544,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetGatesResponse;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.GetGatesResponse;
 
         /**
          * Decodes a GetGatesResponse message from the specified reader or buffer, length delimited.
@@ -560,14 +553,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetGatesResponse;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.GetGatesResponse;
 
         /**
          * Verifies a GetGatesResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a GetGatesResponse message from a plain object. Also converts values to their respective internal types.
@@ -582,7 +575,10 @@ export namespace vtadmin {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtadmin.GetGatesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: vtadmin.GetGatesResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this GetGatesResponse to JSON.
@@ -593,17 +589,15 @@ export namespace vtadmin {
 
     /** Properties of a GetTabletRequest. */
     interface IGetTabletRequest {
-
         /** GetTabletRequest hostname */
-        hostname?: (string|null);
+        hostname?: string | null;
 
         /** GetTabletRequest cluster_ids */
-        cluster_ids?: (string[]|null);
+        cluster_ids?: string[] | null;
     }
 
     /** Represents a GetTabletRequest. */
     class GetTabletRequest implements IGetTabletRequest {
-
         /**
          * Constructs a new GetTabletRequest.
          * @param [properties] Properties to set
@@ -647,7 +641,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetTabletRequest;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.GetTabletRequest;
 
         /**
          * Decodes a GetTabletRequest message from the specified reader or buffer, length delimited.
@@ -656,14 +650,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetTabletRequest;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.GetTabletRequest;
 
         /**
          * Verifies a GetTabletRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a GetTabletRequest message from a plain object. Also converts values to their respective internal types.
@@ -678,7 +672,10 @@ export namespace vtadmin {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtadmin.GetTabletRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: vtadmin.GetTabletRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this GetTabletRequest to JSON.
@@ -689,14 +686,12 @@ export namespace vtadmin {
 
     /** Properties of a GetTabletsRequest. */
     interface IGetTabletsRequest {
-
         /** GetTabletsRequest cluster_ids */
-        cluster_ids?: (string[]|null);
+        cluster_ids?: string[] | null;
     }
 
     /** Represents a GetTabletsRequest. */
     class GetTabletsRequest implements IGetTabletsRequest {
-
         /**
          * Constructs a new GetTabletsRequest.
          * @param [properties] Properties to set
@@ -737,7 +732,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetTabletsRequest;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.GetTabletsRequest;
 
         /**
          * Decodes a GetTabletsRequest message from the specified reader or buffer, length delimited.
@@ -746,14 +741,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetTabletsRequest;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.GetTabletsRequest;
 
         /**
          * Verifies a GetTabletsRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a GetTabletsRequest message from a plain object. Also converts values to their respective internal types.
@@ -768,7 +763,10 @@ export namespace vtadmin {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtadmin.GetTabletsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: vtadmin.GetTabletsRequest,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this GetTabletsRequest to JSON.
@@ -779,14 +777,12 @@ export namespace vtadmin {
 
     /** Properties of a GetTabletsResponse. */
     interface IGetTabletsResponse {
-
         /** GetTabletsResponse tablets */
-        tablets?: (vtadmin.ITablet[]|null);
+        tablets?: vtadmin.ITablet[] | null;
     }
 
     /** Represents a GetTabletsResponse. */
     class GetTabletsResponse implements IGetTabletsResponse {
-
         /**
          * Constructs a new GetTabletsResponse.
          * @param [properties] Properties to set
@@ -817,7 +813,10 @@ export namespace vtadmin {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vtadmin.IGetTabletsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: vtadmin.IGetTabletsResponse,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a GetTabletsResponse message from the specified reader or buffer.
@@ -827,7 +826,7 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetTabletsResponse;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vtadmin.GetTabletsResponse;
 
         /**
          * Decodes a GetTabletsResponse message from the specified reader or buffer, length delimited.
@@ -836,14 +835,14 @@ export namespace vtadmin {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetTabletsResponse;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vtadmin.GetTabletsResponse;
 
         /**
          * Verifies a GetTabletsResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a GetTabletsResponse message from a plain object. Also converts values to their respective internal types.
@@ -858,7 +857,10 @@ export namespace vtadmin {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtadmin.GetTabletsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: vtadmin.GetTabletsResponse,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this GetTabletsResponse to JSON.
@@ -870,20 +872,17 @@ export namespace vtadmin {
 
 /** Namespace topodata. */
 export namespace topodata {
-
     /** Properties of a KeyRange. */
     interface IKeyRange {
-
         /** KeyRange start */
-        start?: (Uint8Array|null);
+        start?: Uint8Array | null;
 
         /** KeyRange end */
-        end?: (Uint8Array|null);
+        end?: Uint8Array | null;
     }
 
     /** Represents a KeyRange. */
     class KeyRange implements IKeyRange {
-
         /**
          * Constructs a new KeyRange.
          * @param [properties] Properties to set
@@ -927,7 +926,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.KeyRange;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.KeyRange;
 
         /**
          * Decodes a KeyRange message from the specified reader or buffer, length delimited.
@@ -936,14 +935,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.KeyRange;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.KeyRange;
 
         /**
          * Verifies a KeyRange message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a KeyRange message from a plain object. Also converts values to their respective internal types.
@@ -958,7 +957,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.KeyRange, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.KeyRange,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this KeyRange to JSON.
@@ -970,29 +972,27 @@ export namespace topodata {
     /** KeyspaceType enum. */
     enum KeyspaceType {
         NORMAL = 0,
-        SNAPSHOT = 1
+        SNAPSHOT = 1,
     }
 
     /** KeyspaceIdType enum. */
     enum KeyspaceIdType {
         UNSET = 0,
         UINT64 = 1,
-        BYTES = 2
+        BYTES = 2,
     }
 
     /** Properties of a TabletAlias. */
     interface ITabletAlias {
-
         /** TabletAlias cell */
-        cell?: (string|null);
+        cell?: string | null;
 
         /** TabletAlias uid */
-        uid?: (number|null);
+        uid?: number | null;
     }
 
     /** Represents a TabletAlias. */
     class TabletAlias implements ITabletAlias {
-
         /**
          * Constructs a new TabletAlias.
          * @param [properties] Properties to set
@@ -1036,7 +1036,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.TabletAlias;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.TabletAlias;
 
         /**
          * Decodes a TabletAlias message from the specified reader or buffer, length delimited.
@@ -1045,14 +1045,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.TabletAlias;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.TabletAlias;
 
         /**
          * Verifies a TabletAlias message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a TabletAlias message from a plain object. Also converts values to their respective internal types.
@@ -1067,7 +1067,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.TabletAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.TabletAlias,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this TabletAlias to JSON.
@@ -1087,52 +1090,50 @@ export namespace topodata {
         EXPERIMENTAL = 5,
         BACKUP = 6,
         RESTORE = 7,
-        DRAINED = 8
+        DRAINED = 8,
     }
 
     /** Properties of a Tablet. */
     interface ITablet {
-
         /** Tablet alias */
-        alias?: (topodata.ITabletAlias|null);
+        alias?: topodata.ITabletAlias | null;
 
         /** Tablet hostname */
-        hostname?: (string|null);
+        hostname?: string | null;
 
         /** Tablet port_map */
-        port_map?: ({ [k: string]: number }|null);
+        port_map?: { [k: string]: number } | null;
 
         /** Tablet keyspace */
-        keyspace?: (string|null);
+        keyspace?: string | null;
 
         /** Tablet shard */
-        shard?: (string|null);
+        shard?: string | null;
 
         /** Tablet key_range */
-        key_range?: (topodata.IKeyRange|null);
+        key_range?: topodata.IKeyRange | null;
 
         /** Tablet type */
-        type?: (topodata.TabletType|null);
+        type?: topodata.TabletType | null;
 
         /** Tablet db_name_override */
-        db_name_override?: (string|null);
+        db_name_override?: string | null;
 
         /** Tablet tags */
-        tags?: ({ [k: string]: string }|null);
+        tags?: { [k: string]: string } | null;
 
         /** Tablet mysql_hostname */
-        mysql_hostname?: (string|null);
+        mysql_hostname?: string | null;
 
         /** Tablet mysql_port */
-        mysql_port?: (number|null);
+        mysql_port?: number | null;
 
         /** Tablet master_term_start_time */
-        master_term_start_time?: (vttime.ITime|null);
+        master_term_start_time?: vttime.ITime | null;
     }
 
     /** Represents a Tablet. */
     class Tablet implements ITablet {
-
         /**
          * Constructs a new Tablet.
          * @param [properties] Properties to set
@@ -1140,7 +1141,7 @@ export namespace topodata {
         constructor(properties?: topodata.ITablet);
 
         /** Tablet alias. */
-        public alias?: (topodata.ITabletAlias|null);
+        public alias?: topodata.ITabletAlias | null;
 
         /** Tablet hostname. */
         public hostname: string;
@@ -1155,7 +1156,7 @@ export namespace topodata {
         public shard: string;
 
         /** Tablet key_range. */
-        public key_range?: (topodata.IKeyRange|null);
+        public key_range?: topodata.IKeyRange | null;
 
         /** Tablet type. */
         public type: topodata.TabletType;
@@ -1173,7 +1174,7 @@ export namespace topodata {
         public mysql_port: number;
 
         /** Tablet master_term_start_time. */
-        public master_term_start_time?: (vttime.ITime|null);
+        public master_term_start_time?: vttime.ITime | null;
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -1206,7 +1207,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Tablet;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.Tablet;
 
         /**
          * Decodes a Tablet message from the specified reader or buffer, length delimited.
@@ -1215,14 +1216,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Tablet;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.Tablet;
 
         /**
          * Verifies a Tablet message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Tablet message from a plain object. Also converts values to their respective internal types.
@@ -1248,32 +1249,30 @@ export namespace topodata {
 
     /** Properties of a Shard. */
     interface IShard {
-
         /** Shard master_alias */
-        master_alias?: (topodata.ITabletAlias|null);
+        master_alias?: topodata.ITabletAlias | null;
 
         /** Shard master_term_start_time */
-        master_term_start_time?: (vttime.ITime|null);
+        master_term_start_time?: vttime.ITime | null;
 
         /** Shard key_range */
-        key_range?: (topodata.IKeyRange|null);
+        key_range?: topodata.IKeyRange | null;
 
         /** Shard served_types */
-        served_types?: (topodata.Shard.IServedType[]|null);
+        served_types?: topodata.Shard.IServedType[] | null;
 
         /** Shard source_shards */
-        source_shards?: (topodata.Shard.ISourceShard[]|null);
+        source_shards?: topodata.Shard.ISourceShard[] | null;
 
         /** Shard tablet_controls */
-        tablet_controls?: (topodata.Shard.ITabletControl[]|null);
+        tablet_controls?: topodata.Shard.ITabletControl[] | null;
 
         /** Shard is_master_serving */
-        is_master_serving?: (boolean|null);
+        is_master_serving?: boolean | null;
     }
 
     /** Represents a Shard. */
     class Shard implements IShard {
-
         /**
          * Constructs a new Shard.
          * @param [properties] Properties to set
@@ -1281,13 +1280,13 @@ export namespace topodata {
         constructor(properties?: topodata.IShard);
 
         /** Shard master_alias. */
-        public master_alias?: (topodata.ITabletAlias|null);
+        public master_alias?: topodata.ITabletAlias | null;
 
         /** Shard master_term_start_time. */
-        public master_term_start_time?: (vttime.ITime|null);
+        public master_term_start_time?: vttime.ITime | null;
 
         /** Shard key_range. */
-        public key_range?: (topodata.IKeyRange|null);
+        public key_range?: topodata.IKeyRange | null;
 
         /** Shard served_types. */
         public served_types: topodata.Shard.IServedType[];
@@ -1332,7 +1331,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.Shard;
 
         /**
          * Decodes a Shard message from the specified reader or buffer, length delimited.
@@ -1341,14 +1340,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.Shard;
 
         /**
          * Verifies a Shard message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Shard message from a plain object. Also converts values to their respective internal types.
@@ -1373,20 +1372,17 @@ export namespace topodata {
     }
 
     namespace Shard {
-
         /** Properties of a ServedType. */
         interface IServedType {
-
             /** ServedType tablet_type */
-            tablet_type?: (topodata.TabletType|null);
+            tablet_type?: topodata.TabletType | null;
 
             /** ServedType cells */
-            cells?: (string[]|null);
+            cells?: string[] | null;
         }
 
         /** Represents a ServedType. */
         class ServedType implements IServedType {
-
             /**
              * Constructs a new ServedType.
              * @param [properties] Properties to set
@@ -1420,7 +1416,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: topodata.Shard.IServedType, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: topodata.Shard.IServedType,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes a ServedType message from the specified reader or buffer.
@@ -1430,7 +1429,7 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard.ServedType;
+            public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.Shard.ServedType;
 
             /**
              * Decodes a ServedType message from the specified reader or buffer, length delimited.
@@ -1439,14 +1438,14 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard.ServedType;
+            public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.Shard.ServedType;
 
             /**
              * Verifies a ServedType message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates a ServedType message from a plain object. Also converts values to their respective internal types.
@@ -1461,7 +1460,10 @@ export namespace topodata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: topodata.Shard.ServedType, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: topodata.Shard.ServedType,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this ServedType to JSON.
@@ -1472,26 +1474,24 @@ export namespace topodata {
 
         /** Properties of a SourceShard. */
         interface ISourceShard {
-
             /** SourceShard uid */
-            uid?: (number|null);
+            uid?: number | null;
 
             /** SourceShard keyspace */
-            keyspace?: (string|null);
+            keyspace?: string | null;
 
             /** SourceShard shard */
-            shard?: (string|null);
+            shard?: string | null;
 
             /** SourceShard key_range */
-            key_range?: (topodata.IKeyRange|null);
+            key_range?: topodata.IKeyRange | null;
 
             /** SourceShard tables */
-            tables?: (string[]|null);
+            tables?: string[] | null;
         }
 
         /** Represents a SourceShard. */
         class SourceShard implements ISourceShard {
-
             /**
              * Constructs a new SourceShard.
              * @param [properties] Properties to set
@@ -1508,7 +1508,7 @@ export namespace topodata {
             public shard: string;
 
             /** SourceShard key_range. */
-            public key_range?: (topodata.IKeyRange|null);
+            public key_range?: topodata.IKeyRange | null;
 
             /** SourceShard tables. */
             public tables: string[];
@@ -1534,7 +1534,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: topodata.Shard.ISourceShard, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: topodata.Shard.ISourceShard,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes a SourceShard message from the specified reader or buffer.
@@ -1544,7 +1547,7 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard.SourceShard;
+            public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.Shard.SourceShard;
 
             /**
              * Decodes a SourceShard message from the specified reader or buffer, length delimited.
@@ -1553,14 +1556,14 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard.SourceShard;
+            public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.Shard.SourceShard;
 
             /**
              * Verifies a SourceShard message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates a SourceShard message from a plain object. Also converts values to their respective internal types.
@@ -1575,7 +1578,10 @@ export namespace topodata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: topodata.Shard.SourceShard, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: topodata.Shard.SourceShard,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this SourceShard to JSON.
@@ -1586,23 +1592,21 @@ export namespace topodata {
 
         /** Properties of a TabletControl. */
         interface ITabletControl {
-
             /** TabletControl tablet_type */
-            tablet_type?: (topodata.TabletType|null);
+            tablet_type?: topodata.TabletType | null;
 
             /** TabletControl cells */
-            cells?: (string[]|null);
+            cells?: string[] | null;
 
             /** TabletControl blacklisted_tables */
-            blacklisted_tables?: (string[]|null);
+            blacklisted_tables?: string[] | null;
 
             /** TabletControl frozen */
-            frozen?: (boolean|null);
+            frozen?: boolean | null;
         }
 
         /** Represents a TabletControl. */
         class TabletControl implements ITabletControl {
-
             /**
              * Constructs a new TabletControl.
              * @param [properties] Properties to set
@@ -1642,7 +1646,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: topodata.Shard.ITabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: topodata.Shard.ITabletControl,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes a TabletControl message from the specified reader or buffer.
@@ -1652,7 +1659,7 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard.TabletControl;
+            public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.Shard.TabletControl;
 
             /**
              * Decodes a TabletControl message from the specified reader or buffer, length delimited.
@@ -1661,14 +1668,14 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard.TabletControl;
+            public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.Shard.TabletControl;
 
             /**
              * Verifies a TabletControl message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates a TabletControl message from a plain object. Also converts values to their respective internal types.
@@ -1683,7 +1690,10 @@ export namespace topodata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: topodata.Shard.TabletControl, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: topodata.Shard.TabletControl,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this TabletControl to JSON.
@@ -1695,29 +1705,27 @@ export namespace topodata {
 
     /** Properties of a Keyspace. */
     interface IKeyspace {
-
         /** Keyspace sharding_column_name */
-        sharding_column_name?: (string|null);
+        sharding_column_name?: string | null;
 
         /** Keyspace sharding_column_type */
-        sharding_column_type?: (topodata.KeyspaceIdType|null);
+        sharding_column_type?: topodata.KeyspaceIdType | null;
 
         /** Keyspace served_froms */
-        served_froms?: (topodata.Keyspace.IServedFrom[]|null);
+        served_froms?: topodata.Keyspace.IServedFrom[] | null;
 
         /** Keyspace keyspace_type */
-        keyspace_type?: (topodata.KeyspaceType|null);
+        keyspace_type?: topodata.KeyspaceType | null;
 
         /** Keyspace base_keyspace */
-        base_keyspace?: (string|null);
+        base_keyspace?: string | null;
 
         /** Keyspace snapshot_time */
-        snapshot_time?: (vttime.ITime|null);
+        snapshot_time?: vttime.ITime | null;
     }
 
     /** Represents a Keyspace. */
     class Keyspace implements IKeyspace {
-
         /**
          * Constructs a new Keyspace.
          * @param [properties] Properties to set
@@ -1740,7 +1748,7 @@ export namespace topodata {
         public base_keyspace: string;
 
         /** Keyspace snapshot_time. */
-        public snapshot_time?: (vttime.ITime|null);
+        public snapshot_time?: vttime.ITime | null;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -1773,7 +1781,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Keyspace;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.Keyspace;
 
         /**
          * Decodes a Keyspace message from the specified reader or buffer, length delimited.
@@ -1782,14 +1790,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Keyspace;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.Keyspace;
 
         /**
          * Verifies a Keyspace message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
@@ -1804,7 +1812,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.Keyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.Keyspace,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this Keyspace to JSON.
@@ -1814,23 +1825,20 @@ export namespace topodata {
     }
 
     namespace Keyspace {
-
         /** Properties of a ServedFrom. */
         interface IServedFrom {
-
             /** ServedFrom tablet_type */
-            tablet_type?: (topodata.TabletType|null);
+            tablet_type?: topodata.TabletType | null;
 
             /** ServedFrom cells */
-            cells?: (string[]|null);
+            cells?: string[] | null;
 
             /** ServedFrom keyspace */
-            keyspace?: (string|null);
+            keyspace?: string | null;
         }
 
         /** Represents a ServedFrom. */
         class ServedFrom implements IServedFrom {
-
             /**
              * Constructs a new ServedFrom.
              * @param [properties] Properties to set
@@ -1867,7 +1875,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: topodata.Keyspace.IServedFrom, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: topodata.Keyspace.IServedFrom,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes a ServedFrom message from the specified reader or buffer.
@@ -1877,7 +1888,7 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Keyspace.ServedFrom;
+            public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.Keyspace.ServedFrom;
 
             /**
              * Decodes a ServedFrom message from the specified reader or buffer, length delimited.
@@ -1886,14 +1897,14 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Keyspace.ServedFrom;
+            public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.Keyspace.ServedFrom;
 
             /**
              * Verifies a ServedFrom message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates a ServedFrom message from a plain object. Also converts values to their respective internal types.
@@ -1908,7 +1919,10 @@ export namespace topodata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: topodata.Keyspace.ServedFrom, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: topodata.Keyspace.ServedFrom,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this ServedFrom to JSON.
@@ -1920,14 +1934,12 @@ export namespace topodata {
 
     /** Properties of a ShardReplication. */
     interface IShardReplication {
-
         /** ShardReplication nodes */
-        nodes?: (topodata.ShardReplication.INode[]|null);
+        nodes?: topodata.ShardReplication.INode[] | null;
     }
 
     /** Represents a ShardReplication. */
     class ShardReplication implements IShardReplication {
-
         /**
          * Constructs a new ShardReplication.
          * @param [properties] Properties to set
@@ -1968,7 +1980,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplication;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.ShardReplication;
 
         /**
          * Decodes a ShardReplication message from the specified reader or buffer, length delimited.
@@ -1977,14 +1989,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplication;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.ShardReplication;
 
         /**
          * Verifies a ShardReplication message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a ShardReplication message from a plain object. Also converts values to their respective internal types.
@@ -1999,7 +2011,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.ShardReplication, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.ShardReplication,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this ShardReplication to JSON.
@@ -2009,17 +2024,14 @@ export namespace topodata {
     }
 
     namespace ShardReplication {
-
         /** Properties of a Node. */
         interface INode {
-
             /** Node tablet_alias */
-            tablet_alias?: (topodata.ITabletAlias|null);
+            tablet_alias?: topodata.ITabletAlias | null;
         }
 
         /** Represents a Node. */
         class Node implements INode {
-
             /**
              * Constructs a new Node.
              * @param [properties] Properties to set
@@ -2027,7 +2039,7 @@ export namespace topodata {
             constructor(properties?: topodata.ShardReplication.INode);
 
             /** Node tablet_alias. */
-            public tablet_alias?: (topodata.ITabletAlias|null);
+            public tablet_alias?: topodata.ITabletAlias | null;
 
             /**
              * Creates a new Node instance using the specified properties.
@@ -2050,7 +2062,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: topodata.ShardReplication.INode, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: topodata.ShardReplication.INode,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes a Node message from the specified reader or buffer.
@@ -2060,7 +2075,10 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplication.Node;
+            public static decode(
+                reader: $protobuf.Reader | Uint8Array,
+                length?: number
+            ): topodata.ShardReplication.Node;
 
             /**
              * Decodes a Node message from the specified reader or buffer, length delimited.
@@ -2069,14 +2087,14 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplication.Node;
+            public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.ShardReplication.Node;
 
             /**
              * Verifies a Node message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates a Node message from a plain object. Also converts values to their respective internal types.
@@ -2091,7 +2109,10 @@ export namespace topodata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: topodata.ShardReplication.Node, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: topodata.ShardReplication.Node,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this Node to JSON.
@@ -2103,17 +2124,15 @@ export namespace topodata {
 
     /** Properties of a ShardReference. */
     interface IShardReference {
-
         /** ShardReference name */
-        name?: (string|null);
+        name?: string | null;
 
         /** ShardReference key_range */
-        key_range?: (topodata.IKeyRange|null);
+        key_range?: topodata.IKeyRange | null;
     }
 
     /** Represents a ShardReference. */
     class ShardReference implements IShardReference {
-
         /**
          * Constructs a new ShardReference.
          * @param [properties] Properties to set
@@ -2124,7 +2143,7 @@ export namespace topodata {
         public name: string;
 
         /** ShardReference key_range. */
-        public key_range?: (topodata.IKeyRange|null);
+        public key_range?: topodata.IKeyRange | null;
 
         /**
          * Creates a new ShardReference instance using the specified properties.
@@ -2157,7 +2176,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReference;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.ShardReference;
 
         /**
          * Decodes a ShardReference message from the specified reader or buffer, length delimited.
@@ -2166,14 +2185,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReference;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.ShardReference;
 
         /**
          * Verifies a ShardReference message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a ShardReference message from a plain object. Also converts values to their respective internal types.
@@ -2188,7 +2207,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.ShardReference, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.ShardReference,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this ShardReference to JSON.
@@ -2199,20 +2221,18 @@ export namespace topodata {
 
     /** Properties of a ShardTabletControl. */
     interface IShardTabletControl {
-
         /** ShardTabletControl name */
-        name?: (string|null);
+        name?: string | null;
 
         /** ShardTabletControl key_range */
-        key_range?: (topodata.IKeyRange|null);
+        key_range?: topodata.IKeyRange | null;
 
         /** ShardTabletControl query_service_disabled */
-        query_service_disabled?: (boolean|null);
+        query_service_disabled?: boolean | null;
     }
 
     /** Represents a ShardTabletControl. */
     class ShardTabletControl implements IShardTabletControl {
-
         /**
          * Constructs a new ShardTabletControl.
          * @param [properties] Properties to set
@@ -2223,7 +2243,7 @@ export namespace topodata {
         public name: string;
 
         /** ShardTabletControl key_range. */
-        public key_range?: (topodata.IKeyRange|null);
+        public key_range?: topodata.IKeyRange | null;
 
         /** ShardTabletControl query_service_disabled. */
         public query_service_disabled: boolean;
@@ -2249,7 +2269,10 @@ export namespace topodata {
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: topodata.IShardTabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(
+            message: topodata.IShardTabletControl,
+            writer?: $protobuf.Writer
+        ): $protobuf.Writer;
 
         /**
          * Decodes a ShardTabletControl message from the specified reader or buffer.
@@ -2259,7 +2282,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardTabletControl;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.ShardTabletControl;
 
         /**
          * Decodes a ShardTabletControl message from the specified reader or buffer, length delimited.
@@ -2268,14 +2291,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardTabletControl;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.ShardTabletControl;
 
         /**
          * Verifies a ShardTabletControl message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a ShardTabletControl message from a plain object. Also converts values to their respective internal types.
@@ -2290,7 +2313,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.ShardTabletControl, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.ShardTabletControl,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this ShardTabletControl to JSON.
@@ -2301,23 +2327,21 @@ export namespace topodata {
 
     /** Properties of a SrvKeyspace. */
     interface ISrvKeyspace {
-
         /** SrvKeyspace partitions */
-        partitions?: (topodata.SrvKeyspace.IKeyspacePartition[]|null);
+        partitions?: topodata.SrvKeyspace.IKeyspacePartition[] | null;
 
         /** SrvKeyspace sharding_column_name */
-        sharding_column_name?: (string|null);
+        sharding_column_name?: string | null;
 
         /** SrvKeyspace sharding_column_type */
-        sharding_column_type?: (topodata.KeyspaceIdType|null);
+        sharding_column_type?: topodata.KeyspaceIdType | null;
 
         /** SrvKeyspace served_from */
-        served_from?: (topodata.SrvKeyspace.IServedFrom[]|null);
+        served_from?: topodata.SrvKeyspace.IServedFrom[] | null;
     }
 
     /** Represents a SrvKeyspace. */
     class SrvKeyspace implements ISrvKeyspace {
-
         /**
          * Constructs a new SrvKeyspace.
          * @param [properties] Properties to set
@@ -2367,7 +2391,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.SrvKeyspace;
 
         /**
          * Decodes a SrvKeyspace message from the specified reader or buffer, length delimited.
@@ -2376,14 +2400,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.SrvKeyspace;
 
         /**
          * Verifies a SrvKeyspace message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a SrvKeyspace message from a plain object. Also converts values to their respective internal types.
@@ -2398,7 +2422,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.SrvKeyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.SrvKeyspace,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this SrvKeyspace to JSON.
@@ -2408,23 +2435,20 @@ export namespace topodata {
     }
 
     namespace SrvKeyspace {
-
         /** Properties of a KeyspacePartition. */
         interface IKeyspacePartition {
-
             /** KeyspacePartition served_type */
-            served_type?: (topodata.TabletType|null);
+            served_type?: topodata.TabletType | null;
 
             /** KeyspacePartition shard_references */
-            shard_references?: (topodata.IShardReference[]|null);
+            shard_references?: topodata.IShardReference[] | null;
 
             /** KeyspacePartition shard_tablet_controls */
-            shard_tablet_controls?: (topodata.IShardTabletControl[]|null);
+            shard_tablet_controls?: topodata.IShardTabletControl[] | null;
         }
 
         /** Represents a KeyspacePartition. */
         class KeyspacePartition implements IKeyspacePartition {
-
             /**
              * Constructs a new KeyspacePartition.
              * @param [properties] Properties to set
@@ -2445,7 +2469,9 @@ export namespace topodata {
              * @param [properties] Properties to set
              * @returns KeyspacePartition instance
              */
-            public static create(properties?: topodata.SrvKeyspace.IKeyspacePartition): topodata.SrvKeyspace.KeyspacePartition;
+            public static create(
+                properties?: topodata.SrvKeyspace.IKeyspacePartition
+            ): topodata.SrvKeyspace.KeyspacePartition;
 
             /**
              * Encodes the specified KeyspacePartition message. Does not implicitly {@link topodata.SrvKeyspace.KeyspacePartition.verify|verify} messages.
@@ -2453,7 +2479,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: topodata.SrvKeyspace.IKeyspacePartition, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(
+                message: topodata.SrvKeyspace.IKeyspacePartition,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Encodes the specified KeyspacePartition message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.KeyspacePartition.verify|verify} messages.
@@ -2461,7 +2490,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: topodata.SrvKeyspace.IKeyspacePartition, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: topodata.SrvKeyspace.IKeyspacePartition,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes a KeyspacePartition message from the specified reader or buffer.
@@ -2471,7 +2503,10 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.KeyspacePartition;
+            public static decode(
+                reader: $protobuf.Reader | Uint8Array,
+                length?: number
+            ): topodata.SrvKeyspace.KeyspacePartition;
 
             /**
              * Decodes a KeyspacePartition message from the specified reader or buffer, length delimited.
@@ -2480,14 +2515,16 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.KeyspacePartition;
+            public static decodeDelimited(
+                reader: $protobuf.Reader | Uint8Array
+            ): topodata.SrvKeyspace.KeyspacePartition;
 
             /**
              * Verifies a KeyspacePartition message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates a KeyspacePartition message from a plain object. Also converts values to their respective internal types.
@@ -2502,7 +2539,10 @@ export namespace topodata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: topodata.SrvKeyspace.KeyspacePartition, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: topodata.SrvKeyspace.KeyspacePartition,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this KeyspacePartition to JSON.
@@ -2513,17 +2553,15 @@ export namespace topodata {
 
         /** Properties of a ServedFrom. */
         interface IServedFrom {
-
             /** ServedFrom tablet_type */
-            tablet_type?: (topodata.TabletType|null);
+            tablet_type?: topodata.TabletType | null;
 
             /** ServedFrom keyspace */
-            keyspace?: (string|null);
+            keyspace?: string | null;
         }
 
         /** Represents a ServedFrom. */
         class ServedFrom implements IServedFrom {
-
             /**
              * Constructs a new ServedFrom.
              * @param [properties] Properties to set
@@ -2549,7 +2587,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encode(message: topodata.SrvKeyspace.IServedFrom, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encode(
+                message: topodata.SrvKeyspace.IServedFrom,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Encodes the specified ServedFrom message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.ServedFrom.verify|verify} messages.
@@ -2557,7 +2598,10 @@ export namespace topodata {
              * @param [writer] Writer to encode to
              * @returns Writer
              */
-            public static encodeDelimited(message: topodata.SrvKeyspace.IServedFrom, writer?: $protobuf.Writer): $protobuf.Writer;
+            public static encodeDelimited(
+                message: topodata.SrvKeyspace.IServedFrom,
+                writer?: $protobuf.Writer
+            ): $protobuf.Writer;
 
             /**
              * Decodes a ServedFrom message from the specified reader or buffer.
@@ -2567,7 +2611,10 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.ServedFrom;
+            public static decode(
+                reader: $protobuf.Reader | Uint8Array,
+                length?: number
+            ): topodata.SrvKeyspace.ServedFrom;
 
             /**
              * Decodes a ServedFrom message from the specified reader or buffer, length delimited.
@@ -2576,14 +2623,14 @@ export namespace topodata {
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.ServedFrom;
+            public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.SrvKeyspace.ServedFrom;
 
             /**
              * Verifies a ServedFrom message.
              * @param message Plain object to verify
              * @returns `null` if valid, otherwise the reason why it is not
              */
-            public static verify(message: { [k: string]: any }): (string|null);
+            public static verify(message: { [k: string]: any }): string | null;
 
             /**
              * Creates a ServedFrom message from a plain object. Also converts values to their respective internal types.
@@ -2598,7 +2645,10 @@ export namespace topodata {
              * @param [options] Conversion options
              * @returns Plain object
              */
-            public static toObject(message: topodata.SrvKeyspace.ServedFrom, options?: $protobuf.IConversionOptions): { [k: string]: any };
+            public static toObject(
+                message: topodata.SrvKeyspace.ServedFrom,
+                options?: $protobuf.IConversionOptions
+            ): { [k: string]: any };
 
             /**
              * Converts this ServedFrom to JSON.
@@ -2610,17 +2660,15 @@ export namespace topodata {
 
     /** Properties of a CellInfo. */
     interface ICellInfo {
-
         /** CellInfo server_address */
-        server_address?: (string|null);
+        server_address?: string | null;
 
         /** CellInfo root */
-        root?: (string|null);
+        root?: string | null;
     }
 
     /** Represents a CellInfo. */
     class CellInfo implements ICellInfo {
-
         /**
          * Constructs a new CellInfo.
          * @param [properties] Properties to set
@@ -2664,7 +2712,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.CellInfo;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.CellInfo;
 
         /**
          * Decodes a CellInfo message from the specified reader or buffer, length delimited.
@@ -2673,14 +2721,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.CellInfo;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.CellInfo;
 
         /**
          * Verifies a CellInfo message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a CellInfo message from a plain object. Also converts values to their respective internal types.
@@ -2695,7 +2743,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.CellInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.CellInfo,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this CellInfo to JSON.
@@ -2706,14 +2757,12 @@ export namespace topodata {
 
     /** Properties of a CellsAlias. */
     interface ICellsAlias {
-
         /** CellsAlias cells */
-        cells?: (string[]|null);
+        cells?: string[] | null;
     }
 
     /** Represents a CellsAlias. */
     class CellsAlias implements ICellsAlias {
-
         /**
          * Constructs a new CellsAlias.
          * @param [properties] Properties to set
@@ -2754,7 +2803,7 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.CellsAlias;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): topodata.CellsAlias;
 
         /**
          * Decodes a CellsAlias message from the specified reader or buffer, length delimited.
@@ -2763,14 +2812,14 @@ export namespace topodata {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.CellsAlias;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): topodata.CellsAlias;
 
         /**
          * Verifies a CellsAlias message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a CellsAlias message from a plain object. Also converts values to their respective internal types.
@@ -2785,7 +2834,10 @@ export namespace topodata {
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.CellsAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(
+            message: topodata.CellsAlias,
+            options?: $protobuf.IConversionOptions
+        ): { [k: string]: any };
 
         /**
          * Converts this CellsAlias to JSON.
@@ -2797,20 +2849,17 @@ export namespace topodata {
 
 /** Namespace vttime. */
 export namespace vttime {
-
     /** Properties of a Time. */
     interface ITime {
-
         /** Time seconds */
-        seconds?: (number|Long|null);
+        seconds?: number | Long | null;
 
         /** Time nanoseconds */
-        nanoseconds?: (number|null);
+        nanoseconds?: number | null;
     }
 
     /** Represents a Time. */
     class Time implements ITime {
-
         /**
          * Constructs a new Time.
          * @param [properties] Properties to set
@@ -2818,7 +2867,7 @@ export namespace vttime {
         constructor(properties?: vttime.ITime);
 
         /** Time seconds. */
-        public seconds: (number|Long);
+        public seconds: number | Long;
 
         /** Time nanoseconds. */
         public nanoseconds: number;
@@ -2854,7 +2903,7 @@ export namespace vttime {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Time;
+        public static decode(reader: $protobuf.Reader | Uint8Array, length?: number): vttime.Time;
 
         /**
          * Decodes a Time message from the specified reader or buffer, length delimited.
@@ -2863,14 +2912,14 @@ export namespace vttime {
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Time;
+        public static decodeDelimited(reader: $protobuf.Reader | Uint8Array): vttime.Time;
 
         /**
          * Verifies a Time message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
-        public static verify(message: { [k: string]: any }): (string|null);
+        public static verify(message: { [k: string]: any }): string | null;
 
         /**
          * Creates a Time message from a plain object. Also converts values to their respective internal types.
