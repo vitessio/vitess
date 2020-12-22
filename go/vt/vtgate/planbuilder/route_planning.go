@@ -278,6 +278,7 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 		if n.vindex != nil {
 			singleColumn = n.vindex.(vindexes.SingleColumn)
 		}
+
 		return &route{
 			eroute: &engine.Route{
 				Opcode:    n.routeOpCode,
