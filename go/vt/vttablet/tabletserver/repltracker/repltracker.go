@@ -87,7 +87,6 @@ func (rt *ReplTracker) MakeMaster() {
 
 	rt.isMaster = true
 	if rt.mode == tabletenv.Heartbeat {
-		rt.hr.Close()
 		rt.hw.Open()
 	}
 	if rt.forceHeartbeat {
