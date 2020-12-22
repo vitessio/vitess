@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -241,6 +242,11 @@ func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, baseP
 		return fmt.Errorf("onlineDDL topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	return nil
+}
+
+// GetGCUUID gets this OnlineDDL UUID in GC UUID format
+func (onlineDDL *OnlineDDL) GetGCUUID() string {
+	return strings.Replace(onlineDDL.UUID, "_", "", -1)
 }
 
 // IsOnlineDDLUUID answers 'true' when the given string is an online-ddl UUID, e.g.:

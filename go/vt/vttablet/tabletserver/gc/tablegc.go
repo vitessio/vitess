@@ -71,6 +71,7 @@ var (
 type transitionRequest struct {
 	fromTableName string
 	toGCState     schema.TableGCState
+	uuid          string
 }
 
 func init() {
@@ -304,7 +305,7 @@ func (collector *TableGC) nextState(fromState schema.TableGCState) *schema.Table
 
 // generateTansition creates a transition request, based on current state and taking configured lifecycleStates
 // into consideration (we may skip some states)
-func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName string) *transitionRequest {
+func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName, uuid string) *transitionRequest {
 	nextState := collector.nextState(fromState)
 	if nextState == nil {
 		return nil
@@ -312,14 +313,15 @@ func (collector *TableGC) generateTansition(ctx context.Context, fromState schem
 	return &transitionRequest{
 		fromTableName: fromTableName,
 		toGCState:     *nextState,
+		uuid:          uuid,
 	}
 }
 
 // submitTransitionRequest generates and queues a transition request for a given table
-func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName string) {
+func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName, uuid string) {
 	log.Infof("TableGC: submitting transition request for %s", fromTableName)
 	go func() {
-		transition := collector.generateTansition(ctx, fromState, fromTableName)
+		transition := collector.generateTansition(ctx, fromState, fromTableName, uuid)
 		if transition != nil {
 			collector.transitionRequestsChan <- transition
 		}
@@ -350,7 +352,7 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	for _, row := range res.Rows {
 		tableName := row[0].ToString()
 
-		isGCTable, state, t, err := schema.AnalyzeGCTableName(tableName)
+		isGCTable, state, uuid, t, err := schema.AnalyzeGCTableName(tableName)
 		if err != nil {
 			log.Errorf("TableGC: error while checking tables: %+v", err)
 			continue
@@ -368,7 +370,7 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 
 		if state == schema.HoldTableGCState {
 			// Hold period expired. Moving to next state
-			collector.submitTransitionRequest(ctx, state, tableName)
+			collector.submitTransitionRequest(ctx, state, tableName, uuid)
 		}
 		if state == schema.PurgeTableGCState {
 			// This table needs to be purged. Make sure to enlist it (we may already have)
@@ -376,7 +378,7 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 		}
 		if state == schema.EvacTableGCState {
 			// This table was in EVAC state for the required period. It will transition into DROP state
-			collector.submitTransitionRequest(ctx, state, tableName)
+			collector.submitTransitionRequest(ctx, state, tableName, uuid)
 		}
 		if state == schema.DropTableGCState {
 			// This table needs to be dropped immediately.
@@ -452,7 +454,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 			// The table is now empty!
 			// we happen to know at this time that the table is in PURGE state,
 			// I mean, that's why we're here. We can hard code that.
-			collector.submitTransitionRequest(ctx, schema.PurgeTableGCState, tableName)
+			_, _, uuid, _, _ := schema.AnalyzeGCTableName(tableName)
+			collector.submitTransitionRequest(ctx, schema.PurgeTableGCState, tableName, uuid)
 			collector.removePurgingTable(tableName)
 			// finished with this table. Maybe more tables are looking to be purged.
 			// Trigger another call to purge(), instead of waiting a full purgeReentranceInterval cycle
@@ -557,8 +560,8 @@ func (collector *TableGC) nextTableToPurge() (tableName string, ok bool) {
 		tableNames = append(tableNames, tableName)
 	}
 	sort.SliceStable(tableNames, func(i, j int) bool {
-		_, _, ti, _ := schema.AnalyzeGCTableName(tableNames[i])
-		_, _, tj, _ := schema.AnalyzeGCTableName(tableNames[j])
+		_, _, _, ti, _ := schema.AnalyzeGCTableName(tableNames[i])
+		_, _, _, tj, _ := schema.AnalyzeGCTableName(tableNames[j])
 
 		return ti.Before(tj)
 	})
