@@ -379,6 +379,10 @@ func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
 
+func escapeNewLines(in string) string {
+	return strings.ReplaceAll(in, "\n", "\\n")
+}
+
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
@@ -398,29 +402,42 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 					out = `"` + out + `"`
 				}
 
-				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out))
+				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
 			})
 
 			if tcase.output2ndPlanner != "" || checkAllTests {
 				t.Run("New Planner: "+tcase.comments, func(t *testing.T) {
+					expectedVal := "{\n}\n"
+					empty := false
 					if tcase.output2ndPlanner == "" {
+						empty = true
 						tcase.output2ndPlanner = tcase.output
 					}
 					vschema.newPlanner = true
-					plan, err := TestBuilder(tcase.input, vschema)
-					out := getPlanOrErrorOutput(err, plan)
+					out, err := getPlanOutput(tcase, vschema)
 					if out != tcase.output2ndPlanner {
 						fail = true
+						expectedVal = ""
 						t.Errorf("New Planner - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
 					}
 					if err != nil {
 						out = `"` + out + `"`
 					}
 
-					expected.WriteString(out)
+					if tcase.output == tcase.output2ndPlanner {
+						if empty {
+							expected.WriteString(expectedVal)
+						} else {
+							// produce empty brackets when the planners agree
+							expected.WriteString("{\n}\n")
+						}
+					} else {
+						expected.WriteString(out)
+					}
 				})
 			}
 
+			expected.WriteString("\n")
 		}
 
 		if fail && tempDir != "" {
@@ -429,6 +446,17 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) //nolint
 		}
 	})
+}
+
+func getPlanOutput(tcase testCase, vschema *vschemaWrapper) (out string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			out = fmt.Sprintf("%v", r)
+		}
+	}()
+	plan, err := TestBuilder(tcase.input, vschema)
+	out = getPlanOrErrorOutput(err, plan)
+	return out, err
 }
 
 func getPlanOrErrorOutput(err error, plan *engine.Plan) string {

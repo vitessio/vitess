@@ -19,6 +19,8 @@
     ]
   }
 }
+{
+}
 
 # set multi user defined variable
 "set @foo = 42, @bar = @foo"
@@ -46,6 +48,8 @@
     ]
   }
 }
+{
+}
 
 # set multi user defined variable with complex expression
 "set @foo = 42, @bar = @foo + 1"
@@ -72,6 +76,8 @@
       }
     ]
   }
+}
+{
 }
 
 # set UDV to expression that can't be evaluated at vtgate
@@ -103,6 +109,8 @@
     ]
   }
 }
+{
+}
 
 # single sysvar cases
 "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
@@ -128,6 +136,8 @@
       }
     ]
   }
+}
+{
 }
 
 # multiple sysvar cases
@@ -163,6 +173,8 @@
       }
     ]
   }
+}
+{
 }
 
 # autocommit case
@@ -211,6 +223,8 @@
     ]
   }
 }
+{
+}
 
 # set ignore plan
 "set @@default_storage_engine = 'DONOTCHANGEME'"
@@ -232,6 +246,8 @@
       }
     ]
   }
+}
+{
 }
 
 # set check and ignore plan
@@ -259,6 +275,8 @@
     ]
   }
 }
+{
+}
 
 # set system settings
 "set @@sql_safe_updates = 1"
@@ -285,6 +303,8 @@
     ]
   }
 }
+{
+}
 
 # set plan building with ON/OFF enum
 "set @@innodb_strict_mode = OFF"
@@ -306,6 +326,8 @@
       }
     ]
   }
+}
+{
 }
 
 # set plan building with string literal
@@ -329,6 +351,8 @@
     ]
   }
 }
+{
+}
 
 # set plan building with string literal
 "set @@innodb_tmpdir = 'OFF'"
@@ -351,10 +375,14 @@
     ]
   }
 }
+{
+}
 
 # set system settings
 "set @@ndbinfo_max_bytes = 192"
 "ndbinfo_max_bytes: system setting is not supported"
+{
+}
 
 # set autocommit
 "set autocommit = 1"
@@ -376,6 +404,8 @@
       }
     ]
   }
+}
+{
 }
 
 # set autocommit false
@@ -399,6 +429,8 @@
     ]
   }
 }
+{
+}
 
 # set autocommit with backticks
 "set @@session.`autocommit` = 0"
@@ -420,6 +452,8 @@
       }
     ]
   }
+}
+{
 }
 
 # more vitess aware settings
@@ -453,6 +487,8 @@
     ]
   }
 }
+{
+}
 
 # set autocommit to default
 "set @@autocommit = default"
@@ -474,6 +510,8 @@
       }
     ]
   }
+}
+{
 }
 
 # set global autocommit to default
@@ -501,4 +539,6 @@
       }
     ]
   }
+}
+{
 }

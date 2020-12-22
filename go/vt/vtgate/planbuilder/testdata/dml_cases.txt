@@ -1,10 +1,14 @@
 # update table not found
 "update nouser set val = 1"
 "table nouser not found"
+{
+}
 
 # delete table not found
 "delete from nouser"
 "table nouser not found"
+{
+}
 
 # explicit keyspace reference
 "update main.m1 set val = 1"
@@ -22,6 +26,8 @@
     "MultiShardAutocommit": false,
     "Query": "update m1 set val = 1"
   }
+}
+{
 }
 
 # update unsharded
@@ -41,6 +47,8 @@
     "Query": "update unsharded set val = 1"
   }
 }
+{
+}
 
 # subqueries in unsharded update
 "update unsharded set col = (select col from unsharded limit 1)"
@@ -58,6 +66,8 @@
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select col from unsharded limit 1)"
   }
+}
+{
 }
 
 # unsharded union in subquery of unsharded update
@@ -77,6 +87,8 @@
     "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
   }
 }
+{
+}
 
 # unsharded join in subquery of unsharded update
 "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)"
@@ -95,6 +107,8 @@
     "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
   }
 }
+{
+}
 
 # update with join subquery
 "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000"
@@ -112,6 +126,8 @@
     "MultiShardAutocommit": false,
     "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
+}
+{
 }
 
 # routing rules: updated of a routed table
@@ -136,6 +152,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update: routing rules for subquery.
 "update unsharded_a set a=(select a from route2)"
@@ -154,6 +172,8 @@
     "Query": "update unsharded_a set a = (select a from unsharded as route2)"
   }
 }
+{
+}
 
 # delete unsharded
 "delete from unsharded"
@@ -171,6 +191,8 @@
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded"
   }
+}
+{
 }
 
 # update by primary keyspace id
@@ -195,6 +217,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update by primary keyspace id with alias
 "update user as user_alias set val = 1 where user_alias.id = 1"
@@ -217,6 +241,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # update by primary keyspace id with parenthesized expression
@@ -241,6 +267,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update by primary keyspace id with multi-part where clause with parens
 "update user set val = 1 where (name = 'foo' and id = 1)"
@@ -263,6 +291,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # update by primary keyspace id, changing one vindex column
@@ -292,10 +322,14 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update by primary keyspace id, changing same vindex twice
 "update user_metadata set email = 'a', email = 'b' where user_id = 1"
 "column has duplicate set values: 'email'"
+{
+}
 
 # update by primary keyspace id, changing multiple vindex columns
 "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1"
@@ -325,6 +359,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update by primary keyspace id, changing one vindex column, using order by and limit
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10"
@@ -353,6 +389,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update by primary keyspace id, stray where clause
 "update user set val = 1 where id = id2 and id = 1"
@@ -376,6 +414,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update by primary keyspace id, stray where clause with conversion error
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
@@ -398,6 +438,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # delete from by primary keyspace id
@@ -424,6 +466,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # multi-table delete with comma join
 "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1"
@@ -441,6 +485,8 @@
     "MultiShardAutocommit": false,
     "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
   }
+}
+{
 }
 
 # multi-table delete with ansi join
@@ -460,6 +506,8 @@
     "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
   }
 }
+{
+}
 
 #delete with join from subquery
 "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
@@ -477,6 +525,8 @@
     "MultiShardAutocommit": false,
     "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
+}
+{
 }
 
 # routing rules: deleted from a routed table
@@ -503,6 +553,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # delete: routing rules for subquery
 "delete from  unsharded_a where a=(select a from route2)"
@@ -520,6 +572,8 @@
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
   }
+}
+{
 }
 
 # update by lookup
@@ -544,6 +598,8 @@
     "Vindex": "music_user_map"
   }
 }
+{
+}
 
 # update multi-table ansi join
 "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1"
@@ -562,6 +618,8 @@
     "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
   }
 }
+{
+}
 
 # update multi-table comma join
 "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1"
@@ -579,6 +637,8 @@
     "MultiShardAutocommit": false,
     "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
   }
+}
+{
 }
 
 # delete from by lookup
@@ -605,6 +665,8 @@
     "Vindex": "music_user_map"
   }
 }
+{
+}
 
 # delete from, no owned vindexes
 "delete from music_extra where user_id = 1"
@@ -628,6 +690,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # simple insert, no values
 "insert into unsharded values()"
@@ -646,6 +710,8 @@
     "Query": "insert into unsharded values ()",
     "TableName": "unsharded"
   }
+}
+{
 }
 
 # simple insert unsharded
@@ -666,6 +732,8 @@
     "TableName": "unsharded"
   }
 }
+{
+}
 
 # simple upsert unsharded
 "insert into unsharded values(1, 2) on duplicate key update x = 3"
@@ -684,6 +752,8 @@
     "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
     "TableName": "unsharded"
   }
+}
+{
 }
 
 # unsharded insert, no col list with auto-inc and authoritative column list
@@ -704,6 +774,8 @@
     "TableName": "unsharded_authoritative"
   }
 }
+{
+}
 
 # sharded upsert with sharding key set to vindex column
 "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)"
@@ -722,6 +794,8 @@
     "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
     "TableName": "music"
   }
+}
+{
 }
 
 # sharded bulk upsert with sharding key set to vindex column
@@ -742,6 +816,8 @@
     "TableName": "music"
   }
 }
+{
+}
 
 # insert unsharded with select
 "insert into unsharded select id from unsharded_auto"
@@ -760,6 +836,8 @@
     "Query": "insert into unsharded select id from unsharded_auto",
     "TableName": "unsharded"
   }
+}
+{
 }
 
 # insert unsharded with select with join
@@ -780,10 +858,14 @@
     "TableName": "unsharded"
   }
 }
+{
+}
 
 # insert unsharded, invalid value for auto-inc
 "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+}
 
 # insert unsharded, column present
 "insert into unsharded_auto(id, val) values(1, 'aa')"
@@ -802,6 +884,8 @@
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
   }
+}
+{
 }
 
 # insert unsharded, column absent
@@ -822,6 +906,8 @@
     "TableName": "unsharded_auto"
   }
 }
+{
+}
 
 # insert unsharded, column absent
 "insert into unsharded_auto(val) values(false)"
@@ -840,6 +926,8 @@
     "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
     "TableName": "unsharded_auto"
   }
+}
+{
 }
 
 # insert unsharded, multi-val
@@ -860,6 +948,8 @@
     "TableName": "unsharded_auto"
   }
 }
+{
+}
 
 # unsharded insert subquery in insert value
 "insert into unsharded values((select 1 from dual), 1)"
@@ -878,6 +968,8 @@
     "Query": "insert into unsharded values (1, 1)",
     "TableName": "unsharded"
   }
+}
+{
 }
 
 # sharded insert subquery in insert value
@@ -898,6 +990,8 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert into a routed table
 "insert into route1(id) values (1)"
@@ -917,10 +1011,14 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert with mimatched column list
 "insert into user(id) values (1, 2)"
 "column list doesn't match values"
+{
+}
 
 # insert no column list for sharded authoritative table
 "insert into authoritative values(1, 2, 3)"
@@ -939,6 +1037,8 @@
     "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
     "TableName": "authoritative"
   }
+}
+{
 }
 
 # insert sharded, no values
@@ -959,6 +1059,8 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert with one vindex
 "insert into user(id) values (1)"
@@ -977,6 +1079,8 @@
     "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
+}
+{
 }
 
 # insert ignore sharded
@@ -997,6 +1101,8 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert on duplicate key
 "insert into user(id) values(1) on duplicate key update col = 2"
@@ -1015,6 +1121,8 @@
     "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
     "TableName": "user"
   }
+}
+{
 }
 
 # insert with one vindex and bind var
@@ -1035,6 +1143,8 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert with non vindex
 "insert into user(nonid) values (2)"
@@ -1053,6 +1163,8 @@
     "Query": "insert into user(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
+}
+{
 }
 
 # insert with default seq
@@ -1073,6 +1185,8 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert with non vindex bool value
 "insert into user(nonid) values (true)"
@@ -1091,6 +1205,8 @@
     "Query": "insert into user(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
     "TableName": "user"
   }
+}
+{
 }
 
 # insert with all vindexes supplied
@@ -1111,6 +1227,8 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert for non-vindex autoinc
 "insert into user_extra(nonid) values (2)"
@@ -1129,6 +1247,8 @@
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
     "TableName": "user_extra"
   }
+}
+{
 }
 
 # insert for non-compliant names
@@ -1149,6 +1269,8 @@
     "TableName": "weird`name"
   }
 }
+{
+}
 
 # unsharded insert from union
 "insert into unsharded select 1 from dual union select 1 from dual"
@@ -1168,22 +1290,32 @@
     "TableName": "unsharded"
   }
 }
+{
+}
 
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+}
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+}
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
 "could not compute value for vindex or auto-inc column: expression is too complex 'id'"
+{
+}
 
 # insert invalid table
 "insert into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
+{
+}
 
 # insert with multiple rows
 "insert into user(id) values (1), (2)"
@@ -1202,6 +1334,8 @@
     "Query": "insert into user(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
     "TableName": "user"
   }
+}
+{
 }
 
 # insert with query timeout
@@ -1223,6 +1357,8 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert with multiple rows - multi-shard autocommit
 "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)"
@@ -1242,10 +1378,14 @@
     "TableName": "user"
   }
 }
+{
+}
 
 # insert into a vindex not allowed
 "insert into user_index(id) values(1)"
 "unsupported: multi-shard or vindex write statement"
+{
+}
 
 # simple replace unsharded
 "replace into unsharded values(1, 2)"
@@ -1264,6 +1404,8 @@
     "Query": "replace into unsharded values (1, 2)",
     "TableName": "unsharded"
   }
+}
+{
 }
 
 # replace unsharded with select
@@ -1284,10 +1426,14 @@
     "TableName": "unsharded"
   }
 }
+{
+}
 
 # replace unsharded, invalid value for auto-inc
 "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+{
+}
 
 # replace unsharded, column present
 "replace into unsharded_auto(id, val) values(1, 'aa')"
@@ -1306,6 +1452,8 @@
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
   }
+}
+{
 }
 
 # replace unsharded, column absent
@@ -1326,6 +1474,8 @@
     "TableName": "unsharded_auto"
   }
 }
+{
+}
 
 # replace unsharded, multi-val
 "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
@@ -1345,10 +1495,14 @@
     "TableName": "unsharded_auto"
   }
 }
+{
+}
 
 # replace invalid table
 "replace into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
+{
+}
 
 # insert a row in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)"
@@ -1367,6 +1521,8 @@
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
     "TableName": "multicolvin"
   }
+}
+{
 }
 
 # insert for overlapped vindex columns
@@ -1387,6 +1543,8 @@
     "TableName": "overlap_vindex"
   }
 }
+{
+}
 
 # insert multiple rows in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)"
@@ -1405,6 +1563,8 @@
     "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
     "TableName": "multicolvin"
   }
+}
+{
 }
 
 # delete row in a multi column vindex table
@@ -1430,6 +1590,8 @@
     ],
     "Vindex": "kid_index"
   }
+}
+{
 }
 
 # update columns of multi column vindex
@@ -1458,6 +1620,8 @@
     ],
     "Vindex": "kid_index"
   }
+}
+{
 }
 
 # update multiple vindexes, with multi column vindex
@@ -1488,6 +1652,8 @@
     "Vindex": "kid_index"
   }
 }
+{
+}
 
 # update with no primary vindex on where clause (scatter update)
 "update user_extra set val = 1"
@@ -1506,6 +1672,8 @@
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
   }
+}
+{
 }
 
 # update with target destination
@@ -1526,6 +1694,8 @@
     "Table": "user_extra"
   }
 }
+{
+}
 
 # update with no primary vindex on where clause (scatter update)   - multi shard autocommit
 "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1"
@@ -1544,6 +1714,8 @@
     "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
     "Table": "user_extra"
   }
+}
+{
 }
 
 # update with no primary vindex on where clause (scatter update)   - query timeout
@@ -1565,6 +1737,8 @@
     "Table": "user_extra"
   }
 }
+{
+}
 
 # update with non-comparison expr
 "update user_extra set val = 1 where id between 1 and 2"
@@ -1583,6 +1757,8 @@
     "Query": "update user_extra set val = 1 where id between 1 and 2",
     "Table": "user_extra"
   }
+}
+{
 }
 
 # update with primary id through IN clause
@@ -1610,6 +1786,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update with non-unique key
 "update user_extra set val = 1 where name = 'foo'"
@@ -1628,6 +1806,8 @@
     "Query": "update user_extra set val = 1 where `name` = 'foo'",
     "Table": "user_extra"
   }
+}
+{
 }
 
 # update by lookup with IN clause
@@ -1648,6 +1828,8 @@
     "Table": "user_extra"
   }
 }
+{
+}
 
 # update with where clause with parens
 "update user_extra set val = 1 where (name = 'foo' or id = 1)"
@@ -1666,6 +1848,8 @@
     "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
     "Table": "user_extra"
   }
+}
+{
 }
 
 # delete from with no where clause
@@ -1686,6 +1870,8 @@
     "Table": "user_extra"
   }
 }
+{
+}
 
 # delete with target destination
 "delete from `user[-]`.user_extra"
@@ -1704,6 +1890,8 @@
     "Query": "delete from user_extra",
     "Table": "user_extra"
   }
+}
+{
 }
 
 # delete with non-comparison expr
@@ -1724,6 +1912,8 @@
     "Table": "user_extra"
   }
 }
+{
+}
 
 # delete from with no index match
 "delete from user_extra where name = 'jose'"
@@ -1742,6 +1932,8 @@
     "Query": "delete from user_extra where `name` = 'jose'",
     "Table": "user_extra"
   }
+}
+{
 }
 
 # delete from with no index match - multi shard autocommit
@@ -1762,6 +1954,8 @@
     "Table": "user_extra"
   }
 }
+{
+}
 
 # delete from with no index match - query timeout
 "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'"
@@ -1781,6 +1975,8 @@
     "QueryTimeout": 1,
     "Table": "user_extra"
   }
+}
+{
 }
 
 # delete from with primary id in through IN clause
@@ -1808,6 +2004,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # unsharded update where inner query references outer query
 "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
@@ -1826,6 +2024,8 @@
     "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
   }
 }
+{
+}
 
 # unsharded delete where inner query references outer query
 "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
@@ -1843,6 +2043,8 @@
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
   }
+}
+{
 }
 
 # update vindex value to null
@@ -1872,6 +2074,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # insert using last_insert_id
 "insert into unsharded values(last_insert_id(), 2)"
@@ -1890,6 +2094,8 @@
     "Query": "insert into unsharded values (:__lastInsertId, 2)",
     "TableName": "unsharded"
   }
+}
+{
 }
 
 # update vindex value to null with multiple primary keyspace id
@@ -1923,6 +2129,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # update vindex value to null without a where clause
 "update user set name = null"
@@ -1947,6 +2155,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # update vindex value to null with complex where clause
 "update user set name = null where id + 1 = 2"
@@ -1970,6 +2180,8 @@
     "Query": "update user set `name` = null where id + 1 = 2",
     "Table": "user"
   }
+}
+{
 }
 
 # delete from user by primary keyspace id with in clause
@@ -2000,6 +2212,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # delete from user by complex expression
 "delete from user where id + 1 = 2"
@@ -2021,6 +2235,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # delete from user without a where clause
 "delete from user"
@@ -2041,6 +2257,8 @@
     "Query": "delete from user",
     "Table": "user"
   }
+}
+{
 }
 
 # delete with single table targets
@@ -2067,6 +2285,8 @@
     "Vindex": "music_user_map"
   }
 }
+{
+}
 
 # scatter update table with owned vindexes without changing lookup vindex
 "update user set val = 1"
@@ -2085,6 +2305,8 @@
     "Query": "update user set val = 1",
     "Table": "user"
   }
+}
+{
 }
 
 # scatter delete with owned lookup vindex
@@ -2106,6 +2328,8 @@
     "Query": "delete from user",
     "Table": "user"
   }
+}
+{
 }
 
 # update multi column vindex, without values for all the vindex columns
@@ -2135,6 +2359,8 @@
     "Vindex": "kid_index"
   }
 }
+{
+}
 
 # update with binary value
 "update user set name = _binary 'abc' where id = 1"
@@ -2163,6 +2389,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # delete with binary value
 "delete from user where name = _binary 'abc'"
@@ -2184,6 +2412,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # delete with shard targeting
 "delete from `user[-]`.user"
@@ -2204,6 +2434,8 @@
     "Query": "delete from user",
     "Table": "user"
   }
+}
+{
 }
 
 # update with shard targeting
@@ -2229,6 +2461,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # update with shard targeting without vindex
 "update `user[-]`.user_extra set val = 1"
@@ -2247,4 +2481,6 @@
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
   }
+}
+{
 }
