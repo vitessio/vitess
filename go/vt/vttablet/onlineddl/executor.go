@@ -1525,6 +1525,11 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		return sqltypes.ResultToProto3(result), nil
 	}
 
+	if err := e.initSchema(ctx); err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
 	switch stmt := vx.Stmt.(type) {
 	case *sqlparser.Delete:
 		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", vx.Query)
