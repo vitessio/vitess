@@ -284,6 +284,7 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
+	newPlanner    bool
 }
 
 func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
@@ -293,6 +294,9 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	return []*vindexes.Keyspace{vw.keyspace}, nil
 }
 
+func (vw *vschemaWrapper) NewPlanner() bool {
+	return vw.newPlanner
+}
 func (vw *vschemaWrapper) GetSemTable() *semantics.SemTable {
 	return nil
 }
@@ -376,31 +380,52 @@ func (vw *vschemaWrapper) TargetString() string {
 }
 
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
-	//var checkAllTests = false
+	var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
 		fail := false
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
+				vschema.newPlanner = false
 				plan, err := TestBuilder(tcase.input, vschema)
-
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
+					t.Errorf("Legacy Planner - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
-
 				if err != nil {
 					out = `"` + out + `"`
 				}
 
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out))
 			})
+
+			if tcase.output2ndPlanner != "" || checkAllTests {
+				t.Run("New Planner: "+tcase.comments, func(t *testing.T) {
+					if tcase.output2ndPlanner == "" {
+						tcase.output2ndPlanner = tcase.output
+					}
+					vschema.newPlanner = true
+					plan, err := TestBuilder(tcase.input, vschema)
+					out := getPlanOrErrorOutput(err, plan)
+					if out != tcase.output2ndPlanner {
+						fail = true
+						t.Errorf("New Planner - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+					}
+					if err != nil {
+						out = `"` + out + `"`
+					}
+
+					expected.WriteString(out)
+				})
+			}
+
 		}
+
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
-			ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
 			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) //nolint
 		}
 	})

@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/key"
@@ -36,23 +38,47 @@ import (
 func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
+		if !vschema.NewPlanner() {
 
-		p, err := handleDualSelects(sel, vschema)
+			p, err := handleDualSelects(sel, vschema)
+			if err != nil {
+				return nil, err
+			}
+			if p != nil {
+				return p, nil
+			}
+
+			pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
+			if err := pb.processSelect(sel, nil, query); err != nil {
+				return nil, err
+			}
+			if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
+				return nil, err
+			}
+			return pb.plan.Primitive(), nil
+		}
+
+		semTable, err := semantics.Analyse(sel, nil) // TODO no nil no
 		if err != nil {
 			return nil, err
 		}
-		if p != nil {
-			return p, nil
+
+		qgraph, err := createQGFromSelect(sel, semTable)
+		if err != nil {
+			return nil, err
 		}
 
-		pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
-		if err := pb.processSelect(sel, nil, query); err != nil {
+		tree, err := solve(qgraph, semTable, vschema)
+		if err != nil {
 			return nil, err
 		}
-		if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
+
+		plan, err := transformToLogicalPlan(tree)
+		if err != nil {
 			return nil, err
 		}
-		return pb.plan.Primitive(), nil
+
+		return plan.Primitive(), nil
 	}
 }
 

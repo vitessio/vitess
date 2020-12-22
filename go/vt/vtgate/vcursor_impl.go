@@ -100,6 +100,7 @@ type vcursorImpl struct {
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
 	semTable              *semantics.SemTable
+	newPlanner            bool
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
@@ -346,6 +347,9 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	return kss, nil
 }
 
+func (vc *vcursorImpl) NewPlanner() bool {
+	return vc.newPlanner
+}
 func (vc *vcursorImpl) GetSemTable() *semantics.SemTable {
 	return vc.semTable
 }
