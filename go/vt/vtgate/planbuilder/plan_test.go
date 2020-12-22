@@ -376,6 +376,7 @@ func (vw *vschemaWrapper) TargetString() string {
 }
 
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
+	//var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
 		fail := false
@@ -414,11 +415,12 @@ func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
 }
 
 type testCase struct {
-	file     string
-	lineno   int
-	input    string
-	output   string
-	comments string
+	file             string
+	lineno           int
+	input            string
+	output           string
+	output2ndPlanner string
+	comments         string
 }
 
 func iterateExecFile(name string) (testCaseIterator chan testCase) {
@@ -473,12 +475,40 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 					break
 				}
 			}
+
+			binput, err = r.ReadBytes('\n')
+			lineno++
+			var output2Planner []byte
+			if err != nil && err != io.EOF {
+				panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
+			}
+			if len(binput) > 0 && (binput[0] == '"' || binput[0] == '{') {
+				output2Planner = append(output2Planner, binput...)
+				for {
+					l, err := r.ReadBytes('\n')
+					lineno++
+					if err != nil {
+						panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
+					}
+					output2Planner = append(output2Planner, l...)
+					if l[0] == '}' {
+						output2Planner = output2Planner[:len(output2Planner)-1]
+						break
+					}
+					if l[0] == '"' {
+						output2Planner = output2Planner[1 : len(output2Planner)-2]
+						break
+					}
+				}
+			}
+
 			testCaseIterator <- testCase{
-				file:     name,
-				lineno:   lineno,
-				input:    input,
-				output:   string(output),
-				comments: comments,
+				file:             name,
+				lineno:           lineno,
+				input:            input,
+				output:           string(output),
+				output2ndPlanner: string(output2Planner),
+				comments:         comments,
 			}
 			comments = ""
 		}
