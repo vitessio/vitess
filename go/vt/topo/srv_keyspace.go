@@ -488,6 +488,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 	if err = CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
 	}
+
 	// The caller intents to update all cells in this case
 	if len(cells) == 0 {
 		cells, err = ts.GetCellInfoNames(ctx)
