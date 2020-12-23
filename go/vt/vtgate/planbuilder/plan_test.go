@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -233,6 +234,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_MASTER,
 	}
 
+	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "show_cases.txt", testOutputTempDir, vschema)
 }
@@ -280,6 +282,13 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
+}
+
+func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
+	if vw.keyspace == nil {
+		return nil, errors.New("keyspace not available")
+	}
+	return []*vindexes.Keyspace{vw.keyspace}, nil
 }
 
 func (vw *vschemaWrapper) KeyspaceExists(keyspace string) bool {
@@ -366,7 +375,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 		fail := false
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
-				plan, err := Build(tcase.input, vschema)
+				plan, err := TestBuilder(tcase.input, vschema)
 
 				out := getPlanOrErrorOutput(err, plan)
 

@@ -113,6 +113,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -1765,20 +1766,32 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	keyspace := subFlags.Arg(0)
-	keyspaceInfo, err := wr.TopoServer().GetKeyspace(ctx, keyspace)
+
+	// TODO: make vtctld a field of the wrangler
+	vtctld := grpcvtctldserver.NewVtctldServer(wr.TopoServer())
+	keyspaceInfo, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{
+		Keyspace: keyspace,
+	})
 	if err != nil {
 		return err
 	}
 	// Pass the embedded proto directly or jsonpb will panic.
-	return printJSON(wr.Logger(), keyspaceInfo.Keyspace)
+	return printJSON(wr.Logger(), keyspaceInfo.Keyspace.Keyspace)
 }
 
 func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	keyspaces, err := wr.TopoServer().GetKeyspaces(ctx)
+	vtctld := grpcvtctldserver.NewVtctldServer(wr.TopoServer())
+	resp, err := vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	if err != nil {
 		return err
 	}
-	wr.Logger().Printf("%v\n", strings.Join(keyspaces, "\n"))
+
+	names := make([]string, len(resp.Keyspaces))
+	for i, ks := range resp.Keyspaces {
+		names[i] = ks.Name
+	}
+
+	wr.Logger().Printf("%v\n", strings.Join(names, "\n"))
 	return nil
 }
 
@@ -2443,7 +2456,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Allow large schema changes which incur a longer unavailability of the database.")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
-	ddlStrategy := subFlags.String("ddl_strategy", "", "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
+	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -2495,6 +2508,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	}
 	query := ""
 	uuid := ""
+	var bindErr error
 	switch command {
 	case "show":
 		{
@@ -2511,10 +2525,14 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				string(schema.OnlineDDLStatusRunning),
 				string(schema.OnlineDDLStatusComplete),
 				string(schema.OnlineDDLStatusFailed):
-				condition = fmt.Sprintf("migration_status='%s'", arg)
+				condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
 			default:
-				uuid = arg
-				condition = fmt.Sprintf("migration_uuid='%s'", uuid)
+				if schema.IsOnlineDDLUUID(arg) {
+					uuid = arg
+					condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
+				} else {
+					condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
+				}
 			}
 			query = fmt.Sprintf(`select
 				shard, mysql_schema, mysql_table, ddl_action, migration_uuid, strategy, started_timestamp, completed_timestamp, migration_status
@@ -2526,7 +2544,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				return fmt.Errorf("UUID required")
 			}
 			uuid = arg
-			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='retry' where migration_uuid='%s'`, uuid)
+			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='retry' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
 		}
 	case "cancel":
 		{
@@ -2534,7 +2552,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				return fmt.Errorf("UUID required")
 			}
 			uuid = arg
-			query = fmt.Sprintf(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid='%s'`, uuid)
+			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
 		}
 	case "cancel-all":
 		{
@@ -2545,6 +2563,9 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
+	}
+	if bindErr != nil {
+		return fmt.Errorf("Error generating OnlineDDL query: %+v", bindErr)
 	}
 
 	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
@@ -2759,7 +2780,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		if err != nil {
 			return fmt.Errorf("error parsing vschema statement `%s`: %v", *sql, err)
 		}
-		ddl, ok := stmt.(sqlparser.DDLStatement)
+		ddl, ok := stmt.(*sqlparser.AlterVschema)
 		if !ok {
 			return fmt.Errorf("error parsing vschema statement `%s`: not a ddl statement", *sql)
 		}

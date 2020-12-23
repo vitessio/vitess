@@ -40,6 +40,28 @@ func replaceAliasedTableExprPartitions(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 }
 
+func replaceAlterVschemaAutoIncSpec(newNode, parent SQLNode) {
+	parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
+}
+
+func replaceAlterVschemaTable(newNode, parent SQLNode) {
+	parent.(*AlterVschema).Table = newNode.(TableName)
+}
+
+type replaceAlterVschemaVindexCols int
+
+func (r *replaceAlterVschemaVindexCols) replace(newNode, container SQLNode) {
+	container.(*AlterVschema).VindexCols[int(*r)] = newNode.(ColIdent)
+}
+
+func (r *replaceAlterVschemaVindexCols) inc() {
+	*r++
+}
+
+func replaceAlterVschemaVindexSpec(newNode, parent SQLNode) {
+	parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
+}
+
 func replaceAndExprLeft(newNode, parent SQLNode) {
 	parent.(*AndExpr).Left = newNode.(Expr)
 }
@@ -188,16 +210,24 @@ func replaceCreateTableTableSpec(newNode, parent SQLNode) {
 	parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
 }
 
+func replaceCreateViewColumns(newNode, parent SQLNode) {
+	parent.(*CreateView).Columns = newNode.(Columns)
+}
+
+func replaceCreateViewSelect(newNode, parent SQLNode) {
+	parent.(*CreateView).Select = newNode.(SelectStatement)
+}
+
+func replaceCreateViewViewName(newNode, parent SQLNode) {
+	parent.(*CreateView).ViewName = newNode.(TableName)
+}
+
 func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 }
 
 func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
-}
-
-func replaceDDLAutoIncSpec(newNode, parent SQLNode) {
-	parent.(*DDL).AutoIncSpec = newNode.(*AutoIncSpec)
 }
 
 func replaceDDLFromTables(newNode, parent SQLNode) {
@@ -222,20 +252,6 @@ func replaceDDLTableSpec(newNode, parent SQLNode) {
 
 func replaceDDLToTables(newNode, parent SQLNode) {
 	parent.(*DDL).ToTables = newNode.(TableNames)
-}
-
-type replaceDDLVindexCols int
-
-func (r *replaceDDLVindexCols) replace(newNode, container SQLNode) {
-	container.(*DDL).VindexCols[int(*r)] = newNode.(ColIdent)
-}
-
-func (r *replaceDDLVindexCols) inc() {
-	*r++
-}
-
-func replaceDDLVindexSpec(newNode, parent SQLNode) {
-	parent.(*DDL).VindexSpec = newNode.(*VindexSpec)
 }
 
 func replaceDeleteComments(newNode, parent SQLNode) {
@@ -629,6 +645,10 @@ func replaceShowInternal(newNode, parent SQLNode) {
 	parent.(*Show).Internal = newNode.(ShowInternal)
 }
 
+func replaceShowBasicFilter(newNode, parent SQLNode) {
+	parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
+}
+
 func replaceShowColumnsFilter(newNode, parent SQLNode) {
 	parent.(*ShowColumns).Filter = newNode.(*ShowFilter)
 }
@@ -960,6 +980,17 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *AlterDatabase:
 
+	case *AlterVschema:
+		a.apply(node, n.AutoIncSpec, replaceAlterVschemaAutoIncSpec)
+		a.apply(node, n.Table, replaceAlterVschemaTable)
+		replacerVindexCols := replaceAlterVschemaVindexCols(0)
+		replacerVindexColsB := &replacerVindexCols
+		for _, item := range n.VindexCols {
+			a.apply(node, item, replacerVindexColsB.replace)
+			replacerVindexColsB.inc()
+		}
+		a.apply(node, n.VindexSpec, replaceAlterVschemaVindexSpec)
+
 	case *AndExpr:
 		a.apply(node, n.Left, replaceAndExprLeft)
 		a.apply(node, n.Right, replaceAndExprRight)
@@ -1052,25 +1083,22 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Table, replaceCreateTableTable)
 		a.apply(node, n.TableSpec, replaceCreateTableTableSpec)
 
+	case *CreateView:
+		a.apply(node, n.Columns, replaceCreateViewColumns)
+		a.apply(node, n.Select, replaceCreateViewSelect)
+		a.apply(node, n.ViewName, replaceCreateViewViewName)
+
 	case *CurTimeFuncExpr:
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
 
 	case *DDL:
-		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
 		a.apply(node, n.FromTables, replaceDDLFromTables)
 		a.apply(node, n.OptLike, replaceDDLOptLike)
 		a.apply(node, n.PartitionSpec, replaceDDLPartitionSpec)
 		a.apply(node, n.Table, replaceDDLTable)
 		a.apply(node, n.TableSpec, replaceDDLTableSpec)
 		a.apply(node, n.ToTables, replaceDDLToTables)
-		replacerVindexCols := replaceDDLVindexCols(0)
-		replacerVindexColsB := &replacerVindexCols
-		for _, item := range n.VindexCols {
-			a.apply(node, item, replacerVindexColsB.replace)
-			replacerVindexColsB.inc()
-		}
-		a.apply(node, n.VindexSpec, replaceDDLVindexSpec)
 
 	case *Default:
 
@@ -1313,6 +1341,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Show:
 		a.apply(node, n.Internal, replaceShowInternal)
+
+	case *ShowBasic:
+		a.apply(node, n.Filter, replaceShowBasicFilter)
 
 	case *ShowColumns:
 		a.apply(node, n.Filter, replaceShowColumnsFilter)

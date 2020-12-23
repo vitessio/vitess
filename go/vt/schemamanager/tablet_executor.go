@@ -152,16 +152,16 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, 
 	return parsedDDLs, parsedDBDDLs, nil
 }
 
-// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func (exec *TabletExecutor) isOnlineSchemaDDL(ddl sqlparser.DDLStatement) (isOnline bool, strategy schema.DDLStrategy, options string) {
-	if ddl == nil {
+// IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
+func (exec *TabletExecutor) isOnlineSchemaDDL() (isOnline bool, strategy schema.DDLStrategy, options string) {
+	strategy, options, err := schema.ParseDDLStrategy(exec.ddlStrategy)
+	if err != nil {
 		return false, strategy, options
 	}
-	strategy, options, _ = schema.ParseDDLStrategy(exec.ddlStrategy)
-	if strategy != schema.DDLStrategyNormal {
-		return true, strategy, options
+	if strategy.IsDirect() {
+		return false, strategy, options
 	}
-	return false, strategy, options
+	return true, strategy, options
 }
 
 // a schema change that satisfies any following condition is considered
@@ -183,7 +183,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
 	for _, ddl := range parsedDDLs {
-		if isOnline, _, _ := exec.isOnlineSchemaDDL(ddl); isOnline {
+		if isOnline, _, _ := exec.isOnlineSchemaDDL(); isOnline {
 			// Since this is an online schema change, there is no need to worry about big changes
 			continue
 		}
@@ -209,6 +209,32 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
 	_, err := exec.wr.TabletManagerClient().PreflightSchema(ctx, exec.tablets[0], sqls)
 	return err
+}
+
+// executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
+// In online DDL case, the query may be exploded into multiple queries during
+func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResult *ExecuteResult) error {
+	stat, err := sqlparser.Parse(sql)
+	if err != nil {
+		return err
+	}
+	switch stat.(type) {
+	case sqlparser.DDLStatement:
+		if isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(); isOnlineDDL {
+			exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
+			normalizedQueries, err := schema.NormalizeOnlineDDL(sql)
+			if err != nil {
+				return err
+			}
+			for _, normalized := range normalizedQueries {
+				exec.executeOnlineDDL(ctx, execResult, normalized.SQL, normalized.TableName.Name.String(), strategy, options)
+			}
+			return nil
+		}
+	}
+	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
+	exec.executeOnAllTablets(ctx, execResult, sql)
+	return nil
 }
 
 // Execute applies schema changes
@@ -247,31 +273,9 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
-
-		stat, err := sqlparser.Parse(sql)
-		if err != nil {
+		if err := exec.executeSQL(ctx, sql, &execResult); err != nil {
 			execResult.ExecutorErr = err.Error()
 			return &execResult
-		}
-		isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(nil)
-		tableName := ""
-		switch ddl := stat.(type) {
-		case sqlparser.DDLStatement:
-			switch ddl.GetAction() {
-			case sqlparser.DropDDLAction:
-				// TODO (shlomi): break into distinct per-table DROP statements; on a future PR where
-				// we implement lazy DROP TABLE on Online DDL
-				tableName = ddl.GetFromTables()[0].Name.String()
-			default:
-				tableName = ddl.GetTable().Name.String()
-			}
-			isOnlineDDL, strategy, options = exec.isOnlineSchemaDDL(ddl)
-		}
-		exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
-		if isOnlineDDL {
-			exec.executeOnlineDDL(ctx, &execResult, sql, tableName, strategy, options)
-		} else {
-			exec.executeOnAllTablets(ctx, &execResult, sql)
 		}
 		if len(execResult.FailedShards) > 0 {
 			break
@@ -285,7 +289,7 @@ func (exec *TabletExecutor) executeOnlineDDL(
 	ctx context.Context, execResult *ExecuteResult, sql string,
 	tableName string, strategy schema.DDLStrategy, options string,
 ) {
-	if strategy == schema.DDLStrategyNormal {
+	if strategy.IsDirect() {
 		execResult.ExecutorErr = "Not an online DDL strategy"
 		return
 	}

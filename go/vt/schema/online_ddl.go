@@ -79,13 +79,23 @@ const (
 type DDLStrategy string
 
 const (
-	// DDLStrategyNormal means not an online-ddl migration. Just a normal MySQL ALTER TABLE
-	DDLStrategyNormal DDLStrategy = ""
+	// DDLStrategyDirect means not an online-ddl migration. Just a normal MySQL ALTER TABLE
+	DDLStrategyDirect DDLStrategy = "direct"
 	// DDLStrategyGhost requests gh-ost to run the migration
 	DDLStrategyGhost DDLStrategy = "gh-ost"
 	// DDLStrategyPTOSC requests pt-online-schema-change to run the migration
 	DDLStrategyPTOSC DDLStrategy = "pt-osc"
 )
+
+// IsDirect returns true if this strategy is a direct strategy
+// A strategy is direct if it's not explciitly one of the online DDL strategies
+func (s DDLStrategy) IsDirect() bool {
+	switch s {
+	case DDLStrategyGhost, DDLStrategyPTOSC:
+		return false
+	}
+	return true
+}
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
@@ -112,10 +122,12 @@ func ParseDDLStrategy(strategyVariable string) (strategy DDLStrategy, options st
 	}
 
 	switch strategy = DDLStrategy(strategyName); strategy {
-	case DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyNormal:
+	case "": // backwards compatiblity and to handle unspecified values
+		return DDLStrategyDirect, options, nil
+	case DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyDirect:
 		return strategy, options, nil
 	default:
-		return strategy, options, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
+		return DDLStrategyDirect, options, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
 	}
 }
 
@@ -137,6 +149,20 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 		return nil, fmt.Errorf("ReadTopo unmarshal %s error: %s", entryPath, err.Error())
 	}
 	return onlineDDL, nil
+}
+
+// getOnlineDDLAction parses the given SQL into a statement and returns the action type of the DDL statement, or error
+// if the statement is not a DDL
+func getOnlineDDLAction(sql string) (action sqlparser.DDLAction, ddlStmt sqlparser.DDLStatement, err error) {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		return action, ddlStmt, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", sql, err)
+	}
+	switch ddlStmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		return ddlStmt.GetAction(), ddlStmt, nil
+	}
+	return action, ddlStmt, fmt.Errorf("Unsupported query type: %s", sql)
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
@@ -175,15 +201,8 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 
 // GetAction extracts the DDL action type from the online DDL statement
 func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
-	stmt, err := sqlparser.Parse(onlineDDL.SQL)
-	if err != nil {
-		return action, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", onlineDDL.SQL, err)
-	}
-	switch stmt := stmt.(type) {
-	case sqlparser.DDLStatement:
-		return stmt.GetAction(), nil
-	}
-	return action, fmt.Errorf("Unsupported query type: %s", onlineDDL.SQL)
+	action, _, err = getOnlineDDLAction(onlineDDL.SQL)
+	return action, err
 }
 
 // GetActionStr returns a string representation of the DDL action
