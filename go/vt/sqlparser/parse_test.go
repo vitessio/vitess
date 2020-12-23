@@ -916,6 +916,11 @@ var (
 	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
+		input:  "alter table a character set utf32 collate = 'utf'",
+		output: "alter table a character set utf32 collate utf",
+	}, {
+		input: "alter table a convert to character set utf32",
+	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
 		input:  "alter table a alter foo",
@@ -970,10 +975,10 @@ var (
 		output: "alter table e",
 	}, {
 		input:  "alter table e character set = 'ascii'",
-		output: "alter table e",
+		output: "alter table e character set ascii",
 	}, {
 		input:  "alter table e default character set = 'ascii'",
-		output: "alter table e",
+		output: "alter table e character set ascii",
 	}, {
 		input:  "alter table e comment = 'hello'",
 		output: "alter table e",

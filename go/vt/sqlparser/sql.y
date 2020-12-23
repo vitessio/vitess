@@ -352,7 +352,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
-%type <str> charset_opt collate_opt
+%type <str> charset_opt collate_opt collate_eq_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> auto_increment_opt unsigned_opt zero_fill_opt
 %type <colKeyOpt> column_key_opt
@@ -1315,6 +1315,19 @@ collate_opt:
     $$ = string($2)
   }
 
+collate_eq_opt:
+  {
+    $$ = ""
+  }
+| COLLATE equal_opt id_or_var
+  {
+    $$ = string($3.String())
+  }
+| COLLATE equal_opt STRING
+  {
+    $$ = string($3)
+  }
+
 column_key_opt:
   {
     $$ = colKeyNone
@@ -1720,6 +1733,14 @@ alter_option:
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {
     $$ = &ChangeColumn{OldColumn:$3, NewColDefinition:$4, First:$5, After:$6}
+  }
+| default_optional CHARACTER SET equal_opt charset collate_eq_opt
+  {
+    $$ = &AlterCharset{IsDefault:true, CharacterSet:$5, Collate:$6}
+  }
+| CONVERT TO CHARACTER SET charset collate_opt
+  {
+    $$ = &AlterCharset{IsDefault:false, CharacterSet:$5, Collate:$6}
   }
 
 alter_statement:

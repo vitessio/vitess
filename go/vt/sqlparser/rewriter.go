@@ -1070,6 +1070,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Hints, replaceAliasedTableExprHints)
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
 
+	case *AlterCharset:
+
 	case *AlterColumn:
 		a.apply(node, n.Column, replaceAlterColumnColumn)
 		a.apply(node, n.DefaultVal, replaceAlterColumnDefaultVal)
