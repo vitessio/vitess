@@ -991,6 +991,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+		e.triggerNextCheckInterval()
 		return err
 	}
 
