@@ -115,6 +115,14 @@ type (
 		DefaultVal  Expr
 	}
 
+	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
+	ChangeColumn struct {
+		OldColumn        *ColName
+		NewColDefinition *ColumnDefinition
+		First            *ColName
+		After            *ColName
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -492,6 +500,7 @@ func (node *AddIndexDefinition) iAlterOption()      {}
 func (node *AddColumns) iAlterOption()              {}
 func (node AlgorithmValue) iAlterOption()           {}
 func (node *AlterColumn) iAlterOption()             {}
+func (node *ChangeColumn) iAlterOption()            {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -2877,5 +2886,16 @@ func (node *AlterColumn) Format(buf *TrackedBuffer) {
 	} else {
 		buf.astPrintf(node, "alter column %v set default", node.Column)
 		buf.astPrintf(node, " %v", node.DefaultVal)
+	}
+}
+
+// Format formats the node
+func (node *ChangeColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "change column %v %v", node.OldColumn, node.NewColDefinition)
+	if node.First != nil {
+		buf.astPrintf(node, " first %v", node.First)
+	}
+	if node.After != nil {
+		buf.astPrintf(node, " after %v", node.After)
 	}
 }

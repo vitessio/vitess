@@ -140,6 +140,22 @@ func (r *replaceCaseExprWhens) inc() {
 	*r++
 }
 
+func replaceChangeColumnAfter(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).After = newNode.(*ColName)
+}
+
+func replaceChangeColumnFirst(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).First = newNode.(*ColName)
+}
+
+func replaceChangeColumnNewColDefinition(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
+}
+
+func replaceChangeColumnOldColumn(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).OldColumn = newNode.(*ColName)
+}
+
 func replaceCheckConstraintDefinitionExpr(newNode, parent SQLNode) {
 	parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
 }
@@ -1102,6 +1118,12 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerWhensB.replace)
 			replacerWhensB.inc()
 		}
+
+	case *ChangeColumn:
+		a.apply(node, n.After, replaceChangeColumnAfter)
+		a.apply(node, n.First, replaceChangeColumnFirst)
+		a.apply(node, n.NewColDefinition, replaceChangeColumnNewColDefinition)
+		a.apply(node, n.OldColumn, replaceChangeColumnOldColumn)
 
 	case *CheckConstraintDefinition:
 		a.apply(node, n.Expr, replaceCheckConstraintDefinitionExpr)

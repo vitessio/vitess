@@ -191,7 +191,7 @@ func skipToEnd(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
@@ -1716,6 +1716,10 @@ alter_option:
 | ALTER column_opt column_name SET DEFAULT value
   {
     $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6}
+  }
+| CHANGE column_opt column_name column_definition first_opt after_opt
+  {
+    $$ = &ChangeColumn{OldColumn:$3, NewColDefinition:$4, First:$5, After:$6}
   }
 
 alter_statement:
