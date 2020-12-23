@@ -8,10 +8,10 @@ metadata:
   name: example
 spec:
   images:
-    vtctld: vitess/lite:v6.0.20-20200429
-    vtgate: vitess/lite:v6.0.20-20200429
-    vttablet: vitess/lite:v6.0.20-20200429
-    vtbackup: vitess/lite:v6.0.20-20200429
+    vtctld: vitess/lite:v8.0.0
+    vtgate: vitess/lite:v8.0.0
+    vttablet: vitess/lite:v8.0.0
+    vtbackup: vitess/lite:v8.0.0
     mysqld:
       mysql56Compatible: vitess/lite:v6.0.20-20200429
     mysqldExporter: prom/mysqld-exporter:v0.11.0

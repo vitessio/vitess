@@ -103,7 +103,7 @@ func (vc *vcursorImpl) GetKeyspace() string {
 	return vc.keyspace
 }
 
-func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error {
+func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error {
 	srvVschema := vc.vm.GetCurrentSrvVschema()
 	if srvVschema == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
@@ -117,8 +117,8 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLS
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
 	var ksName string
-	if !vschemaDDL.GetTable().IsEmpty() {
-		ksName = vschemaDDL.GetTable().Qualifier.String()
+	if !vschemaDDL.Table.IsEmpty() {
+		ksName = vschemaDDL.Table.Qualifier.String()
 	}
 	if ksName == "" {
 		ksName = keyspace
@@ -330,6 +330,17 @@ func (vc *vcursorImpl) SysVarSetEnabled() bool {
 // KeyspaceExists provides whether the keyspace exists or not.
 func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
+}
+
+func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
+	if len(vc.vschema.Keyspaces) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+	}
+	var kss []*vindexes.Keyspace
+	for _, ks := range vc.vschema.Keyspaces {
+		kss = append(kss, ks.Keyspace)
+	}
+	return kss, nil
 }
 
 // TargetString returns the current TargetString of the session.

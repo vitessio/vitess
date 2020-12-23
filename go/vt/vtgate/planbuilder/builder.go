@@ -47,6 +47,7 @@ type ContextVSchema interface {
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
 	KeyspaceExists(keyspace string) bool
+	AllKeyspace() ([]*vindexes.Keyspace, error)
 }
 
 type truncater interface {
@@ -106,10 +107,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Union:
 		return buildRoutePlan(stmt, vschema, buildUnionPlan)
 	case sqlparser.DDLStatement:
-		if sqlparser.IsVschemaDDL(stmt) {
-			return buildVSchemaDDLPlan(stmt, vschema)
-		}
 		return buildGeneralDDLPlan(query, stmt, vschema)
+	case *sqlparser.AlterVschema:
+		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:
@@ -203,5 +203,16 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 		Query:             query,
 		IsDML:             true,
 		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema ContextVSchema) (engine.Primitive, error) {
+	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	return &engine.AlterVSchema{
+		Keyspace:        keyspace,
+		AlterVschemaDDL: stmt,
 	}, nil
 }
