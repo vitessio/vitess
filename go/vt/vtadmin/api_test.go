@@ -286,7 +286,7 @@ func Test_getTablets(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestGetTabet(t *testing.T) {
+func TestGetTablet(t *testing.T) {
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
