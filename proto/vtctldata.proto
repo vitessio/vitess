@@ -57,6 +57,20 @@ message Keyspace {
   topodata.Keyspace keyspace = 2;
 }
 
+message FindAllShardsInKeyspaceRequest {
+  string keyspace = 1;
+}
+
+message FindAllShardsInKeyspaceResponse {
+  map<string, Shard> shards = 1;
+}
+
+message Shard {
+  string keyspace = 1;
+  string name = 2;
+  topodata.Shard shard = 3;
+}
+
 // TableMaterializeSttings contains the settings for one table.
 message TableMaterializeSettings {
   string target_table = 1;
