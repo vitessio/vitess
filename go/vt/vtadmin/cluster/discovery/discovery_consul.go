@@ -48,6 +48,11 @@ type ConsulDiscovery struct {
 	vtgateCellTag             string
 	vtgateKeyspacesToWatchTag string
 	vtgateAddrTmpl            *template.Template
+
+	/* vtctld options */
+	vtctldDatacenter string
+	vtctldService    string
+	vtctldAddrTmpl   *template.Template
 }
 
 // NewConsul returns a ConsulDiscovery for the given cluster. Args are a slice
@@ -77,6 +82,7 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	flags.StringVar(&disco.queryOptions.Token, "token", "", "consul ACL token to use for requests")
 	flags.BoolVar(&disco.passingOnly, "passing-only", true, "whether to include only nodes passing healthchecks")
 
+	/* vtgate discovery config options */
 	flags.StringVar(&disco.vtgateService, "vtgate-service-name", "vtgate", "consul service name vtgates register as")
 	flags.StringVar(&disco.vtgatePoolTag, "vtgate-pool-tag", "pool", "consul service tag to group vtgates by pool")
 	flags.StringVar(&disco.vtgateCellTag, "vtgate-cell-tag", "cell", "consul service tag to group vtgates by cell")
@@ -88,6 +94,16 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	vtgateDatacenterTmplStr := flags.String("vtgate-datacenter-tmpl", "",
 		"Go template string to generate the datacenter for vtgate consul queries. "+
 			"The meta information about the cluster is provided to the template via {{ .Cluster }}. "+
+			"Used once during initialization.")
+
+	/* vtctld discovery config options */
+	flags.StringVar(&disco.vtctldService, "vtctld-service-name", "vtctld", "consul service name vtctlds register as")
+
+	vtctldAddrTmplStr := flags.String("vtctld-addr-tmpl", "{{ .Hostname }}",
+		"Go template string to produce a dialable address from a *vtadminpb.Vtctld")
+	vtctldDatacenterTmplStr := flags.String("vtctld-datacenter-tmpl", "",
+		"Go template string to generate the datacenter for vtgate consul queries. "+
+			"The cluster name is provided to the template via {{ .Cluster }}. "+
 			"Used once during initialization.")
 
 	if err := flags.Parse(args); err != nil {
@@ -115,6 +131,31 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	}
 
 	disco.vtgateAddrTmpl, err = template.New("consul-vtgate-address-template").Parse(*vtgateAddrTmplStr)
+	if err != nil {
+		return nil, err
+	}
+
+	if *vtctldDatacenterTmplStr != "" {
+		tmpl, err := template.New("consul-vtctld-datacenter-" + cluster.Id).Parse(*vtctldDatacenterTmplStr)
+		if err != nil {
+			return nil, err
+		}
+
+		buf := bytes.NewBuffer(nil)
+		err = tmpl.Execute(buf, &struct {
+			Cluster *vtadminpb.Cluster
+		}{
+			Cluster: cluster,
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		disco.vtctldDatacenter = buf.String()
+	}
+
+	disco.vtctldAddrTmpl, err = template.New("consul-vtctld-address-template").Parse(*vtctldAddrTmplStr)
 	if err != nil {
 		return nil, err
 	}
@@ -220,6 +261,79 @@ func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string) ([]*
 	}
 
 	return vtgates, nil
+}
+
+// DiscoverVtctld is part of the Discovery interface.
+func (c *ConsulDiscovery) DiscoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVtctld")
+	defer span.Finish()
+
+	return c.discoverVtctld(ctx, tags)
+}
+
+func (c *ConsulDiscovery) discoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
+	vtctlds, err := c.discoverVtctlds(ctx, tags)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(vtctlds) == 0 {
+		return nil, ErrNoVtctlds
+	}
+
+	return vtctlds[rand.Intn(len(vtctlds))], nil
+}
+
+// DiscoverVtctldAddr is part of the Discovery interface.
+func (c *ConsulDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVtctldAddr")
+	defer span.Finish()
+
+	vtctld, err := c.discoverVtctld(ctx, tags)
+	if err != nil {
+		return "", err
+	}
+
+	buf := bytes.NewBuffer(nil)
+	if err := c.vtctldAddrTmpl.Execute(buf, vtctld); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+// DiscoverVtctlds is part of the Discovery interface.
+func (c *ConsulDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+	span, ctx := trace.NewSpan(ctx, "ConsulDiscovery.DiscoverVtctlds")
+	defer span.Finish()
+
+	return c.discoverVtctlds(ctx, tags)
+}
+
+func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+	opts := c.getQueryOptions()
+	opts.Datacenter = c.vtctldDatacenter
+
+	entries, _, err := c.client.Health().ServiceMultipleTags(c.vtctldService, tags, c.passingOnly, &opts)
+	if err != nil {
+		return nil, err
+	}
+
+	vtctlds := make([]*vtadminpb.Vtctld, len(entries))
+
+	for i, entry := range entries {
+		vtctld := &vtadminpb.Vtctld{
+			Cluster: &vtadminpb.Cluster{
+				Id:   c.cluster.Id,
+				Name: c.cluster.Name,
+			},
+			Hostname: entry.Node.Node,
+		}
+
+		vtctlds[i] = vtctld
+	}
+
+	return vtctlds, nil
 }
 
 // getQueryOptions returns a shallow copy so we can swap in the vtgateDatacenter.
