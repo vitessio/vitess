@@ -101,6 +101,7 @@ var migrationNextCheckInterval = 5 * time.Second
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationMinutes         = 10
+	progressPctStarted    float64 = 0
 	progressPctFull       float64 = 100.0
 	gcHoldHours                   = 72
 	databasePoolSize              = 3
@@ -374,6 +375,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted)
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
 
 	if err != nil {
