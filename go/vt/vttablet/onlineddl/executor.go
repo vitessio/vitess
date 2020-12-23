@@ -364,7 +364,7 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 }
 
 // executeDirectly runs a DDL query directly on the backend MySQL server
-func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...int) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -374,7 +374,21 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetch(onlineDDL.SQL, 0, false); err != nil {
+	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
+
+	if err != nil {
+		// let's see if this error is actually acceptable
+		if merr, ok := err.(*mysql.SQLError); ok {
+			for _, acceptableCode := range acceptableMySQLErrorCodes {
+				if merr.Num == acceptableCode {
+					// we don't consider this to be an error.
+					err = nil
+					break
+				}
+			}
+		}
+	}
+	if err != nil {
 		return err
 	}
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
@@ -1002,16 +1016,29 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	}
 	switch ddlAction {
 	case sqlparser.DropDDLAction:
-		go func() {
-			onlineDDL.SQL, _, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(gcHoldHours*time.Hour))
+		go func() error {
+			// We transform a DRPO TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
+
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 			if err != nil {
-				failMigration(err)
-				return
+				return failMigration(err)
 			}
 
-			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
-				failMigration(err)
+			onlineDDL.SQL, _, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(gcHoldHours*time.Hour))
+			if err != nil {
+				return failMigration(err)
 			}
+
+			if ddlStmt.GetIfExists() {
+				err = e.executeDirectly(ctx, onlineDDL, mysql.ERCantFindFile, mysql.ERNoSuchTable)
+			} else {
+				err = e.executeDirectly(ctx, onlineDDL)
+			}
+
+			if err != nil {
+				return failMigration(err)
+			}
+			return nil
 		}()
 	case sqlparser.CreateDDLAction:
 		go func() {
