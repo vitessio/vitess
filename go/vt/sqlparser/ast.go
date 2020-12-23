@@ -105,6 +105,16 @@ type (
 		After   *ColName
 	}
 
+	// AlgorithmValue is the algorithm specified in the alter table command
+	AlgorithmValue string
+
+	// AlterColumn is used to add or drop defaults to columns in alter table command
+	AlterColumn struct {
+		Column      *ColName
+		DropDefault bool
+		DefaultVal  Expr
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -480,6 +490,8 @@ func (*AlterTable) iDDLStatement()  {}
 func (node *AddConstraintDefinition) iAlterOption() {}
 func (node *AddIndexDefinition) iAlterOption()      {}
 func (node *AddColumns) iAlterOption()              {}
+func (node AlgorithmValue) iAlterOption()           {}
+func (node *AlterColumn) iAlterOption()             {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -2812,7 +2824,10 @@ func (node *UnlockTables) Format(buf *TrackedBuffer) {
 // Format formats the AlterTable node.
 func (node *AlterTable) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "alter table %v", node.Table)
-	for _, option := range node.AlterOptions {
+	for i, option := range node.AlterOptions {
+		if i != 0 {
+			buf.WriteString(",")
+		}
 		buf.astPrintf(node, " %v", option)
 	}
 }
@@ -2847,5 +2862,20 @@ func (node *AddColumns) Format(buf *TrackedBuffer) {
 			}
 		}
 		buf.WriteString(")")
+	}
+}
+
+// Format formats the node.
+func (node AlgorithmValue) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "algorithm = %s", string(node))
+}
+
+// Format formats the node
+func (node *AlterColumn) Format(buf *TrackedBuffer) {
+	if node.DropDefault {
+		buf.astPrintf(node, "alter column %v drop default", node.Column)
+	} else {
+		buf.astPrintf(node, "alter column %v set default", node.Column)
+		buf.astPrintf(node, " %v", node.DefaultVal)
 	}
 }
