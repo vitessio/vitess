@@ -12,6 +12,7 @@
 /go/test/endtoend/vtgate @harshit-gangal @systay
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
+/go/vt/proto/vtadmin @ajm188 @doeg
 /go/vt/orchestrator @deepthi @shlomi-noach
 /go/vt/schema @shlomi-noach
 /go/vt/sqlparser @harshit-gangal @systay
@@ -28,7 +29,8 @@
 /go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach
 /go/vt/wrangler @deepthi @rohit-nayak-ps
 /helm/ @derekperkins @dkhenry
+/proto/vtadmin.proto @ajm188 @doeg
 /proto/vtctldata.proto @ajm188 @doeg
 /proto/vtctlservice.proto @ajm188 @doeg
-/web/vtctld2 @rohit-nayak-ps
 /web/vtadmin @ajm188 @doeg
+/web/vtctld2 @rohit-nayak-ps
