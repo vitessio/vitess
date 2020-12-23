@@ -162,7 +162,7 @@ func (qg *queryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 	}
 }
 
-func (qg *queryGraph) tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) joinTree {
+func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) joinTree {
 	aRoute, ok := a.(*routePlan)
 	if !ok {
 		return nil
