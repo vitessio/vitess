@@ -231,12 +231,16 @@ func TestSchemaChange(t *testing.T) {
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
+		// this table existed
+		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 1)
 	})
 	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "gh-ost", "vtgate", "")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
+		// this table did not exist
+		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 0)
 	})
 	t.Run("Online DROP TABLE for nonexistent table, expect error, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtgate", "")
@@ -256,7 +260,7 @@ func testWithInitialSchema(t *testing.T) {
 	}
 
 	// Check if 4 tables are created
-	checkTables(t, totalTableCount)
+	checkTables(t, "", totalTableCount)
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
@@ -290,17 +294,18 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 }
 
 // checkTables checks the number of tables in the first two shards.
-func checkTables(t *testing.T, count int) {
+func checkTables(t *testing.T, showTableName string, expectCount int) {
 	for i := range clusterInstance.Keyspaces[0].Shards {
-		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], count)
+		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount)
 	}
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
-	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
+func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
+	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
+	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
-	assert.Equal(t, len(queryResult.Rows), count)
+	assert.Equal(t, expectCount, len(queryResult.Rows))
 }
 
 // checkRecentMigrations checks 'OnlineDDL <keyspace> show recent' output. Example to such output:
