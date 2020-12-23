@@ -1953,6 +1953,19 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
 }
 
+// VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
+type VReplicationWorkflowAction string
+
+const (
+	vReplicationWorkflowActionStart          = "start"
+	vReplicationWorkflowActionSwitchTraffic  = "switchtraffic"
+	vReplicationWorkflowActionReverseTraffic = "reversetraffic"
+	vReplicationWorkflowActionComplete       = "complete"
+	vReplicationWorkflowActionAbort          = "abort"
+	vReplicationWorkflowActionShow           = "show"
+	vReplicationWorkflowActionProgress       = "progress"
+)
+
 func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
 
@@ -2039,7 +2052,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
-	case wrangler.VReplicationWorkflowActionStart:
+	case vReplicationWorkflowActionStart:
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
@@ -2068,14 +2081,14 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		}
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
-	case wrangler.VReplicationWorkflowActionSwitchTraffic, wrangler.VReplicationWorkflowActionReverseTraffic:
+	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
 		vrwp.Timeout = *timeout
 		vrwp.EnableReverseReplication = *reverseReplication
-	case wrangler.VReplicationWorkflowActionAbort:
+	case vReplicationWorkflowActionAbort:
 		vrwp.KeepData = *keepData
-	case wrangler.VReplicationWorkflowActionComplete:
+	case vReplicationWorkflowActionComplete:
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			vrwp.RenameTables = *renameTables
@@ -2091,7 +2104,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
 		return err
 	}
-	if !wf.Exists() && action != wrangler.VReplicationWorkflowActionStart {
+	if !wf.Exists() && action != vReplicationWorkflowActionStart {
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
@@ -2127,19 +2140,19 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	startState := wf.CachedState()
 	wr.Logger().Printf("\nCachedState: %s\n", startState)
 	switch action {
-	case wrangler.VReplicationWorkflowActionShow:
+	case vReplicationWorkflowActionShow:
 		return printDetails()
-	case wrangler.VReplicationWorkflowActionProgress:
+	case vReplicationWorkflowActionProgress:
 		return printCopyProgress()
-	case wrangler.VReplicationWorkflowActionStart:
+	case vReplicationWorkflowActionStart:
 		err = wf.Start()
-	case wrangler.VReplicationWorkflowActionSwitchTraffic:
+	case vReplicationWorkflowActionSwitchTraffic:
 		err = wf.SwitchTraffic(wrangler.DirectionForward)
-	case wrangler.VReplicationWorkflowActionReverseTraffic:
+	case vReplicationWorkflowActionReverseTraffic:
 		err = wf.ReverseTraffic()
-	case wrangler.VReplicationWorkflowActionComplete:
+	case vReplicationWorkflowActionComplete:
 		err = wf.Complete()
-	case wrangler.VReplicationWorkflowActionAbort:
+	case vReplicationWorkflowActionAbort:
 		err = wf.Abort()
 	default:
 		return fmt.Errorf("found unsupported action %s", originalAction)

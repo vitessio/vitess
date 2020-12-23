@@ -147,6 +147,8 @@ type workflowState struct {
 	WritesSwitched bool
 }
 
+// For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
+// the query service disabled in its tablet control record
 func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletType string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
@@ -168,12 +170,17 @@ func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKe
 			if !strings.EqualFold(partition.GetServedType().String(), tabletType) {
 				continue
 			}
+
+			// If reads and writes are both switched it is possible that the shard is not in the partition table
 			for _, shardReference := range partition.GetShardReferences() {
 				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
 					found = true
 					break
 				}
 			}
+
+			// It is possible that there are no tablet controls if the target shards are not yet serving
+			// or once reads and writes are both switched,
 			if len(partition.GetShardTabletControls()) == 0 {
 				noControls = true
 				break
@@ -196,6 +203,8 @@ func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKe
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
+// For MoveTables,  to check whether we have switched reads for a tablet type, we check whether the routing rule
+// for the tablet_type is pointing to the target keyspace
 func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletType string) (
 	cellsSwitched, cellsNotSwitched []string, err error) {
 
@@ -257,6 +266,10 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	var cellsSwitched, cellsNotSwitched []string
 	var keyspace string
 	var reverse bool
+
+	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
+	// source of the reverse workflow, which is the target of the workflow initiated by the user for checking routing rules
+	// Similarly we use a target shard of the reverse workflow as the original source to check if writes have been switched
 	if strings.HasSuffix(workflow, "_reverse") {
 		reverse = true
 		keyspace = ws.SourceKeyspace
@@ -352,7 +365,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		}
 	}
 
-	//If journals exist notify user and fail
+	// If journals exist notify user and fail
 	journalsExist, _, err := ts.checkJournals(ctx)
 	if err != nil {
 		wr.Logger().Errorf("checkJournals failed: %v", err)
