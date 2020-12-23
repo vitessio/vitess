@@ -257,6 +257,12 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 			strategy:    schema.DDLStrategyGhost,
 			options:     "--max-load=Threads_running=100",
 		},
+		{
+			query:       "TRUNCATE TABLE t",
+			ddlStrategy: "gh-ost",
+			isOnlineDDL: false,
+			strategy:    schema.DDLStrategyGhost,
+		},
 	}
 
 	for _, ts := range tt {
@@ -267,10 +273,10 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		stmt, err := sqlparser.Parse(ts.query)
 		assert.NoError(t, err)
 
-		_, ok := stmt.(sqlparser.DDLStatement)
+		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		assert.True(t, ok)
 
-		isOnlineDDL, strategy, options := e.isOnlineSchemaDDL()
+		isOnlineDDL, strategy, options := e.isOnlineSchemaDDL(ddlStmt)
 		assert.Equal(t, ts.isOnlineDDL, isOnlineDDL)
 		if isOnlineDDL {
 			assert.Equal(t, ts.strategy, strategy)
