@@ -136,7 +136,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
+	relay := newRelayLog(ctx, *relayLogMaxItems, *relayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {

@@ -1,4 +1,7 @@
-FROM vitess/bootstrap:common
+ARG bootstrap_version
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM "${image}"
 
 # Install Percona 5.6
 #
