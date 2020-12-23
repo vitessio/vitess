@@ -42,7 +42,12 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	tree, err := solve(qgraph, semTable, vschema)
+	var tree joinTree
+	if len(qgraph.tables) <= 10 {
+		tree, err = dpSolve(qgraph, semTable, vschema)
+	} else {
+		tree, err = greedySolve(qgraph, semTable, vschema)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +223,7 @@ func (jp *joinPlan) cost() int {
 	we use dynamic programming to find the cheapest route/join tree possible,
 	where the cost of a plan is the number of joins
 */
-func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	size := len(qg.tables)
 	dpTable := makeDPTable()
 
@@ -251,14 +256,7 @@ func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema)
 					continue
 				}
 				joinPredicates := qg.crossTable[solves]
-				newPlan := qg.tryMerge(lhs, rhs, joinPredicates)
-				if newPlan == nil {
-					newPlan = &joinPlan{
-						lhs:        lhs,
-						rhs:        rhs,
-						predicates: joinPredicates,
-					}
-				}
+				newPlan := createJoin(lhs, rhs, joinPredicates)
 				if oldPlan == nil || newPlan.cost() < oldPlan.cost() {
 					dpTable.add(newPlan)
 				}
@@ -267,6 +265,66 @@ func solve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema)
 	}
 
 	return dpTable.planFor(allTables), nil
+}
+
+func createJoin(lhs joinTree, rhs joinTree, joinPredicates []sqlparser.Expr) joinTree {
+	newPlan := tryMerge(lhs, rhs, joinPredicates)
+	if newPlan == nil {
+		newPlan = &joinPlan{
+			lhs:        lhs,
+			rhs:        rhs,
+			predicates: joinPredicates,
+		}
+	}
+	return newPlan
+}
+
+/*
+
+ */
+func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+	plans := make([]joinTree, len(qg.tables))
+	planCache := map[semantics.TableSet]joinTree{}
+
+	// we start by seeding the table with the single routes
+	for i, table := range qg.tables {
+		solves := semTable.TableSetFor(table.alias)
+		plan, err := createRoutePlan(table, solves, vschema)
+		if err != nil {
+			return nil, err
+		}
+		plans[i] = plan
+	}
+
+	// loop while we have un-joined query parts left
+	for len(plans) > 1 {
+		var lIdx, rIdx int
+		var bestPlan joinTree
+		for i, lhs := range plans {
+			for j := i + 1; j < len(plans); j++ {
+				rhs := plans[j]
+				solves := lhs.solves() | rhs.solves()
+				joinPredicates := qg.crossTable[solves]
+				plan := planCache[solves]
+				if plan == nil {
+					plan = createJoin(lhs, rhs, joinPredicates)
+					planCache[solves] = plan
+				}
+
+				if bestPlan == nil || plan.cost() < bestPlan.cost() {
+					bestPlan = plan
+					// remember which plans we based on, so we can remove them later
+					lIdx = i
+					rIdx = j
+				}
+			}
+		}
+		plans = append(plans[:rIdx], plans[rIdx+1:]...)
+		plans = append(plans[:lIdx], plans[lIdx+1:]...)
+		plans = append(plans, bestPlan)
+	}
+
+	return plans[0], nil
 }
 
 func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
