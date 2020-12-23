@@ -902,8 +902,11 @@ var (
 	}, {
 		input: "set @period.variable = 42",
 	}, {
-		input:  "alter table a add foo",
-		output: "alter table a",
+		input:  "alter table a add foo int first v",
+		output: "alter table a add column foo int first v",
+	}, {
+		input:  "alter table a alter x set default NULL, alter column x2 set default 's', alter x3 drop default",
+		output: "alter table a alter column x set default null, alter column x2 set default 's', alter column x3 drop default",
 	}, {
 		input: "alter table a add spatial key foo (column1)",
 	}, {
@@ -911,8 +914,7 @@ var (
 	}, {
 		input: "alter table a add unique key foo (column1)",
 	}, {
-		input:  "alter table `By` add foo",
-		output: "alter table `By`",
+		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
 		input:  "alter table a alter foo",
 		output: "alter table a",

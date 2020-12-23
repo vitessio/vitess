@@ -1697,6 +1697,26 @@ alter_option:
   {
     $$ = &AddColumns{Columns: []*ColumnDefinition{$3}, First:$4, After:$5}
   }
+| ALGORITHM equal_opt DEFAULT
+  {
+    $$ = AlgorithmValue(string($3))
+  }
+| ALGORITHM equal_opt INPLACE
+  {
+    $$ = AlgorithmValue(string($3))
+  }
+| ALGORITHM equal_opt COPY
+  {
+    $$ = AlgorithmValue(string($3))
+  }
+| ALTER column_opt column_name DROP DEFAULT
+  {
+    $$ = &AlterColumn{Column: $3, DropDefault:true}
+  }
+| ALTER column_opt column_name SET DEFAULT value
+  {
+    $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6}
+  }
 
 alter_statement:
   alter_table_prefix alter_options_opt

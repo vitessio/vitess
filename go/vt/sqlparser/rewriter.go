@@ -66,6 +66,14 @@ func replaceAliasedTableExprPartitions(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 }
 
+func replaceAlterColumnColumn(newNode, parent SQLNode) {
+	parent.(*AlterColumn).Column = newNode.(*ColName)
+}
+
+func replaceAlterColumnDefaultVal(newNode, parent SQLNode) {
+	parent.(*AlterColumn).DefaultVal = newNode.(Expr)
+}
+
 type replaceAlterTableAlterOptions int
 
 func (r *replaceAlterTableAlterOptions) replace(newNode, container SQLNode) {
@@ -1034,6 +1042,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *AddIndexDefinition:
 		a.apply(node, n.IndexDefinition, replaceAddIndexDefinitionIndexDefinition)
 
+	case AlgorithmValue:
+
 	case *AliasedExpr:
 		a.apply(node, n.As, replaceAliasedExprAs)
 		a.apply(node, n.Expr, replaceAliasedExprExpr)
@@ -1043,6 +1053,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Expr, replaceAliasedTableExprExpr)
 		a.apply(node, n.Hints, replaceAliasedTableExprHints)
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
+
+	case *AlterColumn:
+		a.apply(node, n.Column, replaceAlterColumnColumn)
+		a.apply(node, n.DefaultVal, replaceAlterColumnDefaultVal)
 
 	case *AlterDatabase:
 
