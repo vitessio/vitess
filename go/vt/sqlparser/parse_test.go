@@ -914,6 +914,8 @@ var (
 	}, {
 		input: "alter table a add unique key foo (column1)",
 	}, {
+		input: "alter table a change column s foo int default 1 after x",
+	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
 		input:  "alter table a alter foo",
