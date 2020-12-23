@@ -28,8 +28,8 @@ import (
 // the next middleware in the chain.
 //
 // It also annotates the span with the route_path_template, if it exists, and
-// the route_uri. To add additional spans, extract the span in your VTFunHTTPHandler
-// like:
+// the route_uri. To add additional spans, extract the span in your
+// VTAdminHTTPHandler like:
 //
 //		func Handler(ctx context.Context, r Request, api *API) *JSONResponse {
 //			span, _ := trace.FromContext(ctx)
@@ -38,7 +38,7 @@ import (
 //			return NewJSONResponse(api.Something(ctx))
 //		}
 //
-// An unnamed route will get a span named "vtfun:http:<unnamed route>".
+// An unnamed route will get a span named "vtadmin:http:<unnamed route>".
 func TraceHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		route := mux.CurrentRoute(r)
