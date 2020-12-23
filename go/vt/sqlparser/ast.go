@@ -123,6 +123,13 @@ type (
 		After            *ColName
 	}
 
+	// AlterCharset is used to set the default or change the character set and collation in alter table command
+	AlterCharset struct {
+		IsDefault    bool
+		CharacterSet string
+		Collate      string
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -501,6 +508,7 @@ func (node *AddColumns) iAlterOption()              {}
 func (node AlgorithmValue) iAlterOption()           {}
 func (node *AlterColumn) iAlterOption()             {}
 func (node *ChangeColumn) iAlterOption()            {}
+func (node *AlterCharset) iAlterOption()            {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -2897,5 +2905,16 @@ func (node *ChangeColumn) Format(buf *TrackedBuffer) {
 	}
 	if node.After != nil {
 		buf.astPrintf(node, " after %v", node.After)
+	}
+}
+
+// Format formats the node
+func (node *AlterCharset) Format(buf *TrackedBuffer) {
+	if !node.IsDefault {
+		buf.astPrintf(node, "convert to ")
+	}
+	buf.astPrintf(node, "character set %s", node.CharacterSet)
+	if node.Collate != "" {
+		buf.astPrintf(node, " collate %s", node.Collate)
 	}
 }
