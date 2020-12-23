@@ -261,7 +261,11 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 			query:       "TRUNCATE TABLE t",
 			ddlStrategy: "gh-ost",
 			isOnlineDDL: false,
-			strategy:    schema.DDLStrategyGhost,
+		},
+		{
+			query:       "RENAME TABLE t to t2",
+			ddlStrategy: "gh-ost",
+			isOnlineDDL: false,
 		},
 	}
 
