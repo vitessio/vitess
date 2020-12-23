@@ -232,13 +232,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 	insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" //ID 102, hence due to reverse_bits in shard -80
 	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
-	time.Sleep(1 * time.Second) // wait for vreplication to catchup
-
 	reverseKsWorkflow := "product.p2c_reverse"
 	if testReverse {
 		//Reverse Replicate
 		switchReads(t, allCellNames, reverseKsWorkflow)
-		printShardPositions(vc, ksShards)
 		switchWrites(t, reverseKsWorkflow)
 
 		insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
@@ -249,11 +246,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
 
-		time.Sleep(1 * time.Second) // wait for vreplication to catchup
-
 		//Go forward again
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow)
+
 		dropSourcesDryRun(t, ksWorkflow, false, dryRunResultsDropSourcesDropCustomerShard)
 		dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
 
@@ -653,15 +649,11 @@ func switchWritesDryRun(t *testing.T, ksWorkflow string, dryRunResults []string)
 	validateDryRunResults(t, output, dryRunResults)
 }
 
-func switchWrites(t *testing.T, ksWorkflow string) {
-	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
-		"-filtered_replication_wait_time="+SwitchWritesTimeout, ksWorkflow)
-
+func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
 	debug := true
-	if debug && strings.Contains(ksWorkflow, ".p2c") {
-		fmt.Printf("------------------- START Extra debug info for a p2c SwitchWrites\n")
+	if debug {
+		fmt.Printf("------------------- START Extra debug info %s SwitchWrites %s\n", msg, ksWorkflow)
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -683,8 +675,19 @@ func switchWrites(t *testing.T, ksWorkflow string) {
 					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
 			}
 		}
-		fmt.Printf("------------------- END Extra debug info for a p2c SwitchWrites\n")
+		fmt.Printf("------------------- END Extra debug info %s SwitchWrites %s\n", msg, ksWorkflow)
 	}
+}
+
+func switchWrites(t *testing.T, ksWorkflow string) {
+	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites",
+		"-filtered_replication_wait_time="+SwitchWritesTimeout, ksWorkflow)
+	if output != "" {
+		fmt.Printf("Output of SwitchWrites for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
+	}
+	//printSwitchWritesExtraDebug is useful when debugging failures in SwitchWrites due to corner cases/races
+	_ = printSwitchWritesExtraDebug
 	if err != nil {
 		require.FailNow(t, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
 	}
