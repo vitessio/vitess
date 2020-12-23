@@ -75,7 +75,7 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 
 // NormalizeOnlineDDL normalizes a given query for OnlineDDL, possibly exploding it into multiple distinct queries
 func NormalizeOnlineDDL(sql string) (normalized []*NormalizedDDLQuery, err error) {
-	action, ddlStmt, err := getOnlineDDLAction(sql)
+	ddlStmt, action, err := ParseOnlineDDLStatement(sql)
 	if err != nil {
 		return normalized, err
 	}
