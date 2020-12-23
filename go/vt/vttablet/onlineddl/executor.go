@@ -103,6 +103,7 @@ const (
 	staleMigrationMinutes         = 10
 	progressPctFull       float64 = 100.0
 	gcHoldHours                   = 72
+	databasePoolSize              = 3
 )
 
 var (
@@ -157,8 +158,8 @@ func NewExecutor(env tabletenv.Env, tabletAlias topodatapb.TabletAlias, ts *topo
 		env:         env,
 		tabletAlias: &tabletAlias,
 
-		pool: connpool.NewPool(env, "ExecutorPool", tabletenv.ConnPoolConfig{
-			Size:               1,
+		pool: connpool.NewPool(env, "OnlineDDLExecutorPool", tabletenv.ConnPoolConfig{
+			Size:               databasePoolSize,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 		tabletTypeFunc: tabletTypeFunc,
