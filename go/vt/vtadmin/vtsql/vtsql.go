@@ -27,6 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // DB defines the connection and query interface of vitess SQL queries used by
@@ -59,7 +61,7 @@ type DB interface {
 // VTGateProxy is a proxy for creating and using database connections to vtgates
 // in a Vitess cluster.
 type VTGateProxy struct {
-	cluster       string
+	cluster       *vtadminpb.Cluster
 	discovery     discovery.Discovery
 	discoveryTags []string
 	creds         Credentials
@@ -85,14 +87,14 @@ var ErrConnClosed = errors.New("use of closed connection")
 //
 // It does not open a connection to a vtgate; users must call Dial before first
 // use.
-func New(cluster string, cfg *Config) *VTGateProxy {
+func New(cfg *Config) *VTGateProxy {
 	discoveryTags := cfg.DiscoveryTags
 	if discoveryTags == nil {
 		discoveryTags = []string{}
 	}
 
 	return &VTGateProxy{
-		cluster:       cluster,
+		cluster:       cfg.Cluster,
 		discovery:     cfg.Discovery,
 		discoveryTags: discoveryTags,
 		creds:         cfg.Credentials,
@@ -145,7 +147,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	}
 
 	conf := vitessdriver.Configuration{
-		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster),
+		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
 		Address:         vtgate.host,
 		Target:          target,
 		GRPCDialOptions: opts,
@@ -216,7 +218,8 @@ func (vtgate *VTGateProxy) Hostname() string {
 }
 
 func (vtgate *VTGateProxy) annotateSpan(span trace.Span) {
-	span.Annotate("cluster", vtgate.cluster)
+	span.Annotate("cluster_id", vtgate.cluster.Id)
+	span.Annotate("cluster_name", vtgate.cluster.Name)
 
 	if vtgate.host != "" {
 		span.Annotate("vtgate_host", vtgate.host)

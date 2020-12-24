@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/grpcclient"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 func TestConfigParse(t *testing.T) {
@@ -53,10 +55,12 @@ func TestConfigParse(t *testing.T) {
 
 		dir := filepath.Dir(path)
 		baseParts := strings.Split(filepath.Base(path), "-")
-		tmplParts := append(baseParts[:3], "{{ .ClusterName }}", baseParts[4])
+		tmplParts := append(baseParts[:3], "{{ .Cluster.Name }}", baseParts[4])
 
 		cfg := &Config{
-			ClusterName: "testcluster",
+			Cluster: &vtadminpb.Cluster{
+				Name: "testcluster",
+			},
 		}
 
 		credsTmplStr := filepath.Join(dir, strings.Join(tmplParts, "-"))
@@ -103,7 +107,7 @@ func TestConfigParse(t *testing.T) {
 
 		dir := filepath.Dir(path)
 		baseParts := strings.Split(filepath.Base(path), "-")
-		tmplParts := append(baseParts[:3], "{{ .ClusterName }}", baseParts[4])
+		tmplParts := append(baseParts[:3], "{{ .Cluster.Name }}", baseParts[4])
 
 		credsTmplStr := filepath.Join(dir, strings.Join(tmplParts, "-"))
 
@@ -128,14 +132,16 @@ func TestConfigParse(t *testing.T) {
 		}
 
 		expected := &Config{
-			ClusterID:       "cid",
-			ClusterName:     "testcluster",
+			Cluster: &vtadminpb.Cluster{
+				Id:   "cid",
+				Name: "testcluster",
+			},
 			DiscoveryTags:   expectedTags,
 			Credentials:     expectedCreds,
 			CredentialsPath: path,
 		}
 
-		cfg, err := Parse("cid", "testcluster", nil, args)
+		cfg, err := Parse(&vtadminpb.Cluster{Id: "cid", Name: "testcluster"}, nil, args)
 		assert.NoError(t, err)
 		assert.Equal(t, expected, cfg)
 	})

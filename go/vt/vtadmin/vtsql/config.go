@@ -24,6 +24,8 @@ import (
 	"github.com/spf13/pflag"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // Config represents the options that modify the behavior of a vtqsl.VTGateProxy.
@@ -37,18 +39,16 @@ type Config struct {
 	// it's not really an "option" in normal use.
 	CredentialsPath string
 
-	ClusterID   string
-	ClusterName string
+	Cluster *vtadminpb.Cluster
 }
 
 // Parse returns a new config with the given cluster ID and name, after
 // attempting to parse the command-line pflags into that Config. See
 // (*Config).Parse() for more details.
-func Parse(clusterID string, clusterName string, disco discovery.Discovery, args []string) (*Config, error) {
+func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
 	cfg := &Config{
-		ClusterID:   clusterID,
-		ClusterName: clusterName,
-		Discovery:   disco,
+		Cluster:   cluster,
+		Discovery: disco,
 	}
 
 	err := cfg.Parse(args)
