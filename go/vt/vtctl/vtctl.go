@@ -1964,6 +1964,7 @@ const (
 	vReplicationWorkflowActionAbort          = "abort"
 	vReplicationWorkflowActionShow           = "show"
 	vReplicationWorkflowActionProgress       = "progress"
+	vReplicationWorkflowActionGetState       = "getstate"
 )
 
 func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
@@ -2138,7 +2139,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	}
 	startState := wf.CachedState()
-	wr.Logger().Printf("\nCachedState: %s\n", startState)
 	switch action {
 	case vReplicationWorkflowActionShow:
 		return printDetails()
@@ -2146,6 +2146,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return printCopyProgress()
 	case vReplicationWorkflowActionStart:
 		err = wf.Start()
+		//TODO: wait for streams to start or report error (pos != "", Message contains error, tx/update time recent)
 	case vReplicationWorkflowActionSwitchTraffic:
 		err = wf.SwitchTraffic(wrangler.DirectionForward)
 	case vReplicationWorkflowActionReverseTraffic:
@@ -2154,6 +2155,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		err = wf.Complete()
 	case vReplicationWorkflowActionAbort:
 		err = wf.Abort()
+	case vReplicationWorkflowActionGetState:
+		wr.Logger().Printf(wf.CachedState() + "\n")
+		return nil
 	default:
 		return fmt.Errorf("found unsupported action %s", originalAction)
 	}
@@ -2161,9 +2165,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		log.Warningf(" %s error: %v", originalAction, wf)
 		return wrapError(wf, err)
 	}
-	time.Sleep(1 * time.Second)
-	wr.Logger().Printf("%s %s was successful\nStart State: %s\n\nCurrent State: %s\n\n",
-		workflowType, action, startState, wf.CurrentState())
+	wr.Logger().Printf("%s was successful\nStart State: %s\nCurrent State: %s\n\n",
+		originalAction, startState, wf.CurrentState())
 	return nil
 }
 

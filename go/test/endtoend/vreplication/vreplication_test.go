@@ -49,8 +49,9 @@ func init() {
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
+	allCells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = InitCluster(t, []string{defaultCellName})
+	vc = InitCluster(t, allCells)
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
 	defer func() { defaultReplicas = 1 }()

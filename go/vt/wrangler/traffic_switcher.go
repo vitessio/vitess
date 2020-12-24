@@ -225,26 +225,33 @@ func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKe
 			return nil, nil, err
 		}
 		rules := srvVSchema.RoutingRules.Rules
+		log.Infof("Rules for srvVSchema for cell %s are %+v", cell, rules)
+		found := false
+		switched := false
 		for _, rule := range rules {
-			ruleName := fmt.Sprintf("%s@%s", table, tabletType)
+			ruleName := fmt.Sprintf("%s.%s@%s", targetKeyspace, table, tabletType)
 			if rule.FromTable == ruleName {
-				switched := false
+				found = true
 				for _, to := range rule.ToTables {
 					ks, err := getKeyspace(to)
 					if err != nil {
+						log.Errorf(err.Error())
 						return nil, nil, err
 					}
 					if ks == targetKeyspace {
 						switched = true
+						break // if one table in workflow is switched we are done
 					}
 				}
-				if switched {
-					cellsSwitched = append(cellsSwitched, cell)
-				} else {
-					cellsNotSwitched = append(cellsNotSwitched, cell)
-				}
+			}
+			if found {
 				break
 			}
+		}
+		if switched {
+			cellsSwitched = append(cellsSwitched, cell)
+		} else {
+			cellsNotSwitched = append(cellsNotSwitched, cell)
 		}
 	}
 	return cellsSwitched, cellsNotSwitched, nil
@@ -297,7 +304,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			return nil, nil, err
 		}
 		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-
 		rules, err := ts.wr.getRoutingRules(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -352,15 +358,15 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		wr.Logger().Errorf(errorMsg)
 		return nil, fmt.Errorf(errorMsg)
 	}
-	wr.Logger().Infof("SwitchReads: %s.%s tt %+v, cells %+v, state: %+v", targetKeyspace, workflow, servedTypes, cells, ws)
+	wr.Logger().Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflow, servedTypes, cells, ws)
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 		}
-		if direction == DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsNotSwitched) > 0 {
+		if direction == DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for REPLICAs but REPLICA reads have not been switched")
 		}
-		if direction == DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsNotSwitched) > 0 {
+		if direction == DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
 		}
 	}
@@ -689,6 +695,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, error) {
 	tgtInfo, err := wr.buildTargets(ctx, targetKeyspace, workflow)
 	if err != nil {
+		log.Infof("Error building targets: %s", err)
 		return nil, err
 	}
 	targets, frozen, optCells, optTabletTypes := tgtInfo.targets, tgtInfo.frozen, tgtInfo.optCells, tgtInfo.optTabletTypes
@@ -913,20 +920,22 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// table -> sourceKeyspace.table
 	// targetKeyspace.table -> sourceKeyspace.table
 	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
-	// For backward, we delete them.
+	// For backward, we redirect to source
 	for _, servedType := range servedTypes {
 		tt := strings.ToLower(servedType.String())
 		for _, table := range ts.tables {
 			if direction == DirectionForward {
 				log.Infof("Route direction forward")
-				rules[table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
-				rules[ts.targetKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
-				rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
+				toTarget := []string{ts.targetKeyspace + "." + table}
+				rules[table+"@"+tt] = toTarget
+				rules[ts.targetKeyspace+"."+table+"@"+tt] = toTarget
+				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toTarget
 			} else {
 				log.Infof("Route direction backwards")
-				rules[table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
-				rules[ts.targetKeyspace+"."+table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
-				rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.sourceKeyspace + "." + table}
+				toSource := []string{ts.sourceKeyspace + "." + table}
+				rules[table+"@"+tt] = toSource
+				rules[ts.targetKeyspace+"."+table+"@"+tt] = toSource
+				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toSource
 			}
 		}
 	}

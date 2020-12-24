@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/wrangler"
 
 	"github.com/stretchr/testify/require"
@@ -48,9 +50,11 @@ const (
 )
 
 var (
-	customerTab1, customerTab2, productReplicaTab, customerReplicaTab1, productTab *cluster.VttabletProcess
-	lastOutput                                                                     string
-	currentWorkflowType                                                            wrangler.VReplicationWorkflowType
+	targetTab1, targetTab2, targetReplicaTab1 *cluster.VttabletProcess
+	sourceReplicaTab, sourceTab               *cluster.VttabletProcess
+
+	lastOutput          string
+	currentWorkflowType wrangler.VReplicationWorkflowType
 )
 
 func reshard2Start(t *testing.T, sourceShards, targetShards string) error {
@@ -58,8 +62,8 @@ func reshard2Start(t *testing.T, sourceShards, targetShards string) error {
 		"", workflowActionStart, "", sourceShards, targetShards)
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
-	catchup(t, customerTab1, workflowName, "Reshard")
-	catchup(t, customerTab2, workflowName, "Reshard")
+	catchup(t, targetTab1, workflowName, "Reshard")
+	catchup(t, targetTab2, workflowName, "Reshard")
 	vdiff(t, ksWorkflow)
 	return nil
 }
@@ -71,8 +75,8 @@ func moveTables2Start(t *testing.T, tables string) error {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionStart, "", "", "")
 	require.NoError(t, err)
-	catchup(t, customerTab1, workflowName, "MoveTables")
-	catchup(t, customerTab2, workflowName, "MoveTables")
+	catchup(t, targetTab1, workflowName, "MoveTables")
+	catchup(t, targetTab2, workflowName, "MoveTables")
 	time.Sleep(1 * time.Second)
 	vdiff(t, ksWorkflow)
 	return nil
@@ -109,19 +113,24 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output
 	if err != nil {
-		t.Logf("%s command failed with %+v\n", args[0], err)
 		return fmt.Errorf("%s: %s", err, output)
 	}
-	fmt.Printf("----------\n%+v\n%s\n----------\n", args, output)
+	fmt.Printf("----------\n%+v\n%s----------\n", args, output)
 	return nil
 }
 
-func tstWorkflowSwitchReads(t *testing.T, tabletTypes string) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "replica,rdonly", ""))
+func tstWorkflowSwitchReads(t *testing.T, tabletTypes, cells string) {
+	if tabletTypes == "" {
+		tabletTypes = "replica,rdonly"
+	}
+	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, tabletTypes, cells))
 }
 
-func tstWorkflowReverseReads(t *testing.T, tabletTypes string) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "replica,rdonly", ""))
+func tstWorkflowReverseReads(t *testing.T, tabletTypes, cells string) {
+	if tabletTypes == "" {
+		tabletTypes = "replica,rdonly"
+	}
+	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, tabletTypes, cells))
 }
 
 func tstWorkflowSwitchWrites(t *testing.T) {
@@ -161,25 +170,26 @@ func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.Vttabl
 }
 
 func validateReadsRouteToSource(t *testing.T, tabletTypes string) {
-	validateReadsRoute(t, tabletTypes, productReplicaTab)
+	validateReadsRoute(t, tabletTypes, sourceReplicaTab)
 }
 
 func validateReadsRouteToTarget(t *testing.T, tabletTypes string) {
-	validateReadsRoute(t, tabletTypes, customerReplicaTab1)
+	validateReadsRoute(t, tabletTypes, targetReplicaTab1)
 }
 
 func validateWritesRouteToSource(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
 	matchInsertQuery := "insert into customer(name, cid) values"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery, matchInsertQuery))
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, sourceTab, "customer", insertQuery, matchInsertQuery))
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
 }
+
 func validateWritesRouteToTarget(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer3', 101)"
 	matchInsertQuery := "insert into customer(name, cid) values"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery, matchInsertQuery))
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, targetTab2, "customer", insertQuery, matchInsertQuery))
 	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
-	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery, matchInsertQuery))
+	require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, targetTab1, "customer", insertQuery, matchInsertQuery))
 	execVtgateQuery(t, vtgateConn, "customer", "delete from customer where cid > 100")
 }
 
@@ -194,12 +204,12 @@ func revert(t *testing.T) {
 	}
 
 	for _, query := range queries {
-		customerTab1.QueryTablet(query, "customer", true)
-		customerTab2.QueryTablet(query, "customer", true)
-		productTab.QueryTablet(query, "product", true)
+		targetTab1.QueryTablet(query, "customer", true)
+		targetTab2.QueryTablet(query, "customer", true)
+		sourceTab.QueryTablet(query, "product", true)
 	}
-	customerTab1.QueryTablet("drop table vt_customer.customer", "customer", true)
-	customerTab2.QueryTablet("drop table vt_customer.customer", "customer", true)
+	targetTab1.QueryTablet("drop table vt_customer.customer", "customer", true)
+	targetTab2.QueryTablet("drop table vt_customer.customer", "customer", true)
 
 	clearRoutingRules(t, vc)
 }
@@ -207,6 +217,13 @@ func revert(t *testing.T) {
 func checkStates(t *testing.T, startState, endState string) {
 	require.Contains(t, lastOutput, fmt.Sprintf("Start State: %s", startState))
 	require.Contains(t, lastOutput, fmt.Sprintf("Current State: %s", endState))
+}
+
+func getCurrentState(t *testing.T) string {
+	if err := tstWorkflowAction(t, "GetState", "", ""); err != nil {
+		return err.Error()
+	}
+	return strings.TrimSpace(strings.Trim(lastOutput, "\n"))
 }
 
 // ideally this should be broken up into multiple tests for full flow, replica/rdonly flow, reverse flows etc
@@ -219,6 +236,7 @@ func TestBasicV2Workflows(t *testing.T) {
 
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
+	log.Flush()
 }
 
 func testReshardV2Workflow(t *testing.T) {
@@ -227,12 +245,11 @@ func testReshardV2Workflow(t *testing.T) {
 	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
 	reshard2Start(t, "-80,80-", "-40,40-80,80-c0,c0-")
 
-	checkStates(t, "Not Started", "Not Started")
+	checkStates(t, wrangler.WorkflowStateNotStarted, wrangler.WorkflowStateNotSwitched)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
 	testRestOfWorkflow(t)
-
 }
 
 func testMoveTablesV2Workflow(t *testing.T) {
@@ -241,7 +258,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
 	moveTables2Start(t, "customer")
-	checkStates(t, "Not Started", "Not Started")
+	checkStates(t, wrangler.WorkflowStateNotStarted, wrangler.WorkflowStateNotSwitched)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
@@ -260,32 +277,73 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "No workflows found in keyspace customer")
-
 }
+
+func testPartialSwitches(t *testing.T) {
+	//nothing switched
+	require.Equal(t, getCurrentState(t), wrangler.WorkflowStateNotSwitched)
+	tstWorkflowSwitchReads(t, "replica,rdonly", "zone1")
+	nextState := "Reads partially switched. Replica switched in cells: zone1. Rdonly switched in cells: zone1. Writes Not Switched"
+	checkStates(t, wrangler.WorkflowStateNotSwitched, nextState)
+
+	tstWorkflowSwitchReads(t, "replica,rdonly", "zone2")
+	currentState := nextState
+	nextState = wrangler.WorkflowStateReadsSwitched
+	checkStates(t, currentState, nextState)
+
+	tstWorkflowSwitchReads(t, "", "")
+	checkStates(t, nextState, nextState) //idempotency
+
+	tstWorkflowSwitchWrites(t)
+	currentState = nextState
+	nextState = wrangler.WorkflowStateAllSwitched
+	checkStates(t, currentState, nextState)
+
+	tstWorkflowSwitchWrites(t)
+	checkStates(t, nextState, nextState) //idempotency
+
+	tstWorkflowReverseReads(t, "replica,rdonly", "zone1")
+	currentState = nextState
+	nextState = "Reads partially switched. Replica switched in cells: zone2. Rdonly switched in cells: zone2. Writes Switched"
+	checkStates(t, currentState, nextState)
+
+	tstWorkflowReverseReads(t, "replica,rdonly", "zone2")
+	currentState = nextState
+	nextState = wrangler.WorkflowStateWritesSwitched
+	checkStates(t, currentState, nextState)
+
+	tstWorkflowReverseWrites(t)
+	currentState = nextState
+	nextState = wrangler.WorkflowStateNotSwitched
+	checkStates(t, currentState, nextState)
+}
+
 func testRestOfWorkflow(t *testing.T) {
+	testPartialSwitches(t)
+
 	// test basic forward and reverse flows
-	tstWorkflowSwitchReads(t, "")
-	checkStates(t, "Reads Not Switched. Writes Not Switched", "All Reads Switched. Writes Not Switched")
+	tstWorkflowSwitchReads(t, "", "")
+	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToSource(t)
 
 	tstWorkflowSwitchWrites(t)
-	checkStates(t, "All Reads Switched. Writes Not Switched", "All Reads Switched. Writes Switched")
+	checkStates(t, wrangler.WorkflowStateReadsSwitched, wrangler.WorkflowStateAllSwitched)
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
-	tstWorkflowReverseReads(t, "")
-	checkStates(t, "All Reads Switched. Writes Switched", "Reads Not Switched. Writes Switched")
+	tstWorkflowReverseReads(t, "", "")
+	checkStates(t, wrangler.WorkflowStateAllSwitched, wrangler.WorkflowStateWritesSwitched)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	tstWorkflowReverseWrites(t)
-	checkStates(t, "Reads Not Switched. Writes Switched", "Reads Not Switched. Writes Not Switched")
+	checkStates(t, wrangler.WorkflowStateWritesSwitched, wrangler.WorkflowStateNotSwitched)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
 	tstWorkflowSwitchWrites(t)
-	checkStates(t, "Reads Not Switched. Writes Not Switched", "Reads Not Switched. Writes Switched")
+	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateWritesSwitched)
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToTarget(t)
 
@@ -293,11 +351,11 @@ func testRestOfWorkflow(t *testing.T) {
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
-	tstWorkflowSwitchReads(t, "")
+	tstWorkflowSwitchReads(t, "", "")
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToSource(t)
 
-	tstWorkflowReverseReads(t, "")
+	tstWorkflowReverseReads(t, "", "")
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
@@ -308,24 +366,22 @@ func testRestOfWorkflow(t *testing.T) {
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
-	// test complete and abort
-	var err error
-
-	err = tstWorkflowComplete(t)
+	// trying to complete an unswitched workflow should error
+	err := tstWorkflowComplete(t)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "cannot complete workflow because you have not yet switched all read and write traffic")
+	require.Contains(t, err.Error(), wrangler.ErrWorkflowNotFullySwitched)
 
+	// fully switch and complete
 	tstWorkflowSwitchReadsAndWrites(t)
 	validateReadsRouteToTarget(t, "replica")
 	validateWritesRouteToTarget(t)
 
 	err = tstWorkflowComplete(t)
 	require.NoError(t, err)
-
 }
 
 func setupCluster(t *testing.T) *VitessCluster {
-	cells := []string{"zone1"}
+	cells := []string{"zone1", "zone2"}
 
 	vc = InitCluster(t, cells)
 	require.NotNil(t, vc)
@@ -333,27 +389,30 @@ func setupCluster(t *testing.T) *VitessCluster {
 	allCellNames = defaultCellName
 	defaultCell = vc.Cells[defaultCellName]
 
-	cell1 := vc.Cells["zone1"]
-	vc.AddKeyspace(t, []*Cell{cell1}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
+	zone1 := vc.Cells["zone1"]
+	zone2 := vc.Cells["zone2"]
 
-	vtgate = cell1.Vtgates[0]
+	vc.AddKeyspace(t, []*Cell{zone1, zone2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, 1, 100)
+
+	vtgate = zone1.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
 	verifyClusterHealth(t)
 	insertInitialData(t)
 
-	productReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
-	productTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
+	sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
+	sourceTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 
 	return vc
 }
 
 func setupCustomerKeyspace(t *testing.T) {
-	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells[defaultCellName]}, "customer", "-80,80-",
-		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
+	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"], vc.Cells["zone2"]}, "customer", "-80,80-",
+		customerVSchema, customerSchema, defaultReplicas, 1, 200); err != nil {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "-80"), 1); err != nil {
@@ -362,16 +421,22 @@ func setupCustomerKeyspace(t *testing.T) {
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "80-"), 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 1); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 2); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 1); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 2); err != nil {
 		t.Fatal(err)
 	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
-	customerTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
-	customerTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
-	customerReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
+	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+	targetTab2 = custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+	targetReplicaTab1 = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
 }
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
@@ -399,8 +464,8 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 
 	var moveTablesAndWait = func() {
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
-		catchup(t, customerTab1, workflow, "MoveTables")
-		catchup(t, customerTab2, workflow, "MoveTables")
+		catchup(t, targetTab1, workflow, "MoveTables")
+		catchup(t, targetTab2, workflow, "MoveTables")
 		vdiff(t, ksWorkflow)
 	}
 
@@ -475,10 +540,6 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		revert(t)
 
 	}
-	_ = switchReadsFollowedBySwitchWrites
-	_ = switchWritesFollowedBySwitchReads
-	_ = switchReadsReverseSwitchWritesSwitchReads
-	_ = switchWritesReverseSwitchReadsSwitchWrites
 	switchReadsFollowedBySwitchWrites()
 	switchWritesFollowedBySwitchReads()
 	switchReadsReverseSwitchWritesSwitchReads()
@@ -488,21 +549,25 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 func createAdditionalCustomerShards(t *testing.T, shards string) {
 	ksName := "customer"
 	keyspace := vc.Cells[defaultCell.Name].Keyspaces[ksName]
-	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell}, keyspace, shards, defaultReplicas, defaultRdonly, 400))
+	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell, vc.Cells["zone2"]}, keyspace, shards, defaultReplicas, 1, 400))
 	arrTargetShardNames := strings.Split(shards, ",")
 
 	for _, shardName := range arrTargetShardNames {
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", ksName, shardName), 1); err != nil {
 			t.Fatal(err)
 		}
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2); err != nil {
+			t.Fatal(err)
+		}
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 2); err != nil {
+			t.Fatal(err)
+		}
 	}
-	//FIXME
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[ksName]
-	customerTab2 = custKs.Shards["80-c0"].Tablets["zone1-600"].Vttablet
-	customerTab1 = custKs.Shards["40-80"].Tablets["zone1-500"].Vttablet
-	customerReplicaTab1 = custKs.Shards["-40"].Tablets["zone1-401"].Vttablet
+	targetTab2 = custKs.Shards["80-c0"].Tablets["zone1-600"].Vttablet
+	targetTab1 = custKs.Shards["40-80"].Tablets["zone1-500"].Vttablet
+	targetReplicaTab1 = custKs.Shards["-40"].Tablets["zone1-401"].Vttablet
 
-	productReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-201"].Vttablet
-	productTab = vc.Cells[defaultCell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
-
+	sourceReplicaTab = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
+	sourceTab = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 }

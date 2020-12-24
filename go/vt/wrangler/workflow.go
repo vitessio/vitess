@@ -28,11 +28,19 @@ import (
 // VReplicationWorkflowType specifies whether workflow is MoveTables or Reshard
 type VReplicationWorkflowType int
 
+// VReplicationWorkflowType enums
 const (
-	// MoveTablesWorkflow specifies that the workflow is for moving tables from one keyspace to another
 	MoveTablesWorkflow = VReplicationWorkflowType(iota)
-	// ReshardWorkflow specifies that the workflow is for resharding a keyspace
 	ReshardWorkflow
+)
+
+// Workflow state display strings
+const (
+	WorkflowStateNotStarted     = "Not Started"
+	WorkflowStateNotSwitched    = "Reads Not Switched. Writes Not Switched"
+	WorkflowStateReadsSwitched  = "All Reads Switched. Writes Not Switched"
+	WorkflowStateWritesSwitched = "Reads Not Switched. Writes Switched"
+	WorkflowStateAllSwitched    = "All Reads Switched. Writes Switched"
 )
 
 // region Move Tables Public API
@@ -96,14 +104,15 @@ func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VR
 
 // CurrentState reloads and returns a human readable workflow state
 func (vrw *VReplicationWorkflow) CurrentState() string {
-	_, ws, err := vrw.wr.getWorkflowState(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow)
+	var err error
+	vrw.ts, vrw.ws, err = vrw.wr.getWorkflowState(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow)
 	if err != nil {
 		return err.Error()
 	}
-	if ws == nil {
+	if vrw.ws == nil {
 		return "Workflow Not Found"
 	}
-	return vrw.stateAsString(ws)
+	return vrw.stateAsString(vrw.ws)
 }
 
 // CachedState returns a human readable workflow state at the time the workflow was created
@@ -117,6 +126,7 @@ func (vrw *VReplicationWorkflow) Exists() bool {
 }
 
 func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
+	log.Infof("Workflow state is %+v", ws)
 	var stateInfo []string
 	s := ""
 	if !vrw.Exists() {
@@ -127,14 +137,20 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 		} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
 			s = "Reads Not Switched"
 		} else {
-			s = "Reads Partially Switched: "
+			stateInfo = append(stateInfo, "Reads partially switched")
 			if len(ws.ReplicaCellsNotSwitched) == 0 {
 				s += "All Replica Reads Switched"
+			} else if len(ws.ReplicaCellsSwitched) == 0 {
+				s += "Replica not switched"
 			} else {
-				s += "Replicas switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+				s += "Replica switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
 			}
+			stateInfo = append(stateInfo, s)
+			s = ""
 			if len(ws.RdonlyCellsNotSwitched) == 0 {
 				s += "All Rdonly Reads Switched"
+			} else if len(ws.RdonlyCellsSwitched) == 0 {
+				s += "Rdonly not switched"
 			} else {
 				s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
 			}
@@ -151,17 +167,22 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 
 // Start initiates a workflow
 func (vrw *VReplicationWorkflow) Start() error {
+	var err error
 	if vrw.Exists() {
 		return fmt.Errorf("workflow has already been started")
 	}
 	switch vrw.workflowType {
 	case MoveTablesWorkflow:
-		return vrw.initMoveTables()
+		err = vrw.initMoveTables()
 	case ReshardWorkflow:
-		return vrw.initReshard()
+		err = vrw.initReshard()
 	default:
 		return fmt.Errorf("unknown workflow type %d", vrw.workflowType)
 	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // SwitchTraffic switches traffic forward for tablet_types passed
@@ -195,16 +216,17 @@ func (vrw *VReplicationWorkflow) ReverseTraffic() error {
 	return vrw.SwitchTraffic(DirectionBackward)
 }
 
+// Workflow errors
 const (
-	errWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
-	errWorkflowPartiallySwitched = "cannot abort workflow because you have already switched some or all read and write traffic"
+	ErrWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
+	ErrWorkflowPartiallySwitched = "cannot abort workflow because you have already switched some or all read and write traffic"
 )
 
 // Complete cleans up a successful workflow
 func (vrw *VReplicationWorkflow) Complete() error {
 	ws := vrw.ws
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
-		return fmt.Errorf(errWorkflowNotFullySwitched)
+		return fmt.Errorf(ErrWorkflowNotFullySwitched)
 	}
 	var renameTable TableRemovalType
 	if vrw.params.RenameTables {
@@ -223,7 +245,7 @@ func (vrw *VReplicationWorkflow) Complete() error {
 func (vrw *VReplicationWorkflow) Abort() error {
 	ws := vrw.ws
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
-		return fmt.Errorf(errWorkflowPartiallySwitched)
+		return fmt.Errorf(ErrWorkflowPartiallySwitched)
 	}
 	if _, err := vrw.wr.DropTargets(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, vrw.params.KeepData, false); err != nil {
 		return err
