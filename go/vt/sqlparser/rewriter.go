@@ -1311,6 +1311,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.LeftExpr, replaceJoinTableExprLeftExpr)
 		a.apply(node, n.RightExpr, replaceJoinTableExprRightExpr)
 
+	case *KeyState:
+
 	case *Limit:
 		a.apply(node, n.Offset, replaceLimitOffset)
 		a.apply(node, n.Rowcount, replaceLimitRowcount)
@@ -1535,6 +1537,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerIndexesB.replace)
 			replacerIndexesB.inc()
 		}
+
+	case *TablespaceOperation:
 
 	case *TimestampFuncExpr:
 		a.apply(node, n.Expr1, replaceTimestampFuncExprExpr1)
