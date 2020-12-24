@@ -923,36 +923,6 @@ var (
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
-		input:  "alter table a alter foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a change foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a modify foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a disable foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a enable foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a order foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a default foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a discard foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a import foo",
-		output: "alter table a",
-	}, {
 		input:  "alter table a rename b",
 		output: "rename table a to b",
 	}, {
@@ -1024,40 +994,28 @@ var (
 	}, {
 		input: "alter table a add column id int after id2",
 	}, {
-		input:  "alter table a drop column id int",
-		output: "alter table a",
+		input: "alter table a drop column id",
 	}, {
 		input:  "alter table a drop partition p2712",
 		output: "alter table a",
 	}, {
-		input:  "alter table a drop index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop fulltext index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop spatial index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop fulltext index idx (id)",
-		output: "alter table a",
+		input:  "alter table a drop index idx",
+		output: "alter table a drop key idx",
 	}, {
 		input: "alter table a add check (ch_1) not enforced",
 	}, {
 		input:  "alter table a drop check ch_1",
 		output: "alter table a",
 	}, {
-		input:  "alter table a drop foreign key",
-		output: "alter table a",
+		input: "alter table a drop foreign key kx",
 	}, {
-		input:  "alter table a drop primary key",
-		output: "alter table a",
+		input: "alter table a drop primary key",
 	}, {
 		input:  "alter table a drop constraint",
 		output: "alter table a",
 	}, {
 		input:  "alter table a drop id",
-		output: "alter table a",
+		output: "alter table a drop column id",
 	}, {
 		input: "alter database character set geostd8",
 	}, {

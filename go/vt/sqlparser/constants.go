@@ -205,6 +205,11 @@ const (
 	StatusSessionStr   = " status"
 	VariableGlobalStr  = " global variables"
 	VariableSessionStr = " variables"
+
+	// DropKeyType strings
+	PrimaryKeyTypeStr = "primary key"
+	ForeignKeyTypeStr = "foreign key"
+	NormalKeyTypeStr  = "key"
 )
 
 // Constants for Enum type - AccessMode
@@ -420,4 +425,11 @@ const (
 	StatusSession
 	VariableGlobal
 	VariableSession
+)
+
+// DropKeyType constants
+const (
+	PrimaryKeyType DropKeyType = iota
+	ForeignKeyType
+	NormalKeyType
 )

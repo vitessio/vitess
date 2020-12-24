@@ -1226,6 +1226,20 @@ func (ty ShowCommandType) ToString() string {
 	}
 }
 
+// ToString returns the DropKeyType as a string
+func (key DropKeyType) ToString() string {
+	switch key {
+	case PrimaryKeyType:
+		return PrimaryKeyTypeStr
+	case ForeignKeyType:
+		return ForeignKeyTypeStr
+	case NormalKeyType:
+		return NormalKeyTypeStr
+	default:
+		return "Unknown DropKeyType"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
