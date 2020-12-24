@@ -161,6 +161,7 @@ func skipToEnd(yylex interface{}) {
 %token <empty> '(' ',' ')'
 %token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
+%token <bytes> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
@@ -1741,6 +1742,22 @@ alter_option:
 | CONVERT TO CHARACTER SET charset collate_opt
   {
     $$ = &AlterCharset{IsDefault:false, CharacterSet:$5, Collate:$6}
+  }
+| DISABLE KEYS
+  {
+    $$ = &KeyState{Enable:false}
+  }
+| ENABLE KEYS
+  {
+    $$ = &KeyState{Enable:true}
+  }
+| DISCARD TABLESPACE
+  {
+    $$ = &TablespaceOperation{Import:false}
+  }
+| IMPORT TABLESPACE
+  {
+    $$ = &TablespaceOperation{Import:true}
   }
 
 alter_statement:
@@ -4236,6 +4253,7 @@ reserved_keyword:
 | BINARY
 | BY
 | CASE
+| CHANGE
 | CHECK
 | COLLATE
 | COLUMN
@@ -4404,9 +4422,12 @@ non_reserved_keyword:
 | DEFINITION
 | DESCRIPTION
 | DIRECTORY
+| DISABLE
+| DISCARD
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
+| ENABLE
 | ENCLOSED
 | ENFORCED
 | ENGINES
@@ -4431,6 +4452,7 @@ non_reserved_keyword:
 | HEADER
 | HISTOGRAM
 | HISTORY
+| IMPORT
 | INACTIVE
 | INPLACE
 | INT
@@ -4540,6 +4562,7 @@ non_reserved_keyword:
 | STARTING
 | STATUS
 | TABLES
+| TABLESPACE
 | TEMPTABLE
 | TERMINATED
 | TEXT

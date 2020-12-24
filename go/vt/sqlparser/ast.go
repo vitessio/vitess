@@ -130,6 +130,16 @@ type (
 		Collate      string
 	}
 
+	// KeyState is used to disable or enable the keys in an alter table statement
+	KeyState struct {
+		Enable bool
+	}
+
+	// TablespaceOperation is used to discard or import the tablespace in an alter table statement
+	TablespaceOperation struct {
+		Import bool
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -509,6 +519,8 @@ func (node AlgorithmValue) iAlterOption()           {}
 func (node *AlterColumn) iAlterOption()             {}
 func (node *ChangeColumn) iAlterOption()            {}
 func (node *AlterCharset) iAlterOption()            {}
+func (node *KeyState) iAlterOption()                {}
+func (node *TablespaceOperation) iAlterOption()     {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -2916,5 +2928,24 @@ func (node *AlterCharset) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "character set %s", node.CharacterSet)
 	if node.Collate != "" {
 		buf.astPrintf(node, " collate %s", node.Collate)
+	}
+}
+
+// Format formats the node
+func (node *KeyState) Format(buf *TrackedBuffer) {
+	if node.Enable {
+		buf.WriteString("enable keys")
+	} else {
+		buf.WriteString("disable keys")
+	}
+
+}
+
+// Format formats the node
+func (node *TablespaceOperation) Format(buf *TrackedBuffer) {
+	if node.Import {
+		buf.WriteString("import tablespace")
+	} else {
+		buf.WriteString("discard tablespace")
 	}
 }

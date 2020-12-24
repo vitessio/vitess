@@ -977,6 +977,8 @@ var (
 		input:  "alter table e character set = 'ascii'",
 		output: "alter table e character set ascii",
 	}, {
+		input: "alter table e enable keys, discard tablespace",
+	}, {
 		input:  "alter table e default character set = 'ascii'",
 		output: "alter table e character set ascii",
 	}, {
