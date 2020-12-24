@@ -62,12 +62,12 @@ func New(cfg Config) (*Cluster, error) {
 
 	vtsqlargs := buildPFlagSlice(cfg.VtSQLFlags)
 
-	vtsqlCfg, err := vtsql.Parse(cluster.ID, cluster.Name, disco, vtsqlargs)
+	vtsqlCfg, err := vtsql.Parse(cluster.ToProto(), disco, vtsqlargs)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating vtsql connection: %w", err)
 	}
 
-	cluster.DB = vtsql.New(cluster.Name, vtsqlCfg)
+	cluster.DB = vtsql.New(vtsqlCfg)
 
 	return cluster, nil
 }

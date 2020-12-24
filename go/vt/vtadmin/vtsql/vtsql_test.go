@@ -91,14 +91,17 @@ func TestDial(t *testing.T) {
 		{
 			name: "existing conn",
 			proxy: &VTGateProxy{
-				conn: sql.OpenDB(&fakevtsql.Connector{}),
+				cluster: &vtadminpb.Cluster{},
+				conn:    sql.OpenDB(&fakevtsql.Connector{}),
 			},
 			shouldErr: false,
 		},
 		{
-			name:      "discovery error",
-			disco:     fakediscovery.New(),
-			proxy:     &VTGateProxy{},
+			name:  "discovery error",
+			disco: fakediscovery.New(),
+			proxy: &VTGateProxy{
+				cluster: &vtadminpb.Cluster{},
+			},
 			shouldErr: true,
 		},
 		{
@@ -110,6 +113,7 @@ func TestDial(t *testing.T) {
 				},
 			},
 			proxy: &VTGateProxy{
+				cluster: &vtadminpb.Cluster{},
 				DialFunc: func(cfg vitessdriver.Configuration) (*sql.DB, error) {
 					return nil, assert.AnError
 				},
@@ -125,6 +129,7 @@ func TestDial(t *testing.T) {
 				},
 			},
 			proxy: &VTGateProxy{
+				cluster: &vtadminpb.Cluster{},
 				creds: &StaticAuthCredentials{
 					StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
 						Username: "user",

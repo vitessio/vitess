@@ -273,7 +273,11 @@ func Test_getTablets(t *testing.T) {
 	disco := fakediscovery.New()
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
 
-	db := vtsql.New("one", &vtsql.Config{
+	db := vtsql.New(&vtsql.Config{
+		Cluster: &vtadminpb.Cluster{
+			Id:   "c1",
+			Name: "one",
+		},
 		Discovery: disco,
 	})
 	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
@@ -545,7 +549,8 @@ func buildCluster(i int, tablets []*vtadminpb.Tablet, dbconfigs map[string]*dbcf
 		dbconfig = &dbcfg{shouldErr: false}
 	}
 
-	db := vtsql.New(cluster.ID, &vtsql.Config{
+	db := vtsql.New(&vtsql.Config{
+		Cluster:   cluster.ToProto(),
 		Discovery: disco,
 	})
 	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
