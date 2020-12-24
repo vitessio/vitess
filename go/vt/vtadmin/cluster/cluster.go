@@ -21,6 +21,8 @@ import (
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 // Cluster is the self-contained unit of services required for vtadmin to talk
@@ -51,7 +53,7 @@ func New(cfg Config) (*Cluster, error) {
 
 	discoargs := buildPFlagSlice(cfg.DiscoveryFlagsByImpl[cfg.DiscoveryImpl])
 
-	disco, err := discovery.New(cfg.DiscoveryImpl, cluster.Name, discoargs)
+	disco, err := discovery.New(cfg.DiscoveryImpl, cluster.ToProto(), discoargs)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating discovery impl (%s): %w", cfg.DiscoveryImpl, err)
 	}
@@ -68,6 +70,14 @@ func New(cfg Config) (*Cluster, error) {
 	cluster.DB = vtsql.New(cluster.Name, vtsqlCfg)
 
 	return cluster, nil
+}
+
+// ToProto returns a value-copy protobuf equivalent of the cluster.
+func (c Cluster) ToProto() *vtadminpb.Cluster {
+	return &vtadminpb.Cluster{
+		Id:   c.ID,
+		Name: c.Name,
+	}
 }
 
 func buildPFlagSlice(flags map[string]string) []string {

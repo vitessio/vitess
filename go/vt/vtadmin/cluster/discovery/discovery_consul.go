@@ -33,7 +33,7 @@ import (
 
 // ConsulDiscovery implements the Discovery interface for consul.
 type ConsulDiscovery struct {
-	cluster      string
+	cluster      *vtadminpb.Cluster
 	client       ConsulClient
 	queryOptions *consul.QueryOptions
 
@@ -52,7 +52,7 @@ type ConsulDiscovery struct {
 // NewConsul returns a ConsulDiscovery for the given cluster. Args are a slice
 // of command-line flags (e.g. "-key=value") that are parsed by a consul-
 // specific flag set.
-func NewConsul(cluster string, flags *pflag.FlagSet, args []string) (Discovery, error) { // nolint:funlen
+func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error) { // nolint:funlen
 	c, err := consul.NewClient(consul.DefaultConfig())
 	if err != nil {
 		return nil, err
@@ -86,21 +86,22 @@ func NewConsul(cluster string, flags *pflag.FlagSet, args []string) (Discovery, 
 		"Go template string to produce a dialable address from a *vtadminpb.VTGate")
 	vtgateDatacenterTmplStr := flags.String("vtgate-datacenter-tmpl", "",
 		"Go template string to generate the datacenter for vtgate consul queries. "+
-			"The cluster name is provided to the template via {{ .Cluster }}. Used once during initialization.")
+			"The meta information about the cluster is provided to the template via {{ .Cluster }}. "+
+			"Used once during initialization.")
 
 	if err := flags.Parse(args); err != nil {
 		return nil, err
 	}
 
 	if *vtgateDatacenterTmplStr != "" {
-		tmpl, err := template.New("consul-vtgate-datacenter-" + cluster).Parse(*vtgateDatacenterTmplStr)
+		tmpl, err := template.New("consul-vtgate-datacenter-" + cluster.Id).Parse(*vtgateDatacenterTmplStr)
 		if err != nil {
 			return nil, err
 		}
 
 		buf := bytes.NewBuffer(nil)
 		err = tmpl.Execute(buf, &struct {
-			Cluster string
+			Cluster *vtadminpb.Cluster
 		}{
 			Cluster: cluster,
 		})
@@ -181,7 +182,10 @@ func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string) ([]*
 	for i, entry := range entries {
 		vtgate := &vtadminpb.VTGate{
 			Hostname: entry.Node.Node,
-			Cluster:  c.cluster,
+			Cluster: &vtadminpb.Cluster{
+				Id:   c.cluster.Id,
+				Name: c.cluster.Name,
+			},
 		}
 
 		var cell, pool string

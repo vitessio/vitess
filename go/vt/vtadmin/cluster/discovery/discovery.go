@@ -60,7 +60,7 @@ type Discovery interface {
 // The flags FlagSet is provided for convenience, but also to hint to plugin
 // developers that they should expect the args to be in a format compatible with
 // pflag.
-type Factory func(cluster string, flags *pflag.FlagSet, args []string) (Discovery, error)
+type Factory func(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) (Discovery, error)
 
 // nolint:gochecknoglobals
 var registry = map[string]Factory{}
@@ -80,7 +80,7 @@ func Register(name string, factory Factory) {
 // New returns a Discovery implementation using the registered factory for the
 // implementation. Usage of the args slice is dependent on the implementation's
 // factory.
-func New(impl string, cluster string, args []string) (Discovery, error) {
+func New(impl string, cluster *vtadminpb.Cluster, args []string) (Discovery, error) {
 	factory, ok := registry[impl]
 	if !ok {
 		return nil, fmt.Errorf("%w %s", ErrImplementationNotRegistered, impl)
