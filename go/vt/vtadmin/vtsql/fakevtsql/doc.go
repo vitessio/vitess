@@ -26,7 +26,8 @@ limitations under the License.
 // Then, you will call vtsql.New(), passing the faked discovery implementation
 // into the config:
 //
-//		db := vtsql.New("clusterID", &vtsql.Config{
+//		db := vtsql.New(&vtsql.Config{
+//          Cluster: &vtadminpb.Cluster{Id: "cid", Name: "cluster"},
 //			Discovery: disco,
 //		})
 //

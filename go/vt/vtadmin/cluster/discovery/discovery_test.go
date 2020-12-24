@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
 func TestNew(t *testing.T) {
@@ -45,7 +47,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			disco, err := New(tt.impl, "testcluster", []string{})
+			disco, err := New(tt.impl, &vtadminpb.Cluster{Id: "testid", Name: "testcluster"}, []string{})
 			if tt.err != nil {
 				assert.Error(t, err, tt.err.Error())
 				return
