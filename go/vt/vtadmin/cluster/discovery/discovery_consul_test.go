@@ -98,7 +98,10 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 		{
 			name: "all gates",
 			disco: &ConsulDiscovery{
-				cluster:       "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService: "vtgate",
 				vtgateCellTag: "cell",
 				vtgatePoolTag: "pool",
@@ -113,19 +116,28 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 			},
 			expected: []*vtadminpb.VTGate{
 				{
-					Cluster:  "cluster",
+					Cluster: &vtadminpb.Cluster{
+						Id:   "cid",
+						Name: "cluster",
+					},
 					Hostname: "vtgate1",
 					Cell:     "zone1",
 					Pool:     "pool1",
 				},
 				{
-					Cluster:  "cluster",
+					Cluster: &vtadminpb.Cluster{
+						Id:   "cid",
+						Name: "cluster",
+					},
 					Hostname: "vtgate2",
 					Cell:     "zone2",
 					Pool:     "pool1",
 				},
 				{
-					Cluster:  "cluster",
+					Cluster: &vtadminpb.Cluster{
+						Id:   "cid",
+						Name: "cluster",
+					},
 					Hostname: "vtgate3",
 					Cell:     "zone3",
 					Pool:     "pool1",
@@ -136,7 +148,10 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 		{
 			name: "one cell",
 			disco: &ConsulDiscovery{
-				cluster:       "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService: "vtgate",
 				vtgateCellTag: "cell",
 				vtgatePoolTag: "pool",
@@ -151,7 +166,10 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 			},
 			expected: []*vtadminpb.VTGate{
 				{
-					Cluster:  "cluster",
+					Cluster: &vtadminpb.Cluster{
+						Id:   "cid",
+						Name: "cluster",
+					},
 					Hostname: "vtgate1",
 					Cell:     "zone1",
 					Pool:     "pool1",
@@ -162,7 +180,10 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 		{
 			name: "keyspaces to watch",
 			disco: &ConsulDiscovery{
-				cluster:                   "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService:             "vtgate",
 				vtgateCellTag:             "cell",
 				vtgatePoolTag:             "pool",
@@ -176,7 +197,10 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 			},
 			expected: []*vtadminpb.VTGate{
 				{
-					Cluster:   "cluster",
+					Cluster: &vtadminpb.Cluster{
+						Id:   "cid",
+						Name: "cluster",
+					},
 					Hostname:  "vtgate1",
 					Cell:      "zone1",
 					Pool:      "pool1",
@@ -188,7 +212,10 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 		{
 			name: "error",
 			disco: &ConsulDiscovery{
-				cluster:                   "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService:             "vtgate",
 				vtgateCellTag:             "cell",
 				vtgatePoolTag:             "pool",
@@ -233,7 +260,10 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 		{
 			name: "success",
 			disco: &ConsulDiscovery{
-				cluster:       "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService: "vtgate",
 				vtgateCellTag: "cell",
 				vtgatePoolTag: "pool",
@@ -247,7 +277,10 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 				},
 			},
 			expected: &vtadminpb.VTGate{
-				Cluster:  "cluster",
+				Cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				Hostname: "vtgate1",
 				Cell:     "zone1",
 				Pool:     "pool1",
@@ -257,7 +290,10 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 		{
 			name: "no gates",
 			disco: &ConsulDiscovery{
-				cluster:       "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService: "vtgate",
 				vtgateCellTag: "cell",
 				vtgatePoolTag: "pool",
@@ -267,7 +303,10 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 				"vtgate": {},
 			},
 			expected: &vtadminpb.VTGate{
-				Cluster:  "cluster",
+				Cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				Hostname: "vtgate1",
 				Cell:     "zone1",
 				Pool:     "pool1",
@@ -277,7 +316,10 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 		{
 			name: "error",
 			disco: &ConsulDiscovery{
-				cluster:       "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService: "vtgate",
 				vtgateCellTag: "cell",
 				vtgatePoolTag: "pool",
@@ -321,7 +363,10 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 		{
 			name: "default template",
 			disco: &ConsulDiscovery{
-				cluster:        "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService:  "vtgate",
 				vtgateCellTag:  "cell",
 				vtgatePoolTag:  "pool",
@@ -339,11 +384,14 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 		{
 			name: "custom template",
 			disco: &ConsulDiscovery{
-				cluster:        "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService:  "vtgate",
 				vtgateCellTag:  "cell",
 				vtgatePoolTag:  "pool",
-				vtgateAddrTmpl: template.Must(template.New("").Parse("{{ .Cluster }}-{{ .Pool }}-{{ .Cell }}-{{ .Hostname }}.example.com:15000")), // nolint:lll
+				vtgateAddrTmpl: template.Must(template.New("").Parse("{{ .Cluster.Name }}-{{ .Pool }}-{{ .Cell }}-{{ .Hostname }}.example.com:15000")), // nolint:lll
 			},
 			tags: []string{},
 			entries: map[string][]*consul.ServiceEntry{
@@ -357,7 +405,10 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 		{
 			name: "error",
 			disco: &ConsulDiscovery{
-				cluster:        "cluster",
+				cluster: &vtadminpb.Cluster{
+					Id:   "cid",
+					Name: "cluster",
+				},
 				vtgateService:  "vtgate",
 				vtgateCellTag:  "cell",
 				vtgatePoolTag:  "pool",
