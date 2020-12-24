@@ -140,6 +140,20 @@ type (
 		Import bool
 	}
 
+	// DropColumn is used to drop a column in an alter table statement
+	DropColumn struct {
+		Name *ColName
+	}
+
+	// DropKeyType is an enum that represents the type of key being dropped in an alter table statement
+	DropKeyType int8
+
+	// DropKey is used to drop a key in an alter table statement
+	DropKey struct {
+		Type DropKeyType
+		Name string
+	}
+
 	// Select represents a SELECT statement.
 	Select struct {
 		Cache            *bool // a reference here so it can be nil
@@ -521,6 +535,8 @@ func (node *ChangeColumn) iAlterOption()            {}
 func (node *AlterCharset) iAlterOption()            {}
 func (node *KeyState) iAlterOption()                {}
 func (node *TablespaceOperation) iAlterOption()     {}
+func (node *DropColumn) iAlterOption()              {}
+func (node *DropKey) iAlterOption()                 {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -2947,5 +2963,18 @@ func (node *TablespaceOperation) Format(buf *TrackedBuffer) {
 		buf.WriteString("import tablespace")
 	} else {
 		buf.WriteString("discard tablespace")
+	}
+}
+
+// Format formats the node
+func (node *DropColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "drop column %v", node.Name)
+}
+
+// Format formats the node
+func (node *DropKey) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "drop %s", node.Type.ToString())
+	if node.Name != "" {
+		buf.astPrintf(node, " %s", node.Name)
 	}
 }

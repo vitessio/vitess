@@ -1759,6 +1759,22 @@ alter_option:
   {
     $$ = &TablespaceOperation{Import:true}
   }
+| DROP column_opt column_name
+  {
+    $$ = &DropColumn{Name:$3}
+  }
+| DROP index_or_key id_or_var
+  {
+    $$ = &DropKey{Type:NormalKeyType, Name:$3.String()}
+  }
+| DROP PRIMARY KEY
+  {
+    $$ = &DropKey{Type:PrimaryKeyType}
+  }
+| DROP FOREIGN KEY id_or_var
+  {
+    $$ = &DropKey{Type:ForeignKeyType, Name:$4.String()}
+  }
 
 alter_statement:
   alter_table_prefix alter_options_opt
