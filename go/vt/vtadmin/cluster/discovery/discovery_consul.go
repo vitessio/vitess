@@ -111,56 +111,50 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	}
 
 	if *vtgateDatacenterTmplStr != "" {
-		tmpl, err := template.New("consul-vtgate-datacenter-" + cluster.Id).Parse(*vtgateDatacenterTmplStr)
+		disco.vtgateDatacenter, err = generateConsulDatacenter("vtgate", cluster, *vtgateDatacenterTmplStr)
 		if err != nil {
 			return nil, err
 		}
-
-		buf := bytes.NewBuffer(nil)
-		err = tmpl.Execute(buf, &struct {
-			Cluster *vtadminpb.Cluster
-		}{
-			Cluster: cluster,
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		disco.vtgateDatacenter = buf.String()
 	}
 
-	disco.vtgateAddrTmpl, err = template.New("consul-vtgate-address-template").Parse(*vtgateAddrTmplStr)
+	disco.vtgateAddrTmpl, err = template.New("consul-vtgate-address-template-" + cluster.Id).Parse(*vtgateAddrTmplStr)
 	if err != nil {
 		return nil, err
 	}
 
 	if *vtctldDatacenterTmplStr != "" {
-		tmpl, err := template.New("consul-vtctld-datacenter-" + cluster.Id).Parse(*vtctldDatacenterTmplStr)
+		disco.vtctldDatacenter, err = generateConsulDatacenter("vtctld", cluster, *vtctldDatacenterTmplStr)
 		if err != nil {
 			return nil, err
 		}
-
-		buf := bytes.NewBuffer(nil)
-		err = tmpl.Execute(buf, &struct {
-			Cluster *vtadminpb.Cluster
-		}{
-			Cluster: cluster,
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		disco.vtctldDatacenter = buf.String()
 	}
 
-	disco.vtctldAddrTmpl, err = template.New("consul-vtctld-address-template").Parse(*vtctldAddrTmplStr)
+	disco.vtctldAddrTmpl, err = template.New("consul-vtctld-address-template-" + cluster.Id).Parse(*vtctldAddrTmplStr)
 	if err != nil {
 		return nil, err
 	}
 
 	return disco, nil
+}
+
+func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmplStr string) (string, error) {
+	tmpl, err := template.New("consul-" + component + "-datacenter-" + cluster.Id).Parse(tmplStr)
+	if err != nil {
+		return "", err
+	}
+
+	buf := bytes.NewBuffer(nil)
+	err = tmpl.Execute(buf, &struct {
+		Cluster *vtadminpb.Cluster
+	}{
+		Cluster: cluster,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), err
 }
 
 // DiscoverVTGate is part of the Discovery interface.
