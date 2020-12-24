@@ -70,8 +70,8 @@ message VTGate {
     string pool = 2;
     // Cell is the topology cell the VTGate is in.
     string cell = 3;
-    // Cluster is the name of the cluster the VTGate serves.
-    string cluster = 4;
+    // Cluster is the cluster the VTGate serves.
+    Cluster cluster = 4;
     // Keyspaces is the list of keyspaces-to-watch for the VTGate.
     repeated string keyspaces = 5;
 }
