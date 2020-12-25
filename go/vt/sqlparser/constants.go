@@ -210,6 +210,12 @@ const (
 	PrimaryKeyTypeStr = "primary key"
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
+
+	// LockOptionType strings
+	NoneTypeStr      = "none"
+	SharedTypeStr    = "shared"
+	DefaultTypeStr   = "default"
+	ExclusiveTypeStr = "exclusive"
 )
 
 // Constants for Enum type - AccessMode
@@ -432,4 +438,12 @@ const (
 	PrimaryKeyType DropKeyType = iota
 	ForeignKeyType
 	NormalKeyType
+)
+
+// LockOptionType constants
+const (
+	DefaultType LockOptionType = iota
+	NoneType
+	SharedType
+	ExclusiveType
 )

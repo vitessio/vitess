@@ -123,6 +123,13 @@ type (
 		After            *ColName
 	}
 
+	// ModifyColumn is used to change the column definition in alter table command
+	ModifyColumn struct {
+		NewColDefinition *ColumnDefinition
+		First            *ColName
+		After            *ColName
+	}
+
 	// AlterCharset is used to set the default or change the character set and collation in alter table command
 	AlterCharset struct {
 		IsDefault    bool
@@ -152,6 +159,38 @@ type (
 	DropKey struct {
 		Type DropKeyType
 		Name string
+	}
+
+	// Force is used to specify force alter option in an alter table statement
+	Force struct{}
+
+	// LockOptionType is an enum for LockOption.Type
+	LockOptionType int8
+
+	// LockOption is used to specify the type of lock to use in an alter table statement
+	LockOption struct {
+		Type LockOptionType
+	}
+
+	// OrderByOption clause is used to specify the order by in an alter table statement
+	OrderByOption struct {
+		Cols Columns
+	}
+
+	// RenameTable clause is used to rename the table in an alter table statement
+	RenameTable struct {
+		Table TableName
+	}
+
+	// RenameIndex clause is used to rename indexes in an alter table statement
+	RenameIndex struct {
+		OldName string
+		NewName string
+	}
+
+	// Validation clause is used to specify whether to use validation or not
+	Validation struct {
+		With bool
 	}
 
 	// Select represents a SELECT statement.
@@ -526,17 +565,24 @@ func (*CreateView) iDDLStatement()  {}
 func (*CreateTable) iDDLStatement() {}
 func (*AlterTable) iDDLStatement()  {}
 
-func (node *AddConstraintDefinition) iAlterOption() {}
-func (node *AddIndexDefinition) iAlterOption()      {}
-func (node *AddColumns) iAlterOption()              {}
-func (node AlgorithmValue) iAlterOption()           {}
-func (node *AlterColumn) iAlterOption()             {}
-func (node *ChangeColumn) iAlterOption()            {}
-func (node *AlterCharset) iAlterOption()            {}
-func (node *KeyState) iAlterOption()                {}
-func (node *TablespaceOperation) iAlterOption()     {}
-func (node *DropColumn) iAlterOption()              {}
-func (node *DropKey) iAlterOption()                 {}
+func (*AddConstraintDefinition) iAlterOption() {}
+func (*AddIndexDefinition) iAlterOption()      {}
+func (*AddColumns) iAlterOption()              {}
+func (AlgorithmValue) iAlterOption()           {}
+func (*AlterColumn) iAlterOption()             {}
+func (*ChangeColumn) iAlterOption()            {}
+func (*ModifyColumn) iAlterOption()            {}
+func (*AlterCharset) iAlterOption()            {}
+func (*KeyState) iAlterOption()                {}
+func (*TablespaceOperation) iAlterOption()     {}
+func (*DropColumn) iAlterOption()              {}
+func (*DropKey) iAlterOption()                 {}
+func (*Force) iAlterOption()                   {}
+func (*LockOption) iAlterOption()              {}
+func (*OrderByOption) iAlterOption()           {}
+func (*RenameTable) iAlterOption()             {}
+func (*RenameIndex) iAlterOption()             {}
+func (*Validation) iAlterOption()              {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -2937,6 +2983,17 @@ func (node *ChangeColumn) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
+func (node *ModifyColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "modify column %v", node.NewColDefinition)
+	if node.First != nil {
+		buf.astPrintf(node, " first %v", node.First)
+	}
+	if node.After != nil {
+		buf.astPrintf(node, " after %v", node.After)
+	}
+}
+
+// Format formats the node
 func (node *AlterCharset) Format(buf *TrackedBuffer) {
 	if !node.IsDefault {
 		buf.astPrintf(node, "convert to ")
@@ -2976,5 +3033,44 @@ func (node *DropKey) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "drop %s", node.Type.ToString())
 	if node.Name != "" {
 		buf.astPrintf(node, " %s", node.Name)
+	}
+}
+
+// Format formats the node
+func (node *Force) Format(buf *TrackedBuffer) {
+	buf.WriteString("force")
+}
+
+// Format formats the node
+func (node *LockOption) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "lock %s", node.Type.ToString())
+}
+
+// Format formats the node
+func (node *OrderByOption) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "order by ")
+	prefix := ""
+	for _, n := range node.Cols {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node
+func (node *RenameTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename %v", node.Table)
+}
+
+// Format formats the node
+func (node *RenameIndex) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename index %s to %s", node.OldName, node.NewName)
+}
+
+// Format formats the node
+func (node *Validation) Format(buf *TrackedBuffer) {
+	if node.With {
+		buf.WriteString("with validation")
+	} else {
+		buf.WriteString("without validation")
 	}
 }

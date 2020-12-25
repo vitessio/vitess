@@ -905,16 +905,21 @@ var (
 		input:  "alter table a add foo int first v",
 		output: "alter table a add column foo int first v",
 	}, {
+		input:  "alter table a lock default, lock = none, lock shared, lock exclusive",
+		output: "alter table a lock default, lock none, lock shared, lock exclusive",
+	}, {
 		input:  "alter table a alter x set default NULL, alter column x2 set default 's', alter x3 drop default",
 		output: "alter table a alter column x set default null, alter column x2 set default 's', alter column x3 drop default",
 	}, {
 		input: "alter table a add spatial key foo (column1)",
 	}, {
-		input: "alter table a add fulltext key foo (column1)",
+		input: "alter table a add fulltext key foo (column1), order by a, b, c",
 	}, {
 		input: "alter table a add unique key foo (column1)",
 	}, {
 		input: "alter table a change column s foo int default 1 after x",
+	}, {
+		input: "alter table a modify column foo int default 1 first x",
 	}, {
 		input:  "alter table a character set utf32 collate = 'utf'",
 		output: "alter table a character set utf32 collate utf",
@@ -923,23 +928,20 @@ var (
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
-		input:  "alter table a rename b",
-		output: "rename table a to b",
+		input: "alter table a rename b",
 	}, {
-		input:  "alter table `By` rename `bY`",
-		output: "rename table `By` to `bY`",
+		input: "alter table `By` rename `bY`",
 	}, {
 		input:  "alter table a rename to b",
-		output: "rename table a to b",
+		output: "alter table a rename b",
 	}, {
 		input:  "alter table a rename as b",
-		output: "rename table a to b",
+		output: "alter table a rename b",
 	}, {
-		input:  "alter table a rename index foo to bar",
-		output: "alter table a",
+		input: "alter table a rename index foo to bar, with validation",
 	}, {
 		input:  "alter table a rename key foo to bar",
-		output: "alter table a",
+		output: "alter table a rename index foo to bar",
 	}, {
 		input:  "alter table e auto_increment = 20",
 		output: "alter table e",
@@ -947,7 +949,7 @@ var (
 		input:  "alter table e character set = 'ascii'",
 		output: "alter table e character set ascii",
 	}, {
-		input: "alter table e enable keys, discard tablespace",
+		input: "alter table e enable keys, discard tablespace, force",
 	}, {
 		input:  "alter table e default character set = 'ascii'",
 		output: "alter table e character set ascii",
