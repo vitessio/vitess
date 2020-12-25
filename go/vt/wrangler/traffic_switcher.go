@@ -423,11 +423,9 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		return 0, nil, err
 	}
 	if ts == nil {
-		if ts == nil {
-			errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
-			wr.Logger().Errorf(errorMsg)
-			return 0, nil, fmt.Errorf(errorMsg)
-		}
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
+		wr.Logger().Errorf(errorMsg)
+		return 0, nil, fmt.Errorf(errorMsg)
 	}
 
 	var sw iswitcher
