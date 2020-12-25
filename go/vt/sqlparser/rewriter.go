@@ -524,6 +524,18 @@ func replaceMatchExprExpr(newNode, parent SQLNode) {
 	parent.(*MatchExpr).Expr = newNode.(Expr)
 }
 
+func replaceModifyColumnAfter(newNode, parent SQLNode) {
+	parent.(*ModifyColumn).After = newNode.(*ColName)
+}
+
+func replaceModifyColumnFirst(newNode, parent SQLNode) {
+	parent.(*ModifyColumn).First = newNode.(*ColName)
+}
+
+func replaceModifyColumnNewColDefinition(newNode, parent SQLNode) {
+	parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
+}
+
 func replaceNextvalExpr(newNode, parent SQLNode) {
 	tmp := parent.(Nextval)
 	tmp.Expr = newNode.(Expr)
@@ -567,6 +579,10 @@ func (r *replaceOrderByItems) replace(newNode, container SQLNode) {
 
 func (r *replaceOrderByItems) inc() {
 	*r++
+}
+
+func replaceOrderByOptionCols(newNode, parent SQLNode) {
+	parent.(*OrderByOption).Cols = newNode.(Columns)
 }
 
 func replaceParenSelectSelect(newNode, parent SQLNode) {
@@ -623,6 +639,10 @@ func replaceRangeCondTo(newNode, parent SQLNode) {
 
 func replaceReleaseName(newNode, parent SQLNode) {
 	parent.(*Release).Name = newNode.(ColIdent)
+}
+
+func replaceRenameTableTable(newNode, parent SQLNode) {
+	parent.(*RenameTable).Table = newNode.(TableName)
 }
 
 func replaceSRollbackName(newNode, parent SQLNode) {
@@ -1255,6 +1275,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			replacerRef.inc()
 		}
 
+	case *Force:
+
 	case *ForeignKeyDefinition:
 		a.apply(node, n.OnDelete, replaceForeignKeyDefinitionOnDelete)
 		a.apply(node, n.OnUpdate, replaceForeignKeyDefinitionOnUpdate)
@@ -1332,11 +1354,18 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Load:
 
+	case *LockOption:
+
 	case *LockTables:
 
 	case *MatchExpr:
 		a.apply(node, n.Columns, replaceMatchExprColumns)
 		a.apply(node, n.Expr, replaceMatchExprExpr)
+
+	case *ModifyColumn:
+		a.apply(node, n.After, replaceModifyColumnAfter)
+		a.apply(node, n.First, replaceModifyColumnFirst)
+		a.apply(node, n.NewColDefinition, replaceModifyColumnNewColDefinition)
 
 	case Nextval:
 		a.apply(node, n.Expr, replaceNextvalExpr)
@@ -1371,6 +1400,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *OrderByOption:
+		a.apply(node, n.Cols, replaceOrderByOptionCols)
 
 	case *OtherAdmin:
 
@@ -1412,6 +1444,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Release:
 		a.apply(node, n.Name, replaceReleaseName)
+
+	case *RenameIndex:
+
+	case *RenameTable:
+		a.apply(node, n.Table, replaceRenameTableTable)
 
 	case *Rollback:
 
@@ -1609,6 +1646,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *Validation:
 
 	case Values:
 		replacer := replaceValuesItems(0)

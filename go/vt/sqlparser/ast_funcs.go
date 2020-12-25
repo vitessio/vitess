@@ -1240,6 +1240,22 @@ func (key DropKeyType) ToString() string {
 	}
 }
 
+// ToString returns the LockOptionType as a string
+func (lock LockOptionType) ToString() string {
+	switch lock {
+	case NoneType:
+		return NoneTypeStr
+	case DefaultType:
+		return DefaultTypeStr
+	case SharedType:
+		return SharedTypeStr
+	case ExclusiveType:
+		return ExclusiveTypeStr
+	default:
+		return "Unknown type LockOptionType"
+	}
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 

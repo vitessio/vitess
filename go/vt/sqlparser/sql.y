@@ -192,7 +192,7 @@ func skipToEnd(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
@@ -234,7 +234,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> TIMESTAMPADD TIMESTAMPDIFF
 
 // Match
-%token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
+%token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <bytes> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
@@ -1679,6 +1679,10 @@ alter_options_opt:
   {
     $$ = $1
   }
+| alter_options ',' ORDER BY column_list
+  {
+    $$ = append($1,&OrderByOption{Cols:$5})
+  }
 
 alter_options:
   alter_option
@@ -1735,6 +1739,10 @@ alter_option:
   {
     $$ = &ChangeColumn{OldColumn:$3, NewColDefinition:$4, First:$5, After:$6}
   }
+| MODIFY column_opt column_definition first_opt after_opt
+  {
+    $$ = &ModifyColumn{NewColDefinition:$3, First:$4, After:$5}
+  }
 | default_optional CHARACTER SET equal_opt charset collate_eq_opt
   {
     $$ = &AlterCharset{IsDefault:true, CharacterSet:$5, Collate:$6}
@@ -1774,6 +1782,42 @@ alter_option:
 | DROP FOREIGN KEY id_or_var
   {
     $$ = &DropKey{Type:ForeignKeyType, Name:$4.String()}
+  }
+| FORCE
+  {
+    $$ = &Force{}
+  }
+| LOCK equal_opt DEFAULT
+  {
+    $$ = &LockOption{Type:DefaultType}
+  }
+| LOCK equal_opt NONE
+  {
+    $$ = &LockOption{Type:NoneType}
+  }
+| LOCK equal_opt SHARED
+  {
+    $$ = &LockOption{Type:SharedType}
+  }
+| LOCK equal_opt EXCLUSIVE
+  {
+    $$ = &LockOption{Type:ExclusiveType}
+  }
+| RENAME to_opt table_name
+  {
+    $$ = &RenameTable{Table:$3}
+  }
+| RENAME index_or_key id_or_var TO id_or_var
+  {
+    $$ = &RenameIndex{OldName:$3.String(), NewName:$5.String()}
+  }
+| WITH VALIDATION
+  {
+    $$ = &Validation{With:true}
+  }
+| WITHOUT VALIDATION
+  {
+    $$ = &Validation{With:false}
   }
 
 alter_statement:
@@ -4502,6 +4546,7 @@ non_reserved_keyword:
 | MEDIUMTEXT
 | MERGE
 | MODE
+| MODIFY
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
@@ -4600,6 +4645,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | UPGRADE
+| VALIDATION
 | VARBINARY
 | VARCHAR
 | VARIABLES
@@ -4615,6 +4661,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA
 | WARNINGS
+| WITHOUT
 | YEAR
 | ZEROFILL
 
