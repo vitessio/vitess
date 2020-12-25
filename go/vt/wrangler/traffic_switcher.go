@@ -225,7 +225,6 @@ func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKe
 			return nil, nil, err
 		}
 		rules := srvVSchema.RoutingRules.Rules
-		log.Infof("Rules for srvVSchema for cell %s are %+v", cell, rules)
 		found := false
 		switched := false
 		for _, rule := range rules {

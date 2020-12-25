@@ -3,6 +3,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,17 +14,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 )
-
-/*
-	TODO
-    * expand e2e for testing all possible transitions
-     (Switch/Reverse Replica/Rdonly)
-
-	* Unit Tests (run coverage first and identify)
-      (CurrentState())
-    * dry run
-
-*/
 
 // VReplicationWorkflowType specifies whether workflow is MoveTables or Reshard
 type VReplicationWorkflowType int
@@ -168,8 +158,11 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 // Start initiates a workflow
 func (vrw *VReplicationWorkflow) Start() error {
 	var err error
-	if vrw.Exists() {
-		return fmt.Errorf("workflow has already been started")
+	if !vrw.Exists() {
+		return fmt.Errorf("workflow now found")
+	}
+	if vrw.CachedState() != WorkflowStateNotStarted {
+		return fmt.Errorf("workflow has already been started, state is %s", vrw.CachedState())
 	}
 	switch vrw.workflowType {
 	case MoveTablesWorkflow:
@@ -375,29 +368,34 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 			}
 			qr := sqltypes.Proto3ToResult(p3qr)
 			for i := 0; i < len(p3qr.Rows); i++ {
-				tables[qr.Rows[0][0].ToString()] = true
+				tables[qr.Rows[i][0].ToString()] = true
 			}
 			sourcesi, err := vrw.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
 			if err != nil {
 				return nil, err
 			}
-			sourceMasters[sourcesi.MasterAlias] = true
+			found := false
+			for existingSource := range sourceMasters {
+				if existingSource.Uid == sourcesi.MasterAlias.Uid {
+					found = true
+				}
+			}
+			if !found {
+				sourceMasters[sourcesi.MasterAlias] = true
+			}
 		}
 	}
 	if len(tables) == 0 {
 		return nil, nil
 	}
-	tableList := ""
+	var tableList []string
 	targetRowCounts := make(map[string]int64)
 	sourceRowCounts := make(map[string]int64)
 	targetTableSizes := make(map[string]int64)
 	sourceTableSizes := make(map[string]int64)
 
 	for table := range tables {
-		if tableList != "" {
-			tableList += ","
-		}
-		tableList += encodeString(table)
+		tableList = append(tableList, encodeString(table))
 		targetRowCounts[table] = 0
 		sourceRowCounts[table] = 0
 		targetTableSizes[table] = 0
@@ -411,12 +409,12 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 		}
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for i := 0; i < len(qr.Rows); i++ {
-			table := qr.Rows[0][0].ToString()
-			rowCount, err := evalengine.ToInt64(qr.Rows[0][1])
+			table := qr.Rows[i][0].ToString()
+			rowCount, err := evalengine.ToInt64(qr.Rows[i][1])
 			if err != nil {
 				return err
 			}
-			tableSize, err := evalengine.ToInt64(qr.Rows[0][2])
+			tableSize, err := evalengine.ToInt64(qr.Rows[i][2])
 			if err != nil {
 				return err
 			}
@@ -441,8 +439,9 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	if sourceDbName == "" || targetDbName == "" {
 		return nil, fmt.Errorf("workflow %s.%s is incorrectly configured", vrw.ws.TargetKeyspace, vrw.ws.Workflow)
 	}
-
-	query := fmt.Sprintf(getRowCountQuery, encodeString(targetDbName), tableList)
+	sort.Strings(tableList) // sort list for repeatability for mocking in tests
+	tablesStr := strings.Join(tableList, ",")
+	query := fmt.Sprintf(getRowCountQuery, encodeString(targetDbName), tablesStr)
 	for _, target := range vrw.ts.targets {
 		tablet := target.master.Tablet
 		if err := getTableMetrics(tablet, query, &targetRowCounts, &targetTableSizes); err != nil {
@@ -450,7 +449,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 		}
 	}
 
-	query = fmt.Sprintf(getRowCountQuery, encodeString(sourceDbName), tableList)
+	query = fmt.Sprintf(getRowCountQuery, encodeString(sourceDbName), tablesStr)
 	for source := range sourceMasters {
 		ti, err := vrw.wr.ts.GetTablet(ctx, source)
 		tablet := ti.Tablet
