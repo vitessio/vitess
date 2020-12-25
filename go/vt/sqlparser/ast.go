@@ -63,11 +63,8 @@ type (
 		GetAction() DDLAction
 		GetOptLike() *OptLike
 		GetTableSpec() *TableSpec
-		GetVindexSpec() *VindexSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
-		GetAutoIncSpec() *AutoIncSpec
-		GetVindexCols() []ColIdent
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
@@ -387,6 +384,12 @@ type (
 		TableSpec     *TableSpec
 		OptLike       *OptLike
 		PartitionSpec *PartitionSpec
+	}
+
+	// AlterVschema represents a ALTER VSCHEMA statement.
+	AlterVschema struct {
+		Action DDLAction
+		Table  TableName
 
 		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
@@ -558,6 +561,7 @@ func (*CreateView) iStatement()        {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 func (*AlterTable) iStatement()        {}
+func (*AlterVschema) iStatement()      {}
 
 func (*DDL) iDDLStatement()         {}
 func (*CreateIndex) iDDLStatement() {}
@@ -709,31 +713,6 @@ func (node *CreateView) GetTableSpec() *TableSpec {
 	return nil
 }
 
-// GetVindexSpec implements the DDLStatement interface
-func (node *DDL) GetVindexSpec() *VindexSpec {
-	return node.VindexSpec
-}
-
-// GetVindexSpec implements the DDLStatement interface
-func (node *CreateIndex) GetVindexSpec() *VindexSpec {
-	return nil
-}
-
-// GetVindexSpec implements the DDLStatement interface
-func (node *CreateTable) GetVindexSpec() *VindexSpec {
-	return nil
-}
-
-// GetVindexSpec implements the DDLStatement interface
-func (node *CreateView) GetVindexSpec() *VindexSpec {
-	return nil
-}
-
-// GetVindexSpec implements the DDLStatement interface
-func (node *AlterTable) GetVindexSpec() *VindexSpec {
-	return nil
-}
-
 // GetFromTables implements the DDLStatement interface
 func (node *DDL) GetFromTables() TableNames {
 	return node.FromTables
@@ -806,56 +785,6 @@ func (node *CreateView) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *CreateTable) GetToTables() TableNames {
-	return nil
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *DDL) GetAutoIncSpec() *AutoIncSpec {
-	return node.AutoIncSpec
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *CreateIndex) GetAutoIncSpec() *AutoIncSpec {
-	return nil
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *AlterTable) GetAutoIncSpec() *AutoIncSpec {
-	return nil
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *CreateTable) GetAutoIncSpec() *AutoIncSpec {
-	return nil
-}
-
-// GetAutoIncSpec implements the DDLStatement interface
-func (node *CreateView) GetAutoIncSpec() *AutoIncSpec {
-	return nil
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *DDL) GetVindexCols() []ColIdent {
-	return node.VindexCols
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *CreateIndex) GetVindexCols() []ColIdent {
-	return nil
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *AlterTable) GetVindexCols() []ColIdent {
-	return nil
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *CreateTable) GetVindexCols() []ColIdent {
-	return nil
-}
-
-// GetVindexCols implements the DDLStatement interface
-func (node *CreateView) GetVindexCols() []ColIdent {
 	return nil
 }
 
@@ -1798,6 +1727,14 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case FlushDDLAction:
 		buf.astPrintf(node, "%s", FlushStr)
+	default:
+		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
+	}
+}
+
+// Format formats the node.
+func (node *AlterVschema) Format(buf *TrackedBuffer) {
+	switch node.Action {
 	case CreateVindexDDLAction:
 		buf.astPrintf(node, "alter vschema create vindex %v %v", node.Table, node.VindexSpec)
 	case DropVindexDDLAction:
