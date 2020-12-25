@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
 	"golang.org/x/net/context"
@@ -361,6 +363,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		master.TM.VREngine.Open(ctx)
 	}
 	for _, master := range tme.targetMasters {
+		log.Infof("Adding as targetMaster %s", master.Tablet.Alias)
 		dbclient := newFakeDBClient()
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }

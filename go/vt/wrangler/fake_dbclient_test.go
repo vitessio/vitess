@@ -19,9 +19,11 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -46,6 +48,7 @@ type dbResult struct {
 
 func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
 	if dbrs.exhausted() {
+		log.Infof(fmt.Sprintf("Unexpected query >%s<", query))
 		return nil, fmt.Errorf("code executed this query, but the test did not expect it: %s", query)
 	}
 	i := dbrs.index
@@ -143,6 +146,13 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	if result := dc.invariants[query]; result != nil {
 		return result, nil
 	}
+	for q, result := range dc.invariants { //supports allowing just a prefix of an expected query
+		if strings.Contains(query, q) {
+			return result, nil
+		}
+	}
+
+	log.Infof("Missing query: >%s<" + query)
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
