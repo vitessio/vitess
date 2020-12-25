@@ -129,7 +129,6 @@ type (
 
 	// AlterCharset is used to set the default or change the character set and collation in alter table command
 	AlterCharset struct {
-		IsDefault    bool
 		CharacterSet string
 		Collate      string
 	}
@@ -587,6 +586,7 @@ func (*OrderByOption) iAlterOption()           {}
 func (*RenameTable) iAlterOption()             {}
 func (*RenameIndex) iAlterOption()             {}
 func (*Validation) iAlterOption()              {}
+func (TableOptions) iAlterOption()             {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*DDL) IsFullyParsed() bool {
@@ -970,12 +970,15 @@ type PartitionDefinition struct {
 	Maxvalue bool
 }
 
+// TableOptions specifies a list of table options
+type TableOptions []*TableOption
+
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
 	Columns     []*ColumnDefinition
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
-	Options     string
+	Options     TableOptions
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement
@@ -1814,7 +1817,20 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ts, ",\n\t%v", c)
 	}
 
-	buf.astPrintf(ts, "\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+	buf.astPrintf(ts, "\n)")
+	for i, opt := range ts.Options {
+		if i != 0 {
+			buf.WriteString(",\n ")
+		}
+		buf.astPrintf(ts, " %s", opt.Name)
+		if opt.String != "" {
+			buf.astPrintf(ts, " %s", opt.String)
+		} else if opt.Value != nil {
+			buf.astPrintf(ts, " %v", opt.Value)
+		} else {
+			buf.astPrintf(ts, " (%v)", opt.Tables)
+		}
+	}
 }
 
 // Format formats the node.
@@ -2932,10 +2948,7 @@ func (node *ModifyColumn) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *AlterCharset) Format(buf *TrackedBuffer) {
-	if !node.IsDefault {
-		buf.astPrintf(node, "convert to ")
-	}
-	buf.astPrintf(node, "character set %s", node.CharacterSet)
+	buf.astPrintf(node, "convert to character set %s", node.CharacterSet)
 	if node.Collate != "" {
 		buf.astPrintf(node, " collate %s", node.Collate)
 	}
@@ -3009,5 +3022,22 @@ func (node *Validation) Format(buf *TrackedBuffer) {
 		buf.WriteString("with validation")
 	} else {
 		buf.WriteString("without validation")
+	}
+}
+
+// Format formats the node
+func (node TableOptions) Format(buf *TrackedBuffer) {
+	for i, option := range node {
+		if i != 0 {
+			buf.WriteString(" ")
+		}
+		buf.astPrintf(node, "%s", option.Name)
+		if option.String != "" {
+			buf.astPrintf(node, " %s", option.String)
+		} else if option.Value != nil {
+			buf.astPrintf(node, " %v", option.Value)
+		} else {
+			buf.astPrintf(node, " (%v)", option.Tables)
+		}
 	}
 }
