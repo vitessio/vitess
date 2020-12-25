@@ -152,7 +152,7 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		}
 	}
 
-	log.Infof("Missing query: >%s<" + query)
+	log.Infof("Missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", query)
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
