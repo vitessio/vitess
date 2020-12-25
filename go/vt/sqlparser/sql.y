@@ -144,6 +144,8 @@ func skipToEnd(yylex interface{}) {
   alterTable       *AlterTable
   alterOption      AlterOption
   alterOptions	   []AlterOption
+  tableOption      *TableOption
+  tableOptions     TableOptions
 }
 
 %token LEX_ERROR
@@ -159,7 +161,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
 %token <empty> '(' ',' ')'
-%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
 %token <bytes> NULL TRUE FALSE OFF
 %token <bytes> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 
@@ -199,7 +201,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
-%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY FIRST AFTER
+%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -250,6 +252,10 @@ func skipToEnd(yylex interface{}) {
 
 // Lock type tokens
 %token <bytes> LOCAL LOW_PRIORITY
+
+// TableOptions tokens
+%token <bytes> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
+%token <bytes> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
@@ -336,7 +342,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt
+%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt null_opt enforced_opt
 %type <empty> non_add_drop_or_rename_operation to_opt index_opt
@@ -353,7 +359,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
-%type <str> charset_opt collate_opt collate_eq_opt
+%type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> auto_increment_opt unsigned_opt zero_fill_opt
 %type <colKeyOpt> column_key_opt
@@ -367,7 +373,9 @@ func skipToEnd(yylex interface{}) {
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
 %type <optLike> create_like
-%type <str> table_option_list table_option table_opt_value
+%type <str> table_opt_value
+%type <tableOption> table_option
+%type <tableOptions> table_option_list table_option_list_opt space_separated_table_option_list
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
@@ -380,7 +388,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
-%type <bytes> alter_object_type database_or_schema column_opt
+%type <bytes> alter_object_type database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 %type <tableAndLockTypes> lock_table_list
@@ -843,7 +851,7 @@ database_or_schema:
 | SCHEMA
 
 table_spec:
-  '(' table_column_list ')' table_option_list
+  '(' table_column_list ')' table_option_list_opt
   {
     $$ = $2
     $$.Options = $4
@@ -1316,19 +1324,6 @@ collate_opt:
     $$ = string($2)
   }
 
-collate_eq_opt:
-  {
-    $$ = ""
-  }
-| COLLATE equal_opt id_or_var
-  {
-    $$ = string($3.String())
-  }
-| COLLATE equal_opt STRING
-  {
-    $$ = string($3)
-  }
-
 column_key_opt:
   {
     $$ = colKeyNone
@@ -1604,34 +1599,182 @@ enforced_opt:
     $$ = false
   }
 
-table_option_list:
+table_option_list_opt:
   {
-    $$ = ""
+    $$ = nil
   }
-| table_option
-  {
-    $$ = " " + string($1)
-  }
-| table_option_list ',' table_option
-  {
-    $$ = string($1) + ", " + string($3)
-  }
-
-// rather than explicitly parsing the various keywords for table options,
-// just accept any number of keywords, IDs, strings, numbers, and '='
-table_option:
-  table_opt_value
+| table_option_list
   {
     $$ = $1
   }
-| table_option table_opt_value
+
+table_option_list:
+  table_option
   {
-    $$ = $1 + " " + $2
+    $$ = TableOptions{$1}
   }
-| table_option '=' table_opt_value
+| table_option_list ',' table_option
   {
-    $$ = $1 + "=" + $3
+    $$ = append($1,$3)
   }
+| table_option_list table_option
+  {
+    $$ = append($1,$2)
+  }
+
+space_separated_table_option_list:
+  table_option
+  {
+    $$ = TableOptions{$1}
+  }
+| space_separated_table_option_list table_option
+  {
+    $$ = append($1,$2)
+  }
+
+table_option:
+  AUTO_INCREMENT equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| AVG_ROW_LENGTH equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| default_optional CHARACTER SET equal_opt charset
+  {
+    $$ = &TableOption{Name:(string($2)+" "+string($3)), String:$5}
+  }
+| default_optional COLLATE equal_opt charset
+  {
+    $$ = &TableOption{Name:string($2), String:$4}
+  }
+| CHECKSUM equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| COMMENT_KEYWORD equal_opt STRING
+  {
+    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+  }
+| COMPRESSION equal_opt STRING
+  {
+    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+  }
+| CONNECTION equal_opt STRING
+  {
+    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+  }
+| DATA DIRECTORY equal_opt STRING
+  {
+    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+  }
+| INDEX DIRECTORY equal_opt STRING
+  {
+    $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
+  }
+| DELAY_KEY_WRITE equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| ENCRYPTION equal_opt STRING
+  {
+    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+  }
+| ENGINE equal_opt id_or_var
+  {
+    $$ = &TableOption{Name:string($1), String:$3.String()}
+  }
+| ENGINE equal_opt STRING
+  {
+    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+  }
+| INSERT_METHOD equal_opt insert_method_options
+  {
+    $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| KEY_BLOCK_SIZE equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| MAX_ROWS equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| MIN_ROWS equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| PACK_KEYS equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| PACK_KEYS equal_opt DEFAULT
+  {
+    $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| PASSWORD equal_opt STRING
+  {
+    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
+  }
+| ROW_FORMAT equal_opt row_format_options
+  {
+    $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| STATS_AUTO_RECALC equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| STATS_AUTO_RECALC equal_opt DEFAULT
+  {
+    $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| STATS_PERSISTENT equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| STATS_PERSISTENT equal_opt DEFAULT
+  {
+    $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| STATS_SAMPLE_PAGES equal_opt INTEGRAL
+  {
+    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+  }
+| TABLESPACE equal_opt sql_id storage_opt
+  {
+    $$ = &TableOption{Name:string($1), String: ($3.String() + $4)}
+  }
+| UNION equal_opt '(' table_name_list ')'
+  {
+    $$ = &TableOption{Name:string($1), Tables: $4}
+  }
+
+storage_opt:
+  {
+    $$ = ""
+  }
+| STORAGE DISK
+  {
+    $$ = " " + string($1) + " " + string($2)
+  }
+| STORAGE MEMORY
+  {
+    $$ = " " + string($1) + " " + string($2)
+  }
+
+row_format_options:
+  DEFAULT
+| DYNAMIC
+| FIXED
+| COMPRESSED
+| REDUNDANT
+| COMPACT
+
+insert_method_options:
+  NO
+| FIRST
+| LAST
 
 table_opt_value:
   reserved_sql_id
@@ -1695,7 +1838,11 @@ alter_options:
   }
 
 alter_option:
-  ADD check_constraint_definition
+  space_separated_table_option_list
+  {
+    $$ = $1
+  }
+| ADD check_constraint_definition
   {
     $$ = &AddConstraintDefinition{ConstraintDefinition: $2}
   }
@@ -1743,13 +1890,9 @@ alter_option:
   {
     $$ = &ModifyColumn{NewColDefinition:$3, First:$4, After:$5}
   }
-| default_optional CHARACTER SET equal_opt charset collate_eq_opt
-  {
-    $$ = &AlterCharset{IsDefault:true, CharacterSet:$5, Collate:$6}
-  }
 | CONVERT TO CHARACTER SET charset collate_opt
   {
-    $$ = &AlterCharset{IsDefault:false, CharacterSet:$5, Collate:$6}
+    $$ = &AlterCharset{CharacterSet:$5, Collate:$6}
   }
 | DISABLE KEYS
   {
@@ -3490,13 +3633,17 @@ match_option:
 
 charset:
   id_or_var
-{
+  {
     $$ = string($1.String())
-}
+  }
 | STRING
-{
+  {
     $$ = string($1)
-}
+  }
+| BINARY
+  {
+    $$ = string($1)
+  }
 
 convert_type:
   BINARY length_opt
@@ -4452,6 +4599,7 @@ non_reserved_keyword:
 | AFTER
 | ALGORITHM
 | AUTO_INCREMENT
+| AVG_ROW_LENGTH
 | BEGIN
 | BIGINT
 | BIT
@@ -4464,6 +4612,7 @@ non_reserved_keyword:
 | CHAR
 | CHARACTER
 | CHARSET
+| CHECKSUM
 | CLONE
 | CODE
 | COLLATION
@@ -4471,25 +4620,34 @@ non_reserved_keyword:
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
+| COMPACT
 | COMPONENT
+| COMPRESSED
+| COMPRESSION
+| CONNECTION
 | COPY
 | CSV
 | DATA
 | DATE
 | DATETIME
 | DECIMAL
+| DELAY_KEY_WRITE
 | DEFINER
 | DEFINITION
 | DESCRIPTION
 | DIRECTORY
 | DISABLE
 | DISCARD
+| DISK
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
+| DYNAMIC
 | ENABLE
 | ENCLOSED
+| ENCRYPTION
 | ENFORCED
+| ENGINE
 | ENGINES
 | ENUM
 | ESCAPED
@@ -4500,6 +4658,7 @@ non_reserved_keyword:
 | FLOAT_TYPE
 | FIELDS
 | FIRST
+| FIXED
 | FLUSH
 | FOLLOWING
 | FORMAT
@@ -4515,6 +4674,7 @@ non_reserved_keyword:
 | IMPORT
 | INACTIVE
 | INPLACE
+| INSERT_METHOD
 | INT
 | INTEGER
 | INVISIBLE
@@ -4526,6 +4686,7 @@ non_reserved_keyword:
 | KEYS
 | KEYSPACES
 | LANGUAGE
+| LAST
 | LAST_INSERT_ID
 | LESS
 | LEVEL
@@ -4541,10 +4702,13 @@ non_reserved_keyword:
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
 | MASTER_ZSTD_COMPRESSION_LEVEL
+| MAX_ROWS
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
+| MEMORY
 | MERGE
+| MIN_ROWS
 | MODE
 | MODIFY
 | MULTILINESTRING
@@ -4572,8 +4736,10 @@ non_reserved_keyword:
 | OPTIMIZE
 | OTHERS
 | OVERWRITE
+| PACK_KEYS
 | PARSER
 | PARTITION
+| PASSWORD
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -4589,6 +4755,7 @@ non_reserved_keyword:
 | QUERY
 | RANDOM
 | REAL
+| REDUNDANT
 | REFERENCE
 | REFERENCES
 | REORGANIZE
@@ -4603,6 +4770,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| ROW_FORMAT
 | S3
 | SECONDARY
 | SECONDARY_ENGINE
@@ -4621,7 +4789,11 @@ non_reserved_keyword:
 | SRID
 | START
 | STARTING
+| STATS_AUTO_RECALC
+| STATS_PERSISTENT
+| STATS_SAMPLE_PAGES
 | STATUS
+| STORAGE
 | TABLES
 | TABLESPACE
 | TEMPTABLE

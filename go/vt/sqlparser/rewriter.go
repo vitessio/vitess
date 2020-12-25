@@ -875,6 +875,10 @@ func (r *replaceTableSpecIndexes) inc() {
 	*r++
 }
 
+func replaceTableSpecOptions(newNode, parent SQLNode) {
+	parent.(*TableSpec).Options = newNode.(TableOptions)
+}
+
 func replaceTimestampFuncExprExpr1(newNode, parent SQLNode) {
 	parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
 }
@@ -1571,6 +1575,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			replacerRef.inc()
 		}
 
+	case TableOptions:
+
 	case *TableSpec:
 		replacerColumns := replaceTableSpecColumns(0)
 		replacerColumnsB := &replacerColumns
@@ -1590,6 +1596,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerIndexesB.replace)
 			replacerIndexesB.inc()
 		}
+		a.apply(node, n.Options, replaceTableSpecOptions)
 
 	case *TablespaceOperation:
 

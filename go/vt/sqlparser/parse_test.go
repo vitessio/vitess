@@ -943,8 +943,7 @@ var (
 		input:  "alter table a rename key foo to bar",
 		output: "alter table a rename index foo to bar",
 	}, {
-		input:  "alter table e auto_increment = 20",
-		output: "alter table e",
+		input: "alter table e auto_increment 20",
 	}, {
 		input:  "alter table e character set = 'ascii'",
 		output: "alter table e character set ascii",
@@ -954,8 +953,7 @@ var (
 		input:  "alter table e default character set = 'ascii'",
 		output: "alter table e character set ascii",
 	}, {
-		input:  "alter table e comment = 'hello'",
-		output: "alter table e",
+		input: "alter table e comment 'hello'",
 	}, {
 		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
 		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
@@ -1878,7 +1876,7 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A foo",
 		output: "alter table A",
 	}, {
-		input:  "alter table A convert",
+		input:  "alter table A convert unparsable",
 		output: "alter table A",
 	}, {
 		// View names get lower-cased.
@@ -1886,7 +1884,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table a",
 	}, {
 		input:  "alter table A rename to B",
-		output: "rename table A to B",
+		output: "alter table A rename B",
 	}, {
 		input: "rename table A to B",
 	}, {
@@ -2498,10 +2496,10 @@ func TestCreateTable(t *testing.T) {
 			") engine InnoDB,\n" +
 			"  auto_increment 123,\n" +
 			"  avg_row_length 1,\n" +
-			"  default character set utf8mb4,\n" +
+			"  character set utf8mb4,\n" +
 			"  character set latin1,\n" +
 			"  checksum 0,\n" +
-			"  default collate binary,\n" +
+			"  collate binary,\n" +
 			"  collate ascii_bin,\n" +
 			"  comment 'this is a comment',\n" +
 			"  compression 'zlib',\n" +
@@ -2521,6 +2519,7 @@ func TestCreateTable(t *testing.T) {
 			"  stats_persistent 0,\n" +
 			"  stats_sample_pages 1,\n" +
 			"  tablespace tablespace_name storage disk,\n" +
+			"  union (a, b, c),\n" +
 			"  tablespace tablespace_name\n",
 
 		// boolean columns
@@ -2539,9 +2538,7 @@ func TestCreateTable(t *testing.T) {
 		}
 		got := String(tree.(*CreateTable))
 		assert.True(t, tree.(*CreateTable).FullyParsed)
-		if sql != got {
-			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
-		}
+		require.Equal(t, sql, got)
 	}
 
 	sql := "create table t garbage"
