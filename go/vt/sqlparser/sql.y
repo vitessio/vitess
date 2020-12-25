@@ -1873,7 +1873,7 @@ alter_statement:
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: CreateVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
@@ -1885,7 +1885,7 @@ alter_statement:
   }
 | ALTER VSCHEMA DROP VINDEX table_name
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: DropVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
@@ -1895,15 +1895,15 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD TABLE table_name
   {
-    $$ = &DDL{Action: AddVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA DROP TABLE table_name
   {
-    $$ = &DDL{Action: DropVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: DropVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: AddColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
@@ -1916,7 +1916,7 @@ alter_statement:
   }
 | ALTER VSCHEMA ON table_name DROP VINDEX sql_id
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: DropColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
@@ -1926,11 +1926,11 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD SEQUENCE table_name
   {
-    $$ = &DDL{Action: AddSequenceDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: AddAutoIncDDLAction,
         Table: $4,
         AutoIncSpec: &AutoIncSpec{
