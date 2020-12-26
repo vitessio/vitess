@@ -144,12 +144,15 @@ func getQueryCount(url string, query string) int {
 		if len(row) != len(headings) {
 			continue
 		}
+		filterChars := []string{"_", "`"}
 		//Queries seem to include non-printable characters at times and hence equality fails unless these are removed
 		re := regexp.MustCompile("[[:^ascii:]]")
 		foundQuery := re.ReplaceAllLiteralString(row[queryIndex], "")
-		foundQuery = strings.ReplaceAll(foundQuery, "_", "")
 		cleanQuery := re.ReplaceAllLiteralString(query, "")
-		cleanQuery = strings.ReplaceAll(cleanQuery, "_", "")
+		for _, filterChar := range filterChars {
+			foundQuery = strings.ReplaceAll(foundQuery, filterChar, "")
+			cleanQuery = strings.ReplaceAll(cleanQuery, filterChar, "")
+		}
 		if foundQuery == cleanQuery || strings.Contains(foundQuery, cleanQuery) {
 			count, _ = strconv.Atoi(row[countIndex])
 		}
