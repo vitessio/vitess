@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -73,8 +74,10 @@ func runCluster() {
 					}},
 				}},
 			},
-			SchemaDir:     "./schema",
+			SchemaDir:     path.Join(os.Getenv("VTROOT"), "examples/demo/schema"),
 			MySQLBindHost: "0.0.0.0",
+			// VSchemaDDLAuthorizedUsers allows you to experiment with vschema DDLs.
+			VSchemaDDLAuthorizedUsers: "%",
 		},
 	}
 	env, err := vttest.NewLocalTestEnv("", 12345)
