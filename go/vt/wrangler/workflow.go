@@ -158,8 +158,8 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 // Start initiates a workflow
 func (vrw *VReplicationWorkflow) Start() error {
 	var err error
-	if !vrw.Exists() {
-		return fmt.Errorf("workflow now found")
+	if vrw.Exists() {
+		return fmt.Errorf("workflow already exists found")
 	}
 	if vrw.CachedState() != WorkflowStateNotStarted {
 		return fmt.Errorf("workflow has already been started, state is %s", vrw.CachedState())
