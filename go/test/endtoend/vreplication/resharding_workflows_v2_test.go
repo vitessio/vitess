@@ -392,13 +392,12 @@ func setupCluster(t *testing.T) *VitessCluster {
 	zone1 := vc.Cells["zone1"]
 	zone2 := vc.Cells["zone2"]
 
-	vc.AddKeyspace(t, []*Cell{zone1, zone2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, 1, 100)
+	vc.AddKeyspace(t, []*Cell{zone1, zone2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 
 	vtgate = zone1.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
 	verifyClusterHealth(t)
@@ -412,7 +411,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 
 func setupCustomerKeyspace(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"], vc.Cells["zone2"]}, "customer", "-80,80-",
-		customerVSchema, customerSchema, defaultReplicas, 1, 200); err != nil {
+		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "-80"), 1); err != nil {
@@ -425,12 +424,6 @@ func setupCustomerKeyspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "80-"), 2); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "80-"), 2); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", "customer", "-80"), 2); err != nil {
 		t.Fatal(err)
 	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -549,7 +542,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 func createAdditionalCustomerShards(t *testing.T, shards string) {
 	ksName := "customer"
 	keyspace := vc.Cells[defaultCell.Name].Keyspaces[ksName]
-	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell, vc.Cells["zone2"]}, keyspace, shards, defaultReplicas, 1, 400))
+	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell, vc.Cells["zone2"]}, keyspace, shards, defaultReplicas, defaultRdonly, 400))
 	arrTargetShardNames := strings.Split(shards, ",")
 
 	for _, shardName := range arrTargetShardNames {
@@ -557,9 +550,6 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 			t.Fatal(err)
 		}
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2); err != nil {
-			t.Fatal(err)
-		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", ksName, shardName), 2); err != nil {
 			t.Fatal(err)
 		}
 	}
