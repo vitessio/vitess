@@ -319,12 +319,16 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 				}
 			}
 		}
-		plans = append(plans[:rIdx], plans[rIdx+1:]...)
-		plans = append(plans[:lIdx], plans[lIdx+1:]...)
+		plans = removeAt(plans, rIdx)
+		plans = removeAt(plans, lIdx)
 		plans = append(plans, bestPlan)
 	}
 
 	return plans[0], nil
+}
+
+func removeAt(plans []joinTree, idx int) []joinTree {
+	return append(plans[:idx], plans[idx+1:]...)
 }
 
 func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema ContextVSchema) (*routePlan, error) {
