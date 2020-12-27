@@ -20,7 +20,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -160,47 +159,4 @@ func (qg *queryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 			Right: predicate,
 		}
 	}
-}
-
-func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) joinTree {
-	aRoute, ok := a.(*routePlan)
-	if !ok {
-		return nil
-	}
-	bRoute, ok := b.(*routePlan)
-	if !ok {
-		return nil
-	}
-	if aRoute.keyspace != bRoute.keyspace {
-		return nil
-	}
-
-	switch aRoute.routeOpCode {
-	case engine.SelectUnsharded, engine.SelectDBA:
-		if aRoute.routeOpCode != bRoute.routeOpCode {
-			return nil
-		}
-	case engine.SelectEqualUnique:
-		return nil
-	case engine.SelectScatter:
-		//if len(joinPredicates) == 0 {
-		// If we are doing two Scatters, we have to make sure that the
-		// joins are on the correct vindex to allow them to be merged
-		// no join predicates - no vindex
-		return nil
-		//}
-	}
-
-	newTabletSet := aRoute.solved | bRoute.solved
-	r := &routePlan{
-		routeOpCode:          aRoute.routeOpCode,
-		solved:               newTabletSet,
-		tables:               append(aRoute.tables, bRoute.tables...),
-		extraPredicates:      append(aRoute.extraPredicates, bRoute.extraPredicates...),
-		keyspace:             aRoute.keyspace,
-		vindexPlusPredicates: append(aRoute.vindexPlusPredicates, bRoute.vindexPlusPredicates...),
-	}
-
-	r.extraPredicates = append(r.extraPredicates, joinPredicates...)
-	return r
 }
