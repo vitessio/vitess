@@ -36,63 +36,75 @@ var tcases = []tcase{
 	{
 		input: "select * from t",
 		output: &queryGraph{
-			tables: []*queryTable{
-				{
-					tableIdentifier: 1,
-					alias: &sqlparser.AliasedTableExpr{
-						Expr: sqlparser.TableName{
-							Name: sqlparser.NewTableIdent("t"),
-						},
-					},
-					table:      sqlparser.TableName{Name: sqlparser.NewTableIdent("t")},
-					predicates: nil,
-				},
-			},
+			tables: []*queryTable{{
+				tableID: 1,
+				alias:   tableAlias("t"),
+				table:   tableName("t"),
+			}},
 			crossTable: map[semantics.TableSet][]sqlparser.Expr{},
 		},
 	}, {
 		input: "select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2",
 		output: &queryGraph{
-			tables: []*queryTable{
-				{tableIdentifier: 1, alias: &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}}, table: sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}},
-				{
-					tableIdentifier: 2,
-					alias:           &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: sqlparser.NewTableIdent("y")}},
-					table:           sqlparser.TableName{Name: sqlparser.NewTableIdent("y")},
-				},
-				{
-					tableIdentifier: 4,
-					alias:           &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: sqlparser.NewTableIdent("z")}},
-					table:           sqlparser.TableName{Name: sqlparser.NewTableIdent("z")},
-				},
-			},
+			tables: []*queryTable{{
+				tableID: 1,
+				alias:   tableAlias("t"),
+				table:   tableName("t"),
+			}, {
+				tableID: 2,
+				alias:   tableAlias("y"),
+				table:   tableName("y"),
+			}, {
+				tableID: 4,
+				alias:   tableAlias("z"),
+				table:   tableName("z"),
+			}},
 			crossTable: map[semantics.TableSet][]sqlparser.Expr{
-				3: {
-					&sqlparser.ComparisonExpr{
-						Left:  &sqlparser.ColName{Name: sqlparser.NewColIdent("c"), Qualifier: sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}},
-						Right: &sqlparser.ColName{Name: sqlparser.NewColIdent("c"), Qualifier: sqlparser.TableName{Name: sqlparser.NewTableIdent("y")}},
-					},
-				},
-				7: {
-					&sqlparser.OrExpr{
-						Left: &sqlparser.ComparisonExpr{
-							Left:  &sqlparser.ColName{Name: sqlparser.NewColIdent("a"), Qualifier: sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}},
-							Right: &sqlparser.ColName{Name: sqlparser.NewColIdent("a"), Qualifier: sqlparser.TableName{Name: sqlparser.NewTableIdent("z")}},
-						},
-						Right: &sqlparser.ComparisonExpr{
-							Left:  &sqlparser.ColName{Name: sqlparser.NewColIdent("a"), Qualifier: sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}},
-							Right: &sqlparser.ColName{Name: sqlparser.NewColIdent("a"), Qualifier: sqlparser.TableName{Name: sqlparser.NewTableIdent("y")}},
-						},
-					},
-				},
+				1 | 2: {
+					equals(
+						colName("t", "c"),
+						colName("y", "c"))},
+				1 | 2 | 4: {
+					or(
+						equals(
+							colName("t", "a"),
+							colName("z", "a")),
+						equals(
+							colName("t", "a"),
+							colName("y", "a")))},
 			},
 			noDeps: &sqlparser.ComparisonExpr{
-				Operator: 1,
+				Operator: sqlparser.LessThanOp,
 				Left:     &sqlparser.Literal{Type: 1, Val: []uint8{0x31}},
 				Right:    &sqlparser.Literal{Type: 1, Val: []uint8{0x32}},
 			},
 		},
 	},
+}
+
+func or(left, right sqlparser.Expr) sqlparser.Expr {
+	return &sqlparser.OrExpr{
+		Left:  left,
+		Right: right,
+	}
+}
+func equals(left, right sqlparser.Expr) sqlparser.Expr {
+	return &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     left,
+		Right:    right,
+	}
+}
+func colName(table, column string) *sqlparser.ColName {
+	return &sqlparser.ColName{Name: sqlparser.NewColIdent(column), Qualifier: tableName(table)}
+}
+
+func tableAlias(name string) *sqlparser.AliasedTableExpr {
+	return &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: sqlparser.NewTableIdent(name)}}
+}
+
+func tableName(name string) sqlparser.TableName {
+	return sqlparser.TableName{Name: sqlparser.NewTableIdent(name)}
 }
 
 type schemaInf struct{}

@@ -46,10 +46,10 @@ type (
 
 	// queryTable is a single FROM table, including all predicates particular to this table
 	queryTable struct {
-		tableIdentifier semantics.TableSet
-		alias           *sqlparser.AliasedTableExpr
-		table           sqlparser.TableName
-		predicates      []sqlparser.Expr
+		tableID    semantics.TableSet
+		alias      *sqlparser.AliasedTableExpr
+		table      sqlparser.TableName
+		predicates []sqlparser.Expr
 	}
 )
 
@@ -78,7 +78,7 @@ func (qg *queryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.Se
 	switch table := t.(type) {
 	case *sqlparser.AliasedTableExpr:
 		tableName := table.Expr.(sqlparser.TableName)
-		qt := &queryTable{alias: table, table: tableName, tableIdentifier: semTable.TableSetFor(table)}
+		qt := &queryTable{alias: table, table: tableName, tableID: semTable.TableSetFor(table)}
 		qg.tables = append(qg.tables, qt)
 	case *sqlparser.JoinTableExpr:
 		if err := qg.collectTable(table.LeftExpr, semTable); err != nil {
@@ -143,7 +143,7 @@ func (qg *queryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 
 func (qg *queryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
 	for _, t := range qg.tables {
-		if table == t.tableIdentifier {
+		if table == t.tableID {
 			t.predicates = append(t.predicates, predicate)
 			return true
 		}
