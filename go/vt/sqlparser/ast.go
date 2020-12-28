@@ -775,6 +775,12 @@ func (node *CreateIndex) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *AlterTable) GetToTables() TableNames {
+	for _, option := range node.AlterOptions {
+		switch altOption := option.(type) {
+		case *RenameTable:
+			return TableNames{altOption.Table}
+		}
+	}
 	return nil
 }
 
@@ -801,8 +807,14 @@ func (node *DDL) AffectedTables() TableNames {
 
 // AffectedTables returns the list table names affected by the DDLStatement.
 func (node *AlterTable) AffectedTables() TableNames {
-	// TODO (Manan): change according to more implemented alter options before merging
-	return TableNames{node.Table}
+	affectedTables := TableNames{node.Table}
+	for _, option := range node.AlterOptions {
+		switch altOption := option.(type) {
+		case *RenameTable:
+			affectedTables = append(affectedTables, altOption.Table)
+		}
+	}
+	return affectedTables
 }
 
 // AffectedTables implements DDLStatement.

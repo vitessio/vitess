@@ -60,10 +60,11 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 			if err != nil {
 				return nil, nil, err
 			}
+			ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
 		} else {
 			keyspace = table.Keyspace
+			ddlStatement.SetTable("", table.Name.String())
 		}
-		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
 	case *sqlparser.DDL:
 		// For DDL, it is only required that the keyspace exist
 		// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
