@@ -107,10 +107,7 @@ type (
 		vindex     vindexes.Vindex
 		conditions []sqlparser.Expr
 
-		// this state keeps track of which vindexes are available and
-		// whether we have seen enough predicates to satisfy the vindex
-		vindexPlusPredicates []*vindexPlusPredicates
-		vtable               *vindexes.Table
+		vtable *vindexes.Table
 	}
 	joinPlan struct {
 		predicates []sqlparser.Expr
@@ -139,11 +136,11 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "addPredicate should only be called when the route has a single table")
 	}
 
-	if rp.vindexPlusPredicates == nil {
-		// Add all the column vindexes to the list of vindexPlusPredicates
-		for _, columnVindex := range rp.vtable.ColumnVindexes {
-			rp.vindexPlusPredicates = append(rp.vindexPlusPredicates, &vindexPlusPredicates{vindex: columnVindex})
-		}
+	vindexPreds := []*vindexPlusPredicates{}
+
+	// Add all the column vindexes to the list of vindexPlusPredicates
+	for _, columnVindex := range rp.vtable.ColumnVindexes {
+		vindexPreds = append(vindexPreds, &vindexPlusPredicates{vindex: columnVindex})
 	}
 
 	for _, filter := range predicates {
@@ -152,7 +149,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 			switch node.Operator {
 			case sqlparser.EqualOp:
 				// TODO(Manan,Andres): Remove the predicates that are repeated eg. Id=1 AND Id=1
-				for _, v := range rp.vindexPlusPredicates {
+				for _, v := range vindexPreds {
 					column := node.Left.(*sqlparser.ColName)
 					for _, col := range v.vindex.Columns {
 						// If the column for the predicate matches any column in the vindex add it to the list
@@ -168,7 +165,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 	}
 
 	//TODO (Manan,Andres): Improve cost metric for vindexes
-	for _, v := range rp.vindexPlusPredicates {
+	for _, v := range vindexPreds {
 		if !v.covered {
 			continue
 		}
@@ -280,8 +277,10 @@ func createJoin(lhs joinTree, rhs joinTree, joinPredicates []sqlparser.Expr) joi
 }
 
 /*
-
- */
+	The greedy planner will plan a query by finding first finding the best route plan for every table, and then
+	finding the cheapest join, and using that. Then it searches for the next cheapest joinTree that can be produced,
+	and keeps doing this until all tables have been joined
+*/
 func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	plans := make([]joinTree, len(qg.tables))
 	planCache := map[semantics.TableSet]joinTree{}
@@ -358,10 +357,10 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 		plan.routeOpCode = engine.SelectEqualUnique
 	default:
 		plan.routeOpCode = engine.SelectScatter
-		err := plan.addPredicate(table.predicates...)
-		if err != nil {
-			return nil, err
-		}
+	}
+	err = plan.addPredicate(table.predicates...)
+	if err != nil {
+		return nil, err
 	}
 
 	return plan, nil
@@ -464,12 +463,11 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) joinTree {
 
 	newTabletSet := aRoute.solved | bRoute.solved
 	r := &routePlan{
-		routeOpCode:          aRoute.routeOpCode,
-		solved:               newTabletSet,
-		tables:               append(aRoute.tables, bRoute.tables...),
-		extraPredicates:      append(aRoute.extraPredicates, bRoute.extraPredicates...),
-		keyspace:             aRoute.keyspace,
-		vindexPlusPredicates: append(aRoute.vindexPlusPredicates, bRoute.vindexPlusPredicates...),
+		routeOpCode:     aRoute.routeOpCode,
+		solved:          newTabletSet,
+		tables:          append(aRoute.tables, bRoute.tables...),
+		extraPredicates: append(aRoute.extraPredicates, bRoute.extraPredicates...),
+		keyspace:        aRoute.keyspace,
 	}
 
 	r.extraPredicates = append(r.extraPredicates, joinPredicates...)
