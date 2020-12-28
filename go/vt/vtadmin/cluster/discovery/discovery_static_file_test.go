@@ -225,7 +225,7 @@ func TestDiscoverVTGates(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, gates)
+			assert.ElementsMatch(t, tt.expected, gates)
 		})
 	}
 }
