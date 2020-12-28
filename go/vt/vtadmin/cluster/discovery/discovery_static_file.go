@@ -28,7 +28,22 @@ import (
 )
 
 // StaticFileDiscovery implements the Discovery interface for "discovering"
-// Vitess components hardcoded in a static .json file.
+// Vitess components hardcoded in a static JSON file.
+//
+// As an example, here's a minimal JSON file for a single Vitess cluster running locally
+// (such as the one described in https://vitess.io/docs/get-started/local-docker):
+//
+// 		{
+// 			"vtgates": [
+// 				{
+// 					"host": {
+// 						"hostname": "127.0.0.1:15991"
+// 					}
+// 				}
+// 			]
+// 		}
+//
+// For more examples of various static file configurations, see the unit tests.
 type StaticFileDiscovery struct {
 	cluster *vtadminpb.Cluster
 	config  *StaticFileClusterConfig
