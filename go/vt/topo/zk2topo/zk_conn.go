@@ -341,6 +341,8 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error) {
 	servers := strings.Split(addr, ",")
 	dialer := zk.WithDialer(net.DialTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *baseTimeout)
+	defer cancel()
 	// If TLS is enabled use a TLS enabled dialer option
 	if *certPath != "" && *keyPath != "" {
 		if strings.Contains(addr, ",") {
