@@ -43,11 +43,16 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	}
 
 	var tree joinTree
-	if vschema.Planner() == V4GreedyOnly || len(qgraph.tables) > 10 {
+
+	switch {
+	case vschema.Planner() == V4GreedyOnly || len(qgraph.tables) > 10:
 		tree, err = greedySolve(qgraph, semTable, vschema)
-	} else {
+	case vschema.Planner() == V4Left2Right:
+		tree, err = leftToRightSolve(qgraph, semTable, vschema)
+	default:
 		tree, err = dpSolve(qgraph, semTable, vschema)
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -324,6 +329,32 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 	}
 
 	return plans[0], nil
+}
+func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+	plans := make([]joinTree, len(qg.tables))
+
+	// we start by seeding the table with the single routes
+	for i, table := range qg.tables {
+		solves := semTable.TableSetFor(table.alias)
+		plan, err := createRoutePlan(table, solves, vschema)
+		if err != nil {
+			return nil, err
+		}
+		plans[i] = plan
+	}
+
+	var acc joinTree
+	for _, plan := range plans {
+		if acc == nil {
+			acc = plan
+			continue
+		}
+		solves := acc.solves() | plan.solves()
+		joinPredicates := qg.crossTable[solves]
+		acc = createJoin(acc, plan, joinPredicates)
+	}
+
+	return acc, nil
 }
 
 func removeAt(plans []joinTree, idx int) []joinTree {
