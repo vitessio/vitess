@@ -402,10 +402,10 @@ type (
 
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
-		Table          TableName
-		AlterOptions   []AlterOption
-		PartitionSpecs []*PartitionSpec
-		FullyParsed    bool
+		Table         TableName
+		AlterOptions  []AlterOption
+		PartitionSpec *PartitionSpec
+		FullyParsed   bool
 	}
 
 	// CreateIndex represents a CREATE INDEX query
@@ -953,11 +953,15 @@ type OptLike struct {
 	LikeTable TableName
 }
 
-// PartitionSpec describe partition actions (for alter and create)
+// PartitionSpec describe partition actions (for alter statements)
 type PartitionSpec struct {
-	Action      PartitionSpecAction
-	Name        ColIdent
-	Definitions []*PartitionDefinition
+	Action            PartitionSpecAction
+	Names             Partitions
+	Number            *Literal
+	IsAll             bool
+	TableName         TableName
+	WithoutValidation bool
+	Definitions       []*PartitionDefinition
 }
 
 // PartitionSpecAction is an enum for PartitionSpec.Action
@@ -1779,13 +1783,129 @@ func (node *OptLike) Format(buf *TrackedBuffer) {
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case ReorganizeAction:
-		buf.astPrintf(node, "%s %v into (", ReorganizeStr, node.Name)
-		var prefix string
+		buf.astPrintf(node, "%s ", ReorganizeStr)
+		prefix := ""
+		for _, n := range node.Names {
+			buf.astPrintf(node, "%s%v", prefix, n)
+			prefix = ", "
+		}
+		buf.WriteString(" into (")
+		prefix = ""
 		for _, pd := range node.Definitions {
 			buf.astPrintf(node, "%s%v", prefix, pd)
 			prefix = ", "
 		}
 		buf.astPrintf(node, ")")
+	case AddAction:
+		buf.astPrintf(node, "%s (%v)", AddStr, node.Definitions[0])
+	case DropAction:
+		buf.astPrintf(node, "%s ", DropPartitionStr)
+		prefix := ""
+		for _, n := range node.Names {
+			buf.astPrintf(node, "%s%v", prefix, n)
+			prefix = ", "
+		}
+	case DiscardAction:
+		buf.astPrintf(node, "%s ", DiscardStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+		buf.WriteString(" tablespace")
+	case ImportAction:
+		buf.astPrintf(node, "%s ", ImportStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+		buf.WriteString(" tablespace")
+	case TruncateAction:
+		buf.astPrintf(node, "%s ", TruncatePartitionStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case CoalesceAction:
+		buf.astPrintf(node, "%s %v", CoalesceStr, node.Number)
+	case ExchangeAction:
+		buf.astPrintf(node, "%s %v with table %v", ExchangeStr, node.Names[0], node.TableName)
+		if node.WithoutValidation {
+			buf.WriteString(" without validation")
+		}
+	case AnalyzeAction:
+		buf.astPrintf(node, "%s ", AnalyzePartitionStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case CheckAction:
+		buf.astPrintf(node, "%s ", CheckStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case OptimizeAction:
+		buf.astPrintf(node, "%s ", OptimizeStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case RebuildAction:
+		buf.astPrintf(node, "%s ", RebuildStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case RepairAction:
+		buf.astPrintf(node, "%s ", RepairStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case RemoveAction:
+		buf.WriteString(RemoveStr)
+	case UpgradeAction:
+		buf.WriteString(UpgradeStr)
 	default:
 		panic("unimplemented")
 	}
@@ -2868,11 +2988,18 @@ func (node *UnlockTables) Format(buf *TrackedBuffer) {
 // Format formats the AlterTable node.
 func (node *AlterTable) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "alter table %v", node.Table)
+	prefix := ""
 	for i, option := range node.AlterOptions {
 		if i != 0 {
 			buf.WriteString(",")
 		}
 		buf.astPrintf(node, " %v", option)
+		if node.PartitionSpec != nil && node.PartitionSpec.Action != RemoveAction {
+			prefix = ","
+		}
+	}
+	if node.PartitionSpec != nil {
+		buf.astPrintf(node, "%s %v", prefix, node.PartitionSpec)
 	}
 }
 

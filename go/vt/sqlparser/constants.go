@@ -71,7 +71,21 @@ const (
 	VindexOwnerStr = "owner"
 
 	// Partition strings
-	ReorganizeStr = "reorganize partition"
+	ReorganizeStr        = "reorganize partition"
+	AddStr               = "add partition"
+	DiscardStr           = "discard partition"
+	DropPartitionStr     = "drop partition"
+	ImportStr            = "import partition"
+	TruncatePartitionStr = "truncate partition"
+	CoalesceStr          = "coalesce partition"
+	ExchangeStr          = "exchange partition"
+	AnalyzePartitionStr  = "analyze partition"
+	CheckStr             = "check partition"
+	OptimizeStr          = "optimize partition"
+	RebuildStr           = "rebuild partition"
+	RepairStr            = "repair partition"
+	RemoveStr            = "remove partitioning"
+	UpgradeStr           = "upgrade partitioning"
 
 	// JoinTableExpr.Join
 	JoinStr             = "join"
@@ -384,6 +398,20 @@ const (
 // Constant for Enum Type - PartitionSpecAction
 const (
 	ReorganizeAction PartitionSpecAction = iota
+	AddAction
+	DiscardAction
+	DropAction
+	ImportAction
+	TruncateAction
+	CoalesceAction
+	ExchangeAction
+	AnalyzeAction
+	CheckAction
+	OptimizeAction
+	RebuildAction
+	RepairAction
+	RemoveAction
+	UpgradeAction
 )
 
 // Constant for Enum Type - ExplainType
