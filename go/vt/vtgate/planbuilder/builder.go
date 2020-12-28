@@ -50,8 +50,20 @@ type ContextVSchema interface {
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
-	NewPlanner() bool
+	Planner() PlannerVersion
 }
+
+// PlannerVersion is the version of the planner
+type PlannerVersion int
+
+const (
+	// V3 is also the default planner
+	V3 PlannerVersion = iota
+	// V4 is the new planner
+	V4
+	// V4GreedyOnly uses only the faster greedy planner
+	V4GreedyOnly
+)
 
 type truncater interface {
 	SetTruncateColumnCount(int)

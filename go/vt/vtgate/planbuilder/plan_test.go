@@ -285,7 +285,7 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
-	newPlanner    bool
+	version       PlannerVersion
 }
 
 func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
@@ -295,8 +295,8 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	return []*vindexes.Keyspace{vw.keyspace}, nil
 }
 
-func (vw *vschemaWrapper) NewPlanner() bool {
-	return vw.newPlanner
+func (vw *vschemaWrapper) Planner() PlannerVersion {
+	return vw.version
 }
 func (vw *vschemaWrapper) GetSemTable() *semantics.SemTable {
 	return nil
@@ -391,7 +391,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 		fail := false
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
-				vschema.newPlanner = false
+				vschema.version = V3
 				plan, err := TestBuilder(tcase.input, vschema)
 				out := getPlanOrErrorOutput(err, plan)
 
@@ -414,7 +414,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 						empty = true
 						tcase.output2ndPlanner = tcase.output
 					}
-					vschema.newPlanner = true
+					vschema.version = V4
 					out, err := getPlanOutput(tcase, vschema)
 					if out != tcase.output2ndPlanner {
 						fail = true
