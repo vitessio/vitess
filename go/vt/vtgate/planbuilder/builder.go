@@ -63,6 +63,8 @@ const (
 	V4
 	// V4GreedyOnly uses only the faster greedy planner
 	V4GreedyOnly
+	// V4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
+	V4Left2Right
 )
 
 type truncater interface {
