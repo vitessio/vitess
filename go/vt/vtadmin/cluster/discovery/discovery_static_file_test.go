@@ -108,11 +108,14 @@ func TestDiscoverVTGate(t *testing.T) {
 
 func TestDiscoverVTGates(t *testing.T) {
 	tests := []struct {
-		name      string
-		contents  []byte
-		tags      []string
-		expected  []*vtadminpb.VTGate
+		name     string
+		contents []byte
+		tags     []string
+		expected []*vtadminpb.VTGate
+		// True if the test should produce an error on the DiscoverVTGates call
 		shouldErr bool
+		// True if the test should produce an error on the disco.parseConfig step
+		shouldErrConfig bool
 	}{
 		{
 			name:      "empty config",
@@ -154,7 +157,7 @@ func TestDiscoverVTGates(t *testing.T) {
 								"hostname": "127.0.0.1:11111"
 							},
 							"tags": ["cell:cellA"]
-						}, 
+						},
 						{
 							"host": {
 								"hostname": "127.0.0.1:22222"
@@ -187,7 +190,7 @@ func TestDiscoverVTGates(t *testing.T) {
 								"hostname": "127.0.0.1:11111"
 							},
 							"tags": ["cell:cellA"]
-						}, 
+						},
 						{
 							"host": {
 								"hostname": "127.0.0.1:22222"
@@ -209,6 +212,17 @@ func TestDiscoverVTGates(t *testing.T) {
 			},
 			shouldErr: false,
 		},
+		{
+			name: "invalid json",
+			contents: []byte(`
+				{
+					"vtgates": "malformed"
+				}
+			`),
+			tags:            []string{},
+			shouldErr:       false,
+			shouldErrConfig: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -216,7 +230,11 @@ func TestDiscoverVTGates(t *testing.T) {
 			disco := &StaticFileDiscovery{}
 
 			err := disco.parseConfig(tt.contents)
-			require.NoError(t, err)
+			if tt.shouldErrConfig {
+				assert.Error(t, err, assert.AnError)
+			} else {
+				require.NoError(t, err)
+			}
 
 			gates, err := disco.DiscoverVTGates(context.Background(), tt.tags)
 			if tt.shouldErr {
