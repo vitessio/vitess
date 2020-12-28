@@ -17,7 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -25,25 +28,67 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func TestMergeUnshardedJoins(t *testing.T) {
+func unsharded(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routePlan {
+	return &routePlan{
+		routeOpCode: engine.SelectUnsharded,
+		solved:      solved,
+		keyspace:    keyspace,
+	}
+}
+func selectDBA(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routePlan {
+	return &routePlan{
+		routeOpCode: engine.SelectDBA,
+		solved:      solved,
+		keyspace:    keyspace,
+	}
+}
+
+func TestMergeJoins(t *testing.T) {
 	ks := &vindexes.Keyspace{Name: "apa", Sharded: false}
 	ks2 := &vindexes.Keyspace{Name: "banan", Sharded: false}
-	r1 := &routePlan{
-		routeOpCode: engine.SelectUnsharded,
-		solved:      1,
-		keyspace:    ks,
+
+	type testCase struct {
+		l, r, expected joinTree
+		predicates     []sqlparser.Expr
 	}
-	r2 := &routePlan{
-		routeOpCode: engine.SelectUnsharded,
-		solved:      2,
-		keyspace:    ks,
+
+	tests := []testCase{{
+		l:        unsharded(1, ks),
+		r:        unsharded(2, ks),
+		expected: unsharded(1|2, ks),
+	}, {
+		l:        unsharded(1, ks),
+		r:        unsharded(2, ks2),
+		expected: nil,
+	}, {
+		l:        unsharded(2, ks),
+		r:        unsharded(1, ks2),
+		expected: nil,
+	}, {
+		l:        selectDBA(1, ks),
+		r:        selectDBA(2, ks),
+		expected: selectDBA(1|2, ks),
+	}, {
+		l:        selectDBA(1, ks),
+		r:        selectDBA(2, ks2),
+		expected: nil,
+	}, {
+		l:        selectDBA(2, ks),
+		r:        selectDBA(1, ks2),
+		expected: nil,
+	}, {
+		l:        unsharded(1, ks),
+		r:        selectDBA(2, ks),
+		expected: nil,
+	}, {
+		l:        selectDBA(1, ks),
+		r:        unsharded(2, ks),
+		expected: nil,
+	}}
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			result := tryMerge(tc.l, tc.r, tc.predicates)
+			assert.Equal(t, tc.expected, result)
+		})
 	}
-	r3 := &routePlan{
-		routeOpCode: engine.SelectUnsharded,
-		solved:      4,
-		keyspace:    ks2,
-	}
-	assert.NotNil(t, tryMerge(r1, r2, []sqlparser.Expr{}))
-	assert.Nil(t, tryMerge(r1, r3, []sqlparser.Expr{}))
-	assert.Nil(t, tryMerge(r2, r3, []sqlparser.Expr{}))
 }
