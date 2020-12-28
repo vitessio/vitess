@@ -334,7 +334,7 @@ func skipToEnd(yylex interface{}) {
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <setExprs> set_list
-%type <bytes> charset_or_character_set
+%type <bytes> charset_or_character_set charset_or_character_set_or_names
 %type <updateExpr> update_expression
 %type <setExpr> set_expression
 %type <characteristic> transaction_char
@@ -895,13 +895,13 @@ default_optional:
   }
 
 character_set:
-  default_optional CHARACTER SET equal_opt id_or_var
+  default_optional charset_or_character_set equal_opt id_or_var
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:($5.String()), IsDefault:$1}
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:($4.String()), IsDefault:$1}
   }
-| default_optional CHARACTER SET equal_opt STRING
+| default_optional charset_or_character_set equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:("'" + string($5) + "'"), IsDefault:$1}
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:("'" + string($4) + "'"), IsDefault:$1}
   }
 
 collate:
@@ -1303,13 +1303,13 @@ charset_opt:
   {
     $$ = ""
   }
-| CHARACTER SET id_or_var
+| charset_or_character_set id_or_var
   {
-    $$ = string($3.String())
+    $$ = string($2.String())
   }
-| CHARACTER SET BINARY
+| charset_or_character_set BINARY
   {
-    $$ = string($3)
+    $$ = string($2)
   }
 
 collate_opt:
@@ -1642,9 +1642,9 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
   }
-| default_optional CHARACTER SET equal_opt charset
+| default_optional charset_or_character_set equal_opt charset
   {
-    $$ = &TableOption{Name:(string($2)+" "+string($3)), String:$5}
+    $$ = &TableOption{Name:(string($2)), String:$4}
   }
 | default_optional COLLATE equal_opt charset
   {
@@ -1895,9 +1895,9 @@ alter_option:
   {
     $$ = &ModifyColumn{NewColDefinition:$3, First:$4, After:$5}
   }
-| CONVERT TO CHARACTER SET charset collate_opt
+| CONVERT TO charset_or_character_set charset collate_opt
   {
-    $$ = &AlterCharset{CharacterSet:$5, Collate:$6}
+    $$ = &AlterCharset{CharacterSet:$4, Collate:$5}
   }
 | DISABLE KEYS
   {
@@ -2283,11 +2283,7 @@ analyze_statement:
   }
 
 show_statement:
-  SHOW CHARACTER SET like_or_where_opt
-  {
-    $$ = &Show{&ShowBasic{Command: Charset, Filter: $4}}
-  }
-| SHOW CHARSET like_or_where_opt
+  SHOW charset_or_character_set like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Charset, Filter: $3}}
   }
@@ -4414,7 +4410,7 @@ set_expression:
   {
     $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: $3}
   }
-| charset_or_character_set charset_value collate_opt
+| charset_or_character_set_or_names charset_value collate_opt
   {
     $$ = &SetExpr{Name: NewColIdent(string($1)), Scope: ImplicitScope, Expr: $2}
   }
@@ -4430,6 +4426,9 @@ charset_or_character_set:
   {
     $$ = []byte("charset")
   }
+
+charset_or_character_set_or_names:
+  charset_or_character_set
 | NAMES
 
 charset_value:

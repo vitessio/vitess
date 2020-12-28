@@ -922,7 +922,7 @@ var (
 		input: "alter table a modify column foo int default 1 first x",
 	}, {
 		input:  "alter table a character set utf32 collate = 'utf'",
-		output: "alter table a character set utf32 collate utf",
+		output: "alter table a charset utf32 collate utf",
 	}, {
 		input: "alter table a convert to character set utf32",
 	}, {
@@ -946,12 +946,12 @@ var (
 		input: "alter table e auto_increment 20",
 	}, {
 		input:  "alter table e character set = 'ascii'",
-		output: "alter table e character set ascii",
+		output: "alter table e charset ascii",
 	}, {
 		input: "alter table e enable keys, discard tablespace, force",
 	}, {
 		input:  "alter table e default character set = 'ascii'",
-		output: "alter table e character set ascii",
+		output: "alter table e charset ascii",
 	}, {
 		input: "alter table e comment 'hello' remove partitioning",
 	}, {
@@ -2531,8 +2531,8 @@ func TestCreateTable(t *testing.T) {
 			") engine InnoDB,\n" +
 			"  auto_increment 123,\n" +
 			"  avg_row_length 1,\n" +
-			"  character set utf8mb4,\n" +
-			"  character set latin1,\n" +
+			"  charset utf8mb4,\n" +
+			"  charset latin1,\n" +
 			"  checksum 0,\n" +
 			"  collate binary,\n" +
 			"  collate ascii_bin,\n" +
