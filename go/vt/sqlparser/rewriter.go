@@ -84,14 +84,8 @@ func (r *replaceAlterTableAlterOptions) inc() {
 	*r++
 }
 
-type replaceAlterTablePartitionSpecs int
-
-func (r *replaceAlterTablePartitionSpecs) replace(newNode, container SQLNode) {
-	container.(*AlterTable).PartitionSpecs[int(*r)] = newNode.(*PartitionSpec)
-}
-
-func (r *replaceAlterTablePartitionSpecs) inc() {
-	*r++
+func replaceAlterTablePartitionSpec(newNode, parent SQLNode) {
+	parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
 }
 
 func replaceAlterTableTable(newNode, parent SQLNode) {
@@ -615,8 +609,16 @@ func (r *replacePartitionSpecDefinitions) inc() {
 	*r++
 }
 
-func replacePartitionSpecName(newNode, parent SQLNode) {
-	parent.(*PartitionSpec).Name = newNode.(ColIdent)
+func replacePartitionSpecNames(newNode, parent SQLNode) {
+	parent.(*PartitionSpec).Names = newNode.(Partitions)
+}
+
+func replacePartitionSpecNumber(newNode, parent SQLNode) {
+	parent.(*PartitionSpec).Number = newNode.(*Literal)
+}
+
+func replacePartitionSpecTableName(newNode, parent SQLNode) {
+	parent.(*PartitionSpec).TableName = newNode.(TableName)
 }
 
 type replacePartitionsItems int
@@ -1117,12 +1119,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerAlterOptionsB.replace)
 			replacerAlterOptionsB.inc()
 		}
-		replacerPartitionSpecs := replaceAlterTablePartitionSpecs(0)
-		replacerPartitionSpecsB := &replacerPartitionSpecs
-		for _, item := range n.PartitionSpecs {
-			a.apply(node, item, replacerPartitionSpecsB.replace)
-			replacerPartitionSpecsB.inc()
-		}
+		a.apply(node, n.PartitionSpec, replaceAlterTablePartitionSpec)
 		a.apply(node, n.Table, replaceAlterTableTable)
 
 	case *AlterVschema:
@@ -1436,7 +1433,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerDefinitionsB.replace)
 			replacerDefinitionsB.inc()
 		}
-		a.apply(node, n.Name, replacePartitionSpecName)
+		a.apply(node, n.Names, replacePartitionSpecNames)
+		a.apply(node, n.Number, replacePartitionSpecNumber)
+		a.apply(node, n.TableName, replacePartitionSpecTableName)
 
 	case Partitions:
 		replacer := replacePartitionsItems(0)

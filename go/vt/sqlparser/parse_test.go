@@ -953,10 +953,46 @@ var (
 		input:  "alter table e default character set = 'ascii'",
 		output: "alter table e character set ascii",
 	}, {
-		input: "alter table e comment 'hello'",
+		input: "alter table e comment 'hello' remove partitioning",
 	}, {
 		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
 		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
+	}, {
+		input: "alter table a algorithm = default, lock none, add partition (partition d values less than (maxvalue))",
+	}, {
+		input: "alter table a discard partition all tablespace",
+	}, {
+		input: "alter table a import partition a, b, v tablespace",
+	}, {
+		input: "alter table a truncate partition a, b, v",
+	}, {
+		input: "alter table a coalesce partition 7",
+	}, {
+		input: "alter table a exchange partition a with table t without validation",
+	}, {
+		input: "alter table a analyze partition all",
+	}, {
+		input: "alter table a analyze partition a, v",
+	}, {
+		input: "alter table a check partition all",
+	}, {
+		input: "alter table a check partition a, v",
+	}, {
+		input: "alter table a optimize partition all",
+	}, {
+		input: "alter table a optimize partition a, v",
+	}, {
+		input: "alter table a rebuild partition all",
+	}, {
+		input: "alter table a rebuild partition a, v",
+	}, {
+		input: "alter table a repair partition all",
+	}, {
+		input: "alter table a repair partition a, v",
+	}, {
+		input: "alter table a remove partitioning",
+	}, {
+		input: "alter table a upgrade partitioning",
 	}, {
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
@@ -996,8 +1032,7 @@ var (
 	}, {
 		input: "alter table a drop column id",
 	}, {
-		input:  "alter table a drop partition p2712",
-		output: "alter table a",
+		input: "alter table a drop partition p2712, p123",
 	}, {
 		input:  "alter table a drop index idx",
 		output: "alter table a drop key idx",

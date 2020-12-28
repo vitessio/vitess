@@ -116,6 +116,7 @@ func skipToEnd(yylex interface{}) {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
+  partSpecs     []*PartitionSpec
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
@@ -197,7 +198,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
@@ -265,8 +266,8 @@ func skipToEnd(yylex interface{}) {
 %type <ddl> rename_list
 %type <createTable> create_table_prefix
 %type <alterTable> alter_table_prefix
-%type <alterOption> alter_option
-%type <alterOptions> alter_options alter_options_opt
+%type <alterOption> alter_option alter_commands_modifier
+%type <alterOptions> alter_options alter_commands_list alter_commands_modifier_list
 %type <createIndex> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
@@ -345,7 +346,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt null_opt enforced_opt
-%type <empty> non_add_drop_or_rename_operation to_opt index_opt
+%type <empty> to_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
@@ -361,7 +362,7 @@ func skipToEnd(yylex interface{}) {
 %type <optVal> column_default_opt on_update_opt
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolean> auto_increment_opt unsigned_opt zero_fill_opt
+%type <boolean> auto_increment_opt unsigned_opt zero_fill_opt without_valid_opt
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -388,7 +389,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
-%type <bytes> alter_object_type database_or_schema column_opt insert_method_options row_format_options
+%type <bytes> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 %type <tableAndLockTypes> lock_table_list
@@ -1474,7 +1475,7 @@ index_or_key_opt:
   }
 
 index_or_key:
-    INDEX
+  INDEX
   {
     $$ = string($1)
   }
@@ -1814,7 +1815,7 @@ after_opt:
     $$ = $2
   }
 
-alter_options_opt:
+alter_commands_list:
   {
     $$ = nil
   }
@@ -1826,6 +1827,18 @@ alter_options_opt:
   {
     $$ = append($1,&OrderByOption{Cols:$5})
   }
+| alter_commands_modifier_list
+  {
+    $$ = $1
+  }
+| alter_commands_modifier_list ',' alter_options
+  {
+    $$ = append($1,$3...)
+  }
+| alter_commands_modifier_list ',' alter_options ',' ORDER BY column_list
+  {
+    $$ = append(append($1,$3...),&OrderByOption{Cols:$7})
+  }
 
 alter_options:
   alter_option
@@ -1833,6 +1846,10 @@ alter_options:
     $$ = []AlterOption{$1}
   }
 | alter_options ',' alter_option
+  {
+    $$ = append($1,$3)
+  }
+| alter_options ',' alter_commands_modifier
   {
     $$ = append($1,$3)
   }
@@ -1861,18 +1878,6 @@ alter_option:
 | ADD column_opt column_definition first_opt after_opt
   {
     $$ = &AddColumns{Columns: []*ColumnDefinition{$3}, First:$4, After:$5}
-  }
-| ALGORITHM equal_opt DEFAULT
-  {
-    $$ = AlgorithmValue(string($3))
-  }
-| ALGORITHM equal_opt INPLACE
-  {
-    $$ = AlgorithmValue(string($3))
-  }
-| ALGORITHM equal_opt COPY
-  {
-    $$ = AlgorithmValue(string($3))
   }
 | ALTER column_opt column_name DROP DEFAULT
   {
@@ -1930,22 +1935,6 @@ alter_option:
   {
     $$ = &Force{}
   }
-| LOCK equal_opt DEFAULT
-  {
-    $$ = &LockOption{Type:DefaultType}
-  }
-| LOCK equal_opt NONE
-  {
-    $$ = &LockOption{Type:NoneType}
-  }
-| LOCK equal_opt SHARED
-  {
-    $$ = &LockOption{Type:SharedType}
-  }
-| LOCK equal_opt EXCLUSIVE
-  {
-    $$ = &LockOption{Type:ExclusiveType}
-  }
 | RENAME to_opt table_name
   {
     $$ = &RenameTable{Table:$3}
@@ -1954,48 +1943,82 @@ alter_option:
   {
     $$ = &RenameIndex{OldName:$3.String(), NewName:$5.String()}
   }
-| WITH VALIDATION
+
+alter_commands_modifier_list:
+  alter_commands_modifier
   {
-    $$ = &Validation{With:true}
+    $$ = []AlterOption{$1}
   }
-| WITHOUT VALIDATION
+| alter_commands_modifier_list ',' alter_commands_modifier
   {
-    $$ = &Validation{With:false}
+    $$ = append($1,$3)
   }
 
+alter_commands_modifier:
+  ALGORITHM equal_opt DEFAULT
+    {
+      $$ = AlgorithmValue(string($3))
+    }
+  | ALGORITHM equal_opt INPLACE
+    {
+      $$ = AlgorithmValue(string($3))
+    }
+  | ALGORITHM equal_opt COPY
+    {
+      $$ = AlgorithmValue(string($3))
+    }
+  | LOCK equal_opt DEFAULT
+    {
+      $$ = &LockOption{Type:DefaultType}
+    }
+  | LOCK equal_opt NONE
+    {
+      $$ = &LockOption{Type:NoneType}
+    }
+  | LOCK equal_opt SHARED
+    {
+      $$ = &LockOption{Type:SharedType}
+    }
+  | LOCK equal_opt EXCLUSIVE
+    {
+      $$ = &LockOption{Type:ExclusiveType}
+    }
+  | WITH VALIDATION
+    {
+      $$ = &Validation{With:true}
+    }
+  | WITHOUT VALIDATION
+    {
+      $$ = &Validation{With:false}
+    }
+
 alter_statement:
-  alter_table_prefix alter_options_opt
+  alter_table_prefix alter_commands_list
   {
     $1.FullyParsed = true
     $1.AlterOptions = $2
     $$ = $1
   }
-//  ALTER TABLE table_name non_add_drop_or_rename_operation skip_to_end
-//  {
-//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
-//  }
-//| ALTER TABLE table_name ADD alter_object_type skip_to_end
-//  {
-//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
-//  }
-//| ALTER TABLE table_name DROP alter_object_type skip_to_end
-//  {
-//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
-//  }
-//| ALTER TABLE table_name RENAME to_opt table_name
-//  {
-//    // Change this to a rename statement
-//    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$3}, ToTables: TableNames{$6}}
-//  }
-//| ALTER TABLE table_name RENAME index_opt skip_to_end
-//  {
-//    // Rename an index can just be an alter
-//    $$ = &DDL{Action: AlterDDLAction, Table: $3}
-//  }
-//| ALTER TABLE table_name partition_operation
-//  {
-//    $$ = &DDL{Action: AlterDDLAction, Table: $3, PartitionSpec: $4}
-//  }
+| alter_table_prefix alter_commands_list REMOVE PARTITIONING
+  {
+    $1.FullyParsed = true
+    $1.AlterOptions = $2
+    $1.PartitionSpec = &PartitionSpec{Action:RemoveAction}
+    $$ = $1
+  }
+| alter_table_prefix alter_commands_modifier_list ',' partition_operation
+  {
+    $1.FullyParsed = true
+    $1.AlterOptions = $2
+    $1.PartitionSpec = $4
+    $$ = $1
+  }
+| alter_table_prefix partition_operation
+  {
+    $1.FullyParsed = true
+    $1.PartitionSpec = $2
+    $$ = $1
+  }
 | ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
@@ -2083,27 +2106,109 @@ alter_statement:
     }
   }
 
-alter_object_type:
-  CHECK
-| COLUMN
-| CONSTRAINT
-| FOREIGN
-| FULLTEXT
-| ID
-| AT_ID
-| AT_AT_ID
-| INDEX
-| KEY
-| PRIMARY
-| SPATIAL
-| PARTITION
-| UNIQUE
-
 partition_operation:
-  REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
+  ADD PARTITION '(' partition_definition ')'
   {
-    $$ = &PartitionSpec{Action: ReorganizeAction, Name: $3, Definitions: $6}
+    $$ = &PartitionSpec{Action: AddAction, Definitions: []*PartitionDefinition{$4}}
   }
+| DROP PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action:DropAction, Names:$3}
+  }
+| REORGANIZE PARTITION partition_list INTO openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: ReorganizeAction, Names: $3, Definitions: $6}
+  }
+| DISCARD PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action:DiscardAction, Names:$3}
+  }
+| DISCARD PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action:DiscardAction, IsAll:true}
+  }
+| IMPORT PARTITION partition_list TABLESPACE
+  {
+    $$ = &PartitionSpec{Action:ImportAction, Names:$3}
+  }
+| IMPORT PARTITION ALL TABLESPACE
+  {
+    $$ = &PartitionSpec{Action:ImportAction, IsAll:true}
+  }
+| TRUNCATE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action:TruncateAction, Names:$3}
+  }
+| TRUNCATE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action:TruncateAction, IsAll:true}
+  }
+| COALESCE PARTITION INTEGRAL
+  {
+    $$ = &PartitionSpec{Action:CoalesceAction, Number:NewIntLiteral($3) }
+  }
+| EXCHANGE PARTITION sql_id WITH TABLE table_name without_valid_opt
+  {
+    $$ = &PartitionSpec{Action:ExchangeAction, Names: Partitions{$3}, TableName: $6, WithoutValidation: $7}
+  }
+| ANALYZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action:AnalyzeAction, Names:$3}
+  }
+| ANALYZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action:AnalyzeAction, IsAll:true}
+  }
+| CHECK PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action:CheckAction, Names:$3}
+  }
+| CHECK PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action:CheckAction, IsAll:true}
+  }
+| OPTIMIZE PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action:OptimizeAction, Names:$3}
+  }
+| OPTIMIZE PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action:OptimizeAction, IsAll:true}
+  }
+| REBUILD PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action:RebuildAction, Names:$3}
+  }
+| REBUILD PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action:RebuildAction, IsAll:true}
+  }
+| REPAIR PARTITION partition_list
+  {
+    $$ = &PartitionSpec{Action:RepairAction, Names:$3}
+  }
+| REPAIR PARTITION ALL
+  {
+    $$ = &PartitionSpec{Action:RepairAction, IsAll:true}
+  }
+| UPGRADE PARTITIONING
+  {
+    $$ = &PartitionSpec{Action:UpgradeAction}
+  }
+
+without_valid_opt:
+  {
+    $$ = false
+  }
+| WITH VALIDATION
+  {
+    $$ = false
+  }
+| WITHOUT VALIDATION
+  {
+    $$ = true
+  }
+
 
 partition_definitions:
   partition_definition
@@ -2345,6 +2450,14 @@ show_statement:
 | SHOW id_or_var ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2.String()), Scope: ImplicitScope}}
+  }
+| SHOW ENGINE ddl_skip_to_end
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+  }
+| SHOW STORAGE ddl_skip_to_end
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 
 tables_or_processlist:
@@ -4352,40 +4465,11 @@ ignore_opt:
 | IGNORE
   { $$ = true }
 
-non_add_drop_or_rename_operation:
-  ALTER
-  { $$ = struct{}{} }
-| AUTO_INCREMENT
-  { $$ = struct{}{} }
-| CHARACTER
-  { $$ = struct{}{} }
-| COMMENT_KEYWORD
-  { $$ = struct{}{} }
-| DEFAULT
-  { $$ = struct{}{} }
-| ORDER
-  { $$ = struct{}{} }
-| CONVERT
-  { $$ = struct{}{} }
-| PARTITION
-  { $$ = struct{}{} }
-| UNUSED
-  { $$ = struct{}{} }
-| id_or_var
-  { $$ = struct{}{} }
-
-
 to_opt:
   { $$ = struct{}{} }
 | TO
   { $$ = struct{}{} }
 | AS
-  { $$ = struct{}{} }
-
-index_opt:
-  INDEX
-  { $$ = struct{}{} }
-| KEY
   { $$ = struct{}{} }
 
 constraint_opt:
@@ -4542,6 +4626,7 @@ reserved_keyword:
 | OUTER
 | OUTFILE
 | OVER
+| PARTITION
 | PERCENT_RANK
 | PRIMARY
 | RANK
@@ -4614,6 +4699,7 @@ non_reserved_keyword:
 | CHARSET
 | CHECKSUM
 | CLONE
+| COALESCE
 | CODE
 | COLLATION
 | COLUMNS
@@ -4651,6 +4737,7 @@ non_reserved_keyword:
 | ENGINES
 | ENUM
 | ESCAPED
+| EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
 | EXPANSION
@@ -4738,7 +4825,7 @@ non_reserved_keyword:
 | OVERWRITE
 | PACK_KEYS
 | PARSER
-| PARTITION
+| PARTITIONING
 | PASSWORD
 | PATH
 | PERSIST
@@ -4755,9 +4842,11 @@ non_reserved_keyword:
 | QUERY
 | RANDOM
 | REAL
+| REBUILD
 | REDUNDANT
 | REFERENCE
 | REFERENCES
+| REMOVE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
