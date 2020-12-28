@@ -43,10 +43,10 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	}
 
 	var tree joinTree
-	if len(qgraph.tables) <= 10 {
-		tree, err = dpSolve(qgraph, semTable, vschema)
-	} else {
+	if vschema.Planner() == V4GreedyOnly || len(qgraph.tables) > 10 {
 		tree, err = greedySolve(qgraph, semTable, vschema)
+	} else {
+		tree, err = dpSolve(qgraph, semTable, vschema)
 	}
 	if err != nil {
 		return nil, err

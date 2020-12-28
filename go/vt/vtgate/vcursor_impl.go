@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/common/log"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"golang.org/x/sync/errgroup"
@@ -100,7 +102,6 @@ type vcursorImpl struct {
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
 	semTable              *semantics.SemTable
-	newPlanner            bool
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
@@ -336,6 +337,7 @@ func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
 }
 
+// AllKeyspace implements the ContextVSchema interface
 func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
@@ -347,9 +349,22 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	return kss, nil
 }
 
-func (vc *vcursorImpl) NewPlanner() bool {
-	return vc.newPlanner
+// Planner implements the ContextVSchema interface
+func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
+	switch strings.ToLower(*plannerVersion) {
+	case "v3":
+		return planbuilder.V3
+	case "v4":
+		return planbuilder.V4
+	case "v4greedy", "greedy":
+		return planbuilder.V4GreedyOnly
+	}
+
+	log.Warn("unknown planner version configured. using the default")
+	return planbuilder.V3
 }
+
+// GetSemTable implements the ContextVSchema interface
 func (vc *vcursorImpl) GetSemTable() *semantics.SemTable {
 	return vc.semTable
 }
