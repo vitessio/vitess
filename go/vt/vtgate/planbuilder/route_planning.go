@@ -99,7 +99,10 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 
 type (
 	joinTree interface {
+		// solves returns the table identifiers that are solved by this plan
 		solves() semantics.TableSet
+
+		// cost is simply the number of routes in the joinTree
 		cost() int
 	}
 	routeTable struct {
@@ -107,27 +110,33 @@ type (
 		vtable *vindexes.Table
 	}
 	routePlan struct {
-		routeOpCode     engine.RouteOpcode
-		solved          semantics.TableSet
-		tables          []*routeTable
+		routeOpCode engine.RouteOpcode
+		solved      semantics.TableSet
+		keyspace    *vindexes.Keyspace
+
+		// tables contains all the tables that are solved by this plan.
+		// the tables also contain any predicates that only depend on that particular table
+		tables []*routeTable
+
+		// extraPredicates are the predicates that depend on multiple tables
 		extraPredicates []sqlparser.Expr
 
-		keyspace *vindexes.Keyspace
 		// vindex and conditions is set if a vindex will be used for this route.
-		vindex vindexes.Vindex
-
+		vindex     vindexes.Vindex
 		conditions []sqlparser.Expr
 	}
 	joinPlan struct {
 		predicates []sqlparser.Expr
-
-		lhs, rhs joinTree
+		lhs, rhs   joinTree
 	}
 )
 
+// solves implements the joinTree interface
 func (rp *routePlan) solves() semantics.TableSet {
 	return rp.solved
 }
+
+// cost implements the joinTree interface
 func (*routePlan) cost() int {
 	return 1
 }
@@ -140,12 +149,11 @@ type vindexPlusPredicates struct {
 }
 
 func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
-
 	if len(rp.tables) != 1 {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "addPredicate should only be called when the route has a single table")
 	}
 
-	vindexPreds := []*vindexPlusPredicates{}
+	var vindexPreds []*vindexPlusPredicates
 
 	// Add all the column vindexes to the list of vindexPlusPredicates
 	for _, columnVindex := range rp.tables[0].vtable.ColumnVindexes {
@@ -246,6 +254,10 @@ func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchem
 		dpTable.add(plan)
 	}
 
+	/*
+		Next we'll solve bigger and bigger joins, using smaller plans to build larger ones,
+		until we have a join tree covering all tables in the FROM clause
+	*/
 	for currentSize := 2; currentSize <= size; currentSize++ {
 		lefts := dpTable.bitSetsOfSize(currentSize - 1)
 		rights := dpTable.bitSetsOfSize(1)
@@ -334,6 +346,7 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 
 	return plans[0], nil
 }
+
 func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	plans := make([]joinTree, len(qg.tables))
 
