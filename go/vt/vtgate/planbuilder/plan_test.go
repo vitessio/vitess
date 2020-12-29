@@ -260,7 +260,7 @@ func TestOtherPlanningFromFile(t *testing.T) {
 	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema)
 }
 
-func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
+func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
 		t.Fatal(err)
@@ -575,4 +575,37 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 
 func locateFile(name string) string {
 	return "testdata/" + name
+}
+
+func BenchmarkPlanner(b *testing.B) {
+	filenames := []string{"from_cases.txt", "filter_cases.txt", "aggr_cases.txt", "memory_sort_cases.txt", "select_cases.txt", "union_cases.txt", "wireup_cases.txt"}
+	vschema := &vschemaWrapper{
+		v:             loadSchema(b, "schema_test.json"),
+		sysVarEnabled: true,
+	}
+	for _, filename := range filenames {
+		b.Run(filename+"v3", func(b *testing.B) {
+			benchmarkPlanner(b, V3, filename, vschema)
+		})
+		b.Run(filename+"v4", func(b *testing.B) {
+			benchmarkPlanner(b, V4, filename, vschema)
+		})
+		b.Run(filename+"v4greedy", func(b *testing.B) {
+			benchmarkPlanner(b, V4GreedyOnly, filename, vschema)
+		})
+		b.Run(filename+"v4left2right", func(b *testing.B) {
+			benchmarkPlanner(b, V4Left2Right, filename, vschema)
+		})
+	}
+}
+
+func benchmarkPlanner(b *testing.B, version PlannerVersion, filename string, vschema *vschemaWrapper) {
+	for n := 0; n < b.N; n++ {
+		for tcase := range iterateExecFile(filename) {
+			if tcase.output2ndPlanner != "" {
+				vschema.version = version
+				_, _ = TestBuilder(tcase.input, vschema)
+			}
+		}
+	}
 }
