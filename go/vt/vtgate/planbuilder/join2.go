@@ -31,6 +31,7 @@ type join2 struct {
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
 	Cols        []int
+	Vars        map[string]int
 }
 
 // Order implements the logicalPlan interface
@@ -83,6 +84,7 @@ func (j *join2) Primitive() engine.Primitive {
 		Left:  j.Left.Primitive(),
 		Right: j.Right.Primitive(),
 		Cols:  j.Cols,
+		Vars:  j.Vars,
 	}
 }
 

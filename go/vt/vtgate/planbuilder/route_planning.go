@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -57,7 +58,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(tree)
+	plan, err := transformToLogicalPlan(tree, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +403,7 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 	return plan, nil
 }
 
-func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
+func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routePlan:
 		var tablesForSelect sqlparser.TableExprs
@@ -434,6 +435,7 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 		for name := range tableNameMap {
 			tableNames = append(tableNames, name)
 		}
+		sort.Strings(tableNames)
 
 		return &route{
 			eroute: &engine.Route{
@@ -451,17 +453,65 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 		}, nil
 
 	case *joinPlan:
-		lhs, err := transformToLogicalPlan(n.lhs)
+
+		lhsSolves := n.lhs.solves()
+		lhsColMap := map[*sqlparser.ColName]sqlparser.Argument{}
+		for _, predicate := range n.predicates {
+			sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
+				switch node := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if semantics.IsContainedBy(lhsSolves, semTable.Dependencies(node)) {
+						arg := sqlparser.NewArgument([]byte(":" + node.CompliantName("")))
+						lhsColMap[node] = arg
+						cursor.Replace(arg)
+					}
+				}
+				return true
+			}, nil)
+		}
+
+		var lhsColList []*sqlparser.ColName
+		for col := range lhsColMap {
+			lhsColList = append(lhsColList, col)
+		}
+
+		var lhsColExpr []*sqlparser.AliasedExpr
+		for _, col := range lhsColList {
+			lhsColExpr = append(lhsColExpr, &sqlparser.AliasedExpr{
+				Expr: col,
+			})
+		}
+
+		lhs, err := transformToLogicalPlan(n.lhs, semTable)
 		if err != nil {
 			return nil, err
 		}
-		rhs, err := transformToLogicalPlan(n.rhs)
+		offset, err := pushProjection(lhsColExpr, lhs, semTable)
 		if err != nil {
 			return nil, err
 		}
+
+		vars := map[string]int{}
+
+		for _, col := range lhsColList {
+			vars[col.CompliantName("")] = offset
+			offset++
+		}
+
+		rhs, err := transformToLogicalPlan(n.rhs, semTable)
+		if err != nil {
+			return nil, err
+		}
+
+		err = pushPredicate(n.predicates, rhs, semTable)
+		if err != nil {
+			return nil, err
+		}
+
 		return &join2{
 			Left:  lhs,
 			Right: rhs,
+			Vars:  vars,
 		}, nil
 	}
 

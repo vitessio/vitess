@@ -116,6 +116,79 @@ func pushProjection(expr []*sqlparser.AliasedExpr, plan logicalPlan, semTable *s
 	}
 }
 
+func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (err error) {
+	if len(exprs) == 0 {
+		return nil
+	}
+	switch node := plan.(type) {
+	case *route:
+		sel := node.Select.(*sqlparser.Select)
+		finalExpr := reorderExpression(exprs[0], node.solvedTables, semTable)
+		for i, expr := range exprs {
+			if i == 0 {
+				continue
+			}
+			finalExpr = &sqlparser.AndExpr{
+				Left:  finalExpr,
+				Right: reorderExpression(expr, node.solvedTables, semTable),
+			}
+		}
+		if sel.Where != nil {
+			finalExpr = &sqlparser.AndExpr{
+				Left:  sel.Where.Expr,
+				Right: finalExpr,
+			}
+		}
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: finalExpr,
+		}
+		return nil
+	case *join2:
+		var lhs, rhs []sqlparser.Expr
+		lhsSolves := node.Left.Solves()
+		rhsSolves := node.Right.Solves()
+		for _, expr := range exprs {
+			deps := semTable.Dependencies(expr)
+			switch {
+			case semantics.IsContainedBy(deps, lhsSolves):
+				lhs = append(lhs, expr)
+			case semantics.IsContainedBy(deps, rhsSolves):
+				rhs = append(rhs, expr)
+			default:
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
+			}
+		}
+		err := pushPredicate(lhs, node.Left, semTable)
+		if err != nil {
+			return err
+		}
+		err = pushPredicate(rhs, node.Right, semTable)
+		return err
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
+	}
+}
+
+func reorderExpression(expr sqlparser.Expr, solves semantics.TableSet, semTable *semantics.SemTable) sqlparser.Expr {
+	switch compExpr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if compExpr.Operator == sqlparser.EqualOp {
+			if !dependsOnRoute(solves, compExpr.Left, semTable) && dependsOnRoute(solves, compExpr.Right, semTable) {
+				compExpr.Left, compExpr.Right = compExpr.Right, compExpr.Left
+			}
+		}
+	}
+	return expr
+}
+
+func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *semantics.SemTable) bool {
+	if node, ok := expr.(*sqlparser.ColName); ok {
+		return semantics.IsContainedBy(solves, semTable.Dependencies(node))
+	}
+	return !sqlparser.IsValue(expr)
+}
+
 // processSelect builds a primitive tree for the given query or subquery.
 // The tree built by this function has the following general structure:
 //
