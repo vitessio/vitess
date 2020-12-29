@@ -584,24 +584,28 @@ func BenchmarkPlanner(b *testing.B) {
 		sysVarEnabled: true,
 	}
 	for _, filename := range filenames {
-		b.Run(filename+"v3", func(b *testing.B) {
-			benchmarkPlanner(b, V3, filename, vschema)
+		var testCases []testCase
+		for tc := range iterateExecFile(filename) {
+			testCases = append(testCases, tc)
+		}
+		b.Run(filename+"-v3", func(b *testing.B) {
+			benchmarkPlanner(b, V3, testCases, vschema)
 		})
-		b.Run(filename+"v4", func(b *testing.B) {
-			benchmarkPlanner(b, V4, filename, vschema)
+		b.Run(filename+"-v4", func(b *testing.B) {
+			benchmarkPlanner(b, V4, testCases, vschema)
 		})
-		b.Run(filename+"v4greedy", func(b *testing.B) {
-			benchmarkPlanner(b, V4GreedyOnly, filename, vschema)
+		b.Run(filename+"-v4greedy", func(b *testing.B) {
+			benchmarkPlanner(b, V4GreedyOnly, testCases, vschema)
 		})
-		b.Run(filename+"v4left2right", func(b *testing.B) {
-			benchmarkPlanner(b, V4Left2Right, filename, vschema)
+		b.Run(filename+"-v4left2right", func(b *testing.B) {
+			benchmarkPlanner(b, V4Left2Right, testCases, vschema)
 		})
 	}
 }
 
-func benchmarkPlanner(b *testing.B, version PlannerVersion, filename string, vschema *vschemaWrapper) {
+func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {
 	for n := 0; n < b.N; n++ {
-		for tcase := range iterateExecFile(filename) {
+		for _, tcase := range testCases {
 			if tcase.output2ndPlanner != "" {
 				vschema.version = version
 				_, _ = TestBuilder(tcase.input, vschema)
