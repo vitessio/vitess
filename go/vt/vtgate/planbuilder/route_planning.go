@@ -298,9 +298,10 @@ func createJoin(lhs joinTree, rhs joinTree, joinPredicates []sqlparser.Expr, sem
 }
 
 /*
-	The greedy planner will plan a query by finding first finding the best route plan for every table, and then
-	finding the cheapest join, and using that. Then it searches for the next cheapest joinTree that can be produced,
-	and keeps doing this until all tables have been joined
+	The greedy planner will plan a query by finding first finding the best route plan for every table.
+    Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
+	and removes the two inputs to this cheapest plan and instead adds the join.
+	As an optimization, it first only considers joining tables that have predicates defined between them
 */
 func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	plans := make([]joinTree, len(qg.tables))
@@ -316,35 +317,66 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 		plans[i] = plan
 	}
 
-	// loop while we have un-joined query parts left
+	crossJoinsOK := false
 	for len(plans) > 1 {
-		var lIdx, rIdx int
-		var bestPlan joinTree
-		for i, lhs := range plans {
-			for j := i + 1; j < len(plans); j++ {
-				rhs := plans[j]
-				solves := lhs.solves() | rhs.solves()
-				joinPredicates := qg.crossTable[solves]
-				plan := planCache[solves]
-				if plan == nil {
-					plan = createJoin(lhs, rhs, joinPredicates, semTable)
-					planCache[solves] = plan
-				}
-
-				if bestPlan == nil || plan.cost() < bestPlan.cost() {
-					bestPlan = plan
-					// remember which plans we based on, so we can remove them later
-					lIdx = i
-					rIdx = j
-				}
-			}
+		bestPlan, lIdx, rIdx := findBestJoin(qg, semTable, plans, planCache, crossJoinsOK)
+		if bestPlan != nil {
+			// if we found a best plan, we'll replace the two plans that were joined with the join plan created
+			plans = removeAt(plans, rIdx)
+			plans = removeAt(plans, lIdx)
+			plans = append(plans, bestPlan)
+		} else {
+			// we will only fail to find a join plan when there are only cross joins left
+			// when that happens, we switch over to allow cross joins as well.
+			// this way we prioritize joining plans with predicates first
+			crossJoinsOK = true
 		}
-		plans = removeAt(plans, rIdx)
-		plans = removeAt(plans, lIdx)
-		plans = append(plans, bestPlan)
 	}
 
 	return plans[0], nil
+}
+
+func findBestJoin(
+	qg *queryGraph,
+	semTable *semantics.SemTable,
+	plans []joinTree,
+	planCache map[semantics.TableSet]joinTree,
+	crossJoinsOK bool,
+) (joinTree, int, int) {
+	var lIdx, rIdx int
+	var bestPlan joinTree
+
+	for i, lhs := range plans {
+		for j := i + 1; j < len(plans); j++ {
+			rhs := plans[j]
+			solves := lhs.solves() | rhs.solves()
+			joinPredicates := qg.crossTable[solves]
+			if len(joinPredicates) == 0 && !crossJoinsOK {
+				// if there are no predicates joining the to tables,
+				// creating a join between them would produce a
+				// cartesian product, which is almost always a bad idea
+				continue
+			}
+			plan := planCache[solves]
+			if plan == nil {
+				plan = createJoin(lhs, rhs, joinPredicates, semTable)
+				planCache[solves] = plan
+				if plan.cost() == 1 {
+					// if we are able to merge the two inputs into a single route,
+					// we shortcut here and pick this plan. this limits the search space
+					return plan, i, j
+				}
+			}
+
+			if bestPlan == nil || plan.cost() < bestPlan.cost() {
+				bestPlan = plan
+				// remember which plans we based on, so we can remove them later
+				lIdx = i
+				rIdx = j
+			}
+		}
+	}
+	return bestPlan, lIdx, rIdx
 }
 
 func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
