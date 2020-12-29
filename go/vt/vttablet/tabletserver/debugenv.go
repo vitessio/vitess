@@ -59,34 +59,36 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	varname := r.FormValue("varname")
-	value := r.FormValue("value")
 	var msg string
-	setIntVal := func(f func(int)) {
-		ival, err := strconv.Atoi(value)
-		if err != nil {
-			msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
-			return
+	if r.Method == "POST" {
+		varname := r.FormValue("varname")
+		value := r.FormValue("value")
+		setIntVal := func(f func(int)) {
+			ival, err := strconv.Atoi(value)
+			if err != nil {
+				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+				return
+			}
+			f(ival)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
-		f(ival)
-		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
-	}
-	switch varname {
-	case "PoolSize":
-		setIntVal(tsv.SetPoolSize)
-	case "StreamPoolSize":
-		setIntVal(tsv.SetStreamPoolSize)
-	case "TxPoolSize":
-		setIntVal(tsv.SetTxPoolSize)
-	case "QueryCacheCapacity":
-		setIntVal(tsv.SetQueryPlanCacheCap)
-	case "MaxResultSize":
-		setIntVal(tsv.SetMaxResultSize)
-	case "WarnResultSize":
-		setIntVal(tsv.SetWarnResultSize)
-	case "Consolidator":
-		tsv.SetConsolidatorMode(value)
-		msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		switch varname {
+		case "PoolSize":
+			setIntVal(tsv.SetPoolSize)
+		case "StreamPoolSize":
+			setIntVal(tsv.SetStreamPoolSize)
+		case "TxPoolSize":
+			setIntVal(tsv.SetTxPoolSize)
+		case "QueryCacheCapacity":
+			setIntVal(tsv.SetQueryPlanCacheCap)
+		case "MaxResultSize":
+			setIntVal(tsv.SetMaxResultSize)
+		case "WarnResultSize":
+			setIntVal(tsv.SetWarnResultSize)
+		case "Consolidator":
+			tsv.SetConsolidatorMode(value)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		}
 	}
 
 	var vars []envValue
