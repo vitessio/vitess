@@ -101,18 +101,21 @@ type (
 		solves() semantics.TableSet
 		cost() int
 	}
+	routeTable struct {
+		qtable *queryTable
+		vtable *vindexes.Table
+	}
 	routePlan struct {
 		routeOpCode     engine.RouteOpcode
 		solved          semantics.TableSet
-		tables          []*queryTable
+		tables          []*routeTable
 		extraPredicates []sqlparser.Expr
-		keyspace        *vindexes.Keyspace
 
+		keyspace *vindexes.Keyspace
 		// vindex and conditions is set if a vindex will be used for this route.
-		vindex     vindexes.Vindex
-		conditions []sqlparser.Expr
+		vindex vindexes.Vindex
 
-		vtable *vindexes.Table
+		conditions []sqlparser.Expr
 	}
 	joinPlan struct {
 		predicates []sqlparser.Expr
@@ -144,7 +147,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 	vindexPreds := []*vindexPlusPredicates{}
 
 	// Add all the column vindexes to the list of vindexPlusPredicates
-	for _, columnVindex := range rp.vtable.ColumnVindexes {
+	for _, columnVindex := range rp.tables[0].vtable.ColumnVindexes {
 		vindexPreds = append(vindexPreds, &vindexPlusPredicates{vindex: columnVindex})
 	}
 
@@ -204,7 +207,7 @@ func (rp *routePlan) Predicates() sqlparser.Expr {
 		}
 	}
 	for _, t := range rp.tables {
-		for _, predicate := range t.predicates {
+		for _, predicate := range t.qtable.predicates {
 			add(predicate)
 		}
 	}
@@ -258,7 +261,7 @@ func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchem
 					continue
 				}
 				joinPredicates := qg.crossTable[solves]
-				newPlan := createJoin(lhs, rhs, joinPredicates)
+				newPlan := createJoin(lhs, rhs, joinPredicates, semTable)
 				if oldPlan == nil || newPlan.cost() < oldPlan.cost() {
 					dpTable.add(newPlan)
 				}
@@ -269,8 +272,8 @@ func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchem
 	return dpTable.planFor(allTables), nil
 }
 
-func createJoin(lhs joinTree, rhs joinTree, joinPredicates []sqlparser.Expr) joinTree {
-	newPlan := tryMerge(lhs, rhs, joinPredicates)
+func createJoin(lhs joinTree, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
+	newPlan := tryMerge(lhs, rhs, joinPredicates, semTable)
 	if newPlan == nil {
 		newPlan = &joinPlan{
 			lhs:        lhs,
@@ -311,7 +314,7 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 				joinPredicates := qg.crossTable[solves]
 				plan := planCache[solves]
 				if plan == nil {
-					plan = createJoin(lhs, rhs, joinPredicates)
+					plan = createJoin(lhs, rhs, joinPredicates, semTable)
 					planCache[solves] = plan
 				}
 
@@ -351,7 +354,7 @@ func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema Cont
 		}
 		solves := acc.solves() | plan.solves()
 		joinPredicates := qg.crossTable[solves]
-		acc = createJoin(acc, plan, joinPredicates)
+		acc = createJoin(acc, plan, joinPredicates, semTable)
 	}
 
 	return acc, nil
@@ -367,10 +370,12 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 		return nil, err
 	}
 	plan := &routePlan{
-		solved:   solves,
-		tables:   []*queryTable{table},
+		solved: solves,
+		tables: []*routeTable{{
+			qtable: table,
+			vtable: vschemaTable,
+		}},
 		keyspace: vschemaTable.Keyspace,
-		vtable:   vschemaTable,
 	}
 
 	switch {
@@ -404,8 +409,8 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 		tableNameMap := map[string]interface{}{}
 
 		for _, t := range n.tables {
-			tablesForSelect = append(tablesForSelect, t.alias)
-			tableNameMap[sqlparser.String(t.alias.Expr)] = nil
+			tablesForSelect = append(tablesForSelect, t.qtable.alias)
+			tableNameMap[sqlparser.String(t.qtable.alias.Expr)] = nil
 		}
 		predicates := n.Predicates()
 		var where *sqlparser.Where
@@ -463,7 +468,61 @@ func transformToLogicalPlan(tree joinTree) (logicalPlan, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type encountered: %T", tree)
 }
 
-func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) joinTree {
+func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable) vindexes.SingleColumn {
+	left, isCol := exp.(*sqlparser.ColName)
+	if !isCol {
+		return nil
+	}
+	leftDep := sem.Dependencies(left)
+	for _, table := range a.tables {
+		if semantics.IsContainedBy(table.qtable.tableID, leftDep) {
+			for _, vindex := range table.vtable.ColumnVindexes {
+				singCol, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+				if isSingle && vindex.Columns[0].Equal(left.Name) {
+					return singCol
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func canMergeOnFilter(a, b *routePlan, predicate sqlparser.Expr, sem *semantics.SemTable) bool {
+	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return false
+	}
+	if comparison.Operator != sqlparser.EqualOp {
+		return false
+	}
+	left := comparison.Left
+	right := comparison.Right
+
+	lVindex := findColumnVindex(a, left, sem)
+	if lVindex == nil {
+		left, right = right, left
+		lVindex = findColumnVindex(a, left, sem)
+	}
+	if lVindex == nil || !lVindex.IsUnique() {
+		return false
+	}
+	rVindex := findColumnVindex(b, right, sem)
+	if rVindex == nil {
+		return false
+	}
+	return rVindex == lVindex
+}
+
+func canMergeScatter(a, b *routePlan, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
+	for _, predicate := range joinPredicates {
+		if canMergeOnFilter(a, b, predicate, semTable) {
+			return true
+		}
+	}
+	return false
+}
+
+func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
 	aRoute, ok := a.(*routePlan)
 	if !ok {
 		return nil
@@ -484,12 +543,17 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr) joinTree {
 	case engine.SelectEqualUnique:
 		return nil
 	case engine.SelectScatter:
-		//if len(joinPredicates) == 0 {
-		// If we are doing two Scatters, we have to make sure that the
-		// joins are on the correct vindex to allow them to be merged
-		// no join predicates - no vindex
-		return nil
-		//}
+		if len(joinPredicates) == 0 {
+			// If we are doing two Scatters, we have to make sure that the
+			// joins are on the correct vindex to allow them to be merged
+			// no join predicates - no vindex
+			return nil
+		}
+
+		canMerge := canMergeScatter(aRoute, bRoute, joinPredicates, semTable)
+		if !canMerge {
+			return nil
+		}
 	}
 
 	newTabletSet := aRoute.solved | bRoute.solved

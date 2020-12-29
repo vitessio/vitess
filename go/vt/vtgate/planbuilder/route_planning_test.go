@@ -43,6 +43,14 @@ func selectDBA(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routePla
 	}
 }
 
+func selectScatter(solved semantics.TableSet, keyspace *vindexes.Keyspace) *routePlan {
+	return &routePlan{
+		routeOpCode: engine.SelectScatter,
+		solved:      solved,
+		keyspace:    keyspace,
+	}
+}
+
 func TestMergeJoins(t *testing.T) {
 	ks := &vindexes.Keyspace{Name: "apa", Sharded: false}
 	ks2 := &vindexes.Keyspace{Name: "banan", Sharded: false}
@@ -81,13 +89,16 @@ func TestMergeJoins(t *testing.T) {
 		r:        selectDBA(2, ks),
 		expected: nil,
 	}, {
-		l:        selectDBA(1, ks),
-		r:        unsharded(2, ks),
+		l: selectScatter(1, ks),
+		r: selectScatter(2, ks),
+		predicates: []sqlparser.Expr{
+			equals(colName("t1", "id"), colName("t2", "id")),
+		},
 		expected: nil,
 	}}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result := tryMerge(tc.l, tc.r, tc.predicates)
+			result := tryMerge(tc.l, tc.r, tc.predicates, &semantics.SemTable{})
 			assert.Equal(t, tc.expected, result)
 		})
 	}
