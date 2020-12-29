@@ -31,7 +31,7 @@ type myTestCase struct {
 	ddlStrategy                                                       bool
 	udv                                                               int
 	autocommit, clientFoundRows, skipQueryPlanCache                   bool
-	sqlSelectLimit, transactionMode, workload                         bool
+	sqlSelectLimit, transactionMode, workload, plannerVersion         bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -164,6 +164,10 @@ func TestRewrites(in *testing.T) {
 		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
 		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
 		expected: "SELECT * FROM A JOIN B USING (id1,id2,id3)",
+	}, {
+		in:             "SELECT @@planner_version",
+		expected:       "SELECT :__vtplanner_version as `@@planner_version`",
+		plannerVersion: true,
 	}}
 
 	for _, tc := range tests {
@@ -196,6 +200,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
+			assert.Equal(tc.plannerVersion, result.NeedsSysVar(sysvars.PlannerVersion.Name), "should need :__vtplanner_version")
 		})
 	}
 }

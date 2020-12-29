@@ -312,6 +312,12 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				}
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.PlannerVersion.Name:
+			v := *plannerVersion
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.GetPlannerVersion().String()
+			})
+			bindVars[key] = sqltypes.StringBindVariable(v)
 		}
 	}
 

@@ -53,18 +53,18 @@ type ContextVSchema interface {
 	Planner() PlannerVersion
 }
 
-// PlannerVersion is the version of the planner
-type PlannerVersion int
+// PlannerVersion is an alias here to make the code more readable
+type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
 
 const (
 	// V3 is also the default planner
-	V3 PlannerVersion = iota
+	V3 = querypb.ExecuteOptions_V3
 	// V4 is the new planner
-	V4
+	V4 = querypb.ExecuteOptions_V4
 	// V4GreedyOnly uses only the faster greedy planner
-	V4GreedyOnly
+	V4GreedyOnly = querypb.ExecuteOptions_V4Greedy
 	// V4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
-	V4Left2Right
+	V4Left2Right = querypb.ExecuteOptions_V4Left2Right
 )
 
 type truncater interface {
