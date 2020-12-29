@@ -125,6 +125,7 @@ type (
 		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
+		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)

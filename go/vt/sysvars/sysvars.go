@@ -51,6 +51,7 @@ var (
 	SQLSelectLimit      = SystemVariable{Name: "sql_select_limit", Default: off}
 	TransactionMode     = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
 	Workload            = SystemVariable{Name: "workload", IdentifierAsString: true}
+	PlannerVersion      = SystemVariable{Name: "planner_version", IdentifierAsString: true}
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 	// Online DDL
