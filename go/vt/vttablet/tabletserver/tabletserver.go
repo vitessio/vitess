@@ -216,6 +216,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
+	tsv.registerDebugEnvHandler()
 
 	return tsv
 }
@@ -1621,6 +1622,12 @@ func (tsv *TabletServer) registerThrottlerHandlers() {
 	tsv.registerThrottlerStatusHandler()
 }
 
+func (tsv *TabletServer) registerDebugEnvHandler() {
+	tsv.exporter.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+		debugEnvHandler(tsv, w, r)
+	})
+}
+
 // EnableHeartbeat forces heartbeat to be on or off.
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
@@ -1640,8 +1647,10 @@ func (tsv *TabletServer) EnableHistorian(enabled bool) {
 }
 
 // SetPoolSize changes the pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetPoolSize(val int) {
+	if val <= 0 {
+		return
+	}
 	tsv.qe.conns.SetCapacity(val)
 }
 
@@ -1651,7 +1660,6 @@ func (tsv *TabletServer) PoolSize() int {
 }
 
 // SetStreamPoolSize changes the pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
 	tsv.qe.streamConns.SetCapacity(val)
 }
@@ -1662,7 +1670,6 @@ func (tsv *TabletServer) StreamPoolSize() int {
 }
 
 // SetTxPoolSize changes the tx pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
 	tsv.te.txPool.scp.conns.SetCapacity(val)
 }
@@ -1673,7 +1680,6 @@ func (tsv *TabletServer) TxPoolSize() int {
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
 	tsv.te.txPool.SetTimeout(val)
 	tsv.txTimeout.Set(val)
@@ -1685,7 +1691,6 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 }
 
 // SetQueryPlanCacheCap changes the pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
 	tsv.qe.SetQueryPlanCacheCap(val)
 }
@@ -1696,7 +1701,6 @@ func (tsv *TabletServer) QueryPlanCacheCap() int {
 }
 
 // SetMaxResultSize changes the max result size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetMaxResultSize(val int) {
 	tsv.qe.maxResultSize.Set(int64(val))
 }
@@ -1707,7 +1711,6 @@ func (tsv *TabletServer) MaxResultSize() int {
 }
 
 // SetWarnResultSize changes the warn result size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetWarnResultSize(val int) {
 	tsv.qe.warnResultSize.Set(int64(val))
 }
@@ -1724,9 +1727,16 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 }
 
 // SetConsolidatorMode sets the consolidator mode.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
-	tsv.qe.consolidatorMode = mode
+	switch mode {
+	case tabletenv.NotOnMaster, tabletenv.Enable, tabletenv.Disable:
+		tsv.qe.consolidatorMode.Set(mode)
+	}
+}
+
+// ConsolidatorMode returns the consolidator mode.
+func (tsv *TabletServer) ConsolidatorMode() string {
+	return tsv.qe.consolidatorMode.Get()
 }
 
 // queryAsString returns a readable version of query+bind variables.

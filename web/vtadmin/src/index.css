@@ -1,0 +1,68 @@
+/**
+ * Copyright 2020 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+:root {
+  --primaryForegroundRGB: 29, 28, 29;
+  --primaryForeground: rgb(var(--primaryForegroundRGB));
+  --invertedForegroundRGB: 255, 255, 255;
+  --invertedForeground: rgb(var(--invertedForegroundRGB));
+  --primaryBackgroundRGB: 255, 255, 255;
+  --primaryBackground: rgb(var(--primaryBackgroundRGB));
+
+  /* Grayscale */
+  --maxContrastGray: rgba(var(--primaryForegroundRGB), 0.7);
+  --highContrastGray: rgba(var(--primaryForegroundRGB), 0.5);
+  --lowContrastGray: rgba(var(--primaryForegroundRGB), 0.13);
+  --minContrastGray: rgba(var(--primaryForegroundRGB), 0.04);
+}
+
+body {
+  background: var(--primaryBackground);
+  color: var(--primaryForeground);
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'Roboto',
+    'Oxygen',
+    'Ubuntu',
+    'Cantarell',
+    'Fira Sans',
+    'Droid Sans',
+    'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table th {
+  padding: 8px;
+}
+
+table tbody td {
+  border: solid 1px var(--lowContrastGray);
+  padding: 12px;
+}

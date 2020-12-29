@@ -21,7 +21,10 @@ package wrangler
 import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 var (
@@ -42,6 +45,7 @@ type Wrangler struct {
 	logger logutil.Logger
 	ts     *topo.Server
 	tmc    tmclient.TabletManagerClient
+	vtctld vtctlservicepb.VtctldServer
 }
 
 // New creates a new Wrangler object.
@@ -50,6 +54,7 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 		logger: logger,
 		ts:     ts,
 		tmc:    tmc,
+		vtctld: grpcvtctldserver.NewVtctldServer(ts),
 	}
 }
 
@@ -62,6 +67,12 @@ func (wr *Wrangler) TopoServer() *topo.Server {
 // wrangler is using.
 func (wr *Wrangler) TabletManagerClient() tmclient.TabletManagerClient {
 	return wr.tmc
+}
+
+// VtctldServer returns the vtctlservicepb.VtctldServer implementation this
+// wrangler is using.
+func (wr *Wrangler) VtctldServer() vtctlservicepb.VtctldServer {
+	return wr.vtctld
 }
 
 // SetLogger can be used to change the current logger. Not synchronized,
