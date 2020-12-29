@@ -761,6 +761,21 @@
     "Table": "user"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
+    "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
+    "Table": "user, user_extra"
+  }
+}
 
 # mergeable sharded join on unique vindex (parenthesized ON clause)
 "select user.col from user join user_extra on (user.id = user_extra.user_id)"
@@ -777,6 +792,21 @@
     "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
     "Table": "user"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on (user.id = user_extra.user_id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
+    "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
+    "Table": "user, user_extra"
   }
 }
 
@@ -813,6 +843,21 @@
     "FieldQuery": "select user.col from user join user_extra on user_extra.user_id = user.id where 1 != 1",
     "Query": "select user.col from user join user_extra on user_extra.user_id = user.id",
     "Table": "user"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user_extra.user_id = user.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user.col from user join user_extra on user_extra.user_id = user.id where 1 != 1",
+    "Query": "select user.col from user join user_extra on user_extra.user_id = user.id",
+    "Table": "user, user_extra"
   }
 }
 

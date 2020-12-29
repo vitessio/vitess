@@ -388,7 +388,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
-		fail := false
+		fail := checkAllTests
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
 				vschema.version = V3
@@ -397,7 +397,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("Legacy Planner - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
+					t.Errorf("V3 - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
 				if err != nil {
 					out = `"` + out + `"`
@@ -407,7 +407,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			})
 
 			if tcase.output2ndPlanner != "" || checkAllTests {
-				t.Run("New Planner: "+tcase.comments, func(t *testing.T) {
+				t.Run("V4: "+tcase.comments, func(t *testing.T) {
 					expectedVal := "{\n}\n"
 					empty := false
 					if tcase.output2ndPlanner == "" {
@@ -419,7 +419,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 					if out != tcase.output2ndPlanner {
 						fail = true
 						expectedVal = ""
-						t.Errorf("New Planner - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+						t.Errorf("V4 - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
 					}
 					if err != nil {
 						out = `"` + out + `"`
