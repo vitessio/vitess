@@ -631,6 +631,40 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join unsharded as m1 join unsharded as m2",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "unsharded_user",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded as m1, unsharded as m2 where 1 != 1",
+        "Query": "select 1 from unsharded as m1, unsharded as m2",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user",
+        "Table": "user"
+      }
+    ]
+  }
+}
 
 # Parenthesized, single chunk
 "select user.col from user join (unsharded as m1 join unsharded as m2)"
@@ -919,6 +953,40 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.id, user.col from user where 1 != 1",
+        "Query": "select user.id, user.col from user",
+        "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # sharded join, non-col reference RHS
 "select user.col from user join user_extra on user.id = 5"
@@ -1022,6 +1090,40 @@
         },
         "FieldQuery": "select user.col, user.id from user where 1 != 1",
         "Query": "select user.col, user.id from user",
+        "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.col = :user_id",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id = user_extra.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "TableName": "user_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.id, user.col from user where 1 != 1",
+        "Query": "select user.id, user.col from user",
         "Table": "user"
       },
       {
