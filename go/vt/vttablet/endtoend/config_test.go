@@ -266,10 +266,16 @@ func changeVar(t *testing.T, name, value string) (revert func()) {
 	if !ok {
 		t.Fatalf("%s not found in: %v", name, vals)
 	}
-	vals = framework.FetchJSON(fmt.Sprintf("/debug/env?format=json&varname=%s&value=%s", name, value))
+	vals = framework.PostJSON("/debug/env?format=json", map[string]string{
+		"varname": name,
+		"value":   value,
+	})
 	verifyMapValue(t, vals, name, value)
 	return func() {
-		vals := framework.FetchJSON(fmt.Sprintf("/debug/env?format=json&varname=%s&value=%s", name, initial))
+		vals = framework.PostJSON("/debug/env?format=json", map[string]string{
+			"varname": name,
+			"value":   fmt.Sprintf("%v", initial),
+		})
 		verifyMapValue(t, vals, name, initial)
 	}
 }
