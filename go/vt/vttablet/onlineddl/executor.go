@@ -1019,6 +1019,17 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	switch ddlAction {
 	case sqlparser.DropDDLAction:
 		go func() error {
+			// Drop statement.
+			// Normally, we're going to modify DROP to RENAME (see later on). But if table name is
+			// already a GC-lifecycle table, then we don't put it through yet another GC lifecycle,
+			// we just drop it.
+			if schema.IsGCTableName(onlineDDL.Table) {
+				if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+					return failMigration(err)
+				}
+				return nil
+			}
+
 			// We transform a DRPO TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
 
 			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
