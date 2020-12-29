@@ -313,3 +313,12 @@ web_build: web_bootstrap
 # Following the local Docker install guide is recommended: https://vitess.io/docs/get-started/local-docker/
 web_start: web_bootstrap
 	cd web/vtctld2 && npm run start
+
+vtadmin_web_install: 
+	cd web/vtadmin && npm install
+
+# Generate JavaScript/TypeScript bindings for vtadmin-web from the Vitess .proto files.
+# Eventually, we'll want to call this target as part of the standard `make proto` target.
+# While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
+vtadmin_web_proto_types: vtadmin_web_install
+	./web/vtadmin/bin/generate-proto-types.sh

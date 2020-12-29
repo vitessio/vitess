@@ -296,3 +296,53 @@ func TestStripMetaData(t *testing.T) {
 		}
 	}
 }
+
+func TestAppendResult(t *testing.T) {
+	src := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     1,
+		RowsAffected: 2,
+		Rows: [][]Value{
+			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
+			{TestValue(Int64, "3"), TestValue(VarChar, "")},
+		},
+	}
+
+	result := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     3,
+		RowsAffected: 4,
+		Rows: [][]Value{
+			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
+		},
+	}
+
+	want := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     1,
+		RowsAffected: 6,
+		Rows: [][]Value{
+			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
+			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
+			{TestValue(Int64, "3"), TestValue(VarChar, "")},
+		},
+	}
+
+	result.AppendResult(src)
+
+	if !reflect.DeepEqual(result, want) {
+		t.Errorf("Got:\n%#v, want:\n%#v", result, want)
+	}
+}
