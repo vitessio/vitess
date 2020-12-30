@@ -243,6 +243,7 @@ func (vrw *VReplicationWorkflow) Abort() error {
 	if _, err := vrw.wr.DropTargets(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, vrw.params.KeepData, false); err != nil {
 		return err
 	}
+	vrw.ts = nil
 	return nil
 }
 
