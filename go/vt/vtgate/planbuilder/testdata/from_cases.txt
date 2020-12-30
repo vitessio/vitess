@@ -637,20 +637,9 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "TableName": "unsharded_user",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_unsharded",
     "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from unsharded as m1, unsharded as m2 where 1 != 1",
-        "Query": "select 1 from unsharded as m1, unsharded as m2",
-        "Table": "unsharded"
-      },
       {
         "OperatorType": "Route",
         "Variant": "SelectScatter",
@@ -661,6 +650,17 @@
         "FieldQuery": "select user.col from user where 1 != 1",
         "Query": "select user.col from user",
         "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded as m1, unsharded as m2 where 1 != 1",
+        "Query": "select 1 from unsharded as m1, unsharded as m2",
+        "Table": "unsharded"
       }
     ]
   }

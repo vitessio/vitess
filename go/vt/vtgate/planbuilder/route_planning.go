@@ -266,7 +266,7 @@ func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchem
 		rights := dpTable.bitSetsOfSize(1)
 		for _, lhs := range lefts {
 			for _, rhs := range rights {
-				if semantics.IsOverlapping(lhs.solves(), rhs.solves()) {
+				if lhs.solves().IsOverlapping(rhs.solves()) {
 					// at least one of the tables is solved on both sides
 					continue
 				}
@@ -276,7 +276,7 @@ func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchem
 					// we already have the perfect plan. keep it
 					continue
 				}
-				joinPredicates := qg.crossTable[solves]
+				joinPredicates := qg.getPredicates(lhs.solves(), rhs.solves())
 				newPlan := createJoin(lhs, rhs, joinPredicates, semTable)
 				if oldPlan == nil || newPlan.cost() < oldPlan.cost() {
 					dpTable.add(newPlan)
@@ -307,6 +307,10 @@ type priorityQueueItem struct {
 	rhsSolve semantics.TableSet
 }
 
+func (pqi *priorityQueueItem) solves() semantics.TableSet {
+	return pqi.lhsSolve | pqi.rhsSolve
+}
+
 type priorityQueuePlans []*priorityQueueItem
 
 // Len implements the Heap interface
@@ -315,6 +319,9 @@ func (pq priorityQueuePlans) Len() int { return len(pq) }
 // Less implements the Heap interface
 func (pq priorityQueuePlans) Less(i, j int) bool {
 	// We want Pop to give us the lowest cost so we use lesser than here.
+	if pq[i].cost == pq[j].cost {
+		return pq[i].solves() < pq[j].solves()
+	}
 	return pq[i].cost < pq[j].cost
 }
 
@@ -366,8 +373,7 @@ func greedySolveOptimized(qg *queryGraph, semTable *semantics.SemTable, vschema 
 	for i, lhs := range routePlans {
 		for j := i + 1; j < len(routePlans); j++ {
 			rhs := routePlans[j]
-			solves := lhs.solves() | rhs.solves()
-			joinPredicates := qg.crossTable[solves]
+			joinPredicates := qg.getPredicates(lhs.solves(), rhs.solves())
 			plan := createJoin(lhs, rhs, joinPredicates, semTable)
 			pq.Push(&priorityQueueItem{
 				plan:     plan,
@@ -393,8 +399,7 @@ func greedySolveOptimized(qg *queryGraph, semTable *semantics.SemTable, vschema 
 		plan := item.plan
 
 		for tableSet, intermPlan := range intermediatePlans {
-			totalSolved := solves | tableSet
-			newPlan := createJoin(intermPlan.plan, plan, qg.crossTable[totalSolved], semTable)
+			newPlan := createJoin(intermPlan.plan, plan, qg.getPredicates(solves, tableSet), semTable)
 			heap.Push(&pq, &priorityQueueItem{
 				plan:     newPlan,
 				cost:     newPlan.cost(),
@@ -470,7 +475,7 @@ func findBestJoin(
 		for j := i + 1; j < len(plans); j++ {
 			rhs := plans[j]
 			solves := lhs.solves() | rhs.solves()
-			joinPredicates := qg.crossTable[solves]
+			joinPredicates := qg.getPredicates(lhs.solves(), rhs.solves())
 			if len(joinPredicates) == 0 && !crossJoinsOK {
 				// if there are no predicates joining the to tables,
 				// creating a join between them would produce a
@@ -518,8 +523,7 @@ func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema Cont
 			acc = plan
 			continue
 		}
-		solves := acc.solves() | plan.solves()
-		joinPredicates := qg.crossTable[solves]
+		joinPredicates := qg.getPredicates(acc.solves(), plan.solves())
 		acc = createJoin(acc, plan, joinPredicates, semTable)
 	}
 
@@ -625,7 +629,7 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logica
 			sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
 				switch node := cursor.Node().(type) {
 				case *sqlparser.ColName:
-					if semantics.IsContainedBy(lhsSolves, semTable.Dependencies(node)) {
+					if semTable.Dependencies(node).IsSolvedBy(lhsSolves) {
 						arg := sqlparser.NewArgument([]byte(":" + node.CompliantName("")))
 						lhsColMap[node] = arg
 						cursor.Replace(arg)
@@ -690,7 +694,7 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 	}
 	leftDep := sem.Dependencies(left)
 	for _, table := range a.tables {
-		if semantics.IsContainedBy(table.qtable.tableID, leftDep) {
+		if leftDep.IsSolvedBy(table.qtable.tableID) {
 			for _, vindex := range table.vtable.ColumnVindexes {
 				singCol, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 				if isSingle && vindex.Columns[0].Equal(left.Name) {

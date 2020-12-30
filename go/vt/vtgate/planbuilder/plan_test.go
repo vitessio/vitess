@@ -184,6 +184,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "large_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -414,7 +415,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 						empty = true
 						tcase.output2ndPlanner = tcase.output
 					}
-					vschema.version = V4
+					vschema.version = V4GreedyOptimized
 					out, err := getPlanOutput(tcase, vschema)
 					if out != tcase.output2ndPlanner {
 						fail = true
@@ -578,7 +579,7 @@ func locateFile(name string) string {
 }
 
 func BenchmarkPlanner(b *testing.B) {
-	filenames := []string{"from_cases.txt", "filter_cases.txt", "aggr_cases.txt", "memory_sort_cases.txt", "select_cases.txt", "union_cases.txt", "wireup_cases.txt"}
+	filenames := []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "memory_sort_cases.txt", "select_cases.txt", "union_cases.txt", "wireup_cases.txt"}
 	vschema := &vschemaWrapper{
 		v:             loadSchema(b, "schema_test.json"),
 		sysVarEnabled: true,
