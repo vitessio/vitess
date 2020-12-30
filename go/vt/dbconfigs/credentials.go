@@ -33,7 +33,7 @@ import (
 	"syscall"
 	"time"
 
-	vaultapi "github.com/mch1307/vaultlib"
+	vaultapi "github.com/aquarapid/vaultlib"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
