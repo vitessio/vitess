@@ -1028,6 +1028,8 @@
     ]
   }
 }
+{
+}
 
 # sharded join, non-col reference LHS
 "select user.col from user join user_extra on 5 = user.id"

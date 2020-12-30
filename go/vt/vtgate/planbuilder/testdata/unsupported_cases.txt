@@ -485,6 +485,8 @@
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"
 "Complex select queries are not supported in create view statements"
+{
+}
 
 # create view with sharded limit
 "create view user.view_a as select id from user order by id limit 10"
