@@ -10,6 +10,7 @@ require (
 	github.com/DataDog/datadog-go v2.2.0+incompatible
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/PuerkitoBio/goquery v1.5.1
+	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
 	github.com/aws/aws-sdk-go v1.28.8
@@ -60,7 +61,6 @@ require (
 	github.com/martini-contrib/gzip v0.0.0-20151124214156-6c035326b43f
 	github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
 	github.com/mattn/go-sqlite3 v1.14.0
-	github.com/mch1307/vaultlib v0.5.0
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
