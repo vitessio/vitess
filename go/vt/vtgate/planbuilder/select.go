@@ -79,10 +79,10 @@ func pushProjection(expr []*sqlparser.AliasedExpr, plan logicalPlan, semTable *s
 		for i, e := range expr {
 			deps := semTable.Dependencies(e.Expr)
 			switch {
-			case semantics.IsContainedBy(deps, lhsSolves):
+			case deps.IsSolvedBy(lhsSolves):
 				lhs = append(lhs, e)
 				cols[i] = -1
-			case semantics.IsContainedBy(deps, rhsSolves):
+			case deps.IsSolvedBy(rhsSolves):
 				rhs = append(rhs, e)
 				cols[i] = 1
 			default:
@@ -151,9 +151,9 @@ func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics
 		for _, expr := range exprs {
 			deps := semTable.Dependencies(expr)
 			switch {
-			case semantics.IsContainedBy(deps, lhsSolves):
+			case deps.IsSolvedBy(lhsSolves):
 				lhs = append(lhs, expr)
-			case semantics.IsContainedBy(deps, rhsSolves):
+			case deps.IsSolvedBy(rhsSolves):
 				rhs = append(rhs, expr)
 			default:
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
@@ -184,7 +184,7 @@ func reorderExpression(expr sqlparser.Expr, solves semantics.TableSet, semTable 
 
 func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *semantics.SemTable) bool {
 	if node, ok := expr.(*sqlparser.ColName); ok {
-		return semantics.IsContainedBy(solves, semTable.Dependencies(node))
+		return semTable.Dependencies(node).IsSolvedBy(solves)
 	}
 	return !sqlparser.IsValue(expr)
 }

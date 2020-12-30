@@ -30,14 +30,14 @@ const (
 )
 
 func TestTableSet(t *testing.T) {
-	assert.True(t, IsOverlapping(F1|F2, F1|F2))
-	assert.True(t, IsOverlapping(F1|F2, F1))
-	assert.True(t, IsOverlapping(F1, F1|F2))
-	assert.False(t, IsOverlapping(F1|F2, F3))
-	assert.False(t, IsOverlapping(F3, F1|F2))
+	assert.True(t, (F1 | F2).IsOverlapping(F1|F2))
+	assert.True(t, F1.IsOverlapping(F1|F2))
+	assert.True(t, (F1 | F2).IsOverlapping(F1))
+	assert.False(t, F3.IsOverlapping(F1|F2))
+	assert.False(t, (F1 | F2).IsOverlapping(F3))
 
-	assert.False(t, IsContainedBy(F1|F2, F1))
-	assert.True(t, IsContainedBy(F1, F1|F2))
-	assert.False(t, IsContainedBy(F1|F2, F3))
-	assert.False(t, IsContainedBy(F3, F1|F2))
+	assert.True(t, F1.IsSolvedBy(F1|F2))
+	assert.False(t, (F1 | F2).IsSolvedBy(F1))
+	assert.False(t, F3.IsSolvedBy(F1|F2))
+	assert.False(t, (F1 | F2).IsSolvedBy(F3))
 }

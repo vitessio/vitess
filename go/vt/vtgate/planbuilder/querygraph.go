@@ -52,6 +52,18 @@ type (
 	}
 )
 
+func (qg *queryGraph) getPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
+	var allExprs []sqlparser.Expr
+	for tableSet, exprs := range qg.crossTable {
+		if tableSet.IsSolvedBy(lhs|rhs) &&
+			tableSet.IsOverlapping(rhs) &&
+			tableSet.IsOverlapping(lhs) {
+			allExprs = append(allExprs, exprs...)
+		}
+	}
+	return allExprs
+}
+
 func createQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*queryGraph, error) {
 	qg := newQueryGraph()
 	if err := qg.collectTables(sel.From, semTable); err != nil {

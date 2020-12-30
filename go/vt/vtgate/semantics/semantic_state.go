@@ -48,22 +48,6 @@ type (
 	}
 )
 
-// NumberOfTables returns the number of bits set
-func (ts TableSet) NumberOfTables() int {
-	// Brian Kernighan’s Algorithm
-	count := 0
-	for ts > 0 {
-		ts &= ts - 1
-		count++
-	}
-	return count
-}
-
-// Merge creates a TableSet that contains both inputs
-func (ts TableSet) Merge(other TableSet) TableSet {
-	return ts | other
-}
-
 // TableSetFor returns the bitmask for this particular tableshoe
 func (st *SemTable) TableSetFor(t table) TableSet {
 	for idx, t2 := range st.Tables {
@@ -126,7 +110,23 @@ func log(node sqlparser.SQLNode, format string, args ...interface{}) {
 }
 
 // IsOverlapping returns true if at least one table exists in both sets
-func IsOverlapping(a, b TableSet) bool { return a&b != 0 }
+func (ts TableSet) IsOverlapping(b TableSet) bool { return ts&b != 0 }
 
-// IsContainedBy returns true if all of `b` is contained in `a`
-func IsContainedBy(a, b TableSet) bool { return a&b == a }
+// IsSolvedBy returns true if all of `ts` is contained in `b`
+func (ts TableSet) IsSolvedBy(b TableSet) bool { return ts&b == ts }
+
+// NumberOfTables returns the number of bits set
+func (ts TableSet) NumberOfTables() int {
+	// Brian Kernighan’s Algorithm
+	count := 0
+	for ts > 0 {
+		ts &= ts - 1
+		count++
+	}
+	return count
+}
+
+// Merge creates a TableSet that contains both inputs
+func (ts TableSet) Merge(other TableSet) TableSet {
+	return ts | other
+}
