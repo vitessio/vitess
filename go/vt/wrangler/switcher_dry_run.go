@@ -234,14 +234,17 @@ func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType Ta
 	logs := make([]string, 0)
 	for _, source := range dr.ts.sources {
 		for _, tableName := range dr.ts.tables {
-			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s RemovalType %s",
-				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias.Uid, tableName,
-				removalType))
+			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",
+				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias.Uid, tableName))
 		}
 	}
+	action := "Dropping"
+	if removalType == RenameTable {
+		action = "Renaming"
+	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Dropping following tables from the database and from the vschema for keyspace %s:",
-			dr.ts.sourceKeyspace))
+		dr.drLog.Log(fmt.Sprintf("%s these tables from the database and removing them from the vschema for keyspace %s:",
+			action, dr.ts.sourceKeyspace))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
@@ -335,7 +338,7 @@ func (dr *switcherDryRun) removeTargetTables(ctx context.Context) error {
 		}
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Dropping following tables from the database and from the vschema for keyspace %s:",
+		dr.drLog.Log(fmt.Sprintf("Dropping these tables from the database and removing from the vschema for keyspace %s:",
 			dr.ts.targetKeyspace))
 		dr.drLog.LogSlice(logs)
 	}
