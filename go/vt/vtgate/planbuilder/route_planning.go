@@ -168,6 +168,13 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 		case *sqlparser.ComparisonExpr:
 			switch node.Operator {
 			case sqlparser.EqualOp:
+				if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
+					// we are looking at ANDed predicates in the WHERE clause.
+					// since we know that nothing returns true when compared to NULL,
+					// so we can safely bail out here
+					rp.routeOpCode = engine.SelectNone
+					return nil
+				}
 				// TODO(Manan,Andres): Remove the predicates that are repeated eg. Id=1 AND Id=1
 				for _, v := range vindexPreds {
 					column := node.Left.(*sqlparser.ColName)

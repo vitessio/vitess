@@ -35,6 +35,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # Single table unique vindex route
 "select id from user where user.id = 5"
@@ -1614,6 +1616,8 @@
     "Table": "music"
   }
 }
+{
+}
 
 # SELECT with IS NULL
 "select id from music where id is null"
@@ -1673,6 +1677,8 @@
     "Query": "select id from music where user_id = 4 and id = null",
     "Table": "music"
   }
+}
+{
 }
 
 # Single table with unique vindex match and IN (null)
