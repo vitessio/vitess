@@ -170,7 +170,7 @@ func TestMoveTablesV2(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 }
 
-func TestAbortMoveTablesV2(t *testing.T) {
+func TestMoveTablesV2Partial(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
 		Workflow:       "test",
@@ -187,39 +187,180 @@ func TestAbortMoveTablesV2(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme)
-	require.NoError(t, wf.Abort())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "replica"
+	wf.params.Cells = "cell1"
+	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.Equal(t, "Reads partially switched. Replica switched in cells: cell1. Rdonly not switched. Writes Not Switched", wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "replica"
+	wf.params.Cells = "cell2"
+	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.Equal(t, "Reads partially switched. All Replica Reads Switched. Rdonly not switched. Writes Not Switched", wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "rdonly"
+	wf.params.Cells = "cell1,cell2"
+	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.Equal(t, WorkflowStateReadsSwitched, wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "replica,rdonly"
+	require.NoError(t, wf.SwitchTraffic(DirectionBackward))
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "rdonly"
+	wf.params.Cells = "cell1"
+	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.Equal(t, "Reads partially switched. Replica not switched. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "rdonly"
+	wf.params.Cells = "cell2"
+	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.Equal(t, "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched", wf.CurrentState())
+
 }
 
-func TestReshardV2(t *testing.T) {
+func TestMoveTablesV2Abort(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
 		Workflow:       "test",
 		SourceKeyspace: "ks1",
 		TargetKeyspace: "ks2",
-		SourceShards:   []string{"-40", "40-"},
-		TargetShards:   []string{"-80", "80-"},
+		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
 		TabletTypes:    "replica,rdonly,master",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
+	expectMoveTablesQueries(t, tme)
+	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	require.NotNil(t, wf)
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	expectMoveTablesQueries(t, tme)
+	require.NoError(t, wf.Abort())
+}
+
+func TestReshardV2(t *testing.T) {
+	ctx := context.Background()
+	sourceShards := []string{"-40", "40-"}
+	targetShards := []string{"-80", "80-"}
+	p := &VReplicationWorkflowParams{
+		Workflow:       "test",
+		SourceKeyspace: "ks",
+		TargetKeyspace: "ks",
+		SourceShards:   sourceShards,
+		TargetShards:   targetShards,
+		Cells:          "cell1,cell2",
+		TabletTypes:    "replica,rdonly,master",
+		Timeout:        DefaultActionTimeout,
+	}
+	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
+	defer tme.stopTablets(t)
 	wf, err := tme.wr.NewVReplicationWorkflow(ctx, ReshardWorkflow, p)
 	require.NoError(t, err)
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	tme.expectNoPreviousJournals()
-	expectMoveTablesQueries(t, tme)
+	expectReshardQueries(t, tme)
 	tme.expectNoPreviousJournals()
 	require.NoError(t, wf.SwitchTraffic(DirectionForward))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 	require.NoError(t, wf.Complete())
+	si, err := wf.wr.ts.GetShard(ctx, "ks", "-40")
+	require.Contains(t, err.Error(), "node doesn't exist")
+	require.Nil(t, si)
+	si, err = wf.wr.ts.GetShard(ctx, "ks", "-80")
+	require.NoError(t, err)
+	require.NotNil(t, si)
+}
+
+func TestReshardV2Abort(t *testing.T) {
+	ctx := context.Background()
+	sourceShards := []string{"-40", "40-"}
+	targetShards := []string{"-80", "80-"}
+	p := &VReplicationWorkflowParams{
+		Workflow:       "test",
+		SourceKeyspace: "ks",
+		TargetKeyspace: "ks",
+		SourceShards:   sourceShards,
+		TargetShards:   targetShards,
+		Cells:          "cell1,cell2",
+		TabletTypes:    "replica,rdonly,master",
+		Timeout:        DefaultActionTimeout,
+	}
+	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
+	defer tme.stopTablets(t)
+	wf, err := tme.wr.NewVReplicationWorkflow(ctx, ReshardWorkflow, p)
+	require.NoError(t, err)
+	require.NotNil(t, wf)
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	tme.expectNoPreviousJournals()
+	expectReshardQueries(t, tme)
+	require.NoError(t, wf.Abort())
+}
+
+func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
+
+	sourceQueries := []string{
+		"select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
+		"select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'",
+	}
+	noResult := &sqltypes.Result{}
+	for _, dbclient := range tme.dbSourceClients {
+		for _, query := range sourceQueries {
+			dbclient.addInvariant(query, noResult)
+		}
+		dbclient.addInvariant("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid1)
+		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
+		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
+		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name)", &sqltypes.Result{InsertID: uint64(1)})
+		dbclient.addInvariant("select id from _vt.vreplication where id = 1", resultid1)
+		dbclient.addInvariant("select id from _vt.vreplication where id = 2", resultid2)
+		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
+		dbclient.addInvariant("select * from _vt.vreplication where id = 2", runningResult(2))
+		dbclient.addInvariant("insert into _vt.resharding_journal", noResult)
+
+	}
+
+	targetQueries := []string{
+		"select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
+	}
+
+	for _, dbclient := range tme.dbTargetClients {
+		for _, query := range targetQueries {
+			dbclient.addInvariant(query, noResult)
+		}
+		dbclient.addInvariant("select id from _vt.vreplication where id = 1", resultid1)
+		dbclient.addInvariant("select id from _vt.vreplication where id = 2", resultid2)
+		dbclient.addInvariant("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", noResult)
+		dbclient.addInvariant("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", noResult)
+		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
+		dbclient.addInvariant("select * from _vt.vreplication where id = 2", runningResult(2))
+		state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"pos|state|message",
+			"varchar|varchar|varchar"),
+			"MariaDB/5-456-892|Running")
+		dbclient.addInvariant("select pos, state, message from _vt.vreplication where id=2", state)
+		dbclient.addInvariant("select pos, state, message from _vt.vreplication where id=1", state)
+		dbclient.addInvariant("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid1)
+		dbclient.addInvariant("update _vt.vreplication set message = 'FROZEN'", noResult)
+		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
+		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
+
+	}
 }
 
 func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 	var query string
-	//var result *sqltypes.Result
 	noResult := &sqltypes.Result{}
 	for _, dbclient := range tme.dbTargetClients {
 		query = "update _vt.vreplication set state = 'Running', message = '' where id in (1)"
