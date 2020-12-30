@@ -672,6 +672,8 @@
     ]
   }
 }
+{
+}
 
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
@@ -997,6 +999,8 @@
       }
     ]
   }
+}
+{
 }
 
 # routing rules: choose the redirected table
