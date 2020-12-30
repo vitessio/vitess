@@ -97,8 +97,8 @@ var dryRunResultsSwitchWritesM2m3 = []string{
 var dryRunResultsDropSourcesDropCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Dropping following tables from the database and from the vschema for keyspace product:",
-	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType DROP TABLE",
+	"Dropping these tables from the database and removing them from the vschema for keyspace product:",
+	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer",
 	"Blacklisted tables customer will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
 	"Delete reverse vreplication streams on source:",
@@ -114,8 +114,8 @@ var dryRunResultsDropSourcesDropCustomerShard = []string{
 var dryRunResultsDropSourcesRenameCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Dropping following tables from the database and from the vschema for keyspace product:",
-	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType RENAME TABLE",
+	"Renaming these tables from the database and removing them from the vschema for keyspace product:",
+	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer",
 	"Blacklisted tables customer will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
 	"Delete reverse vreplication streams on source:",

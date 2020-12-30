@@ -857,9 +857,9 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	wantdryRunDropSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Dropping following tables from the database and from the vschema for keyspace ks1:",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1 RemovalType DROP TABLE",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2 RemovalType DROP TABLE",
+		"Dropping these tables from the database and removing them from the vschema for keyspace ks1:",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
 		"Blacklisted tables t1,t2 will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
@@ -884,9 +884,9 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	wantdryRunRenameSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Dropping following tables from the database and from the vschema for keyspace ks1:",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1 RemovalType RENAME TABLE",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2 RemovalType RENAME TABLE",
+		"Renaming these tables from the database and removing them from the vschema for keyspace ks1:","	" +
+			"Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
+		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
 		"Blacklisted tables t1,t2 will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
@@ -907,14 +907,14 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", &sqltypes.Result{}, nil)
-		tme.tmeDB.AddQuery("drop table vt_ks1.t1", &sqltypes.Result{})
-		tme.tmeDB.AddQuery("drop table vt_ks1.t2", &sqltypes.Result{})
+		tme.tmeDB.AddQuery(fmt.Sprintf("rename table vt_ks1.t1 TO vt_ks1.%s", getRenameFileName("t1")), &sqltypes.Result{})
+		tme.tmeDB.AddQuery(fmt.Sprintf("rename table vt_ks1.t2 TO vt_ks1.%s", getRenameFileName("t2")), &sqltypes.Result{})
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil) //
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", &sqltypes.Result{}, nil)
 	}
 	dropSources()
 
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false, false, false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", RenameTable, false, false, false)
 	require.NoError(t, err)
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
 
