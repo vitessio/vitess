@@ -65,6 +65,8 @@ const (
 	V4GreedyOnly = querypb.ExecuteOptions_V4Greedy
 	// V4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
 	V4Left2Right = querypb.ExecuteOptions_V4Left2Right
+	// V4GreedyOptimized uses only the faster greedy planner
+	V4GreedyOptimized = querypb.ExecuteOptions_V4GreedyOptimized
 )
 
 type truncater interface {

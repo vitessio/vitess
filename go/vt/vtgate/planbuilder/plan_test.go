@@ -600,10 +600,14 @@ func BenchmarkPlanner(b *testing.B) {
 		b.Run(filename+"-v4left2right", func(b *testing.B) {
 			benchmarkPlanner(b, V4Left2Right, testCases, vschema)
 		})
+		b.Run(filename+"-v4greedyOptimized", func(b *testing.B) {
+			benchmarkPlanner(b, V4GreedyOptimized, testCases, vschema)
+		})
 	}
 }
 
 func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {
+	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for _, tcase := range testCases {
 			if tcase.output2ndPlanner != "" {

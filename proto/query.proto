@@ -304,6 +304,7 @@ message ExecuteOptions {
     V4 = 2;
     V4Greedy = 3;
     V4Left2Right = 4;
+    V4GreedyOptimized = 5;
   }
   
   // PlannerVersion specifies which planner to use. 

@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"container/heap"
 	"sort"
 	"strings"
 
@@ -48,6 +49,8 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	switch {
 	case vschema.Planner() == V4GreedyOnly || len(qgraph.tables) > 10:
 		tree, err = greedySolve(qgraph, semTable, vschema)
+	case vschema.Planner() == V4GreedyOptimized:
+		tree, err = greedySolveOptimized(qgraph, semTable, vschema)
 	case vschema.Planner() == V4Left2Right:
 		tree, err = leftToRightSolve(qgraph, semTable, vschema)
 	default:
@@ -295,6 +298,123 @@ func createJoin(lhs joinTree, rhs joinTree, joinPredicates []sqlparser.Expr, sem
 		}
 	}
 	return newPlan
+}
+
+type priorityQueueItem struct {
+	plan     joinTree
+	cost     int
+	lhsSolve semantics.TableSet
+	rhsSolve semantics.TableSet
+}
+
+type priorityQueuePlans []*priorityQueueItem
+
+// Len implements the Heap interface
+func (pq priorityQueuePlans) Len() int { return len(pq) }
+
+// Less implements the Heap interface
+func (pq priorityQueuePlans) Less(i, j int) bool {
+	// We want Pop to give us the lowest cost so we use lesser than here.
+	return pq[i].cost < pq[j].cost
+}
+
+// Swap implements the Heap interface
+func (pq priorityQueuePlans) Swap(i, j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+}
+
+// Push implements the Heap interface
+func (pq *priorityQueuePlans) Push(x interface{}) {
+	item := x.(*priorityQueueItem)
+	*pq = append(*pq, item)
+}
+
+// Pop implements the Heap interface
+func (pq *priorityQueuePlans) Pop() interface{} {
+	old := *pq
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil // avoid memory leak
+	*pq = old[0 : n-1]
+	return item
+}
+
+func greedySolveOptimized(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+	routePlans := make([]*routePlan, len(qg.tables))
+	intermediatePlans := map[semantics.TableSet]*priorityQueueItem{}
+
+	for i, table := range qg.tables {
+		solves := semTable.TableSetFor(table.alias)
+		plan, err := createRoutePlan(table, solves, vschema)
+		if err != nil {
+			return nil, err
+		}
+		routePlans[i] = plan
+		intermediatePlans[solves] = &priorityQueueItem{
+			plan:     plan,
+			cost:     plan.cost(),
+			lhsSolve: 0,
+		}
+	}
+
+	if len(qg.tables) == 1 {
+		return routePlans[0], nil
+	}
+
+	pq := priorityQueuePlans{}
+
+	for i, lhs := range routePlans {
+		for j := i + 1; j < len(routePlans); j++ {
+			rhs := routePlans[j]
+			solves := lhs.solves() | rhs.solves()
+			joinPredicates := qg.crossTable[solves]
+			plan := createJoin(lhs, rhs, joinPredicates, semTable)
+			pq.Push(&priorityQueueItem{
+				plan:     plan,
+				cost:     plan.cost(),
+				lhsSolve: lhs.solves(),
+				rhsSolve: rhs.solves(),
+			})
+		}
+	}
+
+	heap.Init(&pq)
+
+	for pq.Len() > 0 {
+		item := heap.Pop(&pq).(*priorityQueueItem)
+		_, isLeftAvail := intermediatePlans[item.lhsSolve]
+		_, isRightAvail := intermediatePlans[item.rhsSolve]
+		if !isLeftAvail || !isRightAvail {
+			continue
+		}
+		delete(intermediatePlans, item.lhsSolve)
+		delete(intermediatePlans, item.rhsSolve)
+		solves := item.lhsSolve | item.rhsSolve
+		plan := item.plan
+
+		for tableSet, intermPlan := range intermediatePlans {
+			totalSolved := solves | tableSet
+			newPlan := createJoin(intermPlan.plan, plan, qg.crossTable[totalSolved], semTable)
+			heap.Push(&pq, &priorityQueueItem{
+				plan:     newPlan,
+				cost:     newPlan.cost(),
+				lhsSolve: tableSet,
+				rhsSolve: solves,
+			})
+		}
+		intermediatePlans[solves] = item
+	}
+
+	// intermediatePlans should only have 1 value now
+	if len(intermediatePlans) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "their should be only 1 intermediate planner now")
+	}
+
+	for _, item := range intermediatePlans {
+		return item.plan, nil
+	}
+
+	return nil, nil
 }
 
 /*
