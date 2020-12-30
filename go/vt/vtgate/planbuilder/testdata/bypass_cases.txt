@@ -15,6 +15,8 @@
     "SingleShardOnly": false
   }
 }
+{
+}
 
 # update bypass
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
@@ -32,6 +34,8 @@
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
     "SingleShardOnly": false
   }
+}
+{
 }
 
 # delete bypass
@@ -51,6 +55,8 @@
     "SingleShardOnly": false
   }
 }
+{
+}
 
 # insert bypass
 "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')"
@@ -68,6 +74,8 @@
     "Query": "insert into USER(ID, `NAME`) values (42, 'ms X')",
     "SingleShardOnly": false
   }
+}
+{
 }
 
 # insert bypass with sequence: sequences ignored
@@ -87,6 +95,8 @@
     "SingleShardOnly": false
   }
 }
+{
+}
 
 # bypass query for into outfile s3
 "select count(*), col from unsharded into outfile S3 'x.txt'"
@@ -105,6 +115,8 @@
     "SingleShardOnly": false
   }
 }
+{
+}
 
 "select * from user into outfile S3 'x.txt'"
 {
@@ -121,6 +133,8 @@
     "Query": "select * from user into outfile s3 'x.txt'",
     "SingleShardOnly": false
   }
+}
+{
 }
 
 "load data from s3 'x.txt' into table x"
@@ -139,6 +153,8 @@
     "SingleShardOnly": true
   }
 }
+{
+}
 
 "load data from s3 'x.txt'"
 {
@@ -155,4 +171,6 @@
     "Query": "load data from s3 'x.txt'",
     "SingleShardOnly": true
   }
+}
+{
 }
