@@ -378,6 +378,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
+			c.recycleReadPacket()
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
 		return *c.currentEphemeralBuffer, nil
@@ -437,6 +438,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 	if length < MaxPacketSize {
 		c.currentEphemeralBuffer = bufPool.Get(length)
 		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
+			c.recycleReadPacket()
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
 		return *c.currentEphemeralBuffer, nil
