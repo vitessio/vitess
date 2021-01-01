@@ -98,8 +98,13 @@ func (qg *queryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.Se
 		if err := qg.collectTable(table.RightExpr, semTable); err != nil {
 			return err
 		}
-		if err := qg.collectPredicate(table.Condition.On, semTable); err != nil {
-			return err
+		if table.Condition.On != nil {
+			for _, predicate := range splitAndExpression(nil, table.Condition.On) {
+				err := qg.collectPredicate(predicate, semTable)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	case *sqlparser.ParenTableExpr:
 		if err := qg.collectTables(table.Exprs, semTable); err != nil {
