@@ -582,116 +582,127 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routePlan:
-		var tablesForSelect sqlparser.TableExprs
-		tableNameMap := map[string]interface{}{}
-
-		for _, t := range n.tables {
-			tablesForSelect = append(tablesForSelect, t.qtable.alias)
-			tableNameMap[sqlparser.String(t.qtable.alias.Expr)] = nil
-		}
-		predicates := n.Predicates()
-		var where *sqlparser.Where
-		if predicates != nil {
-			where = &sqlparser.Where{Expr: predicates, Type: sqlparser.WhereClause}
-		}
-		var values []sqltypes.PlanValue
-		if len(n.conditions) == 1 {
-			value, err := sqlparser.NewPlanValue(n.conditions[0].(*sqlparser.ComparisonExpr).Right)
-			if err != nil {
-				return nil, err
-			}
-			values = []sqltypes.PlanValue{value}
-		}
-		var singleColumn vindexes.SingleColumn
-		if n.vindex != nil {
-			singleColumn = n.vindex.(vindexes.SingleColumn)
-		}
-
-		var tableNames []string
-		for name := range tableNameMap {
-			tableNames = append(tableNames, name)
-		}
-		sort.Strings(tableNames)
-
-		return &route{
-			eroute: &engine.Route{
-				Opcode:    n.routeOpCode,
-				TableName: strings.Join(tableNames, ", "),
-				Keyspace:  n.keyspace,
-				Vindex:    singleColumn,
-				Values:    values,
-			},
-			Select: &sqlparser.Select{
-				From:  tablesForSelect,
-				Where: where,
-			},
-			solvedTables: n.solved,
-		}, nil
+		return transformRoutePlan(n)
 
 	case *joinPlan:
-
-		lhsSolves := n.lhs.solves()
-		lhsColMap := map[*sqlparser.ColName]sqlparser.Argument{}
-		for _, predicate := range n.predicates {
-			sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
-				switch node := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if semTable.Dependencies(node).IsSolvedBy(lhsSolves) {
-						arg := sqlparser.NewArgument([]byte(":" + node.CompliantName("")))
-						lhsColMap[node] = arg
-						cursor.Replace(arg)
-					}
-				}
-				return true
-			}, nil)
-		}
-
-		var lhsColList []*sqlparser.ColName
-		for col := range lhsColMap {
-			lhsColList = append(lhsColList, col)
-		}
-
-		var lhsColExpr []*sqlparser.AliasedExpr
-		for _, col := range lhsColList {
-			lhsColExpr = append(lhsColExpr, &sqlparser.AliasedExpr{
-				Expr: col,
-			})
-		}
-
-		lhs, err := transformToLogicalPlan(n.lhs, semTable)
-		if err != nil {
-			return nil, err
-		}
-		offset, err := pushProjection(lhsColExpr, lhs, semTable)
-		if err != nil {
-			return nil, err
-		}
-
-		vars := map[string]int{}
-
-		for _, col := range lhsColList {
-			vars[col.CompliantName("")] = offset
-			offset++
-		}
-
-		rhs, err := transformToLogicalPlan(n.rhs, semTable)
-		if err != nil {
-			return nil, err
-		}
-
-		err = pushPredicate(n.predicates, rhs, semTable)
-		if err != nil {
-			return nil, err
-		}
-
-		return &join2{
-			Left:  lhs,
-			Right: rhs,
-			Vars:  vars,
-		}, nil
+		return transformJoinPlan(n, semTable)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type encountered: %T", tree)
+}
+
+func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (*join2, error) {
+	lhsColList := extractColumnsNeededFromLHS(n, semTable, n.lhs.solves())
+
+	var lhsColExpr []*sqlparser.AliasedExpr
+	for _, col := range lhsColList {
+		lhsColExpr = append(lhsColExpr, &sqlparser.AliasedExpr{
+			Expr: col,
+		})
+	}
+
+	lhs, err := transformToLogicalPlan(n.lhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+	offset, err := pushProjection(lhsColExpr, lhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	vars := map[string]int{}
+
+	for _, col := range lhsColList {
+		vars[col.CompliantName("")] = offset
+		offset++
+	}
+
+	rhs, err := transformToLogicalPlan(n.rhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	err = pushPredicate(n.predicates, rhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return &join2{
+		Left:  lhs,
+		Right: rhs,
+		Vars:  vars,
+	}, nil
+}
+
+func extractColumnsNeededFromLHS(n *joinPlan, semTable *semantics.SemTable, lhsSolves semantics.TableSet) []*sqlparser.ColName {
+	lhsColMap := map[*sqlparser.ColName]sqlparser.Argument{}
+	for _, predicate := range n.predicates {
+		sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
+			switch node := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if semTable.Dependencies(node).IsSolvedBy(lhsSolves) {
+					arg := sqlparser.NewArgument([]byte(":" + node.CompliantName("")))
+					lhsColMap[node] = arg
+					cursor.Replace(arg)
+				}
+			}
+			return true
+		}, nil)
+	}
+
+	var lhsColList []*sqlparser.ColName
+	for col := range lhsColMap {
+		lhsColList = append(lhsColList, col)
+	}
+	return lhsColList
+}
+
+func transformRoutePlan(n *routePlan) (*route, error) {
+	var tablesForSelect sqlparser.TableExprs
+	tableNameMap := map[string]interface{}{}
+
+	for _, t := range n.tables {
+		tablesForSelect = append(tablesForSelect, t.qtable.alias)
+		tableNameMap[sqlparser.String(t.qtable.table.Name)] = nil
+	}
+	predicates := n.Predicates()
+	var where *sqlparser.Where
+	if predicates != nil {
+		where = &sqlparser.Where{Expr: predicates, Type: sqlparser.WhereClause}
+	}
+	var values []sqltypes.PlanValue
+	if len(n.conditions) == 1 {
+		value, err := sqlparser.NewPlanValue(n.conditions[0].(*sqlparser.ComparisonExpr).Right)
+		if err != nil {
+			return nil, err
+		}
+		values = []sqltypes.PlanValue{value}
+	}
+	var singleColumn vindexes.SingleColumn
+	if n.vindex != nil {
+		singleColumn = n.vindex.(vindexes.SingleColumn)
+	}
+
+	var tableNames []string
+	for name := range tableNameMap {
+		tableNames = append(tableNames, name)
+	}
+	sort.Strings(tableNames)
+
+	return &route{
+		eroute: &engine.Route{
+			Opcode:    n.routeOpCode,
+			TableName: strings.Join(tableNames, ", "),
+			Keyspace:  n.keyspace,
+			Vindex:    singleColumn,
+			Values:    values,
+		},
+		Select: &sqlparser.Select{
+			From:  tablesForSelect,
+			Where: where,
+		},
+		solvedTables: n.solved,
+	}, nil
 }
 
 func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable) vindexes.SingleColumn {
@@ -763,13 +774,14 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 
 	newTabletSet := aRoute.solved | bRoute.solved
 	r := &routePlan{
-		routeOpCode:     aRoute.routeOpCode,
-		solved:          newTabletSet,
-		tables:          append(aRoute.tables, bRoute.tables...),
-		extraPredicates: append(aRoute.extraPredicates, bRoute.extraPredicates...),
-		keyspace:        aRoute.keyspace,
+		routeOpCode: aRoute.routeOpCode,
+		solved:      newTabletSet,
+		tables:      append(aRoute.tables, bRoute.tables...),
+		extraPredicates: append(
+			append(aRoute.extraPredicates, bRoute.extraPredicates...),
+			joinPredicates...),
+		keyspace: aRoute.keyspace,
 	}
-	r.extraPredicates = append(r.extraPredicates, joinPredicates...)
 
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
