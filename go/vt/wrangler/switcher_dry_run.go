@@ -335,7 +335,8 @@ func (dr *switcherDryRun) removeTargetTables(ctx context.Context) error {
 		}
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log("Dropping following tables:")
+		dr.drLog.Log(fmt.Sprintf("Dropping following tables from the database and from the vschema for keyspace %s:",
+			dr.ts.targetKeyspace))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
