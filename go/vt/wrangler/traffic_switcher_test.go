@@ -858,7 +858,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	wantdryRunDropSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Dropping following tables:",
+		"Dropping following tables from the database and from the vschema for keyspace ks1:",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1 RemovalType DROP TABLE",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2 RemovalType DROP TABLE",
 		"Blacklisted tables t1,t2 will be removed from:",
@@ -885,7 +885,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	wantdryRunRenameSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Dropping following tables:",
+		"Dropping following tables from the database and from the vschema for keyspace ks1:",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1 RemovalType RENAME TABLE",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2 RemovalType RENAME TABLE",
 		"Blacklisted tables t1,t2 will be removed from:",

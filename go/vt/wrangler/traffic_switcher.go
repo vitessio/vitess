@@ -567,7 +567,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	return ts.id, sw.logs(), nil
 }
 
-// DropTargets cleans up target tables, shards and blacklisted tables after a MoveTables/Reshard is completed
+// DropTargets cleans up target tables, shards and blacklisted tables if a MoveTables/Reshard is aborted
 func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
@@ -1479,8 +1479,9 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 
 }
 
-func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
-	return ts.forAllSources(func(source *tsSource) error {
+func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) (err error) {
+	var vschema *vschemapb.Keyspace
+	err = ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
 			if removalType == DropTable {
@@ -1500,6 +1501,18 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	vschema, err = ts.wr.ts.GetVSchema(ctx, ts.sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	for _, tableName := range ts.tables {
+		delete(vschema.Tables, tableName)
+	}
+	return ts.wr.ts.SaveVSchema(ctx, ts.sourceKeyspace, vschema)
 }
 
 // FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
