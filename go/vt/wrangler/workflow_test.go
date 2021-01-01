@@ -306,8 +306,19 @@ func TestMoveTablesV2Abort(t *testing.T) {
 	expectMoveTablesQueries(t, tme)
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 4) // rules set up by test env
 
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
+
 	require.NoError(t, wf.Abort())
+
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
+
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 }
 
 func TestReshardV2(t *testing.T) {

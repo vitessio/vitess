@@ -1480,7 +1480,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 }
 
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) (err error) {
-	var vschema *vschemapb.Keyspace
 	err = ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
@@ -1505,14 +1504,18 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 		return err
 	}
 
-	vschema, err = ts.wr.ts.GetVSchema(ctx, ts.sourceKeyspace)
+	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.sourceKeyspace)
+}
+
+func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Context, keyspace string) error {
+	vschema, err := ts.wr.ts.GetVSchema(ctx, keyspace)
 	if err != nil {
 		return err
 	}
 	for _, tableName := range ts.tables {
 		delete(vschema.Tables, tableName)
 	}
-	return ts.wr.ts.SaveVSchema(ctx, ts.sourceKeyspace, vschema)
+	return ts.wr.ts.SaveVSchema(ctx, keyspace, vschema)
 }
 
 // FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
@@ -1564,7 +1567,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	return ts.forAllTargets(func(target *tsTarget) error {
+	err := ts.forAllTargets(func(target *tsTarget) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", target.master.DbName(), tableName)
 			ts.wr.Logger().Infof("Dropping table %s.%s\n", target.master.DbName(), tableName)
@@ -1578,6 +1581,12 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.targetKeyspace)
+
 }
 
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
