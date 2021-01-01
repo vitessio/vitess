@@ -37,6 +37,11 @@ type switcherDryRun struct {
 	ts    *trafficSwitcher
 }
 
+func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
+	dr.drLog.Log("Routing rules for participating tables will be deleted")
+	return nil
+}
+
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
