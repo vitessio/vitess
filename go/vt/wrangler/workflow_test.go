@@ -289,7 +289,10 @@ func TestMoveTablesV2Abort(t *testing.T) {
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	expectMoveTablesQueries(t, tme)
+	validateRoutingRuleCount(ctx, t, wf.wr.ts, 4) // rules set up by test env
+
 	require.NoError(t, wf.Abort())
+	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
 }
 
 func TestReshardV2(t *testing.T) {
