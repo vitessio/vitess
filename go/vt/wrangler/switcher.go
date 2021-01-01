@@ -31,6 +31,10 @@ type switcher struct {
 	wr *Wrangler
 }
 
+func (r *switcher) deleteRoutingRules(ctx context.Context) error {
+	return r.ts.deleteRoutingRules(ctx)
+}
+
 func (r *switcher) dropSourceBlacklistedTables(ctx context.Context) error {
 	return r.ts.dropSourceBlacklistedTables(ctx)
 }

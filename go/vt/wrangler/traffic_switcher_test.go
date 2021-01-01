@@ -868,6 +868,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Delete vreplication streams on target:",
 		"	Keyspace ks2 Shard -80 Workflow test DbName vt_ks2 Tablet 20",
 		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30",
+		"Routing rules for participating tables will be deleted",
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}
@@ -894,6 +895,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Delete vreplication streams on target:",
 		"	Keyspace ks2 Shard -80 Workflow test DbName vt_ks2 Tablet 20",
 		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30",
+		"Routing rules for participating tables will be deleted",
 		"Unlock keyspace ks2",
 		"Unlock keyspace ks1",
 	}

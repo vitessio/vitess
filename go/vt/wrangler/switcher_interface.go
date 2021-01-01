@@ -48,5 +48,7 @@ type iswitcher interface {
 	dropTargetVReplicationStreams(ctx context.Context) error
 	removeTargetTables(ctx context.Context) error
 	dropTargetShards(ctx context.Context) error
+	deleteRoutingRules(ctx context.Context) error
+
 	logs() *[]string
 }

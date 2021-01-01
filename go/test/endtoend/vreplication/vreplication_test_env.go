@@ -54,7 +54,7 @@ var dryRunResultsReadCustomerShard = []string{
 	"Unlock keyspace product",
 }
 
-var dryrunresultsswitchwritesM2m3 = []string{
+var dryRunResultsSwitchWritesM2m3 = []string{
 	"Lock keyspace merchant",
 	"Stop streams on keyspace merchant",
 	"/      Id 2 Keyspace customer Shard -80 Rules rules:<match:\"morders\" filter:\"select * from orders where in_keyrange(mname, 'merchant.md5', '-80')\" >  at Position ",
@@ -106,6 +106,7 @@ var dryRunResultsDropSourcesDropCustomerShard = []string{
 	"Delete vreplication streams on target:",
 	"	Keyspace customer Shard -80 Workflow p2c DbName vt_customer Tablet 200",
 	"	Keyspace customer Shard 80- Workflow p2c DbName vt_customer Tablet 300",
+	"Routing rules for participating tables will be deleted",
 	"Unlock keyspace customer",
 	"Unlock keyspace product",
 }
@@ -122,6 +123,7 @@ var dryRunResultsDropSourcesRenameCustomerShard = []string{
 	"Delete vreplication streams on target:",
 	"	Keyspace customer Shard -80 Workflow p2c DbName vt_customer Tablet 200",
 	"	Keyspace customer Shard 80- Workflow p2c DbName vt_customer Tablet 300",
+	"Routing rules for participating tables will be deleted",
 	"Unlock keyspace customer",
 	"Unlock keyspace product",
 }

@@ -627,6 +627,10 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return err
 	}
+	if err := sw.deleteRoutingRules(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -676,6 +680,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
 				return nil, err
 			}
+
 		case binlogdatapb.MigrationType_SHARDS:
 			log.Infof("Removing shards")
 			if err := sw.dropSourceShards(ctx); err != nil {
@@ -1573,6 +1578,28 @@ func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 		ts.wr.Logger().Infof("Deleted shard %s.%s\n", target.si.Keyspace(), target.si.ShardName())
 		return nil
 	})
+}
+
+func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
+	rules, err := ts.wr.getRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	for _, table := range ts.tables {
+		delete(rules, table)
+		delete(rules, table+"@replica")
+		delete(rules, table+"@rdonly")
+		delete(rules, ts.targetKeyspace+"."+table)
+		delete(rules, ts.targetKeyspace+"."+table+"@replica")
+		delete(rules, ts.targetKeyspace+"."+table+"@rdonly")
+		delete(rules, ts.sourceKeyspace+"."+table)
+		delete(rules, ts.sourceKeyspace+"."+table+"@replica")
+		delete(rules, ts.sourceKeyspace+"."+table+"@rdonly")
+	}
+	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, error) {
