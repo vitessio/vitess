@@ -30,8 +30,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"

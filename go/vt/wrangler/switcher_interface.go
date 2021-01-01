@@ -21,7 +21,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 type iswitcher interface {

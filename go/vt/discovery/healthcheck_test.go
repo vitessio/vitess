@@ -37,7 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"

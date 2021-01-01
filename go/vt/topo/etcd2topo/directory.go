@@ -20,8 +20,8 @@ import (
 	"path"
 	"strings"
 
+	"context"
 	"github.com/coreos/etcd/clientv3"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 )

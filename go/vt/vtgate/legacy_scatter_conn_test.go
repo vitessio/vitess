@@ -26,7 +26,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
