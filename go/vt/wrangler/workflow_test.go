@@ -182,6 +182,14 @@ func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server
 	require.Equal(t, cnt, len(rules))
 }
 
+func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace string, table string) bool {
+	vschema, err := ts.GetVSchema(ctx, keyspace)
+	require.NoError(t, err)
+	require.NotNil(t, vschema)
+	_, ok := vschema.Tables[table]
+	return ok
+}
+
 func TestMoveTablesV2Complete(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
@@ -207,8 +215,15 @@ func TestMoveTablesV2Complete(t *testing.T) {
 
 	//16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 16)
-
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 	require.NoError(t, wf.Complete())
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
 }
