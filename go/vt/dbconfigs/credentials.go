@@ -155,6 +155,10 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 	}
 
 	if vcs.cacheValid && vcs.dbCredsCache != nil {
+		if vcs.dbCredsCache[user] == nil {
+			log.Errorf("Vault cache is valid, but user %s unknown in cache, will retry", user)
+			return "", "", ErrUnknownUser
+		}
 		return user, vcs.dbCredsCache[user][0], nil
 	}
 
@@ -175,13 +179,31 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 	// for everything, so we get retries
 	if vcs.vaultClient == nil {
 		config := vaultapi.NewConfig()
-		config.Address = *vaultAddr
-		config.Timeout = *vaultTimeout
-		config.CACert = *vaultCACert
-		config.Token = token
-		config.AppRoleCredentials.RoleID = *vaultRoleID
-		config.AppRoleCredentials.SecretID = secretID
-		config.AppRoleCredentials.MountPoint = *vaultRoleMountPoint
+
+		// All these can be overriden by environment
+		//   so we need to check if they have been set by NewConfig
+		if config.Address == "" {
+			config.Address = *vaultAddr
+		}
+		if config.Timeout == (0 * time.Second) {
+			config.Timeout = *vaultTimeout
+		}
+		if config.CACert == "" {
+			config.CACert = *vaultCACert
+		}
+		if config.Token == "" {
+			config.Token = token
+		}
+		if config.AppRoleCredentials.RoleID == "" {
+			config.AppRoleCredentials.RoleID = *vaultRoleID
+		}
+		if config.AppRoleCredentials.SecretID == "" {
+			config.AppRoleCredentials.SecretID = secretID
+		}
+		if config.AppRoleCredentials.MountPoint == "" {
+			config.AppRoleCredentials.MountPoint = *vaultRoleMountPoint
+		}
+
 		if config.CACert != "" {
 			// If we provide a CA, ensure we actually use it
 			config.InsecureSSL = false
