@@ -19,7 +19,9 @@ package vault
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -31,7 +33,9 @@ import (
 )
 
 const (
-	vaultExecutableName = "vault-1.6.1"
+	vaultExecutableName = "vault"
+	vaultDownloadSource = "https://vitess-operator.storage.googleapis.com/install/vault"
+	vaultDownloadSize   = 132738840
 	vaultDirName        = "vault"
 	vaultConfigFileName = "vault.hcl"
 	vaultCertFileName   = "vault-cert.pem"
@@ -54,8 +58,18 @@ type VaultServer struct {
 
 // Start the Vault server in dev mode
 func (vs *VaultServer) start() error {
-	hclFile := path.Join(os.Getenv("PWD"), vaultConfigFileName)
+	// Download and unpack vault binary
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
+	fileStat, err := os.Stat(vs.execPath)
+	if err != nil || fileStat.Size() != vaultDownloadSize {
+		err := downloadExecFile(vs.execPath, vaultDownloadSource)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+	}
+
+	// Create Vault log directory
 	vs.logDir = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", vaultDirName, vs.port1))
 	if _, err := os.Stat(vs.logDir); os.IsNotExist(err) {
 		err := os.Mkdir(vs.logDir, 0700)
@@ -65,6 +79,7 @@ func (vs *VaultServer) start() error {
 		}
 	}
 
+	hclFile := path.Join(os.Getenv("PWD"), vaultConfigFileName)
 	hcl, _ := ioutil.ReadFile(hclFile)
 	// Replace variable parts in Vault config file
 	hcl = bytes.Replace(hcl, []byte("$server"), []byte(vs.address), 1)
@@ -72,7 +87,7 @@ func (vs *VaultServer) start() error {
 	hcl = bytes.Replace(hcl, []byte("$cert"), []byte(path.Join(os.Getenv("PWD"), vaultCertFileName)), 1)
 	hcl = bytes.Replace(hcl, []byte("$key"), []byte(path.Join(os.Getenv("PWD"), vaultKeyFileName)), 1)
 	newHclFile := path.Join(vs.logDir, vaultConfigFileName)
-	err := ioutil.WriteFile(newHclFile, hcl, 0700)
+	err = ioutil.WriteFile(newHclFile, hcl, 0700)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -126,4 +141,25 @@ func (vs *VaultServer) stop() error {
 		vs.proc = nil
 		return <-vs.exit
 	}
+}
+
+func downloadExecFile(path string, url string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	err = ioutil.WriteFile(path, []byte(""), 0700)
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
