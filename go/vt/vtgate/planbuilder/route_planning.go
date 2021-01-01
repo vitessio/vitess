@@ -739,7 +739,7 @@ func canMergeOnFilter(a, b *routePlan, predicate sqlparser.Expr, sem *semantics.
 	return rVindex == lVindex
 }
 
-func canMergeScatter(a, b *routePlan, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
+func canMergeOnFilters(a, b *routePlan, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
 	for _, predicate := range joinPredicates {
 		if canMergeOnFilter(a, b, predicate, semTable) {
 			return true
@@ -761,27 +761,6 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 		return nil
 	}
 
-	switch aRoute.routeOpCode {
-	case engine.SelectUnsharded, engine.SelectDBA:
-		if aRoute.routeOpCode != bRoute.routeOpCode {
-			return nil
-		}
-	case engine.SelectEqualUnique:
-		return nil
-	case engine.SelectScatter:
-		if len(joinPredicates) == 0 {
-			// If we are doing two Scatters, we have to make sure that the
-			// joins are on the correct vindex to allow them to be merged
-			// no join predicates - no vindex
-			return nil
-		}
-
-		canMerge := canMergeScatter(aRoute, bRoute, joinPredicates, semTable)
-		if !canMerge {
-			return nil
-		}
-	}
-
 	newTabletSet := aRoute.solved | bRoute.solved
 	r := &routePlan{
 		routeOpCode:     aRoute.routeOpCode,
@@ -790,7 +769,34 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 		extraPredicates: append(aRoute.extraPredicates, bRoute.extraPredicates...),
 		keyspace:        aRoute.keyspace,
 	}
-
 	r.extraPredicates = append(r.extraPredicates, joinPredicates...)
+
+	switch aRoute.routeOpCode {
+	case engine.SelectUnsharded, engine.SelectDBA:
+		if aRoute.routeOpCode != bRoute.routeOpCode {
+			return nil
+		}
+	case engine.SelectScatter, engine.SelectEqualUnique:
+		if len(joinPredicates) == 0 {
+			// If we are doing two Scatters, we have to make sure that the
+			// joins are on the correct vindex to allow them to be merged
+			// no join predicates - no vindex
+			return nil
+		}
+
+		canMerge := canMergeOnFilters(aRoute, bRoute, joinPredicates, semTable)
+		if !canMerge {
+			return nil
+		}
+		if aRoute.routeOpCode == engine.SelectEqualUnique {
+			r.vindex = aRoute.vindex
+			r.conditions = aRoute.conditions
+		} else if bRoute.routeOpCode == engine.SelectEqualUnique {
+			r.routeOpCode = bRoute.routeOpCode
+			r.vindex = bRoute.vindex
+			r.conditions = bRoute.conditions
+		}
+	}
+
 	return r
 }

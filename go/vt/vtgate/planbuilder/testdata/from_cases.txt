@@ -702,6 +702,40 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join (unsharded as m1 join unsharded as m2)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "TableName": "user_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user",
+        "Table": "user"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded as m1, unsharded as m2 where 1 != 1",
+        "Query": "select 1 from unsharded as m1, unsharded as m2",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
 
 # Parenthesized, multi-chunk
 "select user.col from user join (user as u1 join unsharded)"
@@ -861,6 +895,21 @@
     "Table": "user"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id where 1 != 1",
+    "Query": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
+    "Table": "user, user_extra"
+  }
+}
 
 # mergeable sharded join on unique vindex, swapped operands
 "select user.col from user join user_extra on user_extra.user_id = user.id"
@@ -910,6 +959,25 @@
     "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
     "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
     "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
+    "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+    "Table": "user, user_extra",
     "Values": [
       5
     ],
