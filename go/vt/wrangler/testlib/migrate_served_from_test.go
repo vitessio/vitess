@@ -23,7 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"

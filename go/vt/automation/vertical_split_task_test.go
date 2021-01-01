@@ -20,7 +20,7 @@ import (
 	"flag"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"vitess.io/vitess/go/vt/vtctl/fakevtctlclient"

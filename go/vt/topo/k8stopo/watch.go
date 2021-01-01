@@ -17,7 +17,7 @@ limitations under the License.
 package k8stopo
 
 import (
-	"golang.org/x/net/context"
+	"context"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
 

@@ -26,8 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"

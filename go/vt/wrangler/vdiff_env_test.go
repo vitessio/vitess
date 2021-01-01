@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"

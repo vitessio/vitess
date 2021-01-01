@@ -94,9 +94,9 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/json2"

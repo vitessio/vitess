@@ -21,7 +21,7 @@ import (
 	"path"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/hashicorp/consul/api"
 	"vitess.io/vitess/go/vt/topo"

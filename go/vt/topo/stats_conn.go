@@ -19,7 +19,7 @@ package topo
 import (
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/stats"
 )

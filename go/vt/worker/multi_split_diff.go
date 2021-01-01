@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"

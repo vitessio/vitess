@@ -31,7 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sysvars"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
