@@ -101,13 +101,31 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 	}
 
 	config := vaultapi.NewConfig()
-	config.Address = addr
-	config.Timeout = timeout
-	config.CACert = caCertPath
-	config.Token = token
-	config.AppRoleCredentials.RoleID = roleID
-	config.AppRoleCredentials.SecretID = secretID
-	config.AppRoleCredentials.MountPoint = roleMountPoint
+
+	// All these can be overriden by environment
+	//   so we need to check if they have been set by NewConfig
+	if config.Address == "" {
+		config.Address = addr
+	}
+	if config.Timeout == (0 * time.Second) {
+		config.Timeout = timeout
+	}
+	if config.CACert == "" {
+		config.CACert = caCertPath
+	}
+	if config.Token == "" {
+		config.Token = token
+	}
+	if config.AppRoleCredentials.RoleID == "" {
+		config.AppRoleCredentials.RoleID = roleID
+	}
+	if config.AppRoleCredentials.SecretID == "" {
+		config.AppRoleCredentials.SecretID = secretID
+	}
+	if config.AppRoleCredentials.MountPoint == "" {
+		config.AppRoleCredentials.MountPoint = roleMountPoint
+	}
+
 	if config.CACert != "" {
 		// If we provide a CA, ensure we actually use it
 		config.InsecureSSL = false
