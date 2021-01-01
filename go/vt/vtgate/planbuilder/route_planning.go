@@ -295,7 +295,7 @@ func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchem
 	return dpTable.planFor(allTables), nil
 }
 
-func createJoin(lhs joinTree, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
+func createJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
 	newPlan := tryMerge(lhs, rhs, joinPredicates, semTable)
 	if newPlan == nil {
 		newPlan = &joinPlan{
@@ -429,6 +429,13 @@ func greedySolveOptimized(qg *queryGraph, semTable *semantics.SemTable, vschema 
 	return nil, nil
 }
 
+type (
+	tableSetPair struct {
+		left, right semantics.TableSet
+	}
+	cacheMap map[tableSetPair]joinTree
+)
+
 /*
 	The greedy planner will plan a query by finding first finding the best route plan for every table.
     Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
@@ -437,7 +444,7 @@ func greedySolveOptimized(qg *queryGraph, semTable *semantics.SemTable, vschema 
 */
 func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
 	plans := make([]joinTree, len(qg.tables))
-	planCache := map[semantics.TableSet]joinTree{}
+	planCache := cacheMap{}
 
 	// we start by seeding the table with the single routes
 	for i, table := range qg.tables {
@@ -468,37 +475,39 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 	return plans[0], nil
 }
 
+func (cm cacheMap) getJoinFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
+	solves := tableSetPair{left: lhs.solves(), right: rhs.solves()}
+	plan := cm[solves]
+	if plan == nil {
+		plan = createJoin(lhs, rhs, joinPredicates, semTable)
+		cm[solves] = plan
+	}
+	return plan
+}
+
 func findBestJoin(
 	qg *queryGraph,
 	semTable *semantics.SemTable,
 	plans []joinTree,
-	planCache map[semantics.TableSet]joinTree,
+	planCache cacheMap,
 	crossJoinsOK bool,
 ) (joinTree, int, int) {
 	var lIdx, rIdx int
 	var bestPlan joinTree
 
 	for i, lhs := range plans {
-		for j := i + 1; j < len(plans); j++ {
-			rhs := plans[j]
-			solves := lhs.solves() | rhs.solves()
+		for j, rhs := range plans {
+			if i == j {
+				continue
+			}
 			joinPredicates := qg.getPredicates(lhs.solves(), rhs.solves())
 			if len(joinPredicates) == 0 && !crossJoinsOK {
-				// if there are no predicates joining the to tables,
+				// if there are no predicates joining the two tables,
 				// creating a join between them would produce a
 				// cartesian product, which is almost always a bad idea
 				continue
 			}
-			plan := planCache[solves]
-			if plan == nil {
-				plan = createJoin(lhs, rhs, joinPredicates, semTable)
-				planCache[solves] = plan
-				if plan.cost() == 1 {
-					// if we are able to merge the two inputs into a single route,
-					// we shortcut here and pick this plan. this limits the search space
-					return plan, i, j
-				}
-			}
+			plan := planCache.getJoinFor(lhs, rhs, joinPredicates, semTable)
 
 			if bestPlan == nil || plan.cost() < bestPlan.cost() {
 				bestPlan = plan
