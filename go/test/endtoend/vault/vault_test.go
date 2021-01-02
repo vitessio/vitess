@@ -104,10 +104,10 @@ var (
 
 func TestVaultAuth(t *testing.T) {
 	defer cluster.PanicHandler(nil)
-	defer clusterInstance.Teardown()
 
 	// Instantiate Vitess Cluster objects and start topo
 	initializeClusterEarly(t)
+	defer clusterInstance.Teardown()
 
 	// start Vault server
 	vs := startVaultServer(t, master)
