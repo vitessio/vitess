@@ -457,6 +457,8 @@
     "Table": "unsharded"
   }
 }
+{
+}
 
 # select from dual on unqualified keyspace
 "select @@session.auto_increment_increment from dual"
@@ -516,6 +518,8 @@
     "Query": "select @@session.auto_increment_increment from dual",
     "Table": "dual"
   }
+}
+{
 }
 
 # RHS route referenced
@@ -1290,8 +1294,6 @@
     "Table": "unsharded"
   }
 }
-{
-}
 
 "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
 {
@@ -1425,8 +1427,6 @@
     "Table": "dual"
   }
 }
-{
-}
 
 # testing SingleRow Projection with arithmetics
 "select 42+2"
@@ -1469,6 +1469,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # sql_calc_found_rows with limit

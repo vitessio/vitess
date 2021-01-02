@@ -15,8 +15,6 @@
     "Table": "user"
   }
 }
-{
-}
 
 # ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having col1 = 2"

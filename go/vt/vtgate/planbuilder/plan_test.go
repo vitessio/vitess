@@ -407,33 +407,37 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
 			})
 
-			expectedVal := "{\n}\n"
 			empty := false
 			if tcase.output2ndPlanner == "" {
 				empty = true
+			}
+			if tcase.output2ndPlanner == "{\n}\n" {
 				tcase.output2ndPlanner = tcase.output
 			}
+
 			vschema.version = V4GreedyOptimized
 			out, err := getPlanOutput(tcase, vschema)
 
+			// our expectation for the new planner on this query is one of three
+			//  - it produces the same plan as V3 - this is shown using empty brackets: {\n}
+			//  - it produces a different but accepted plan - this is shown using the accepted plan
+			//  - or it produces a different plan that has not yet been accepted, or it fails to produce a plan
+			//       this is shown by not having any info at all after the result for the V3 planner
+			//       with this last expectation, it is an error if the V4 planner
+			//       produces the same plan as the V3 planner does
 			if !empty || checkAllTests {
 				t.Run("V4: "+tcase.comments, func(t *testing.T) {
 					if out != tcase.output2ndPlanner {
 						fail = true
-						expectedVal = ""
 						t.Errorf("V4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+
 					}
 					if err != nil {
 						out = `"` + out + `"`
 					}
 
-					if tcase.output == tcase.output2ndPlanner {
-						if empty {
-							expected.WriteString(expectedVal)
-						} else {
-							// produce empty brackets when the planners agree
-							expected.WriteString("{\n}\n")
-						}
+					if tcase.output == out {
+						expected.WriteString("{\n}\n")
 					} else {
 						expected.WriteString(out)
 					}

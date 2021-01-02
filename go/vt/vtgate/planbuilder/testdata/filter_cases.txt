@@ -413,8 +413,6 @@
     "Table": "user"
   }
 }
-{
-}
 
 # Composite IN: RHS has no simple values
 "select id from user where (col1, name) in (('aa', 1+1))"
@@ -452,8 +450,6 @@
     "Query": "select Id from user where 1 in ('aa', 'bb')",
     "Table": "user"
   }
-}
-{
 }
 
 # Single table complex in clause
@@ -1190,8 +1186,6 @@
     "Table": "user"
   }
 }
-{
-}
 
 # outer and inner subquery route by same int val
 "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)"
@@ -1213,8 +1207,6 @@
     ],
     "Vindex": "user_index"
   }
-}
-{
 }
 
 # outer and inner subquery route by same str val
@@ -1238,8 +1230,6 @@
     "Vindex": "user_index"
   }
 }
-{
-}
 
 # outer and inner subquery route by same val arg
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)"
@@ -1262,8 +1252,6 @@
     "Vindex": "user_index"
   }
 }
-{
-}
 
 # unresolved symbol in inner subquery.
 "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
@@ -1285,8 +1273,6 @@
     "Query": "select id2 from user as uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
     "Table": "user"
   }
-}
-{
 }
 
 # cross-shard subquery in IN clause.
@@ -1589,8 +1575,6 @@
     "Query": "select id from user where database()",
     "Table": "user"
   }
-}
-{
 }
 
 # outer and inner subquery route reference the same "uu.id" name

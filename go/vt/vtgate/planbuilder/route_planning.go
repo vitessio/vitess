@@ -79,7 +79,13 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) error {
 	rb, ok := plan.(*route)
 	if ok {
-		rb.Select = sel
+		ast := rb.Select.(*sqlparser.Select)
+		ast.Distinct = sel.Distinct
+		ast.GroupBy = sel.GroupBy
+		ast.OrderBy = sel.OrderBy
+		ast.Limit = sel.Limit
+		ast.SelectExprs = sel.SelectExprs
+		ast.Comments = sel.Comments
 	} else {
 		var projections []*sqlparser.AliasedExpr
 
@@ -671,9 +677,18 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	tableNameMap := map[string]interface{}{}
 
 	for _, t := range n.tables {
-		tablesForSelect = append(tablesForSelect, t.qtable.alias)
+		alias := sqlparser.AliasedTableExpr{
+			Expr: sqlparser.TableName{
+				Name: t.vtable.Name,
+			},
+			Partitions: nil,
+			As:         t.qtable.alias.As,
+			Hints:      nil,
+		}
+		tablesForSelect = append(tablesForSelect, &alias)
 		tableNameMap[sqlparser.String(t.qtable.table.Name)] = nil
 	}
+
 	predicates := n.Predicates()
 	var where *sqlparser.Where
 	if predicates != nil {
