@@ -104,13 +104,16 @@ var (
 
 func TestVaultAuth(t *testing.T) {
 	defer cluster.PanicHandler(nil)
-	initializeClusterEarly(t)
 	defer clusterInstance.Teardown()
+
+	// Instantiate Vitess Cluster objects and start topo
+	initializeClusterEarly(t)
 
 	// start Vault server
 	vs := startVaultServer(t, master)
 	defer vs.stop()
 
+	// Wait for Vault server to come up
 	for i := 0; i < 60; i++ {
 		time.Sleep(250 * time.Millisecond)
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", hostname, vs.port1))
@@ -126,17 +129,18 @@ func TestVaultAuth(t *testing.T) {
 	require.NotEmpty(t, secretID)
 
 	// Passing via environment, easier than trying to modify
-	// vtgate/vttablet flags
+	// vtgate/vttablet flags within our test machinery
 	os.Setenv("VAULT_ROLEID", roleID)
 	os.Setenv("VAULT_SECRETID", secretID)
 
+	// Bring up rest of the Vitess cluster
 	initializeClusterLate(t)
 
-	// Creating the table
+	// Create a table
 	_, err := master.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
 	require.NoError(t, err)
 
-	// This tests the vtgate Vault auth.
+	// This tests the vtgate Vault auth & indirectly vttablet Vault auth too
 	insertRow(t, 1, "prd-1")
 	insertRow(t, 2, "prd-2")
 
@@ -145,6 +149,8 @@ func TestVaultAuth(t *testing.T) {
 	// Sleep for a while; giving enough time for a token renewal
 	//   and it making it into the (asynchronous) log
 	time.Sleep(30 * time.Second)
+	// Check the log for the Vault token renewal message
+	//   If we don't see it, that is a test failure
 	logContents, _ := ioutil.ReadFile(path.Join(clusterInstance.TmpDirectory, vttabletLogFileName))
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
