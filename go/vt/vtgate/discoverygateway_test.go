@@ -179,7 +179,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet(cell, "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
 	hc.AddTestTablet(cell, "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second) //nolint
 	err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_MASTER})
 	if err != nil {
 		t.Errorf("want %+v, got %+v", nil, err)
@@ -192,7 +192,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	}
 
 	// errors because there is no primary on  ks2
-	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second) //nolint
 	srvTopo.SrvKeyspaceNames = []string{keyspace, "ks2"}
 	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
 	if err == nil {
@@ -201,7 +201,7 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 
 	discovery.KeyspacesToWatch = []string{keyspace}
 	// does not wait for ks2 if it's not part of the filter
-	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second) //nolint
 	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
 	if err != nil {
 		t.Errorf("want %+v, got %+v", nil, err)
