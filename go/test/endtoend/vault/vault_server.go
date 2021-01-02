@@ -62,11 +62,14 @@ func (vs *VaultServer) start() error {
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
 	fileStat, err := os.Stat(vs.execPath)
 	if err != nil || fileStat.Size() != vaultDownloadSize {
+		log.Warningf("Downloading Vault binary to: %v", vs.execPath)
 		err := downloadExecFile(vs.execPath, vaultDownloadSource)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
+	} else {
+		log.Warningf("Vault binary already present at %v , not re-downloading", vs.execPath)
 	}
 
 	// Create Vault log directory
@@ -143,6 +146,7 @@ func (vs *VaultServer) stop() error {
 	}
 }
 
+// Download file from url to path; making it executable
 func downloadExecFile(path string, url string) error {
 	resp, err := http.Get(url)
 	if err != nil {
