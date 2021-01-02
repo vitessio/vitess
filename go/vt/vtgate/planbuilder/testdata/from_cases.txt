@@ -113,6 +113,19 @@
   }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select m1.col from unsharded as m1 join unsharded as m2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
+    "Query": "select m1.col from unsharded as m1, unsharded as m2",
+    "Table": "unsharded"
+  }
 }
 
 # Multi-table, multi-chunk
@@ -171,6 +184,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
@@ -188,6 +203,8 @@
     "Query": "select * from user as a",
     "Table": "user"
   }
+}
+{
 }
 
 # routing rules where table name does not match, and there's no alias.
@@ -350,6 +367,19 @@
   }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select u1.a, u2.a from unsharded as u3, unsharded as u1, unsharded as u2 where 1 != 1",
+    "Query": "select u1.a, u2.a from unsharded as u3, unsharded as u1, unsharded as u2",
+    "Table": "unsharded"
+  }
 }
 
 # Left join, single chunk
@@ -368,8 +398,6 @@
     "Query": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a = m2.b",
     "Table": "unsharded"
   }
-}
-{
 }
 
 # Left join, multi-chunk
@@ -572,8 +600,6 @@
     "Query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
     "Table": "unsharded"
   }
-}
-{
 }
 
 # Three-way join
@@ -809,8 +835,6 @@
     "Table": "user"
   }
 }
-{
-}
 
 # mergeable sharded join on unique vindex
 "select user.col from user join user_extra on user.id = user_extra.user_id"
@@ -839,8 +863,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
+    "FieldQuery": "select user.col from user, user_extra where 1 != 1",
+    "Query": "select user.col from user, user_extra where user.id = user_extra.user_id",
     "Table": "user, user_extra"
   }
 }
@@ -872,8 +896,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
+    "FieldQuery": "select user.col from user, user_extra where 1 != 1",
+    "Query": "select user.col from user, user_extra where user.id = user_extra.user_id",
     "Table": "user, user_extra"
   }
 }
@@ -905,8 +929,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
+    "FieldQuery": "select user.col from user, user_extra where 1 != 1",
+    "Query": "select user.col from user, user_extra where user.col between 1 and 2 and user.id = user_extra.user_id",
     "Table": "user, user_extra"
   }
 }
@@ -938,8 +962,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user_extra.user_id = user.id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user_extra.user_id = user.id",
+    "FieldQuery": "select user.col from user, user_extra where 1 != 1",
+    "Query": "select user.col from user, user_extra where user_extra.user_id = user.id",
     "Table": "user, user_extra"
   }
 }
@@ -975,8 +999,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
+    "FieldQuery": "select user.col from user, user_extra where 1 != 1",
+    "Query": "select user.col from user, user_extra where user.id = 5 and user.id = user_extra.user_id",
     "Table": "user, user_extra",
     "Values": [
       5
@@ -1288,6 +1312,19 @@
   }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select r1.col from ref r1 join ref",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select r1.col from ref as r1, ref where 1 != 1",
+    "Query": "select r1.col from ref as r1, ref",
+    "Table": "ref"
+  }
 }
 
 # reference table can merge with other opcodes left to right.
@@ -2268,8 +2305,6 @@
     "Table": "unsharded"
   }
 }
-{
-}
 
 # last_insert_id for dual
 "select last_insert_id()"
@@ -2328,6 +2363,8 @@
     "Query": "select :__lastInsertId as `last_insert_id()` from unsharded",
     "Table": "unsharded"
   }
+}
+{
 }
 
 # join with USING construct
