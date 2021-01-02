@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -496,6 +497,7 @@ func (msdw *MultiSplitDiffWorker) startVreplication(ctx context.Context, shardIn
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 	_, err := msdw.wr.TabletManagerClient().VReplicationExec(shortCtx, masterInfo.Tablet, binlogplayer.StartVReplication(msdw.sourceUID))
 	if err != nil {
+		cancel()
 		return vterrors.Wrapf(err, "VReplicationExec(start) failed for %v", shardInfo.MasterAlias)
 	}
 	cancel()

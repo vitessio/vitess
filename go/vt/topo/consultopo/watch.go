@@ -90,6 +90,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 				notifications <- &topo.WatchData{
 					Err: convertError(err, nodePath),
 				}
+				cancelGetCtx()
 				return
 			}
 
@@ -98,6 +99,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 				notifications <- &topo.WatchData{
 					Err: topo.NewError(topo.NoNode, nodePath),
 				}
+				cancelGetCtx()
 				return
 			}
 
@@ -115,6 +117,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 				notifications <- &topo.WatchData{
 					Err: convertError(watchCtx.Err(), nodePath),
 				}
+				cancelGetCtx()
 				return
 			default:
 			}
