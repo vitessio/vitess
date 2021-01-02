@@ -615,6 +615,15 @@
 			"Shard": 22,
 			"RetryMax": 0,
 			"Tags": []
+		},
+		"vault": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 23,
+			"RetryMax": 0,
+			"Tags": []
 		}
 	}
 }
