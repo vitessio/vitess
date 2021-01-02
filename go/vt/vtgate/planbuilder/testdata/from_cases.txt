@@ -376,8 +376,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select u1.a, u2.a from unsharded as u3, unsharded as u1, unsharded as u2 where 1 != 1",
-    "Query": "select u1.a, u2.a from unsharded as u3, unsharded as u1, unsharded as u2",
+    "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3 where 1 != 1",
+    "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3",
     "Table": "unsharded"
   }
 }

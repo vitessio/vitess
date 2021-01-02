@@ -125,7 +125,7 @@ type (
 
 		// tables contains all the tables that are solved by this plan.
 		// the tables also contain any predicates that only depend on that particular table
-		tables []*routeTable
+		tables routeTables
 
 		// extraPredicates are the predicates that depend on multiple tables
 		extraPredicates []sqlparser.Expr
@@ -138,6 +138,7 @@ type (
 		predicates []sqlparser.Expr
 		lhs, rhs   joinTree
 	}
+	routeTables []*routeTable
 )
 
 // solves implements the joinTree interface
@@ -676,6 +677,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
+	sort.Sort(n.tables)
 	for _, t := range n.tables {
 		alias := sqlparser.AliasedTableExpr{
 			Expr: sqlparser.TableName{
@@ -835,4 +837,18 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 	}
 
 	return r
+}
+
+var _ sort.Interface = (routeTables)(nil)
+
+func (r routeTables) Len() int {
+	return len(r)
+}
+
+func (r routeTables) Less(i, j int) bool {
+	return r[i].qtable.tableID < r[j].qtable.tableID
+}
+
+func (r routeTables) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
 }

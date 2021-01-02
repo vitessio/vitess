@@ -204,8 +204,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user.id from user_metadata, user, user_extra where 1 != 1",
-            "Query": "select user.id from user_metadata, user, user_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id",
+            "FieldQuery": "select user.id from user, user_extra, user_metadata where 1 != 1",
+            "Query": "select user.id from user, user_extra, user_metadata where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id",
             "Table": "user, user_extra, user_metadata"
           },
           {
@@ -215,8 +215,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from unsharded_auto, unsharded_b, unsharded, unsharded_a where 1 != 1",
-            "Query": "select 1 from unsharded_auto, unsharded_b, unsharded, unsharded_a where unsharded.x = unsharded_a.y",
+            "FieldQuery": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where 1 != 1",
+            "Query": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where unsharded.x = unsharded_a.y",
             "Table": "unsharded, unsharded_a, unsharded_auto, unsharded_b"
           }
         ]
