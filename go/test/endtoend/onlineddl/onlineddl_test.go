@@ -24,6 +24,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,36 +46,43 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	totalTableCount       = 4
-	ddlStrategyUnchanged  = "-"
 	createTable           = `
 		CREATE TABLE %s (
-		id BIGINT(20) not NULL,
-		msg varchar(64),
-		PRIMARY KEY (id)
+			id bigint(20) NOT NULL,
+			msg varchar(64),
+			PRIMARY KEY (id)
 		) ENGINE=InnoDB;`
 	// To verify non online-DDL behavior
 	alterTableNormalStatement = `
 		ALTER TABLE %s
-		ADD COLUMN non_online INT UNSIGNED NOT NULL`
+			ADD COLUMN non_online int UNSIGNED NOT NULL`
 	// A trivial statement which must succeed and does not change the schema
 	alterTableTrivialStatement = `
 		ALTER TABLE %s
-		ENGINE=InnoDB`
+			ENGINE=InnoDB`
 	// The following statement is valid
 	alterTableSuccessfulStatement = `
 		ALTER TABLE %s
-		MODIFY id BIGINT UNSIGNED NOT NULL,
-		ADD COLUMN ghost_col INT NOT NULL,
-		ADD INDEX idx_msg(msg)`
+			MODIFY id bigint UNSIGNED NOT NULL,
+			ADD COLUMN ghost_col int NOT NULL,
+			ADD INDEX idx_msg(msg)`
 	// The following statement will fail because gh-ost requires some shared unique key
 	alterTableFailedStatement = `
 		ALTER TABLE %s
-		DROP PRIMARY KEY,
-		DROP COLUMN ghost_col`
+			DROP PRIMARY KEY,
+			DROP COLUMN ghost_col`
 	// We will run this query with "gh-ost --max-load=Threads_running=1"
 	alterTableThrottlingStatement = `
 		ALTER TABLE %s
-		DROP COLUMN ghost_col`
+			DROP COLUMN ghost_col`
+	onlineDDLCreateTableStatement = `
+		CREATE TABLE %s (
+			id bigint NOT NULL,
+			online_ddl_create_col INT NOT NULL,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB;`
+	onlineDDLDropTableStatement = `
+		DROP TABLE %s`
 )
 
 func fullWordUUIDRegexp(uuid, searchWord string) *regexp.Regexp {
@@ -105,6 +113,7 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-migration_check_interval", "5s",
+			"-gh-ost-path", os.Getenv("VITESS_ENDTOEND_GH_OST_PATH"), // leave env variable empty/unset to get the default behavior. Override in Mac.
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"-ddl_strategy", "gh-ost",
@@ -156,32 +165,64 @@ func TestSchemaChange(t *testing.T) {
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
 	{
-		_ = testAlterTable(t, alterTableNormalStatement, string(schema.DDLStrategyNormal), "vtctl", "non_online")
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online")
 	}
 	{
-		uuid := testAlterTable(t, alterTableSuccessfulStatement, ddlStrategyUnchanged, "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "gh-ost", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
 	}
 	{
-		uuid := testAlterTable(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, false)
 	}
 	{
-		uuid := testAlterTable(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
 		checkCancelMigration(t, uuid, true)
 		time.Sleep(2 * time.Second)
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 	}
 	{
-		uuid := testAlterTable(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col")
+		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 		checkCancelMigration(t, uuid, false)
 		checkRetryMigration(t, uuid, true)
+		// migration will fail again
+	}
+	{
+		// no migrations pending at this time
+		time.Sleep(10 * time.Second)
+		checkCancelAllMigrations(t, 0)
+	}
+	{
+		// spawn n migrations; cancel them via cancel-all
+		var wg sync.WaitGroup
+		count := 4
+		for i := 0; i < count; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col")
+			}()
+		}
+		wg.Wait()
+		checkCancelAllMigrations(t, count)
+	}
+	{
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtctl", "")
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
+	}
+	{
+		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "gh-ost", "vtctl", "online_ddl_create_col")
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkCancelMigration(t, uuid, false)
+		checkRetryMigration(t, uuid, false)
 	}
 }
 
@@ -198,8 +239,8 @@ func testWithInitialSchema(t *testing.T) {
 	checkTables(t, totalTableCount)
 }
 
-// testAlterTable runs an online DDL, ALTER statement
-func testAlterTable(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
+// testOnlineDDLStatement runs an online DDL, ALTER statement
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
@@ -209,22 +250,22 @@ func testAlterTable(t *testing.T, alterStatement string, ddlStrategy string, exe
 		}
 	} else {
 		var err error
-		ddlStrategyArg := ""
-		if ddlStrategy != ddlStrategyUnchanged {
-			ddlStrategyArg = ddlStrategy
-		}
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategyArg)
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategy)
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	if ddlStrategy != string(schema.DDLStrategyNormal) {
+	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
+	assert.NoError(t, err)
+	if !strategy.IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
 
-	checkMigratedTable(t, tableName, expectColumn)
+	if expectColumn != "" {
+		checkMigratedTable(t, tableName, expectColumn)
+	}
 	return uuid
 }
 
@@ -279,6 +320,18 @@ func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) 
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
+// checkCancelAllMigrations all pending migrations
+func checkCancelAllMigrations(t *testing.T, expectCount int) {
+	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelAllMigrations(keyspaceName)
+	fmt.Println("# 'vtctlclient OnlineDDL cancel-all' output (for debug purposes):")
+	fmt.Println(result)
+	assert.NoError(t, err)
+
+	r := fullWordRegexp(fmt.Sprintf("%d", expectCount))
+	m := r.FindAllString(result, -1)
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
+}
+
 // checkRetryMigration attempts to retry a migration, and expects rejection
 func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLRetryMigration(keyspaceName, uuid)
@@ -323,11 +376,10 @@ func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError stri
 	require.Nil(t, err)
 	defer conn.Close()
 
-	if ddlStrategy != ddlStrategyUnchanged {
-		setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
-		_, err := conn.ExecuteFetch(setSession, 1000, true)
-		assert.NoError(t, err)
-	}
+	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
+	_, err = conn.ExecuteFetch(setSession, 1000, true)
+	assert.NoError(t, err)
+
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
 		require.NoError(t, err)

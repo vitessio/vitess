@@ -193,6 +193,24 @@ func TestInsertAllDefaults(t *testing.T) {
 	assertMatches(t, conn, `select * from allDefaults`, "[[INT64(1) NULL]]")
 }
 
+func TestCreateViewUnsharded(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	defer exec(t, conn, `delete from t1`)
+	// Test that create view works and the output is as expected
+	_, err = conn.ExecuteFetch(`create view v1 as select * from t1`, 1000, true)
+	require.NoError(t, err)
+	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'),(30,10,30,'ac'),(3,0,3,'a')`)
+	assertMatches(t, conn, "select * from v1", `[[INT64(3) INT64(0) INT64(3) VARCHAR("a")] [INT64(30) INT64(10) INT64(30) VARCHAR("ac")] [INT64(300) INT64(100) INT64(300) VARCHAR("abc")]]`)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)

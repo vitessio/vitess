@@ -78,10 +78,10 @@ func limitString(s string, limit int) string {
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
 	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Infof("exec %s", limitString(redactMasterPassword(query), LogQueryLengthLimit))
+		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			log.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
+			log.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
 		}
 	}
 	return nil
@@ -213,16 +213,28 @@ func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[s
 const (
 	masterPasswordStart = "  MASTER_PASSWORD = '"
 	masterPasswordEnd   = "',\n"
+	passwordStart       = " PASSWORD = '"
+	passwordEnd         = "'"
 )
 
-func redactMasterPassword(input string) string {
+func redactPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)
+	// We have master password in the query, try to redact it
+	if i != -1 {
+		j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
+		if j == -1 {
+			return input
+		}
+		input = input[:i+len(masterPasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
+	}
+	// We also check if we have any password keyword in the query
+	i = strings.Index(input, passwordStart)
 	if i == -1 {
 		return input
 	}
-	j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
+	j := strings.Index(input[i+len(passwordStart):], passwordEnd)
 	if j == -1 {
 		return input
 	}
-	return input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
+	return input[:i+len(passwordStart)] + strings.Repeat("*", 4) + input[i+len(passwordStart)+j:]
 }

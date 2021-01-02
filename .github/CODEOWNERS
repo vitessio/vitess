@@ -1,20 +1,27 @@
 * @sougou
 
-/config/mycnf/ @morgo
+/config/mycnf/ @askdba @shlomi-noach
 /docker/ @derekperkins @dkhenry
 /examples/compose @shlomi-noach
 /examples/local @rohit-nayak-ps
+/go/cmd/vtadmin @ajm188 @doeg
+/go/cmd/vtctldclient @ajm188 @doeg
 /go/mysql @harshit-gangal @systay
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/orchestrator @deepthi @shlomi-noach
 /go/test/endtoend/vtgate @harshit-gangal @systay
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
-/go/vt/mysqlctl/mysqld.go @morgo
+/go/vt/proto/vtadmin @ajm188 @doeg
 /go/vt/orchestrator @deepthi @shlomi-noach
 /go/vt/schema @shlomi-noach
 /go/vt/sqlparser @harshit-gangal @systay
+/go/vt/vtadmin @ajm188 @doeg
 /go/vt/vtctl @deepthi
+/go/vt/vtctl/vtctl.go @ajm188 @doeg
+/go/vt/vtctl/grpcvtctldclient @ajm188 @doeg
+/go/vt/vtctl/grpcvtctldserver @ajm188 @doeg
+/go/vt/vtctl/vtctldclient @ajm188 @doeg
 /go/vt/vtgate @harshit-gangal @systay
 /go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps
@@ -22,4 +29,8 @@
 /go/vt/vttablet/tabletserver @harshit-gangal @systay @shlomi-noach
 /go/vt/wrangler @deepthi @rohit-nayak-ps
 /helm/ @derekperkins @dkhenry
+/proto/vtadmin.proto @ajm188 @doeg
+/proto/vtctldata.proto @ajm188 @doeg
+/proto/vtctlservice.proto @ajm188 @doeg
+/web/vtadmin @ajm188 @doeg
 /web/vtctld2 @rohit-nayak-ps

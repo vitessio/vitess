@@ -74,14 +74,14 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
@@ -190,119 +190,57 @@ $(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql56 mysql57 mysql80 percona percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
+BOOTSTRAP_VERSION=0
+ensure_bootstrap_version:
+	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
+	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
+
 docker_bootstrap:
-	for i in $(DOCKER_IMAGES); do echo "building bootstrap image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "building bootstrap image: $$i"; docker/bootstrap/build.sh $$i ${BOOTSTRAP_VERSION} || exit 1; done
 
 docker_bootstrap_test:
-	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=2 -flavor=$${flavors// /,}
+	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=2 -bootstrap-version=${BOOTSTRAP_VERSION} -flavor=$${flavors// /,}
 
 docker_bootstrap_push:
-	for i in $(DOCKER_IMAGES); do echo "pushing bootstrap image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "pushing bootstrap image: ${BOOTSTRAP_VERSION}-$$i"; docker push vitess/bootstrap:${BOOTSTRAP_VERSION}-$$i || exit 1; done
 
 # Use this target to update the local copy of your images with the one on Dockerhub.
 docker_bootstrap_pull:
-	for i in $(DOCKER_IMAGES); do echo "pulling bootstrap image: $$i"; docker pull vitess/bootstrap:$$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "pulling bootstrap image: $$i"; docker pull vitess/bootstrap:${BOOTSTRAP_VERSION}-$$i || exit 1; done
+
+
+define build_docker_image
+	# Fix permissions before copying files, to avoid AUFS bug.
+	${info Building ${2}}
+	chmod -R o=g *;
+	docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
+endef
 
 docker_base:
-	# Fix permissions before copying files, to avoid AUFS bug.
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile -t vitess/base .
+	${call build_docker_image,docker/base/Dockerfile,vitess/base}
 
-docker_base_mysql56:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql56 .
+DOCKER_BASE_SUFFIX = mysql56 mysql80 mariadb mariadb103 percona percona57 percona80
+DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
+$(DOCKER_BASE_TARGETS): docker_base_%:
+	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
 
-docker_base_mysql80:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mysql80 -t vitess/base:mysql80 .
-
-docker_base_mariadb:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb .
-
-docker_base_mariadb103:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb103 .
-
-docker_base_percona:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona -t vitess/base:percona .
-
-docker_base_percona57:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona57 .
-
-docker_base_percona80:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona80 -t vitess/base:percona80 .
+docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 
 docker_lite:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile -t vitess/lite .
+	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-docker_lite_mysql56:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql56 -t vitess/lite:mysql56 .
+DOCKER_LITE_SUFFIX = mysql56 mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing
+DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
+$(DOCKER_LITE_TARGETS): docker_lite_%:
+	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
 
-docker_lite_mysql57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql57 -t vitess/lite:mysql57 .
-
-docker_lite_ubi7.mysql57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.mysql57 -t vitess/lite:ubi7.mysql57 .
-
-docker_lite_mysql80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql80 -t vitess/lite:mysql80 .
-
-docker_lite_ubi7.mysql80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.mysql80 -t vitess/lite:ubi7.mysql80 .
-
-docker_lite_mariadb:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mariadb -t vitess/lite:mariadb .
-
-docker_lite_mariadb103:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mariadb103 -t vitess/lite:mariadb103 .
-
-docker_lite_percona:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.percona -t vitess/lite:percona .
-
-docker_lite_percona57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.percona57 -t vitess/lite:percona57 .
-
-docker_lite_ubi7.percona57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.percona57 -t vitess/lite:ubi7.percona57 .
-
-docker_lite_percona80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.percona80 -t vitess/lite:percona80 .
-
-docker_lite_ubi7.percona80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.percona80 -t vitess/lite:ubi7.percona80 .
-
-docker_lite_alpine:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
-
-docker_lite_testing:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.testing -t vitess/lite:testing .
+docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 
 docker_local:
-	chmod -R o=g *
-	docker build -f docker/local/Dockerfile -t vitess/local .
+	${call build_docker_image,docker/local/Dockerfile,vitess/local}
 
 docker_mini:
-	chmod -R o=g *
-	docker build -f docker/mini/Dockerfile -t vitess/mini .
+	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
@@ -326,15 +264,6 @@ release: docker_base
 	echo "A git tag was created, you can push it with:"
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
-
-packages: docker_base
-	@if [ -z "$VERSION" ]; then \
-	  echo "Set the env var VERSION with the release version"; exit 1;\
-	fi
-	mkdir -p releases
-	docker build -f docker/packaging/Dockerfile -t vitess/packaging .
-	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t deb --deb-no-default-config-files
-	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t rpm
 
 tools:
 	echo $$(date): Installing dependencies
@@ -384,3 +313,12 @@ web_build: web_bootstrap
 # Following the local Docker install guide is recommended: https://vitess.io/docs/get-started/local-docker/
 web_start: web_bootstrap
 	cd web/vtctld2 && npm run start
+
+vtadmin_web_install: 
+	cd web/vtadmin && npm install
+
+# Generate JavaScript/TypeScript bindings for vtadmin-web from the Vitess .proto files.
+# Eventually, we'll want to call this target as part of the standard `make proto` target.
+# While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
+vtadmin_web_proto_types: vtadmin_web_install
+	./web/vtadmin/bin/generate-proto-types.sh

@@ -84,7 +84,7 @@ type (
 		// Will replace all of the Topo functions.
 		ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 
-		ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error
+		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error
 
 		SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error
 

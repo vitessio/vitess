@@ -156,6 +156,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	saveSessionStats(safeSession, stmtType, result, err)
 	if result != nil && len(result.Rows) > *warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v", sql, *warnMemoryRows)
 	}
 
 	logStats.Send()
@@ -433,7 +434,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	if err != nil {
 		return nil, err
 	}
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, nil, "vtg", false)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, nil, "vtg", false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -599,28 +600,10 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	execStart := time.Now()
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
 	switch strings.ToLower(show.Type) {
-	case sqlparser.KeywordString(sqlparser.COLLATION), sqlparser.KeywordString(sqlparser.VARIABLES):
+	case sqlparser.KeywordString(sqlparser.VARIABLES):
 		if show.Scope == sqlparser.VitessMetadataScope {
 			return e.handleShowVitessMetadata(ctx, show.ShowTablesOpt)
 		}
-
-		if destKeyspace == "" {
-			keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if len(keyspaces) == 0 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
-			}
-			return e.handleOther(ctx, safeSession, sql, bindVars, dest, keyspaces[0], destTabletType, logStats, ignoreMaxMemoryRows)
-		}
-	// for STATUS, return empty result set
-	case sqlparser.KeywordString(sqlparser.STATUS):
-		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Variable_name", "Value"),
-			Rows:         make([][]sqltypes.Value, 0, 2),
-			RowsAffected: 0,
-		}, nil
 	// for ENGINES, we want to return just InnoDB
 	case sqlparser.KeywordString(sqlparser.ENGINES):
 		rows := make([][]sqltypes.Value, 0, 6)
@@ -652,25 +635,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Rows:         rows,
 			RowsAffected: 1,
 		}, nil
-	// CHARSET & CHARACTER SET return utf8mb4 & utf8
-	case sqlparser.KeywordString(sqlparser.CHARSET):
-		fields := buildVarCharFields("Charset", "Description", "Default collation")
-		maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
-		fields = append(fields, maxLenField)
-
-		charsets := []string{utf8, utf8mb4}
-		filter := show.ShowTablesOpt.Filter
-		rows, err := generateCharsetRows(filter, charsets)
-		if err != nil {
-			return nil, err
-		}
-		rowsAffected := uint64(len(rows))
-
-		return &sqltypes.Result{
-			Fields:       fields,
-			Rows:         rows,
-			RowsAffected: rowsAffected,
-		}, err
 	case "create table":
 		if !show.Table.Qualifier.IsEmpty() {
 			// Explicit keyspace was passed. Use that for targeting but remove from the query itself.
@@ -720,34 +684,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			show.ShowTablesOpt.DbName = ""
 		}
 		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.DATABASES), sqlparser.KeywordString(sqlparser.VITESS_KEYSPACES), sqlparser.KeywordString(sqlparser.KEYSPACES):
-		keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		var filter *regexp.Regexp
-
-		if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
-			filter = sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
-		}
-
-		if filter == nil {
-			filter = regexp.MustCompile(".*")
-		}
-
-		rows := make([][]sqltypes.Value, 0, len(keyspaces))
-		for _, v := range keyspaces {
-			if filter.MatchString(v) {
-				rows = append(rows, buildVarCharRow(v))
-			}
-		}
-
-		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Databases"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
-		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
 		showVitessShardsFilters := func(show *sqlparser.ShowLegacy) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
 			keyspaceFilters := []func(string) bool{}
@@ -1361,7 +1297,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize)
+		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize, vcursor.keyspace)
 		if err != nil {
 			return nil, err
 		}
