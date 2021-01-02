@@ -297,7 +297,11 @@ client_go_gen: install_k8s-code-generator
 	# Delete and re-generate the deepcopy types
 	find $(VTROOT)/go/vt/topo/k8stopo/apis/topo/v1beta1 -name "zz_generated.deepcopy.go" -delete
 
-	$(DEEPCOPY_GEN) --input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	# We output to ./ and then copy over the generated files to the appropriate path
+	# This is done so we don't have rely on the repository being cloned to `$GOPATH/src/vitess.io/vitess`
+
+	$(DEEPCOPY_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
 	-O zz_generated.deepcopy \
 	--bounding-dirs $(GEN_BASE_DIR)/apis \
 	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
@@ -306,7 +310,8 @@ client_go_gen: install_k8s-code-generator
 	rm -rf go/vt/topo/k8stopo/client
 
 	# Generate clientset
-	$(CLIENT_GEN) --clientset-name versioned \
+	$(CLIENT_GEN) -o ./ \
+	--clientset-name versioned \
 	--input-base $(GEN_BASE_DIR)/apis \
 	--input 'topo/v1beta1' \
 	--output-package $(GEN_BASE_DIR)/client/clientset \
@@ -314,16 +319,22 @@ client_go_gen: install_k8s-code-generator
 	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
 	# Generate listers
-	$(LISTER_GEN) --input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	$(LISTER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
 	--output-package $(GEN_BASE_DIR)/client/listers \
 	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
 	# Generate informers
-	$(INFORMER_GEN) --input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	$(INFORMER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
 	--output-package $(GEN_BASE_DIR)/client/informers \
 	--versioned-clientset-package $(GEN_BASE_DIR)/client/clientset/versioned \
 	--listers-package $(GEN_BASE_DIR)/client/listers \
 	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
+
+	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
+	mv vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go
+	rm -rf vitess.io/vitess/go/vt/topo/k8stopo/
 
 # Check prerequisites and install dependencies
 web_bootstrap:
