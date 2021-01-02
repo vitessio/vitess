@@ -35,8 +35,8 @@ import (
 )
 
 var (
-	vaultAddr             = flag.String("mysql_auth_vault_addr", "", "TODO")
-	vaultTimeout          = flag.Duration("mysql_auth_vault_timeout", 10*time.Second, "TODO")
+	vaultAddr             = flag.String("mysql_auth_vault_addr", "", "URL to Vault server")
+	vaultTimeout          = flag.Duration("mysql_auth_vault_timeout", 10*time.Second, "Timeout for vault API operations")
 	vaultCACert           = flag.String("mysql_auth_vault_tls_ca", "", "Path to CA PEM for validating Vault server certificate")
 	vaultPath             = flag.String("mysql_auth_vault_path", "", "Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds")
 	vaultCacheTTL         = flag.Duration("mysql_auth_vault_ttl", 30*time.Minute, "How long to cache vtgate credentials from the Vault server")
