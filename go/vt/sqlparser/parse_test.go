@@ -191,6 +191,9 @@ var (
 		input:  "select /* column alias as string without as */ a \"b\" from t",
 		output: "select /* column alias as string without as */ a as b from t",
 	}, {
+		input:  "select /* column alias with non_reserved keyword */ a as auto_increment from t",
+		output: "select /* column alias with non_reserved keyword */ a as `auto_increment` from t",
+	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
 		input:  "select next value for t",
@@ -1156,27 +1159,46 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input: "create index a on b (col1)",
+		input:  "create index a on b (col1)",
+		output: "alter table b add index a (col1)",
 	}, {
-		input: "create unique index a on b (col1)",
+		input:  "create unique index a on b (col1)",
+		output: "alter table b add unique index a (col1)",
 	}, {
-		input: "create unique index a using foo on b (col1 desc)",
+		input:  "create unique index a using foo on b (col1 desc)",
+		output: "alter table b add unique index a (col1 desc) using foo",
 	}, {
-		input: "create fulltext index a using foo on b (col1)",
+		input:  "create fulltext index a on b (col1) with parser a",
+		output: "alter table b add fulltext index a (col1) with parser a",
 	}, {
-		input: "create spatial index a using foo on b (col1)",
+		input:  "create spatial index a on b (col1)",
+		output: "alter table b add spatial index a (col1)",
 	}, {
-		input: "create index a on b (col1) using btree key_block_size 12 with parser 'a' comment 'string' algorithm inplace lock none",
+		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
+		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string' algorithm inplace lock none",
 	}, {
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
-		output:     "create index a on b ()",
+		output:     "alter table b add index a ()",
 		partialDDL: true,
 	}, {
-		input:  "create view a",
-		output: "create table a",
+		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
-		input:  "create or replace view a",
-		output: "create table a",
+		input: "create view ks.a as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e",
+	}, {
+		input:  "create algorithm = merge sql security definer view a (b,c,d) as select * from e with cascaded check option",
+		output: "create algorithm = merge sql security definer view a(b, c, d) as select * from e with cascaded check option",
+	}, {
+		input:  "create algorithm = temptable definer = a@b.c.d view a(b,c,d) as select * from e with local check option",
+		output: "create algorithm = temptable definer = a@b.c.d view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b,c,d) as select * from e with local check option",
+		output: "create or replace algorithm = temptable definer = a@b.c.d sql security definer view a(b, c, d) as select * from e with local check option",
+	}, {
+		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
+		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
 	}, {
 		input:  "alter view a",
 		output: "alter table a",
@@ -1250,8 +1272,7 @@ var (
 		input:  "show create event e",
 		output: "show create event",
 	}, {
-		input:  "show create function f",
-		output: "show create function",
+		input: "show create function f",
 	}, {
 		input:  "show create procedure p",
 		output: "show create procedure",
@@ -1271,29 +1292,30 @@ var (
 		input:  "show databases",
 		output: "show databases",
 	}, {
+		input:  "show databases like '%'",
+		output: "show databases like '%'",
+	}, {
 		input:  "show schemas",
-		output: "show schemas",
+		output: "show databases",
+	}, {
+		input:  "show schemas like '%'",
+		output: "show databases like '%'",
 	}, {
 		input:  "show engine INNODB",
 		output: "show engine",
 	}, {
-		input:  "show engines",
-		output: "show engines",
+		input: "show engines",
 	}, {
 		input:  "show storage engines",
 		output: "show storage",
 	}, {
-		input:  "show errors",
-		output: "show errors",
+		input: "show errors",
 	}, {
-		input:  "show events",
-		output: "show events",
+		input: "show events",
 	}, {
-		input:  "show function code func",
-		output: "show function",
+		input: "show function code func",
 	}, {
-		input:  "show function status",
-		output: "show function",
+		input: "show function status",
 	}, {
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
@@ -1316,11 +1338,9 @@ var (
 		input:  "show privileges",
 		output: "show privileges",
 	}, {
-		input:  "show procedure code p",
-		output: "show procedure",
+		input: "show procedure code p",
 	}, {
-		input:  "show procedure status",
-		output: "show procedure",
+		input: "show procedure status",
 	}, {
 		input:  "show processlist",
 		output: "show processlist",
@@ -1350,7 +1370,7 @@ var (
 		output: "show global status",
 	}, {
 		input:  "show session status",
-		output: "show session status",
+		output: "show status",
 	}, {
 		input: "show table status",
 	}, {
@@ -1413,11 +1433,13 @@ var (
 		output: "show global variables",
 	}, {
 		input:  "show session variables",
-		output: "show session variables",
+		output: "show variables",
 	}, {
-		input: "show vitess_keyspaces",
+		input:  "show vitess_keyspaces",
+		output: "show databases",
 	}, {
-		input: "show vitess_keyspaces like '%'",
+		input:  "show vitess_keyspaces like '%'",
+		output: "show databases like '%'",
 	}, {
 		input: "show vitess_shards",
 	}, {
@@ -1510,11 +1532,20 @@ var (
 		input:  "optimize foo",
 		output: "otheradmin",
 	}, {
-		input:  "lock tables foo",
-		output: "otheradmin",
+		input:  "lock tables foo read",
+		output: "lock tables foo read",
 	}, {
-		input:  "unlock tables foo",
-		output: "otheradmin",
+		input:  "lock tables foo write",
+		output: "lock tables foo write",
+	}, {
+		input:  "lock tables foo read local",
+		output: "lock tables foo read local",
+	}, {
+		input:  "lock tables foo low_priority write",
+		output: "lock tables foo low_priority write",
+	}, {
+		input:  "unlock tables",
+		output: "unlock tables",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
 	}, {
@@ -1868,7 +1899,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input: "create index b on A (col1 desc)",
+		input:  "create index b on A (col1 desc)",
+		output: "alter table A add index b (col1 desc)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -1927,8 +1959,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A",
-		output: "create table a",
+		input:  "create view A as select * from b",
+		output: "create view a as select * from b",
 	}, {
 		input:  "alter view A",
 		output: "alter table a",
@@ -2030,7 +2062,7 @@ func TestKeywords(t *testing.T) {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 	}, {
-		input:  "select /* unused keywords as cols */ write, varying from t where trailing = 'foo'",
+		input:  "select /* unused keywords as cols */ `write`, varying from t where trailing = 'foo'",
 		output: "select /* unused keywords as cols */ `write`, `varying` from t where `trailing` = 'foo'",
 	}, {
 		input:  "select status from t",
@@ -2532,20 +2564,21 @@ func TestCreateTable(t *testing.T) {
 			t.Errorf("input: %s, err: %v", sql, err)
 			continue
 		}
-		got := String(tree.(*DDL))
-
+		got := String(tree.(*CreateTable))
+		assert.True(t, tree.(*CreateTable).FullyParsed)
 		if sql != got {
 			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
 		}
 	}
 
 	sql := "create table t garbage"
-	_, err := Parse(sql)
+	tree, err := Parse(sql)
 	if err != nil {
 		t.Errorf("input: %s, err: %v", sql, err)
 	}
+	assert.True(t, !tree.(*CreateTable).FullyParsed)
 
-	tree, err := ParseStrictDDL(sql)
+	tree, err = ParseStrictDDL(sql)
 	if tree != nil || err == nil {
 		t.Errorf("ParseStrictDDL unexpectedly accepted input %s", sql)
 	}
@@ -2749,7 +2782,8 @@ func TestCreateTable(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		assert.True(t, tree.(*CreateTable).FullyParsed)
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}
@@ -2780,7 +2814,8 @@ func TestCreateTableLike(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		assert.True(t, tree.(*CreateTable).FullyParsed)
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}
@@ -2809,7 +2844,7 @@ func TestCreateTableEscaped(t *testing.T) {
 			t.Errorf("input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
+		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
 	}

@@ -154,6 +154,16 @@ func TestRewrites(in *testing.T) {
 		in:       `select * from user where col = @@read_after_write_gtid OR col = @@read_after_write_timeout OR col = @@session_track_gtids`,
 		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
 		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
+	}, {
+		in:       "SELECT a.col, b.col FROM A JOIN B USING (id)",
+		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id = B.id",
+	}, {
+		in:       "SELECT a.col, b.col FROM A JOIN B USING (id1,id2,id3)",
+		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id1 = B.id1 AND A.id2 = B.id2 AND A.id3 = B.id3",
+	}, {
+		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
+		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
+		expected: "SELECT * FROM A JOIN B USING (id1,id2,id3)",
 	}}
 
 	for _, tc := range tests {
@@ -162,7 +172,7 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt)
+			result, err := RewriteAST(stmt, "ks") // passing `ks` just to test that no rewriting happens as it is not system schema
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -186,6 +196,56 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
+		})
+	}
+}
+
+func TestRewritesWithDefaultKeyspace(in *testing.T) {
+	tests := []myTestCase{{
+		in:       "SELECT 1 from x.test",
+		expected: "SELECT 1 from x.test", // no change
+	}, {
+		in:       "SELECT x.col as c from x.test",
+		expected: "SELECT x.col as c from x.test", // no change
+	}, {
+		in:       "SELECT 1 from test",
+		expected: "SELECT 1 from sys.test",
+	}, {
+		in:       "SELECT 1 from test as t",
+		expected: "SELECT 1 from sys.test as t",
+	}, {
+		in:       "SELECT 1 from `test 24` as t",
+		expected: "SELECT 1 from sys.`test 24` as t",
+	}, {
+		in:       "SELECT 1, (select 1 from test) from x.y",
+		expected: "SELECT 1, (select 1 from sys.test) from x.y",
+	}, {
+		in:       "SELECT 1 from (select 2 from test) t",
+		expected: "SELECT 1 from (select 2 from sys.test) t",
+	}, {
+		in:       "SELECT 1 from test where exists (select 2 from test)",
+		expected: "SELECT 1 from sys.test where exists (select 2 from sys.test)",
+	}, {
+		in:       "SELECT 1 from dual",
+		expected: "SELECT 1 from dual",
+	}, {
+		in:       "SELECT (select 2 from dual) from DUAL",
+		expected: "SELECT 2 as `(select 2 from dual)` from DUAL",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "sys")
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
 		})
 	}
 }

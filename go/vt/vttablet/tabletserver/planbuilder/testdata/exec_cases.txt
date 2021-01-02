@@ -637,7 +637,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "create table a (\n\ta int,\n\tb varchar(8)\n)"
 }
 
 # create index
@@ -651,9 +652,22 @@ options:PassthroughDMLs
       "Role": 2
     }
   ],
-  "FullQuery":"create index a on b (id)"
+  "FullQuery":"alter table b add index a (id)"
 }
 
+# create view
+"create view a as select * from b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"create view a as select * from b"
+}
 
 # alter
 "alter table a add column(a int)"

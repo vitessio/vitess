@@ -19,6 +19,7 @@ package io.vitess.jdbc;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.nullable;
 import static org.mockito.Matchers.anyMap;
 import static org.mockito.Matchers.anyString;
 import static org.powermock.api.mockito.PowerMockito.mock;
@@ -115,7 +116,7 @@ public class VitessPreparedStatementTest {
     SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
 
     when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(any(Context.class), anyString(), anyMap(), any(VTSession.class))).
+    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class))).
         thenReturn(mockSqlFutureCursor);
     when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.SIMPLE);
     when(mockConn.isSimpleExecute()).thenReturn(true);
@@ -176,9 +177,9 @@ public class VitessPreparedStatementTest {
 
     when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
     when(mockVtGateConn
-        .streamExecute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+        .streamExecute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockCursor);
-    when(mockVtGateConn.execute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
     when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
     when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.STREAM);
@@ -218,13 +219,13 @@ public class VitessPreparedStatementTest {
       try {
         //when returned cursor is null
         when(mockVtGateConn
-            .streamExecute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+            .streamExecute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
             .thenReturn(null);
         preparedStatement.executeQuery();
         fail("Should have thrown exception for cursor null");
       } catch (SQLException ex) {
         assertEquals("Failed to execute this method", ex.getMessage());
-      }
+        }
 
     } catch (SQLException e) {
       fail("Test failed " + e.getMessage());
@@ -241,7 +242,7 @@ public class VitessPreparedStatementTest {
     List<Query.Field> fieldList = mock(ArrayList.class);
 
     when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
     when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
     when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
@@ -279,7 +280,7 @@ public class VitessPreparedStatementTest {
       } catch (SQLException ex) {
         assertEquals("Failed to execute this method", ex.getMessage());
       }
-
+      
       //read only
       when(mockConn.isReadOnly()).thenReturn(true);
       try {
@@ -312,7 +313,7 @@ public class VitessPreparedStatementTest {
     List<Query.Field> mockFieldList = PowerMockito.spy(new ArrayList<>());
 
     when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
     when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.SIMPLE);
     when(mockConn.isSimpleExecute()).thenReturn(true);
@@ -384,10 +385,10 @@ public class VitessPreparedStatementTest {
     SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
     when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
 
-    when(mockVtGateConn.execute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
     when(mockVtGateConn
-        .streamExecute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+        .streamExecute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockCursor);
 
     VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, sqlSelect);
@@ -396,12 +397,12 @@ public class VitessPreparedStatementTest {
 
     if (shouldRunExecute) {
       Mockito.verify(mockVtGateConn, Mockito.times(2))
-          .execute(any(Context.class), anyString(), anyMap(), any(VTSession.class));
+          .execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class));
     }
 
     if (shouldRunStreamExecute) {
       Mockito.verify(mockVtGateConn)
-          .streamExecute(any(Context.class), anyString(), anyMap(), any(VTSession.class));
+          .streamExecute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class));
     }
   }
 
@@ -413,7 +414,7 @@ public class VitessPreparedStatementTest {
     SQLFuture mockSqlFuture = mock(SQLFuture.class);
 
     when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFuture);
     when(mockSqlFuture.checkedGet()).thenReturn(mockCursor);
     when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
@@ -598,7 +599,7 @@ public class VitessPreparedStatementTest {
     SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
 
     when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(any(Context.class), anyString(), anyMap(), any(VTSession.class)))
+    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
     when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
     when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
@@ -626,7 +627,7 @@ public class VitessPreparedStatementTest {
 
     } catch (SQLException e) {
       fail("Test failed " + e.getMessage());
-    }
+    } 
   }
 
   @Test
@@ -683,8 +684,8 @@ public class VitessPreparedStatementTest {
     when(mockConn.getAutoCommit()).thenReturn(true);
 
     SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
-    when(mockVtGateConn.executeBatch(any(Context.class), Matchers.anyList(), Matchers.anyList(),
-        any(VTSession.class))).thenReturn(mockSqlFutureCursor);
+    when(mockVtGateConn.executeBatch(nullable(Context.class), Matchers.anyList(), Matchers.anyList(),
+        nullable(VTSession.class))).thenReturn(mockSqlFutureCursor);
 
     List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
     when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);

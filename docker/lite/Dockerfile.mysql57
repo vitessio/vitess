@@ -17,7 +17,10 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-FROM vitess/bootstrap:mysql57 AS builder
+ARG bootstrap_version=0
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
+
+FROM "${image}" AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER

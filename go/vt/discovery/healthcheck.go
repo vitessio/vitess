@@ -397,6 +397,11 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 		return
 	}
 	delete(ths, tabletAlias)
+	// delete from healthy list
+	healthy, ok := hc.healthy[key]
+	if ok && len(healthy) > 0 {
+		hc.recomputeHealthy(key)
+	}
 }
 
 func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealthResponse, currentTarget *query.Target, trivialNonMasterUpdate bool, isMasterUpdate bool, isMasterChange bool) {
@@ -446,27 +451,11 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 		// Tablets from other cells for non-master targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
 		if shr.Target.TabletType != topodata.TabletType_MASTER && hc.isIncluded(shr.Target.TabletType, shr.TabletAlias) {
-			all := hc.healthData[targetKey]
-			allArray := make([]*TabletHealth, 0, len(all))
-			for _, s := range all {
-				// Only tablets in same cell / cellAlias are included in healthy list.
-				if hc.isIncluded(s.Tablet.Type, s.Tablet.Alias) {
-					allArray = append(allArray, s)
-				}
-			}
-			hc.healthy[targetKey] = FilterStatsByReplicationLag(allArray)
+			hc.recomputeHealthy(targetKey)
 		}
 		if targetChanged && currentTarget.TabletType != topodata.TabletType_MASTER && hc.isIncluded(shr.Target.TabletType, shr.TabletAlias) { // also recompute old target's healthy list
 			oldTargetKey := hc.keyFromTarget(currentTarget)
-			all := hc.healthData[oldTargetKey]
-			allArray := make([]*TabletHealth, 0, len(all))
-			for _, s := range all {
-				// Only tablets in same cell / cellAlias are included in healthy list.
-				if hc.isIncluded(s.Tablet.Type, s.Tablet.Alias) {
-					allArray = append(allArray, s)
-				}
-			}
-			hc.healthy[oldTargetKey] = FilterStatsByReplicationLag(allArray)
+			hc.recomputeHealthy(oldTargetKey)
 		}
 	}
 	if isMasterChange {
@@ -476,6 +465,18 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, shr *query.StreamHealt
 	// broadcast to subscribers
 	hc.broadcast(th)
 
+}
+
+func (hc *HealthCheckImpl) recomputeHealthy(key keyspaceShardTabletType) {
+	all := hc.healthData[key]
+	allArray := make([]*TabletHealth, 0, len(all))
+	for _, s := range all {
+		// Only tablets in same cell / cellAlias are included in healthy list.
+		if hc.isIncluded(s.Tablet.Type, s.Tablet.Alias) {
+			allArray = append(allArray, s)
+		}
+	}
+	hc.healthy[key] = FilterStatsByReplicationLag(allArray)
 }
 
 // Subscribe adds a listener. Used by vtgate buffer to learn about master changes.

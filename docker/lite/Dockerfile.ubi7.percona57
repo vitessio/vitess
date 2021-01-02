@@ -17,7 +17,10 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-FROM vitess/bootstrap:percona57 AS builder
+ARG bootstrap_version=0
+ARG image="vitess/bootstrap:${bootstrap_version}-percona57"
+
+FROM "${image}" AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -34,7 +37,7 @@ FROM registry.access.redhat.com/ubi7/ubi:latest
 
 # Install keys and dependencies
 RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
- && yum install --setopt=alwaysprompt=no gnupg \
+ && yum install -y --setopt=alwaysprompt=no gnupg \
  && ( gpg --keyserver keyserver.ubuntu.com --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 \
  ||   gpg --keyserver ha.pool.sks-keyservers.net --recv-keys 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A 4D1BB29D63D98E422B2113B19334A25F8507EFA5 6341AB2753D78A78A7C27BB124C6A8A7F4A80EB5 ) \
  && gpg --export --armor 430BDF5C56E7C94E848EE60C1C4CBDCDCD2EFD2A > ${GNUPGHOME}/RPM-GPG-KEY-Percona.1 \
@@ -45,15 +48,10 @@ RUN mkdir /tmp/gpg && chmod 700 /tmp/gpg && export GNUPGHOME=/tmp/gpg \
  && rpmkeys --checksig /tmp/perconarepo.rpm \
  && rpm -Uvh /tmp/perconarepo.rpm \
  && rm -f /tmp/perconarepo.rpm
-RUN curl -L --retry-delay 10 --retry 3 -o /tmp/libev.rpm http://mirror.centos.org/centos/7/extras/x86_64/Packages/libev-4.15-7.el7.x86_64.rpm \
- && curl -L --retry-delay 10 --retry 3 -o /tmp/gperf.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/gperftools-libs-2.6.1-1.el7.x86_64.rpm \
- && curl -L --retry-delay 10 --retry 3 -o /tmp/numactl.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/numactl-libs-2.0.12-5.el7.x86_64.rpm \
- && curl -L --retry-delay 10 --retry 3 -o /tmp/sysstat.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/sysstat-10.1.5-19.el7.x86_64.rpm \
- && curl -L --retry-delay 10 --retry 3 -o /tmp/strace.rpm http://mirror.centos.org/centos/7/os/x86_64/Packages/strace-4.24-4.el7.x86_64.rpm \
- && rpm -i --nodeps /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm \
- && rm -f /tmp/libev.rpm /tmp/gperf.rpm /tmp/numactl.rpm /tmp/sysstat.rpm /tmp/strace.rpm
-RUN yum update \
- && yum install --setopt=alwaysprompt=no --setopt=tsflags=nodocs bzip2 ca-certificates gnupg libaio libcurl \
+RUN echo H4sICH852V8CA2ZvbwC1jr0OgkAQhPt7CgrbY7W6xOQaDaEgRqKxMMTiOFYg/F2WI9G39xCttKGg2UxmJrNfokWqeryxVjUo99ja45kLj3s757IxGqiWhbVmC9CURB352rW63u8oh0mCAHdWY1uRLoDlJtcF6kpuRlnhU97LGt0CoNVgqhLINNxFcIoPPIxDHgVX/v3OsFVpjZlcM5ZoMZhMWex/ES9TMIPyM7UYKj4sqT+kwdufAToNLcP5AvRgmV7zAQAA | base64 -d | gzip -dc > /etc/yum.repos.d/CentOS-Base.repo \
+ && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs --enablerepo c7base --enablerepo c7updates --enablerepo c7extras install libev gperftools-libs numactl-libs sysstat strace
+RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
+ && yum install -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs bzip2 ca-certificates gnupg libaio libcurl \
     jemalloc gperftools-libs procps-ng rsync wget openssl hostname curl tzdata make \
 # Can't use alwaysprompt=no here, since we need to pick up deps
 #   No way to separate key imports and accept deps separately in yum/dnf

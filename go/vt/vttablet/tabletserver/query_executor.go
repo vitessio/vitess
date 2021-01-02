@@ -361,6 +361,12 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 			qre.tsv.Stats().TableaclPseudoDenied.Add(statsKey, 1)
 			return nil
 		}
+
+		// Skip ACL check for queries against the dummy dual table
+		if tableName == "dual" {
+			return nil
+		}
+
 		if qre.tsv.qe.strictTableACL {
 			errStr := fmt.Sprintf("table acl error: %q %v cannot run %v on table %q", callerID.Username, callerID.Groups, qre.plan.PlanID, tableName)
 			qre.tsv.Stats().TableaclDenied.Add(statsKey, 1)
@@ -602,7 +608,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 		return nil, err
 	}
 	// Check tablet type.
-	if qre.tsv.qe.consolidatorMode == tabletenv.Enable || (qre.tsv.qe.consolidatorMode == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
+	if cm := qre.tsv.qe.consolidatorMode.Get(); cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
 		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
 		if original {
 			defer q.Broadcast()

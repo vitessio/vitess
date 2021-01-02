@@ -217,8 +217,8 @@ func TestTxPoolSize(t *testing.T) {
 	defer client1.Rollback()
 	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
 
-	defer framework.Server.SetTxPoolSize(framework.Server.TxPoolSize())
-	framework.Server.SetTxPoolSize(1)
+	revert := changeVar(t, "TxPoolSize", "1")
+	defer revert()
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)
 	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)

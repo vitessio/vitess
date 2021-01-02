@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"strings"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -190,7 +188,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 				return
 			}
 		case sqlparser.TableName:
-			if !systemTable(node.Qualifier.String()) {
+			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
@@ -204,13 +202,6 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	rb.eroute.Query = buf.ParsedQuery().Query
 	rb.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
-}
-
-func systemTable(qualifier string) bool {
-	return strings.EqualFold(qualifier, "information_schema") ||
-		strings.EqualFold(qualifier, "performance_schema") ||
-		strings.EqualFold(qualifier, "sys") ||
-		strings.EqualFold(qualifier, "mysql")
 }
 
 // procureValues procures and converts the input into
@@ -252,7 +243,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				return
 			}
 		case sqlparser.TableName:
-			if !systemTable(node.Qualifier.String()) {
+			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
@@ -304,11 +295,17 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
 	}
 
+	aliasExpr, ok := s.SelectExprs[colNumber].(*sqlparser.AliasedExpr)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
+	}
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
 			Name: sqlparser.NewColIdent("weight_string"),
 			Exprs: []sqlparser.SelectExpr{
-				s.SelectExprs[colNumber],
+				&sqlparser.AliasedExpr{
+					Expr: aliasExpr.Expr,
+				},
 			},
 		},
 	}
@@ -368,7 +365,7 @@ func (rb *route) isSingleShard() bool {
 // JoinCanMerge, SubqueryCanMerge and unionCanMerge have subtly different behaviors.
 // The difference in behavior is around SelectReference.
 // It's not worth trying to reuse the code between them.
-func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr) bool {
+func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr, where sqlparser.Expr) bool {
 	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
 		return false
 	}
@@ -377,7 +374,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		return true
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA:
+	case engine.SelectUnsharded:
 		return rb.eroute.Opcode == rrb.eroute.Opcode
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
@@ -388,6 +385,22 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		return true
 	case engine.SelectNext:
 		return false
+	case engine.SelectDBA:
+		if rrb.eroute.Opcode != engine.SelectDBA {
+			return false
+		}
+		if where == nil {
+			return true
+		}
+		hasRuntimeRoutingPredicates := false
+		sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			col, ok := node.(*sqlparser.ColName)
+			if ok {
+				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)
+			}
+			return !hasRuntimeRoutingPredicates, nil
+		}, where)
+		return !hasRuntimeRoutingPredicates
 	}
 	if ajoin == nil {
 		return false

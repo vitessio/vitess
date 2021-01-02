@@ -47,20 +47,21 @@ type ContextVSchema interface {
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
 	KeyspaceExists(keyspace string) bool
+	AllKeyspace() ([]*vindexes.Keyspace, error)
 }
 
 type truncater interface {
 	SetTruncateColumnCount(int)
 }
 
-// Build builds a plan for a query based on the specified vschema.
+// TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
-func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
+func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt)
+	result, err := sqlparser.RewriteAST(stmt, "")
 	if err != nil {
 		return nil, err
 	}
@@ -106,10 +107,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Union:
 		return buildRoutePlan(stmt, vschema, buildUnionPlan)
 	case sqlparser.DDLStatement:
-		if sqlparser.IsVschemaDDL(stmt) {
-			return buildVSchemaDDLPlan(stmt, vschema)
-		}
 		return buildGeneralDDLPlan(query, stmt, vschema)
+	case *sqlparser.AlterVschema:
+		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:
@@ -136,6 +136,10 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return nil, nil
 	case *sqlparser.Show:
 		return buildShowPlan(stmt, vschema)
+	case *sqlparser.LockTables:
+		return buildRoutePlan(stmt, vschema, buildLockPlan)
+	case *sqlparser.UnlockTables:
+		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
@@ -154,19 +158,14 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 	ksExists := vschema.KeyspaceExists(ksName)
 
 	switch dbDDL := dbDDLstmt.(type) {
-	case *sqlparser.DBDDL:
-		switch dbDDL.Action {
-		case sqlparser.DropDBDDLAction:
-			if dbDDL.IfExists && !ksExists {
-				return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
-			}
-			if !ksExists {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", ksName)
-			}
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDLstmt))
+	case *sqlparser.DropDatabase:
+		if dbDDL.IfExists && !ksExists {
+			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
+		if !ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", ksName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot alter database '%s'; database does not exists", ksName)
@@ -204,5 +203,16 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 		Query:             query,
 		IsDML:             true,
 		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema ContextVSchema) (engine.Primitive, error) {
+	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	return &engine.AlterVSchema{
+		Keyspace:        keyspace,
+		AlterVschemaDDL: stmt,
 	}, nil
 }

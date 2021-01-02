@@ -181,9 +181,8 @@ func TestDDL(t *testing.T) {
 		affected []string
 	}{{
 		query: "create table a",
-		output: &DDL{
-			Action: CreateDDLAction,
-			Table:  TableName{Name: NewTableIdent("a")},
+		output: &CreateTable{
+			Table: TableName{Name: NewTableIdent("a")},
 		},
 		affected: []string{"a"},
 	}, {

@@ -136,6 +136,10 @@ func skipToEnd(yylex interface{}) {
   alterDatabase  *AlterDatabase
   collateAndCharset CollateAndCharset
   collateAndCharsets []CollateAndCharset
+  createTable      *CreateTable
+  tableAndLockTypes []*TableAndLockType
+  tableAndLockType *TableAndLockType
+  lockType LockType
 }
 
 %token LEX_ERROR
@@ -189,8 +193,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
-%token <bytes> STATUS VARIABLES WARNINGS
-%token <bytes> SEQUENCE
+%token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
+%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -207,16 +211,16 @@ func skipToEnd(yylex interface{}) {
 // Type Modifiers
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
-// Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS
+// SHOW tokens
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
 %token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
-%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
+%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
 %token <bytes> REPLACE
 %token <bytes> CONVERT CAST
@@ -239,12 +243,16 @@ func skipToEnd(yylex interface{}) {
 // Explain tokens
 %token <bytes> FORMAT TREE VITESS TRADITIONAL
 
+// Lock type tokens
+%token <bytes> LOCAL LOW_PRIORITY
+
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <ddl> create_table_prefix rename_list
+%type <ddl> rename_list
+%type <createTable> create_table_prefix
 %type <createIndex> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
@@ -253,19 +261,21 @@ func skipToEnd(yylex interface{}) {
 %type <boolean> default_optional
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
+%type <statement> lock_statement unlock_statement
 %type <bytes2> comment_opt comment_list
-%type <str> wild_opt
+%type <str> wild_opt check_option_opt cascade_or_local_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <bytes> explain_synonyms
 %type <str> cache_opt separator_opt
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt union_op
+%type <boolean> distinct_opt union_op replace_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
 %type <strs> select_options
-%type <str> select_option
+%type <str> select_option algorithm_view security_view security_view_opt
+%type <str> definer_opt user
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -302,9 +312,9 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <selectInto> into_option
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt using_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt
 %type <lock> lock_opt
-%type <columns> ins_column_list column_list
+%type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -329,7 +339,7 @@ func skipToEnd(yylex interface{}) {
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
-%type <scope> set_session_or_global show_session_or_global
+%type <scope> set_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
@@ -352,8 +362,8 @@ func skipToEnd(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
-%type <indexOption> index_option lock_index algorithm_index
-%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt
+%type <indexOption> index_option lock_index algorithm_index using_index_type
+%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -364,6 +374,11 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> alter_object_type database_or_schema
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
+%type <tableAndLockTypes> lock_table_list
+%type <tableAndLockType> lock_table
+%type <lockType> lock_type
+%type <empty> session_or_local_opt
+
 
 %start any_command
 
@@ -409,6 +424,8 @@ command:
 | flush_statement
 | do_statement
 | load_statement
+| lock_statement
+| unlock_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -697,34 +714,42 @@ create_statement:
   create_table_prefix table_spec
   {
     $1.TableSpec = $2
+    $1.FullyParsed = true
     $$ = $1
   }
 | create_table_prefix create_like
   {
     // Create table [name] like [name]
     $1.OptLike = $2
+    $1.FullyParsed = true
     $$ = $1
   }
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
     $1.Columns = $3
-    $1.Options = append($5,$6...)
+    $1.Options = append($1.Options,$5...)
+    $1.Options = append($1.Options,$6...)
     $1.FullyParsed = true
     $$ = $1
   }
-| CREATE VIEW table_name ddl_skip_to_end
+| CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &DDL{Action: CreateDDLAction, Table: $3.ToViewName()}
-  }
-| CREATE OR REPLACE VIEW table_name ddl_skip_to_end
-  {
-    $$ = &DDL{Action: CreateDDLAction, Table: $5.ToViewName()}
+    $$ = &CreateView{ViewName: $7.ToViewName(), IsReplace:$2, Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 | create_database_prefix create_options_opt
   {
     $1.FullyParsed = true
     $1.CreateOptions = $2
     $$ = $1
+  }
+
+replace_opt:
+  {
+    $$ = false
+  }
+| OR REPLACE
+  {
+    $$ = true
   }
 
 vindex_type_opt:
@@ -772,14 +797,14 @@ vindex_param:
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
   {
-    $$ = &DDL{Action: CreateDDLAction, Table: $4}
+    $$ = &CreateTable{Table: $4, IfNotExists: $3}
     setDDL(yylex, $$)
   }
 
 create_index_prefix:
   CREATE constraint_opt INDEX id_or_var using_opt ON table_name
   {
-    $$ = &CreateIndex{Constraint: $2, Name: $4, IndexType: $5, Table: $7}
+    $$ = &CreateIndex{Constraint: $2, Name: $4, Options: $5, Table: $7}
     setDDL(yylex, $$)
   }
 
@@ -1317,9 +1342,9 @@ index_option_list:
   }
 
 index_option:
-  USING id_or_var
+  using_index_type
   {
-    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+    $$ = $1
   }
 | KEY_BLOCK_SIZE equal_opt INTEGRAL
   {
@@ -1330,9 +1355,9 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1), Value: NewStrLiteral($2)}
   }
-| WITH PARSER STRING
+| WITH PARSER id_or_var
   {
-    $$ = &IndexOption{Name: string($1) + " " + string($2), Value: NewStrLiteral($3)}
+    $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
   }
 
 equal_opt:
@@ -1616,7 +1641,7 @@ alter_statement:
   }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: CreateVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
@@ -1628,7 +1653,7 @@ alter_statement:
   }
 | ALTER VSCHEMA DROP VINDEX table_name
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: DropVindexDDLAction,
         Table: $5,
         VindexSpec: &VindexSpec{
@@ -1638,15 +1663,15 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD TABLE table_name
   {
-    $$ = &DDL{Action: AddVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA DROP TABLE table_name
   {
-    $$ = &DDL{Action: DropVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: DropVschemaTableDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: AddColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
@@ -1659,7 +1684,7 @@ alter_statement:
   }
 | ALTER VSCHEMA ON table_name DROP VINDEX sql_id
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: DropColVindexDDLAction,
         Table: $4,
         VindexSpec: &VindexSpec{
@@ -1669,11 +1694,11 @@ alter_statement:
   }
 | ALTER VSCHEMA ADD SEQUENCE table_name
   {
-    $$ = &DDL{Action: AddSequenceDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $5}
   }
 | ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
-    $$ = &DDL{
+    $$ = &AlterVschema{
         Action: AddAutoIncDDLAction,
         Table: $4,
         AutoIncSpec: &AutoIncSpec{
@@ -1757,13 +1782,9 @@ drop_statement:
   {
     $$ = &DDL{Action: DropDDLAction, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
   }
-| DROP DATABASE exists_opt id_or_var
+| DROP database_or_schema exists_opt id_or_var
   {
-    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String()), IfExists: $3}
-  }
-| DROP SCHEMA exists_opt id_or_var
-  {
-    $$ = &DBDDL{Action: DropDBDDLAction, DBName: string($4.String()), IfExists: $3}
+    $$ = &DropDatabase{DBName: string($4.String()), IfExists: $3}
   }
 
 truncate_statement:
@@ -1782,24 +1803,81 @@ analyze_statement:
   }
 
 show_statement:
-  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
+  SHOW CHARACTER SET like_or_where_opt
   {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
-  }
-/* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
-| SHOW CHARACTER SET like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{&ShowLegacy{Type: CharsetStr, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Charset, Filter: $4}}
   }
 | SHOW CHARSET like_or_where_opt
   {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Charset, Filter: $3}}
+  }
+| SHOW COLLATION like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Collation, Filter: $3}}
+  }
+| SHOW DATABASES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW SCHEMAS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW KEYSPACES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW VITESS_KEYSPACES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+  }
+| SHOW FUNCTION STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
+  }
+| SHOW PRIVILEGES
+  {
+    $$ = &Show{&ShowBasic{Command: Privilege}}
+  }
+| SHOW PROCEDURE STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Procedure, Filter: $4}}
+  }
+| SHOW session_or_local_opt STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: StatusSession, Filter: $4}}
+  }
+| SHOW GLOBAL STATUS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: StatusGlobal, Filter: $4}}
+  }
+| SHOW session_or_local_opt VARIABLES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VariableSession, Filter: $4}}
+  }
+| SHOW GLOBAL VARIABLES like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VariableGlobal, Filter: $4}}
+  }
+| SHOW TABLE STATUS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
+  }
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
+  }
+|  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+  }
+| SHOW CREATE FUNCTION table_name
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE id_or_var ddl_skip_to_end
@@ -1822,24 +1900,13 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
-| SHOW DATABASES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-  }
-| SHOW KEYSPACES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-  }
-| SHOW VITESS_KEYSPACES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $3}
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-  }
 | SHOW ENGINES
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+  }
+| SHOW FUNCTION CODE table_name
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
   {
@@ -1850,21 +1917,9 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
-| SHOW PROCEDURE ddl_skip_to_end
+| SHOW PROCEDURE CODE table_name
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-| SHOW show_session_or_global STATUS ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
-  }
-| SHOW TABLE STATUS from_database_opt like_or_where_opt
-  {
-    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
-  }
-| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
-  {
-    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
 | SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
   {
@@ -1875,18 +1930,6 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
       $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
     }
-  }
-| SHOW show_session_or_global VARIABLES ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Scope: $2, Type: string($3)}}
-  }
-| SHOW COLLATION
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-| SHOW COLLATION WHERE expression
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2), ShowCollationFilterOpt: $4, Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
@@ -2017,18 +2060,18 @@ like_opt:
       $$ = &ShowFilter{Like:string($2)}
     }
 
-show_session_or_global:
+session_or_local_opt:
   /* empty */
   {
-    $$ = ImplicitScope
+    $$ = struct{}{}
   }
 | SESSION
   {
-    $$ = SessionScope
+    $$ = struct{}{}
   }
-| GLOBAL
+| LOCAL
   {
-    $$ = GlobalScope
+    $$ = struct{}{}
   }
 
 use_statement:
@@ -2179,13 +2222,51 @@ other_statement:
   {
     $$ = &OtherAdmin{}
   }
-| LOCK TABLES skip_to_end
+
+lock_statement:
+  LOCK TABLES lock_table_list
   {
-    $$ = &OtherAdmin{}
+    $$ = &LockTables{Tables: $3}
   }
-| UNLOCK TABLES skip_to_end
+
+lock_table_list:
+  lock_table
   {
-    $$ = &OtherAdmin{}
+    $$ = TableAndLockTypes{$1}
+  }
+| lock_table_list ',' lock_table
+  {
+    $$ = append($1, $3)
+  }
+
+lock_table:
+  aliased_table_name lock_type
+  {
+    $$ = &TableAndLockType{Table:$1, Lock:$2}
+  }
+
+lock_type:
+  READ
+  {
+    $$ = Read
+  }
+| READ LOCAL
+  {
+    $$ = ReadLocal
+  }
+| WRITE
+  {
+    $$ = Write
+  }
+| LOW_PRIORITY WRITE
+  {
+    $$ = LowPriorityWrite
+  }
+
+unlock_statement:
+  UNLOCK TABLES
+  {
+    $$ = &UnlockTables{}
   }
 
 flush_statement:
@@ -2407,6 +2488,15 @@ table_name as_opt_id index_hint_list
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
   {
     $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+  }
+
+column_list_opt:
+  {
+    $$ = nil
+  }
+| '(' column_list ')'
+  {
+    $$ = $2
   }
 
 column_list:
@@ -3469,6 +3559,91 @@ algorithm_index:
     $$ = &IndexOption{Name: string($1), String: string($3)}
   }
 
+algorithm_view:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' UNDEFINED
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' MERGE
+  {
+    $$ = string($3)
+  }
+| ALGORITHM '=' TEMPTABLE
+  {
+    $$ = string($3)
+  }
+
+security_view_opt:
+  {
+    $$ = ""
+  }
+| SQL SECURITY security_view
+  {
+    $$ = $3
+  }
+
+security_view:
+  DEFINER
+  {
+    $$ = string($1)
+  }
+| INVOKER
+  {
+    $$ = string($1)
+  }
+
+check_option_opt:
+  {
+    $$ = ""
+  }
+| WITH cascade_or_local_opt CHECK OPTION
+  {
+    $$ = $2
+  }
+
+cascade_or_local_opt:
+  {
+    $$ = "cascaded"
+  }
+| CASCADED
+  {
+    $$ = string($1)
+  }
+| LOCAL
+  {
+    $$ = string($1)
+  }
+
+definer_opt:
+  {
+    $$ = ""
+  }
+| DEFINER '=' user
+  {
+    $$ = $3
+  }
+
+user:
+CURRENT_USER
+  {
+    $$ = string($1)
+  }
+| CURRENT_USER '(' ')'
+  {
+    $$ = string($1)
+  }
+| STRING AT_ID
+  {
+    $$ = "'" + string($1) + "'@" + string($2)
+  }
+| ID
+  {
+    $$ = string($1)
+  }
+
 lock_opt:
   {
     $$ = NoLock
@@ -3844,9 +4019,15 @@ constraint_opt:
   { $$ = string($1) }
 
 using_opt:
-  { $$ = "" }
-| USING sql_id
-  { $$ = $2.val }
+  { $$ = nil }
+| using_index_type
+  { $$ = []*IndexOption{$1} }
+
+using_index_type:
+  USING sql_id
+  {
+    $$ = &IndexOption{Name: string($1), String: string($2.String())}
+  }
 
 sql_id:
   id_or_var
@@ -3881,7 +4062,6 @@ reserved_table_id:
   {
     $$ = NewTableIdent(string($1))
   }
-
 /*
   These are not all necessarily reserved in MySQL, but some are.
 
@@ -3897,7 +4077,6 @@ reserved_keyword:
 | AND
 | AS
 | ASC
-| AUTO_INCREMENT
 | BETWEEN
 | BINARY
 | BY
@@ -3910,6 +4089,7 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
+| CURRENT_USER
 | SUBSTR
 | SUBSTRING
 | DATABASE
@@ -3959,6 +4139,7 @@ reserved_keyword:
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
+| LOW_PRIORITY
 | MEMBER
 | MATCH
 | MAXVALUE
@@ -3979,6 +4160,7 @@ reserved_keyword:
 | OVER
 | PERCENT_RANK
 | RANK
+| READ
 | RECURSIVE
 | REGEXP
 | RENAME
@@ -3986,6 +4168,7 @@ reserved_keyword:
 | RIGHT
 | ROW_NUMBER
 | SCHEMA
+| SCHEMAS
 | SELECT
 | SEPARATOR
 | SET
@@ -4008,9 +4191,11 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| WITH
 | WHEN
 | WHERE
 | WINDOW
+| WRITE
 | XOR
 
 /*
@@ -4026,6 +4211,7 @@ non_reserved_keyword:
 | ACTIVE
 | ADMIN
 | ALGORITHM
+| AUTO_INCREMENT
 | BEGIN
 | BIGINT
 | BIT
@@ -4034,11 +4220,13 @@ non_reserved_keyword:
 | BOOLEAN
 | BUCKETS
 | CASCADE
+| CASCADED
 | CHAR
 | CHARACTER
 | CHARSET
 | CHECK
 | CLONE
+| CODE
 | COLLATION
 | COLUMNS
 | COMMENT_KEYWORD
@@ -4051,6 +4239,7 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DECIMAL
+| DEFINER
 | DEFINITION
 | DESCRIPTION
 | DIRECTORY
@@ -4073,6 +4262,7 @@ non_reserved_keyword:
 | FOREIGN
 | FORMAT
 | FULLTEXT
+| FUNCTION
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
@@ -4086,6 +4276,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INVOKER
 | INDEXES
 | ISOLATION
 | JSON
@@ -4099,6 +4290,7 @@ non_reserved_keyword:
 | LINES
 | LINESTRING
 | LOAD
+| LOCAL
 | LOCKED
 | LONGBLOB
 | LONGTEXT
@@ -4110,6 +4302,7 @@ non_reserved_keyword:
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
+| MERGE
 | MODE
 | MULTILINESTRING
 | MULTIPOINT
@@ -4127,6 +4320,7 @@ non_reserved_keyword:
 | OFFSET
 | OJ
 | OLD
+| OPTION
 | OPTIONAL
 | OPTIONALLY
 | ORDINALITY
@@ -4142,6 +4336,7 @@ non_reserved_keyword:
 | PERSIST_ONLY
 | PRECEDING
 | PRIVILEGE_CHECKS_USER
+| PRIVILEGES
 | PROCESS
 | PLUGINS
 | POINT
@@ -4151,7 +4346,6 @@ non_reserved_keyword:
 | PROCESSLIST
 | QUERY
 | RANDOM
-| READ
 | REAL
 | REFERENCE
 | REFERENCES
@@ -4172,6 +4366,7 @@ non_reserved_keyword:
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
+| SECURITY
 | SEQUENCE
 | SESSION
 | SERIALIZABLE
@@ -4181,11 +4376,13 @@ non_reserved_keyword:
 | SKIP
 | SMALLINT
 | SPATIAL
+| SQL
 | SRID
 | START
 | STARTING
 | STATUS
 | TABLES
+| TEMPTABLE
 | TERMINATED
 | TEXT
 | THAN
@@ -4202,6 +4399,7 @@ non_reserved_keyword:
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
+| UNDEFINED
 | UNSIGNED
 | UNUSED
 | UPGRADE
@@ -4220,8 +4418,6 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VSCHEMA
 | WARNINGS
-| WITH
-| WRITE
 | YEAR
 | ZEROFILL
 

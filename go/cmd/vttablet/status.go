@@ -77,6 +77,7 @@ var (
       <a href="/debug/health">Query Service Health Check</a></br>
       <a href="/livequeryz/">Real-time Queries</a></br>
       <a href="/debug/status_details">JSON Status Details</a></br>
+      <a href="/debug/env">View/Change Environment variables</a></br>
     </td>
   </tr>
 </table>

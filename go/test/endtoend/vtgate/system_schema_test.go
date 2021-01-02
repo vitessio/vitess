@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -113,4 +114,72 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 	_ = exec(t, conn, "SELECT * FROM t1000") // test that the routed table is available to us
 	result := exec(t, conn, "SELECT * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
 	assert.NotEmpty(t, result.Rows)
+}
+
+func TestFKConstraintUsingInformationSchema(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = 't7_fk' and rc.constraint_schema = database() and rc.table_name = 't7_fk'"
+	assertMatches(t, conn, query, `[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`)
+}
+
+func TestConnectWithSystemSchema(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
+		connParams := vtParams
+		connParams.DbName = dbname
+		conn, err := mysql.Connect(ctx, &connParams)
+		require.NoError(t, err)
+		conn.Close()
+	}
+}
+
+func TestUseSystemSchema(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+
+		exec(t, conn, fmt.Sprintf("use %s", dbname))
+		conn.Close()
+	}
+}
+
+func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	queryWithQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
+		"from information_schema.tables t "+
+		"join information_schema.columns c "+
+		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
+		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
+	qr1 := exec(t, conn, queryWithQualifier)
+
+	queryWithoutQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
+		"from tables t "+
+		"join columns c "+
+		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
+		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
+	exec(t, conn, "use information_schema")
+	qr2 := exec(t, conn, queryWithoutQualifier)
+	require.Equal(t, qr1, qr2)
+
+	connParams := vtParams
+	connParams.DbName = "information_schema"
+	conn2, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	qr3 := exec(t, conn2, queryWithoutQualifier)
+	require.Equal(t, qr2, qr3)
 }

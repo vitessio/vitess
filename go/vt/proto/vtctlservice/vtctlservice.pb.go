@@ -29,17 +29,22 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 func init() { proto.RegisterFile("vtctlservice.proto", fileDescriptor_27055cdbb1148d2b) }
 
 var fileDescriptor_27055cdbb1148d2b = []byte{
-	// 146 bytes of a gzipped FileDescriptorProto
+	// 235 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2a, 0x2b, 0x49, 0x2e,
 	0xc9, 0x29, 0x4e, 0x2d, 0x2a, 0xcb, 0x4c, 0x4e, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2,
 	0x41, 0x16, 0x93, 0xe2, 0x07, 0xf3, 0x52, 0x12, 0x4b, 0x12, 0x21, 0xd2, 0x46, 0x85, 0x5c, 0xac,
 	0x61, 0x20, 0x21, 0xa1, 0x0c, 0x2e, 0x61, 0xd7, 0x8a, 0xd4, 0xe4, 0xd2, 0x92, 0x54, 0x30, 0xdf,
 	0x39, 0x3f, 0x37, 0x37, 0x31, 0x2f, 0x45, 0x48, 0x55, 0x0f, 0xa1, 0x03, 0x8b, 0x7c, 0x50, 0x6a,
 	0x61, 0x69, 0x6a, 0x71, 0x89, 0x94, 0x1a, 0x21, 0x65, 0xc5, 0x05, 0xf9, 0x79, 0xc5, 0xa9, 0x4a,
-	0x0c, 0x06, 0x8c, 0x4e, 0xda, 0x51, 0x9a, 0x65, 0x99, 0x25, 0xa9, 0xc5, 0xc5, 0x7a, 0x99, 0xf9,
-	0xfa, 0x10, 0x96, 0x7e, 0x7a, 0xbe, 0x7e, 0x59, 0x89, 0x3e, 0xd8, 0x49, 0xfa, 0xc8, 0x0e, 0x4e,
-	0x62, 0x03, 0x8b, 0x19, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0x9d, 0xb5, 0x06, 0x92, 0xdb, 0x00,
-	0x00, 0x00,
+	0x0c, 0x06, 0x8c, 0x46, 0xf3, 0x99, 0xb8, 0xd8, 0xc0, 0x92, 0x29, 0x42, 0x45, 0x5c, 0xe2, 0x6e,
+	0x99, 0x79, 0x29, 0x8e, 0x39, 0x39, 0xc1, 0x19, 0x89, 0x45, 0x29, 0xc5, 0x9e, 0x79, 0xde, 0xa9,
+	0x95, 0xc5, 0x05, 0x89, 0xc9, 0xa9, 0x42, 0x9a, 0x48, 0x26, 0xe2, 0x50, 0x03, 0xb3, 0x5c, 0x8b,
+	0x18, 0xa5, 0x30, 0x07, 0x08, 0xf9, 0x71, 0x71, 0xbb, 0xa7, 0x96, 0xc0, 0xed, 0x91, 0x45, 0xd2,
+	0x8c, 0x24, 0x0e, 0x33, 0x5b, 0x0e, 0x97, 0x34, 0xdc, 0xbc, 0x40, 0x2e, 0x1e, 0x24, 0x89, 0x62,
+	0x21, 0x1c, 0x3a, 0x8a, 0x61, 0x26, 0xca, 0xe3, 0x94, 0x87, 0x19, 0xe9, 0xa4, 0x1d, 0xa5, 0x59,
+	0x96, 0x59, 0x92, 0x5a, 0x5c, 0xac, 0x97, 0x99, 0xaf, 0x0f, 0x61, 0xe9, 0xa7, 0xe7, 0xeb, 0x97,
+	0x95, 0xe8, 0x83, 0x23, 0x4d, 0x1f, 0x39, 0x4a, 0x93, 0xd8, 0xc0, 0x62, 0xc6, 0x80, 0x00, 0x00,
+	0x00, 0xff, 0xff, 0xd5, 0x49, 0x16, 0xd1, 0xfd, 0x01, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -146,5 +151,155 @@ var _Vtctl_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+	Metadata: "vtctlservice.proto",
+}
+
+// VtctldClient is the client API for Vtctld service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type VtctldClient interface {
+	// FindAllShardsInKeyspace returns a map of shard names to shard references for a given keyspace.
+	FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// GetKeyspace reads the given keyspace from the topo and returns it.
+	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceResponse, error)
+	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
+	GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error)
+}
+
+type vtctldClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewVtctldClient(cc *grpc.ClientConn) VtctldClient {
+	return &vtctldClient{cc}
+}
+
+func (c *vtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
+	out := new(vtctldata.FindAllShardsInKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/FindAllShardsInKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceResponse, error) {
+	out := new(vtctldata.GetKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspacesResponse, error) {
+	out := new(vtctldata.GetKeyspacesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetKeyspaces", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// VtctldServer is the server API for Vtctld service.
+type VtctldServer interface {
+	// FindAllShardsInKeyspace returns a map of shard names to shard references for a given keyspace.
+	FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// GetKeyspace reads the given keyspace from the topo and returns it.
+	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error)
+	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
+	GetKeyspaces(context.Context, *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error)
+}
+
+// UnimplementedVtctldServer can be embedded to have forward compatible implementations.
+type UnimplementedVtctldServer struct {
+}
+
+func (*UnimplementedVtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FindAllShardsInKeyspace not implemented")
+}
+func (*UnimplementedVtctldServer) GetKeyspace(ctx context.Context, req *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspace not implemented")
+}
+func (*UnimplementedVtctldServer) GetKeyspaces(ctx context.Context, req *vtctldata.GetKeyspacesRequest) (*vtctldata.GetKeyspacesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspaces not implemented")
+}
+
+func RegisterVtctldServer(s *grpc.Server, srv VtctldServer) {
+	s.RegisterService(&_Vtctld_serviceDesc, srv)
+}
+
+func _Vtctld_FindAllShardsInKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.FindAllShardsInKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).FindAllShardsInKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/FindAllShardsInKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).FindAllShardsInKeyspace(ctx, req.(*vtctldata.FindAllShardsInKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetKeyspace(ctx, req.(*vtctldata.GetKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetKeyspacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetKeyspaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetKeyspaces",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetKeyspaces(ctx, req.(*vtctldata.GetKeyspacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _Vtctld_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "vtctlservice.Vtctld",
+	HandlerType: (*VtctldServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "FindAllShardsInKeyspace",
+			Handler:    _Vtctld_FindAllShardsInKeyspace_Handler,
+		},
+		{
+			MethodName: "GetKeyspace",
+			Handler:    _Vtctld_GetKeyspace_Handler,
+		},
+		{
+			MethodName: "GetKeyspaces",
+			Handler:    _Vtctld_GetKeyspaces_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "vtctlservice.proto",
 }
