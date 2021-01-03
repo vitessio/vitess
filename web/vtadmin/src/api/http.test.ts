@@ -125,6 +125,20 @@ describe('api/http', () => {
             expect(result).toEqual(tablets);
         });
 
+        it('throws an error if result.tablets is not an array', async () => {
+            mockServerJson('/api/tablets', { ok: true, result: { tablets: null } });
+
+            expect.assertions(1);
+
+            try {
+                await api.fetchTablets();
+            } catch (e) {
+                /* eslint-disable jest/no-conditional-expect */
+                expect(e.message).toEqual('expected tablets to be an array, got null');
+                /* eslint-enable jest/no-conditional-expect */
+            }
+        });
+
         it('throws an error if JSON cannot be unmarshalled into Tablet objects', async () => {
             mockServerJson(`/api/tablets`, {
                 ok: true,
