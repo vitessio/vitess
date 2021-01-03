@@ -31,6 +31,12 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 - [TypeScript](http://typescriptlang.org/)
 - [protobufjs](https://github.com/protobufjs)
 
+## Environment Variables
+
+Under the hood, we use create-react-app's environment variable set-up which is very well documented: https://create-react-app.dev/docs/adding-custom-environment-variables. 
+
+All of our environment variables are enumerated and commented in [react-app-env.d.ts](./src/react-app-env.d.ts). This also gives us type hinting on `process.env`, for editors that support it. 
+
 ## Configuring your editor
 
 ### VS Code
