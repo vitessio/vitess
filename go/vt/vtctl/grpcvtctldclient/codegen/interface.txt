@@ -1,2 +1,0 @@
-GetKeyspace vtctldatapb.GetKeyspaceRequest vtctldatapb.GetKeyspaceResponse
-GetKeyspaces vtctldatapb.GetKeyspacesRequest vtctldatapb.GetKeyspacesResponse
