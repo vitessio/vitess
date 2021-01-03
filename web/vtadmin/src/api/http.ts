@@ -27,6 +27,14 @@ interface HttpErrorResponse {
 
 type HttpResponse = HttpOkResponse | HttpErrorResponse;
 
+// vtfetch makes HTTP requests against the given vtadmin-api endpoint
+// and returns the parsed response.
+//
+// HttpResponse envelope types are not defined in vtadmin.proto (nor should they be)
+// thus we have to validate the shape of the API response with more care.
+//
+// Note that this only validates the HttpResponse envelope; it does not
+// do any type checking or validation on the result.
 export const vtfetch = async (endpoint: string): Promise<HttpResponse> => {
     const url = `${process.env.REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
     const response = await fetch(url);
@@ -42,13 +50,13 @@ export const fetchTablets = async () => {
     if (!res.ok) throw Error('not ok');
 
     const { result } = res;
-    if (!Array.isArray(result.tablets)) throw Error('no tablets');
+    const tablets = res.result?.tablets;
+    if (!Array.isArray(tablets)) throw Error(`expected tablets to be an array, got ${result.tablets}`);
 
-    const tablets: pb.Tablet[] = result.tablets.map((t: any) => {
+    return tablets.map((t: any) => {
         const err = pb.Tablet.verify(t);
         if (err) throw Error(err);
 
         return pb.Tablet.create(t);
     });
-    return tablets;
 };
