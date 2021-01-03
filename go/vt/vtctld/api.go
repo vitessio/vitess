@@ -233,7 +233,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			if action == "" {
 				return nil, errors.New("a POST request must specify action")
 			}
-			return actions.ApplyKeyspaceAction(ctx, action, keyspace, r), nil
+			return actions.ApplyKeyspaceAction(ctx, action, keyspace), nil
 		default:
 			return nil, fmt.Errorf("unsupported HTTP method: %v", r.Method)
 		}
@@ -323,7 +323,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, re
 			if action == "" {
 				return nil, errors.New("must specify action")
 			}
-			return actions.ApplyShardAction(ctx, action, keyspace, shard, r), nil
+			return actions.ApplyShardAction(ctx, action, keyspace, shard), nil
 		}
 
 		// Get the shard record.
