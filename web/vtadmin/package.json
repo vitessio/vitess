@@ -54,6 +54,7 @@
     ]
   },
   "devDependencies": {
+    "msw": "^0.24.4",
     "prettier": "^2.2.1",
     "protobufjs": "^6.10.2",
     "stylelint": "^13.8.0",
