@@ -19,7 +19,9 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -64,6 +66,8 @@ func main() {
 			logutil.LogEvent(logger, e)
 		})
 	if err != nil {
+		errStr := strings.Replace(err.Error(), "remote error: ", "", -1)
+		fmt.Printf("%s Error: %s\n", flag.Arg(0), errStr)
 		log.Error(err)
 		os.Exit(1)
 	}

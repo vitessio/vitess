@@ -2013,9 +2013,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	go func() {
 		defer close(ch)
 		defer wg.Done()
-		log.Infof(">>>>>>>>>>> before vstream")
 		vstream(ctx, t, position, tablePKs, filter, ch)
-		log.Infof(">>>>>>>>>> after vstream")
 	}()
 	return &wg, ch
 }
