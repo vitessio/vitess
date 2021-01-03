@@ -178,6 +178,8 @@ func main() { // nolint:funlen
 	}
 }
 
+// ClientInterfaceDef is a struct providing enough information to generate an
+// implementation of a gRPC Client interface.
 type ClientInterfaceDef struct {
 	PackageName string
 	Type        string
@@ -185,17 +187,24 @@ type ClientInterfaceDef struct {
 	Methods     []*Func
 }
 
+// Import contains the meta information about a Go import.
 type Import struct {
 	Alias string
 	Path  string
 }
 
+// Func is the variable part of a gRPC client interface method (i.e. not the
+// context or dialopts arguments, or the error part of the result tuple).
 type Func struct {
 	Name   string
 	Param  Param
 	Result Param
 }
 
+// Param represents an element of either a parameter list or result list. It
+// contains an optional name, and a package-local type. This struct exists
+// purely to power template execution, which is why the Type field is simply a
+// bare string.
 type Param struct {
 	Name string
 	// locally-qualified type, e.g. "grpc.CallOption", and not "google.golang.org/grpc.CallOption".
