@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"go/types"
@@ -29,7 +30,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func main() { // nolint:funlen,gocognit
+func main() { // nolint:funlen
 	source := flag.String("source", "../../proto/vtctlservice", "source package")
 	typeName := flag.String("type", "VtctldClient", "interface type to implement")
 	implType := flag.String("impl", "gRPCVtctldClient", "type implementing the interface")
@@ -66,30 +67,8 @@ func main() { // nolint:funlen,gocognit
 		output = f
 	}
 
-	pkgs, err := packages.Load(&packages.Config{
-		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo,
-	}, *source)
+	pkg, err := loadPackage(*source)
 	if err != nil {
-		panic(err)
-	}
-
-	if len(pkgs) != 1 {
-		panic("must specify exactly one package")
-	}
-
-	pkg := pkgs[0]
-	if len(pkg.Errors) > 0 {
-		var err error
-
-		for _, e := range pkg.Errors {
-			switch err {
-			case nil:
-				err = fmt.Errorf("errors loading package %s: %s", *source, e.Error())
-			default:
-				err = fmt.Errorf("%w; %s", err, e.Error())
-			}
-		}
-
 		panic(err)
 	}
 
@@ -238,6 +217,37 @@ type Param struct {
 	Name string
 	// locally-qualified type, e.g. "grpc.CallOption", and not "google.golang.org/grpc.CallOption".
 	Type string
+}
+
+func loadPackage(source string) (*packages.Package, error) {
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo,
+	}, source)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pkgs) != 1 {
+		return nil, errors.New("must specify exactly one package")
+	}
+
+	pkg := pkgs[0]
+	if len(pkg.Errors) > 0 {
+		var err error
+
+		for _, e := range pkg.Errors {
+			switch err {
+			case nil:
+				err = fmt.Errorf("errors loading package %s: %s", source, e.Error())
+			default:
+				err = fmt.Errorf("%w; %s", err, e.Error())
+			}
+		}
+
+		return nil, err
+	}
+
+	return pkg, nil
 }
 
 var vitessProtoRegexp = regexp.MustCompile(`^vitess.io.*/proto/.*`)
