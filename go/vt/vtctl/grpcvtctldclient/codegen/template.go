@@ -51,7 +51,7 @@ import (
 )
 {{ range .Methods }}
 // {{ .Name }} is part of the vtctlservicepb.VtctldClient interface.
-func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, in *{{ .RequestType }}, opts ...grpc.CallOption) (*{{ .ResponseType }}, error) {
+func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, {{ .Param.Name }} {{ .Param.Type }}, opts ...grpc.CallOption) ({{ .Result.Type }}, error) {
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)
 	}
