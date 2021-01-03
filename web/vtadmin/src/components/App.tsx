@@ -21,14 +21,26 @@ import { TabletList } from './TabletList';
 import { useTablets } from '../hooks/api';
 
 export const App = () => {
-    const { data, isLoading } = useTablets();
+    const { data, error, isError, isSuccess } = useTablets();
+
+    // Placeholder UI :D
+    let content = <div>Loading...</div>;
+    if (isError) {
+        content = (
+            <div>
+                {error?.name}: {error?.message}
+            </div>
+        );
+    } else if (isSuccess) {
+        content = <TabletList tablets={data || []} />;
+    }
 
     return (
         <div className={style.container}>
             <img src={logo} alt="logo" height={40} />
             <h1>VTAdmin</h1>
 
-            {isLoading ? <div>Loading...</div> : <TabletList tablets={data || []} />}
+            {content}
         </div>
     );
 };

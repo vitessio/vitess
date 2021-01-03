@@ -18,6 +18,7 @@ import { setupServer } from 'msw/node';
 
 import * as api from './http';
 import { vtadmin as pb } from '../proto/vtadmin';
+import { HTTP_RESPONSE_NOT_OK_ERROR, MALFORMED_HTTP_RESPONSE_ERROR } from './http';
 
 // This test suite uses Mock Service Workers (https://github.com/mswjs/msw)
 // to mock HTTP responses from vtadmin-api.
@@ -38,7 +39,6 @@ import { vtadmin as pb } from '../proto/vtadmin';
 // means our fake is more robust than it would be otherwise. Since we are using
 // the exact same protos in our fake as in our real vtadmin-api server, we're guaranteed
 // to have type parity.
-//
 process.env.REACT_APP_VTADMIN_API_ADDRESS = '';
 const server = setupServer();
 
@@ -101,7 +101,7 @@ describe('api/http', () => {
                 await api.vtfetch(endpoint);
             } catch (e) {
                 /* eslint-disable jest/no-conditional-expect */
-                expect(e.message).toEqual('invalid http envelope');
+                expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 /* eslint-enable jest/no-conditional-expect */
             }
         });
@@ -125,6 +125,23 @@ describe('api/http', () => {
             expect(result).toEqual(tablets);
         });
 
+        it('throws an error if response.ok is false', async () => {
+            const response = { ok: false };
+            mockServerJson('/api/tablets', response);
+
+            expect.assertions(3);
+
+            try {
+                await api.fetchTablets();
+            } catch (e) {
+                /* eslint-disable jest/no-conditional-expect */
+                expect(e.name).toEqual(HTTP_RESPONSE_NOT_OK_ERROR);
+                expect(e.message).toEqual('/api/tablets');
+                expect(e.response).toEqual(response);
+                /* eslint-enable jest/no-conditional-expect */
+            }
+        });
+
         it('throws an error if result.tablets is not an array', async () => {
             mockServerJson('/api/tablets', { ok: true, result: { tablets: null } });
 
@@ -134,7 +151,7 @@ describe('api/http', () => {
                 await api.fetchTablets();
             } catch (e) {
                 /* eslint-disable jest/no-conditional-expect */
-                expect(e.message).toEqual('expected tablets to be an array, got null');
+                expect(e.message).toMatch('expected tablets to be an array');
                 /* eslint-enable jest/no-conditional-expect */
             }
         });
