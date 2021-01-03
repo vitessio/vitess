@@ -27,6 +27,28 @@ interface HttpErrorResponse {
 
 type HttpResponse = HttpOkResponse | HttpErrorResponse;
 
+export const MALFORMED_HTTP_RESPONSE_ERROR = 'MalformedHttpResponseError';
+class MalformedHttpResponseError extends Error {
+    responseJson: object;
+
+    constructor(message: string, responseJson: object) {
+        super(message);
+        this.name = MALFORMED_HTTP_RESPONSE_ERROR;
+        this.responseJson = responseJson;
+    }
+}
+
+export const HTTP_RESPONSE_NOT_OK_ERROR = 'HttpResponseNotOkError';
+class HttpResponseNotOkError extends Error {
+    response: HttpErrorResponse | null;
+
+    constructor(endpoint: string, response: HttpErrorResponse) {
+        super(endpoint);
+        this.name = HTTP_RESPONSE_NOT_OK_ERROR;
+        this.response = response;
+    }
+}
+
 // vtfetch makes HTTP requests against the given vtadmin-api endpoint
 // and returns the parsed response.
 //
@@ -40,14 +62,18 @@ export const vtfetch = async (endpoint: string): Promise<HttpResponse> => {
     const response = await fetch(url);
 
     const json = await response.json();
-    if (!('ok' in json)) throw Error('invalid http envelope');
+    if (!('ok' in json)) throw new MalformedHttpResponseError('invalid http envelope', json);
 
     return json as HttpResponse;
 };
 
 export const fetchTablets = async () => {
-    const res = await vtfetch('/api/tablets');
-    if (!res.ok) throw Error('not ok');
+    const endpoint = '/api/tablets';
+    const res = await vtfetch(endpoint);
+
+    // Throw "not ok" responses so that react-query correctly interprets them as errors.
+    // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
+    if (!res.ok) throw new HttpResponseNotOkError(endpoint, res);
 
     const { result } = res;
     const tablets = res.result?.tablets;
