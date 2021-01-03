@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"go/types"
@@ -30,7 +29,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func main() { // nolint:funlen
+func main() { // nolint:funlen,gocognit
 	source := flag.String("source", "../../proto/vtctlservice", "source package")
 	typeName := flag.String("type", "VtctldClient", "interface type to implement")
 	implType := flag.String("impl", "gRPCVtctldClient", "type implementing the interface")
@@ -165,14 +164,15 @@ func main() { // nolint:funlen
 
 		imports[localImport] = pkgPath
 
-		// TODO: check which grpc lib CallOption is imported from in this
-		// interface; it could be either google.golang.org/grpc or
-		// github.com/golang/protobuf/grpc.
+		// (TODO|@amason): check which grpc lib CallOption is imported from in
+		// this interface; it could be either google.golang.org/grpc or
+		// github.com/golang/protobuf/grpc, although in vitess we currently
+		// always use the former.
 
 		// The second result is always error.
 		result := sig.Results().At(0)
 
-		localType, localImport, pkgPath, err = extractLocalPointerType(result) // TODO: does not work for streaming rpcs
+		localType, localImport, pkgPath, err = extractLocalPointerType(result) // (TODO|@amason): does not work for streaming rpcs
 		if err != nil {
 			panic(err)
 		}
@@ -250,16 +250,20 @@ func rewriteProtoImports(pkg *types.Package) string {
 	return pkg.Name()
 }
 
-func extractLocalPointerType(v *types.Var) (string, string, string, error) {
+func extractLocalPointerType(v *types.Var) (name string, localImport string, pkgPath string, err error) {
 	ptr, ok := v.Type().(*types.Pointer)
 	if !ok {
-		return "", "", "", errors.New("TODO: provide details")
+		return "", "", "", fmt.Errorf("expected a pointer type for %s, got %V", v.Name(), v.Type())
 	}
 
 	typ, ok := ptr.Elem().(*types.Named)
 	if !ok {
-		return "", "", "", errors.New("TODO: provide details")
+		return "", "", "", fmt.Errorf("expected an underlying named type for %s, got %V", v.Name(), ptr.Elem())
 	}
 
-	return typ.Obj().Name(), rewriteProtoImports(typ.Obj().Pkg()), typ.Obj().Pkg().Path(), nil
+	name = typ.Obj().Name()
+	localImport = rewriteProtoImports(typ.Obj().Pkg())
+	pkgPath = typ.Obj().Pkg().Path()
+
+	return name, localImport, pkgPath, nil
 }
