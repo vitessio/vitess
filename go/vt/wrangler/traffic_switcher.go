@@ -47,7 +47,8 @@ import (
 )
 
 const (
-	frozenStr = "FROZEN"
+	frozenStr      = "FROZEN"
+	errorNoStreams = "no streams found in keyspace %s for: %s"
 )
 
 // TrafficSwitchDirection specifies the switching direction.
@@ -126,18 +127,250 @@ type tsSource struct {
 	journaled bool
 }
 
-// SwitchReads is a generic way of switching read traffic for a resharding workflow.
-func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedType topodatapb.TabletType, cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
-	if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
-		return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
-	}
-	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+const (
+	workflowTypeReshard    = "Reshard"
+	workflowTypeMoveTables = "MoveTables"
+)
+
+type workflowState struct {
+	Workflow       string
+	SourceKeyspace string
+	TargetKeyspace string
+	WorkflowType   string
+
+	ReplicaCellsSwitched    []string
+	ReplicaCellsNotSwitched []string
+
+	RdonlyCellsSwitched    []string
+	RdonlyCellsNotSwitched []string
+
+	WritesSwitched bool
+}
+
+// For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
+// the query service disabled in its tablet control record
+func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletType string) (
+	cellsSwitched, cellsNotSwitched []string, err error) {
+
+	cells, err := wr.ts.GetCellInfoNames(ctx)
 	if err != nil {
+		return nil, nil, err
+	}
+	for _, cell := range cells {
+		wr.Logger().Infof("cell %s", cell)
+		srvKeyspace, err := wr.ts.GetSrvKeyspace(ctx, cell, targetKeyspace)
+		if err != nil {
+			return nil, nil, err
+		}
+		// Checking one shard is enough.
+		var shardServedTypes []string
+		found := false
+		noControls := true
+		for _, partition := range srvKeyspace.GetPartitions() {
+			if !strings.EqualFold(partition.GetServedType().String(), tabletType) {
+				continue
+			}
+
+			// If reads and writes are both switched it is possible that the shard is not in the partition table
+			for _, shardReference := range partition.GetShardReferences() {
+				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+					found = true
+					break
+				}
+			}
+
+			// It is possible that there are no tablet controls if the target shards are not yet serving
+			// or once reads and writes are both switched,
+			if len(partition.GetShardTabletControls()) == 0 {
+				noControls = true
+				break
+			}
+			for _, tabletControl := range partition.GetShardTabletControls() {
+				if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
+					if !tabletControl.GetQueryServiceDisabled() {
+						shardServedTypes = append(shardServedTypes, si.ShardName())
+					}
+					break
+				}
+			}
+		}
+		if found && (len(shardServedTypes) > 0 || noControls) {
+			cellsNotSwitched = append(cellsNotSwitched, cell)
+		} else {
+			cellsSwitched = append(cellsSwitched, cell)
+		}
+	}
+	return cellsSwitched, cellsNotSwitched, nil
+}
+
+// For MoveTables,  to check whether we have switched reads for a tablet type, we check whether the routing rule
+// for the tablet_type is pointing to the target keyspace
+func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletType string) (
+	cellsSwitched, cellsNotSwitched []string, err error) {
+
+	cells, err := wr.ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	getKeyspace := func(ruleTarget string) (string, error) {
+		arr := strings.Split(ruleTarget, ".")
+		if len(arr) != 2 {
+			return "", fmt.Errorf("rule target is not correctly formatted: %s", ruleTarget)
+		}
+		return arr[0], nil
+	}
+	for _, cell := range cells {
+		srvVSchema, err := wr.ts.GetSrvVSchema(ctx, cell)
+		if err != nil {
+			return nil, nil, err
+		}
+		rules := srvVSchema.RoutingRules.Rules
+		found := false
+		switched := false
+		for _, rule := range rules {
+			ruleName := fmt.Sprintf("%s.%s@%s", targetKeyspace, table, tabletType)
+			if rule.FromTable == ruleName {
+				found = true
+				for _, to := range rule.ToTables {
+					ks, err := getKeyspace(to)
+					if err != nil {
+						log.Errorf(err.Error())
+						return nil, nil, err
+					}
+					if ks == targetKeyspace {
+						switched = true
+						break // if one table in workflow is switched we are done
+					}
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if switched {
+			cellsSwitched = append(cellsSwitched, cell)
+		} else {
+			cellsNotSwitched = append(cellsNotSwitched, cell)
+		}
+	}
+	return cellsSwitched, cellsNotSwitched, nil
+}
+
+func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, *workflowState, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+
+	if ts == nil || err != nil {
+		if err.Error() == fmt.Sprintf(errorNoStreams, targetKeyspace, workflow) {
+			return nil, nil, nil
+		}
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	//If journals exist notify user and fail
+	ws := &workflowState{Workflow: workflow, TargetKeyspace: targetKeyspace}
+	ws.SourceKeyspace = ts.sourceKeyspace
+	var cellsSwitched, cellsNotSwitched []string
+	var keyspace string
+	var reverse bool
+
+	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
+	// source of the reverse workflow, which is the target of the workflow initiated by the user for checking routing rules
+	// Similarly we use a target shard of the reverse workflow as the original source to check if writes have been switched
+	if strings.HasSuffix(workflow, "_reverse") {
+		reverse = true
+		keyspace = ws.SourceKeyspace
+		workflow = reverseName(workflow)
+	} else {
+		keyspace = targetKeyspace
+	}
+	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+		ws.WorkflowType = workflowTypeMoveTables
+
+		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
+		if len(ts.tables) == 0 {
+			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflow)
+
+		}
+		table := ts.tables[0]
+
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "rdonly")
+		if err != nil {
+			return nil, nil, err
+		}
+		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "replica")
+		if err != nil {
+			return nil, nil, err
+		}
+		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
+		rules, err := ts.wr.getRoutingRules(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, table := range ts.tables {
+			rr := rules[table]
+			// if a rule exists for the table and points to the target keyspace, writes have been switched
+			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
+				ws.WritesSwitched = true
+			}
+		}
+	} else {
+		ws.WorkflowType = workflowTypeReshard
+
+		// we assume a consistent state, so only choose one shard
+		var shard *topo.ShardInfo
+		if reverse {
+			shard = ts.targetShards()[0]
+		} else {
+			shard = ts.sourceShards()[0]
+		}
+
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "rdonly")
+		if err != nil {
+			return nil, nil, err
+		}
+		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
+		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "replica")
+		if err != nil {
+			return nil, nil, err
+		}
+		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
+		if !shard.IsMasterServing {
+			ws.WritesSwitched = true
+		}
+	}
+
+	return ts, ws, nil
+}
+
+// SwitchReads is a generic way of switching read traffic for a resharding workflow.
+func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedTypes []topodatapb.TabletType,
+	cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
+
+	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
+	if err != nil {
+		wr.Logger().Errorf("getWorkflowState failed: %v", err)
+		return nil, err
+	}
+	if ts == nil {
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
+		wr.Logger().Errorf(errorMsg)
+		return nil, fmt.Errorf(errorMsg)
+	}
+	wr.Logger().Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflow, servedTypes, cells, ws)
+	for _, servedType := range servedTypes {
+		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
+			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
+		}
+		if direction == DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
+			return nil, fmt.Errorf("requesting reversal of SwitchReads for REPLICAs but REPLICA reads have not been switched")
+		}
+		if direction == DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
+			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
+		}
+	}
+
+	// If journals exist notify user and fail
 	journalsExist, _, err := ts.checkJournals(ctx)
 	if err != nil {
 		wr.Logger().Errorf("checkJournals failed: %v", err)
@@ -145,9 +378,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 	}
 	if journalsExist {
 		wr.Logger().Errorf("Found a previous journal entry for %d", ts.id)
-		return nil, fmt.Errorf("found an entry from a previous run for migration id %d in _vt.resharding_journal, please review and delete it before proceeding", ts.id)
 	}
-
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -155,10 +386,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		sw = &switcher{ts: ts, wr: wr}
 	}
 
-	if ts.frozen {
-		return nil, fmt.Errorf("cannot switch reads while SwitchWrites is in progress")
-	}
-	if err := ts.validate(ctx, false /* isWrite */); err != nil {
+	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
 		return nil, err
 	}
@@ -172,13 +400,14 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 	defer unlock(&err)
 
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		if err := sw.switchTableReads(ctx, cells, servedType, direction); err != nil {
+		if err := sw.switchTableReads(ctx, cells, servedTypes, direction); err != nil {
 			ts.wr.Logger().Errorf("switchTableReads failed: %v", err)
 			return nil, err
 		}
 		return sw.logs(), nil
 	}
-	if err := ts.switchShardReads(ctx, cells, servedType, direction); err != nil {
+	wr.Logger().Infof("switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
+	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
 		ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
@@ -186,11 +415,17 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 }
 
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, cancelMigrate, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
-	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow string, timeout time.Duration, cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflow)
+	_ = ws
 	if err != nil {
-		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
+		wr.Logger().Errorf("getWorkflowState failed: %v", err)
 		return 0, nil, err
+	}
+	if ts == nil {
+		errorMsg := fmt.Sprintf("workflow %s not found in keyspace %s", workflow, targetKeyspace)
+		wr.Logger().Errorf(errorMsg)
+		return 0, nil, fmt.Errorf(errorMsg)
 	}
 
 	var sw iswitcher
@@ -206,7 +441,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	}
 
 	ts.wr.Logger().Infof("Built switching metadata: %+v", ts)
-	if err := ts.validate(ctx, true /* isWrite */); err != nil {
+	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate failed: %v", err)
 		return 0, nil, err
 	}
@@ -237,12 +472,12 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	}
 	if !journalsExist {
 		ts.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := buildStreamMigrater(ctx, ts, cancelMigrate)
+		sm, err := buildStreamMigrater(ctx, ts, cancel)
 		if err != nil {
 			ts.wr.Logger().Errorf("buildStreamMigrater failed: %v", err)
 			return 0, nil, err
 		}
-		if cancelMigrate {
+		if cancel {
 			sw.cancelMigration(ctx, sm)
 			return 0, sw.logs(), nil
 		}
@@ -266,7 +501,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 		}
 
 		ts.wr.Logger().Infof("Waiting for streams to catchup")
-		if err := sw.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
+		if err := sw.waitForCatchup(ctx, timeout); err != nil {
 			ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
@@ -286,7 +521,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 			return 0, nil, err
 		}
 	} else {
-		if cancelMigrate {
+		if cancel {
 			err := fmt.Errorf("traffic switching has reached the point of no return, cannot cancel")
 			ts.wr.Logger().Errorf("%v", err)
 			return 0, nil, err
@@ -332,8 +567,71 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	return ts.id, sw.logs(), nil
 }
 
+// DropTargets cleans up target tables, shards and blacklisted tables after a MoveTables/Reshard is completed
+func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	if err != nil {
+		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
+		return nil, err
+	}
+	var sw iswitcher
+	if dryRun {
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
+	} else {
+		sw = &switcher{ts: ts, wr: wr}
+	}
+	var tctx context.Context
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.sourceKeyspace, "DropTargets")
+	if lockErr != nil {
+		ts.wr.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
+		return nil, lockErr
+	}
+	defer sourceUnlock(&err)
+	ctx = tctx
+	if ts.targetKeyspace != ts.sourceKeyspace {
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.targetKeyspace, "DropTargets")
+		if lockErr != nil {
+			ts.wr.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+			return nil, lockErr
+		}
+		defer targetUnlock(&err)
+		ctx = tctx
+	}
+	if !keepData {
+		switch ts.migrationType {
+		case binlogdatapb.MigrationType_TABLES:
+			log.Infof("Deleting target tables")
+			if err := sw.removeTargetTables(ctx); err != nil {
+				return nil, err
+			}
+			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+				return nil, err
+			}
+		case binlogdatapb.MigrationType_SHARDS:
+			log.Infof("Removing target shards")
+			if err := sw.dropTargetShards(ctx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := wr.dropArtifacts(ctx, sw); err != nil {
+		return nil, err
+	}
+	return sw.logs(), nil
+}
+
+func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
+	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+		return err
+	}
+	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
-func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, dryRun bool) (*[]string, error) {
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -362,38 +660,42 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 		defer targetUnlock(&err)
 		ctx = tctx
 	}
-	if err := sw.validateWorkflowHasCompleted(ctx); err != nil {
-		wr.Logger().Errorf("Workflow has not completed, cannot DropSources: %v", err)
-		return nil, err
-	}
-	switch ts.migrationType {
-	case binlogdatapb.MigrationType_TABLES:
-		if err := sw.removeSourceTables(ctx, removalType); err != nil {
-			return nil, err
-		}
-		if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
-			return nil, err
-		}
-	case binlogdatapb.MigrationType_SHARDS:
-		if err := sw.dropSourceShards(ctx); err != nil {
+	if !force {
+		if err := sw.validateWorkflowHasCompleted(ctx); err != nil {
+			wr.Logger().Errorf("Workflow has not completed, cannot DropSources: %v", err)
 			return nil, err
 		}
 	}
-	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+	if !keepData {
+		switch ts.migrationType {
+		case binlogdatapb.MigrationType_TABLES:
+			log.Infof("Deleting tables")
+			if err := sw.removeSourceTables(ctx, removalType); err != nil {
+				return nil, err
+			}
+			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+				return nil, err
+			}
+		case binlogdatapb.MigrationType_SHARDS:
+			log.Infof("Removing shards")
+			if err := sw.dropSourceShards(ctx); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := wr.dropArtifacts(ctx, sw); err != nil {
 		return nil, err
 	}
-	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
-		return nil, err
-	}
-
 	return sw.logs(), nil
 }
 
 func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, error) {
-	targets, frozen, optCells, optTabletTypes, err := wr.buildTargets(ctx, targetKeyspace, workflow)
+	tgtInfo, err := wr.buildTargets(ctx, targetKeyspace, workflow)
 	if err != nil {
+		log.Infof("Error building targets: %s", err)
 		return nil, err
 	}
+	targets, frozen, optCells, optTabletTypes := tgtInfo.targets, tgtInfo.frozen, tgtInfo.optCells, tgtInfo.optTabletTypes
 
 	ts := &trafficSwitcher{
 		wr:              wr,
@@ -407,7 +709,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		optCells:        optCells,
 		optTabletTypes:  optTabletTypes,
 	}
-	ts.wr.Logger().Infof("Migration ID for workflow %s: %d", workflow, ts.id)
+	log.Infof("Migration ID for workflow %s: %d", workflow, ts.id)
 
 	// Build the sources
 	for _, target := range targets {
@@ -476,11 +778,21 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	return ts, nil
 }
 
-func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow string) (targets map[string]*tsTarget, frozen bool, optCells string, optTabletTypes string, err error) {
-	targets = make(map[string]*tsTarget)
+type targetInfo struct {
+	targets        map[string]*tsTarget
+	frozen         bool
+	optCells       string
+	optTabletTypes string
+}
+
+func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow string) (*targetInfo, error) {
+	var err error
+	var frozen bool
+	var optCells, optTabletTypes string
+	targets := make(map[string]*tsTarget)
 	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
 	if err != nil {
-		return nil, false, "", "", err
+		return nil, err
 	}
 	// We check all target shards. All of them may not have a stream.
 	// For example, if we're splitting -80 to -40,40-80, only those
@@ -488,19 +800,19 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 	for _, targetShard := range targetShards {
 		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
-			return nil, false, "", "", err
+			return nil, err
 		}
 		if targetsi.MasterAlias == nil {
 			// This can happen if bad inputs are given.
-			return nil, false, "", "", fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
+			return nil, fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
 		}
 		targetMaster, err := wr.ts.GetTablet(ctx, targetsi.MasterAlias)
 		if err != nil {
-			return nil, false, "", "", err
+			return nil, err
 		}
 		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source, message, cell, tablet_types from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
 		if err != nil {
-			return nil, false, "", "", err
+			return nil, err
 		}
 		// If there's no vreplication stream, check the next target.
 		if len(p3qr.Rows) < 1 {
@@ -516,12 +828,12 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 		for _, row := range qr.Rows {
 			id, err := evalengine.ToInt64(row[0])
 			if err != nil {
-				return nil, false, "", "", err
+				return nil, err
 			}
 
 			var bls binlogdatapb.BinlogSource
 			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
-				return nil, false, "", "", err
+				return nil, err
 			}
 			targets[targetShard].sources[uint32(id)] = &bls
 
@@ -533,9 +845,11 @@ func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow s
 		}
 	}
 	if len(targets) == 0 {
-		return nil, false, "", "", fmt.Errorf("no streams found in keyspace %s for: %s", targetKeyspace, workflow)
+		err2 := fmt.Errorf(errorNoStreams, targetKeyspace, workflow)
+		return nil, err2
 	}
-	return targets, frozen, optCells, optTabletTypes, nil
+	tinfo := &targetInfo{targets: targets, frozen: frozen, optCells: optCells, optTabletTypes: optTabletTypes}
+	return tinfo, nil
 }
 
 // hashStreams produces a reproducible hash based on the input parameters.
@@ -557,7 +871,7 @@ func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
 	return int64(hasher.Sum64() & math.MaxInt64)
 }
 
-func (ts *trafficSwitcher) validate(ctx context.Context, isWrite bool) error {
+func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		// All shards must be present.
 		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards()); err != nil {
@@ -571,61 +885,6 @@ func (ts *trafficSwitcher) validate(ctx context.Context, isWrite bool) error {
 			if strings.HasPrefix(table, "/") {
 				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
 			}
-		}
-		if isWrite {
-			return ts.validateTableForWrite(ctx)
-		}
-	} else { // binlogdatapb.MigrationType_SHARDS
-		if isWrite {
-			return ts.validateShardForWrite(ctx)
-		}
-	}
-	return nil
-}
-
-func (ts *trafficSwitcher) validateTableForWrite(ctx context.Context) error {
-	rules, err := ts.wr.getRoutingRules(ctx)
-	if err != nil {
-		return err
-	}
-	for _, table := range ts.tables {
-		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
-			tt := strings.ToLower(tabletType.String())
-			if rules[table+"@"+tt] == nil || rules[ts.targetKeyspace+"."+table+"@"+tt] == nil {
-				return fmt.Errorf("missing tablet type specific routing, read-only traffic must be switched before switching writes: %v", table)
-			}
-		}
-	}
-	return nil
-}
-
-func (ts *trafficSwitcher) validateShardForWrite(ctx context.Context) error {
-	srvKeyspaces, err := ts.wr.ts.GetSrvKeyspaceAllCells(ctx, ts.sourceKeyspace)
-	if err != nil {
-		return err
-	}
-
-	// Checking one shard is enough.
-	var si *topo.ShardInfo
-	for _, source := range ts.sources {
-		si = source.si
-		break
-	}
-
-	for _, srvKeyspace := range srvKeyspaces {
-		var shardServedTypes []string
-		for _, partition := range srvKeyspace.GetPartitions() {
-			if partition.GetServedType() == topodatapb.TabletType_MASTER {
-				continue
-			}
-			for _, shardReference := range partition.GetShardReferences() {
-				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
-					shardServedTypes = append(shardServedTypes, partition.GetServedType().String())
-				}
-			}
-		}
-		if len(shardServedTypes) > 0 {
-			return fmt.Errorf("cannot switch MASTER away from %v/%v until everything else is switched. Make sure that the following types are switched first: %v", si.Keyspace(), si.ShardName(), strings.Join(shardServedTypes, ", "))
 		}
 	}
 	return nil
@@ -648,7 +907,8 @@ func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, s
 	return nil
 }
 
-func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
 	rules, err := ts.wr.getRoutingRules(ctx)
 	if err != nil {
 		return err
@@ -657,17 +917,23 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// table -> sourceKeyspace.table
 	// targetKeyspace.table -> sourceKeyspace.table
 	// For forward migration, we add tablet type specific rules to redirect traffic to the target.
-	// For backward, we delete them.
-	tt := strings.ToLower(servedType.String())
-	for _, table := range ts.tables {
-		if direction == DirectionForward {
-			rules[table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
-			rules[ts.targetKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
-			rules[ts.sourceKeyspace+"."+table+"@"+tt] = []string{ts.targetKeyspace + "." + table}
-		} else {
-			delete(rules, table+"@"+tt)
-			delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
-			delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
+	// For backward, we redirect to source
+	for _, servedType := range servedTypes {
+		tt := strings.ToLower(servedType.String())
+		for _, table := range ts.tables {
+			if direction == DirectionForward {
+				log.Infof("Route direction forward")
+				toTarget := []string{ts.targetKeyspace + "." + table}
+				rules[table+"@"+tt] = toTarget
+				rules[ts.targetKeyspace+"."+table+"@"+tt] = toTarget
+				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toTarget
+			} else {
+				log.Infof("Route direction backwards")
+				toSource := []string{ts.sourceKeyspace + "." + table}
+				rules[table+"@"+tt] = toSource
+				rules[ts.targetKeyspace+"."+table+"@"+tt] = toSource
+				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toSource
+			}
 		}
 	}
 	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
@@ -676,21 +942,26 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	return ts.wr.ts.RebuildSrvVSchema(ctx, cells)
 }
 
-func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	var fromShards, toShards []*topo.ShardInfo
 	if direction == DirectionForward {
 		fromShards, toShards = ts.sourceShards(), ts.targetShards()
 	} else {
 		fromShards, toShards = ts.targetShards(), ts.sourceShards()
 	}
-
-	if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */); err != nil {
-		return err
+	for _, servedType := range servedTypes {
+		if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */); err != nil {
+			return err
+		}
+		if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, toShards, cells, servedType, false, false); err != nil {
+			return err
+		}
+		err := ts.wr.ts.MigrateServedType(ctx, ts.sourceKeyspace, toShards, fromShards, servedType, cells)
+		if err != nil {
+			return err
+		}
 	}
-	if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, toShards, cells, servedType, false, false); err != nil {
-		return err
-	}
-	return ts.wr.ts.MigrateServedType(ctx, ts.sourceKeyspace, toShards, fromShards, servedType, cells)
+	return nil
 }
 
 func (wr *Wrangler) checkIfJournalExistsOnTablet(ctx context.Context, tablet *topodatapb.Tablet, migrationID int64) (*binlogdatapb.Journal, bool, error) {
@@ -1008,33 +1279,17 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 
 func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		return ts.changeTableRouting(ctx)
+		return ts.changeWriteRoute(ctx)
 	}
 	return ts.changeShardRouting(ctx)
 }
 
-func (ts *trafficSwitcher) changeTableRouting(ctx context.Context) error {
+func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 	rules, err := ts.wr.getRoutingRules(ctx)
 	if err != nil {
 		return err
 	}
-	// We assume that the following rules were setup when the targets were created:
-	// table -> sourceKeyspace.table
-	// targetKeyspace.table -> sourceKeyspace.table
-	// Additionally, SwitchReads would have added rules like this:
-	// table@replica -> targetKeyspace.table
-	// targetKeyspace.table@replica -> targetKeyspace.table
-	// After this step, only the following rules will be left:
-	// table -> targetKeyspace.table
-	// sourceKeyspace.table -> targetKeyspace.table
 	for _, table := range ts.tables {
-		for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
-			tt := strings.ToLower(tabletType.String())
-			delete(rules, table+"@"+tt)
-			delete(rules, ts.targetKeyspace+"."+table+"@"+tt)
-			delete(rules, ts.sourceKeyspace+"."+table+"@"+tt)
-			ts.wr.Logger().Infof("Delete routing: %v %v %v", table+"@"+tt, ts.targetKeyspace+"."+table+"@"+tt, ts.sourceKeyspace+"."+table+"@"+tt)
-		}
 		delete(rules, ts.targetKeyspace+"."+table)
 		ts.wr.Logger().Infof("Delete routing: %v", ts.targetKeyspace+"."+table)
 		rules[table] = []string{ts.targetKeyspace + "." + table}
@@ -1242,6 +1497,7 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 	})
 }
 
+// FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
 func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 	return ts.forAllSources(func(source *tsSource) error {
 		ts.wr.Logger().Infof("Deleting shard %s.%s\n", source.si.Keyspace(), source.si.ShardName())
@@ -1289,6 +1545,36 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 	})
 }
 
+func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+	return ts.forAllTargets(func(target *tsTarget) error {
+		for _, tableName := range ts.tables {
+			query := fmt.Sprintf("drop table %s.%s", target.master.DbName(), tableName)
+			ts.wr.Logger().Infof("Dropping table %s.%s\n", target.master.DbName(), tableName)
+			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.master.Alias, query, 1, false, true)
+			if err != nil {
+				ts.wr.Logger().Errorf("Error removing table %s: %v", tableName, err)
+				return err
+			}
+			ts.wr.Logger().Infof("Removed table %s.%s\n", target.master.DbName(), tableName)
+
+		}
+		return nil
+	})
+}
+
+func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
+	return ts.forAllTargets(func(target *tsTarget) error {
+		ts.wr.Logger().Infof("Deleting shard %s.%s\n", target.si.Keyspace(), target.si.ShardName())
+		err := ts.wr.DeleteShard(ctx, target.si.Keyspace(), target.si.ShardName(), true, false)
+		if err != nil {
+			ts.wr.Logger().Errorf("Error deleting shard %s: %v", target.si.ShardName(), err)
+			return err
+		}
+		ts.wr.Logger().Infof("Deleted shard %s.%s\n", target.si.Keyspace(), target.si.ShardName())
+		return nil
+	})
+}
+
 func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, error) {
 	rrs, err := wr.ts.GetRoutingRules(ctx)
 	if err != nil {
@@ -1302,7 +1588,7 @@ func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, e
 }
 
 func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]string) error {
-	wr.Logger().Infof("Saving routing rules %v\n", rules)
+	log.Infof("Saving routing rules %v\n", rules)
 	rrs := &vschemapb.RoutingRules{Rules: make([]*vschemapb.RoutingRule, 0, len(rules))}
 	for from, to := range rules {
 		rrs.Rules = append(rrs.Rules, &vschemapb.RoutingRule{

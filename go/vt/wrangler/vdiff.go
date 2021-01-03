@@ -146,7 +146,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		wr.Logger().Errorf("buildTrafficSwitcher: %v", err)
 		return nil, err
 	}
-	if err := ts.validate(ctx, false /* isWrite */); err != nil {
+	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate: %v", err)
 		return nil, err
 	}

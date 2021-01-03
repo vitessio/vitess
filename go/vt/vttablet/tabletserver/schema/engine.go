@@ -284,9 +284,9 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 
 // reload reloads the schema. It can also be used to initialize it.
 func (se *Engine) reload(ctx context.Context) error {
-	start := time.Now()
+	//start := time.Now()
 	defer func() {
-		log.Infof("Time taken to load the schema: %v", time.Since(start))
+		//log.Infof("Time taken to load the schema: %v", time.Since(start))
 		se.env.LogError()
 	}()
 
