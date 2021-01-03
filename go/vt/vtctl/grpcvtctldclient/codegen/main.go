@@ -72,26 +72,9 @@ func main() { // nolint:funlen
 		panic(err)
 	}
 
-	obj := pkg.Types.Scope().Lookup(*typeName)
-	if obj == nil {
-		panic(fmt.Sprintf("no symbol %s found in package %s", *typeName, *source))
-	}
-
-	var (
-		iface *types.Interface
-		ok    bool
-	)
-
-	switch t := obj.Type().(type) {
-	case *types.Named:
-		iface, ok = t.Underlying().(*types.Interface)
-		if !ok {
-			panic(fmt.Sprintf("symbol %s in package %s was not an interface but %T", *typeName, *source, t.Underlying()))
-		}
-	case *types.Interface:
-		iface = t
-	default:
-		panic(fmt.Sprintf("symbol %s in package %s was not an interface but %T", *typeName, *source, t))
+	iface, err := extractSourceInterface(pkg, *typeName)
+	if err != nil {
+		panic(fmt.Errorf("error getting %s in %s: %w", *typeName, *source, err))
 	}
 
 	imports := map[string]string{
@@ -248,6 +231,27 @@ func loadPackage(source string) (*packages.Package, error) {
 	}
 
 	return pkg, nil
+}
+
+func extractSourceInterface(pkg *packages.Package, name string) (*types.Interface, error) {
+	obj := pkg.Types.Scope().Lookup(name)
+	if obj == nil {
+		return nil, fmt.Errorf("no symbol found with name %s", name)
+	}
+
+	switch t := obj.Type().(type) {
+	case *types.Named:
+		iface, ok := t.Underlying().(*types.Interface)
+		if !ok {
+			return nil, fmt.Errorf("symbol %s was not an interface but %T", name, t.Underlying())
+		}
+
+		return iface, nil
+	case *types.Interface:
+		return t, nil
+	}
+
+	return nil, fmt.Errorf("symbol %s was not an interface but %T", name, obj.Type())
 }
 
 var vitessProtoRegexp = regexp.MustCompile(`^vitess.io.*/proto/.*`)
