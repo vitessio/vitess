@@ -106,8 +106,6 @@ func main() { // nolint:funlen
 		}
 		funcs[f.Name] = f
 
-		fmt.Println(sig.Params().String())
-
 		// The first parameter is always context.Context. The third parameter is
 		// always a ...grpc.CallOption.
 		param := sig.Params().At(1)
