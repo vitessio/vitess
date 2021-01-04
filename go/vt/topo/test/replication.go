@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

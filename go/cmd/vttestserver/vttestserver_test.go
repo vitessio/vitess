@@ -31,11 +31,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/vttest"
 
 	"github.com/golang/protobuf/jsonpb"
+
 	"vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"

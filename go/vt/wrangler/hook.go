@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"context"
+
 	hk "vitess.io/vitess/go/vt/hook"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

@@ -10,6 +10,7 @@ import (
 	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 
 	"github.com/go-martini/martini"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 )
 

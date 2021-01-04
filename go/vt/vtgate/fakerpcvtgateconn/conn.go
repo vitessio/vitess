@@ -26,6 +26,7 @@ import (
 	"reflect"
 
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 

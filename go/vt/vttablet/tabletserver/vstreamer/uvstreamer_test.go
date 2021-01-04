@@ -57,6 +57,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )

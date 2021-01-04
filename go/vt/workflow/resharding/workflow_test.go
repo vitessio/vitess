@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"context"
+
 	"github.com/golang/mock/gomock"
 
 	"vitess.io/vitess/go/vt/topo"

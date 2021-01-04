@@ -20,6 +20,7 @@ package helpers
 
 import (
 	"context"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 

@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"

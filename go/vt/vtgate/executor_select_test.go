@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"

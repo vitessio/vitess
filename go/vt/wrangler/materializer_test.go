@@ -23,8 +23,10 @@ import (
 	"testing"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"

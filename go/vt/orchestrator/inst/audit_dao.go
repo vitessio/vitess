@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/rcrowley/go-metrics"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"

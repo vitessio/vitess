@@ -10,6 +10,7 @@ import (
 
 	"github.com/DataDog/datadog-go/statsd"
 	"gotest.tools/assert"
+
 	"vitess.io/vitess/go/stats"
 )
 

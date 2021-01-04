@@ -29,7 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"context"
+
 	"github.com/hashicorp/consul/api"
+
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"

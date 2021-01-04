@@ -16,6 +16,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/PuerkitoBio/goquery"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )

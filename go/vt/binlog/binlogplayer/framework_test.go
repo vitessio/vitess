@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 

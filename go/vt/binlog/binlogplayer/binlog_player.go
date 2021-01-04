@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
