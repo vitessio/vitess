@@ -147,6 +147,7 @@ func skipToEnd(yylex interface{}) {
   alterOptions	   []AlterOption
   tableOption      *TableOption
   tableOptions     TableOptions
+  renameTable	   *RenameTable
 }
 
 %token LEX_ERROR
@@ -263,7 +264,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <ddl> rename_list
+%type <renameTable> rename_list
 %type <createTable> create_table_prefix
 %type <alterTable> alter_table_prefix
 %type <alterOption> alter_option alter_commands_modifier
@@ -1960,7 +1961,7 @@ alter_option:
   }
 | RENAME to_opt table_name
   {
-    $$ = &RenameTable{Table:$3}
+    $$ = &RenameTableName{Table:$3}
   }
 | RENAME index_or_key id_or_var TO id_or_var
   {
@@ -2262,7 +2263,7 @@ rename_statement:
 rename_list:
   table_name TO table_name
   {
-    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$1}, ToTables: TableNames{$3}}
+    $$ = &RenameTable{FromTables: TableNames{$1}, ToTables: TableNames{$3}}
   }
 | rename_list ',' table_name TO table_name
   {

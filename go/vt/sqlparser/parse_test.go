@@ -1213,8 +1213,8 @@ var (
 		input:  "rename table a to b",
 		output: "rename table a to b",
 	}, {
-		input:  "rename table a to b, b to c",
-		output: "rename table a to b, b to c",
+		input:  "rename table x.a to b, b to c",
+		output: "rename table x.a to b, b to c",
 	}, {
 		input:  "drop view a,B,c",
 		output: "drop view a, b, c",

@@ -667,8 +667,16 @@ func replaceReleaseName(newNode, parent SQLNode) {
 	parent.(*Release).Name = newNode.(ColIdent)
 }
 
-func replaceRenameTableTable(newNode, parent SQLNode) {
-	parent.(*RenameTable).Table = newNode.(TableName)
+func replaceRenameTableFromTables(newNode, parent SQLNode) {
+	parent.(*RenameTable).FromTables = newNode.(TableNames)
+}
+
+func replaceRenameTableToTables(newNode, parent SQLNode) {
+	parent.(*RenameTable).ToTables = newNode.(TableNames)
+}
+
+func replaceRenameTableNameTable(newNode, parent SQLNode) {
+	parent.(*RenameTableName).Table = newNode.(TableName)
 }
 
 func replaceSRollbackName(newNode, parent SQLNode) {
@@ -1493,7 +1501,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *RenameIndex:
 
 	case *RenameTable:
-		a.apply(node, n.Table, replaceRenameTableTable)
+		a.apply(node, n.FromTables, replaceRenameTableFromTables)
+		a.apply(node, n.ToTables, replaceRenameTableToTables)
+
+	case *RenameTableName:
+		a.apply(node, n.Table, replaceRenameTableNameTable)
 
 	case *Rollback:
 

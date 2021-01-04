@@ -546,3 +546,22 @@
     "Query": "truncate table user_extra"
   }
 }
+
+# Rename table
+"rename table user_extra to b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table user_extra to b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "rename table user_extra to b"
+  }
+}
+
+# Rename table with different keyspace tables
+"rename table user_extra to b, main.a to b"
+"Tables or Views specified in the query do not belong to the same destination"
