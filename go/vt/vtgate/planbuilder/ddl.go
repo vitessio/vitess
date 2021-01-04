@@ -45,18 +45,26 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 	var err error
 
 	switch ddl := ddlStatement.(type) {
-	case *sqlparser.CreateIndex:
-		// For Create index, the table must already exist
+	case *sqlparser.CreateIndex, *sqlparser.AlterTable:
+		// For Create index and Alter Table, the table must already exist
 		// We should find the target of the query from this tables location
 		table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
-		keyspace = table.Keyspace
 		if err != nil {
-			return nil, nil, err
+			_, isNotFound := err.(vindexes.NotFoundError)
+			if !isNotFound {
+				return nil, nil, err
+			}
 		}
 		if table == nil {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", ddlStatement.GetTable().Name.String())
+			destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+			if err != nil {
+				return nil, nil, err
+			}
+			ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
+		} else {
+			keyspace = table.Keyspace
+			ddlStatement.SetTable("", table.Name.String())
 		}
-		ddlStatement.SetTable("", table.Name.String())
 	case *sqlparser.DDL:
 		// For DDL, it is only required that the keyspace exist
 		// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name

@@ -2356,7 +2356,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tPRIMARY KEY (id),\n" +
 				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tKEY fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
 
 			hasErr: false,
 		},
@@ -2378,7 +2379,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tPRIMARY KEY (id),\n" +
 				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tKEY fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
 		},
 		{
 			desc: "bad ddl has error",
