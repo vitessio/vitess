@@ -42,11 +42,12 @@ func (c *Conn) WriteComQuery(query string) error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
 
-	data, pos := c.startEphemeralPacketWithHeader(len(query) + 1)
+	buffer, pos := c.startEphemeralPacketWithHeader(len(query) + 1)
+	data := *buffer.data
 	data[pos] = ComQuery
 	pos++
 	copy(data[pos:], query)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -56,11 +57,12 @@ func (c *Conn) WriteComQuery(query string) error {
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComInitDB(db string) error {
-	data, pos := c.startEphemeralPacketWithHeader(len(db) + 1)
+	buffer, pos := c.startEphemeralPacketWithHeader(len(db) + 1)
+	data := *buffer.data
 	data[pos] = ComInitDB
 	pos++
 	copy(data[pos:], db)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -69,11 +71,12 @@ func (c *Conn) writeComInitDB(db string) error {
 // writeComSetOption changes the connection's capability of executing multi statements.
 // Returns SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComSetOption(operation uint16) error {
-	data, pos := c.startEphemeralPacketWithHeader(16 + 1)
+	buffer, pos := c.startEphemeralPacketWithHeader(16 + 1)
+	data := *buffer.data
 	data[pos] = ComSetOption
 	pos++
 	writeUint16(data, pos, operation)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -82,12 +85,13 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 // readColumnDefinition reads the next Column Definition packet.
 // Returns a SQLError.
 func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
-	colDef, err := c.readEphemeralPacket()
+	buffer, err := c.readEphemeralPacket()
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	defer c.recycleReadPacket()
+	defer buffer.release()
 
+	colDef := *buffer.data
 	// Catalog is ignored, always set to "def"
 	pos, ok := skipLenEncString(colDef, 0)
 	if !ok {
@@ -180,12 +184,13 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 // readColumnDefinition that only fills in the Type.
 // Returns a SQLError.
 func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
-	colDef, err := c.readEphemeralPacket()
+	buffer, err := c.readEphemeralPacket()
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	defer c.recycleReadPacket()
+	defer buffer.release()
 
+	colDef := *buffer.data
 	// catalog, schema, table, orgTable, name and orgName are
 	// strings, all skipped.
 	pos, ok := skipLenEncString(colDef, 0)
@@ -384,38 +389,40 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.readEphemeralPacket()
+		buffer, err := c.readEphemeralPacket()
 		if err != nil {
 			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
+		data := *buffer.data
 		if isEOFPacket(data) {
 
 			// This is what we expect.
 			// Warnings and status flags are ignored.
-			c.recycleReadPacket()
+			buffer.release()
 			// goto: read row loop
 
 		} else if isErrorPacket(data) {
-			defer c.recycleReadPacket()
+			defer buffer.release()
 			return nil, false, 0, ParseErrorPacket(data)
 		} else {
-			defer c.recycleReadPacket()
+			defer buffer.release()
 			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
 		}
 	}
 
 	// read each row until EOF or OK packet.
 	for {
-		data, err := c.readEphemeralPacket()
+		buffer, err := c.readEphemeralPacket()
 		if err != nil {
 			return nil, false, 0, err
 		}
+		data := *buffer.data
 
 		// TODO: harshit - the EOF packet is deprecated as of MySQL 5.7.5.
 		// https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
 		// It will be OK Packet with EOF Header. This needs to change in the code here.
 		if isEOFPacket(data) {
-			defer c.recycleReadPacket()
+			defer buffer.release()
 
 			// Strip the partial Fields before returning.
 			if !wantfields {
@@ -442,14 +449,14 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			return result, more, warnings, nil
 
 		} else if isErrorPacket(data) {
-			defer c.recycleReadPacket()
+			defer buffer.release()
 			// Error packet.
 			return nil, false, 0, ParseErrorPacket(data)
 		}
 
 		// Check we're not over the limit before we add more.
 		if len(result.Rows) == maxrows {
-			c.recycleReadPacket()
+			buffer.release()
 			if err := c.drainResults(); err != nil {
 				return nil, false, 0, err
 			}
@@ -459,38 +466,40 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		// Regular row.
 		row, err := c.parseRow(data, result.Fields)
 		if err != nil {
-			c.recycleReadPacket()
+			buffer.release()
 			return nil, false, 0, err
 		}
 		result.Rows = append(result.Rows, row)
-		c.recycleReadPacket()
+		buffer.release()
 	}
 }
 
 // drainResults will read all packets for a result set and ignore them.
 func (c *Conn) drainResults() error {
 	for {
-		data, err := c.readEphemeralPacket()
+		buffer, err := c.readEphemeralPacket()
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
+		data := *buffer.data
 		if isEOFPacket(data) {
-			c.recycleReadPacket()
+			buffer.release()
 			return nil
 		} else if isErrorPacket(data) {
-			defer c.recycleReadPacket()
+			defer buffer.release()
 			return ParseErrorPacket(data)
 		}
-		c.recycleReadPacket()
+		buffer.release()
 	}
 }
 
 func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
-	data, err := c.readEphemeralPacket()
+	buffer, err := c.readEphemeralPacket()
 	if err != nil {
 		return 0, nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	defer c.recycleReadPacket()
+	defer buffer.release()
+	data := *buffer.data
 	if len(data) == 0 {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}
@@ -876,9 +885,9 @@ func (c *Conn) parseComInitDB(data []byte) string {
 
 func (c *Conn) sendColumnCount(count uint64) error {
 	length := lenEncIntSize(count)
-	data, pos := c.startEphemeralPacketWithHeader(length)
-	writeLenEncInt(data, pos, count)
-	return c.writeEphemeralPacket()
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	writeLenEncInt(*buffer.data, pos, count)
+	return c.writeEphemeralPacket(buffer)
 }
 
 func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
@@ -904,8 +913,8 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		flags = int64(field.Flags)
 	}
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
-
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	pos = writeLenEncString(data, pos, "def") // Always the same.
 	pos = writeLenEncString(data, pos, field.Database)
 	pos = writeLenEncString(data, pos, field.Table)
@@ -924,7 +933,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "packing of column definition used %v bytes instead of %v", pos, len(data))
 	}
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 func (c *Conn) writeRow(row []sqltypes.Value) error {
@@ -938,7 +947,8 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 		}
 	}
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	for _, val := range row {
 		if val.IsNull() {
 			pos = writeByte(data, pos, NullValue)
@@ -949,7 +959,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 		}
 	}
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 // writeFields writes the fields of a Result. It should be called only
@@ -1042,8 +1052,8 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 		numParams:    paramsCount,
 		warningCount: 0,
 	}
-	bytes, pos := c.startEphemeralPacketWithHeader(12)
-	data := &coder{data: bytes, pos: pos}
+	buffer, pos := c.startEphemeralPacketWithHeader(12)
+	data := &coder{data: *buffer.data, pos: pos}
 	data.writeByte(ok.status)
 	data.writeUint32(ok.stmtID)
 	data.writeUint16(ok.numCols)
@@ -1051,7 +1061,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	data.writeByte(0x00) // reserved 1 byte
 	data.writeUint16(ok.warningCount)
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		return err
 	}
 
@@ -1110,8 +1120,8 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 
 	length += nullBitMapLen + 1
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
-
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	pos = writeByte(data, pos, 0x00)
 
 	for i := 0; i < nullBitMapLen; i++ {
@@ -1126,14 +1136,14 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 		} else {
 			v, err := val2MySQL(val)
 			if err != nil {
-				c.recycleWritePacket()
+				buffer.release()
 				return fmt.Errorf("internal value %v to MySQL value error: %v", val, err)
 			}
 			pos += copy(data[pos:], v)
 		}
 	}
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 // writeBinaryRows sends the rows of a Result with binary form.

@@ -53,20 +53,6 @@ const (
 	packetHeaderSize = 4
 )
 
-// Constants for how ephemeral buffers were used for reading / writing.
-const (
-	// ephemeralUnused means the ephemeral buffer is not in use at this
-	// moment. This is the default value, and is checked so we don't
-	// read or write a packet while one is already used.
-	ephemeralUnused = iota
-
-	// ephemeralWrite means we currently in process of writing from  currentEphemeralBuffer
-	ephemeralWrite
-
-	// ephemeralRead means we currently in process of reading into currentEphemeralBuffer
-	ephemeralRead
-)
-
 // A Getter has a Get()
 type Getter interface {
 	Get() *querypb.VTGateCallerID
@@ -122,16 +108,6 @@ type Conn struct {
 
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
-
-	// Keep track of how and of the buffer we allocated for an
-	// ephemeral packet on the read and write sides.
-	// These fields are used by:
-	// - startEphemeralPacketWithHeader / writeEphemeralPacket methods for writes.
-	// - readEphemeralPacket / recycleReadPacket methods for reads.
-	currentEphemeralPolicy int
-	// currentEphemeralBuffer for tracking allocated temporary buffer for writes and reads respectively.
-	// It can be allocated from bufPool or heap and should be recycled in the same manner.
-	currentEphemeralBuffer *[]byte
 
 	listener *Listener
 
@@ -193,6 +169,18 @@ type PrepareData struct {
 	BindVars    map[string]*querypb.BindVariable
 	StatementID uint32
 	ParamsCount uint16
+}
+
+// a connBuffer knows to return itself to the buffer pool when done
+type dataBuffer struct {
+	data     *[]byte
+	fromPool bool
+}
+
+func (cb *dataBuffer) release() {
+	if cb.fromPool {
+		bufPool.Put(cb.data)
+	}
 }
 
 // execResult is an enum signifying the result of executing a query
@@ -355,11 +343,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 // returned, and it may not be io.EOF. If the connection closes while
 // we are stuck waiting for data, an error will also be returned, and
 // it most likely will be io.EOF.
-func (c *Conn) readEphemeralPacket() ([]byte, error) {
-	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
-	}
-
+func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 	r := c.getReader()
 
 	length, err := c.readHeaderFrom(r)
@@ -367,20 +351,20 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 		return nil, err
 	}
 
-	c.currentEphemeralPolicy = ephemeralRead
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
-		return nil, nil
+		return &dataBuffer{fromPool: false}, nil
 	}
 
 	// Use the bufPool.
 	if length < MaxPacketSize {
-		c.currentEphemeralBuffer = bufPool.Get(length)
-		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
+		bytes := bufPool.Get(length)
+		if _, err := io.ReadFull(r, *bytes); err != nil {
+			bufPool.Put(bytes)
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
-		return *c.currentEphemeralBuffer, nil
+		return &dataBuffer{data: bytes, fromPool: true}, nil
 	}
 
 	// Much slower path, revert to allocating everything from scratch.
@@ -407,7 +391,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 		}
 	}
 
-	return data, nil
+	return &dataBuffer{data: &data, fromPool: false}, nil
 }
 
 // readEphemeralPacketDirect attempts to read a packet from the socket directly.
@@ -415,11 +399,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 // so we do't buffer the SSL negotiation packet. As a shortcut, only
 // packets smaller than MaxPacketSize can be read here.
 // This function usually shouldn't be used - use readEphemeralPacket.
-func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
-	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
-	}
-
+func (c *Conn) readEphemeralPacketDirect() (*dataBuffer, error) {
 	var r io.Reader = c.conn
 
 	length, err := c.readHeaderFrom(r)
@@ -427,37 +407,21 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 		return nil, err
 	}
 
-	c.currentEphemeralPolicy = ephemeralRead
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
-		return nil, nil
+		return &dataBuffer{fromPool: false}, nil
 	}
 
 	if length < MaxPacketSize {
-		c.currentEphemeralBuffer = bufPool.Get(length)
-		if _, err := io.ReadFull(r, *c.currentEphemeralBuffer); err != nil {
+		bytes := bufPool.Get(length)
+		if _, err := io.ReadFull(r, *bytes); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
-		return *c.currentEphemeralBuffer, nil
+		return &dataBuffer{data: bytes, fromPool: true}, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")
-}
-
-// recycleReadPacket recycles the read packet. It needs to be called
-// after readEphemeralPacket was called.
-func (c *Conn) recycleReadPacket() {
-	if c.currentEphemeralPolicy != ephemeralRead {
-		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
-	}
-	if c.currentEphemeralBuffer != nil {
-		// We are using the pool, put the buffer back in.
-		bufPool.Put(c.currentEphemeralBuffer)
-		c.currentEphemeralBuffer = nil
-	}
-	c.currentEphemeralPolicy = ephemeralUnused
 }
 
 // readOnePacket reads a single packet into a newly allocated buffer.
@@ -594,46 +558,22 @@ func (c *Conn) writePacket(data []byte) error {
 	}
 }
 
-func (c *Conn) startEphemeralPacketWithHeader(length int) ([]byte, int) {
-	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic("startEphemeralPacketWithHeader cannot be used while a packet is already started.")
-	}
-
-	c.currentEphemeralPolicy = ephemeralWrite
+func (c *Conn) startEphemeralPacketWithHeader(length int) (*dataBuffer, int) {
 	// get buffer from pool or it'll be allocated if length is too big
-	c.currentEphemeralBuffer = bufPool.Get(length + packetHeaderSize)
-	return *c.currentEphemeralBuffer, packetHeaderSize
+	bytes := bufPool.Get(length + packetHeaderSize)
+	return &dataBuffer{data: bytes, fromPool: true}, packetHeaderSize
 }
 
 // writeEphemeralPacket writes the packet that was allocated by
 // startEphemeralPacketWithHeader.
-func (c *Conn) writeEphemeralPacket() error {
-	defer c.recycleWritePacket()
+func (c *Conn) writeEphemeralPacket(buffer *dataBuffer) error {
+	defer buffer.release()
 
-	switch c.currentEphemeralPolicy {
-	case ephemeralWrite:
-		if err := c.writePacket(*c.currentEphemeralBuffer); err != nil {
-			return vterrors.Wrapf(err, "conn %v", c.ID())
-		}
-	case ephemeralUnused, ephemeralRead:
-		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
+	if err := c.writePacket(*buffer.data); err != nil {
+		return vterrors.Wrapf(err, "conn %v", c.ID())
 	}
 
 	return nil
-}
-
-// recycleWritePacket recycles the write packet. It needs to be called
-// after writeEphemeralPacket was called.
-func (c *Conn) recycleWritePacket() {
-	if c.currentEphemeralPolicy != ephemeralWrite {
-		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
-	}
-	// Release our reference so the buffer can be gced
-	bufPool.Put(c.currentEphemeralBuffer)
-	c.currentEphemeralBuffer = nil
-	c.currentEphemeralPolicy = ephemeralUnused
 }
 
 // writeComQuit writes a Quit message for the server, to indicate we
@@ -644,9 +584,9 @@ func (c *Conn) writeComQuit() error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
 
-	data, pos := c.startEphemeralPacketWithHeader(1)
-	data[pos] = ComQuit
-	if err := c.writeEphemeralPacket(); err != nil {
+	buffer, pos := c.startEphemeralPacketWithHeader(1)
+	(*buffer.data)[pos] = ComQuit
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -729,8 +669,8 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 		length += len(packetOk.info) // info
 	}
 
-	bytes, pos := c.startEphemeralPacketWithHeader(length)
-	data := &coder{data: bytes, pos: pos}
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := &coder{data: *buffer.data, pos: pos}
 	data.writeByte(headerType) //header - OK or EOF
 	data.writeLenEncInt(packetOk.affectedRows)
 	data.writeLenEncInt(packetOk.lastInsertID)
@@ -744,7 +684,7 @@ func (c *Conn) writeOKPacketWithHeader(packetOk *PacketOK, headerType byte) erro
 	} else {
 		data.writeEOFString(packetOk.info)
 	}
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 func getLenEncString(value []byte) []byte {
@@ -803,7 +743,8 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
-	data, pos := c.startEphemeralPacketWithHeader(length)
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	pos = writeByte(data, pos, ErrPacket)
 	pos = writeUint16(data, pos, errorCode)
 	pos = writeByte(data, pos, '#')
@@ -816,7 +757,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	pos = writeEOFString(data, pos, sqlState)
 	_ = writeEOFString(data, pos, errorMessage)
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 // writeErrorPacketFromError writes an error packet, from a regular error.
@@ -833,19 +774,20 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 // doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	length := 5
-	data, pos := c.startEphemeralPacketWithHeader(length)
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	pos = writeByte(data, pos, EOFPacket)
 	pos = writeUint16(data, pos, warnings)
 	_ = writeUint16(data, pos, flags)
 
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 // handleNextCommand is called in the server loop to process
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) bool {
 	c.sequence = 0
-	data, err := c.readEphemeralPacket()
+	buffer, err := c.readEphemeralPacket()
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam.
 		if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
@@ -853,43 +795,46 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		}
 		return false
 	}
+	data := *buffer.data
 
 	switch data[0] {
 	case ComQuit:
-		c.recycleReadPacket()
+		buffer.release()
 		return false
 	case ComInitDB:
 		db := c.parseComInitDB(data)
-		c.recycleReadPacket()
+		buffer.release()
 		res := c.execQuery("use "+sqlescape.EscapeID(db), handler, false)
 		return res != connErr
 	case ComQuery:
-		return c.handleComQuery(handler, data)
+		return c.handleComQuery(handler, buffer)
 	case ComPing:
+		buffer.release()
 		return c.handleComPing()
 	case ComSetOption:
-		return c.handleComSetOption(data)
+		return c.handleComSetOption(buffer)
 	case ComPrepare:
-		return c.handleComPrepare(handler, data)
+		return c.handleComPrepare(handler, buffer)
 	case ComStmtExecute:
-		return c.handleComStmtExecute(handler, data)
+		return c.handleComStmtExecute(handler, buffer)
 	case ComStmtSendLongData:
-		return c.handleComStmtSendLongData(data)
+		return c.handleComStmtSendLongData(buffer)
 	case ComStmtClose:
 		stmtID, ok := c.parseComStmtClose(data)
-		c.recycleReadPacket()
+		buffer.release()
 		if ok {
 			delete(c.PrepareData, stmtID)
 		}
 	case ComStmtReset:
-		return c.handleComStmtReset(data)
+		return c.handleComStmtReset(buffer)
 	case ComResetConnection:
+		buffer.release()
 		c.handleComResetConnection(handler)
 		return true
 
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
-		c.recycleReadPacket()
+		buffer.release()
 		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
@@ -900,7 +845,6 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 
 func (c *Conn) handleComResetConnection(handler Handler) {
 	// Clean up and reset the connection
-	c.recycleReadPacket()
 	handler.ComResetConnection(c)
 	// Reset prepared statements
 	c.PrepareData = make(map[uint32]*PrepareData)
@@ -910,9 +854,10 @@ func (c *Conn) handleComResetConnection(handler Handler) {
 	}
 }
 
-func (c *Conn) handleComStmtReset(data []byte) bool {
+func (c *Conn) handleComStmtReset(buffer *dataBuffer) bool {
+	data := *buffer.data
 	stmtID, ok := c.parseComStmtReset(data)
-	c.recycleReadPacket()
+	buffer.release()
 	if !ok {
 		log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
 		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
@@ -941,9 +886,10 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	return true
 }
 
-func (c *Conn) handleComStmtSendLongData(data []byte) bool {
+func (c *Conn) handleComStmtSendLongData(buffer *dataBuffer) bool {
+	data := *buffer.data
 	stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
-	c.recycleReadPacket()
+	buffer.release()
 	if !ok {
 		err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
 		return c.writeErrorPacketFromErrorAndLog(err)
@@ -974,7 +920,7 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 	return true
 }
 
-func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool) {
+func (c *Conn) handleComStmtExecute(handler Handler, buffer *dataBuffer) (kontinue bool) {
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
@@ -983,8 +929,8 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	}()
 	queryStart := time.Now()
-	stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
-	c.recycleReadPacket()
+	stmtID, _, err := c.parseComStmtExecute(c.PrepareData, *buffer.data)
+	buffer.release()
 
 	if stmtID != uint32(0) {
 		defer func() {
@@ -1064,9 +1010,10 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	return true
 }
 
-func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
+func (c *Conn) handleComPrepare(handler Handler, buffer *dataBuffer) bool {
+	data := *buffer.data
 	query := c.parseComPrepare(data)
-	c.recycleReadPacket()
+	buffer.release()
 
 	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
@@ -1137,9 +1084,10 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
 	return true
 }
 
-func (c *Conn) handleComSetOption(data []byte) bool {
+func (c *Conn) handleComSetOption(buffer *dataBuffer) bool {
+	data := *buffer.data
 	operation, ok := c.parseComSetOption(data)
-	c.recycleReadPacket()
+	buffer.release()
 	if ok {
 		switch operation {
 		case 0:
@@ -1166,7 +1114,6 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 }
 
 func (c *Conn) handleComPing() bool {
-	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.isShutdown() {
 		if !c.writeErrorAndLog(ERServerShutdown, SSServerShutdown, "Server shutdown in progress") {
@@ -1181,7 +1128,7 @@ func (c *Conn) handleComPing() bool {
 	return true
 }
 
-func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
+func (c *Conn) handleComQuery(handler Handler, buffer *dataBuffer) (kontinue bool) {
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
@@ -1191,8 +1138,8 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	}()
 
 	queryStart := time.Now()
-	query := c.parseComQuery(data)
-	c.recycleReadPacket()
+	query := c.parseComQuery(*buffer.data)
+	buffer.release()
 
 	var queries []string
 	var err error

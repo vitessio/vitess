@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
@@ -177,17 +178,18 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 func (c *Conn) Ping() error {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
-	data, pos := c.startEphemeralPacketWithHeader(1)
-	data[pos] = ComPing
+	writeBuffer, pos := c.startEphemeralPacketWithHeader(1)
+	(*writeBuffer.data)[pos] = ComPing
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(writeBuffer); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
-	data, err := c.readEphemeralPacket()
+	readBuffer, err := c.readEphemeralPacket()
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	defer c.recycleReadPacket()
+	defer readBuffer.release()
+	data := *readBuffer.data
 	switch data[0] {
 	case OKPacket:
 		return nil
@@ -545,8 +547,8 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		capabilityFlags |= CapabilityClientConnectWithDB
 	}
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
-
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	// Client capability flags.
 	pos = writeUint32(data, pos, capabilityFlags)
 
@@ -557,7 +559,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	_ = writeByte(data, pos, characterSet)
 
 	// And send it as is.
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send SSLRequest: %v", err)
 	}
 	return nil
@@ -617,8 +619,8 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		length++
 	}
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
-
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	// Client capability flags.
 	pos = writeUint32(data, pos, capabilityFlags)
 
@@ -658,7 +660,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "writeHandshakeResponse41: only packed %v bytes, out of %v allocated", pos, len(data))
 	}
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
 	}
 	return nil
@@ -683,24 +685,26 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 // Returns a SQLError.
 func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	length := len(params.Pass) + 1
-	data, pos := c.startEphemeralPacketWithHeader(length)
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 // writeMysqlNativePassword writes the encrypted mysql_native_password format
 // Returns a SQLError.
 func (c *Conn) writeMysqlNativePassword(params *ConnParams, salt []byte) error {
 	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
-	data, pos := c.startEphemeralPacketWithHeader(len(scrambledPassword))
+	buffer, pos := c.startEphemeralPacketWithHeader(len(scrambledPassword))
+	data := *buffer.data
 	pos += copy(data[pos:], scrambledPassword)
 	// Sanity check.
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building MysqlNativePassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }

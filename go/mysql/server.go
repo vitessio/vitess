@@ -305,7 +305,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Wait for the client response. This has to be a direct read,
 	// so we don't buffer the TLS negotiation packets.
-	response, err := c.readEphemeralPacketDirect()
+	buffer, err := c.readEphemeralPacketDirect()
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
@@ -313,29 +313,29 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		return
 	}
-	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, response)
+	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, *buffer.data)
 	if err != nil {
 		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
 		return
 	}
 
-	c.recycleReadPacket()
+	buffer.release()
 
 	if c.Capabilities&CapabilityClientSSL > 0 {
 		// SSL was enabled. We need to re-read the auth packet.
-		response, err = c.readEphemeralPacket()
+		buffer, err = c.readEphemeralPacket()
 		if err != nil {
 			log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c, err)
 			return
 		}
 
 		// Returns copies of the data, so we can recycle the buffer.
-		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, response)
+		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, *buffer.data)
 		if err != nil {
 			log.Errorf("Cannot parse post-SSL client handshake response from %s: %v", c, err)
 			return
 		}
-		c.recycleReadPacket()
+		buffer.release()
 
 		if con, ok := c.conn.(*tls.Conn); ok {
 			connState := con.ConnectionState()
@@ -390,12 +390,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			return
 		}
 
-		response, err := c.readEphemeralPacket()
+		buffer, err := c.readEphemeralPacket()
 		if err != nil {
 			log.Errorf("Error reading auth switch response for %s: %v", c, err)
 			return
 		}
-		c.recycleReadPacket()
+		// this looks really dangerous. is this correct?
+		response := *buffer.data
+		buffer.release()
 
 		userData, err := l.authServer.ValidateHash(salt, user, response, conn.RemoteAddr())
 		if err != nil {
@@ -529,8 +531,8 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 			13 + // auth-plugin-data
 			lenNullString(MysqlNativePassword) // auth-plugin-name
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
-
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 	// Protocol version.
 	pos = writeByte(data, pos, protocolVersion)
 
@@ -583,7 +585,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error building Handshake packet: got %v bytes expected %v", pos, len(data))
 	}
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.writeEphemeralPacket(buffer); err != nil {
 		if strings.HasSuffix(err.Error(), "write: connection reset by peer") {
 			return nil, io.EOF
 		}
@@ -775,7 +777,8 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 		len(pluginName) + 1 + // 0-terminated pluginName
 		len(pluginData)
 
-	data, pos := c.startEphemeralPacketWithHeader(length)
+	buffer, pos := c.startEphemeralPacketWithHeader(length)
+	data := *buffer.data
 
 	// Packet header.
 	pos = writeByte(data, pos, AuthSwitchRequestPacket)
@@ -790,7 +793,7 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket()
+	return c.writeEphemeralPacket(buffer)
 }
 
 // Whenever we move to a new version of go, we will need add any new supported TLS versions here
