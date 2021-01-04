@@ -484,7 +484,7 @@
 
 # Alter View with unknown view
 "alter view unknown as select* from user"
-"table unknown not found"
+"keyspace not specified"
 
 # drop table with qualifier in one
 "drop table user.user, user_extra"
@@ -507,7 +507,7 @@
 
 # drop table with unknown table
 "drop table unknown"
-"table unknown not found"
+"keyspace not specified"
 
 # drop view with 1 view without qualifier
 "drop view user.user, user_extra"
@@ -530,4 +530,4 @@
 
 # drop view with unknown view
 "drop view unknown"
-"table unknown not found"
+"keyspace not specified"

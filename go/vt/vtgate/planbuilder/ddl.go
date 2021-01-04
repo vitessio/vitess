@@ -39,7 +39,6 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschem
 }
 
 func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
-	var table *vindexes.Table
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -48,22 +47,9 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 	case *sqlparser.CreateIndex, *sqlparser.AlterTable:
 		// For Create index and Alter Table, the table must already exist
 		// We should find the target of the query from this tables location
-		table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
+		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
-			if !isNotFound {
-				return nil, nil, err
-			}
-		}
-		if table == nil {
-			destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
-			if err != nil {
-				return nil, nil, err
-			}
-			ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
-		} else {
-			keyspace = table.Keyspace
-			ddlStatement.SetTable("", table.Name.String())
+			return nil, nil, err
 		}
 	case *sqlparser.DDL:
 		// For DDL, it is only required that the keyspace exist
@@ -123,19 +109,38 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		}, nil
 }
 
+func findTableDestinationAndKeyspace(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+	var table *vindexes.Table
+	var destination key.Destination
+	var keyspace *vindexes.Keyspace
+	var err error
+	table, _, _, _, destination, err = vschema.FindTableOrVindex(ddlStatement.GetTable())
+	if err != nil {
+		_, isNotFound := err.(vindexes.NotFoundError)
+		if !isNotFound {
+			return nil, nil, err
+		}
+	}
+	if table == nil {
+		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+		if err != nil {
+			return nil, nil, err
+		}
+		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
+	} else {
+		keyspace = table.Keyspace
+		ddlStatement.SetTable("", table.Name.String())
+	}
+	return destination, keyspace, nil
+}
+
 func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Destination, *vindexes.Keyspace, error) {
 	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
-	table, _, _, _, destination, err := vschema.FindTableOrVindex(ddl.ViewName)
+	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
 	if err != nil {
 		return nil, nil, err
 	}
-	if table == nil {
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", ddl.ViewName.Name.String())
-	}
-	keyspace := table.Keyspace
-
-	ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
 
 	var selectPlan engine.Primitive
 	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
@@ -204,23 +209,39 @@ func buildDropViewOrTable(vschema ContextVSchema, ddlStatement sqlparser.DDLStat
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	for i, tab := range ddlStatement.GetFromTables() {
-		table, _, _, _, destinationTab, err := vschema.FindTableOrVindex(tab)
+		var destinationTab key.Destination
+		var keyspaceTab *vindexes.Keyspace
+		var table *vindexes.Table
+		var err error
+		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
+
 		if err != nil {
-			return nil, nil, err
+			_, isNotFound := err.(vindexes.NotFoundError)
+			if !isNotFound {
+				return nil, nil, err
+			}
 		}
 		if table == nil {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "table does not exists: %s", tab.Name.String())
+			destinationTab, keyspaceTab, _, err = vschema.TargetDestination(tab.Qualifier.String())
+			if err != nil {
+				return nil, nil, err
+			}
+			ddlStatement.GetFromTables()[i] = sqlparser.TableName{
+				Name: tab.Name,
+			}
+		} else {
+			keyspaceTab = table.Keyspace
+			ddlStatement.GetFromTables()[i] = sqlparser.TableName{
+				Name: table.Name,
+			}
 		}
-		keyspaceTab := table.Keyspace
+
 		if destination == nil && keyspace == nil {
 			destination = destinationTab
 			keyspace = keyspaceTab
 		}
 		if destination != destinationTab || keyspace != keyspaceTab {
 			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Tables or Views specified in the query do not belong to the same destination")
-		}
-		ddlStatement.GetFromTables()[i] = sqlparser.TableName{
-			Name: tab.Name,
 		}
 	}
 	return destination, keyspace, nil
