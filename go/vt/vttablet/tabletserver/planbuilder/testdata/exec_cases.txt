@@ -679,7 +679,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"alter table a add column a int"
 }
 
 # alter rename
@@ -696,7 +697,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"alter table a rename b"
 }
 
 # rename

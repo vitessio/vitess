@@ -23,8 +23,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"context"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"

@@ -19,7 +19,7 @@ package topo
 import (
 	"sort"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // Conn defines the interface that must be implemented by topology

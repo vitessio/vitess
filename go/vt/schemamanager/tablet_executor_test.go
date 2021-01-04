@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -267,10 +267,10 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		stmt, err := sqlparser.Parse(ts.query)
 		assert.NoError(t, err)
 
-		ddl, ok := stmt.(sqlparser.DDLStatement)
+		_, ok := stmt.(sqlparser.DDLStatement)
 		assert.True(t, ok)
 
-		isOnlineDDL, strategy, options := e.isOnlineSchemaDDL(ddl)
+		isOnlineDDL, strategy, options := e.isOnlineSchemaDDL()
 		assert.Equal(t, ts.isOnlineDDL, isOnlineDDL)
 		if isOnlineDDL {
 			assert.Equal(t, ts.strategy, strategy)

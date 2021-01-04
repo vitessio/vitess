@@ -20,9 +20,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 
+	"context"
 	otgrpc "github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )

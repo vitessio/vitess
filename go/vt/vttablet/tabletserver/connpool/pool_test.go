@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 func TestConnPoolGet(t *testing.T) {

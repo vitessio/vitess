@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/schema"
@@ -152,16 +152,16 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, 
 	return parsedDDLs, parsedDBDDLs, nil
 }
 
-// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func (exec *TabletExecutor) isOnlineSchemaDDL(ddl sqlparser.DDLStatement) (isOnline bool, strategy schema.DDLStrategy, options string) {
-	if ddl == nil {
+// IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
+func (exec *TabletExecutor) isOnlineSchemaDDL() (isOnline bool, strategy schema.DDLStrategy, options string) {
+	strategy, options, err := schema.ParseDDLStrategy(exec.ddlStrategy)
+	if err != nil {
 		return false, strategy, options
 	}
-	strategy, options, _ = schema.ParseDDLStrategy(exec.ddlStrategy)
-	if strategy != schema.DDLStrategyNormal {
-		return true, strategy, options
+	if strategy.IsDirect() {
+		return false, strategy, options
 	}
-	return false, strategy, options
+	return true, strategy, options
 }
 
 // a schema change that satisfies any following condition is considered
@@ -183,7 +183,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
 	for _, ddl := range parsedDDLs {
-		if isOnline, _, _ := exec.isOnlineSchemaDDL(ddl); isOnline {
+		if isOnline, _, _ := exec.isOnlineSchemaDDL(); isOnline {
 			// Since this is an online schema change, there is no need to worry about big changes
 			continue
 		}
@@ -218,10 +218,10 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 	if err != nil {
 		return err
 	}
-	switch ddl := stat.(type) {
+	switch stat.(type) {
 	case sqlparser.DDLStatement:
-		if isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(ddl); isOnlineDDL {
-			exec.wr.Logger().Infof("Received online DDL request. strategy=%+v", strategy)
+		if isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(); isOnlineDDL {
+			exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
 			normalizedQueries, err := schema.NormalizeOnlineDDL(sql)
 			if err != nil {
 				return err
@@ -232,6 +232,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 			return nil
 		}
 	}
+	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
 	exec.executeOnAllTablets(ctx, execResult, sql)
 	return nil
 }
@@ -276,7 +277,6 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			execResult.ExecutorErr = err.Error()
 			return &execResult
 		}
-
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
@@ -289,7 +289,7 @@ func (exec *TabletExecutor) executeOnlineDDL(
 	ctx context.Context, execResult *ExecuteResult, sql string,
 	tableName string, strategy schema.DDLStrategy, options string,
 ) {
-	if strategy == schema.DDLStrategyNormal {
+	if strategy.IsDirect() {
 		execResult.ExecutorErr = "Not an online DDL strategy"
 		return
 	}

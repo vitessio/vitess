@@ -83,8 +83,9 @@ var (
     <td width="25%" border="">
       <a href="{{.Prefix}}/healthz">Health Check</a></br>
       <a href="{{.Prefix}}/debug/health">Query Service Health Check</a></br>
-      <a href="/livequeryz/">Real-time Queries</a></br>
+      <a href="{{.Prefix}}/livequeryz/">Real-time Queries</a></br>
       <a href="{{.Prefix}}/debug/status_details">JSON Status Details</a></br>
+      <a href="{{.Prefix}}/debug/env">View/Change Environment variables</a></br>
     </td>
   </tr>
 </table>

@@ -22,8 +22,8 @@ import (
 	"io"
 	"strings"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"

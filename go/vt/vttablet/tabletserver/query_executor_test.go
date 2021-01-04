@@ -26,9 +26,9 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
+	"context"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -203,12 +203,12 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "alter table test_table add zipcode int",
 		dbResponses: []dbResponse{{
-			query:  "alter table test_table add zipcode int",
+			query:  "alter table test_table add column zipcode int",
 			result: dmlResult,
 		}},
 		resultWant: dmlResult,
 		planWant:   "DDL",
-		logWant:    "alter table test_table add zipcode int",
+		logWant:    "alter table test_table add column zipcode int",
 	}, {
 		input: "savepoint a",
 		dbResponses: []dbResponse{{

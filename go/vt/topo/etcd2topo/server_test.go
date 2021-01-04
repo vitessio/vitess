@@ -31,7 +31,7 @@ import (
 
 	"github.com/coreos/etcd/pkg/transport"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/coreos/etcd/clientv3"
 	"vitess.io/vitess/go/testfiles"
