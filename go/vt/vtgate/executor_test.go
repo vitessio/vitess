@@ -1128,6 +1128,7 @@ func TestExecutorDDL(t *testing.T) {
 		"alter table t2 add primary key id",
 		"rename table t1 to t2",
 		"truncate table t2",
+		"drop table t2",
 		`create table test_partitioned (
 			id bigint,
 			date_create int,		
@@ -1184,7 +1185,7 @@ func TestExecutorDDL(t *testing.T) {
 		sbclookup.ExecCount.Set(0)
 		_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
 		if stmt.hasErr {
-			require.EqualError(t, err, "table t2 not found", "expect query to fail")
+			require.EqualError(t, err, "keyspace not specified", "expect query to fail")
 			testQueryLog(t, logChan, "TestExecute", "", stmt.input, 0)
 		} else {
 			require.NoError(t, err)
