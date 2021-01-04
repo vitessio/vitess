@@ -73,6 +73,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		"--initial-advertise-peer-urls", topo.PeerURL,
 		"--listen-peer-urls", topo.PeerURL,
 		"--initial-cluster", fmt.Sprintf("%s=%s", topo.Name, topo.PeerURL),
+		"--enable-v2=true",
 	)
 
 	err = createDirectory(topo.DataDirectory, 0700)
@@ -88,7 +89,8 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
+	log.Errorf("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
+
 	err = topo.proc.Start()
 	if err != nil {
 		return
@@ -307,7 +309,7 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	topo.ListenClientURL = fmt.Sprintf("http://%s:%d", topo.Host, topo.Port)
 	topo.DataDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port))
 	topo.LogDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port), "logs")
-	topo.VerifyURL = fmt.Sprintf("http://%s:%d/version", topo.Host, topo.Port)
+	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v2/keys", topo.Host, topo.Port)
 	topo.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return topo
 }
