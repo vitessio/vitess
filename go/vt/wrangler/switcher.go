@@ -21,7 +21,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 var _ iswitcher = (*switcher)(nil)
@@ -39,8 +39,6 @@ func (r *switcher) validateWorkflowHasCompleted(ctx context.Context) error {
 	return r.ts.validateWorkflowHasCompleted(ctx)
 }
 
-//TODO: do we need to disable ForeignKey before dropping tables?
-//TODO: delete multiple tables in single statement?
 func (r *switcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
 	return r.ts.removeSourceTables(ctx, removalType)
 }
@@ -49,12 +47,12 @@ func (r *switcher) dropSourceShards(ctx context.Context) error {
 	return r.ts.dropSourceShards(ctx)
 }
 
-func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	return r.ts.switchShardReads(ctx, cells, servedType, direction)
+func (r *switcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+	return r.ts.switchShardReads(ctx, cells, servedTypes, direction)
 }
 
-func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
-	return r.ts.switchTableReads(ctx, cells, servedType, direction)
+func (r *switcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+	return r.ts.switchTableReads(ctx, cells, servedTypes, direction)
 }
 
 func (r *switcher) startReverseVReplication(ctx context.Context) error {
@@ -116,6 +114,14 @@ func (r *switcher) dropTargetVReplicationStreams(ctx context.Context) error {
 
 func (r *switcher) dropSourceReverseVReplicationStreams(ctx context.Context) error {
 	return r.ts.dropSourceReverseVReplicationStreams(ctx)
+}
+
+func (r *switcher) removeTargetTables(ctx context.Context) error {
+	return r.ts.removeTargetTables(ctx)
+}
+
+func (r *switcher) dropTargetShards(ctx context.Context) error {
+	return r.ts.dropTargetShards(ctx)
 }
 
 func (r *switcher) logs() *[]string {

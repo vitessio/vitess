@@ -1125,7 +1125,7 @@ func TestExecutorDDL(t *testing.T) {
 
 	stmts := []string{
 		"create table t1(id bigint primary key)",
-		"alter table t1 add primary key id",
+		"alter table t2 add primary key id",
 		"rename table t1 to t2",
 		"truncate table t2",
 		`create table test_partitioned (

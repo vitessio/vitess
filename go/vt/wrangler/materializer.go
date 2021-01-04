@@ -30,8 +30,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
@@ -155,8 +155,15 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return err
 	}
 	for _, table := range tables {
-		rules[table] = []string{sourceKeyspace + "." + table}
-		rules[targetKeyspace+"."+table] = []string{sourceKeyspace + "." + table}
+		toSource := []string{sourceKeyspace + "." + table}
+		rules[table] = toSource
+		rules[table+"@replica"] = toSource
+		rules[table+"@rdonly"] = toSource
+		rules[targetKeyspace+"."+table] = toSource
+		rules[targetKeyspace+"."+table+"@replica"] = toSource
+		rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+		rules[sourceKeyspace+"."+table+"@replica"] = toSource
+		rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
 	}
 	if err := wr.saveRoutingRules(ctx, rules); err != nil {
 		return err

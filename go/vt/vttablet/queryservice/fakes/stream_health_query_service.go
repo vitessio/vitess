@@ -17,7 +17,7 @@ limitations under the License.
 package fakes
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/golang/protobuf/proto"
 

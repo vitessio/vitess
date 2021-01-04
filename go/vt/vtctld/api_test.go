@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -102,15 +102,15 @@ func TestAPI(t *testing.T) {
 
 	// Populate fake actions.
 	actionRepo.RegisterKeyspaceAction("TestKeyspaceAction",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
 			return "TestKeyspaceAction Result", nil
 		})
 	actionRepo.RegisterShardAction("TestShardAction",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
 			return "TestShardAction Result", nil
 		})
 	actionRepo.RegisterTabletAction("TestTabletAction", "",
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
 			return "TestTabletAction Result", nil
 		})
 

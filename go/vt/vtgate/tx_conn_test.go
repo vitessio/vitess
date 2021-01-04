@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/utils"
 
+	"context"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
