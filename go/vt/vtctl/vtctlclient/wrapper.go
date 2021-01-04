@@ -22,7 +22,7 @@ import (
 	"io"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )

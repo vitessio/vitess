@@ -20,7 +20,7 @@ import (
 	"flag"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"

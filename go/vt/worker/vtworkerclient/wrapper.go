@@ -19,7 +19,7 @@ package vtworkerclient
 import (
 	"io"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 

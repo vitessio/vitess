@@ -19,7 +19,7 @@ limitations under the License.
 package grpcthrottlerserver
 
 import (
-	"golang.org/x/net/context"
+	"context"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/servenv"

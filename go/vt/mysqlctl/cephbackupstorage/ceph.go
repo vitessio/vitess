@@ -30,8 +30,8 @@ import (
 
 	"errors"
 
+	"context"
 	minio "github.com/minio/minio-go"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"

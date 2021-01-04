@@ -21,7 +21,7 @@ import (
 	"flag"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
