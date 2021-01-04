@@ -467,6 +467,71 @@
   }
 }
 
+# Alter View
+"alter view user_extra as select* from user"
+{
+  "QueryType": "DDL",
+  "Original": "alter view user_extra as select* from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter view user_extra as select * from user"
+  }
+}
+
+# Alter View with unknown view
+"alter view unknown as select* from user"
+"keyspace not specified"
+
+# drop table with qualifier in one
+"drop table user.user, user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "drop table user.user, user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "drop table user, user_extra"
+  }
+}
+
+# drop table with incompatible tables
+"drop table user, unsharded_a"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# drop table with unknown table
+"drop table unknown"
+"keyspace not specified"
+
+# drop view with 1 view without qualifier
+"drop view user.user, user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "drop view user.user, user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "drop view user, user_extra"
+  }
+}
+
+# drop view with incompatible views
+"drop view user, unsharded_a"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# drop view with unknown view
+"drop view unknown"
+"keyspace not specified"
+
 # Truncate table without qualifier
 "truncate user_extra"
 {

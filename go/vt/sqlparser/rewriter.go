@@ -92,6 +92,18 @@ func replaceAlterTableTable(newNode, parent SQLNode) {
 	parent.(*AlterTable).Table = newNode.(TableName)
 }
 
+func replaceAlterViewColumns(newNode, parent SQLNode) {
+	parent.(*AlterView).Columns = newNode.(Columns)
+}
+
+func replaceAlterViewSelect(newNode, parent SQLNode) {
+	parent.(*AlterView).Select = newNode.(SelectStatement)
+}
+
+func replaceAlterViewViewName(newNode, parent SQLNode) {
+	parent.(*AlterView).ViewName = newNode.(TableName)
+}
+
 func replaceAlterVschemaAutoIncSpec(newNode, parent SQLNode) {
 	parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
 }
@@ -356,6 +368,14 @@ func replaceDerivedTableSelect(newNode, parent SQLNode) {
 
 func replaceDropColumnName(newNode, parent SQLNode) {
 	parent.(*DropColumn).Name = newNode.(*ColName)
+}
+
+func replaceDropTableFromTables(newNode, parent SQLNode) {
+	parent.(*DropTable).FromTables = newNode.(TableNames)
+}
+
+func replaceDropViewFromTables(newNode, parent SQLNode) {
+	parent.(*DropView).FromTables = newNode.(TableNames)
 }
 
 func replaceExistsExprSubquery(newNode, parent SQLNode) {
@@ -1126,6 +1146,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.PartitionSpec, replaceAlterTablePartitionSpec)
 		a.apply(node, n.Table, replaceAlterTableTable)
 
+	case *AlterView:
+		a.apply(node, n.Columns, replaceAlterViewColumns)
+		a.apply(node, n.Select, replaceAlterViewSelect)
+		a.apply(node, n.ViewName, replaceAlterViewViewName)
+
 	case *AlterVschema:
 		a.apply(node, n.AutoIncSpec, replaceAlterVschemaAutoIncSpec)
 		a.apply(node, n.Table, replaceAlterVschemaTable)
@@ -1272,6 +1297,12 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *DropDatabase:
 
 	case *DropKey:
+
+	case *DropTable:
+		a.apply(node, n.FromTables, replaceDropTableFromTables)
+
+	case *DropView:
+		a.apply(node, n.FromTables, replaceDropViewFromTables)
 
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
