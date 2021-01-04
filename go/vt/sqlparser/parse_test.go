@@ -1206,8 +1206,9 @@ var (
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
 	}, {
-		input:  "alter view a",
-		output: "alter table a",
+		input: "alter view a as select * from t",
+	}, {
+		input: "alter algorithm = merge definer = m@172.0.1.01 sql security definer view a as select * from t with local check option",
 	}, {
 		input:  "rename table a to b",
 		output: "rename table a to b",
@@ -1215,8 +1216,8 @@ var (
 		input:  "rename table a to b, b to c",
 		output: "rename table a to b, b to c",
 	}, {
-		input:  "drop view a",
-		output: "drop table a",
+		input:  "drop view a,B,c",
+		output: "drop view a, b, c",
 	}, {
 		input:  "drop table a",
 		output: "drop table a",
@@ -1224,11 +1225,11 @@ var (
 		input:  "drop table a, b",
 		output: "drop table a, b",
 	}, {
-		input:  "drop table if exists a",
-		output: "drop table if exists a",
+		input:  "drop table if exists a,b restrict",
+		output: "drop table if exists a, b",
 	}, {
-		input:  "drop view if exists a",
-		output: "drop table if exists a",
+		input:  "drop view if exists a cascade",
+		output: "drop view if exists a",
 	}, {
 		input:  "drop index b on a",
 		output: "alter table a",
@@ -1915,8 +1916,8 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "alter table A",
 	}, {
 		// View names get lower-cased.
-		input:  "alter view A foo",
-		output: "alter table a",
+		input:  "alter view A as select * from t",
+		output: "alter view a as select * from t",
 	}, {
 		input:  "alter table A rename to B",
 		output: "alter table A rename B",
@@ -1968,14 +1969,11 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create view A as select * from b",
 		output: "create view a as select * from b",
 	}, {
-		input:  "alter view A",
-		output: "alter table a",
-	}, {
 		input:  "drop view A",
-		output: "drop table a",
+		output: "drop view a",
 	}, {
 		input:  "drop view if exists A",
-		output: "drop table if exists a",
+		output: "drop view if exists a",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",

@@ -248,3 +248,48 @@
     "Query": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)"
   }
 }
+
+# Alter View
+"alter view user.user_extra as select* from user.user"
+{
+  "QueryType": "DDL",
+  "Original": "alter view user.user_extra as select* from user.user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter view user_extra as select * from user"
+  }
+}
+
+# drop table without qualifier
+"drop table unsharded_a"
+{
+  "QueryType": "DDL",
+  "Original": "drop table unsharded_a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop table unsharded_a"
+  }
+}
+
+# Drop view
+"drop view main.a"
+{
+  "QueryType": "DDL",
+  "Original": "drop view main.a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop view a"
+  }
+}

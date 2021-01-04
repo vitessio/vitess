@@ -753,7 +753,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "drop table a"
 }
 
 # multi-drop
@@ -770,7 +771,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "drop table a, b"
 }
 
 # analyze
@@ -854,4 +856,50 @@ options:PassthroughDMLs
 {
     "PlanID":"Load",
     "TableName":""
+}
+
+# alter view
+"alter view a as select * from b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"alter view a as select * from b"
+}
+
+# drop view
+"drop view a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"drop view a"
+}
+
+# multi-drop views
+"drop view a, b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"drop view a, b"
 }
