@@ -18,4 +18,4 @@ jobs:
 
     - name: Run tests which require docker - 3
       run: |
-        go run test.go -docker=true --follow -shard 26
+        GODEBUG="x509ignoreCN=0" go run test.go -docker=true --follow -shard 26
