@@ -200,11 +200,6 @@ func TestSysVarSetDisabled(t *testing.T) {
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json"),
-		keyspace: &vindexes.Keyspace{
-			Name:    "main",
-			Sharded: false,
-		},
-		tabletType: topodatapb.TabletType_MASTER,
 	}
 
 	testFile(t, "onecase.txt", "", vschema)
