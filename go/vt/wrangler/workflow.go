@@ -120,7 +120,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 	var stateInfo []string
 	s := ""
 	if !vrw.Exists() {
-		stateInfo = append(stateInfo, "Not Started")
+		stateInfo = append(stateInfo, WorkflowStateNotStarted)
 	} else {
 		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
 			s = "All Reads Switched"
@@ -176,6 +176,52 @@ func (vrw *VReplicationWorkflow) Start() error {
 		return err
 	}
 	return nil
+}
+
+// WorkflowError has per stream errors if present in a workflow
+type WorkflowError struct {
+	Tablet      string
+	ID          int64
+	Description string
+}
+
+// NewWorkflowError returns a new WorkflowError object
+func NewWorkflowError(tablet string, id int64, description string) *WorkflowError {
+	wfErr := &WorkflowError{
+		Tablet:      tablet,
+		ID:          id,
+		Description: description,
+	}
+	return wfErr
+}
+
+// GetStreamCount returns a count of total and running streams and any stream errors
+func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowError, error) {
+	var err error
+	var workflowErrors []*WorkflowError
+	var totalStreams, runningStreams int64
+	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	for ksShard := range res.ShardStatuses {
+		statuses := res.ShardStatuses[ksShard].MasterReplicationStatuses
+		for _, st := range statuses {
+			totalStreams++
+			if strings.HasPrefix(st.Message, "Error:") {
+				workflowErrors = append(workflowErrors, NewWorkflowError(st.Tablet, st.ID, st.Message))
+				continue
+			}
+			if st.Pos == "" {
+				continue
+			}
+			if st.State == "Running" {
+				runningStreams++
+			}
+		}
+	}
+
+	return totalStreams, runningStreams, workflowErrors, nil
 }
 
 // SwitchTraffic switches traffic forward for tablet_types passed

@@ -487,7 +487,6 @@ func TestTableMigrateMainflow(t *testing.T) {
 // TestShardMigrate tests table mode migrations.
 // This has to be kept in sync with TestTableMigrate.
 func TestShardMigrateMainflow(t *testing.T) {
-	//t.Skip("To be fixed before release") //FIXME
 	ctx := context.Background()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)

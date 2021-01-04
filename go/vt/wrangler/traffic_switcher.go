@@ -157,7 +157,6 @@ func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKe
 		return nil, nil, err
 	}
 	for _, cell := range cells {
-		wr.Logger().Infof("cell %s", cell)
 		srvKeyspace, err := wr.ts.GetSrvKeyspace(ctx, cell, targetKeyspace)
 		if err != nil {
 			return nil, nil, err
