@@ -22,7 +22,9 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
+	"path"
 	"testing"
 	"time"
 
@@ -488,7 +490,7 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 	tablet.VttabletProcess.Keyspace = restoreKeyspaceName
 	tablet.VttabletProcess.EnableSemiSync = true
 
-	certDir := tabletForBinlogs.VttabletProcess.Directory + "/data"
+	certDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/ssl_%010d", tablet.MysqlctlProcess.TabletUID))
 	tablet.VttabletProcess.ExtraArgs = []string{
 		"-disable_active_reparents",
 		"-enable_replication_reporter=false",
@@ -500,8 +502,8 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 		"-binlog_port", fmt.Sprintf("%d", tabletForBinlogs.MySQLPort),
 		"-binlog_user", mysqlUserName,
 		"-binlog_password", mysqlPassword,
-		"-binlog_ssl_ca", certDir + "/ca.pem",
-		"-binlog_ssl_server_name", getCNFromCertPEM(certDir + "/server-cert.pem"),
+		"-binlog_ssl_ca", certDir + "/ca-cert.pem",
+		"-binlog_ssl_server_name", getCNFromCertPEM(certDir + "/server-001-cert.pem"),
 		"-pitr_gtid_lookup_timeout", lookupTimeout,
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
