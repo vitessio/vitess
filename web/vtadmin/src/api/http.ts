@@ -75,9 +75,8 @@ export const fetchTablets = async () => {
     // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
     if (!res.ok) throw new HttpResponseNotOkError(endpoint, res);
 
-    const { result } = res;
     const tablets = res.result?.tablets;
-    if (!Array.isArray(tablets)) throw Error(`expected tablets to be an array, got ${result.tablets}`);
+    if (!Array.isArray(tablets)) throw Error(`expected tablets to be an array, got ${tablets}`);
 
     return tablets.map((t: any) => {
         const err = pb.Tablet.verify(t);
