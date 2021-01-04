@@ -413,6 +413,19 @@ type (
 		FullyParsed   bool
 	}
 
+	// DropTable represents a DROP TABLE statement.
+	DropTable struct {
+		FromTables TableNames
+		// The following fields are set if a DDL was fully analyzed.
+		IfExists bool
+	}
+
+	// DropView represents a DROP VIEW statement.
+	DropView struct {
+		FromTables TableNames
+		IfExists   bool
+	}
+
 	// CreateIndex represents a CREATE INDEX query
 	CreateIndex struct {
 		Constraint  string
@@ -442,6 +455,17 @@ type (
 		Select      SelectStatement
 		CheckOption string
 		IsReplace   bool
+	}
+
+	// AlterView represents a ALTER VIEW query
+	AlterView struct {
+		ViewName    TableName
+		Algorithm   string
+		Definer     string
+		Security    string
+		Columns     Columns
+		Select      SelectStatement
+		CheckOption string
 	}
 
 	// DDLAction is an enum for DDL.Action
@@ -562,16 +586,22 @@ func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
 func (*CreateTable) iStatement()       {}
 func (*CreateView) iStatement()        {}
+func (*AlterView) iStatement()         {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
+func (*DropTable) iStatement()         {}
+func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 
 func (*DDL) iDDLStatement()           {}
 func (*CreateIndex) iDDLStatement()   {}
 func (*CreateView) iDDLStatement()    {}
+func (*AlterView) iDDLStatement()     {}
 func (*CreateTable) iDDLStatement()   {}
+func (*DropTable) iDDLStatement()     {}
+func (*DropView) iDDLStatement()      {}
 func (*AlterTable) iDDLStatement()    {}
 func (*TruncateTable) iDDLStatement() {}
 
@@ -625,6 +655,21 @@ func (node *CreateView) IsFullyParsed() bool {
 	return true
 }
 
+// IsFullyParsed implements the DDLStatement interface
+func (node *DropView) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *DropTable) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *AlterView) IsFullyParsed() bool {
+	return true
+}
+
 // GetTable implements the DDLStatement interface
 func (node *CreateIndex) GetTable() TableName {
 	return node.Table
@@ -651,8 +696,23 @@ func (node *CreateView) GetTable() TableName {
 }
 
 // GetTable implements the DDLStatement interface
+func (node *AlterView) GetTable() TableName {
+	return node.ViewName
+}
+
+// GetTable implements the DDLStatement interface
 func (node *DDL) GetTable() TableName {
 	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *DropView) GetTable() TableName {
+	return TableName{}
+}
+
+// GetTable implements the DDLStatement interface
+func (node *DropTable) GetTable() TableName {
+	return TableName{}
 }
 
 // GetAction implements the DDLStatement interface
@@ -685,6 +745,21 @@ func (node *CreateView) GetAction() DDLAction {
 	return CreateDDLAction
 }
 
+// GetAction implements the DDLStatement interface
+func (node *AlterView) GetAction() DDLAction {
+	return AlterDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *DropTable) GetAction() DDLAction {
+	return DropDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *DropView) GetAction() DDLAction {
+	return DropDDLAction
+}
+
 // GetOptLike implements the DDLStatement interface
 func (node *DDL) GetOptLike() *OptLike {
 	return node.OptLike
@@ -712,6 +787,21 @@ func (node *AlterTable) GetOptLike() *OptLike {
 
 // GetOptLike implements the DDLStatement interface
 func (node *CreateView) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *AlterView) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *DropTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *DropView) GetOptLike() *OptLike {
 	return nil
 }
 
@@ -745,6 +835,21 @@ func (node *CreateView) GetTableSpec() *TableSpec {
 	return nil
 }
 
+// GetTableSpec implements the DDLStatement interface
+func (node *AlterView) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *DropTable) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *DropView) GetTableSpec() *TableSpec {
+	return nil
+}
+
 // GetFromTables implements the DDLStatement interface
 func (node *DDL) GetFromTables() TableNames {
 	return node.FromTables
@@ -775,6 +880,21 @@ func (node *CreateView) GetFromTables() TableNames {
 	return nil
 }
 
+// GetFromTables implements the DDLStatement interface
+func (node *DropTable) GetFromTables() TableNames {
+	return node.FromTables
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *DropView) GetFromTables() TableNames {
+	return node.FromTables
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *AlterView) GetFromTables() TableNames {
+	return nil
+}
+
 // SetFromTables implements DDLStatement.
 func (node *DDL) SetFromTables(tables TableNames) {
 	node.FromTables = tables
@@ -802,6 +922,21 @@ func (node *CreateTable) SetFromTables(tables TableNames) {
 
 // SetFromTables implements DDLStatement.
 func (node *CreateView) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *DropTable) SetFromTables(tables TableNames) {
+	node.FromTables = tables
+}
+
+// SetFromTables implements DDLStatement.
+func (node *DropView) SetFromTables(tables TableNames) {
+	node.FromTables = tables
+}
+
+// SetFromTables implements DDLStatement.
+func (node *AlterView) SetFromTables(tables TableNames) {
 	// irrelevant
 }
 
@@ -837,7 +972,22 @@ func (node *CreateView) GetToTables() TableNames {
 }
 
 // GetToTables implements the DDLStatement interface
+func (node *AlterView) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
 func (node *CreateTable) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *DropTable) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *DropView) GetToTables() TableNames {
 	return nil
 }
 
@@ -884,6 +1034,21 @@ func (node *CreateView) AffectedTables() TableNames {
 	return TableNames{node.ViewName}
 }
 
+// AffectedTables implements DDLStatement.
+func (node *AlterView) AffectedTables() TableNames {
+	return TableNames{node.ViewName}
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *DropTable) AffectedTables() TableNames {
+	return node.FromTables
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *DropView) AffectedTables() TableNames {
+	return node.FromTables
+}
+
 // SetTable implements DDLStatement.
 func (node *CreateIndex) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
@@ -919,6 +1084,18 @@ func (node *CreateView) SetTable(qualifier string, name string) {
 	node.ViewName.Qualifier = NewTableIdent(qualifier)
 	node.ViewName.Name = NewTableIdent(name)
 }
+
+// SetTable implements DDLStatement.
+func (node *AlterView) SetTable(qualifier string, name string) {
+	node.ViewName.Qualifier = NewTableIdent(qualifier)
+	node.ViewName.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *DropTable) SetTable(qualifier string, name string) {}
+
+// SetTable implements DDLStatement.
+func (node *DropView) SetTable(qualifier string, name string) {}
 
 func (*DropDatabase) iDBDDLStatement()   {}
 func (*CreateDatabase) iDBDDLStatement() {}
@@ -3053,6 +3230,43 @@ func (node *LockTables) Format(buf *TrackedBuffer) {
 // Format formats the UnlockTables node.
 func (node *UnlockTables) Format(buf *TrackedBuffer) {
 	buf.WriteString("unlock tables")
+}
+
+// Format formats the node.
+func (node *AlterView) Format(buf *TrackedBuffer) {
+	buf.WriteString("alter")
+	if node.Algorithm != "" {
+		buf.astPrintf(node, " algorithm = %s", node.Algorithm)
+	}
+	if node.Definer != "" {
+		buf.astPrintf(node, " definer = %s", node.Definer)
+	}
+	if node.Security != "" {
+		buf.astPrintf(node, " sql security %s", node.Security)
+	}
+	buf.astPrintf(node, " view %v", node.ViewName)
+	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
+	if node.CheckOption != "" {
+		buf.astPrintf(node, " with %s check option", node.CheckOption)
+	}
+}
+
+// Format formats the node.
+func (node *DropTable) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = " if exists"
+	}
+	buf.astPrintf(node, "drop table%s %v", exists, node.FromTables)
+}
+
+// Format formats the node.
+func (node *DropView) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = " if exists"
+	}
+	buf.astPrintf(node, "drop view%s %v", exists, node.FromTables)
 }
 
 // Format formats the AlterTable node.
