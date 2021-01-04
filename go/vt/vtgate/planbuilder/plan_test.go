@@ -181,6 +181,8 @@ func TestPlan(t *testing.T) {
 	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -345,6 +347,9 @@ func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
+	}
+	if destKeyspace == "" && vw.keyspace != nil {
+		destKeyspace = vw.keyspace.Name
 	}
 	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
 	if err != nil {

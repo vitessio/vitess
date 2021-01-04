@@ -373,8 +373,12 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 		table := ddl.GetTable().Name.String()
 		options := ""
 		spec := ddl.GetTableSpec()
-		if spec != nil && strings.Contains(spec.Options, "vitess_sequence") {
-			options = "vitess_sequence"
+		if spec != nil {
+			for _, option := range spec.Options {
+				if option.Name == "comment" && string(option.Value.Val) == "vitess_sequence" {
+					options = "vitess_sequence"
+				}
+			}
 		}
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
 	}
