@@ -307,7 +307,7 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	topo.ListenClientURL = fmt.Sprintf("http://%s:%d", topo.Host, topo.Port)
 	topo.DataDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port))
 	topo.LogDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "topo", port), "logs")
-	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v2/keys", topo.Host, topo.Port)
+	topo.VerifyURL = fmt.Sprintf("http://%s:%d/version", topo.Host, topo.Port)
 	topo.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return topo
 }
