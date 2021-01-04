@@ -156,6 +156,9 @@ type Conn struct {
 
 	// Packet encoding variables.
 	sequence uint8
+
+	//
+	ch chan *dataBuffer
 }
 
 // splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
@@ -219,6 +222,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		listener:    listener,
 		closed:      sync2.NewAtomicBool(false),
 		PrepareData: make(map[uint32]*PrepareData),
+		ch:          make(chan *dataBuffer, 1),
 	}
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
@@ -787,12 +791,8 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) bool {
 	c.sequence = 0
-	buffer, err := c.readEphemeralPacket()
-	if err != nil {
-		// Don't log EOF errors. They cause too much spam.
-		if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
-			log.Errorf("Error reading packet from %s: %v", c, err)
-		}
+	buffer, more := <-c.ch
+	if !more {
 		return false
 	}
 	data := *buffer.data

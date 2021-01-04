@@ -471,11 +471,28 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
 
+	go c.readConnPacket()
+
 	for {
 		kontinue := c.handleNextCommand(l.handler)
 		if !kontinue {
 			return
 		}
+	}
+}
+
+func (c *Conn) readConnPacket() {
+	for {
+		buffer, err := c.readEphemeralPacket()
+		if err != nil {
+			// Don't log EOF errors. They cause too much spam.
+			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Errorf("Error reading packet from %s: %v", c, err)
+			}
+			close(c.ch)
+			return
+		}
+		c.ch <- buffer
 	}
 }
 
