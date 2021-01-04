@@ -55,7 +55,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 				return nil, nil, err
 			}
 		}
-		if err != nil || table == nil {
+		if table == nil {
 			destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
 			if err != nil {
 				return nil, nil, err
