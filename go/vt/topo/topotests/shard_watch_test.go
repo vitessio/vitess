@@ -22,7 +22,9 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"

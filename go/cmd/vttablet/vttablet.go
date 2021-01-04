@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"

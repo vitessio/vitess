@@ -26,6 +26,7 @@ import (
 
 	consul "github.com/hashicorp/consul/api"
 	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/trace"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"

@@ -18,6 +18,7 @@ package automation
 
 import (
 	"context"
+
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )
 

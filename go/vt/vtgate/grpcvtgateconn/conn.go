@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"context"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 

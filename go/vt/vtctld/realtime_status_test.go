@@ -24,6 +24,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"

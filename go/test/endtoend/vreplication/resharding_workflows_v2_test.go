@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 

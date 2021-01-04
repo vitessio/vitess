@@ -30,6 +30,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"

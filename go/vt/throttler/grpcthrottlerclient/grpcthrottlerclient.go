@@ -21,6 +21,7 @@ import (
 	"flag"
 
 	"context"
+
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"

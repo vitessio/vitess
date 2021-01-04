@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )

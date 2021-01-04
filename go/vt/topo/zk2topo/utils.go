@@ -24,7 +24,9 @@ import (
 	"sync"
 
 	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 

@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"context"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"

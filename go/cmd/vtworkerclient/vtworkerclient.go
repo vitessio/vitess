@@ -23,6 +23,7 @@ import (
 	"syscall"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/worker/vtworkerclient"

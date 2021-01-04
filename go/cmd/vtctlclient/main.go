@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"

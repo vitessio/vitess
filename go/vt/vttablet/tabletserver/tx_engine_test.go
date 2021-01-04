@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	"context"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

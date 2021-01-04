@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"context"

@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 
 	"google.golang.org/grpc/credentials"
+
 	"vitess.io/vitess/go/vt/grpcclient"
 )
 

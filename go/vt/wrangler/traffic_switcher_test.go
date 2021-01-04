@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

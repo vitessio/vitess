@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"

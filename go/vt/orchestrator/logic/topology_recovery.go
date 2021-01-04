@@ -28,6 +28,7 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
+
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"

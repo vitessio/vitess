@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/flagutil"

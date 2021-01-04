@@ -22,8 +22,10 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"

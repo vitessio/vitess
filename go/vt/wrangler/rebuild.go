@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+
 	"vitess.io/vitess/go/vt/topotools"
 )
 

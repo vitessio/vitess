@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
