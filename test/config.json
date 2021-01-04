@@ -623,6 +623,13 @@
 			"Manual": false,
 			"Shard": 21,
 			"RetryMax": 3,
+		"provision": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/provision"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 28,
+			"RetryMax": 0,
 			"Tags": []
 		}
 	}

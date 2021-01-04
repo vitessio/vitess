@@ -1,0 +1,113 @@
+I see two ways to implement the "hook" for this:
+
+1) ExecuteCreateKeyspace calls some async endpoint that was passed in a CLI flag to vtgate:
+
+ExecuteCreateKeyspace:
+Does keyspace exist in topo? 
+	true:
+		Return a mysql error that database already exists.
+	false:
+		vtgate sends request to keyspace create service
+			other added keyspace:
+				Nothing happens at this step.
+			keyspace service partition:
+				Retry loop to send request.
+			vtgate partition:
+(1)				The user is disconnected. When they reconnect, if they run `CREATE DATABASE` again, they'll end up sending another request if the first hasn't finished.
+				Depending on what the other side does, that's probably fine.
+			vtgate and keyspace service partition:
+				The user is disconnected and the request is lost.
+			true:
+(2)				The request has succesfully been submitted. Does keyspace exists in topo?
+					true:
+						Return success to the user.
+					false:
+						Repeat (2).
+					vtgate partition:
+						Same as (1).
+	vtgate partition:
+		The CREATE DATABASE request is lost and the user is disconnected.
+	keyspace removed:
+		Returns a mysql error that database already exists, even though it does not.
+		
+
+	
+2) ExecuteCreateKeyspace records the "DesiredKeyspace" in the topo server in a dir seperate from keyspace, and anything who wants to repond to desired keyspace requests can subscribe to it in some way. psuedocode
+
+ExecuteCreateKeyspace:
+Does keyspace exist in topo? 
+	true:
+		Does desired keyspace exist in topo?
+			true:
+				Clean up orphaned desired keyspace and return mysql error that database already exists.
+			false:
+				Return mysql error that database already exists.
+			vtgate partition:
+				The CREATE DATABASE request is lost and the user is disconnected.
+			keyspace removed:
+				Any orphan desired state is correctly cleaned up.We return that the database exists even though it does not.
+	false:
+		Try to create desired keyspace in topo. 
+			vtgate partition:
+				The CREATE DATABASE request is saved and the user is disconnected. If they attempt to rerun the CREATE, they will end up at (1) or (2).
+		Did the desired keyspace already exist in topo?
+			true:
+				Does the desired keyspace in topo match our desired keyspace? (This will always be true when the only piece of information we're saving is the keyspace name)
+					true:
+(1)						Block and poll keyspace until it exists.
+						Remove desired keyspace.
+						Return success to the user.
+					false:
+(2)						Return error to the user that a different keyspace request is already in progress with params : %v.
+			false:
+				Block and poll keyspace until it exists.
+				Remove desired keyspace.
+				Return success to the user.
+				false:
+				
+	vtgate partition:
+		The CREATE DATABASE request is lost and the user is disconnected.
+
+
+    
+    
+update topserver DesiredKeyspace
+   already exists: return an error that states keyspace creation already in progress [or block]
+   does not exit:
+
+
+
+does Keyspace exit? Remove DesiredKeyspace and return
+if not, poll getKeyspaces until it pops up, then remove desiredkeyspace and return
+
+in thirdpartyservice [presumably you'd only have one consumer, the operator]:
+
+
+
+
+
+
+
+
+When it's fullfilled the desire, it removes it from the topo server, and CREATE DATABSE returns.
+
+
+
+Advantages of approach 1:
+1) YAGNI - it's relatively straightfoward to implement.
+2) We don't need asynchoncitiy in this case, we're going to block the CREATE DATABASE until the creation is complete.
+
+Disadvantages of approach 1:
+1) It's quasi racey. However, that doesn't matter for CREATE DABASE <keyspace> specifically because 
+2) I find it much harder to reason about the non-happy path in terms of network issues.
+3) If we ever introduce anything like "CREATE DATABASE hello SHARDS 3", we have a race.
+4) DNS or whatever to "catch the tail" of the operator
+
+
+
+
+disavdnatnges of approach 2:
+	dependiy might not be quite as clear
+
+advanatages of approach 2
+	easier operationally 

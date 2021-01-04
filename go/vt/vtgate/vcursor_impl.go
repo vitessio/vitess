@@ -18,12 +18,14 @@ package vtgate
 
 import (
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/sync/errgroup"
+	"vitess.io/vitess/go/vt/provision"
+	"vitess.io/vitess/go/vt/vtgate/provisioncreateacl"
+	"vitess.io/vitess/go/vt/vtgate/provisiondeleteacl"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -138,6 +140,106 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.Alt
 
 	return vc.vm.UpdateVSchema(vc.ctx, ksName, srvVschema)
 
+}
+
+func (vc *vcursorImpl) ExecuteCreateKeyspace(keyspace string, ifNotExists bool) error {
+	allowed := provisioncreateacl.Authorized(callerid.ImmediateCallerIDFromContext(vc.ctx))
+	if !allowed {
+		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform provision create operations")
+	}
+
+	keyspaceExists, err := vc.topoServer.KeyspaceExists(vc.ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	if keyspaceExists && ifNotExists {
+		return nil
+	}
+
+	if keyspaceExists {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %v already exists", keyspace)
+	}
+
+	err = provision.RequestCreateKeyspace(vc.ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <- vc.ctx.Done():
+			return vterrors.Errorf(
+				vtrpcpb.Code_ABORTED,
+				"waiting for creation of keyspace %v cancelled. provisioning will continue asynchronously.",
+				keyspace,
+				)
+		case <-time.After(*provision.ProvisionerTimeout):
+			return vterrors.Errorf(
+				vtrpcpb.Code_DEADLINE_EXCEEDED,
+				"waiting for creation of keyspace %v timed out. provisioning will continue asynchronously.",
+				keyspace,
+			)
+		case <-time.After(5 * time.Second):
+			exists, err := vc.topoServer.KeyspaceExists(vc.ctx, keyspace)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return nil
+			}
+		}
+	}
+}
+
+func (vc *vcursorImpl) ExecuteDeleteKeyspace(keyspace string, ifExists bool) error {
+	allowed := provisiondeleteacl.Authorized(callerid.ImmediateCallerIDFromContext(vc.ctx))
+	if !allowed {
+		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform provision delete operations")
+	}
+
+	keyspaceExists, err := vc.topoServer.KeyspaceExists(vc.ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	if !keyspaceExists && ifExists {
+		return nil
+	}
+
+	if !keyspaceExists {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %v does not exist", keyspace)
+	}
+
+	err = provision.RequestDeleteKeyspace(vc.ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <- vc.ctx.Done():
+			return vterrors.Errorf(
+				vtrpcpb.Code_ABORTED,
+				"waiting for deletion of keyspace %v cancelled. provisioning will continue asynchronously.",
+				keyspace,
+			)
+		case <-time.After(*provision.ProvisionerTimeout):
+			return vterrors.Errorf(
+				vtrpcpb.Code_DEADLINE_EXCEEDED,
+				"waiting for deletion of keyspace %v timed out. provisioning will continue asynchronously.",
+				keyspace,
+			)
+		case <-time.After(5 * time.Second):
+			exists, err := vc.topoServer.KeyspaceExists(vc.ctx, keyspace)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return nil
+			}
+		}
+	}
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with

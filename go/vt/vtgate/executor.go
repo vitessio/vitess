@@ -28,8 +28,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"vitess.io/vitess/go/vt/sysvars"
+	"vitess.io/vitess/go/vt/vtgate/provisioncreateacl"
+	"vitess.io/vitess/go/vt/vtgate/provisiondeleteacl"
 
 	"context"
 	"vitess.io/vitess/go/trace"
@@ -125,6 +126,8 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	}
 
 	vschemaacl.Init()
+	provisioncreateacl.Init()
+	provisiondeleteacl.Init()
 	e.vm = &VSchemaManager{e: e}
 	e.vm.watchSrvVSchema(ctx, cell)
 

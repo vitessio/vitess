@@ -22,7 +22,7 @@ source ./env.sh
 printf -v tablet_dir 'vt_%010d' $TABLET_UID
 pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
 
-kill $pid
+kill -9 $pid
 
 # Wait for vttablet to die.
 while ps -p $pid > /dev/null; do sleep 1; done

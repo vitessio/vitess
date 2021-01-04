@@ -165,7 +165,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !ksExists {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
+		return buildDeleteKeyspacePlan(dbDDLstmt.GetDatabaseName(), true), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot alter database '%s'; database does not exists", ksName)
@@ -178,7 +178,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !dbDDL.IfNotExists && ksExists {
 			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "cannot create database '%s'; database exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
+		return buildCreateKeyspacePlan(dbDDLstmt.GetDatabaseName(), false), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDLstmt))
 }

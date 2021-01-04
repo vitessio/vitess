@@ -73,6 +73,23 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 	return tmpProcess.Run()
 }
 
+// DeleteKeyspace executes vtctl command to create keyspace
+func (vtctl *VtctlProcess) DeleteKeyspace(keyspace string) (err error) {
+	tmpProcess := exec.Command(
+		vtctl.Binary,
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot,
+	)
+	if *isCoverage {
+		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-delete-ks.out"))
+	}
+	tmpProcess.Args = append(tmpProcess.Args,
+		"DeleteKeyspace", keyspace)
+	log.Infof("Running DeleteKeyspace with command: %v", strings.Join(tmpProcess.Args, " "))
+	return tmpProcess.Run()
+}
+
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
 func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
 	args = append([]string{
