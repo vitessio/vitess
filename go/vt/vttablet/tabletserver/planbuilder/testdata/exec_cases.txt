@@ -756,6 +756,20 @@ options:PassthroughDMLs
   ]
 }
 
+# drop
+"truncate table a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "truncate table a"
+}
+
 # multi-drop
 "drop table a, b"
 {

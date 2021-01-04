@@ -889,6 +889,10 @@ func replaceTimestampFuncExprExpr2(newNode, parent SQLNode) {
 	parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
 }
 
+func replaceTruncateTableTable(newNode, parent SQLNode) {
+	parent.(*TruncateTable).Table = newNode.(TableName)
+}
+
 func replaceUnaryExprExpr(newNode, parent SQLNode) {
 	parent.(*UnaryExpr).Expr = newNode.(Expr)
 }
@@ -1602,6 +1606,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *TimestampFuncExpr:
 		a.apply(node, n.Expr1, replaceTimestampFuncExprExpr1)
 		a.apply(node, n.Expr2, replaceTimestampFuncExprExpr2)
+
+	case *TruncateTable:
+		a.apply(node, n.Table, replaceTruncateTableTable)
 
 	case *UnaryExpr:
 		a.apply(node, n.Expr, replaceUnaryExprExpr)
