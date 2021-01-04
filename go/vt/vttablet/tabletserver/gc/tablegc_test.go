@@ -150,3 +150,64 @@ func TestNextState(t *testing.T) {
 		assert.Nil(t, postDrop)
 	}
 }
+
+func TestShouldTransitionTable(t *testing.T) {
+	tt := []struct {
+		table            string
+		state            schema.TableGCState
+		shouldTransition bool
+		isError          bool
+	}{
+		{
+			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
+			state:            schema.PurgeTableGCState,
+			shouldTransition: true,
+		},
+		{
+			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            schema.PurgeTableGCState,
+			shouldTransition: false,
+		},
+		{
+			table:            "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            schema.DropTableGCState,
+			shouldTransition: false,
+		},
+		{
+			table:            "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20090915120410",
+			state:            schema.DropTableGCState,
+			shouldTransition: true,
+		},
+		{
+			table:            "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            schema.EvacTableGCState,
+			shouldTransition: false,
+		},
+		{
+			table:            "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            schema.HoldTableGCState,
+			shouldTransition: true,
+		},
+		{
+			table:            "_vt_SOMETHING_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            "",
+			shouldTransition: false,
+		},
+	}
+	lifecycleStates, err := schema.ParseGCLifecycle("purge,evac,drop")
+	assert.NoError(t, err)
+	collector := &TableGC{
+		lifecycleStates: lifecycleStates,
+	}
+	for _, ts := range tt {
+		shouldTransition, state, err := collector.shouldTransitionTable(ts.table)
+		if ts.isError {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+			assert.Equal(t, ts.shouldTransition, shouldTransition)
+			assert.Equal(t, ts.state, state)
+
+		}
+	}
+}

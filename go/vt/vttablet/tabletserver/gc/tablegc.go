@@ -326,6 +326,28 @@ func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState
 	}()
 }
 
+// shouldTransitionTable checks if the given table is a GC table and if it's time to transition it to next state
+func (collector *TableGC) shouldTransitionTable(tableName string) (shouldTransition bool, state schema.TableGCState, err error) {
+	isGCTable, state, t, err := schema.AnalyzeGCTableName(tableName)
+	if err != nil {
+		return false, state, err
+	}
+	if !isGCTable {
+		// irrelevant table
+		return false, state, nil
+	}
+	if _, ok := collector.lifecycleStates[state]; ok {
+		// this state is in our expected lifecycle. Let's check table's time hint:
+		timeNow := time.Now().UTC()
+		if timeNow.Before(t) {
+			// not yet time to operate on this table
+			return false, state, nil
+		}
+		// If the state is not in our expected lifecycle, we ignore the time hint and just move it to the next phase
+	}
+	return true, state, nil
+}
+
 // checkTables looks for potential GC tables in the MySQL server+schema.
 // It lists _vt_% tables, then filters through those which are due-date.
 // It then applies the necessary operation per table.
@@ -350,20 +372,17 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	for _, row := range res.Rows {
 		tableName := row[0].ToString()
 
-		isGCTable, state, t, err := schema.AnalyzeGCTableName(tableName)
+		shouldTransition, state, err := collector.shouldTransitionTable(tableName)
+
 		if err != nil {
 			log.Errorf("TableGC: error while checking tables: %+v", err)
 			continue
 		}
-		timeNow := time.Now().UTC()
-		if !isGCTable {
+		if !shouldTransition {
 			// irrelevant table
 			continue
 		}
-		if timeNow.Before(t) {
-			// net yet time to operate on this table
-			continue
-		}
+
 		log.Infof("TableGC: will operate on table %s", tableName)
 
 		if state == schema.HoldTableGCState {
