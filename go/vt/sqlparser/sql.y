@@ -2270,11 +2270,11 @@ drop_statement:
 truncate_statement:
   TRUNCATE TABLE table_name
   {
-    $$ = &DDL{Action: TruncateDDLAction, Table: $3}
+    $$ = &TruncateTable{Table: $3}
   }
 | TRUNCATE table_name
   {
-    $$ = &DDL{Action: TruncateDDLAction, Table: $2}
+    $$ = &TruncateTable{Table: $2}
   }
 analyze_statement:
   ANALYZE TABLE table_name

@@ -7481,13 +7481,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2272
 		{
-			yyVAL.statement = &DDL{Action: TruncateDDLAction, Table: yyDollar[3].tableName}
+			yyVAL.statement = &TruncateTable{Table: yyDollar[3].tableName}
 		}
 	case 414:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2276
 		{
-			yyVAL.statement = &DDL{Action: TruncateDDLAction, Table: yyDollar[2].tableName}
+			yyVAL.statement = &TruncateTable{Table: yyDollar[2].tableName}
 		}
 	case 415:
 		yyDollar = yyS[yypt-3 : yypt+1]

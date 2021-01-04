@@ -248,3 +248,18 @@
     "Query": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)"
   }
 }
+
+# Truncate table with qualifier
+"truncate user.user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "truncate user.user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "truncate table user_extra"
+  }
+}
