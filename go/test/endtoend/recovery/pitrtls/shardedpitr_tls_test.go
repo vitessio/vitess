@@ -150,6 +150,7 @@ func initializeCluster(t *testing.T) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			tablet.MysqlctlProcess.SecureTransport = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -469,6 +470,7 @@ func tlsTestTabletRecovery(t *testing.T, tabletForBinlogs *cluster.Vttablet, loo
 
 func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBinlogs *cluster.Vttablet, lookupTimeout, restoreKeyspaceName, shardName string) {
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	tablet.MysqlctlProcess.SecureTransport = true
 	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
