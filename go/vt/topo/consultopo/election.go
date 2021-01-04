@@ -19,7 +19,7 @@ package consultopo
 import (
 	"path"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/hashicorp/consul/api"
 	"vitess.io/vitess/go/vt/log"

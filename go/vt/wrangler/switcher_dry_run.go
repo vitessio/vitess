@@ -27,7 +27,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 var _ iswitcher = (*switcherDryRun)(nil)

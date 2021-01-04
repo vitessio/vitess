@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"

@@ -35,7 +35,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	"golang.org/x/net/context"
+	"context"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

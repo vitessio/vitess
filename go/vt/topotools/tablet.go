@@ -37,8 +37,8 @@ import (
 	"errors"
 	"fmt"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"

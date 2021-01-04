@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"

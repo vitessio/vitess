@@ -22,7 +22,7 @@ import (
 	"flag"
 	"fmt"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/vt/log"
 )
 
