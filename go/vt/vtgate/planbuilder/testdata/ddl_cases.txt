@@ -308,3 +308,18 @@
     "Query": "truncate table user_extra"
   }
 }
+
+# Rename table
+"rename table a to main.b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table a to main.b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "rename table a to b"
+  }
+}

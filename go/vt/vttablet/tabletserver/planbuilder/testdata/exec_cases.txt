@@ -715,7 +715,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"rename table a to b"
 }
 
 # multi-rename
@@ -740,7 +741,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"rename table a to b, b to a"
 }
 
 # drop
