@@ -19,6 +19,7 @@ package preparestmt
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		// preparing value for the insert testing
 		insertValue := []interface{}{
-			i, fmt.Sprint(i) + "21", i * 100,
+			i, strconv.FormatInt(int64(i), 10) + "21", i * 100,
 			127, 1, 32767, 8388607, 2147483647, 2.55, 64.9, 55.5,
 			time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
 			time.Date(2009, 5, 5, 0, 0, 0, 50000, location),
