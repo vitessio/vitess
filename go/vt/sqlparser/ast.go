@@ -811,12 +811,12 @@ func (node *AlterView) GetIfExists() bool {
 
 // GetIfExists implements the DDLStatement interface
 func (node *DropTable) GetIfExists() bool {
-	return false
+	return node.IfExists
 }
 
 // GetIfExists implements the DDLStatement interface
 func (node *DropView) GetIfExists() bool {
-	return false
+	return node.IfExists
 }
 
 // GetTableSpec implements the DDLStatement interface
