@@ -62,6 +62,7 @@ type (
 		GetTable() TableName
 		GetAction() DDLAction
 		GetOptLike() *OptLike
+		GetIfExists() bool
 		GetTableSpec() *TableSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
@@ -776,6 +777,46 @@ func (node *DropTable) GetOptLike() *OptLike {
 // GetOptLike implements the DDLStatement interface
 func (node *DropView) GetOptLike() *OptLike {
 	return nil
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *DDL) GetIfExists() bool {
+	return node.IfExists
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *CreateTable) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *CreateIndex) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *AlterTable) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *CreateView) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *AlterView) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *DropTable) GetIfExists() bool {
+	return node.IfExists
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *DropView) GetIfExists() bool {
+	return node.IfExists
 }
 
 // GetTableSpec implements the DDLStatement interface
