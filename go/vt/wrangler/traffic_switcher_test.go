@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -884,7 +885,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	wantdryRunRenameSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Renaming these tables from the database and removing them from the vschema for keyspace ks1:","	" +
+		"Renaming these tables from the database and removing them from the vschema for keyspace ks1:", "	" +
 			"Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
 		"Blacklisted tables t1,t2 will be removed from:",

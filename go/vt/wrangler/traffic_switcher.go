@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -1485,7 +1486,7 @@ func getRenameFileName(tableName string) string {
 }
 
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
-		err := ts.forAllSources(func(source *tsSource) error {
+	err := ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
 			if removalType == DropTable {
