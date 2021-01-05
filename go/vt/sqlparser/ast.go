@@ -432,16 +432,6 @@ type (
 		IfExists   bool
 	}
 
-	// CreateIndex represents a CREATE INDEX query
-	CreateIndex struct {
-		Constraint  string
-		Name        ColIdent
-		Table       TableName
-		Columns     []*IndexColumn
-		Options     []*IndexOption
-		FullyParsed bool
-	}
-
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
 		Table       TableName
@@ -587,7 +577,6 @@ func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
-func (*CreateIndex) iStatement()       {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
 func (*CreateTable) iStatement()       {}
@@ -603,7 +592,6 @@ func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 
 func (*DDL) iDDLStatement()           {}
-func (*CreateIndex) iDDLStatement()   {}
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
 func (*CreateTable) iDDLStatement()   {}
@@ -649,11 +637,6 @@ func (*RenameTable) IsFullyParsed() bool {
 }
 
 // IsFullyParsed implements the DDLStatement interface
-func (node *CreateIndex) IsFullyParsed() bool {
-	return node.FullyParsed
-}
-
-// IsFullyParsed implements the DDLStatement interface
 func (node *CreateTable) IsFullyParsed() bool {
 	return node.FullyParsed
 }
@@ -681,11 +664,6 @@ func (node *DropTable) IsFullyParsed() bool {
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
-}
-
-// GetTable implements the DDLStatement interface
-func (node *CreateIndex) GetTable() TableName {
-	return node.Table
 }
 
 // GetTable implements the DDLStatement interface
@@ -736,11 +714,6 @@ func (node *RenameTable) GetTable() TableName {
 // GetAction implements the DDLStatement interface
 func (node *DDL) GetAction() DDLAction {
 	return node.Action
-}
-
-// GetAction implements the DDLStatement interface
-func (node *CreateIndex) GetAction() DDLAction {
-	return AlterDDLAction
 }
 
 // GetAction implements the DDLStatement interface
@@ -804,11 +777,6 @@ func (node *RenameTable) GetOptLike() *OptLike {
 }
 
 // GetOptLike implements the DDLStatement interface
-func (node *CreateIndex) GetOptLike() *OptLike {
-	return nil
-}
-
-// GetOptLike implements the DDLStatement interface
 func (node *AlterTable) GetOptLike() *OptLike {
 	return nil
 }
@@ -841,11 +809,6 @@ func (node *DDL) GetTableSpec() *TableSpec {
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
-}
-
-// GetTableSpec implements the DDLStatement interface
-func (node *CreateIndex) GetTableSpec() *TableSpec {
-	return nil
 }
 
 // GetTableSpec implements the DDLStatement interface
@@ -899,11 +862,6 @@ func (node *TruncateTable) GetFromTables() TableNames {
 }
 
 // GetFromTables implements the DDLStatement interface
-func (node *CreateIndex) GetFromTables() TableNames {
-	return nil
-}
-
-// GetFromTables implements the DDLStatement interface
 func (node *AlterTable) GetFromTables() TableNames {
 	return nil
 }
@@ -949,11 +907,6 @@ func (node *TruncateTable) SetFromTables(tables TableNames) {
 }
 
 // SetFromTables implements DDLStatement.
-func (node *CreateIndex) SetFromTables(tables TableNames) {
-	// irrelevant
-}
-
-// SetFromTables implements DDLStatement.
 func (node *AlterTable) SetFromTables(tables TableNames) {
 	// irrelevant
 }
@@ -995,11 +948,6 @@ func (node *RenameTable) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *TruncateTable) GetToTables() TableNames {
-	return nil
-}
-
-// GetToTables implements the DDLStatement interface
-func (node *CreateIndex) GetToTables() TableNames {
 	return nil
 }
 
@@ -1076,11 +1024,6 @@ func (node *TruncateTable) AffectedTables() TableNames {
 }
 
 // AffectedTables implements DDLStatement.
-func (node *CreateIndex) AffectedTables() TableNames {
-	return TableNames{node.Table}
-}
-
-// AffectedTables implements DDLStatement.
 func (node *CreateTable) AffectedTables() TableNames {
 	return TableNames{node.Table}
 }
@@ -1103,12 +1046,6 @@ func (node *DropTable) AffectedTables() TableNames {
 // AffectedTables returns the list table names affected by the DDLStatement.
 func (node *DropView) AffectedTables() TableNames {
 	return node.FromTables
-}
-
-// SetTable implements DDLStatement.
-func (node *CreateIndex) SetTable(qualifier string, name string) {
-	node.Table.Qualifier = NewTableIdent(qualifier)
-	node.Table.Name = NewTableIdent(name)
 }
 
 // SetTable implements DDLStatement.
@@ -3169,42 +3106,6 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " character set %s", node.Charset)
 	}
 	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
-}
-
-// Format formats the node.
-func (node *CreateIndex) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "alter table %v add", node.Table)
-	if node.Constraint != "" {
-		buf.WriteString(" " + node.Constraint)
-	}
-	buf.astPrintf(node, " index %v", node.Name)
-
-	buf.WriteString(" (")
-	for i, col := range node.Columns {
-		if i != 0 {
-			buf.astPrintf(node, ", %v", col.Column)
-		} else {
-			buf.astPrintf(node, "%v", col.Column)
-		}
-		if col.Length != nil {
-			buf.astPrintf(node, "(%v)", col.Length)
-		}
-		if col.Direction == DescOrder {
-			buf.WriteString(" desc")
-		}
-	}
-	buf.astPrintf(node, ")")
-	for _, opt := range node.Options {
-		//if opt == nil {
-		//	continue
-		//}
-		buf.WriteString(" " + strings.ToLower(opt.Name))
-		if opt.String != "" {
-			buf.WriteString(" " + opt.String)
-		} else {
-			buf.astPrintf(node, " %v", opt.Value)
-		}
-	}
 }
 
 // Format formats the node.

@@ -45,8 +45,8 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 	var err error
 
 	switch ddl := ddlStatement.(type) {
-	case *sqlparser.CreateIndex, *sqlparser.AlterTable, *sqlparser.TruncateTable:
-		// For Create index, Alter Table and other statements, the table must already exist
+	case *sqlparser.AlterTable, *sqlparser.TruncateTable:
+		// For Alter Table and other statements, the table must already exist
 		// We should find the target of the query from this tables location
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
 		if err != nil {

@@ -1181,11 +1181,14 @@ var (
 		output: "alter table b add spatial index a (col1)",
 	}, {
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
-		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string' algorithm inplace lock none",
+		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
 		output:     "alter table b add index a ()",
 		partialDDL: true,
+	}, {
+		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
+		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
@@ -1823,12 +1826,10 @@ func TestValid(t *testing.T) {
 				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 			}
 
-			// CREATE INDEX currently only has 5.7 specifications.
+			// Some statements currently only have 5.7 specifications.
 			// For mysql 8.0 syntax, the query is not entirely parsed.
 			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
 			switch x := tree.(type) {
-			case *CreateIndex:
-				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			case *CreateDatabase:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			case *AlterDatabase:
