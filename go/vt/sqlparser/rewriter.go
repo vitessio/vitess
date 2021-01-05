@@ -270,14 +270,6 @@ func replaceConvertUsingExprExpr(newNode, parent SQLNode) {
 	parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 }
 
-func replaceCreateIndexName(newNode, parent SQLNode) {
-	parent.(*CreateIndex).Name = newNode.(ColIdent)
-}
-
-func replaceCreateIndexTable(newNode, parent SQLNode) {
-	parent.(*CreateIndex).Table = newNode.(TableName)
-}
-
 func replaceCreateTableOptLike(newNode, parent SQLNode) {
 	parent.(*CreateTable).OptLike = newNode.(*OptLike)
 }
@@ -1258,10 +1250,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Expr, replaceConvertUsingExprExpr)
 
 	case *CreateDatabase:
-
-	case *CreateIndex:
-		a.apply(node, n.Name, replaceCreateIndexName)
-		a.apply(node, n.Table, replaceCreateIndexTable)
 
 	case *CreateTable:
 		a.apply(node, n.OptLike, replaceCreateTableOptLike)

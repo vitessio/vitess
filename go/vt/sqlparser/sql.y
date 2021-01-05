@@ -133,7 +133,6 @@ func skipToEnd(yylex interface{}) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   selectInto	  *SelectInto
-  createIndex	  *CreateIndex
   createDatabase  *CreateDatabase
   alterDatabase  *AlterDatabase
   collateAndCharset CollateAndCharset
@@ -267,9 +266,9 @@ func skipToEnd(yylex interface{}) {
 %type <renameTable> rename_list
 %type <createTable> create_table_prefix
 %type <alterTable> alter_table_prefix
-%type <alterOption> alter_option alter_commands_modifier
-%type <alterOptions> alter_options alter_commands_list alter_commands_modifier_list
-%type <createIndex> create_index_prefix
+%type <alterOption> alter_option alter_commands_modifier lock_index algorithm_index
+%type <alterOptions> alter_options alter_commands_list alter_commands_modifier_list algorithm_lock_opt
+%type <alterTable> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
@@ -328,7 +327,7 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <selectInto> into_option
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
@@ -381,8 +380,8 @@ func skipToEnd(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
-%type <indexOption> index_option lock_index algorithm_index using_index_type
-%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt using_opt
+%type <indexOption> index_option using_index_type
+%type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -755,9 +754,10 @@ create_statement:
   }
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
-    $1.Columns = $3
-    $1.Options = append($1.Options,$5...)
-    $1.Options = append($1.Options,$6...)
+    indexDef := $1.AlterOptions[0].(*AddIndexDefinition).IndexDefinition
+    indexDef.Columns = $3
+    indexDef.Options = append(indexDef.Options,$5...)
+    $1.AlterOptions = append($1.AlterOptions,$6...)
     $1.FullyParsed = true
     $$ = $1
   }
@@ -838,9 +838,24 @@ alter_table_prefix:
   }
 
 create_index_prefix:
-  CREATE constraint_opt INDEX id_or_var using_opt ON table_name
+  CREATE INDEX id_or_var using_opt ON table_name
   {
-    $$ = &CreateIndex{Constraint: $2, Name: $4, Options: $5, Table: $7}
+    $$ = &AlterTable{Table: $6, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$3, Type:string($2)}, Options:$4}}}}
+    setDDL(yylex, $$)
+  }
+| CREATE FULLTEXT INDEX id_or_var using_opt ON table_name
+  {
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Fulltext:true}, Options:$5}}}}
+    setDDL(yylex, $$)
+  }
+| CREATE SPATIAL INDEX id_or_var using_opt ON table_name
+  {
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Spatial:true}, Options:$5}}}}
+    setDDL(yylex, $$)
+  }
+| CREATE UNIQUE INDEX id_or_var using_opt ON table_name
+  {
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Unique:true}, Options:$5}}}}
     setDDL(yylex, $$)
   }
 
@@ -4023,52 +4038,52 @@ algorithm_lock_opt:
   }
 | lock_index algorithm_index
   {
-     $$ = []*IndexOption{$1,$2}
+     $$ = []AlterOption{$1,$2}
   }
 | algorithm_index lock_index
   {
-     $$ = []*IndexOption{$1,$2}
+     $$ = []AlterOption{$1,$2}
   }
 | algorithm_index
   {
-     $$ = []*IndexOption{$1}
+     $$ = []AlterOption{$1}
   }
 | lock_index
   {
-     $$ = []*IndexOption{$1}
+     $$ = []AlterOption{$1}
   }
 
 
 lock_index:
   LOCK equal_opt DEFAULT
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:DefaultType}
   }
 | LOCK equal_opt NONE
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:NoneType}
   }
 | LOCK equal_opt SHARED
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:SharedType}
   }
 | LOCK equal_opt EXCLUSIVE
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:ExclusiveType}
   }
 
 algorithm_index:
   ALGORITHM equal_opt DEFAULT
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = AlgorithmValue($3)
   }
 | ALGORITHM equal_opt INPLACE
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = AlgorithmValue($3)
   }
 | ALGORITHM equal_opt COPY
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = AlgorithmValue($3)
   }
 
 algorithm_view:
@@ -4494,15 +4509,6 @@ to_opt:
   { $$ = struct{}{} }
 | AS
   { $$ = struct{}{} }
-
-constraint_opt:
-  { $$ = "" }
-| UNIQUE
-  { $$ = string($1) }
-| SPATIAL
-  { $$ = string($1) }
-| FULLTEXT
-  { $$ = string($1) }
 
 using_opt:
   { $$ = nil }
