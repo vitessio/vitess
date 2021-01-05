@@ -1968,7 +1968,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	workflowType wrangler.VReplicationWorkflowType) error {
 
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
-	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from (e.g. master, replica, rdonly). Defaults to -vreplication_tablet_type parameter value for the tablet, which has the default value of replica.")
+	tabletTypes := subFlags.String("tablet_types", "master,replica,rdonly", "Source tablet types to replicate from (e.g. master, replica, rdonly). Defaults to -vreplication_tablet_type parameter value for the tablet, which has the default value of replica.")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
 	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on master migrations. The migration will be cancelled on a timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
@@ -1986,7 +1986,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 	_ = subFlags.Bool("v2", true, "")
 
-	_ = dryRun //TODO: add dry run functionality
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2139,6 +2138,16 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return printDetails()
 
 	}
+
+	if *dryRun {
+		switch action {
+		case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic, vReplicationWorkflowActionComplete:
+		default:
+			return fmt.Errorf("-dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete, not for %s", originalAction)
+		}
+	}
+
+	var dryRunResults *[]string
 	startState := wf.CachedState()
 	switch action {
 	case vReplicationWorkflowActionShow:
@@ -2207,11 +2216,11 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			}
 		}
 	case vReplicationWorkflowActionSwitchTraffic:
-		err = wf.SwitchTraffic(wrangler.DirectionForward)
+		dryRunResults, err = wf.SwitchTraffic(wrangler.DirectionForward)
 	case vReplicationWorkflowActionReverseTraffic:
-		err = wf.ReverseTraffic()
+		dryRunResults, err = wf.ReverseTraffic()
 	case vReplicationWorkflowActionComplete:
-		err = wf.Complete()
+		dryRunResults, err = wf.Complete()
 	case vReplicationWorkflowActionCancel:
 		err = wf.Cancel()
 	case vReplicationWorkflowActionGetState:
@@ -2223,6 +2232,13 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if err != nil {
 		log.Warningf(" %s error: %v", originalAction, wf)
 		return wrapError(wf, err)
+	}
+	if *dryRun {
+		if len(*dryRunResults) > 0 {
+			wr.Logger().Printf("Dry Run results for %s run at %s\nParameters: %s\n\n", time.RFC822, originalAction, strings.Join(args, " "))
+			wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
+			return nil
+		}
 	}
 	wr.Logger().Printf("%s was successful\nStart State: %s\nCurrent State: %s\n\n",
 		originalAction, startState, wf.CurrentState())
