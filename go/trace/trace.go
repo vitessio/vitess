@@ -24,7 +24,7 @@ import (
 	"io"
 	"strings"
 
-	"golang.org/x/net/context"
+	"context"
 	"google.golang.org/grpc"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"

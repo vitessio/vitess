@@ -18,7 +18,7 @@ limitations under the License.
 package fakevtworkerclient
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtctl/fakevtctlclient"

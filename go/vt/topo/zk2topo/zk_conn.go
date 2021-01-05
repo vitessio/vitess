@@ -28,8 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
