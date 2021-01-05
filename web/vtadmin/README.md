@@ -1,12 +1,64 @@
 # VTAdmin
 
-## Getting started
+## Running vtadmin-web locally
 
-1. Install node v.14.15.3. (Using a Node version manager like [nvm](https://github.com/nvm-sh/nvm) is highly recommended.)
-1. From the `vitess/web/vtadmin/` directory, install dependencies with `npm install`.
-1. Run `npm start` to start vtadmin-web on [http://localhost:3000](http://localhost:3000) 
+In this section, we'll get vtadmin-web, vtadmin-api, and Vitess all running locally. This process is still somewhat... cumbersome, apologies. 😰 
 
-Have fun! 🎉
+1. Run Vitess locally [with Docker](https://vitess.io/docs/get-started/local-docker/) (or another way, if you prefer):
+
+	```bash
+	make docker_local
+	./docker/local/run.sh
+	```
+
+1. Create an empty vtgate credentials file to avoid the gRPC dialer bug mentioned in https://github.com/vitessio/vitess/pull/7187. Location and filename don't matter since you'll be passing this in as a flag; I put mine at ` /Users/sarabee/id1-grpc_vtgate_credentials.json`:
+
+	```json
+	{
+		"Username": "",
+		"Password": ""
+	}
+	```
+
+1. Create a cluster configuration file for the local Vitess you started up in step 1. Again, filename and location don't matter since we'll be passing in the path as a flag; I put mine at `/Users/sarabee/vtadmin-cluster1.json`. Here it is with default values for the [local Vitess/Docker example](https://vitess.io/docs/get-started/local-docker/) we're following: 
+
+	```json
+	{
+		"vtgates": [
+			{
+				"host": {
+					"hostname": "127.0.0.1:15991"
+				},
+				"tags": ["pool:pool1", "cell:zone1", "extra:tag"]
+			},
+			{
+				"host": {
+					"hostname": "127.0.0.1:15992"
+				},
+				"tags": ["dead-dove-do-not-eat"]
+			}
+		]
+	}
+	```
+
+1. Start up vtadmin-api but **make sure to update the filepaths** for the vtgate creds file and static service discovery file you created above!
+
+	```bash
+	make build
+
+	./bin/vtadmin \
+		--addr ":15999" \
+		--cluster-defaults "vtsql-credentials-path-tmpl=/Users/sarabee/id1-grpc_vtgate_credentials.json" \
+		--cluster "name=cluster1,id=id1,discovery=staticFile,discovery-staticFile-path=/Users/sarabee/vtadmin-cluster1.json,vtsql-discovery-tags=cell:zone1" 
+	```
+
+1. Finally! Start up vtadmin-web on [http://localhost:3000](http://localhost:3000), pointed at the vtadmin-api server you started in the last step. 
+
+	```bash
+	cd web/vtadmin
+	npm install
+	REACT_APP_VTADMIN_API_ADDRESS="http://127.0.0.1:15999" npm start
+	```
 
 # Developer guide
 
@@ -30,6 +82,12 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 - [create-react-app](https://create-react-app.dev/) (generated with v.4.0.1)
 - [TypeScript](http://typescriptlang.org/)
 - [protobufjs](https://github.com/protobufjs)
+
+## Environment Variables
+
+Under the hood, we use create-react-app's environment variable set-up which is very well documented: https://create-react-app.dev/docs/adding-custom-environment-variables. 
+
+All of our environment variables are enumerated and commented in [react-app-env.d.ts](./src/react-app-env.d.ts). This also gives us type hinting on `process.env`, for editors that support it. 
 
 ## Configuring your editor
 
