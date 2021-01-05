@@ -157,7 +157,7 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action sqlparser.DDLAction, err error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
-		return ddlStmt, action, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", sql, err)
+		return nil, 0, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", sql, err)
 	}
 	switch ddlStmt := stmt.(type) {
 	case sqlparser.DDLStatement:
