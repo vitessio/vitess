@@ -26,16 +26,7 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 	"Create journal entries on source databases",
 	"Enable writes on keyspace customer tables customer",
 	"Switch routing from keyspace product to keyspace customer",
-	"Following rules will be deleted:",
-	"       customer.customer@rdonly => customer.customer",
-	"       customer.customer@replica => customer.customer",
-	"       customer@rdonly => customer.customer",
-	"       customer@replica => customer.customer",
-	"       product.customer@rdonly => customer.customer",
-	"       product.customer@replica => customer.customer",
-	"Following rules will be added:",
-	"       customer => customer.customer",
-	"       product.customer => customer.customer",
+	"Routing rules for tables customer will be updated",
 	"SwitchWrites completed, freeze and delete vreplication streams on:",
 	"       tablet 200 ",
 	"       tablet 300 ",
@@ -50,7 +41,8 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace product",
-	"Switch reads for tables customer to keyspace customer",
+	"Switch reads for tables customer to keyspace customer for tablet types REPLICA",
+	"Routing rules for tables customer will be updated",
 	"Unlock keyspace product",
 }
 
