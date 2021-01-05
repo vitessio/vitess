@@ -565,3 +565,7 @@
 # Rename table with different keyspace tables
 "rename table user_extra to b, main.a to b"
 "Tables or Views specified in the query do not belong to the same destination"
+
+# Flush statement
+"flush x"
+"keyspace not specified"

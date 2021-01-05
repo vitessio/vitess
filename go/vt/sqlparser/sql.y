@@ -54,7 +54,6 @@ func skipToEnd(yylex interface{}) {
   empty         struct{}
   statement     Statement
   selStmt       SelectStatement
-  ddl           *DDL
   ins           *Insert
   byt           byte
   bytes         []byte
@@ -2799,7 +2798,7 @@ unlock_statement:
 flush_statement:
   FLUSH skip_to_end
   {
-    $$ = &DDL{Action: FlushDDLAction}
+    $$ = &Flush{}
   }
 comment_opt:
   {

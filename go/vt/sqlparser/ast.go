@@ -365,25 +365,8 @@ type (
 		FullyParsed         bool
 	}
 
-	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
-	DDL struct {
-		Action DDLAction
-
-		// FromTables is set if Action is RenameDDLAction or DropDDLAction.
-		FromTables TableNames
-
-		// ToTables is set if Action is RenameDDLAction.
-		ToTables TableNames
-
-		// Table is set if Action is other than RenameDDLAction or DropDDLAction.
-		Table TableName
-
-		// The following fields are set if a DDL was fully analyzed.
-		IfExists      bool
-		TableSpec     *TableSpec
-		OptLike       *OptLike
-		PartitionSpec *PartitionSpec
-	}
+	// Flush represents a FLUSH statement.
+	Flush struct{}
 
 	// RenameTable represents a RENAME TABLE statement.
 	RenameTable struct {
@@ -561,7 +544,7 @@ func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
 func (*SetTransaction) iStatement()    {}
 func (*DropDatabase) iStatement()      {}
-func (*DDL) iStatement()               {}
+func (*Flush) iStatement()             {}
 func (*Show) iStatement()              {}
 func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
@@ -591,7 +574,7 @@ func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 
-func (*DDL) iDDLStatement()           {}
+func (*Flush) iDDLStatement()         {}
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
 func (*CreateTable) iDDLStatement()   {}
@@ -622,7 +605,7 @@ func (*Validation) iAlterOption()              {}
 func (TableOptions) iAlterOption()             {}
 
 // IsFullyParsed implements the DDLStatement interface
-func (*DDL) IsFullyParsed() bool {
+func (*Flush) IsFullyParsed() bool {
 	return false
 }
 
@@ -692,8 +675,8 @@ func (node *AlterView) GetTable() TableName {
 }
 
 // GetTable implements the DDLStatement interface
-func (node *DDL) GetTable() TableName {
-	return node.Table
+func (node *Flush) GetTable() TableName {
+	return TableName{}
 }
 
 // GetTable implements the DDLStatement interface
@@ -712,8 +695,8 @@ func (node *RenameTable) GetTable() TableName {
 }
 
 // GetAction implements the DDLStatement interface
-func (node *DDL) GetAction() DDLAction {
-	return node.Action
+func (node *Flush) GetAction() DDLAction {
+	return FlushDDLAction
 }
 
 // GetAction implements the DDLStatement interface
@@ -757,8 +740,8 @@ func (node *DropView) GetAction() DDLAction {
 }
 
 // GetOptLike implements the DDLStatement interface
-func (node *DDL) GetOptLike() *OptLike {
-	return node.OptLike
+func (node *Flush) GetOptLike() *OptLike {
+	return nil
 }
 
 // GetOptLike implements the DDLStatement interface
@@ -802,8 +785,8 @@ func (node *DropView) GetOptLike() *OptLike {
 }
 
 // GetTableSpec implements the DDLStatement interface
-func (node *DDL) GetTableSpec() *TableSpec {
-	return node.TableSpec
+func (node *Flush) GetTableSpec() *TableSpec {
+	return nil
 }
 
 // GetTableSpec implements the DDLStatement interface
@@ -847,8 +830,8 @@ func (node *DropView) GetTableSpec() *TableSpec {
 }
 
 // GetFromTables implements the DDLStatement interface
-func (node *DDL) GetFromTables() TableNames {
-	return node.FromTables
+func (node *Flush) GetFromTables() TableNames {
+	return nil
 }
 
 // GetFromTables implements the DDLStatement interface
@@ -892,8 +875,8 @@ func (node *AlterView) GetFromTables() TableNames {
 }
 
 // SetFromTables implements DDLStatement.
-func (node *DDL) SetFromTables(tables TableNames) {
-	node.FromTables = tables
+func (node *Flush) SetFromTables(tables TableNames) {
+	// irrelevant
 }
 
 // SetFromTables implements DDLStatement.
@@ -937,8 +920,8 @@ func (node *AlterView) SetFromTables(tables TableNames) {
 }
 
 // GetToTables implements the DDLStatement interface
-func (node *DDL) GetToTables() TableNames {
-	return node.ToTables
+func (node *Flush) GetToTables() TableNames {
+	return nil
 }
 
 // GetToTables implements the DDLStatement interface
@@ -988,14 +971,8 @@ func (node *DropView) GetToTables() TableNames {
 }
 
 // AffectedTables returns the list table names affected by the DDLStatement.
-func (node *DDL) AffectedTables() TableNames {
-	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
-		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
-		list = append(list, node.FromTables...)
-		list = append(list, node.ToTables...)
-		return list
-	}
-	return TableNames{node.Table}
+func (node *Flush) AffectedTables() TableNames {
+	return nil
 }
 
 // AffectedTables returns the list table names affected by the DDLStatement.
@@ -1049,10 +1026,7 @@ func (node *DropView) AffectedTables() TableNames {
 }
 
 // SetTable implements DDLStatement.
-func (node *DDL) SetTable(qualifier string, name string) {
-	node.Table.Qualifier = NewTableIdent(qualifier)
-	node.Table.Name = NewTableIdent(name)
-}
+func (node *Flush) SetTable(qualifier string, name string) {}
 
 // SetTable implements DDLStatement.
 func (node *TruncateTable) SetTable(qualifier string, name string) {
@@ -1948,38 +1922,8 @@ func (node *DropDatabase) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *DDL) Format(buf *TrackedBuffer) {
-	switch node.Action {
-	case CreateDDLAction:
-		if node.OptLike != nil {
-			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.OptLike)
-		} else if node.TableSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.TableSpec)
-		} else {
-			buf.astPrintf(node, "%s table %v", CreateStr, node.Table)
-		}
-	case DropDDLAction:
-		exists := ""
-		if node.IfExists {
-			exists = " if exists"
-		}
-		buf.astPrintf(node, "%s table%s %v", DropStr, exists, node.FromTables)
-	case RenameDDLAction:
-		buf.astPrintf(node, "%s table %v to %v", RenameStr, node.FromTables[0], node.ToTables[0])
-		for i := 1; i < len(node.FromTables); i++ {
-			buf.astPrintf(node, ", %v to %v", node.FromTables[i], node.ToTables[i])
-		}
-	case AlterDDLAction:
-		if node.PartitionSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", AlterStr, node.Table, node.PartitionSpec)
-		} else {
-			buf.astPrintf(node, "%s table %v", AlterStr, node.Table)
-		}
-	case FlushDDLAction:
-		buf.astPrintf(node, "%s", FlushStr)
-	default:
-		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
-	}
+func (node *Flush) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s", FlushStr)
 }
 
 // Format formats the node.

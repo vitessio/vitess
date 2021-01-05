@@ -52,14 +52,12 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		if err != nil {
 			return nil, nil, err
 		}
-	case *sqlparser.DDL:
-		// For DDL, it is only required that the keyspace exist
-		// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
-		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+	case *sqlparser.Flush:
+		// For Flush, we route it to the default keyspace if it is set, otherwise we throw an error
+		destination, keyspace, _, err = vschema.TargetDestination("")
 		if err != nil {
 			return nil, nil, err
 		}
-		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(vschema, ddl)
 		if err != nil {
