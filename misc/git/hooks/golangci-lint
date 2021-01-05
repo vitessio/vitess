@@ -28,9 +28,8 @@ if [ $? -eq 1 ]; then
   curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.34.1
 fi
 
-#golangci-lint run --disable=ineffassign,unused,gosimple,staticcheck,errcheck,structcheck,varcheck,deadcode
 for gopackage in $gopackages
 do
  echo "Linting $gopackage"
- golangci-lint run $gopackage
+ golangci-lint run --fast $gopackage
 done
