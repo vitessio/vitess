@@ -96,6 +96,9 @@ install-testing: build
 	mkdir -p "$${PREFIX}/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
+grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
+	make -C go/vt/vtctl/grpcvtctldclient
+
 parser:
 	make -C go/vt/sqlparser
 
