@@ -43,7 +43,7 @@ import (
 
 	rice "github.com/GeertJohan/go.rice"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"

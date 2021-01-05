@@ -21,7 +21,7 @@ import (
 	"path"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"

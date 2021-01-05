@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/sqlparser"

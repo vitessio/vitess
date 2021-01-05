@@ -54,6 +54,7 @@ require (
 	github.com/klauspost/pgzip v1.2.4
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/krishicks/yaml-patch v0.0.10
+	github.com/looplab/fsm v0.2.0
 	github.com/magiconair/properties v1.8.1
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8
 	github.com/martini-contrib/gzip v0.0.0-20151124214156-6c035326b43f

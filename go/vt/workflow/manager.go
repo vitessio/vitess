@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	gouuid "github.com/pborman/uuid"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"

@@ -25,8 +25,9 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -308,7 +309,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	time.Sleep(*srvTopoCacheTTL)
 
-	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2)
+	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
 	_, err = rs.GetSrvKeyspace(timeoutCtx, "test_cell", "test_ks")
 	wantErr := "timed out waiting for keyspace"
 	if err == nil || err.Error() != wantErr {
@@ -612,7 +613,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 
 	time.Sleep(*srvTopoCacheTTL)
 
-	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2)
+	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
 	wantErr := "timed out waiting for keyspace names"
 	if err == nil || err.Error() != wantErr {

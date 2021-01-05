@@ -24,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
