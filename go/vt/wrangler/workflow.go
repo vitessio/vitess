@@ -225,32 +225,41 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 }
 
 // SwitchTraffic switches traffic forward for tablet_types passed
-func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection) error {
+func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection) (*[]string, error) {
+	var dryRunResults []string
+	var rdDryRunResults, wrDryRunResults *[]string
+	var err error
 	if !vrw.Exists() {
-		return fmt.Errorf("workflow has not yet been started")
+		return nil, fmt.Errorf("workflow has not yet been started")
 	}
 	vrw.params.Direction = direction
 	hasReplica, hasRdonly, hasMaster, err := vrw.parseTabletTypes()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if hasReplica || hasRdonly {
-		if err := vrw.switchReads(); err != nil {
-			return err
+		if rdDryRunResults, err = vrw.switchReads(); err != nil {
+			return nil, err
 		}
+	}
+	if rdDryRunResults != nil {
+		dryRunResults = append(dryRunResults, *rdDryRunResults...)
 	}
 	if hasMaster {
-		if err := vrw.switchWrites(); err != nil {
-			return err
+		if wrDryRunResults, err = vrw.switchWrites(); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	if wrDryRunResults != nil {
+		dryRunResults = append(dryRunResults, *wrDryRunResults...)
+	}
+	return &dryRunResults, nil
 }
 
 // ReverseTraffic switches traffic backwards for tablet_types passed
-func (vrw *VReplicationWorkflow) ReverseTraffic() error {
+func (vrw *VReplicationWorkflow) ReverseTraffic() (*[]string, error) {
 	if !vrw.Exists() {
-		return fmt.Errorf("workflow has not yet been started")
+		return nil, fmt.Errorf("workflow has not yet been started")
 	}
 	return vrw.SwitchTraffic(DirectionBackward)
 }
@@ -262,10 +271,10 @@ const (
 )
 
 // Complete cleans up a successful workflow
-func (vrw *VReplicationWorkflow) Complete() error {
+func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 	ws := vrw.ws
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
-		return fmt.Errorf(ErrWorkflowNotFullySwitched)
+		return nil, fmt.Errorf(ErrWorkflowNotFullySwitched)
 	}
 	var renameTable TableRemovalType
 	if vrw.params.RenameTables {
@@ -273,11 +282,13 @@ func (vrw *VReplicationWorkflow) Complete() error {
 	} else {
 		renameTable = DropTable
 	}
-	if _, err := vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable, vrw.params.KeepData,
-		false, false); err != nil {
-		return err
+	var dryRunResults *[]string
+	var err error
+	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable, vrw.params.KeepData,
+		false, vrw.params.DryRun); err != nil {
+		return nil, err
 	}
-	return nil
+	return dryRunResults, nil
 }
 
 // Cancel deletes all artifacts from a workflow which has not yet been switched
@@ -347,7 +358,7 @@ func (vrw *VReplicationWorkflow) initReshard() error {
 		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes)
 }
 
-func (vrw *VReplicationWorkflow) switchReads() error {
+func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {
 	log.Infof("In VReplicationWorkflow.switchReads() for %+v", vrw)
 	var tabletTypes []topodatapb.TabletType
 	for _, tt := range vrw.getTabletTypes() {
@@ -355,16 +366,20 @@ func (vrw *VReplicationWorkflow) switchReads() error {
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
-
-	_, err := vrw.wr.SwitchReads(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, tabletTypes,
-		vrw.getCellsAsArray(), vrw.params.Direction, false)
+	var dryRunResults *[]string
+	var err error
+	dryRunResults, err = vrw.wr.SwitchReads(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, tabletTypes,
+		vrw.getCellsAsArray(), vrw.params.Direction, vrw.params.DryRun)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return dryRunResults, nil
 }
 
-func (vrw *VReplicationWorkflow) switchWrites() error {
+func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
+	var journalID int64
+	var dryRunResults *[]string
+	var err error
 	log.Infof("In VReplicationWorkflow.switchWrites() for %+v", vrw)
 	if vrw.params.Direction == DirectionBackward {
 		keyspace := vrw.params.SourceKeyspace
@@ -373,13 +388,13 @@ func (vrw *VReplicationWorkflow) switchWrites() error {
 		vrw.params.Workflow = reverseName(vrw.params.Workflow)
 		log.Infof("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw)
 	}
-	journalID, _, err := vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
-		false, vrw.params.Direction == DirectionBackward, vrw.params.EnableReverseReplication, false)
+	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
+		false, vrw.params.Direction == DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.Infof("switchWrites succeeded with journal id %s", journalID)
-	return nil
+	return dryRunResults, nil
 }
 
 // endregion
