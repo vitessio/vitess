@@ -567,7 +567,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	return ts.id, sw.logs(), nil
 }
 
-// DropTargets cleans up target tables, shards and blacklisted tables after a MoveTables/Reshard is completed
+// DropTargets cleans up target tables, shards and blacklisted tables if a MoveTables/Reshard is aborted
 func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
@@ -627,6 +627,10 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return err
 	}
+	if err := sw.deleteRoutingRules(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -676,6 +680,7 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
 				return nil, err
 			}
+
 		case binlogdatapb.MigrationType_SHARDS:
 			log.Infof("Removing shards")
 			if err := sw.dropSourceShards(ctx); err != nil {
@@ -1474,8 +1479,8 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 
 }
 
-func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
-	return ts.forAllSources(func(source *tsSource) error {
+func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) (err error) {
+	err = ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
 			if removalType == DropTable {
@@ -1495,6 +1500,22 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType T
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.sourceKeyspace)
+}
+
+func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Context, keyspace string) error {
+	vschema, err := ts.wr.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	for _, tableName := range ts.tables {
+		delete(vschema.Tables, tableName)
+	}
+	return ts.wr.ts.SaveVSchema(ctx, keyspace, vschema)
 }
 
 // FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
@@ -1546,7 +1567,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	return ts.forAllTargets(func(target *tsTarget) error {
+	err := ts.forAllTargets(func(target *tsTarget) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", target.master.DbName(), tableName)
 			ts.wr.Logger().Infof("Dropping table %s.%s\n", target.master.DbName(), tableName)
@@ -1560,6 +1581,12 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.targetKeyspace)
+
 }
 
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
@@ -1573,6 +1600,28 @@ func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
 		ts.wr.Logger().Infof("Deleted shard %s.%s\n", target.si.Keyspace(), target.si.ShardName())
 		return nil
 	})
+}
+
+func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
+	rules, err := ts.wr.getRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	for _, table := range ts.tables {
+		delete(rules, table)
+		delete(rules, table+"@replica")
+		delete(rules, table+"@rdonly")
+		delete(rules, ts.targetKeyspace+"."+table)
+		delete(rules, ts.targetKeyspace+"."+table+"@replica")
+		delete(rules, ts.targetKeyspace+"."+table+"@rdonly")
+		delete(rules, ts.sourceKeyspace+"."+table)
+		delete(rules, ts.sourceKeyspace+"."+table+"@replica")
+		delete(rules, ts.sourceKeyspace+"."+table+"@rdonly")
+	}
+	if err := ts.wr.saveRoutingRules(ctx, rules); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, error) {
