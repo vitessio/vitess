@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Functionality of this Executor is tested in go/test/endtoend/onlineddl/onlineddl_test.go
+*/
+
 package onlineddl
 
 import (
