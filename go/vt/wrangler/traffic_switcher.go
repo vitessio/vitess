@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -49,6 +50,8 @@ import (
 const (
 	frozenStr      = "FROZEN"
 	errorNoStreams = "no streams found in keyspace %s for: %s"
+	// use pt-osc's naming convention, this format also ensures vstreamer ignores such tables
+	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 )
 
 // TrafficSwitchDirection specifies the switching direction.
@@ -1478,14 +1481,18 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 
 }
 
-func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) (err error) {
-	err = ts.forAllSources(func(source *tsSource) error {
+func getRenameFileName(tableName string) string {
+	return fmt.Sprintf(renameTableTemplate, tableName)
+}
+
+func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+	err := ts.forAllSources(func(source *tsSource) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", source.master.DbName(), tableName)
 			if removalType == DropTable {
 				ts.wr.Logger().Infof("Dropping table %s.%s\n", source.master.DbName(), tableName)
 			} else {
-				renameName := fmt.Sprintf("_%.63s", tableName)
+				renameName := getRenameFileName(tableName)
 				ts.wr.Logger().Infof("Renaming table %s.%s to %s.%s\n", source.master.DbName(), tableName, source.master.DbName(), renameName)
 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", source.master.DbName(), tableName, source.master.DbName(), renameName)
 			}
