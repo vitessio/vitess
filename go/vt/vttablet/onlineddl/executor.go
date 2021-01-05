@@ -1030,7 +1030,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				return nil
 			}
 
-			// We transform a DRPO TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
+			// We transform a DROP TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
 
 			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 			if err != nil {
