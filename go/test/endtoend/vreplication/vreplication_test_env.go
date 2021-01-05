@@ -54,7 +54,7 @@ var dryRunResultsReadCustomerShard = []string{
 	"Unlock keyspace product",
 }
 
-var dryrunresultsswitchwritesM2m3 = []string{
+var dryRunResultsSwitchWritesM2m3 = []string{
 	"Lock keyspace merchant",
 	"Stop streams on keyspace merchant",
 	"/      Id 2 Keyspace customer Shard -80 Rules rules:<match:\"morders\" filter:\"select * from orders where in_keyrange(mname, 'merchant.md5', '-80')\" >  at Position ",
@@ -97,7 +97,7 @@ var dryrunresultsswitchwritesM2m3 = []string{
 var dryRunResultsDropSourcesDropCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Dropping following tables:",
+	"Dropping following tables from the database and from the vschema for keyspace product:",
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType DROP TABLE",
 	"Blacklisted tables customer will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
@@ -106,6 +106,7 @@ var dryRunResultsDropSourcesDropCustomerShard = []string{
 	"Delete vreplication streams on target:",
 	"	Keyspace customer Shard -80 Workflow p2c DbName vt_customer Tablet 200",
 	"	Keyspace customer Shard 80- Workflow p2c DbName vt_customer Tablet 300",
+	"Routing rules for participating tables will be deleted",
 	"Unlock keyspace customer",
 	"Unlock keyspace product",
 }
@@ -113,7 +114,7 @@ var dryRunResultsDropSourcesDropCustomerShard = []string{
 var dryRunResultsDropSourcesRenameCustomerShard = []string{
 	"Lock keyspace product",
 	"Lock keyspace customer",
-	"Dropping following tables:",
+	"Dropping following tables from the database and from the vschema for keyspace product:",
 	"	Keyspace product Shard 0 DbName vt_product Tablet 100 Table customer RemovalType RENAME TABLE",
 	"Blacklisted tables customer will be removed from:",
 	"	Keyspace product Shard 0 Tablet 100",
@@ -122,6 +123,7 @@ var dryRunResultsDropSourcesRenameCustomerShard = []string{
 	"Delete vreplication streams on target:",
 	"	Keyspace customer Shard -80 Workflow p2c DbName vt_customer Tablet 200",
 	"	Keyspace customer Shard 80- Workflow p2c DbName vt_customer Tablet 300",
+	"Routing rules for participating tables will be deleted",
 	"Unlock keyspace customer",
 	"Unlock keyspace product",
 }
