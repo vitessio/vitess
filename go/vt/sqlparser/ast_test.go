@@ -187,8 +187,7 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a"},
 	}, {
 		query: "rename table a to b",
-		output: &DDL{
-			Action: RenameDDLAction,
+		output: &RenameTable{
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 			},
@@ -199,8 +198,7 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a", "b"},
 	}, {
 		query: "rename table a to b, c to d",
-		output: &DDL{
-			Action: RenameDDLAction,
+		output: &RenameTable{
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 				TableName{Name: NewTableIdent("c")},
