@@ -2292,10 +2292,14 @@ drop_statement:
   {
     $$ = &DropTable{FromTables: $4, IfExists: $3}
   }
-| DROP INDEX id_or_var ON table_name ddl_skip_to_end
+| DROP INDEX id_or_var ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterDDLAction, Table: $5}
+    if $3.Lowered() == "primary" {
+      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
+    } else {
+      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3.String()}},$6...)}
+    }
   }
 | DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
   {

@@ -1234,8 +1234,11 @@ var (
 		input:  "drop view if exists a cascade",
 		output: "drop view if exists a",
 	}, {
-		input:  "drop index b on a",
-		output: "alter table a",
+		input:  "drop index b on a lock = none algorithm default",
+		output: "alter table a drop key b, lock none, algorithm = default",
+	}, {
+		input:  "drop index `PRIMARY` on a lock none",
+		output: "alter table a drop primary key, lock none",
 	}, {
 		input:  "analyze table a",
 		output: "otherread",
@@ -1932,7 +1935,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "drop table if exists B",
 	}, {
 		input:  "drop index b on A",
-		output: "alter table A",
+		output: "alter table A drop key b",
 	}, {
 		input: "select a from B",
 	}, {
