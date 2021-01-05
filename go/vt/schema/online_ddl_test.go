@@ -97,12 +97,16 @@ func TestIsOnlineDDLUUID(t *testing.T) {
 }
 
 func TestGetGCUUID(t *testing.T) {
-	for i := 0; i < 20; i++ {
+	uuids := map[string]bool{}
+	count := 20
+	for i := 0; i < count; i++ {
 		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", DDLStrategyDirect, "", "")
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
 		assert.True(t, IsGCUUID(gcUUID))
+		uuids[gcUUID] = true
 	}
+	assert.Equal(t, count, len(uuids))
 }
 
 func TestGetActionStr(t *testing.T) {
