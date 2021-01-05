@@ -34,4 +34,7 @@ ENV PATH="/var/opt/etcd:${PATH}"
 RUN mkdir /vt/local
 COPY examples/local /vt/local
 
+RUN mkdir /vt/common
+COPY examples/common /vt/common
+
 CMD cd /vt/local && ./101_initial_cluster.sh && /bin/bash
