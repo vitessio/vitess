@@ -302,30 +302,6 @@ func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
 }
 
-func replaceDDLFromTables(newNode, parent SQLNode) {
-	parent.(*DDL).FromTables = newNode.(TableNames)
-}
-
-func replaceDDLOptLike(newNode, parent SQLNode) {
-	parent.(*DDL).OptLike = newNode.(*OptLike)
-}
-
-func replaceDDLPartitionSpec(newNode, parent SQLNode) {
-	parent.(*DDL).PartitionSpec = newNode.(*PartitionSpec)
-}
-
-func replaceDDLTable(newNode, parent SQLNode) {
-	parent.(*DDL).Table = newNode.(TableName)
-}
-
-func replaceDDLTableSpec(newNode, parent SQLNode) {
-	parent.(*DDL).TableSpec = newNode.(*TableSpec)
-}
-
-func replaceDDLToTables(newNode, parent SQLNode) {
-	parent.(*DDL).ToTables = newNode.(TableNames)
-}
-
 func replaceDeleteComments(newNode, parent SQLNode) {
 	parent.(*Delete).Comments = newNode.(Comments)
 }
@@ -1265,14 +1241,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
 
-	case *DDL:
-		a.apply(node, n.FromTables, replaceDDLFromTables)
-		a.apply(node, n.OptLike, replaceDDLOptLike)
-		a.apply(node, n.PartitionSpec, replaceDDLPartitionSpec)
-		a.apply(node, n.Table, replaceDDLTable)
-		a.apply(node, n.TableSpec, replaceDDLTableSpec)
-		a.apply(node, n.ToTables, replaceDDLToTables)
-
 	case *Default:
 
 	case *Delete:
@@ -1313,6 +1281,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *Flush:
 
 	case *Force:
 

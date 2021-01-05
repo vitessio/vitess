@@ -323,3 +323,18 @@
     "Query": "rename table a to b"
   }
 }
+
+# Flush statement
+"flush x"
+{
+  "QueryType": "DDL",
+  "Original": "flush x",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "flush x"
+  }
+}
