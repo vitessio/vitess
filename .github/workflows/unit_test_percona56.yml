@@ -4,7 +4,6 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    name: unit
 
     steps:
     - name: Set up Go
@@ -55,7 +54,7 @@ jobs:
       run: |
         make tools
 
-    - name: Unit Test (percona56)
+    - name: Run test
       timeout-minutes: 30
       run: |
         eatmydata -- make unit_test
