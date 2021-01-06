@@ -1243,11 +1243,20 @@ var (
 		input:  "analyze table a",
 		output: "otherread",
 	}, {
-		input:  "flush tables",
-		output: "flush",
+		input: "flush tables",
 	}, {
-		input:  "flush tables with read lock",
-		output: "flush",
+		input: "flush tables with read lock",
+	}, {
+		input: "flush tables a, c.v, b",
+	}, {
+		input: "flush local tables a, c.v, b with read lock",
+	}, {
+		input: "flush tables a, c.v, b for export",
+	}, {
+		input: "flush local binary logs, engine logs, error logs, general logs, hosts, logs, privileges, optimizer_costs",
+	}, {
+		input:  "flush no_write_to_binlog slow logs, status, user_resources, relay logs, relay logs for channel s",
+		output: "flush local slow logs, status, user_resources, relay logs, relay logs for channel s",
 	}, {
 		input:  "show binary logs",
 		output: "show binary logs",
