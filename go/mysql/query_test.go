@@ -74,42 +74,6 @@ func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 	return prepare, result
 }
 
-type loggingHandler struct {
-	log []string
-}
-
-var _ Handler = (*loggingHandler)(nil)
-
-func (l loggingHandler) NewConnection(c *Conn) {
-	panic("implement me")
-}
-
-func (l loggingHandler) ConnectionClosed(c *Conn) {
-	panic("implement me")
-}
-
-func (l loggingHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
-	l.log = append(l.log, query)
-	//callback(&sqltypes.Result{})
-	return nil
-}
-
-func (l loggingHandler) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	panic("implement me")
-}
-
-func (l loggingHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
-}
-
-func (l loggingHandler) WarningCount(c *Conn) uint16 {
-	return 0
-}
-
-func (l loggingHandler) ComResetConnection(c *Conn) {
-	panic("implement me")
-}
-
 func TestComInitDB(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t, false)
 	defer func() {
@@ -133,7 +97,6 @@ func TestComInitDB(t *testing.T) {
 }
 
 func TestComSetOption(t *testing.T) {
-	//t.SkipNow()
 	listener, sConn, cConn := createSocketPair(t, false)
 	defer func() {
 		listener.Close()
