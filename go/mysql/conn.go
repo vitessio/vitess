@@ -400,6 +400,21 @@ func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 	return &dataBuffer{data: &data, fromPool: false, sequences: sequences}, nil
 }
 
+func (c *Conn) readPacketWithSeq() (*dataBuffer, error) {
+	buffer, err := c.readEphemeralPacket()
+	if err != nil {
+		return nil, err
+	}
+	for _, sequence := range buffer.sequences {
+		if sequence != c.sequence {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+		}
+		c.sequence++
+	}
+	buffer.sequences = nil
+	return buffer, err
+}
+
 // readEphemeralPacketDirect attempts to read a packet from the socket directly.
 // It needs to be used for the first handshake packet the server receives,
 // so we do't buffer the SSL negotiation packet. As a shortcut, only
@@ -412,11 +427,15 @@ func (c *Conn) readEphemeralPacketDirect() (*dataBuffer, error) {
 	if err != nil {
 		return nil, err
 	}
-	sequences := []uint8{sequence}
+	if sequence != c.sequence {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
+	c.sequence++
+
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
-		return &dataBuffer{fromPool: false, sequences: sequences}, nil
+		return &dataBuffer{fromPool: false}, nil
 	}
 
 	if length < MaxPacketSize {
@@ -424,7 +443,7 @@ func (c *Conn) readEphemeralPacketDirect() (*dataBuffer, error) {
 		if _, err := io.ReadFull(r, *bytes); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
-		return &dataBuffer{data: bytes, fromPool: true, sequences: sequences}, nil
+		return &dataBuffer{data: bytes, fromPool: true}, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")

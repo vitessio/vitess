@@ -184,17 +184,11 @@ func (c *Conn) Ping() error {
 	if err := c.writeEphemeralPacket(writeBuffer); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
-	readBuffer, err := c.readEphemeralPacket()
+	readBuffer, err := c.readPacketWithSeq()
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer readBuffer.release()
-	for _, sequence := range readBuffer.sequences {
-		if sequence != c.sequence {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-		}
-		c.sequence++
-	}
 	data := *readBuffer.data
 	switch data[0] {
 	case OKPacket:

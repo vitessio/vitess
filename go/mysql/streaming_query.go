@@ -17,9 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -76,15 +73,9 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	// Read the EOF after the fields if necessary.
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		buffer, err := c.readEphemeralPacket()
+		buffer, err := c.readPacketWithSeq()
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-		}
-		for _, sequence := range buffer.sequences {
-			if sequence != c.sequence {
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-			}
-			c.sequence++
 		}
 		data := *buffer.data
 		defer buffer.release()

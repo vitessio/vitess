@@ -85,17 +85,11 @@ func (c *Conn) writeComSetOption(operation uint16) error {
 // readColumnDefinition reads the next Column Definition packet.
 // Returns a SQLError.
 func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
-	buffer, err := c.readEphemeralPacket()
+	buffer, err := c.readPacketWithSeq()
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer buffer.release()
-	for _, sequence := range buffer.sequences {
-		if sequence != c.sequence {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-		}
-		c.sequence++
-	}
 	colDef := *buffer.data
 	// Catalog is ignored, always set to "def"
 	pos, ok := skipLenEncString(colDef, 0)
@@ -189,17 +183,11 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 // readColumnDefinition that only fills in the Type.
 // Returns a SQLError.
 func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
-	buffer, err := c.readEphemeralPacket()
+	buffer, err := c.readPacketWithSeq()
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer buffer.release()
-	for _, sequence := range buffer.sequences {
-		if sequence != c.sequence {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-		}
-		c.sequence++
-	}
 	colDef := *buffer.data
 	// catalog, schema, table, orgTable, name and orgName are
 	// strings, all skipped.
@@ -399,17 +387,10 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		buffer, err := c.readEphemeralPacket()
+		buffer, err := c.readPacketWithSeq()
 		if err != nil {
 			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		for _, sequence := range buffer.sequences {
-			if sequence != c.sequence {
-				return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-			}
-			c.sequence++
-		}
-
 		data := *buffer.data
 		if isEOFPacket(data) {
 
@@ -429,19 +410,11 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 
 	// read each row until EOF or OK packet.
 	for {
-		buffer, err := c.readEphemeralPacket()
+		buffer, err := c.readPacketWithSeq()
 		if err != nil {
 			return nil, false, 0, err
 		}
-		for _, sequence := range buffer.sequences {
-			if sequence != c.sequence {
-				return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-			}
-			c.sequence++
-		}
-
 		data := *buffer.data
-
 		// TODO: harshit - the EOF packet is deprecated as of MySQL 5.7.5.
 		// https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
 		// It will be OK Packet with EOF Header. This needs to change in the code here.
@@ -501,15 +474,9 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 // drainResults will read all packets for a result set and ignore them.
 func (c *Conn) drainResults() error {
 	for {
-		buffer, err := c.readEphemeralPacket()
+		buffer, err := c.readPacketWithSeq()
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-		}
-		for _, sequence := range buffer.sequences {
-			if sequence != c.sequence {
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-			}
-			c.sequence++
 		}
 		data := *buffer.data
 		if isEOFPacket(data) {
@@ -524,17 +491,11 @@ func (c *Conn) drainResults() error {
 }
 
 func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
-	buffer, err := c.readEphemeralPacket()
+	buffer, err := c.readPacketWithSeq()
 	if err != nil {
 		return 0, nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer buffer.release()
-	for _, sequence := range buffer.sequences {
-		if sequence != c.sequence {
-			return 0, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-		}
-		c.sequence++
-	}
 	data := *buffer.data
 	if len(data) == 0 {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")

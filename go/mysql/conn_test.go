@@ -133,7 +133,28 @@ func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 	}
 }
 
-func verifyPacketCommsSpecificWBuffers(
+func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
+	write func(t *testing.T, cConn *Conn, data []byte),
+	read func() ([]byte, error)) {
+	// Have to do it in the background if it cannot be buffered.
+	// Note we have to wait for it to finish at the end of the
+	// test, as the write may write all the data to the socket,
+	// and the flush may not be done after we're done with the read.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		write(t, cConn, data)
+		wg.Done()
+	}()
+
+	received, err := read()
+	if err != nil || !bytes.Equal(data, received) {
+		t.Fatalf("ReadPacket failed: %v %v", received, err)
+	}
+	wg.Wait()
+}
+
+func verifyPacketCommsSpecificWBuf(
 	t *testing.T,
 	cConn *Conn,
 	data []byte,
@@ -167,53 +188,24 @@ func verifyPacketCommsSpecificWBuffers(
 	wg.Wait()
 }
 
-func verifyPacketCommsSpecific(
-	t *testing.T,
-	cConn *Conn,
-	data []byte,
-	name string,
-	write func(t *testing.T, cConn *Conn, data []byte),
-	read func() ([]byte, error)) {
-	t.Run(fmt.Sprintf("verifyPacketCommsSpecific %s data of length %d", name, len(data)), func(t *testing.T) {
-		// Have to do it in the background if it cannot be buffered.
-		// Note we have to wait for it to finish at the end of the
-		// test, as the write may write all the data to the socket,
-		// and the flush may not be done after we're done with the read.
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			write(t, cConn, data)
-			wg.Done()
-		}()
-
-		received, err := read()
-		if err != nil || !bytes.Equal(data, received) {
-			t.Fatalf("ReadPacket failed: %v %v", received, err)
-		}
-		wg.Wait()
-	})
-}
-
 // Write a packet on one side, read it on the other, check it's
 // correct.  We use all possible read and write methods.
 func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
-	cConn.sequence = 0
-	sConn.sequence = 0
 	// All three writes, with ReadPacket.
-	verifyPacketCommsSpecific(t, cConn, data, "useWritePacket ReadPacket", useWritePacket, sConn.ReadPacket)
-	verifyPacketCommsSpecific(t, cConn, data, "useWriteEphemeralPacketBuffered ReadPacket", useWriteEphemeralPacketBuffered, sConn.ReadPacket)
-	verifyPacketCommsSpecific(t, cConn, data, "useWriteEphemeralPacketDirect ReadPacket", useWriteEphemeralPacketDirect, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadPacket)
 
 	// All three writes, with readEphemeralPacket.
-	verifyPacketCommsSpecificWBuffers(t, cConn, data, useWritePacket, sConn.readEphemeralPacket)
-	verifyPacketCommsSpecificWBuffers(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readEphemeralPacket)
-	verifyPacketCommsSpecificWBuffers(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacket)
+	verifyPacketCommsSpecificWBuf(t, cConn, data, useWritePacket, sConn.readPacketWithSeq)
+	verifyPacketCommsSpecificWBuf(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readPacketWithSeq)
+	verifyPacketCommsSpecificWBuf(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readPacketWithSeq)
 
 	// All three writes, with readEphemeralPacketDirect, if size allows it.
 	if len(data) < MaxPacketSize {
-		verifyPacketCommsSpecificWBuffers(t, cConn, data, useWritePacket, sConn.readEphemeralPacketDirect)
-		verifyPacketCommsSpecificWBuffers(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readEphemeralPacketDirect)
-		verifyPacketCommsSpecificWBuffers(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacketDirect)
+		verifyPacketCommsSpecificWBuf(t, cConn, data, useWritePacket, sConn.readEphemeralPacketDirect)
+		verifyPacketCommsSpecificWBuf(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readEphemeralPacketDirect)
+		verifyPacketCommsSpecificWBuf(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacketDirect)
 	}
 }
 
@@ -247,9 +239,9 @@ func TestPackets(t *testing.T) {
 	verifyPacketComms(t, cConn, sConn, data)
 
 	// Over the limit, two packets.
-	data = make([]byte, MaxPacketSize+995)
+	data = make([]byte, MaxPacketSize+1000)
 	data[0] = 0xab
-	data[MaxPacketSize+994] = 0xef
+	data[MaxPacketSize+999] = 0xef
 	verifyPacketComms(t, cConn, sConn, data)
 }
 
