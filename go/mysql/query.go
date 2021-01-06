@@ -92,8 +92,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	defer buffer.release()
 	for _, sequence := range buffer.sequences {
 		if sequence != c.sequence {
-			// TODO: Fix it
-			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 		}
 		c.sequence++
 	}
@@ -197,8 +196,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 	defer buffer.release()
 	for _, sequence := range buffer.sequences {
 		if sequence != c.sequence {
-			// TODO: Fix it
-			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 		}
 		c.sequence++
 	}
@@ -407,8 +405,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 		for _, sequence := range buffer.sequences {
 			if sequence != c.sequence {
-				// TODO: Fix it
-				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+				return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 			}
 			c.sequence++
 		}
@@ -438,8 +435,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 		for _, sequence := range buffer.sequences {
 			if sequence != c.sequence {
-				// TODO: Fix it
-				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+				return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 			}
 			c.sequence++
 		}
@@ -511,8 +507,7 @@ func (c *Conn) drainResults() error {
 		}
 		for _, sequence := range buffer.sequences {
 			if sequence != c.sequence {
-				// TODO: Fix it
-				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+				return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 			}
 			c.sequence++
 		}
@@ -536,8 +531,7 @@ func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
 	defer buffer.release()
 	for _, sequence := range buffer.sequences {
 		if sequence != c.sequence {
-			// TODO: Fix it
-			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			return 0, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 		}
 		c.sequence++
 	}

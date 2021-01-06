@@ -191,8 +191,7 @@ func (c *Conn) Ping() error {
 	defer readBuffer.release()
 	for _, sequence := range readBuffer.sequences {
 		if sequence != c.sequence {
-			// TODO: Fix it
-			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 		}
 		c.sequence++
 	}

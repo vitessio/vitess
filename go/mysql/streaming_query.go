@@ -17,7 +17,8 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -81,8 +82,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		}
 		for _, sequence := range buffer.sequences {
 			if sequence != c.sequence {
-				// TODO: Fix it
-				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+				return vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 			}
 			c.sequence++
 		}

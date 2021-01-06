@@ -805,6 +805,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	c.sequence = 0
 	for _, sequence := range buffer.sequences {
 		if sequence != c.sequence {
+			log.Warningf("invalid sequence, expected %v got %v", c.sequence, sequence)
 			return false
 		}
 		c.sequence++
