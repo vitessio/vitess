@@ -53,12 +53,6 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		if err != nil {
 			return nil, nil, err
 		}
-	case *sqlparser.Flush:
-		// For Flush, we route it to the default keyspace if it is set, otherwise we throw an error
-		destination, keyspace, _, err = vschema.TargetDestination("")
-		if err != nil {
-			return nil, nil, err
-		}
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(vschema, ddl)
 		if err != nil {
