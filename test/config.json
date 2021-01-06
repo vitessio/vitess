@@ -99,7 +99,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 21, 
+			"Shard": 21,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -567,7 +567,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 22,
+			"Shard": "vreplication_multicell",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -576,7 +576,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 23,
+			"Shard": "vreplication_cellalias",
 			"RetryMax": 0,
 			"Tags": []
 		},
