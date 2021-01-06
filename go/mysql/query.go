@@ -90,7 +90,13 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer buffer.release()
-
+	for _, sequence := range buffer.sequences {
+		if sequence != c.sequence {
+			// TODO: Fix it
+			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+		}
+		c.sequence++
+	}
 	colDef := *buffer.data
 	// Catalog is ignored, always set to "def"
 	pos, ok := skipLenEncString(colDef, 0)
@@ -189,7 +195,13 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer buffer.release()
-
+	for _, sequence := range buffer.sequences {
+		if sequence != c.sequence {
+			// TODO: Fix it
+			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+		}
+		c.sequence++
+	}
 	colDef := *buffer.data
 	// catalog, schema, table, orgTable, name and orgName are
 	// strings, all skipped.
@@ -393,6 +405,14 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		if err != nil {
 			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
+		for _, sequence := range buffer.sequences {
+			if sequence != c.sequence {
+				// TODO: Fix it
+				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			}
+			c.sequence++
+		}
+
 		data := *buffer.data
 		if isEOFPacket(data) {
 
@@ -416,6 +436,14 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		if err != nil {
 			return nil, false, 0, err
 		}
+		for _, sequence := range buffer.sequences {
+			if sequence != c.sequence {
+				// TODO: Fix it
+				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			}
+			c.sequence++
+		}
+
 		data := *buffer.data
 
 		// TODO: harshit - the EOF packet is deprecated as of MySQL 5.7.5.
@@ -481,6 +509,13 @@ func (c *Conn) drainResults() error {
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
+		for _, sequence := range buffer.sequences {
+			if sequence != c.sequence {
+				// TODO: Fix it
+				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			}
+			c.sequence++
+		}
 		data := *buffer.data
 		if isEOFPacket(data) {
 			buffer.release()
@@ -499,6 +534,13 @@ func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
 		return 0, nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer buffer.release()
+	for _, sequence := range buffer.sequences {
+		if sequence != c.sequence {
+			// TODO: Fix it
+			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+		}
+		c.sequence++
+	}
 	data := *buffer.data
 	if len(data) == 0 {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")

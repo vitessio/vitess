@@ -189,6 +189,13 @@ func (c *Conn) Ping() error {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer readBuffer.release()
+	for _, sequence := range readBuffer.sequences {
+		if sequence != c.sequence {
+			// TODO: Fix it
+			panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+		}
+		c.sequence++
+	}
 	data := *readBuffer.data
 	switch data[0] {
 	case OKPacket:

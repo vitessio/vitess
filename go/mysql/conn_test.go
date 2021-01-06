@@ -39,7 +39,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
+func createSocketPair(t *testing.T, readThreadEnabled bool) (net.Listener, *Conn, *Conn) {
 	// Create a listener.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -78,8 +78,12 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn)
-	sConn := newConn(serverConn)
-
+	sConn := newServerConn(serverConn, &Listener{
+		listener: listener,
+	})
+	if readThreadEnabled {
+		go sConn.readConnPacket()
+	}
 	return listener, sConn, cConn
 }
 
@@ -167,33 +171,38 @@ func verifyPacketCommsSpecific(
 	t *testing.T,
 	cConn *Conn,
 	data []byte,
+	name string,
 	write func(t *testing.T, cConn *Conn, data []byte),
 	read func() ([]byte, error)) {
-	// Have to do it in the background if it cannot be buffered.
-	// Note we have to wait for it to finish at the end of the
-	// test, as the write may write all the data to the socket,
-	// and the flush may not be done after we're done with the read.
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		write(t, cConn, data)
-		wg.Done()
-	}()
+	t.Run(fmt.Sprintf("verifyPacketCommsSpecific %s data of length %d", name, len(data)), func(t *testing.T) {
+		// Have to do it in the background if it cannot be buffered.
+		// Note we have to wait for it to finish at the end of the
+		// test, as the write may write all the data to the socket,
+		// and the flush may not be done after we're done with the read.
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			write(t, cConn, data)
+			wg.Done()
+		}()
 
-	received, err := read()
-	if err != nil || !bytes.Equal(data, received) {
-		t.Fatalf("ReadPacket failed: %v %v", received, err)
-	}
-	wg.Wait()
+		received, err := read()
+		if err != nil || !bytes.Equal(data, received) {
+			t.Fatalf("ReadPacket failed: %v %v", received, err)
+		}
+		wg.Wait()
+	})
 }
 
 // Write a packet on one side, read it on the other, check it's
 // correct.  We use all possible read and write methods.
 func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
+	cConn.sequence = 0
+	sConn.sequence = 0
 	// All three writes, with ReadPacket.
-	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadPacket)
-	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.ReadPacket)
-	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, "useWritePacket ReadPacket", useWritePacket, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, "useWriteEphemeralPacketBuffered ReadPacket", useWriteEphemeralPacketBuffered, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, "useWriteEphemeralPacketDirect ReadPacket", useWriteEphemeralPacketDirect, sConn.ReadPacket)
 
 	// All three writes, with readEphemeralPacket.
 	verifyPacketCommsSpecificWBuffers(t, cConn, data, useWritePacket, sConn.readEphemeralPacket)
@@ -209,45 +218,45 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 }
 
 func TestPackets(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, false)
 	defer func() {
 		listener.Close()
 		sConn.Close()
 		cConn.Close()
 	}()
 
-	//// Verify all packets go through correctly.
-	//// Small one.
-	//data := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	//verifyPacketComms(t, cConn, sConn, data)
-
-	// 0 length packet
-	data := []byte{}
+	// Verify all packets go through correctly.
+	// Small one.
+	data := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	verifyPacketComms(t, cConn, sConn, data)
 
-	//// Under the limit, still one packet.
-	//data = make([]byte, MaxPacketSize-1)
-	//data[0] = 0xab
-	//data[MaxPacketSize-2] = 0xef
-	//verifyPacketComms(t, cConn, sConn, data)
-	//
-	//// Exactly the limit, two packets.
-	//data = make([]byte, MaxPacketSize)
-	//data[0] = 0xab
-	//data[MaxPacketSize-1] = 0xef
-	//verifyPacketComms(t, cConn, sConn, data)
-	//
-	//// Over the limit, two packets.
-	//data = make([]byte, MaxPacketSize+1000)
-	//data[0] = 0xab
-	//data[MaxPacketSize+999] = 0xef
-	//verifyPacketComms(t, cConn, sConn, data)
+	// 0 length packet
+	data = []byte{}
+	verifyPacketComms(t, cConn, sConn, data)
+
+	// Under the limit, still one packet.
+	data = make([]byte, MaxPacketSize-1)
+	data[0] = 0xab
+	data[MaxPacketSize-2] = 0xef
+	verifyPacketComms(t, cConn, sConn, data)
+
+	// Exactly the limit, two packets.
+	data = make([]byte, MaxPacketSize)
+	data[0] = 0xab
+	data[MaxPacketSize-1] = 0xef
+	verifyPacketComms(t, cConn, sConn, data)
+
+	// Over the limit, two packets.
+	data = make([]byte, MaxPacketSize+995)
+	data[0] = 0xab
+	data[MaxPacketSize+994] = 0xef
+	verifyPacketComms(t, cConn, sConn, data)
 }
 
 func TestBasicPackets(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, true)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -358,7 +367,7 @@ func TestBasicPackets(t *testing.T) {
 }
 
 func TestOkPackets(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, true)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -470,7 +479,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 }
 
 func TestMultiStatementStopsOnError(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, true)
 	sConn.Capabilities |= CapabilityClientMultiStatements
 	defer func() {
 		listener.Close()
@@ -496,7 +505,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 }
 
 func TestMultiStatement(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, true)
 	sConn.Capabilities |= CapabilityClientMultiStatements
 	defer func() {
 		listener.Close()
@@ -544,7 +553,7 @@ func TestMultiStatement(t *testing.T) {
 }
 
 func TestMultiStatementOnSplitError(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, true)
 	// Set the splitStatementFunction to return an error.
 	splitStatementFunction = func(blob string) (pieces []string, err error) {
 		return nil, fmt.Errorf("Error in split statements")
@@ -579,7 +588,7 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 }
 
 func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, true)
 	sConn.Capabilities |= CapabilityClientMultiStatements
 	defer func() {
 		listener.Close()
@@ -610,10 +619,13 @@ func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
 		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComQuery, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
 	})
+	// TODO: do better
+	sConn.ch = make(chan *dataBuffer, 1)
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	errorString := make([]byte, 17000)
 	handler := &testRun{t: t, err: fmt.Errorf(string(errorString))}
+	go sConn.readConnPacket()
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -626,9 +638,12 @@ func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
 		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtSendLongData, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
 	})
+	// TODO: do better
+	sConn.ch = make(chan *dataBuffer, 1)
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	handler := &testRun{t: t, err: fmt.Errorf("not used")}
+	go sConn.readConnPacket()
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -641,8 +656,11 @@ func TestConnectionErrorWhileWritingComPrepare(t *testing.T) {
 		queryPacket: []byte{0x01, 0x00, 0x00, 0x00, ComPrepare},
 	})
 	sConn.Capabilities = sConn.Capabilities | CapabilityClientMultiStatements
+	// TODO: do better
+	sConn.ch = make(chan *dataBuffer, 1)
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	handler := &testRun{t: t, err: fmt.Errorf("not used")}
+	go sConn.readConnPacket()
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -655,8 +673,11 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComStmtExecute, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
 	})
+	// TODO: do better
+	sConn.ch = make(chan *dataBuffer, 1)
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	handler := &testRun{t: t, err: fmt.Errorf("not used")}
+	go sConn.readConnPacket()
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }

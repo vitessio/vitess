@@ -313,6 +313,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		return
 	}
+	if buffer.sequences[0] != c.sequence {
+		return
+	}
+	c.sequence++
+
 	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, *buffer.data)
 	if err != nil {
 		log.Errorf("Cannot parse client handshake response from %s: %v", c, err)
@@ -328,7 +333,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			log.Errorf("Cannot read post-SSL client handshake response from %s: %v", c, err)
 			return
 		}
-
+		if buffer.sequences[0] != c.sequence {
+			return
+		}
+		c.sequence++
 		// Returns copies of the data, so we can recycle the buffer.
 		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, *buffer.data)
 		if err != nil {
@@ -395,6 +403,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			log.Errorf("Error reading auth switch response for %s: %v", c, err)
 			return
 		}
+		if buffer.sequences[0] != c.sequence {
+			return
+		}
+		c.sequence++
 		// this looks really dangerous. is this correct?
 		response := *buffer.data
 		buffer.release()

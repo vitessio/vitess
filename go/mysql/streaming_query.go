@@ -17,6 +17,8 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -76,6 +78,13 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		buffer, err := c.readEphemeralPacket()
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		}
+		for _, sequence := range buffer.sequences {
+			if sequence != c.sequence {
+				// TODO: Fix it
+				panic(fmt.Sprintf("invalid seq: exp %v, got %v", c.sequence, sequence))
+			}
+			c.sequence++
 		}
 		data := *buffer.data
 		defer buffer.release()

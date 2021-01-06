@@ -176,8 +176,10 @@ type PrepareData struct {
 
 // a connBuffer knows to return itself to the buffer pool when done
 type dataBuffer struct {
-	data     *[]byte
-	fromPool bool
+	data      *[]byte
+	fromPool  bool
+	numPkts   uint8
+	sequences []uint8
 }
 
 func (cb *dataBuffer) release() {
@@ -308,7 +310,7 @@ func (c *Conn) getReader() io.Reader {
 	return c.conn
 }
 
-func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
+func (c *Conn) readHeaderFrom(r io.Reader) (uint8, int, error) {
 	var header [packetHeaderSize]byte
 	// Note io.ReadFull will return two different types of errors:
 	// 1. if the socket is already closed, and the go runtime knows it,
@@ -321,22 +323,21 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 		// is used by the server side only, to suppress an error
 		// message if a client just disconnects.
 		if err == io.EOF {
-			return 0, err
+			return 0, 0, err
 		}
 		if strings.HasSuffix(err.Error(), "read: connection reset by peer") {
-			return 0, io.EOF
+			return 0, 0, io.EOF
 		}
-		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
+		return 0, 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
-	sequence := uint8(header[3])
-	if sequence != c.sequence {
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
-	}
+	//if sequence != c.sequence {
+	//	return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+	//}
 
-	c.sequence++
+	//c.sequence++
 
-	return int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16), nil
+	return header[3], int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16), nil
 }
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
@@ -350,15 +351,16 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 	r := c.getReader()
 
-	length, err := c.readHeaderFrom(r)
+	sequence, length, err := c.readHeaderFrom(r)
 	if err != nil {
 		return nil, err
 	}
+	sequences := []uint8{sequence}
 
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
-		return &dataBuffer{fromPool: false}, nil
+		return &dataBuffer{fromPool: false, sequences: sequences}, nil
 	}
 
 	// Use the bufPool.
@@ -368,7 +370,7 @@ func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 			bufPool.Put(bytes)
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
-		return &dataBuffer{data: bytes, fromPool: true}, nil
+		return &dataBuffer{data: bytes, fromPool: true, sequences: sequences}, nil
 	}
 
 	// Much slower path, revert to allocating everything from scratch.
@@ -378,11 +380,14 @@ func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
+	numPckts := uint8(0)
 	for {
-		next, err := c.readOnePacket()
+		sequence, next, err := c.readOnePacket()
 		if err != nil {
 			return nil, err
 		}
+		sequences = append(sequences, sequence)
+		numPckts++
 
 		if len(next) == 0 {
 			// Again, the packet after a packet of exactly size MaxPacketSize.
@@ -395,7 +400,7 @@ func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 		}
 	}
 
-	return &dataBuffer{data: &data, fromPool: false}, nil
+	return &dataBuffer{data: &data, fromPool: false, numPkts: numPckts, sequences: sequences}, nil
 }
 
 // readEphemeralPacketDirect attempts to read a packet from the socket directly.
@@ -406,15 +411,15 @@ func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 func (c *Conn) readEphemeralPacketDirect() (*dataBuffer, error) {
 	var r io.Reader = c.conn
 
-	length, err := c.readHeaderFrom(r)
+	sequence, length, err := c.readHeaderFrom(r)
 	if err != nil {
 		return nil, err
 	}
-
+	sequences := []uint8{sequence}
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
-		return &dataBuffer{fromPool: false}, nil
+		return &dataBuffer{fromPool: false, sequences: sequences}, nil
 	}
 
 	if length < MaxPacketSize {
@@ -422,30 +427,30 @@ func (c *Conn) readEphemeralPacketDirect() (*dataBuffer, error) {
 		if _, err := io.ReadFull(r, *bytes); err != nil {
 			return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 		}
-		return &dataBuffer{data: bytes, fromPool: true}, nil
+		return &dataBuffer{data: bytes, fromPool: true, sequences: sequences}, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")
 }
 
 // readOnePacket reads a single packet into a newly allocated buffer.
-func (c *Conn) readOnePacket() ([]byte, error) {
+func (c *Conn) readOnePacket() (uint8, []byte, error) {
 	r := c.getReader()
-	length, err := c.readHeaderFrom(r)
+	sequence, length, err := c.readHeaderFrom(r)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 	if length == 0 {
 		// This can be caused by the packet after a packet of
 		// exactly size MaxPacketSize.
-		return nil, nil
+		return sequence, nil, nil
 	}
 
 	data := make([]byte, length)
 	if _, err := io.ReadFull(r, data); err != nil {
-		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
+		return 0, nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
-	return data, nil
+	return sequence, data, nil
 }
 
 // readPacket reads a packet from the underlying connection.
@@ -453,11 +458,14 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 // This method returns a generic error, not a SQLError.
 func (c *Conn) readPacket() ([]byte, error) {
 	// Optimize for a single packet case.
-	data, err := c.readOnePacket()
+	sequence, data, err := c.readOnePacket()
 	if err != nil {
 		return nil, err
 	}
-
+	if sequence != c.sequence {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
+	c.sequence++
 	// This is a single packet.
 	if len(data) < MaxPacketSize {
 		return data, nil
@@ -465,11 +473,14 @@ func (c *Conn) readPacket() ([]byte, error) {
 
 	// There is more than one packet, read them all.
 	for {
-		next, err := c.readOnePacket()
+		sequence, next, err := c.readOnePacket()
 		if err != nil {
 			return nil, err
 		}
-
+		if sequence != c.sequence {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+		}
+		c.sequence++
 		if len(next) == 0 {
 			// Again, the packet after a packet of exactly size MaxPacketSize.
 			break
@@ -790,10 +801,16 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 // handleNextCommand is called in the server loop to process
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) bool {
-	c.sequence = 0
 	buffer, more := <-c.ch
 	if !more {
 		return false
+	}
+	c.sequence = 0
+	for _, sequence := range buffer.sequences {
+		if sequence != c.sequence {
+			return false
+		}
+		c.sequence++
 	}
 	data := *buffer.data
 

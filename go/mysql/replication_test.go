@@ -22,7 +22,7 @@ import (
 )
 
 func TestComBinlogDump(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, false)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -73,7 +73,7 @@ func TestComBinlogDump(t *testing.T) {
 }
 
 func TestComBinlogDumpGTID(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := createSocketPair(t, false)
 	defer func() {
 		listener.Close()
 		sConn.Close()
