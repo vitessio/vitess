@@ -178,7 +178,6 @@ type PrepareData struct {
 type dataBuffer struct {
 	data      *[]byte
 	fromPool  bool
-	numPkts   uint8
 	sequences []uint8
 }
 
@@ -380,14 +379,12 @@ func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, vterrors.Wrapf(err, "io.ReadFull(packet body of length %v) failed", length)
 	}
-	numPckts := uint8(0)
 	for {
 		sequence, next, err := c.readOnePacket()
 		if err != nil {
 			return nil, err
 		}
 		sequences = append(sequences, sequence)
-		numPckts++
 
 		if len(next) == 0 {
 			// Again, the packet after a packet of exactly size MaxPacketSize.
@@ -400,7 +397,7 @@ func (c *Conn) readEphemeralPacket() (*dataBuffer, error) {
 		}
 	}
 
-	return &dataBuffer{data: &data, fromPool: false, numPkts: numPckts, sequences: sequences}, nil
+	return &dataBuffer{data: &data, fromPool: false, sequences: sequences}, nil
 }
 
 // readEphemeralPacketDirect attempts to read a packet from the socket directly.
