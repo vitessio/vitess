@@ -39,7 +39,7 @@ jobs:
       run: |
         make tools
 
-    - name: unit
+    - name: Unit Test (mysql57)
       timeout-minutes: 30
       run: |
         eatmydata -- make unit_test
