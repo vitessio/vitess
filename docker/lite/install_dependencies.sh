@@ -25,6 +25,19 @@ add_apt_key() {
     done
 }
 
+# Set number of times to retry a download
+MAX_RETRY=20
+
+do_fetch() {
+    wget \
+        --tries=$MAX_RETRY\
+        --read-timeout=30\
+        --timeout=30\
+        --retry-connrefused\
+        --waitretry=1\
+        --no-dns-cache \
+        $1 -O $2
+}
 
 # Install base packages that are common to all flavors.
 BASE_PACKAGES=(
@@ -63,11 +76,11 @@ mysql56)
     ;;
 mysql57)
     mysql57_version=5.7.31
-    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb -O /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-server_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_${mysql57_version}-1debian10_amd64.deb -O /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-client_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-client_${mysql57_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-server_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-community-server_${mysql57_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-server_${mysql57_version}-1debian10_amd64.deb /tmp/mysql-server_${mysql57_version}-1debian10_amd64.deb
     PACKAGES=(
         /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
         /tmp/mysql-community-client_${mysql57_version}-1debian10_amd64.deb
@@ -79,13 +92,13 @@ mysql57)
     ;;
 mysql80)
     mysql8_version=8.0.21
-    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb -O /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-community-server_${mysql8_version}-1debian10_amd64.deb
-    wget https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-server_${mysql8_version}-1debian10_amd64.deb -O /tmp/mysql-server_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-server_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-server_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-server_${mysql8_version}-1debian10_amd64.deb
     PACKAGES=(
         /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
@@ -213,7 +226,7 @@ esac
 
 # Install flavor-specific packages
 apt-get update
-apt-get install -y --no-install-recommends "${PACKAGES[@]}"
+for i in $(seq 1 $MAX_RETRY); do apt-get install -y --no-install-recommends "${PACKAGES[@]}" && break; done
 
 # Clean up files we won't need in the final image.
 rm -rf /var/lib/apt/lists/*
