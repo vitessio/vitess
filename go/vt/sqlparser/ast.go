@@ -368,10 +368,15 @@ type (
 	// Flush represents a FLUSH statement.
 	Flush struct{}
 
+	// RenameTablePair represents the name of the original table and what it is going to be set in a RENAME TABLE statement.
+	RenameTablePair struct {
+		FromTable TableName
+		ToTable   TableName
+	}
+
 	// RenameTable represents a RENAME TABLE statement.
 	RenameTable struct {
-		FromTables TableNames
-		ToTables   TableNames
+		TablePairs []*RenameTablePair
 	}
 
 	// TruncateTable represents a TRUNCATE TABLE statement.
@@ -836,7 +841,11 @@ func (node *Flush) GetFromTables() TableNames {
 
 // GetFromTables implements the DDLStatement interface
 func (node *RenameTable) GetFromTables() TableNames {
-	return node.FromTables
+	var fromTables TableNames
+	for _, pair := range node.TablePairs {
+		fromTables = append(fromTables, pair.FromTable)
+	}
+	return fromTables
 }
 
 // GetFromTables implements the DDLStatement interface
@@ -881,7 +890,12 @@ func (node *Flush) SetFromTables(tables TableNames) {
 
 // SetFromTables implements DDLStatement.
 func (node *RenameTable) SetFromTables(tables TableNames) {
-	node.FromTables = tables
+	if len(node.TablePairs) != len(tables) {
+		return
+	}
+	for i := range node.TablePairs {
+		node.TablePairs[i].FromTable = tables[i]
+	}
 }
 
 // SetFromTables implements DDLStatement.
@@ -926,7 +940,11 @@ func (node *Flush) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *RenameTable) GetToTables() TableNames {
-	return node.ToTables
+	var toTables TableNames
+	for _, pair := range node.TablePairs {
+		toTables = append(toTables, pair.ToTable)
+	}
+	return toTables
 }
 
 // GetToTables implements the DDLStatement interface
@@ -977,9 +995,11 @@ func (node *Flush) AffectedTables() TableNames {
 
 // AffectedTables returns the list table names affected by the DDLStatement.
 func (node *RenameTable) AffectedTables() TableNames {
-	list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
-	list = append(list, node.FromTables...)
-	list = append(list, node.ToTables...)
+	list := make(TableNames, 0, 2*len(node.TablePairs))
+	for _, pair := range node.TablePairs {
+		list = append(list, pair.FromTable)
+		list = append(list, pair.ToTable)
+	}
 	return list
 }
 
@@ -3364,8 +3384,10 @@ func (node *TruncateTable) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RenameTable) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "rename table %v to %v", node.FromTables[0], node.ToTables[0])
-	for i := 1; i < len(node.FromTables); i++ {
-		buf.astPrintf(node, ", %v to %v", node.FromTables[i], node.ToTables[i])
+	buf.astPrintf(node, "rename table")
+	prefix := " "
+	for _, pair := range node.TablePairs {
+		buf.astPrintf(node, "%s%v to %v", prefix, pair.FromTable, pair.ToTable)
+		prefix = ", "
 	}
 }
