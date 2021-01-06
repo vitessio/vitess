@@ -364,6 +364,10 @@ func (r *replaceExprsItems) inc() {
 	*r++
 }
 
+func replaceFlushTableNames(newNode, parent SQLNode) {
+	parent.(*Flush).TableNames = newNode.(TableNames)
+}
+
 func replaceForeignKeyDefinitionOnDelete(newNode, parent SQLNode) {
 	parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
 }
@@ -1275,6 +1279,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		}
 
 	case *Flush:
+		a.apply(node, n.TableNames, replaceFlushTableNames)
 
 	case *Force:
 

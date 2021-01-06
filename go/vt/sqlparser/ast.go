@@ -366,7 +366,13 @@ type (
 	}
 
 	// Flush represents a FLUSH statement.
-	Flush struct{}
+	Flush struct {
+		IsLocal      bool
+		FlushOptions []string
+		TableNames   TableNames
+		WithLock     bool
+		ForExport    bool
+	}
 
 	// RenameTablePair represents the name of the original table and what it is going to be set in a RENAME TABLE statement.
 	RenameTablePair struct {
@@ -579,7 +585,6 @@ func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 
-func (*Flush) iDDLStatement()         {}
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
 func (*CreateTable) iDDLStatement()   {}
@@ -608,11 +613,6 @@ func (*RenameTableName) iAlterOption()         {}
 func (*RenameIndex) iAlterOption()             {}
 func (*Validation) iAlterOption()              {}
 func (TableOptions) iAlterOption()             {}
-
-// IsFullyParsed implements the DDLStatement interface
-func (*Flush) IsFullyParsed() bool {
-	return false
-}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -680,11 +680,6 @@ func (node *AlterView) GetTable() TableName {
 }
 
 // GetTable implements the DDLStatement interface
-func (node *Flush) GetTable() TableName {
-	return TableName{}
-}
-
-// GetTable implements the DDLStatement interface
 func (node *DropView) GetTable() TableName {
 	return TableName{}
 }
@@ -697,11 +692,6 @@ func (node *DropTable) GetTable() TableName {
 // GetTable implements the DDLStatement interface
 func (node *RenameTable) GetTable() TableName {
 	return TableName{}
-}
-
-// GetAction implements the DDLStatement interface
-func (node *Flush) GetAction() DDLAction {
-	return FlushDDLAction
 }
 
 // GetAction implements the DDLStatement interface
@@ -745,11 +735,6 @@ func (node *DropView) GetAction() DDLAction {
 }
 
 // GetOptLike implements the DDLStatement interface
-func (node *Flush) GetOptLike() *OptLike {
-	return nil
-}
-
-// GetOptLike implements the DDLStatement interface
 func (node *CreateTable) GetOptLike() *OptLike {
 	return node.OptLike
 }
@@ -790,11 +775,6 @@ func (node *DropView) GetOptLike() *OptLike {
 }
 
 // GetTableSpec implements the DDLStatement interface
-func (node *Flush) GetTableSpec() *TableSpec {
-	return nil
-}
-
-// GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
 }
@@ -831,11 +811,6 @@ func (node *DropTable) GetTableSpec() *TableSpec {
 
 // GetTableSpec implements the DDLStatement interface
 func (node *DropView) GetTableSpec() *TableSpec {
-	return nil
-}
-
-// GetFromTables implements the DDLStatement interface
-func (node *Flush) GetFromTables() TableNames {
 	return nil
 }
 
@@ -884,11 +859,6 @@ func (node *AlterView) GetFromTables() TableNames {
 }
 
 // SetFromTables implements DDLStatement.
-func (node *Flush) SetFromTables(tables TableNames) {
-	// irrelevant
-}
-
-// SetFromTables implements DDLStatement.
 func (node *RenameTable) SetFromTables(tables TableNames) {
 	if len(node.TablePairs) != len(tables) {
 		return
@@ -931,11 +901,6 @@ func (node *DropView) SetFromTables(tables TableNames) {
 // SetFromTables implements DDLStatement.
 func (node *AlterView) SetFromTables(tables TableNames) {
 	// irrelevant
-}
-
-// GetToTables implements the DDLStatement interface
-func (node *Flush) GetToTables() TableNames {
-	return nil
 }
 
 // GetToTables implements the DDLStatement interface
@@ -985,11 +950,6 @@ func (node *DropTable) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *DropView) GetToTables() TableNames {
-	return nil
-}
-
-// AffectedTables returns the list table names affected by the DDLStatement.
-func (node *Flush) AffectedTables() TableNames {
 	return nil
 }
 
@@ -1044,9 +1004,6 @@ func (node *DropTable) AffectedTables() TableNames {
 func (node *DropView) AffectedTables() TableNames {
 	return node.FromTables
 }
-
-// SetTable implements DDLStatement.
-func (node *Flush) SetTable(qualifier string, name string) {}
 
 // SetTable implements DDLStatement.
 func (node *TruncateTable) SetTable(qualifier string, name string) {
@@ -1944,6 +1901,27 @@ func (node *DropDatabase) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Flush) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s", FlushStr)
+	if node.IsLocal {
+		buf.WriteString(" local")
+	}
+	if len(node.FlushOptions) != 0 {
+		prefix := " "
+		for _, option := range node.FlushOptions {
+			buf.astPrintf(node, "%s%s", prefix, option)
+			prefix = ", "
+		}
+	} else {
+		buf.WriteString(" tables")
+		if len(node.TableNames) != 0 {
+			buf.astPrintf(node, " %v", node.TableNames)
+		}
+		if node.ForExport {
+			buf.WriteString(" for export")
+		}
+		if node.WithLock {
+			buf.WriteString(" with read lock")
+		}
+	}
 }
 
 // Format formats the node.
