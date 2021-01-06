@@ -919,3 +919,21 @@ options:PassthroughDMLs
   ],
   "FullQuery":"drop view a, b"
 }
+
+# flush statement
+"flush tables a,b"
+{
+  "PlanID": "Flush",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "flush tables a, b"
+}

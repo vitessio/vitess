@@ -776,8 +776,8 @@ func (node *DropView) GetOptLike() *OptLike {
 }
 
 // GetIfExists implements the DDLStatement interface
-func (node *DDL) GetIfExists() bool {
-	return node.IfExists
+func (node *RenameTable) GetIfExists() bool {
+	return false
 }
 
 // GetIfExists implements the DDLStatement interface
@@ -786,7 +786,7 @@ func (node *CreateTable) GetIfExists() bool {
 }
 
 // GetIfExists implements the DDLStatement interface
-func (node *CreateIndex) GetIfExists() bool {
+func (node *TruncateTable) GetIfExists() bool {
 	return false
 }
 
