@@ -188,27 +188,28 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "rename table a to b",
 		output: &RenameTable{
-			FromTables: TableNames{
-				TableName{Name: NewTableIdent("a")},
-			},
-			ToTables: TableNames{
-				TableName{Name: NewTableIdent("b")},
+			TablePairs: []*RenameTablePair{
+				{
+					FromTable: TableName{Name: NewTableIdent("a")},
+					ToTable:   TableName{Name: NewTableIdent("b")},
+				},
 			},
 		},
 		affected: []string{"a", "b"},
 	}, {
 		query: "rename table a to b, c to d",
 		output: &RenameTable{
-			FromTables: TableNames{
-				TableName{Name: NewTableIdent("a")},
-				TableName{Name: NewTableIdent("c")},
-			},
-			ToTables: TableNames{
-				TableName{Name: NewTableIdent("b")},
-				TableName{Name: NewTableIdent("d")},
+			TablePairs: []*RenameTablePair{
+				{
+					FromTable: TableName{Name: NewTableIdent("a")},
+					ToTable:   TableName{Name: NewTableIdent("b")},
+				}, {
+					FromTable: TableName{Name: NewTableIdent("c")},
+					ToTable:   TableName{Name: NewTableIdent("d")},
+				},
 			},
 		},
-		affected: []string{"a", "c", "b", "d"},
+		affected: []string{"a", "b", "c", "d"},
 	}, {
 		query: "drop table a",
 		output: &DropTable{

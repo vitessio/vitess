@@ -1,6 +1,7 @@
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -254,12 +255,13 @@ func buildDropViewOrTable(vschema ContextVSchema, ddlStatement sqlparser.DDLStat
 func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable) (key.Destination, *vindexes.Keyspace, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
-	for i, tab := range renameTable.FromTables {
-		var destinationTab key.Destination
-		var keyspaceTab *vindexes.Keyspace
+
+	for _, tabPair := range renameTable.TablePairs {
+		var destinationFrom key.Destination
+		var keyspaceFrom *vindexes.Keyspace
 		var table *vindexes.Table
 		var err error
-		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
+		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
 
 		if err != nil {
 			_, isNotFound := err.(vindexes.NotFoundError)
@@ -268,28 +270,38 @@ func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable
 			}
 		}
 		if table == nil {
-			destinationTab, keyspaceTab, _, err = vschema.TargetDestination(tab.Qualifier.String())
+			destinationFrom, keyspaceFrom, _, err = vschema.TargetDestination(tabPair.FromTable.Qualifier.String())
 			if err != nil {
 				return nil, nil, err
 			}
-			renameTable.FromTables[i] = sqlparser.TableName{
-				Name: tab.Name,
+			tabPair.FromTable = sqlparser.TableName{
+				Name: tabPair.FromTable.Name,
 			}
 		} else {
-			keyspaceTab = table.Keyspace
-			renameTable.FromTables[i] = sqlparser.TableName{
+			keyspaceFrom = table.Keyspace
+			tabPair.FromTable = sqlparser.TableName{
 				Name: table.Name,
 			}
 		}
-		renameTable.ToTables[i] = sqlparser.TableName{
-			Name: renameTable.ToTables[i].Name,
+
+		if tabPair.ToTable.Qualifier.String() != "" {
+			_, keyspaceTo, _, err := vschema.TargetDestination(tabPair.ToTable.Qualifier.String())
+			if err != nil {
+				return nil, nil, err
+			}
+			if keyspaceTo.Name != keyspaceFrom.Name {
+				return nil, nil, mysql.NewSQLError(1450, mysql.SSUnknownSQLState, "Changing schema from '%s' to '%s' is not allowed", keyspaceFrom.Name, keyspaceTo.Name)
+			}
+			tabPair.ToTable = sqlparser.TableName{
+				Name: tabPair.ToTable.Name,
+			}
 		}
 
 		if destination == nil && keyspace == nil {
-			destination = destinationTab
-			keyspace = keyspaceTab
+			destination = destinationFrom
+			keyspace = keyspaceFrom
 		}
-		if destination != destinationTab || keyspace != keyspaceTab {
+		if destination != destinationFrom || keyspace != keyspaceFrom {
 			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, DifferentDestinations)
 		}
 	}

@@ -566,6 +566,10 @@
 "rename table user_extra to b, main.a to b"
 "Tables or Views specified in the query do not belong to the same destination"
 
+# Rename table with change in keyspace name
+"rename table user_extra to main.b"
+"Changing schema from 'user' to 'main' is not allowed (errno 1450) (sqlstate HY000)"
+
 # Flush statement
 "flush x"
 "keyspace not specified"
