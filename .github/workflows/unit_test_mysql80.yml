@@ -1,10 +1,9 @@
-name: unit
+name: Unit Test (mysql80)
 on: [push, pull_request]
 jobs:
 
   build:
     runs-on: ubuntu-latest
-    name: Unit Test (mysql80)
 
     steps:
     - name: Set up Go
