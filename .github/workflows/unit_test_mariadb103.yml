@@ -2,8 +2,9 @@ name: Unit Test (mariadb103)
 on: [push, pull_request]
 jobs:
 
-  build:
+  test:
     runs-on: ubuntu-latest
+    name: unit
 
     steps:
     - name: Set up Go
