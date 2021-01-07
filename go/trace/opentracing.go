@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 
 	"context"
+
 	otgrpc "github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/vterrors"
 )
 

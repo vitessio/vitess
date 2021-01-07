@@ -24,7 +24,9 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 
 	"context"
+
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"

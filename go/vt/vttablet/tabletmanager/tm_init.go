@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/dbconnpool"
 
 	"vitess.io/vitess/go/netutil"

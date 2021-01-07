@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"

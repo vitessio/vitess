@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/spyzhov/ajson"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

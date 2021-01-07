@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"

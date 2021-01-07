@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/sysvars"
 
 	"context"
+
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"

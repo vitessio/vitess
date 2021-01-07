@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vitessdriver"

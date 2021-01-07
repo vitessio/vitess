@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqlescape"

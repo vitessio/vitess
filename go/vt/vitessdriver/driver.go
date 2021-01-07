@@ -24,6 +24,7 @@ import (
 	"errors"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )

@@ -24,6 +24,7 @@ import (
 	"math/rand"
 
 	"github.com/spf13/pflag"
+
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 

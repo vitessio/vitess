@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"context"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 

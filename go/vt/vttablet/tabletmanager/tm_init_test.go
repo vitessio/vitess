@@ -21,8 +21,10 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"

@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/topo"
 )
 

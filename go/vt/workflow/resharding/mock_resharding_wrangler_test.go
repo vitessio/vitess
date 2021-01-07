@@ -9,7 +9,9 @@ import (
 	time "time"
 
 	context "context"
+
 	gomock "github.com/golang/mock/gomock"
+
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 

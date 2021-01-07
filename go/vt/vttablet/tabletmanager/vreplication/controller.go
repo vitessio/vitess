@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"

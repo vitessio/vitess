@@ -25,6 +25,7 @@ import (
 	"sync"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"

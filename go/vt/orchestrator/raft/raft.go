@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/util"
 
 	"github.com/patrickmn/go-cache"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/raft"
 )
 

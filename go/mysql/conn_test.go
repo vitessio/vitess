@@ -32,9 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

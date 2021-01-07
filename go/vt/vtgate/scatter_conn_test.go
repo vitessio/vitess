@@ -20,12 +20,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"

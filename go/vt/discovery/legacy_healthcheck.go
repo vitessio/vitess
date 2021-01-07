@@ -51,6 +51,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"

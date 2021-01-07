@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
+
 	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/mysql"

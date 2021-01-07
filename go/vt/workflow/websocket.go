@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"context"
+
 	"github.com/gorilla/websocket"
 
 	"vitess.io/vitess/go/acl"

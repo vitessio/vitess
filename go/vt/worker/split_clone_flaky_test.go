@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"

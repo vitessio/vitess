@@ -274,12 +274,12 @@ func rewriteProtoImports(pkg *types.Package) string {
 func extractLocalPointerType(v *types.Var) (name string, localImport string, pkgPath string, err error) {
 	ptr, ok := v.Type().(*types.Pointer)
 	if !ok {
-		return "", "", "", fmt.Errorf("expected a pointer type for %s, got %V", v.Name(), v.Type())
+		return "", "", "", fmt.Errorf("expected a pointer type for %s, got %v", v.Name(), v.Type())
 	}
 
 	typ, ok := ptr.Elem().(*types.Named)
 	if !ok {
-		return "", "", "", fmt.Errorf("expected an underlying named type for %s, got %V", v.Name(), ptr.Elem())
+		return "", "", "", fmt.Errorf("expected an underlying named type for %s, got %v", v.Name(), ptr.Elem())
 	}
 
 	name = typ.Obj().Name()

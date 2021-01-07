@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"

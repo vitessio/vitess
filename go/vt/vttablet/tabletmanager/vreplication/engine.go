@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/withddl"
 
 	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"

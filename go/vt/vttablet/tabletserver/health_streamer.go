@@ -24,7 +24,9 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
