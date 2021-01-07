@@ -1165,7 +1165,7 @@
 }
 
 # sharded join, non-vindex col
-"select user.col from user join user_extra on user.id = user_extra.col"
+"select user.col from user join user_extra on user.id = user_extra.col where user.id = 35"
 {
   "QueryType": "SELECT",
   "Original": "select user.col from user join user_extra on user.id = user_extra.col",

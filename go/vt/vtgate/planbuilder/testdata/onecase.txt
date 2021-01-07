@@ -1,6 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-# routing rules bad table
-"select * from bad_table"
-"keyspace noks not found in vschema"
-{
-}
