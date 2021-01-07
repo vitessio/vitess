@@ -22,7 +22,9 @@ import (
 	"sync"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

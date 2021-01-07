@@ -38,6 +38,7 @@ import (
 	"fmt"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/hook"

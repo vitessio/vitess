@@ -31,6 +31,7 @@ import (
 	"errors"
 
 	"context"
+
 	minio "github.com/minio/minio-go"
 
 	"vitess.io/vitess/go/vt/concurrency"

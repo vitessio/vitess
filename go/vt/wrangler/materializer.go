@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
@@ -162,6 +163,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		rules[targetKeyspace+"."+table] = toSource
 		rules[targetKeyspace+"."+table+"@replica"] = toSource
 		rules[targetKeyspace+"."+table+"@rdonly"] = toSource
+		rules[targetKeyspace+"."+table] = toSource
 		rules[sourceKeyspace+"."+table+"@replica"] = toSource
 		rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
 	}

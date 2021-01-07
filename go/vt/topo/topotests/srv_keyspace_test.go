@@ -26,6 +26,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"

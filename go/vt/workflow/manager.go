@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"context"
+
 	gouuid "github.com/pborman/uuid"
 
 	"vitess.io/vitess/go/vt/log"

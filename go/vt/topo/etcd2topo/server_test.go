@@ -34,6 +34,7 @@ import (
 	"context"
 
 	"github.com/coreos/etcd/clientv3"
+
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"

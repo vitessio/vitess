@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/log"
 )
 

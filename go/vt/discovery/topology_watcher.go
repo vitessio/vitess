@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 
 	"context"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 

@@ -25,7 +25,9 @@ import (
 	"strings"
 
 	"context"
+
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"

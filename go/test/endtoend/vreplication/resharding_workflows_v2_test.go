@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -244,8 +245,9 @@ func testReshardV2Workflow(t *testing.T) {
 
 	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
 	reshard2Start(t, "-80,80-", "-40,40-80,80-c0,c0-")
-
-	checkStates(t, wrangler.WorkflowStateNotStarted, wrangler.WorkflowStateNotSwitched)
+	if !strings.Contains(lastOutput, "Workflow started successfully") {
+		t.Fail()
+	}
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 
@@ -258,7 +260,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
 	moveTables2Start(t, "customer")
-	checkStates(t, wrangler.WorkflowStateNotStarted, wrangler.WorkflowStateNotSwitched)
+	if !strings.Contains(lastOutput, "Workflow started successfully") {
+		t.Fail()
+	}
 	validateReadsRouteToSource(t, "replica")
 	validateWritesRouteToSource(t)
 

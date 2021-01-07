@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/json2"

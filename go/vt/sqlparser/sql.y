@@ -278,7 +278,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement
 %type <bytes2> comment_opt comment_list
-%type <str> wild_opt check_option_opt cascade_or_local_opt
+%type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <bytes> explain_synonyms
@@ -295,7 +295,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
-%type <tableNames> table_name_list delete_table_list
+%type <tableNames> table_name_list delete_table_list view_name_list
 %type <joinType> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
@@ -630,6 +630,16 @@ delete_statement:
 from_or_using:
   FROM {}
 | USING {}
+
+view_name_list:
+  table_name
+  {
+    $$ = TableNames{$1.ToViewName()}
+  }
+| view_name_list ',' table_name
+  {
+    $$ = append($$, $3.ToViewName())
+  }
 
 table_name_list:
   table_name
@@ -1587,6 +1597,19 @@ fk_reference_action:
     $$ = SetNull
   }
 
+restrict_or_cascade_opt:
+  {
+    $$ = ""
+  }
+| RESTRICT
+  {
+    $$ = string($1)
+  }
+| CASCADE
+  {
+    $$ = string($1)
+  }
+
 enforced_opt:
   {
     $$ = true
@@ -2019,9 +2042,9 @@ alter_statement:
     $1.PartitionSpec = $2
     $$ = $1
   }
-| ALTER VIEW table_name ddl_skip_to_end
+| ALTER algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &DDL{Action: AlterDDLAction, Table: $3.ToViewName()}
+    $$ = &AlterView{ViewName: $6.ToViewName(), Algorithm:$2, Definer: $3 ,Security:$4, Columns:$7, Select: $9, CheckOption: $10 }
   }
 | alter_database_prefix id_or_var_opt create_options
   {
@@ -2249,18 +2272,18 @@ rename_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list
+  DROP TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DDL{Action: DropDDLAction, FromTables: $4, IfExists: $3}
+    $$ = &DropTable{FromTables: $4, IfExists: $3}
   }
 | DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterDDLAction, Table: $5}
   }
-| DROP VIEW exists_opt table_name ddl_skip_to_end
+| DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DDL{Action: DropDDLAction, FromTables: TableNames{$4.ToViewName()}, IfExists: $3}
+    $$ = &DropView{FromTables: $4, IfExists: $3}
   }
 | DROP database_or_schema exists_opt id_or_var
   {

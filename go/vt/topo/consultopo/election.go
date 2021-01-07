@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/consul/api"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )

@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 
 	proxyproto "github.com/pires/go-proxyproto"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"

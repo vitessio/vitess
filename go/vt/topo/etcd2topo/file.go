@@ -20,6 +20,7 @@ import (
 	"path"
 
 	"context"
+
 	"github.com/coreos/etcd/clientv3"
 
 	"vitess.io/vitess/go/vt/topo"

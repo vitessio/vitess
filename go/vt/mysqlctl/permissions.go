@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )

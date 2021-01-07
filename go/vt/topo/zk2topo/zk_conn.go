@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
 
 	"vitess.io/vitess/go/sync2"

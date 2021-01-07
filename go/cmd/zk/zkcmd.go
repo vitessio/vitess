@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/crypto/ssh/terminal"
 

@@ -22,7 +22,9 @@ import (
 	"sync"
 
 	"context"
+
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"

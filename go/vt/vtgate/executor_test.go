@@ -35,6 +35,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -1164,6 +1165,32 @@ func TestExecutorDDL(t *testing.T) {
 			}
 
 			testQueryLog(t, logChan, "TestExecute", stmtType, stmt, tc.shardQueryCnt)
+		}
+	}
+
+	stmts2 := []struct {
+		input  string
+		hasErr bool
+	}{
+		{input: "drop table t1", hasErr: false},
+		{input: "drop table t2", hasErr: true},
+		{input: "drop view t1", hasErr: false},
+		{input: "drop view t2", hasErr: true},
+		{input: "alter view t1 as select * from t1", hasErr: false},
+		{input: "alter view t2 as select * from t1", hasErr: true},
+	}
+
+	for _, stmt := range stmts2 {
+		sbc1.ExecCount.Set(0)
+		sbc2.ExecCount.Set(0)
+		sbclookup.ExecCount.Set(0)
+		_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
+		if stmt.hasErr {
+			require.EqualError(t, err, "keyspace not specified", "expect query to fail")
+			testQueryLog(t, logChan, "TestExecute", "", stmt.input, 0)
+		} else {
+			require.NoError(t, err)
+			testQueryLog(t, logChan, "TestExecute", "DDL", stmt.input, 8)
 		}
 	}
 }

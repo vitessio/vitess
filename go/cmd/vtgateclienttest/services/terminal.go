@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"

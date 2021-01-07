@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/config"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"

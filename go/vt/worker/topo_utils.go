@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -94,6 +95,19 @@ func TestIsOnlineDDLUUID(t *testing.T) {
 	for _, tc := range tt {
 		assert.False(t, IsOnlineDDLUUID(tc))
 	}
+}
+
+func TestGetGCUUID(t *testing.T) {
+	uuids := map[string]bool{}
+	count := 20
+	for i := 0; i < count; i++ {
+		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", DDLStrategyDirect, "", "")
+		assert.NoError(t, err)
+		gcUUID := onlineDDL.GetGCUUID()
+		assert.True(t, IsGCUUID(gcUUID))
+		uuids[gcUUID] = true
+	}
+	assert.Equal(t, count, len(uuids))
 }
 
 func TestGetActionStr(t *testing.T) {

@@ -20,6 +20,7 @@ package vtgateservice
 
 import (
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"

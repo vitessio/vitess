@@ -20,7 +20,9 @@ import (
 	"sort"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"

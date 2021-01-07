@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"

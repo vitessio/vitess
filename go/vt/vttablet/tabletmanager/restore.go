@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"

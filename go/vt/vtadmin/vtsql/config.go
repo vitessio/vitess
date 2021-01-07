@@ -22,6 +22,7 @@ import (
 	"text/template"
 
 	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 

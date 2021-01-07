@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 )

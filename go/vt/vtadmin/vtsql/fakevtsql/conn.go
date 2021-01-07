@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
