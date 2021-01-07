@@ -98,6 +98,7 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
