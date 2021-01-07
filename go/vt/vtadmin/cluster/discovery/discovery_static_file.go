@@ -175,3 +175,18 @@ func (d *StaticFileDiscovery) DiscoverVTGates(ctx context.Context, tags []string
 
 	return results, nil
 }
+
+// DiscoverVtctld is part of the Discovery interface.
+func (d *StaticFileDiscovery) DiscoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
+	panic("unimplemented")
+}
+
+// DiscoverVtctldAddr is part of the Discovery interface.
+func (d *StaticFileDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string) (string, error) {
+	panic("unimplemented")
+}
+
+// DiscoverVtctlds is part of the Discovery interface.
+func (d *StaticFileDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+	panic("unimplemented")
+}
