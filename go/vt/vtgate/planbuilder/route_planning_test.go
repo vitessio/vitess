@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
