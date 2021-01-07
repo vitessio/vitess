@@ -185,8 +185,8 @@ func TestPlan(t *testing.T) {
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper, true)
 	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper, true)
 	testFile(t, "large_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -420,7 +420,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				tcase.output2ndPlanner = tcase.output
 			}
 
-			vschema.version = V4GreedyOptimized
+			vschema.version = V4
 			out, err := getPlanOutput(tcase, vschema)
 
 			// our expectation for the new planner on this query is one of three
@@ -611,14 +611,8 @@ func BenchmarkPlanner(b *testing.B) {
 		b.Run(filename+"-v4", func(b *testing.B) {
 			benchmarkPlanner(b, V4, testCases, vschema)
 		})
-		b.Run(filename+"-v4greedy", func(b *testing.B) {
-			benchmarkPlanner(b, V4GreedyOnly, testCases, vschema)
-		})
 		b.Run(filename+"-v4left2right", func(b *testing.B) {
 			benchmarkPlanner(b, V4Left2Right, testCases, vschema)
-		})
-		b.Run(filename+"-v4greedyOptimized", func(b *testing.B) {
-			benchmarkPlanner(b, V4GreedyOptimized, testCases, vschema)
 		})
 	}
 }
