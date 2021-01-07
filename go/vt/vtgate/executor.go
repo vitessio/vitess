@@ -294,6 +294,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(v)
 		case sysvars.DDLStrategy.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.DDLStrategy)
+		case sysvars.SessionUUID.Name:
+			bindVars[key] = sqltypes.StringBindVariable(session.SessionUUID)
 		case sysvars.ReadAfterWriteGTID.Name:
 			var v string
 			ifReadAfterWriteExist(session, func(raw *vtgatepb.ReadAfterWrite) {

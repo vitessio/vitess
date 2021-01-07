@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -75,7 +77,7 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 	}
 	rows := [][]sqltypes.Value{}
 	for _, normalized := range normalizedQueries {
-		onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), normalized.TableName.Name.String(), normalized.SQL, v.Strategy, v.Options, "vtgate")
+		onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), normalized.TableName.Name.String(), normalized.SQL, v.Strategy, v.Options, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
 		if err != nil {
 			return result, err
 		}
