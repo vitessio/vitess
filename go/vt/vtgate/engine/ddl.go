@@ -70,7 +70,7 @@ func (v *DDL) GetTableName() string {
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func (v *DDL) isOnlineSchemaDDL() bool {
 	switch v.DDL.GetAction() {
-	case sqlparser.AlterDDLAction:
+	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction, sqlparser.AlterDDLAction:
 		return !v.OnlineDDL.Strategy.IsDirect()
 	}
 	return false

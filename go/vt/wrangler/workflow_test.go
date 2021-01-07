@@ -17,7 +17,10 @@ limitations under the License.
 package wrangler
 
 import (
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/vt/topo"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -171,6 +174,61 @@ func TestMoveTablesV2(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 }
 
+func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server, cnt int) {
+	rr, err := ts.GetRoutingRules(ctx)
+	fmt.Printf("Rules %+v\n", rr.Rules)
+	require.NoError(t, err)
+	require.NotNil(t, rr)
+	rules := rr.Rules
+	require.Equal(t, cnt, len(rules))
+}
+
+func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace string, table string) bool {
+	vschema, err := ts.GetVSchema(ctx, keyspace)
+	require.NoError(t, err)
+	require.NotNil(t, vschema)
+	_, ok := vschema.Tables[table]
+	return ok
+}
+
+func TestMoveTablesV2Complete(t *testing.T) {
+	ctx := context.Background()
+	p := &VReplicationWorkflowParams{
+		Workflow:       "test",
+		SourceKeyspace: "ks1",
+		TargetKeyspace: "ks2",
+		Tables:         "t1,t2",
+		Cells:          "cell1,cell2",
+		TabletTypes:    "replica,rdonly,master",
+		Timeout:        DefaultActionTimeout,
+	}
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
+	require.NoError(t, err)
+	require.NotNil(t, wf)
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+	tme.expectNoPreviousJournals()
+	expectMoveTablesQueries(t, tme)
+	tme.expectNoPreviousJournals()
+	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
+
+	//16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
+	validateRoutingRuleCount(ctx, t, wf.wr.ts, 16)
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
+	require.NoError(t, wf.Complete())
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
+
+	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
+}
+
 func TestMoveTablesV2Partial(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
@@ -247,7 +305,21 @@ func TestMoveTablesV2Abort(t *testing.T) {
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	expectMoveTablesQueries(t, tme)
+	validateRoutingRuleCount(ctx, t, wf.wr.ts, 4) // rules set up by test env
+
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
+
 	require.NoError(t, wf.Abort())
+
+	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
+
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
+	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
+	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 }
 
 func TestReshardV2(t *testing.T) {

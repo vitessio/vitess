@@ -19,6 +19,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"os"
 	"os/exec"
 	"path"
@@ -26,19 +27,21 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/tlstest"
 )
 
 // MysqlctlProcess is a generic handle for a running mysqlctl command .
 // It can be spawned manually
 type MysqlctlProcess struct {
-	Name         string
-	Binary       string
-	LogDirectory string
-	TabletUID    int
-	MySQLPort    int
-	InitDBFile   string
-	ExtraArgs    []string
-	InitMysql    bool
+	Name            string
+	Binary          string
+	LogDirectory    string
+	TabletUID       int
+	MySQLPort       int
+	InitDBFile      string
+	ExtraArgs       []string
+	InitMysql       bool
+	SecureTransport bool
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -82,6 +85,38 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
 	if mysqlctl.InitMysql {
+		if mysqlctl.SecureTransport {
+			// Set up EXTRA_MY_CNF for ssl
+			sslPath := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/ssl_%010d", mysqlctl.TabletUID))
+			sslPathData := struct {
+				Dir string
+			}{
+				Dir: sslPath,
+			}
+
+			os.MkdirAll(sslPath, 0755)
+			extraMyCNF := path.Join(sslPath, "ssl.cnf")
+			fout, err := os.Create(extraMyCNF)
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
+
+			template.Must(template.New(fmt.Sprintf("%010d", mysqlctl.TabletUID)).Parse(`
+ssl_ca={{.Dir}}/ca-cert.pem
+ssl_cert={{.Dir}}/server-001-cert.pem
+ssl_key={{.Dir}}/server-001-key.pem
+`)).Execute(fout, sslPathData)
+			if err := fout.Close(); err != nil {
+				return nil, err
+			}
+
+			tlstest.CreateClientServerCertPairs(sslPath)
+
+			tmpProcess.Env = append(tmpProcess.Env, "EXTRA_MY_CNF="+extraMyCNF)
+			tmpProcess.Env = append(tmpProcess.Env, "VTDATAROOT="+os.Getenv("VTDATAROOT"))
+		}
+
 		tmpProcess.Args = append(tmpProcess.Args, "init",
 			"-init_db_sql_file", mysqlctl.InitDBFile)
 	}
@@ -138,6 +173,7 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
 	mysqlctl.InitMysql = true
+	mysqlctl.SecureTransport = false
 	return mysqlctl
 }
 

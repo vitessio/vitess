@@ -320,7 +320,7 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 func reshardMerchant2to3SplitMerge(t *testing.T) {
 	ksName := "merchant"
 	counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
-	reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryrunresultsswitchwritesM2m3, nil, "")
+	reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryRunResultsSwitchWritesM2m3, nil, "")
 	validateCount(t, vtgateConn, ksName, "merchant", 2)
 	query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
@@ -382,7 +382,7 @@ func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
 	reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0", 1500, counts, nil, nil, "")
 }
 
-func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int, dryRunResultswitchWrites []string, cells []*Cell, sourceCellOrAlias string) {
+func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string) {
 	if cells == nil {
 		cells = []*Cell{defaultCell}
 	}
@@ -415,8 +415,8 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	}
 	vdiff(t, ksWorkflow)
 	switchReads(t, allCellNames, ksWorkflow)
-	if dryRunResultswitchWrites != nil {
-		switchWritesDryRun(t, ksWorkflow, dryRunResultswitchWrites)
+	if dryRunResultSwitchWrites != nil {
+		switchWritesDryRun(t, ksWorkflow, dryRunResultSwitchWrites)
 	}
 	switchWrites(t, ksWorkflow, false)
 	dropSources(t, ksWorkflow)

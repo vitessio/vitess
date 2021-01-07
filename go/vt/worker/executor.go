@@ -17,17 +17,16 @@ limitations under the License.
 package worker
 
 import (
-	"fmt"
-	"time"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"context"
+	"fmt"
+	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -60,7 +59,7 @@ func newExecutor(wr *wrangler.Wrangler, tsc *discovery.LegacyTabletStatsCache, t
 		keyspace:  keyspace,
 		shard:     shard,
 		threadID:  threadID,
-		statsKey:  []string{keyspace, shard, fmt.Sprint(threadID)},
+		statsKey:  []string{keyspace, shard, strconv.FormatInt(int64(threadID), 10)},
 	}
 }
 
