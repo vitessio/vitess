@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"container/heap"
 	"sort"
 	"strings"
 
@@ -47,14 +46,10 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	var tree joinTree
 
 	switch {
-	case vschema.Planner() == V4GreedyOnly || len(qgraph.tables) > 10:
-		tree, err = greedySolve(qgraph, semTable, vschema)
-	case vschema.Planner() == V4GreedyOptimized:
-		tree, err = greedySolveOptimized(qgraph, semTable, vschema)
 	case vschema.Planner() == V4Left2Right:
 		tree, err = leftToRightSolve(qgraph, semTable, vschema)
 	default:
-		tree, err = dpSolve(qgraph, semTable, vschema)
+		tree, err = greedySolve(qgraph, semTable, vschema)
 	}
 
 	if err != nil {
@@ -250,58 +245,6 @@ func (jp *joinPlan) cost() int {
 	return jp.lhs.cost() + jp.rhs.cost()
 }
 
-/*
-	we use dynamic programming to find the cheapest route/join tree possible,
-	where the cost of a plan is the number of joins
-*/
-func dpSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
-	size := len(qg.tables)
-	dpTable := makeDPTable()
-
-	var allTables semantics.TableSet
-
-	// we start by seeding the table with the single routes
-	for _, table := range qg.tables {
-		solves := semTable.TableSetFor(table.alias)
-		allTables |= solves
-		plan, err := createRoutePlan(table, solves, vschema)
-		if err != nil {
-			return nil, err
-		}
-		dpTable.add(plan)
-	}
-
-	/*
-		Next we'll solve bigger and bigger joins, using smaller plans to build larger ones,
-		until we have a join tree covering all tables in the FROM clause
-	*/
-	for currentSize := 2; currentSize <= size; currentSize++ {
-		lefts := dpTable.bitSetsOfSize(currentSize - 1)
-		rights := dpTable.bitSetsOfSize(1)
-		for _, lhs := range lefts {
-			for _, rhs := range rights {
-				if lhs.solves().IsOverlapping(rhs.solves()) {
-					// at least one of the tables is solved on both sides
-					continue
-				}
-				solves := lhs.solves() | rhs.solves()
-				oldPlan := dpTable.planFor(solves)
-				if oldPlan != nil && oldPlan.cost() == 1 {
-					// we already have the perfect plan. keep it
-					continue
-				}
-				joinPredicates := qg.getPredicates(lhs.solves(), rhs.solves())
-				newPlan := createJoin(lhs, rhs, joinPredicates, semTable)
-				if oldPlan == nil || newPlan.cost() < oldPlan.cost() {
-					dpTable.add(newPlan)
-				}
-			}
-		}
-	}
-
-	return dpTable.planFor(allTables), nil
-}
-
 func createJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
 	newPlan := tryMerge(lhs, rhs, joinPredicates, semTable)
 	if newPlan == nil {
@@ -312,128 +255,6 @@ func createJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *se
 		}
 	}
 	return newPlan
-}
-
-type priorityQueueItem struct {
-	plan     joinTree
-	cost     int
-	lhsSolve semantics.TableSet
-	rhsSolve semantics.TableSet
-}
-
-func (pqi *priorityQueueItem) solves() semantics.TableSet {
-	return pqi.lhsSolve | pqi.rhsSolve
-}
-
-type priorityQueuePlans []*priorityQueueItem
-
-// Len implements the Heap interface
-func (pq priorityQueuePlans) Len() int { return len(pq) }
-
-// Less implements the Heap interface
-func (pq priorityQueuePlans) Less(i, j int) bool {
-	// We want Pop to give us the lowest cost so we use lesser than here.
-	if pq[i].cost == pq[j].cost {
-		return pq[i].solves() < pq[j].solves()
-	}
-	return pq[i].cost < pq[j].cost
-}
-
-// Swap implements the Heap interface
-func (pq priorityQueuePlans) Swap(i, j int) {
-	pq[i], pq[j] = pq[j], pq[i]
-}
-
-// Push implements the Heap interface
-func (pq *priorityQueuePlans) Push(x interface{}) {
-	item := x.(*priorityQueueItem)
-	*pq = append(*pq, item)
-}
-
-// Pop implements the Heap interface
-func (pq *priorityQueuePlans) Pop() interface{} {
-	old := *pq
-	n := len(old)
-	item := old[n-1]
-	old[n-1] = nil // avoid memory leak
-	*pq = old[0 : n-1]
-	return item
-}
-
-func greedySolveOptimized(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
-	routePlans := make([]*routePlan, len(qg.tables))
-	intermediatePlans := map[semantics.TableSet]*priorityQueueItem{}
-
-	for i, table := range qg.tables {
-		solves := semTable.TableSetFor(table.alias)
-		plan, err := createRoutePlan(table, solves, vschema)
-		if err != nil {
-			return nil, err
-		}
-		routePlans[i] = plan
-		intermediatePlans[solves] = &priorityQueueItem{
-			plan:     plan,
-			cost:     plan.cost(),
-			lhsSolve: 0,
-		}
-	}
-
-	if len(qg.tables) == 1 {
-		return routePlans[0], nil
-	}
-
-	pq := priorityQueuePlans{}
-
-	for i, lhs := range routePlans {
-		for j := i + 1; j < len(routePlans); j++ {
-			rhs := routePlans[j]
-			joinPredicates := qg.getPredicates(lhs.solves(), rhs.solves())
-			plan := createJoin(lhs, rhs, joinPredicates, semTable)
-			pq.Push(&priorityQueueItem{
-				plan:     plan,
-				cost:     plan.cost(),
-				lhsSolve: lhs.solves(),
-				rhsSolve: rhs.solves(),
-			})
-		}
-	}
-
-	heap.Init(&pq)
-
-	for pq.Len() > 0 {
-		item := heap.Pop(&pq).(*priorityQueueItem)
-		_, isLeftAvail := intermediatePlans[item.lhsSolve]
-		_, isRightAvail := intermediatePlans[item.rhsSolve]
-		if !isLeftAvail || !isRightAvail {
-			continue
-		}
-		delete(intermediatePlans, item.lhsSolve)
-		delete(intermediatePlans, item.rhsSolve)
-		solves := item.lhsSolve | item.rhsSolve
-		plan := item.plan
-
-		for tableSet, intermPlan := range intermediatePlans {
-			newPlan := createJoin(intermPlan.plan, plan, qg.getPredicates(solves, tableSet), semTable)
-			heap.Push(&pq, &priorityQueueItem{
-				plan:     newPlan,
-				cost:     newPlan.cost(),
-				lhsSolve: tableSet,
-				rhsSolve: solves,
-			})
-		}
-		intermediatePlans[solves] = item
-	}
-
-	// intermediatePlans should only have 1 value now
-	if len(intermediatePlans) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "their should be only 1 intermediate planner now")
-	}
-
-	for _, item := range intermediatePlans {
-		return item.plan, nil
-	}
-
-	return nil, nil
 }
 
 type (
