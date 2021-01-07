@@ -131,6 +131,8 @@ type (
 		SetDDLStrategy(string)
 		GetDDLStrategy() string
 
+		GetSessionUUID() string
+
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)
 		SetReadAfterWriteTimeout(float64)

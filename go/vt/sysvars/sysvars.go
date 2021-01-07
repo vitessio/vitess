@@ -53,6 +53,7 @@ var (
 	Workload            = SystemVariable{Name: "workload", IdentifierAsString: true}
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
+	SessionUUID         = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
 	// Online DDL
 	DDLStrategy = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
 
@@ -73,6 +74,7 @@ var (
 		Workload,
 		Charset,
 		Names,
+		SessionUUID,
 		ReadAfterWriteGTID,
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
