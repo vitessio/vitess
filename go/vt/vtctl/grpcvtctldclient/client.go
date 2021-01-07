@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,17 +19,13 @@ limitations under the License.
 package grpcvtctldclient
 
 import (
-	"context"
 	"flag"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
@@ -56,6 +52,9 @@ type gRPCVtctldClient struct {
 	c  vtctlservicepb.VtctldClient
 }
 
+//go:generate -command grpcvtctldclient go run ./codegen
+//go:generate grpcvtctldclient -out client_gen.go
+
 func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
 	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
@@ -80,33 +79,6 @@ func (client *gRPCVtctldClient) Close() error {
 	}
 
 	return err
-}
-
-// (TODO:@amason) - This boilerplate should end up the same for all ~70 commands
-// .... we should do this with code gen.
-
-func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
-}
-
-func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.GetKeyspace(ctx, in, opts...)
-}
-
-func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
 func init() {

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -151,18 +152,18 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 	return onlineDDL, nil
 }
 
-// getOnlineDDLAction parses the given SQL into a statement and returns the action type of the DDL statement, or error
+// ParseOnlineDDLStatement parses the given SQL into a statement and returns the action type of the DDL statement, or error
 // if the statement is not a DDL
-func getOnlineDDLAction(sql string) (action sqlparser.DDLAction, ddlStmt sqlparser.DDLStatement, err error) {
+func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action sqlparser.DDLAction, err error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
-		return action, ddlStmt, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", sql, err)
+		return nil, 0, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", sql, err)
 	}
 	switch ddlStmt := stmt.(type) {
 	case sqlparser.DDLStatement:
-		return ddlStmt.GetAction(), ddlStmt, nil
+		return ddlStmt, ddlStmt.GetAction(), nil
 	}
-	return action, ddlStmt, fmt.Errorf("Unsupported query type: %s", sql)
+	return ddlStmt, action, fmt.Errorf("Unsupported query type: %s", sql)
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
@@ -201,7 +202,7 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 
 // GetAction extracts the DDL action type from the online DDL statement
 func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
-	action, _, err = getOnlineDDLAction(onlineDDL.SQL)
+	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL)
 	return action, err
 }
 
@@ -243,10 +244,20 @@ func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, baseP
 	return nil
 }
 
+// GetGCUUID gets this OnlineDDL UUID in GC UUID format
+func (onlineDDL *OnlineDDL) GetGCUUID() string {
+	return OnlineDDLToGCUUID(onlineDDL.UUID)
+}
+
 // IsOnlineDDLUUID answers 'true' when the given string is an online-ddl UUID, e.g.:
 // a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a
 func IsOnlineDDLUUID(uuid string) bool {
 	return onlineDdlUUIDRegexp.MatchString(uuid)
+}
+
+// OnlineDDLToGCUUID converts a UUID in online-ddl format to GC-table format
+func OnlineDDLToGCUUID(uuid string) string {
+	return strings.Replace(uuid, "_", "", -1)
 }
 
 // IsOnlineDDLTableName answers 'true' when the given table name _appears to be_ a name

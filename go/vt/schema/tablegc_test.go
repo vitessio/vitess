@@ -28,7 +28,7 @@ func TestIsGCTableName(t *testing.T) {
 	states := []TableGCState{HoldTableGCState, PurgeTableGCState, EvacTableGCState, DropTableGCState}
 	for _, state := range states {
 		for i := 0; i < 10; i++ {
-			tableName, err := generateGCTableName(state, tm)
+			tableName, err := generateGCTableName(state, "", tm)
 			assert.NoError(t, err)
 			assert.True(t, IsGCTableName(tableName))
 		}
@@ -77,9 +77,10 @@ func TestAnalyzeGCTableName(t *testing.T) {
 		},
 	}
 	for _, ts := range tt {
-		isGC, state, tm, err := AnalyzeGCTableName(ts.tableName)
+		isGC, state, uuid, tm, err := AnalyzeGCTableName(ts.tableName)
 		assert.NoError(t, err)
 		assert.True(t, isGC)
+		assert.True(t, IsGCUUID(uuid))
 		assert.Equal(t, ts.state, state)
 		assert.Equal(t, ts.t, tm)
 	}
@@ -140,12 +141,14 @@ func TestParseGCLifecycle(t *testing.T) {
 		},
 	}
 	for _, ts := range tt {
-		states, err := ParseGCLifecycle(ts.lifecycle)
-		if ts.expectErr {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-			assert.Equal(t, ts.states, states)
-		}
+		t.Run(ts.lifecycle, func(*testing.T) {
+			states, err := ParseGCLifecycle(ts.lifecycle)
+			if ts.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, ts.states, states)
+			}
+		})
 	}
 }

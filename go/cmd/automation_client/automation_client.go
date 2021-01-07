@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"

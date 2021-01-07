@@ -23,7 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/withddl"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"

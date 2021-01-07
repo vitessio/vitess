@@ -29,9 +29,9 @@ import (
 	"testing"
 	"time"
 
+	"context"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtenv "vitess.io/vitess/go/vt/env"

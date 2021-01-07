@@ -199,7 +199,10 @@ func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgate
 			sess.Target.Shard == shardSession.Target.Shard
 		if targetedAtSameTablet {
 			if !proto.Equal(sess.TabletAlias, shardSession.TabletAlias) {
-				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+				errorDetails := fmt.Sprintf("got non-matching aliases (%v vs %v) for the same target (keyspace: %v, tabletType: %v, shard: %v)",
+					sess.TabletAlias, shardSession.TabletAlias,
+					sess.Target.Keyspace, sess.Target.TabletType, sess.Target.Shard)
+				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, errorDetails)
 			}
 			// replace the old info with the new one
 			sessions[i] = shardSession

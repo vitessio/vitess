@@ -32,7 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
 	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/mysql"
