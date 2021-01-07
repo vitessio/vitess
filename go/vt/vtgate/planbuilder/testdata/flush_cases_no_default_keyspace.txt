@@ -69,3 +69,25 @@
     ]
   }
 }
+
+# Incorrect tables in flush
+"flush tables user.a with read lock"
+"table a not found"
+
+# Unknown tables in unsharded keyspaces are allowed
+"flush tables main.a with read lock"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush tables main.a with read lock",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "flush tables a with read lock",
+    "SingleShardOnly": false
+  }
+}

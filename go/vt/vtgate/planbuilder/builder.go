@@ -256,24 +256,14 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Pri
 		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
 
 		if err != nil {
-			_, isNotFound := err.(vindexes.NotFoundError)
-			if !isNotFound {
-				return nil, err
-			}
+			return nil, err
 		}
 		if table == nil {
-			destinationTab, keyspaceTab, _, err = vschema.TargetDestination(tab.Qualifier.String())
-			if err != nil {
-				return nil, err
-			}
-			stmt.TableNames[i] = sqlparser.TableName{
-				Name: tab.Name,
-			}
-		} else {
-			keyspaceTab = table.Keyspace
-			stmt.TableNames[i] = sqlparser.TableName{
-				Name: table.Name,
-			}
+			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
+		}
+		keyspaceTab = table.Keyspace
+		stmt.TableNames[i] = sqlparser.TableName{
+			Name: table.Name,
 		}
 		if destinationTab == nil {
 			destinationTab = key.DestinationAllShards{}
