@@ -26,8 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	"context"
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
@@ -155,7 +155,7 @@ func (ct *controller) run(ctx context.Context) {
 		timer := time.NewTimer(*retryDelay)
 		select {
 		case <-ctx.Done():
-			log.Warningf("context canceleld: %s", err.Error())
+			log.Warningf("context canceled: %s", err.Error())
 			timer.Stop()
 			return
 		case <-timer.C:

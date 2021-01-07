@@ -15,12 +15,18 @@
  */
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { QueryClient, QueryClientProvider } from 'react-query';
+
 import './index.css';
 import { App } from './components/App';
 
+const queryClient = new QueryClient();
+
 ReactDOM.render(
     <React.StrictMode>
-        <App />
+        <QueryClientProvider client={queryClient}>
+            <App />
+        </QueryClientProvider>
     </React.StrictMode>,
     document.getElementById('root')
 );

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/schema"
@@ -153,7 +153,12 @@ func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, 
 }
 
 // IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
-func (exec *TabletExecutor) isOnlineSchemaDDL() (isOnline bool, strategy schema.DDLStrategy, options string) {
+func (exec *TabletExecutor) isOnlineSchemaDDL(ddlStmt sqlparser.DDLStatement) (isOnline bool, strategy schema.DDLStrategy, options string) {
+	switch ddlStmt.GetAction() {
+	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction, sqlparser.AlterDDLAction:
+	default:
+		return false, strategy, options
+	}
 	strategy, options, err := schema.ParseDDLStrategy(exec.ddlStrategy)
 	if err != nil {
 		return false, strategy, options
@@ -183,7 +188,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
 	for _, ddl := range parsedDDLs {
-		if isOnline, _, _ := exec.isOnlineSchemaDDL(); isOnline {
+		if isOnline, _, _ := exec.isOnlineSchemaDDL(ddl); isOnline {
 			// Since this is an online schema change, there is no need to worry about big changes
 			continue
 		}
@@ -218,9 +223,9 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 	if err != nil {
 		return err
 	}
-	switch stat.(type) {
+	switch stat := stat.(type) {
 	case sqlparser.DDLStatement:
-		if isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(); isOnlineDDL {
+		if isOnlineDDL, strategy, options := exec.isOnlineSchemaDDL(stat); isOnlineDDL {
 			exec.wr.Logger().Infof("Received DDL request. strategy=%+v", strategy)
 			normalizedQueries, err := schema.NormalizeOnlineDDL(sql)
 			if err != nil {

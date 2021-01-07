@@ -27,7 +27,7 @@ import (
 	"sync"
 
 	"cloud.google.com/go/storage"
-	"golang.org/x/net/context"
+	"context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"

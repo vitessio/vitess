@@ -22,7 +22,9 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
+	"path"
 	"testing"
 	"time"
 
@@ -148,6 +150,7 @@ func initializeCluster(t *testing.T) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			tablet.MysqlctlProcess.SecureTransport = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -467,6 +470,7 @@ func tlsTestTabletRecovery(t *testing.T, tabletForBinlogs *cluster.Vttablet, loo
 
 func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBinlogs *cluster.Vttablet, lookupTimeout, restoreKeyspaceName, shardName string) {
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	tablet.MysqlctlProcess.SecureTransport = true
 	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
@@ -488,7 +492,7 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 	tablet.VttabletProcess.Keyspace = restoreKeyspaceName
 	tablet.VttabletProcess.EnableSemiSync = true
 
-	certDir := tabletForBinlogs.VttabletProcess.Directory + "/data"
+	certDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/ssl_%010d", tablet.MysqlctlProcess.TabletUID))
 	tablet.VttabletProcess.ExtraArgs = []string{
 		"-disable_active_reparents",
 		"-enable_replication_reporter=false",
@@ -500,8 +504,8 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 		"-binlog_port", fmt.Sprintf("%d", tabletForBinlogs.MySQLPort),
 		"-binlog_user", mysqlUserName,
 		"-binlog_password", mysqlPassword,
-		"-binlog_ssl_ca", certDir + "/ca.pem",
-		"-binlog_ssl_server_name", getCNFromCertPEM(certDir + "/server-cert.pem"),
+		"-binlog_ssl_ca", certDir + "/ca-cert.pem",
+		"-binlog_ssl_server_name", getCNFromCertPEM(certDir + "/server-001-cert.pem"),
 		"-pitr_gtid_lookup_timeout", lookupTimeout,
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",

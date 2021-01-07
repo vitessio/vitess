@@ -33,7 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
