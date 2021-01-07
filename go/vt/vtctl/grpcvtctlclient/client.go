@@ -22,7 +22,9 @@ import (
 	"time"
 
 	"context"
+
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"

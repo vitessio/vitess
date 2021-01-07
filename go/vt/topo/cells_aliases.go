@@ -21,6 +21,7 @@ import (
 	"path"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

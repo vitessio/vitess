@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+
 	"vitess.io/vitess/go/trace"
 )
 

@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 

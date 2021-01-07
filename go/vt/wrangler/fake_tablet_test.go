@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/dbconfigs"

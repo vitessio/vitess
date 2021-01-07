@@ -18,6 +18,7 @@ package k8stopo
 
 import (
 	"fmt"
+
 	"vitess.io/vitess/go/vt/topo"
 )
 

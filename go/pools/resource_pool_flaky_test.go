@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/sync2"
 )
 

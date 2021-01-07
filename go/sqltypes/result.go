@@ -20,6 +20,7 @@ import (
 	"reflect"
 
 	"github.com/golang/protobuf/proto"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

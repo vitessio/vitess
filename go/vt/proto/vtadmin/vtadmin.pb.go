@@ -12,6 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 

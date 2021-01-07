@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"

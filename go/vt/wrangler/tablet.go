@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"

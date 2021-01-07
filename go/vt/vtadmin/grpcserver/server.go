@@ -36,10 +36,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/reflection"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 

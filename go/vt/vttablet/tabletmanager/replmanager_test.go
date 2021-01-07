@@ -21,7 +21,9 @@ import (
 	"time"
 
 	"context"
+
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

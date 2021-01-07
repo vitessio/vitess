@@ -18,6 +18,7 @@ package queryservice
 
 import (
 	"context"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"

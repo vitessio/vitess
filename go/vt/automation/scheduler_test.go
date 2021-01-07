@@ -22,6 +22,7 @@ import (
 	"time"
 
 	context "context"
+
 	"github.com/golang/protobuf/proto"
 
 	automationpb "vitess.io/vitess/go/vt/proto/automation"

@@ -26,6 +26,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 
 	"context"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"
