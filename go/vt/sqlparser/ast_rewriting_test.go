@@ -29,7 +29,7 @@ import (
 type myTestCase struct {
 	in, expected                                                      string
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID bool
-	ddlStrategy                                                       bool
+	ddlStrategy, sessionUUID                                          bool
 	udv                                                               int
 	autocommit, clientFoundRows, skipQueryPlanCache                   bool
 	sqlSelectLimit, transactionMode, workload                         bool
@@ -194,6 +194,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
 			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
+			assert.Equal(tc.sessionUUID, result.NeedsSysVar(sysvars.SessionUUID.Name), "should need sessionUUID")
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")

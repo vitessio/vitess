@@ -34,10 +34,9 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/trace"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
@@ -46,6 +45,8 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -335,6 +336,7 @@ func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
+		u, _ := uuid.NewUUID()
 		session = &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
@@ -342,6 +344,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			},
 			Autocommit:  true,
 			DDLStrategy: *defaultDDLStrategy,
+			SessionUUID: u.String(),
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
