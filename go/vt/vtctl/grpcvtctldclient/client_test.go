@@ -22,62 +22,27 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/nettest"
-	"google.golang.org/grpc"
-
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
-
-// annoyingly, this is duplicated with theu tests in package grpcvtctldserver.
-// fine for now, I suppose.
-func addKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctldatapb.Keyspace) {
-	in := *ks.Keyspace // take a copy to avoid the XXX_ fields changing
-
-	err := ts.CreateKeyspace(ctx, ks.Name, &in)
-	require.NoError(t, err)
-}
-
-func withTestServer(
-	t *testing.T,
-	server vtctlservicepb.VtctldServer,
-	test func(t *testing.T, client vtctldclient.VtctldClient),
-) {
-	lis, err := nettest.NewLocalListener("tcp")
-	require.NoError(t, err, "cannot create nettest listener")
-
-	defer lis.Close()
-
-	s := grpc.NewServer()
-	vtctlservicepb.RegisterVtctldServer(s, server)
-
-	go s.Serve(lis)
-	defer s.Stop()
-
-	client, err := vtctldclient.New("grpc", lis.Addr().String())
-	require.NoError(t, err, "cannot create vtctld client")
-
-	test(t, client)
-}
 
 func TestFindAllShardsInKeyspace(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	vtctld := grpcvtctldserver.NewVtctldServer(ts)
 
-	withTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		ks := &vtctldatapb.Keyspace{
 			Name:     "testkeyspace",
 			Keyspace: &topodatapb.Keyspace{},
 		}
-		addKeyspace(ctx, t, ts, ks)
+		testutil.AddKeyspace(ctx, t, ts, ks)
 
 		si1, err := ts.GetOrCreateShard(ctx, ks.Name, "-80")
 		require.NoError(t, err)
@@ -115,7 +80,7 @@ func TestGetKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	vtctld := grpcvtctldserver.NewVtctldServer(ts)
 
-	withTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		expected := &vtctldatapb.GetKeyspaceResponse{
 			Keyspace: &vtctldata.Keyspace{
 				Name: "testkeyspace",
@@ -124,7 +89,7 @@ func TestGetKeyspace(t *testing.T) {
 				},
 			},
 		}
-		addKeyspace(ctx, t, ts, expected.Keyspace)
+		testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)
 
 		resp, err := client.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 		assert.NoError(t, err)
@@ -142,7 +107,7 @@ func TestGetKeyspaces(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	vtctld := grpcvtctldserver.NewVtctldServer(ts)
 
-	withTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		resp, err := client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 		assert.NoError(t, err)
 		assert.Empty(t, resp.Keyspaces)
@@ -151,7 +116,7 @@ func TestGetKeyspaces(t *testing.T) {
 			Name:     "testkeyspace",
 			Keyspace: &topodatapb.Keyspace{},
 		}
-		addKeyspace(ctx, t, ts, expected)
+		testutil.AddKeyspace(ctx, t, ts, expected)
 
 		resp, err = client.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 		assert.NoError(t, err)

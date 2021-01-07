@@ -23,9 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -40,7 +39,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 		Name:     "testkeyspace",
 		Keyspace: &topodatapb.Keyspace{},
 	}
-	addKeyspace(ctx, t, ts, ks)
+	testutil.AddKeyspace(ctx, t, ts, ks)
 
 	si1, err := ts.GetOrCreateShard(ctx, ks.Name, "-80")
 	require.NoError(t, err)
@@ -83,7 +82,7 @@ func TestGetKeyspace(t *testing.T) {
 			},
 		},
 	}
-	addKeyspace(ctx, t, ts, expected.Keyspace)
+	testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)
 
 	ks, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 	assert.NoError(t, err)
@@ -91,13 +90,6 @@ func TestGetKeyspace(t *testing.T) {
 
 	_, err = vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: "notfound"})
 	assert.Error(t, err)
-}
-
-func addKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctldatapb.Keyspace) {
-	in := *ks.Keyspace // take a copy to avoid the XXX_ fields changing
-
-	err := ts.CreateKeyspace(ctx, ks.Name, &in)
-	require.NoError(t, err)
 }
 
 func TestGetKeyspaces(t *testing.T) {
@@ -130,7 +122,7 @@ func TestGetKeyspaces(t *testing.T) {
 		},
 	}
 	for _, ks := range expected {
-		addKeyspace(ctx, t, ts, ks)
+		testutil.AddKeyspace(ctx, t, ts, ks)
 	}
 
 	resp, err = vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
