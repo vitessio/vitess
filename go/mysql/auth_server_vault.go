@@ -149,24 +149,26 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 	return a, nil
 }
 
-// Caller must hold the a.mu mutex.
 func (a *AuthServerVault) setTTLTicker(ttl time.Duration) {
-	if a.vaultCacheExpireTicker != nil {
-		a.vaultCacheExpireTicker.Stop()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.vaultCacheExpireTicker == nil {
+		a.vaultCacheExpireTicker = time.NewTicker(ttl)
+		go func() {
+			for range a.vaultCacheExpireTicker.C {
+				a.sigChan <- syscall.SIGHUP
+			}
+		}()
+	} else {
+		a.vaultCacheExpireTicker.Reset(ttl)
 	}
-	a.vaultCacheExpireTicker = time.NewTicker(ttl)
-	go func() {
-		for range a.vaultCacheExpireTicker.C {
-			a.sigChan <- syscall.SIGHUP
-		}
-	}()
 }
 
 // Reload JSON auth key from Vault. Return true if successful, false if not
 func (a *AuthServerVault) reloadVault() error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	secret, err := a.vaultClient.GetSecret(a.vaultPath)
+	a.mu.Unlock()
 	a.setTTLTicker(10 * time.Second) // Reload frequently on error
 
 	if err != nil {
@@ -186,7 +188,9 @@ func (a *AuthServerVault) reloadVault() error {
 	}
 
 	log.Infof("reloadVault(): success. Client status: %s", a.vaultClient.GetStatus())
+	a.mu.Lock()
 	a.entries = entries
+	a.mu.Unlock()
 	a.setTTLTicker(a.vaultTTL)
 	return nil
 }
