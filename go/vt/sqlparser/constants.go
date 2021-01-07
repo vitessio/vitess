@@ -219,6 +219,7 @@ const (
 	StatusSessionStr   = " status"
 	VariableGlobalStr  = " global variables"
 	VariableSessionStr = " variables"
+	KeyspaceStr        = " keyspaces"
 
 	// DropKeyType strings
 	PrimaryKeyTypeStr = "primary key"
@@ -458,6 +459,7 @@ const (
 	StatusSession
 	VariableGlobal
 	VariableSession
+	Keyspace
 )
 
 // DropKeyType constants

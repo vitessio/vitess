@@ -437,11 +437,19 @@ func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
-	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES", "show schemas", "show SCHEMAS"} {
+	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		require.EqualValues(t, 5, qr.RowsAffected, fmt.Sprintf("unexpected results running query: %s", query))
 	}
+
+	for _, query := range []string{"show databases", "show DATABASES", "show schemas", "show SCHEMAS"} {
+		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
+		require.NoError(t, err)
+		// Showing default tables (5+4[default])
+		require.EqualValues(t, 9, qr.RowsAffected, fmt.Sprintf("unexpected results running query: %s", query))
+	}
+
 	_, err := executor.Execute(ctx, "TestExecute", session, "show variables", nil)
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "show collation", nil)

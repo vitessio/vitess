@@ -7753,13 +7753,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2346
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilter}}
+			yyVAL.statement = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilter}}
 		}
 	case 429:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2350
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilter}}
+			yyVAL.statement = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilter}}
 		}
 	case 430:
 		yyDollar = yyS[yypt-4 : yypt+1]

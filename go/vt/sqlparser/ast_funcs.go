@@ -1243,6 +1243,8 @@ func (ty ShowCommandType) ToString() string {
 		return VariableGlobalStr
 	case VariableSession:
 		return VariableSessionStr
+	case Keyspace:
+		return KeyspaceStr
 	default:
 		return "Unknown ShowCommandType"
 	}
