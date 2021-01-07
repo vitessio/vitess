@@ -25,7 +25,8 @@ import (
 	"math/rand"
 	"reflect"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 

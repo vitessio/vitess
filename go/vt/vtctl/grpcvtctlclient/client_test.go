@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclienttest"

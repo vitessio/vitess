@@ -25,6 +25,7 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
+
 	v1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 	scheme "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned/scheme"
 )

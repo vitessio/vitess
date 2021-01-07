@@ -25,7 +25,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"

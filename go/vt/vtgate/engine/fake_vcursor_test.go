@@ -35,7 +35,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -62,6 +62,10 @@ func (t noopVCursor) SetDDLStrategy(strategy string) {
 }
 
 func (t noopVCursor) GetDDLStrategy() string {
+	panic("implement me")
+}
+
+func (t noopVCursor) GetSessionUUID() string {
 	panic("implement me")
 }
 

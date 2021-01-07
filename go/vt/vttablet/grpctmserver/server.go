@@ -19,7 +19,8 @@ package grpctmserver
 import (
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/callinfo"

@@ -8,6 +8,7 @@ import (
 	math "math"
 
 	proto "github.com/golang/protobuf/proto"
+
 	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 

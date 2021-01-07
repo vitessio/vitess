@@ -332,6 +332,7 @@ const (
 	ERServerShutdown = 1053
 
 	// not found
+	ERCantFindFile          = 1017
 	ERFormNotFound          = 1029
 	ERKeyNotFound           = 1032
 	ERBadFieldError         = 1054

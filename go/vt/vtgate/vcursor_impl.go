@@ -39,7 +39,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -654,6 +654,11 @@ func (vc *vcursorImpl) SetDDLStrategy(strategy string) {
 // SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
+}
+
+// GetSessionUUID implements the SessionActions interface
+func (vc *vcursorImpl) GetSessionUUID() string {
+	return vc.safeSession.GetSessionUUID()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface

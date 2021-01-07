@@ -20,8 +20,9 @@ import (
 	"flag"
 	"testing"
 
+	"context"
+
 	"github.com/golang/mock/gomock"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
