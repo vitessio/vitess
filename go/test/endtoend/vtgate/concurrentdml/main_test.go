@@ -399,8 +399,13 @@ func TestTrxRollbackOnDisconnect(t *testing.T) {
 	wg.Wait()
 	time.Sleep(2 * time.Second)
 	conn2.Close()
-
+	now := time.Now()
 	exec(t, conn1, `insert into t1(c1, c2, c3) values (1000,2000,3000)`)
+	exec(t, conn1, `commit`)
+	since := time.Since(now)
+
+	secondsSince := since.Seconds()
+	require.Less(t, secondsSince, float64(1), "shutting down took too long - tx killer had to clean up")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

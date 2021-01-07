@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
+
 	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/mysql"
@@ -117,11 +118,14 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
-	defer func() {
-		vh.mu.Lock()
-		defer vh.mu.Unlock()
-		delete(vh.connections, c)
-	}()
+	vh.mu.Lock()
+	_, stillThere := vh.connections[c]
+	if !stillThere {
+		// someone else already closed
+		return
+	}
+	delete(vh.connections, c)
+	vh.mu.Unlock()
 
 	var ctx context.Context
 	var cancel context.CancelFunc

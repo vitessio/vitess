@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
@@ -674,25 +676,67 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
 
+func TestConnectionEOFWhileBusy(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t, true)
+	handler := &testRun{t: t}
+	sConn.listener.handler = handler
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	_ = cConn.WriteComQuery("block")
+	go func() {
+		_ = sConn.handleNextCommand(handler)
+	}()
+
+	time.Sleep(100 * time.Millisecond) // just to make sure the other goroutine has started
+	cConn.Close()
+	time.Sleep(2 * time.Second)
+	assert.True(t, handler.closed.Get(), "blocked connection not closed")
+}
+
+func TestConnectionEOFWhileNotBusy(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t, true)
+	handler := &testRun{t: t}
+	sConn.listener.handler = handler
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	cConn.Close()
+	cont := sConn.handleNextCommand(handler)
+	assert.False(t, cont)
+}
+
 type testRun struct {
-	t   *testing.T
-	err error
+	t      *testing.T
+	err    error
+	closed sync2.AtomicBool
 }
 
-func (t testRun) NewConnection(c *Conn) {
+func (t *testRun) NewConnection(c *Conn) {
 	panic("implement me")
 }
 
-func (t testRun) ConnectionClosed(c *Conn) {
-	panic("implement me")
+func (t *testRun) ConnectionClosed(c *Conn) {
+	t.closed.Set(true)
 }
 
-func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+func (t *testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
 	if strings.Contains(query, "error") {
 		return t.err
 	}
 	if strings.Contains(query, "panic") {
 		panic("test panic attack!")
+	}
+	if strings.Contains(query, "block") {
+		for !t.closed.Get() {
+		}
+		return nil
 	}
 	callback(selectRowsResult)
 	return nil

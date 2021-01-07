@@ -486,6 +486,10 @@ func (c *Conn) readConnPacket() {
 				log.Errorf("Error reading packet from %s: %v", c, err)
 			}
 			close(c.ch)
+			if c.busy.Get() {
+				// this will try to clean up resources a little sooner than waiting for the executor to finish would
+				c.listener.handler.ConnectionClosed(c)
+			}
 			return
 		}
 		c.ch <- buffer

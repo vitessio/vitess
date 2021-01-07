@@ -159,6 +159,8 @@ type Conn struct {
 
 	//
 	ch chan *dataBuffer
+
+	busy sync2.AtomicBool
 }
 
 // splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
@@ -821,6 +823,8 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	if !more {
 		return false
 	}
+	c.busy.Set(true)
+	defer c.busy.Set(false)
 	c.sequence = 0
 	for _, sequence := range buffer.sequences {
 		if sequence != c.sequence {
