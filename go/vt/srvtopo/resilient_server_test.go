@@ -310,7 +310,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	time.Sleep(*srvTopoCacheTTL)
 
-	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
+	defer cancel()
 	_, err = rs.GetSrvKeyspace(timeoutCtx, "test_cell", "test_ks")
 	wantErr := "timed out waiting for keyspace"
 	if err == nil || err.Error() != wantErr {
@@ -614,7 +615,8 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 
 	time.Sleep(*srvTopoCacheTTL)
 
-	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
+	defer cancel()
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
 	wantErr := "timed out waiting for keyspace names"
 	if err == nil || err.Error() != wantErr {
