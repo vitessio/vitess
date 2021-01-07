@@ -17,14 +17,13 @@ limitations under the License.
 package vtsql
 
 import (
-	"bytes"
 	"fmt"
-	"text/template"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/credentials"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -83,7 +82,7 @@ func (c *Config) Parse(args []string) error {
 	var creds *grpcclient.StaticAuthClientCreds
 
 	if *credentialsTmplStr != "" {
-		_creds, path, err := c.loadCredentialsFromTemplate(*credentialsTmplStr)
+		_creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)
 		if err != nil {
 			return fmt.Errorf("cannot load credentials from path template %s: %w", *credentialsTmplStr, err)
 		}
@@ -106,29 +105,4 @@ func (c *Config) Parse(args []string) error {
 	}
 
 	return nil
-}
-
-func (c Config) loadCredentialsFromTemplate(tmplStr string) (*grpcclient.StaticAuthClientCreds, string, error) {
-	path, err := c.renderTemplate(tmplStr)
-	if err != nil {
-		return nil, "", err
-	}
-
-	creds, err := loadCredentials(path)
-
-	return creds, path, err
-}
-
-func (c Config) renderTemplate(tmplStr string) (string, error) {
-	tmpl, err := template.New("").Parse(tmplStr)
-	if err != nil {
-		return "", err
-	}
-
-	buf := bytes.NewBuffer(nil)
-	if err := tmpl.Execute(buf, &c); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
 }
