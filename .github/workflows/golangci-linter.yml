@@ -20,5 +20,8 @@ jobs:
       - name: Clean Env
         run: $(go env GOPATH)/bin/golangci-lint cache clean
 
+      - name: Print linter version
+        run: $(go env GOPATH)/bin/golangci-lint --version
+
       - name: Run golangci-lint
         run: $(go env GOPATH)/bin/golangci-lint run go/...
