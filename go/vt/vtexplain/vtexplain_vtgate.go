@@ -111,12 +111,7 @@ func buildTopology(opts *Options, vschemaStr string, ksShardMapStr string, numSh
 	explainTopo.TabletConns = make(map[string]*explainTablet)
 	explainTopo.KeyspaceShards = make(map[string]map[string]*topodatapb.ShardReference)
 	for ks, vschema := range explainTopo.Keyspaces {
-		numShards := numShardsPerKeyspace
-		if !vschema.Sharded {
-			numShards = 1
-		}
-
-		shards, err := getShardRanges(ks, vschema, ksShardMap, numShards)
+		shards, err := getShardRanges(ks, vschema, ksShardMap, numShardsPerKeyspace)
 		if err != nil {
 			return err
 		}
@@ -166,10 +161,15 @@ func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[strin
 
 	}
 
-	shards := make([]*topodatapb.ShardReference, numShardsPerKeyspace)
+	numShards := 1
+	if vschema.Sharded {
+		numShards = numShardsPerKeyspace
+	}
 
-	for i := 0; i < numShardsPerKeyspace; i++ {
-		kr, err := key.EvenShardsKeyRange(i, numShardsPerKeyspace)
+	shards := make([]*topodatapb.ShardReference, numShards)
+
+	for i := 0; i < numShards; i++ {
+		kr, err := key.EvenShardsKeyRange(i, numShards)
 		if err != nil {
 			return nil, err
 		}
