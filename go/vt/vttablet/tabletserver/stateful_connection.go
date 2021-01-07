@@ -32,7 +32,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"golang.org/x/net/context"
+	"context"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"

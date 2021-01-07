@@ -26,7 +26,8 @@ import (
 
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"

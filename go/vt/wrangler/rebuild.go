@@ -17,7 +17,8 @@ limitations under the License.
 package wrangler
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/topotools"
 )
 

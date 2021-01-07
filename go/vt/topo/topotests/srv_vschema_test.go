@@ -18,9 +18,10 @@ package topotests
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

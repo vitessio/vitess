@@ -28,8 +28,10 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -146,7 +148,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		wr.Logger().Errorf("buildTrafficSwitcher: %v", err)
 		return nil, err
 	}
-	if err := ts.validate(ctx, false /* isWrite */); err != nil {
+	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate: %v", err)
 		return nil, err
 	}

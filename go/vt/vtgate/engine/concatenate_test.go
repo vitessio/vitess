@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 

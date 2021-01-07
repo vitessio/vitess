@@ -17,8 +17,9 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 )

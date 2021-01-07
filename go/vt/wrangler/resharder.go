@@ -21,9 +21,11 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"

@@ -26,7 +26,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"

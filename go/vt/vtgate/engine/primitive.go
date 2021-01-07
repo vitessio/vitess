@@ -24,9 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -130,6 +131,8 @@ type (
 
 		SetDDLStrategy(string)
 		GetDDLStrategy() string
+
+		GetSessionUUID() string
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)

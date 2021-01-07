@@ -37,6 +37,7 @@ import (
 	"github.com/martini-contrib/auth"
 	"github.com/martini-contrib/gzip"
 	"github.com/martini-contrib/render"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 

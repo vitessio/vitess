@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"

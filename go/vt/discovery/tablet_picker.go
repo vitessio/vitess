@@ -31,7 +31,8 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"golang.org/x/net/context"
+	"context"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"

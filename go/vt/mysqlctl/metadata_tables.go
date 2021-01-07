@@ -20,7 +20,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
