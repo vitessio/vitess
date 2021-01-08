@@ -43,17 +43,17 @@ import (
 // In Test*() function:
 //
 // mustMatch(t, want, got, "something doesn't match")
-func MustMatchFn(allowUnexportedTypes []interface{}, ignoredFields []string, extraOpts ...cmp.Option) func(t *testing.T, want, got interface{}, errMsg string) {
+func MustMatchFn(allowUnexportedTypes []interface{}, ignoredFields []string, extraOpts ...cmp.Option) func(t *testing.T, want, got interface{}, errMsg ...string) {
 	diffOpts := append([]cmp.Option{
 		cmp.AllowUnexported(allowUnexportedTypes...),
 		cmpIgnoreFields(ignoredFields...),
 	}, extraOpts...)
 	// Diffs want/got and fails with errMsg on any failure.
-	return func(t *testing.T, want, got interface{}, errMsg string) {
+	return func(t *testing.T, want, got interface{}, errMsg ...string) {
 		t.Helper()
 		diff := cmp.Diff(want, got, diffOpts...)
 		if diff != "" {
-			t.Fatalf("%s: (-want +got)\n%v", errMsg, diff)
+			t.Fatalf("%v: (-want +got)\n%v", errMsg, diff)
 		}
 	}
 }

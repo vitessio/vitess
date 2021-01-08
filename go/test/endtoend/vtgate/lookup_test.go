@@ -513,3 +513,15 @@ func TestSelectNullLookup(t *testing.T) {
 
 	exec(t, conn, "delete from t6")
 }
+
+func TestUnicodeLooseMD5CaseInsensitive(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into t4(id1, id2) values(1, 'test')")
+	defer exec(t, conn, "delete from t4")
+
+	assertMatches(t, conn, "SELECT id1, id2 from t4 where id2 = 'Test'", `[[INT64(1) VARCHAR("test")]]`)
+}
