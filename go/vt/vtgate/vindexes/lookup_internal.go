@@ -80,7 +80,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 	if vcursor.InTransactionAndIsDML() {
 		sel = sel + " for update"
 	}
-	if !ids[0].IsIntegral() && !ids[0].IsBinary() {
+	if !ids[0].IsIntegral() {
 		// for non integral and binary type, fallback to send query per id
 		for _, id := range ids {
 			vars, err := sqltypes.BuildBindVariable([]interface{}{id})
