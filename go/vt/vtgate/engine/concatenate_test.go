@@ -45,6 +45,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 		inputs: []*sqltypes.Result{
 			r("id1|col11|col12", "int64|varbinary|varbinary"),
 			r("id2|col21|col22", "int64|varbinary|varbinary"),
+			r("id3|col31|col32", "int64|varbinary|varbinary"),
 		},
 		expectedResult: r("id1|col11|col12", "int64|varbinary|varbinary"),
 	}, {
@@ -52,11 +53,14 @@ func TestConcatenate_NoErrors(t *testing.T) {
 		inputs: []*sqltypes.Result{
 			r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2"),
 			r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
+			r("id2|col2|col3", "int64|varchar|varbinary", "3|a3|b3"),
+			r("id2|col2|col3", "int64|varchar|varbinary", "4|a4|b4"),
 		},
-		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2"),
+		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2", "3|a3|b3", "4|a4|b4"),
 	}, {
 		testName: "mismatch field type",
 		inputs: []*sqltypes.Result{
+			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
 			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
 			r("id|col3|col4", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
@@ -64,6 +68,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 	}, {
 		testName: "input source has different column count",
 		inputs: []*sqltypes.Result{
+			r("id|col1|col2", "int64|varchar|varchar", "1|a1|b1", "2|a2|b2"),
 			r("id|col1|col2", "int64|varchar|varchar", "1|a1|b1", "2|a2|b2"),
 			r("id|col3|col4|col5", "int64|varchar|varchar|int32", "1|a1|b1|5", "2|a2|b2|6"),
 		},
@@ -78,12 +83,13 @@ func TestConcatenate_NoErrors(t *testing.T) {
 	}}
 
 	for _, tc := range testCases {
-		require.Equal(t, 2, len(tc.inputs))
+		var sources []Primitive
+		for _, input := range tc.inputs {
+			// input is added twice, since the first one is used by execute and the next by stream execute
+			sources = append(sources, &fakePrimitive{results: []*sqltypes.Result{input, input}})
+		}
 		concatenate := &Concatenate{
-			Sources: []Primitive{
-				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[0], tc.inputs[0]}},
-				&fakePrimitive{results: []*sqltypes.Result{tc.inputs[1], tc.inputs[1]}},
-			},
+			Sources: sources,
 		}
 
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
@@ -117,6 +123,7 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	fake := r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2")
 	concatenate := &Concatenate{
 		Sources: []Primitive{
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 		},
@@ -132,6 +139,7 @@ func TestConcatenate_WithErrors(t *testing.T) {
 		Sources: []Primitive{
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 		},
 	}
 	_, err = concatenate.Execute(&noopVCursor{ctx: ctx}, nil, true)
