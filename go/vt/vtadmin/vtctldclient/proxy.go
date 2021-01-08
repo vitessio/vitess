@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
