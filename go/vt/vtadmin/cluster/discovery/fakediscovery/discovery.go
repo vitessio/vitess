@@ -62,7 +62,7 @@ func New() *Fake {
 
 // AddTaggedGates adds the given gates to the discovery fake, associating each
 // gate with each tag. To tag different gates with multiple tags, call multiple
-// times with the same gates but different tag slices. Gates an uniquely
+// times with the same gates but different tag slices. Gates are uniquely
 // identified by hostname.
 func (d *Fake) AddTaggedGates(tags []string, gates ...*vtadminpb.VTGate) {
 	for _, tag := range tags {
@@ -71,6 +71,20 @@ func (d *Fake) AddTaggedGates(tags []string, gates ...*vtadminpb.VTGate) {
 
 	for _, g := range gates {
 		d.gates.byName[g.Hostname] = g
+	}
+}
+
+// AddTaggedVtctlds adds the given vtctlds to the discovery fake, associating
+// each vtctld with each tag. To tag different vtctlds with multiple tags, call
+// multiple times with the same vtctlds but different tag slices. Vtctlds are
+// uniquely identified by hostname.
+func (d *Fake) AddTaggedVtctlds(tags []string, vtctlds ...*vtadminpb.Vtctld) {
+	for _, tag := range tags {
+		d.vtctlds.byTag[tag] = append(d.vtctlds.byTag[tag], vtctlds...)
+	}
+
+	for _, vtctld := range vtctlds {
+		d.vtctlds.byName[vtctld.Hostname] = vtctld
 	}
 }
 
