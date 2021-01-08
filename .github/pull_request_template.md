@@ -23,3 +23,4 @@ Components that this PR will affect:
 - [ ]  VReplication
 - [ ]  Cluster Management
 - [ ]  Build 
+- [ ]  VTAdmin
