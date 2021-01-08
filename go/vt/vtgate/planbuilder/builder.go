@@ -284,6 +284,18 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Pri
 		flushStatements[sendDest{keyspaceTab, destinationTab}] = flush
 	}
 
+	if len(flushStatements) == 1 {
+		for sendDest, flush := range flushStatements {
+			return &engine.Send{
+				Keyspace:          sendDest.ks,
+				TargetDestination: sendDest.dest,
+				Query:             sqlparser.String(flush),
+				IsDML:             false,
+				SingleShardOnly:   false,
+			}, nil
+		}
+	}
+
 	keys := make([]sendDest, len(flushStatements))
 
 	// Collect keys of the map
@@ -297,7 +309,9 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Pri
 		return keys[i].ks.Name < keys[j].ks.Name
 	})
 
-	var finalPlan engine.Primitive
+	finalPlan := &engine.Concatenate{
+		Sources: nil,
+	}
 	for _, sendDest := range keys {
 		plan := &engine.Send{
 			Keyspace:          sendDest.ks,
@@ -306,13 +320,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Pri
 			IsDML:             false,
 			SingleShardOnly:   false,
 		}
-		if finalPlan == nil {
-			finalPlan = plan
-		} else {
-			finalPlan = &engine.Concatenate{
-				Sources: []engine.Primitive{finalPlan, plan},
-			}
-		}
+		finalPlan.Sources = append(finalPlan.Sources, plan)
 	}
 
 	return finalPlan, nil
