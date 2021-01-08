@@ -81,7 +81,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 		sel = sel + " for update"
 	}
 	if ids[0].IsIntegral() {
-		// for integral or binary type, batch query all ids and then map them back to the input order
+		// for integral types, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
