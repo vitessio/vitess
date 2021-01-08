@@ -3,6 +3,7 @@ package vtgate
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/proto/vschema"
@@ -237,7 +238,7 @@ func TestSetTarget(t *testing.T) {
 	}}
 
 	for i, tc := range tests {
-		t.Run(string(i)+"#"+tc.targetString, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			vc, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{InTransaction: true}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil)
 			vc.vschema = tc.vschema
 			err := vc.SetTarget(tc.targetString)
@@ -277,7 +278,7 @@ func TestPlanPrefixKey(t *testing.T) {
 	}}
 
 	for i, tc := range tests {
-		t.Run(string(i)+"#"+tc.targetString, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
 			ss.SetTargetString(tc.targetString)
 			vc, err := newVCursorImpl(context.Background(), ss, sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&fakeTopoServer{}, nil, ""))
