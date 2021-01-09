@@ -177,12 +177,12 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t1":         {"ks1.t1"},
 		"t2":             {"ks1.t2"},
 		"ks2.t2":         {"ks1.t2"},
-		"t1@rdonly":      {"ks2.t1"},
-		"ks2.t1@rdonly":  {"ks2.t1"},
-		"ks1.t1@rdonly":  {"ks2.t1"},
-		"t2@rdonly":      {"ks2.t2"},
-		"ks2.t2@rdonly":  {"ks2.t2"},
-		"ks1.t2@rdonly":  {"ks2.t2"},
+		"t1@rdonly":      {"ks1.t1"},
+		"ks2.t1@rdonly":  {"ks1.t1"},
+		"ks1.t1@rdonly":  {"ks1.t1"},
+		"t2@rdonly":      {"ks1.t2"},
+		"ks2.t2@rdonly":  {"ks1.t2"},
+		"ks1.t2@rdonly":  {"ks1.t2"},
 		"t1@replica":     {"ks1.t1"},
 		"ks2.t1@replica": {"ks1.t1"},
 		"ks1.t1@replica": {"ks1.t1"},
@@ -526,10 +526,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
 	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
 	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
-	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 2)
-	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 2)
-	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 1)
-	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 2)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 2)
 	verifyQueries(t, tme.allDBClients)
 
 	tme.expectNoPreviousJournals()
@@ -1764,7 +1764,7 @@ func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][
 		got[rr.FromTable] = append(got[rr.FromTable], rr.ToTables...)
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("srv rules for cell %s:\n%v, want\n%v", cell, got, want)
+		t.Fatalf("ERROR: routing rules don't match for cell %s:got\n%v, want\n%v", cell, got, want)
 	}
 }
 
@@ -1799,10 +1799,8 @@ func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want 
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if len(servedTypes) != want {
-		t.Errorf("shard %v has wrong served types: got: %v, want: %v", keyspaceShard, len(servedTypes), want)
-	}
+	require.Equal(t, want, len(servedTypes), fmt.Sprintf("shard %v has wrong served types: got: %v, want: %v",
+		keyspaceShard, len(servedTypes), want))
 }
 
 func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspaceShard, cell string, want int) {
@@ -1823,9 +1821,8 @@ outer:
 			}
 		}
 	}
-	if count != want {
-		t.Errorf("serving types for keyspaceShard %s, cell %s: %d, want %d", keyspaceShard, cell, count, want)
-	}
+	require.Equal(t, want, count, fmt.Sprintf("serving types for keyspaceShard %s, cell %s: %d, want %d",
+		keyspaceShard, cell, count, want))
 }
 
 func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
