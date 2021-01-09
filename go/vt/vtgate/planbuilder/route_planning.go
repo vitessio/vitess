@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"sort"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -105,6 +106,9 @@ type (
 
 		// cost is simply the number of routes in the joinTree
 		cost() int
+
+		// creates a copy of the joinTree that can be updated without changing the original
+		clone() joinTree
 	}
 	routeTable struct {
 		qtable *queryTable
@@ -139,7 +143,7 @@ type (
 
 // clone returns a copy of the struct with copies of slices,
 // so changing the the contents of them will not be reflected in the original
-func (rp *routePlan) clone() *routePlan {
+func (rp *routePlan) clone() joinTree {
 	result := *rp
 	result.vindexPreds = make([]vindexPlusPredicates, len(rp.vindexPreds))
 	copy(result.vindexPreds, rp.vindexPreds)
@@ -152,7 +156,25 @@ func (rp *routePlan) solves() semantics.TableSet {
 }
 
 // cost implements the joinTree interface
-func (*routePlan) cost() int {
+func (rp *routePlan) cost() int {
+	switch rp.routeOpCode {
+	case
+		engine.SelectDBA,
+		engine.SelectEqualUnique,
+		engine.SelectNext,
+		engine.SelectNone,
+		engine.SelectReference,
+		engine.SelectUnsharded:
+		return 1
+	case engine.SelectEqual:
+		return 5
+	case engine.SelectIN:
+		return 10
+	case engine.SelectMultiEqual:
+		return 10
+	case engine.SelectScatter:
+		return 20
+	}
 	return 1
 }
 
@@ -164,23 +186,16 @@ type vindexPlusPredicates struct {
 	covered bool
 }
 
+// addPredicate clones this routePlan and returns a new one with these predicates added to it. if the predicates can help,
+// they will improve the routeOpCode
 func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
-	if len(rp.tables) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "addPredicate should only be called when the route has a single table")
-	}
-
-	var vindexPreds []*vindexPlusPredicates
-
-	// Add all the column vindexes to the list of vindexPlusPredicates
-	for _, columnVindex := range rp.tables[0].vtable.ColumnVindexes {
-		vindexPreds = append(vindexPreds, &vindexPlusPredicates{vindex: columnVindex})
-	}
-
+	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
 		case *sqlparser.ComparisonExpr:
 			switch node.Operator {
 			case sqlparser.EqualOp:
+				// here we are searching for predicates in the form n.col = XYZ
 				if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
 					// we are looking at ANDed predicates in the WHERE clause.
 					// since we know that nothing returns true when compared to NULL,
@@ -189,7 +204,11 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 					return nil
 				}
 				// TODO(Manan,Andres): Remove the predicates that are repeated eg. Id=1 AND Id=1
-				for _, v := range vindexPreds {
+				for _, v := range rp.vindexPreds {
+					if v.covered {
+						// already covered by an earlier predicate
+						continue
+					}
 					column := node.Left.(*sqlparser.ColName)
 					for _, col := range v.vindex.Columns {
 						// If the column for the predicate matches any column in the vindex add it to the list
@@ -197,6 +216,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 							v.predicates = append(v.predicates, node)
 							// Vindex is covered if all the columns in the vindex have a associated predicate
 							v.covered = len(v.predicates) == len(v.vindex.Columns)
+							newVindexFound = true
 						}
 					}
 				}
@@ -204,8 +224,21 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 		}
 	}
 
+	// if we didn't open up any new vindex options, no need to enter here
+	if newVindexFound {
+		rp.pickBestAvailableVindex()
+	}
+
+	// any predicates that cover more than a single table need to be added here
+	rp.extraPredicates = append(rp.extraPredicates, predicates...)
+
+	return nil
+}
+
+// pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
+func (rp *routePlan) pickBestAvailableVindex() {
 	//TODO (Manan,Andres): Improve cost metric for vindexes
-	for _, v := range vindexPreds {
+	for _, v := range rp.vindexPreds {
 		if !v.covered {
 			continue
 		}
@@ -222,7 +255,6 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 			rp.routeOpCode = engine.SelectEqualUnique
 		}
 	}
-	return nil
 }
 
 // Predicates takes all known predicates for this route and ANDs them together
@@ -255,17 +287,69 @@ func (jp *joinPlan) solves() semantics.TableSet {
 func (jp *joinPlan) cost() int {
 	return jp.lhs.cost() + jp.rhs.cost()
 }
-
-func createJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
-	newPlan := tryMerge(lhs, rhs, joinPredicates, semTable)
-	if newPlan == nil {
-		newPlan = &joinPlan{
-			lhs:        lhs,
-			rhs:        rhs,
-			predicates: joinPredicates,
-		}
+func (jp *joinPlan) clone() joinTree {
+	result := &joinPlan{
+		predicates: make([]sqlparser.Expr, len(jp.predicates)),
+		lhs:        jp.lhs.clone(),
+		rhs:        jp.rhs.clone(),
 	}
-	return newPlan
+	copy(result.predicates, jp.predicates)
+	return result
+}
+
+func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {
+	switch node := tree.(type) {
+	case *routePlan:
+		plan := node.clone().(*routePlan)
+		err := plan.addPredicate(exprs...)
+		if err != nil {
+			return nil, err
+		}
+		return plan, nil
+
+	case *joinPlan:
+		// we need to figure out which predicates go where
+		var lhsPreds, rhsPreds []sqlparser.Expr
+		lhsSolves := node.lhs.solves()
+		rhsSolves := node.rhs.solves()
+		for _, expr := range exprs {
+			// TODO: we should not do this.
+			// we should instead do the same as go/vt/vtgate/planbuilder/jointree_transformers.go:46
+			deps := semTable.Dependencies(expr)
+			switch {
+			case deps.IsSolvedBy(lhsSolves):
+				lhsPreds = append(lhsPreds, expr)
+			case deps.IsSolvedBy(rhsSolves):
+				rhsPreds = append(rhsPreds, expr)
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
+			}
+		}
+		lhsPlan, err := pushPredicate2(lhsPreds, node.lhs, semTable)
+		if err != nil {
+			return nil, err
+		}
+		rhsPlan, err := pushPredicate2(rhsPreds, node.rhs, semTable)
+		if err != nil {
+			return nil, err
+		}
+		return &joinPlan{
+			predicates: exprs,
+			lhs:        lhsPlan,
+			rhs:        rhsPlan,
+		}, nil
+	default:
+		panic(fmt.Sprintf("BUG: unknown type %T", node))
+	}
+}
+
+func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+	newPlan := tryMerge(lhs, rhs, joinPredicates, semTable)
+	if newPlan != nil {
+		return newPlan, nil
+	}
+
+	return pushPredicate2(joinPredicates, &joinPlan{lhs: lhs, rhs: rhs}, semTable)
 }
 
 type (
@@ -297,7 +381,10 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 
 	crossJoinsOK := false
 	for len(plans) > 1 {
-		bestPlan, lIdx, rIdx := findBestJoin(qg, semTable, plans, planCache, crossJoinsOK)
+		bestPlan, lIdx, rIdx, err := findBestJoin(qg, semTable, plans, planCache, crossJoinsOK)
+		if err != nil {
+			return nil, err
+		}
 		if bestPlan != nil {
 			// if we found a best plan, we'll replace the two plans that were joined with the join plan created
 			plans = removeAt(plans, rIdx)
@@ -314,14 +401,19 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 	return plans[0], nil
 }
 
-func (cm cacheMap) getJoinFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) joinTree {
+func (cm cacheMap) getJoinFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
 	solves := tableSetPair{left: lhs.solves(), right: rhs.solves()}
-	plan := cm[solves]
-	if plan == nil {
-		plan = createJoin(lhs, rhs, joinPredicates, semTable)
-		cm[solves] = plan
+	cachedPlan := cm[solves]
+	if cachedPlan != nil {
+		return cachedPlan, nil
 	}
-	return plan
+
+	join, err := mergeOrJoin(lhs, rhs, joinPredicates, semTable)
+	if err != nil {
+		return nil, err
+	}
+	cm[solves] = join
+	return join, nil
 }
 
 func findBestJoin(
@@ -330,10 +422,7 @@ func findBestJoin(
 	plans []joinTree,
 	planCache cacheMap,
 	crossJoinsOK bool,
-) (joinTree, int, int) {
-	var lIdx, rIdx int
-	var bestPlan joinTree
-
+) (bestPlan joinTree, lIdx int, rIdx int, err error) {
 	for i, lhs := range plans {
 		for j, rhs := range plans {
 			if i == j {
@@ -346,8 +435,10 @@ func findBestJoin(
 				// cartesian product, which is almost always a bad idea
 				continue
 			}
-			plan := planCache.getJoinFor(lhs, rhs, joinPredicates, semTable)
-
+			plan, err := planCache.getJoinFor(lhs, rhs, joinPredicates, semTable)
+			if err != nil {
+				return nil, 0, 0, err
+			}
 			if bestPlan == nil || plan.cost() < bestPlan.cost() {
 				bestPlan = plan
 				// remember which plans we based on, so we can remove them later
@@ -356,7 +447,7 @@ func findBestJoin(
 			}
 		}
 	}
-	return bestPlan, lIdx, rIdx
+	return bestPlan, lIdx, rIdx, nil
 }
 
 func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
@@ -373,13 +464,17 @@ func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema Cont
 	}
 
 	var acc joinTree
+	var err error
 	for _, plan := range plans {
 		if acc == nil {
 			acc = plan
 			continue
 		}
 		joinPredicates := qg.getPredicates(acc.solves(), plan.solves())
-		acc = createJoin(acc, plan, joinPredicates, semTable)
+		acc, err = mergeOrJoin(acc, plan, joinPredicates, semTable)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return acc, nil
@@ -401,6 +496,10 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 			vtable: vschemaTable,
 		}},
 		keyspace: vschemaTable.Keyspace,
+	}
+
+	for _, columnVindex := range vschemaTable.ColumnVindexes {
+		plan.vindexPreds = append(plan.vindexPreds, vindexPlusPredicates{vindex: columnVindex})
 	}
 
 	switch {
@@ -502,7 +601,8 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 		extraPredicates: append(
 			append(aRoute.extraPredicates, bRoute.extraPredicates...),
 			joinPredicates...),
-		keyspace: aRoute.keyspace,
+		keyspace:    aRoute.keyspace,
+		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
 	}
 
 	switch aRoute.routeOpCode {
@@ -522,14 +622,7 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 		if !canMerge {
 			return nil
 		}
-		if aRoute.routeOpCode == engine.SelectEqualUnique {
-			r.vindex = aRoute.vindex
-			r.conditions = aRoute.conditions
-		} else if bRoute.routeOpCode == engine.SelectEqualUnique {
-			r.routeOpCode = bRoute.routeOpCode
-			r.vindex = bRoute.vindex
-			r.conditions = bRoute.conditions
-		}
+		r.pickBestAvailableVindex()
 	}
 
 	return r

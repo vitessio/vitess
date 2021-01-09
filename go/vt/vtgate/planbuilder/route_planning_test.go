@@ -115,11 +115,12 @@ func TestClone(t *testing.T) {
 
 	clone := original.clone()
 
-	clone.routeOpCode = engine.SelectDBA
-	assert.Equal(t, clone.routeOpCode, engine.SelectDBA)
+	clonedRP := clone.(*routePlan)
+	clonedRP.routeOpCode = engine.SelectDBA
+	assert.Equal(t, clonedRP.routeOpCode, engine.SelectDBA)
 	assert.Equal(t, original.routeOpCode, engine.SelectEqualUnique)
 
-	clone.vindexPreds[0].covered = true
-	assert.True(t, clone.vindexPreds[0].covered)
+	clonedRP.vindexPreds[0].covered = true
+	assert.True(t, clonedRP.vindexPreds[0].covered)
 	assert.False(t, original.vindexPreds[0].covered)
 }
