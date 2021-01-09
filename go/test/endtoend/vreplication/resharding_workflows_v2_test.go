@@ -523,7 +523,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		switchWrites(t, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		switchWrites(t, ksWorkflow, true)
+		switchWrites(t, reverseKsWorkflow, true)
 		validateWritesRouteToSource(t)
 
 		validateReadsRouteToSource(t, "replica")
