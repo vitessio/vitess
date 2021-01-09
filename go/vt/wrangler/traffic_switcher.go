@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+
 	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
