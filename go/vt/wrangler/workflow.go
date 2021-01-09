@@ -258,7 +258,7 @@ func (vrw *VReplicationWorkflow) ReverseTraffic() error {
 // Workflow errors
 const (
 	ErrWorkflowNotFullySwitched  = "cannot complete workflow because you have not yet switched all read and write traffic"
-	ErrWorkflowPartiallySwitched = "cannot abort workflow because you have already switched some or all read and write traffic"
+	ErrWorkflowPartiallySwitched = "cannot cancel workflow because you have already switched some or all read and write traffic"
 )
 
 // Complete cleans up a successful workflow
@@ -280,8 +280,8 @@ func (vrw *VReplicationWorkflow) Complete() error {
 	return nil
 }
 
-// Abort deletes all artifacts from a workflow which has not yet been switched
-func (vrw *VReplicationWorkflow) Abort() error {
+// Cancel deletes all artifacts from a workflow which has not yet been switched
+func (vrw *VReplicationWorkflow) Cancel() error {
 	ws := vrw.ws
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
 		return fmt.Errorf(ErrWorkflowPartiallySwitched)
