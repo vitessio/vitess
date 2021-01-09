@@ -180,7 +180,7 @@ func (m *Manager) Run(ctx context.Context) {
 	m.workflows = make(map[string]*runningWorkflow)
 	m.mu.Unlock()
 
-	// Abort the running jobs. They won't save their state as
+	// Cancel the running jobs. They won't save their state as
 	// m.ctx is nil and they know it means we're shutting down.
 	for _, rw := range runningWorkflows {
 		rw.cancel()
