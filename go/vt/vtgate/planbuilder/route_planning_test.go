@@ -104,3 +104,22 @@ func TestMergeJoins(t *testing.T) {
 		})
 	}
 }
+
+func TestClone(t *testing.T) {
+	original := &routePlan{
+		routeOpCode: engine.SelectEqualUnique,
+		vindexPreds: []vindexPlusPredicates{{
+			covered: false,
+		}},
+	}
+
+	clone := original.clone()
+
+	clone.routeOpCode = engine.SelectDBA
+	assert.Equal(t, clone.routeOpCode, engine.SelectDBA)
+	assert.Equal(t, original.routeOpCode, engine.SelectEqualUnique)
+
+	clone.vindexPreds[0].covered = true
+	assert.True(t, clone.vindexPreds[0].covered)
+	assert.False(t, original.vindexPreds[0].covered)
+}
