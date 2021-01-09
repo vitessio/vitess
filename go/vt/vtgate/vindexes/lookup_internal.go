@@ -80,7 +80,30 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 	if vcursor.InTransactionAndIsDML() {
 		sel = sel + " for update"
 	}
-	if !ids[0].IsIntegral() && !ids[0].IsBinary() {
+	if ids[0].IsIntegral() {
+		// for integral types, batch query all ids and then map them back to the input order
+		vars, err := sqltypes.BuildBindVariable(ids)
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Map: %v", err)
+		}
+		bindVars := map[string]*querypb.BindVariable{
+			lkp.FromColumns[0]: vars,
+		}
+		result, err := vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
+		if err != nil {
+			return nil, fmt.Errorf("lookup.Map: %v", err)
+		}
+		resultMap := make(map[string][][]sqltypes.Value)
+		for _, row := range result.Rows {
+			resultMap[row[0].ToString()] = append(resultMap[row[0].ToString()], []sqltypes.Value{row[1]})
+		}
+
+		for _, id := range ids {
+			results = append(results, &sqltypes.Result{
+				Rows: resultMap[id.ToString()],
+			})
+		}
+	} else {
 		// for non integral and binary type, fallback to send query per id
 		for _, id := range ids {
 			vars, err := sqltypes.BuildBindVariable([]interface{}{id})
@@ -101,29 +124,6 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 			}
 			results = append(results, &sqltypes.Result{
 				Rows: rows,
-			})
-		}
-	} else {
-		// for integral or binary type, batch query all ids and then map them back to the input order
-		vars, err := sqltypes.BuildBindVariable(ids)
-		if err != nil {
-			return nil, fmt.Errorf("lookup.Map: %v", err)
-		}
-		bindVars := map[string]*querypb.BindVariable{
-			lkp.FromColumns[0]: vars,
-		}
-		result, err := vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
-		if err != nil {
-			return nil, fmt.Errorf("lookup.Map: %v", err)
-		}
-		resultMap := make(map[string][][]sqltypes.Value)
-		for _, row := range result.Rows {
-			resultMap[row[0].ToString()] = append(resultMap[row[0].ToString()], []sqltypes.Value{row[1]})
-		}
-
-		for _, id := range ids {
-			results = append(results, &sqltypes.Result{
-				Rows: resultMap[id.ToString()],
 			})
 		}
 	}
