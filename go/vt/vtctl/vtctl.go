@@ -2200,6 +2200,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			case progress := <-progressCh:
 				if progress.running == progress.total {
 					wr.Logger().Printf("\nWorkflow started successfully with %d stream(s)\n", progress.total)
+					printDetails()
 					return nil
 				}
 				wr.Logger().Printf("%d%% ... ", 100*progress.running/progress.total)
