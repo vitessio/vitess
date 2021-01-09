@@ -105,6 +105,28 @@ func TestSelect(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	tree, err := Parse("update t set a = 1")
+	require.NoError(t, err)
+
+	upd, ok := tree.(*Update)
+	require.True(t, ok)
+
+	upd.AddWhere(&ComparisonExpr{
+		Left:     &ColName{Name: NewColIdent("b")},
+		Operator: EqualOp,
+		Right:    NewIntLiteral([]byte("2")),
+	})
+	assert.Equal(t, "update t set a = 1 where b = 2", String(upd))
+
+	upd.AddWhere(&ComparisonExpr{
+		Left:     &ColName{Name: NewColIdent("c")},
+		Operator: EqualOp,
+		Right:    NewIntLiteral([]byte("3")),
+	})
+	assert.Equal(t, "update t set a = 1 where b = 2 and c = 3", String(upd))
+}
+
 func TestRemoveHints(t *testing.T) {
 	for _, query := range []string{
 		"select * from t use index (i)",
