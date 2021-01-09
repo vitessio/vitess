@@ -213,6 +213,8 @@ percona57)
 debconf debconf/frontend select Noninteractive
 percona-server-server-5.7 percona-server-server/root_password password 'unused'
 percona-server-server-5.7 percona-server-server/root_password_again password 'unused'
+percona-server-server-5.7 percona-server-server-5.7/root-pass password 'unused'
+percona-server-server-5.7 percona-server-server-5.7/re-root-pass password 'unused'
 EOF
     ;;
 percona80)
