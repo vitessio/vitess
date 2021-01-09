@@ -512,7 +512,11 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 }
 
 func (tm *TabletManager) checkMysql(ctx context.Context) error {
-	if appConfig, _ := tm.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+	appConfig, err := tm.DBConfigs.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
+	}
+	if appConfig.Host != "" {
 		tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = appConfig.Host
 			tablet.MysqlPort = int32(appConfig.Port)
