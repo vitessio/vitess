@@ -26,7 +26,7 @@ const (
 
 // Workflow state display strings
 const (
-	WorkflowStateNotStarted     = "Not Started"
+	WorkflowStateNotCreated     = "Not Created"
 	WorkflowStateNotSwitched    = "Reads Not Switched. Writes Not Switched"
 	WorkflowStateReadsSwitched  = "All Reads Switched. Writes Not Switched"
 	WorkflowStateWritesSwitched = "Reads Not Switched. Writes Switched"
@@ -82,7 +82,7 @@ func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VR
 		return nil, err
 	}
 	log.Infof("Workflow state is %+v", ws)
-	if ts != nil { //Other than on Start we need to get SourceKeyspace from the workflow
+	if ts != nil { //Other than on create we need to get SourceKeyspace from the workflow
 		vrw.params.TargetKeyspace = ts.targetKeyspace
 		vrw.params.Workflow = ts.workflow
 		vrw.params.SourceKeyspace = ts.sourceKeyspace
@@ -120,7 +120,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 	var stateInfo []string
 	s := ""
 	if !vrw.Exists() {
-		stateInfo = append(stateInfo, WorkflowStateNotStarted)
+		stateInfo = append(stateInfo, WorkflowStateNotCreated)
 	} else {
 		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
 			s = "All Reads Switched"
@@ -155,14 +155,14 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 	return strings.Join(stateInfo, ". ")
 }
 
-// Start initiates a workflow
-func (vrw *VReplicationWorkflow) Start() error {
+// Create initiates a workflow
+func (vrw *VReplicationWorkflow) Create() error {
 	var err error
 	if vrw.Exists() {
-		return fmt.Errorf("workflow already exists found")
+		return fmt.Errorf("workflow already exists")
 	}
-	if vrw.CachedState() != WorkflowStateNotStarted {
-		return fmt.Errorf("workflow has already been started, state is %s", vrw.CachedState())
+	if vrw.CachedState() != WorkflowStateNotCreated {
+		return fmt.Errorf("workflow has already been created, state is %s", vrw.CachedState())
 	}
 	switch vrw.workflowType {
 	case MoveTablesWorkflow:
