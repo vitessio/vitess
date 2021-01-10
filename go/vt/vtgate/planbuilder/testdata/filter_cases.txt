@@ -36,6 +36,19 @@
   }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select id from user where someColumn = null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from user where 1 != 1",
+    "Query": "select id from user",
+    "Table": "user"
+  }
 }
 
 # Single table unique vindex route
@@ -1601,6 +1614,19 @@
   }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select id from music where id = null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music",
+    "Table": "music"
+  }
 }
 
 # SELECT with IS NULL
@@ -1663,6 +1689,19 @@
   }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select id from music where user_id = 4 and id = null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNone",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music",
+    "Table": "music"
+  }
 }
 
 # Single table with unique vindex match and IN (null)
