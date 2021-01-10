@@ -108,7 +108,7 @@ func TestMergeJoins(t *testing.T) {
 func TestClone(t *testing.T) {
 	original := &routePlan{
 		routeOpCode: engine.SelectEqualUnique,
-		vindexPreds: []vindexPlusPredicates{{
+		vindexPreds: []*vindexPlusPredicates{{
 			covered: false,
 		}},
 	}
