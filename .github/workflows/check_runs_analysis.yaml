@@ -49,12 +49,14 @@ jobs:
         # now combine back into $WORKFLOW_FAILURES_FILE, skipping duplicates
         tmpfile="$(mktemp)"
         cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | base64 -w 0 > $tmpfile
+        sha="$(sha1sum < $tmpfile | cut -d' ' -f1)"
         # cp $tmpfile $WORKFLOW_FAILURES_FILE
 
         json="
           {
             \"message\": \"automated merge of failed check runs\",
             \"branch\": \"metrics\",
+            \"sha\": \"sha\",
             \"content\": \"$(cat $tmpfile)\"
           }
         "
