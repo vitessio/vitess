@@ -29,7 +29,7 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestPlatforms = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
+	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
 
 	clusterTestTemplate        = "templates/cluster_endtoend_test.tpl"
 	clusterList                = "11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27"
@@ -41,7 +41,7 @@ const (
 )
 
 type unitTest struct {
-	Name, Platform string
+	Name, Database string
 }
 
 type clusterTest struct {
@@ -109,11 +109,11 @@ func generateClusterWorkflows() {
 }
 
 func generateUnitTestWorkflows() {
-	platforms := parseList(unitTestPlatforms)
+	platforms := parseList(unitTestDatabases)
 	for _, platform := range platforms {
 		test := &unitTest{
 			Name:     fmt.Sprintf("Unit Test (%s)", platform),
-			Platform: platform,
+			Database: platform,
 		}
 		path := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
 		generateWorkflowFile(unitTestTemplate, path, test)
