@@ -31,6 +31,8 @@ jobs:
         echo "> GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
         echo "git branch:"
         git branch
+        echo "ls -l $WORKFLOW_FAILURES_FILE:"
+        ls -l "$WORKFLOW_FAILURES_FILE"
 
         # Get latest failed check runs
         curl \
