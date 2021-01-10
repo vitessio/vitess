@@ -56,7 +56,7 @@ jobs:
           {
             \"message\": \"automated merge of failed check runs\",
             \"branch\": \"metrics\",
-            \"sha\": \"sha\",
+            \"sha\": \"$sha\",
             \"content\": \"$(cat $tmpfile)\"
           }
         "
