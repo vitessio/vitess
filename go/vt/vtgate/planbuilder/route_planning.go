@@ -123,8 +123,8 @@ type (
 		// the tables also contain any predicates that only depend on that particular table
 		tables routeTables
 
-		// extraPredicates are the predicates that depend on multiple tables
-		extraPredicates []sqlparser.Expr
+		// predicates are the predicates evaluated by this plan
+		predicates []sqlparser.Expr
 
 		// vindex and conditions is set if a vindex will be used for this route.
 		vindex     vindexes.Vindex
@@ -132,7 +132,7 @@ type (
 
 		// here we store the possible vindexes we can use so that when we add predicates to the plan,
 		// we can quickly check if the new predicates enables any new vindex options
-		vindexPreds []vindexPlusPredicates
+		vindexPreds []*vindexPlusPredicates
 	}
 	joinPlan struct {
 		predicates []sqlparser.Expr
@@ -145,8 +145,12 @@ type (
 // so changing the the contents of them will not be reflected in the original
 func (rp *routePlan) clone() joinTree {
 	result := *rp
-	result.vindexPreds = make([]vindexPlusPredicates, len(rp.vindexPreds))
-	copy(result.vindexPreds, rp.vindexPreds)
+	result.vindexPreds = make([]*vindexPlusPredicates, len(rp.vindexPreds))
+	for i, pred := range rp.vindexPreds {
+		// we do this to create a copy of the struct
+		p := *pred
+		result.vindexPreds[i] = &p
+	}
 	return &result
 }
 
@@ -216,7 +220,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 							v.predicates = append(v.predicates, node)
 							// Vindex is covered if all the columns in the vindex have a associated predicate
 							v.covered = len(v.predicates) == len(v.vindex.Columns)
-							newVindexFound = true
+							newVindexFound = newVindexFound || v.covered
 						}
 					}
 				}
@@ -230,7 +234,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 	}
 
 	// any predicates that cover more than a single table need to be added here
-	rp.extraPredicates = append(rp.extraPredicates, predicates...)
+	rp.predicates = append(rp.predicates, predicates...)
 
 	return nil
 }
@@ -270,12 +274,7 @@ func (rp *routePlan) Predicates() sqlparser.Expr {
 			Right: e,
 		}
 	}
-	for _, t := range rp.tables {
-		for _, predicate := range t.qtable.predicates {
-			add(predicate)
-		}
-	}
-	for _, p := range rp.extraPredicates {
+	for _, p := range rp.predicates {
 		add(p)
 	}
 	return result
@@ -499,7 +498,7 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 	}
 
 	for _, columnVindex := range vschemaTable.ColumnVindexes {
-		plan.vindexPreds = append(plan.vindexPreds, vindexPlusPredicates{vindex: columnVindex})
+		plan.vindexPreds = append(plan.vindexPreds, &vindexPlusPredicates{vindex: columnVindex})
 	}
 
 	switch {
@@ -598,8 +597,8 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
 		tables:      append(aRoute.tables, bRoute.tables...),
-		extraPredicates: append(
-			append(aRoute.extraPredicates, bRoute.extraPredicates...),
+		predicates: append(
+			append(aRoute.predicates, bRoute.predicates...),
 			joinPredicates...),
 		keyspace:    aRoute.keyspace,
 		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),

@@ -396,7 +396,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 		expected := &strings.Builder{}
 		fail := checkAllTests
 		for tcase := range iterateExecFile(filename) {
-			t.Run(tcase.comments, func(t *testing.T) {
+			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				vschema.version = V3
 				plan, err := TestBuilder(tcase.input, vschema)
 				out := getPlanOrErrorOutput(err, plan)
@@ -431,7 +431,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 			//       with this last expectation, it is an error if the V4 planner
 			//       produces the same plan as the V3 planner does
 			if !empty || checkAllTests {
-				t.Run("V4: "+tcase.comments, func(t *testing.T) {
+				t.Run(fmt.Sprintf("%d V4: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 					if out != tcase.output2ndPlanner {
 						fail = true
 						t.Errorf("V4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
