@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -69,15 +71,24 @@ func (v *OnlineDDL) GetTableName() string {
 
 // Execute implements the Primitive interface
 func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), v.GetTableName(), v.SQL, v.Strategy, v.Options, "vtgate")
+	normalizedQueries, err := schema.NormalizeOnlineDDL(v.SQL)
 	if err != nil {
 		return result, err
 	}
-	err = vcursor.SubmitOnlineDDL(onlineDDL)
-	if err != nil {
-		return result, err
+	rows := [][]sqltypes.Value{}
+	for _, normalized := range normalizedQueries {
+		onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), normalized.TableName.Name.String(), normalized.SQL, v.Strategy, v.Options, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
+		if err != nil {
+			return result, err
+		}
+		err = vcursor.SubmitOnlineDDL(onlineDDL)
+		if err != nil {
+			return result, err
+		}
+		rows = append(rows, []sqltypes.Value{
+			sqltypes.NewVarChar(onlineDDL.UUID),
+		})
 	}
-
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -85,12 +96,8 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 				Type: sqltypes.VarChar,
 			},
 		},
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewVarChar(onlineDDL.UUID),
-			},
-		},
-		RowsAffected: 1,
+		Rows:         rows,
+		RowsAffected: uint64(len(rows)),
 	}
 	return result, err
 }

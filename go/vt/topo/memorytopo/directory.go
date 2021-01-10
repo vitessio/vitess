@@ -17,7 +17,8 @@ limitations under the License.
 package memorytopo
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 

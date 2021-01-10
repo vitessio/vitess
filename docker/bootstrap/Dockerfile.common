@@ -1,4 +1,4 @@
-FROM golang:1.13-buster
+FROM golang:1.15-buster
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -15,6 +15,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     software-properties-common \
     unzip \
     zip \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (equivalent to '. dev.env')

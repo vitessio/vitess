@@ -97,6 +97,14 @@ type IndexOption struct {
 	String string
 }
 
+// TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
+type TableOption struct {
+	Name   string
+	Value  *Literal
+	String string
+	Tables TableNames
+}
+
 // ColumnKeyOption indicates whether or not the given column is defined as an
 // index element and contains the type of the option
 type ColumnKeyOption int
@@ -1209,6 +1217,8 @@ func (ty ShowCommandType) ToString() string {
 		return DatabaseStr
 	case Function:
 		return FunctionStr
+	case Privilege:
+		return PrivilegeStr
 	case Procedure:
 		return ProcedureStr
 	case StatusGlobal:
@@ -1221,6 +1231,36 @@ func (ty ShowCommandType) ToString() string {
 		return VariableSessionStr
 	default:
 		return "Unknown ShowCommandType"
+	}
+}
+
+// ToString returns the DropKeyType as a string
+func (key DropKeyType) ToString() string {
+	switch key {
+	case PrimaryKeyType:
+		return PrimaryKeyTypeStr
+	case ForeignKeyType:
+		return ForeignKeyTypeStr
+	case NormalKeyType:
+		return NormalKeyTypeStr
+	default:
+		return "Unknown DropKeyType"
+	}
+}
+
+// ToString returns the LockOptionType as a string
+func (lock LockOptionType) ToString() string {
+	switch lock {
+	case NoneType:
+		return NoneTypeStr
+	case DefaultType:
+		return DefaultTypeStr
+	case SharedType:
+		return SharedTypeStr
+	case ExclusiveType:
+		return ExclusiveTypeStr
+	default:
+		return "Unknown type LockOptionType"
 	}
 }
 

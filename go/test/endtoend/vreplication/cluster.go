@@ -21,7 +21,8 @@ import (
 )
 
 var (
-	debug              = false // set to true to always use local env vtdataroot for local debugging
+	debug = false // set to true to always use local env vtdataroot for local debugging
+
 	originalVtdataroot string
 	vtdataroot         string
 )

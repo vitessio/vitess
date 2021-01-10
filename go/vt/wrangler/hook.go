@@ -20,7 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/net/context"
+	"context"
+
 	hk "vitess.io/vitess/go/vt/hook"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

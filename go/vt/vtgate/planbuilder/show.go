@@ -54,7 +54,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	switch show.Command {
 	case sqlparser.Charset:
 		return showCharset(show)
-	case sqlparser.Collation, sqlparser.Function, sqlparser.Procedure,
+	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
 		sqlparser.VariableGlobal, sqlparser.VariableSession:
 		return showSendAnywhere(show, vschema)
 	case sqlparser.Database:

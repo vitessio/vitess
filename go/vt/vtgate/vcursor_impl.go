@@ -35,7 +35,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -103,7 +103,7 @@ func (vc *vcursorImpl) GetKeyspace() string {
 	return vc.keyspace
 }
 
-func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error {
+func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error {
 	srvVschema := vc.vm.GetCurrentSrvVschema()
 	if srvVschema == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
@@ -117,8 +117,8 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLS
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
 	var ksName string
-	if !vschemaDDL.GetTable().IsEmpty() {
-		ksName = vschemaDDL.GetTable().Qualifier.String()
+	if !vschemaDDL.Table.IsEmpty() {
+		ksName = vschemaDDL.Table.Qualifier.String()
 	}
 	if ksName == "" {
 		ksName = keyspace
@@ -617,6 +617,11 @@ func (vc *vcursorImpl) SetDDLStrategy(strategy string) {
 // SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
+}
+
+// GetSessionUUID implements the SessionActions interface
+func (vc *vcursorImpl) GetSessionUUID() string {
+	return vc.safeSession.GetSessionUUID()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface

@@ -20,7 +20,7 @@ package tabletservermock
 import (
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"time"
 

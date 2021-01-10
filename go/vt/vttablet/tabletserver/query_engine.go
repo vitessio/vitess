@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -150,7 +150,7 @@ type QueryEngine struct {
 
 	strictTransTables bool
 
-	consolidatorMode            string
+	consolidatorMode            sync2.AtomicString
 	enableQueryPlanFieldCaching bool
 
 	// stats
@@ -175,7 +175,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 	qe.conns = connpool.NewPool(env, "ConnPool", config.OltpReadPool)
 	qe.streamConns = connpool.NewPool(env, "StreamConnPool", config.OlapReadPool)
-	qe.consolidatorMode = config.Consolidator
+	qe.consolidatorMode.Set(config.Consolidator)
 	qe.enableQueryPlanFieldCaching = config.CacheResultFields
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(env)

@@ -35,7 +35,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -62,6 +62,10 @@ func (t noopVCursor) SetDDLStrategy(strategy string) {
 }
 
 func (t noopVCursor) GetDDLStrategy() string {
+	panic("implement me")
+}
+
+func (t noopVCursor) GetSessionUUID() string {
 	panic("implement me")
 }
 
@@ -116,7 +120,7 @@ func (t noopVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	panic("implement me")
 }
 
-func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error {
+func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error {
 	panic("implement me")
 }
 
@@ -281,7 +285,7 @@ func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	return nil
 }
 
-func (f *loggingVCursor) ExecuteVSchema(string, sqlparser.DDLStatement) error {
+func (f *loggingVCursor) ExecuteVSchema(string, *sqlparser.AlterVschema) error {
 	panic("implement me")
 }
 

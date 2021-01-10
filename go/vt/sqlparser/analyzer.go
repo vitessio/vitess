@@ -76,7 +76,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case DDLStatement, DBDDLStatement:
+	case DDLStatement, DBDDLStatement, *AlterVschema:
 		return StmtDDL
 	case *Use:
 		return StmtUse
@@ -109,6 +109,16 @@ func ASTToStatementType(stmt Statement) StatementType {
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+		return true
+	}
+	return false
+}
+
+// CachePlan takes Statement and returns true if the query plan should be cached
+func CachePlan(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Select, *Union, *ParenSelect,
+		*Insert, *Update, *Delete:
 		return true
 	}
 	return false
@@ -266,18 +276,6 @@ func IsDMLStatement(stmt Statement) bool {
 		return true
 	}
 
-	return false
-}
-
-//IsVschemaDDL returns true if the query is an Vschema alter ddl.
-func IsVschemaDDL(ddl DDLStatement) bool {
-	switch ddlStatement := ddl.(type) {
-	case *DDL:
-		switch ddlStatement.Action {
-		case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
-			return true
-		}
-	}
 	return false
 }
 

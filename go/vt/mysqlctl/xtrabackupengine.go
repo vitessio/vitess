@@ -33,6 +33,7 @@ import (
 
 	"github.com/klauspost/pgzip"
 	"github.com/planetscale/pargzip"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"

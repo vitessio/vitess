@@ -1,27 +1,26 @@
-## Backport
-YES | NO
-
-## Status
-**DRAFT/READY/IN DEVELOPMENT/HOLD**
+<!-- if this PR is Work in Progress please create it as a Draft Pull Request -->
 
 ## Description
-A few sentences describing the overall goals of the pull request's commits.
+<!-- A few sentences describing the overall goals of the pull request's commits. -->
 
 ## Related Issue(s)
-List related PRs against other branches:
+<!-- List related issues and pull requests: -->
 
-## Todos
-- [ ] Tests
-- [ ] Documentation
+- 
+
+## Checklist
+- [ ] Should this PR be backported?
+- [ ] Tests were added or are not required
+- [ ] Documentation was added or is not required
 
 ## Deployment Notes
-Notes regarding deployment of the contained body of work.  These should note any
-db migrations, etc.
+<!-- Notes regarding deployment of the contained body of work. These should note any db migrations, etc. -->
 
 ## Impacted Areas in Vitess
-List general components of the application that this PR will affect:
+Components that this PR will affect:
 
 - [ ]  Query Serving
 - [ ]  VReplication
 - [ ]  Cluster Management
 - [ ]  Build 
+- [ ]  VTAdmin

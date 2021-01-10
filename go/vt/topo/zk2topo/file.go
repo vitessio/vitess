@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"path"
 
+	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 )

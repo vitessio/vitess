@@ -31,7 +31,8 @@ import (
 
 	"vitess.io/vitess/go/vt/sysvars"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -293,6 +294,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(v)
 		case sysvars.DDLStrategy.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.DDLStrategy)
+		case sysvars.SessionUUID.Name:
+			bindVars[key] = sqltypes.StringBindVariable(session.SessionUUID)
 		case sysvars.ReadAfterWriteGTID.Name:
 			var v string
 			ifReadAfterWriteExist(session, func(raw *vtgatepb.ReadAfterWrite) {
@@ -1319,7 +1322,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
-	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && plan.Instructions != nil {
+	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
 	return plan, nil

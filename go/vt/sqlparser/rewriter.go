@@ -16,6 +16,32 @@ type application struct {
 	cursor    Cursor
 }
 
+func replaceAddColumnsAfter(newNode, parent SQLNode) {
+	parent.(*AddColumns).After = newNode.(*ColName)
+}
+
+type replaceAddColumnsColumns int
+
+func (r *replaceAddColumnsColumns) replace(newNode, container SQLNode) {
+	container.(*AddColumns).Columns[int(*r)] = newNode.(*ColumnDefinition)
+}
+
+func (r *replaceAddColumnsColumns) inc() {
+	*r++
+}
+
+func replaceAddColumnsFirst(newNode, parent SQLNode) {
+	parent.(*AddColumns).First = newNode.(*ColName)
+}
+
+func replaceAddConstraintDefinitionConstraintDefinition(newNode, parent SQLNode) {
+	parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
+}
+
+func replaceAddIndexDefinitionIndexDefinition(newNode, parent SQLNode) {
+	parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
+}
+
 func replaceAliasedExprAs(newNode, parent SQLNode) {
 	parent.(*AliasedExpr).As = newNode.(ColIdent)
 }
@@ -38,6 +64,66 @@ func replaceAliasedTableExprHints(newNode, parent SQLNode) {
 
 func replaceAliasedTableExprPartitions(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
+}
+
+func replaceAlterColumnColumn(newNode, parent SQLNode) {
+	parent.(*AlterColumn).Column = newNode.(*ColName)
+}
+
+func replaceAlterColumnDefaultVal(newNode, parent SQLNode) {
+	parent.(*AlterColumn).DefaultVal = newNode.(Expr)
+}
+
+type replaceAlterTableAlterOptions int
+
+func (r *replaceAlterTableAlterOptions) replace(newNode, container SQLNode) {
+	container.(*AlterTable).AlterOptions[int(*r)] = newNode.(AlterOption)
+}
+
+func (r *replaceAlterTableAlterOptions) inc() {
+	*r++
+}
+
+func replaceAlterTablePartitionSpec(newNode, parent SQLNode) {
+	parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
+}
+
+func replaceAlterTableTable(newNode, parent SQLNode) {
+	parent.(*AlterTable).Table = newNode.(TableName)
+}
+
+func replaceAlterViewColumns(newNode, parent SQLNode) {
+	parent.(*AlterView).Columns = newNode.(Columns)
+}
+
+func replaceAlterViewSelect(newNode, parent SQLNode) {
+	parent.(*AlterView).Select = newNode.(SelectStatement)
+}
+
+func replaceAlterViewViewName(newNode, parent SQLNode) {
+	parent.(*AlterView).ViewName = newNode.(TableName)
+}
+
+func replaceAlterVschemaAutoIncSpec(newNode, parent SQLNode) {
+	parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
+}
+
+func replaceAlterVschemaTable(newNode, parent SQLNode) {
+	parent.(*AlterVschema).Table = newNode.(TableName)
+}
+
+type replaceAlterVschemaVindexCols int
+
+func (r *replaceAlterVschemaVindexCols) replace(newNode, container SQLNode) {
+	container.(*AlterVschema).VindexCols[int(*r)] = newNode.(ColIdent)
+}
+
+func (r *replaceAlterVschemaVindexCols) inc() {
+	*r++
+}
+
+func replaceAlterVschemaVindexSpec(newNode, parent SQLNode) {
+	parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
 }
 
 func replaceAndExprLeft(newNode, parent SQLNode) {
@@ -80,6 +166,22 @@ func (r *replaceCaseExprWhens) replace(newNode, container SQLNode) {
 
 func (r *replaceCaseExprWhens) inc() {
 	*r++
+}
+
+func replaceChangeColumnAfter(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).After = newNode.(*ColName)
+}
+
+func replaceChangeColumnFirst(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).First = newNode.(*ColName)
+}
+
+func replaceChangeColumnNewColDefinition(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
+}
+
+func replaceChangeColumnOldColumn(newNode, parent SQLNode) {
+	parent.(*ChangeColumn).OldColumn = newNode.(*ColName)
 }
 
 func replaceCheckConstraintDefinitionExpr(newNode, parent SQLNode) {
@@ -208,10 +310,6 @@ func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
 }
 
-func replaceDDLAutoIncSpec(newNode, parent SQLNode) {
-	parent.(*DDL).AutoIncSpec = newNode.(*AutoIncSpec)
-}
-
 func replaceDDLFromTables(newNode, parent SQLNode) {
 	parent.(*DDL).FromTables = newNode.(TableNames)
 }
@@ -234,20 +332,6 @@ func replaceDDLTableSpec(newNode, parent SQLNode) {
 
 func replaceDDLToTables(newNode, parent SQLNode) {
 	parent.(*DDL).ToTables = newNode.(TableNames)
-}
-
-type replaceDDLVindexCols int
-
-func (r *replaceDDLVindexCols) replace(newNode, container SQLNode) {
-	container.(*DDL).VindexCols[int(*r)] = newNode.(ColIdent)
-}
-
-func (r *replaceDDLVindexCols) inc() {
-	*r++
-}
-
-func replaceDDLVindexSpec(newNode, parent SQLNode) {
-	parent.(*DDL).VindexSpec = newNode.(*VindexSpec)
 }
 
 func replaceDeleteComments(newNode, parent SQLNode) {
@@ -280,6 +364,18 @@ func replaceDeleteWhere(newNode, parent SQLNode) {
 
 func replaceDerivedTableSelect(newNode, parent SQLNode) {
 	parent.(*DerivedTable).Select = newNode.(SelectStatement)
+}
+
+func replaceDropColumnName(newNode, parent SQLNode) {
+	parent.(*DropColumn).Name = newNode.(*ColName)
+}
+
+func replaceDropTableFromTables(newNode, parent SQLNode) {
+	parent.(*DropTable).FromTables = newNode.(TableNames)
+}
+
+func replaceDropViewFromTables(newNode, parent SQLNode) {
+	parent.(*DropView).FromTables = newNode.(TableNames)
 }
 
 func replaceExistsExprSubquery(newNode, parent SQLNode) {
@@ -368,6 +464,10 @@ func (r *replaceIndexHintsIndexes) inc() {
 	*r++
 }
 
+func replaceIndexInfoConstraintName(newNode, parent SQLNode) {
+	parent.(*IndexInfo).ConstraintName = newNode.(ColIdent)
+}
+
 func replaceIndexInfoName(newNode, parent SQLNode) {
 	parent.(*IndexInfo).Name = newNode.(ColIdent)
 }
@@ -442,6 +542,18 @@ func replaceMatchExprExpr(newNode, parent SQLNode) {
 	parent.(*MatchExpr).Expr = newNode.(Expr)
 }
 
+func replaceModifyColumnAfter(newNode, parent SQLNode) {
+	parent.(*ModifyColumn).After = newNode.(*ColName)
+}
+
+func replaceModifyColumnFirst(newNode, parent SQLNode) {
+	parent.(*ModifyColumn).First = newNode.(*ColName)
+}
+
+func replaceModifyColumnNewColDefinition(newNode, parent SQLNode) {
+	parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
+}
+
 func replaceNextvalExpr(newNode, parent SQLNode) {
 	tmp := parent.(Nextval)
 	tmp.Expr = newNode.(Expr)
@@ -487,6 +599,10 @@ func (r *replaceOrderByItems) inc() {
 	*r++
 }
 
+func replaceOrderByOptionCols(newNode, parent SQLNode) {
+	parent.(*OrderByOption).Cols = newNode.(Columns)
+}
+
 func replaceParenSelectSelect(newNode, parent SQLNode) {
 	parent.(*ParenSelect).Select = newNode.(SelectStatement)
 }
@@ -513,8 +629,16 @@ func (r *replacePartitionSpecDefinitions) inc() {
 	*r++
 }
 
-func replacePartitionSpecName(newNode, parent SQLNode) {
-	parent.(*PartitionSpec).Name = newNode.(ColIdent)
+func replacePartitionSpecNames(newNode, parent SQLNode) {
+	parent.(*PartitionSpec).Names = newNode.(Partitions)
+}
+
+func replacePartitionSpecNumber(newNode, parent SQLNode) {
+	parent.(*PartitionSpec).Number = newNode.(*Literal)
+}
+
+func replacePartitionSpecTableName(newNode, parent SQLNode) {
+	parent.(*PartitionSpec).TableName = newNode.(TableName)
 }
 
 type replacePartitionsItems int
@@ -541,6 +665,10 @@ func replaceRangeCondTo(newNode, parent SQLNode) {
 
 func replaceReleaseName(newNode, parent SQLNode) {
 	parent.(*Release).Name = newNode.(ColIdent)
+}
+
+func replaceRenameTableTable(newNode, parent SQLNode) {
+	parent.(*RenameTable).Table = newNode.(TableName)
 }
 
 func replaceSRollbackName(newNode, parent SQLNode) {
@@ -769,6 +897,10 @@ func (r *replaceTableSpecIndexes) inc() {
 	*r++
 }
 
+func replaceTableSpecOptions(newNode, parent SQLNode) {
+	parent.(*TableSpec).Options = newNode.(TableOptions)
+}
+
 func replaceTimestampFuncExprExpr1(newNode, parent SQLNode) {
 	parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
 }
@@ -964,6 +1096,24 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case nil:
 	case AccessMode:
 
+	case *AddColumns:
+		a.apply(node, n.After, replaceAddColumnsAfter)
+		replacerColumns := replaceAddColumnsColumns(0)
+		replacerColumnsB := &replacerColumns
+		for _, item := range n.Columns {
+			a.apply(node, item, replacerColumnsB.replace)
+			replacerColumnsB.inc()
+		}
+		a.apply(node, n.First, replaceAddColumnsFirst)
+
+	case *AddConstraintDefinition:
+		a.apply(node, n.ConstraintDefinition, replaceAddConstraintDefinitionConstraintDefinition)
+
+	case *AddIndexDefinition:
+		a.apply(node, n.IndexDefinition, replaceAddIndexDefinitionIndexDefinition)
+
+	case AlgorithmValue:
+
 	case *AliasedExpr:
 		a.apply(node, n.As, replaceAliasedExprAs)
 		a.apply(node, n.Expr, replaceAliasedExprExpr)
@@ -974,7 +1124,39 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Hints, replaceAliasedTableExprHints)
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
 
+	case *AlterCharset:
+
+	case *AlterColumn:
+		a.apply(node, n.Column, replaceAlterColumnColumn)
+		a.apply(node, n.DefaultVal, replaceAlterColumnDefaultVal)
+
 	case *AlterDatabase:
+
+	case *AlterTable:
+		replacerAlterOptions := replaceAlterTableAlterOptions(0)
+		replacerAlterOptionsB := &replacerAlterOptions
+		for _, item := range n.AlterOptions {
+			a.apply(node, item, replacerAlterOptionsB.replace)
+			replacerAlterOptionsB.inc()
+		}
+		a.apply(node, n.PartitionSpec, replaceAlterTablePartitionSpec)
+		a.apply(node, n.Table, replaceAlterTableTable)
+
+	case *AlterView:
+		a.apply(node, n.Columns, replaceAlterViewColumns)
+		a.apply(node, n.Select, replaceAlterViewSelect)
+		a.apply(node, n.ViewName, replaceAlterViewViewName)
+
+	case *AlterVschema:
+		a.apply(node, n.AutoIncSpec, replaceAlterVschemaAutoIncSpec)
+		a.apply(node, n.Table, replaceAlterVschemaTable)
+		replacerVindexCols := replaceAlterVschemaVindexCols(0)
+		replacerVindexColsB := &replacerVindexCols
+		for _, item := range n.VindexCols {
+			a.apply(node, item, replacerVindexColsB.replace)
+			replacerVindexColsB.inc()
+		}
+		a.apply(node, n.VindexSpec, replaceAlterVschemaVindexSpec)
 
 	case *AndExpr:
 		a.apply(node, n.Left, replaceAndExprLeft)
@@ -1003,6 +1185,12 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerWhensB.replace)
 			replacerWhensB.inc()
 		}
+
+	case *ChangeColumn:
+		a.apply(node, n.After, replaceChangeColumnAfter)
+		a.apply(node, n.First, replaceChangeColumnFirst)
+		a.apply(node, n.NewColDefinition, replaceChangeColumnNewColDefinition)
+		a.apply(node, n.OldColumn, replaceChangeColumnOldColumn)
 
 	case *CheckConstraintDefinition:
 		a.apply(node, n.Expr, replaceCheckConstraintDefinitionExpr)
@@ -1078,20 +1266,12 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
 
 	case *DDL:
-		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
 		a.apply(node, n.FromTables, replaceDDLFromTables)
 		a.apply(node, n.OptLike, replaceDDLOptLike)
 		a.apply(node, n.PartitionSpec, replaceDDLPartitionSpec)
 		a.apply(node, n.Table, replaceDDLTable)
 		a.apply(node, n.TableSpec, replaceDDLTableSpec)
 		a.apply(node, n.ToTables, replaceDDLToTables)
-		replacerVindexCols := replaceDDLVindexCols(0)
-		replacerVindexColsB := &replacerVindexCols
-		for _, item := range n.VindexCols {
-			a.apply(node, item, replacerVindexColsB.replace)
-			replacerVindexColsB.inc()
-		}
-		a.apply(node, n.VindexSpec, replaceDDLVindexSpec)
 
 	case *Default:
 
@@ -1107,7 +1287,18 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *DerivedTable:
 		a.apply(node, n.Select, replaceDerivedTableSelect)
 
+	case *DropColumn:
+		a.apply(node, n.Name, replaceDropColumnName)
+
 	case *DropDatabase:
+
+	case *DropKey:
+
+	case *DropTable:
+		a.apply(node, n.FromTables, replaceDropTableFromTables)
+
+	case *DropView:
+		a.apply(node, n.FromTables, replaceDropViewFromTables)
 
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
@@ -1122,6 +1313,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *Force:
 
 	case *ForeignKeyDefinition:
 		a.apply(node, n.OnDelete, replaceForeignKeyDefinitionOnDelete)
@@ -1160,6 +1353,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		}
 
 	case *IndexInfo:
+		a.apply(node, n.ConstraintName, replaceIndexInfoConstraintName)
 		a.apply(node, n.Name, replaceIndexInfoName)
 
 	case *Insert:
@@ -1187,6 +1381,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.LeftExpr, replaceJoinTableExprLeftExpr)
 		a.apply(node, n.RightExpr, replaceJoinTableExprRightExpr)
 
+	case *KeyState:
+
 	case *Limit:
 		a.apply(node, n.Offset, replaceLimitOffset)
 		a.apply(node, n.Rowcount, replaceLimitRowcount)
@@ -1197,11 +1393,18 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Load:
 
+	case *LockOption:
+
 	case *LockTables:
 
 	case *MatchExpr:
 		a.apply(node, n.Columns, replaceMatchExprColumns)
 		a.apply(node, n.Expr, replaceMatchExprExpr)
+
+	case *ModifyColumn:
+		a.apply(node, n.After, replaceModifyColumnAfter)
+		a.apply(node, n.First, replaceModifyColumnFirst)
+		a.apply(node, n.NewColDefinition, replaceModifyColumnNewColDefinition)
 
 	case Nextval:
 		a.apply(node, n.Expr, replaceNextvalExpr)
@@ -1237,6 +1440,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			replacerRef.inc()
 		}
 
+	case *OrderByOption:
+		a.apply(node, n.Cols, replaceOrderByOptionCols)
+
 	case *OtherAdmin:
 
 	case *OtherRead:
@@ -1258,7 +1464,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerDefinitionsB.replace)
 			replacerDefinitionsB.inc()
 		}
-		a.apply(node, n.Name, replacePartitionSpecName)
+		a.apply(node, n.Names, replacePartitionSpecNames)
+		a.apply(node, n.Number, replacePartitionSpecNumber)
+		a.apply(node, n.TableName, replacePartitionSpecTableName)
 
 	case Partitions:
 		replacer := replacePartitionsItems(0)
@@ -1277,6 +1485,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *Release:
 		a.apply(node, n.Name, replaceReleaseName)
+
+	case *RenameIndex:
+
+	case *RenameTable:
+		a.apply(node, n.Table, replaceRenameTableTable)
 
 	case *Rollback:
 
@@ -1392,6 +1605,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			replacerRef.inc()
 		}
 
+	case TableOptions:
+
 	case *TableSpec:
 		replacerColumns := replaceTableSpecColumns(0)
 		replacerColumnsB := &replacerColumns
@@ -1411,6 +1626,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerIndexesB.replace)
 			replacerIndexesB.inc()
 		}
+		a.apply(node, n.Options, replaceTableSpecOptions)
+
+	case *TablespaceOperation:
 
 	case *TimestampFuncExpr:
 		a.apply(node, n.Expr1, replaceTimestampFuncExprExpr1)
@@ -1472,6 +1690,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *Validation:
 
 	case Values:
 		replacer := replaceValuesItems(0)

@@ -600,7 +600,7 @@
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "Basic"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 24,
@@ -614,6 +614,24 @@
 			"Manual": false,
 			"Shard": 22,
 			"RetryMax": 0,
+			"Tags": []
+		},
+		"vault": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 23,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_v2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21,
+			"RetryMax": 3,
 			"Tags": []
 		}
 	}

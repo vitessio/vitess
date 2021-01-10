@@ -234,6 +234,7 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 		sysvars.TransactionMode.Name,
 		sysvars.Workload.Name,
 		sysvars.DDLStrategy.Name,
+		sysvars.SessionUUID.Name,
 		sysvars.ReadAfterWriteGTID.Name,
 		sysvars.ReadAfterWriteTimeOut.Name,
 		sysvars.SessionTrackGTIDs.Name:

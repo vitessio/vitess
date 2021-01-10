@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.13
+go 1.15
 
 require (
 	cloud.google.com/go/storage v1.0.0
@@ -10,6 +10,7 @@ require (
 	github.com/DataDog/datadog-go v2.2.0+incompatible
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/PuerkitoBio/goquery v1.5.1
+	github.com/aquarapid/vaultlib v0.5.1
 	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
 	github.com/aws/aws-sdk-go v1.28.8
@@ -34,6 +35,8 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.2.0 // indirect
+	github.com/gorilla/handlers v1.5.1
+	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
@@ -52,13 +55,13 @@ require (
 	github.com/klauspost/pgzip v1.2.4
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/krishicks/yaml-patch v0.0.10
+	github.com/looplab/fsm v0.2.0
 	github.com/magiconair/properties v1.8.1
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8
 	github.com/martini-contrib/gzip v0.0.0-20151124214156-6c035326b43f
 	github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
 	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
-	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
 	github.com/montanaflynn/stats v0.6.3
@@ -80,7 +83,9 @@ require (
 	github.com/samuel/go-zookeeper v0.0.0-20200724154423-2164a8ac840e
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sjmudd/stopwatch v0.0.0-20170613150411-f380bf8a9be1
+	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v1.1.1
+	github.com/spf13/pflag v1.0.5
 	github.com/spyzhov/ajson v0.4.2
 	github.com/stretchr/testify v1.4.0
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
@@ -105,6 +110,7 @@ require (
 	gopkg.in/gcfg.v1 v1.2.3
 	gopkg.in/ldap.v2 v2.5.0
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	gopkg.in/yaml.v2 v2.4.0
 	gotest.tools v2.2.0+incompatible
 	honnef.co/go/tools v0.0.1-2019.2.3
 	k8s.io/apiextensions-apiserver v0.17.3

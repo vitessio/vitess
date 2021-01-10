@@ -88,29 +88,11 @@
   }
 }
 
-# show columns from routed table
-"show full fields from `route1`"
-{
-  "QueryType": "SHOW",
-  "Original": "show full fields from `route1`",
-  "Instructions": {
-    "OperatorType": "Send",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "show full columns from user",
-    "SingleShardOnly": true
-  }
-}
-
 # show columns from user keyspace
-"show full columns from user_extra"
+"show full columns from user.user_extra"
 {
   "QueryType": "SHOW",
-  "Original": "show full columns from user_extra",
+  "Original": "show full columns from user.user_extra",
   "Instructions": {
     "OperatorType": "Send",
     "Keyspace": {
@@ -167,3 +149,97 @@
 # show columns fails as table does not exists in user keyspace
 "show full columns from user.unsharded"
 "table unsharded not found"
+
+# show charset
+"show charset"
+{
+  "QueryType": "SHOW",
+  "Original": "show charset",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# show function
+"show function status"
+{
+  "QueryType": "SHOW",
+  "Original": "show function status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show function status",
+    "SingleShardOnly": true
+  }
+}
+
+# show privileges
+"show privileges"
+{
+  "QueryType": "SHOW",
+  "Original": "show privileges",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show privileges",
+    "SingleShardOnly": true
+  }
+}
+
+# show procedure status
+"show procedure status"
+{
+  "QueryType": "SHOW",
+  "Original": "show procedure status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show procedure status",
+    "SingleShardOnly": true
+  }
+}
+
+
+# show variables
+"show variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show variables",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show variables",
+    "SingleShardOnly": true
+  }
+}
+
+
+# show databases
+"show databases"
+{
+  "QueryType": "SHOW",
+  "Original": "show databases",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
