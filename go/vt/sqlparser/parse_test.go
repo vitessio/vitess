@@ -1079,12 +1079,27 @@ var (
 	}, {
 		input: "create table a",
 	}, {
+		input:  "create table `a`",
+		output: "create table a",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
 	}, {
 		input: "create table test (\n\t__year year(4)\n)",
+	}, {
+		input: "create table a (\n\ta int not null\n)",
+	}, {
+		input: "create table a (\n\ta int not null default 0\n)",
+	}, {
+		input:  "create table a (a int not null default 0, primary key(a))",
+		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
+	}, {
+		input:  "create table a (`a column` int)",
+		output: "create table a (\n\t`a column` int\n)",
+	}, {
+		input: "create table a (\n\ta varchar(32) not null default ''\n)",
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
