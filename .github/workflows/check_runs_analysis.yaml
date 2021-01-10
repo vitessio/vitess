@@ -59,6 +59,9 @@ jobs:
           }
         "
 
+        echo "> json is:"
+        echo "$json"
+
         curl \
           -X PUT \
           -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
