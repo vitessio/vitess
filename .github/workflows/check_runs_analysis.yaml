@@ -3,8 +3,8 @@ on:
     types: [assigned, opened, synchronize, reopened]
     branches:
       - master
-  # schedule:
-  #   - cron:  '*/5 * * * *'
+  schedule:
+    - cron:  '*/5 * * * *'
 
 jobs:
   analyze:
