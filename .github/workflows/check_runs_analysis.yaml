@@ -52,6 +52,7 @@ jobs:
         sha="$(sha1sum < $tmpfile | cut -d' ' -f1)"
         sha="$(git hash-object $tmpfile)"
         sha="$(printf "blob $(cat $tmpfile | wc -c)\0$(cat $tmpfile)" | sha1sum)"
+        sha="$(git hash-object ${WORKFLOW_FAILURES_FILE})"
         # cp $tmpfile $WORKFLOW_FAILURES_FILE
 
         json="
