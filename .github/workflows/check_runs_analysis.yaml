@@ -22,11 +22,15 @@ jobs:
         ref: metrics
     - name: analyze check runs
       run: |
-        GITHUB_REPOSITORY="vitessio/vitess"
+        # GITHUB_REPOSITORY="vitessio/vitess"
         FAILED_RUNS_JSON="/tmp/failed_runs.json"
         FAILED_RUNS_CSV="/tmp/failed_runs.csv"
         FAILED_RUNS_COMBINED="/tmp/failed_runs.csv"
         WORKFLOW_FAILURES_FILE=".metrics/workflow-failures"
+
+        echo "> GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
+        echo "git branch:"
+        git branch
 
         # Get latest failed check runs
         curl \
