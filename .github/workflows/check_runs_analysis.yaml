@@ -48,7 +48,7 @@ jobs:
 
         # now combine back into $WORKFLOW_FAILURES_FILE, skipping duplicates
         tmpfile="$(mktemp)"
-        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | base64 > $tmpfile
+        cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | base64 -w 0 > $tmpfile
         # cp $tmpfile $WORKFLOW_FAILURES_FILE
 
         json="
