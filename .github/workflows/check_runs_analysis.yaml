@@ -7,22 +7,14 @@ jobs:
     name: analyze_check_runs
     runs-on: ubuntu-latest
     steps:
-    - name: get hub
-      run: |
-        cd /tmp
-        curl -s -L https://github.com/github/hub/releases/download/v2.12.3/hub-linux-amd64-2.12.3.tgz > hub-linux-amd64-2.12.3.tgz
-        tar xzf hub-linux-amd64-2.12.3.tgz hub-linux-amd64-2.12.3/bin/hub
-        mv hub-linux-amd64-2.12.3/bin/hub hub
 
     - uses: actions/checkout@v2
       with:
         ref: metrics
     - name: analyze check runs
       run: |
-        # GITHUB_REPOSITORY="vitessio/vitess"
         FAILED_RUNS_JSON="/tmp/failed_runs.json"
         FAILED_RUNS_CSV="/tmp/failed_runs.csv"
-        FAILED_RUNS_COMBINED="/tmp/failed_runs.csv"
         WORKFLOW_FAILURES_FILE=".metrics/workflow-failures"
 
         # Get latest failed check runs
