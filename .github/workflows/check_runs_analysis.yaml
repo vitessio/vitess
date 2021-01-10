@@ -50,6 +50,8 @@ jobs:
         tmpfile="$(mktemp)"
         cat $WORKFLOW_FAILURES_FILE $FAILED_RUNS_CSV | sort | uniq | base64 -w 0 > $tmpfile
         sha="$(sha1sum < $tmpfile | cut -d' ' -f1)"
+        sha="$(git hash-object $tmpfile)"
+
         # cp $tmpfile $WORKFLOW_FAILURES_FILE
 
         json="
