@@ -1283,3 +1283,260 @@ const (
 	// DoubleAt represnts @@
 	DoubleAt
 )
+
+func (node *Subquery) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic(1)
+}
+
+func (node *AndExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &AndExpr{
+		Left:  node.Left.Clone(),
+		Right: node.Right.Clone(),
+	}
+}
+
+func (node *OrExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &OrExpr{
+		Left:  node.Left.Clone(),
+		Right: node.Right.Clone(),
+	}
+}
+
+func (node *XorExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &XorExpr{
+		Left:  node.Left.Clone(),
+		Right: node.Right.Clone(),
+	}
+}
+
+func (node *NotExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &NotExpr{
+		Expr: node.Clone(),
+	}
+}
+
+func (node *ComparisonExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ComparisonExpr{
+		Operator: node.Operator,
+		Left:     node.Left.Clone(),
+		Right:    node.Right.Clone(),
+		Escape:   node.Escape.Clone(),
+	}
+}
+func (node *RangeCond) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &RangeCond{
+		Operator: node.Operator,
+		Left:     node.Left.Clone(),
+		From:     node.From.Clone(),
+		To:       node.To.Clone(),
+	}
+}
+func (node *IsExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &IsExpr{
+		Operator: node.Operator,
+		Expr:     node.Expr.Clone(),
+	}
+}
+func (node *ExistsExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ExistsExpr{
+		Subquery: node.Subquery.Clone().(*Subquery),
+	}
+}
+func (node *Literal) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &Literal{}
+}
+func (node Argument) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	cpy := make(Argument, len(node))
+	copy(cpy, node)
+	return cpy
+}
+func (node *NullVal) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &NullVal{}
+}
+func (node BoolVal) Clone() Expr {
+	return node
+}
+func (node *ColName) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ColName{
+		Metadata:  node.Metadata,
+		Name:      node.Name,
+		Qualifier: node.Qualifier,
+	}
+}
+func (node ValTuple) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	cpy := make(ValTuple, len(node))
+	copy(cpy, node)
+	return cpy
+}
+func (node ListArg) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	cpy := make(ListArg, len(node))
+	copy(cpy, node)
+	return cpy
+}
+func (node *BinaryExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &BinaryExpr{
+		Operator: node.Operator,
+		Left:     node.Left.Clone(),
+		Right:    node.Right.Clone(),
+	}
+}
+func (node *UnaryExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &UnaryExpr{
+		Operator: node.Operator,
+		Expr:     node.Expr.Clone(),
+	}
+}
+func (node *IntervalExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &IntervalExpr{
+		Expr: node.Expr.Clone(),
+		Unit: node.Unit,
+	}
+}
+func (node *CollateExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &CollateExpr{
+		Expr:    node.Expr.Clone(),
+		Charset: node.Charset,
+	}
+}
+func (node *FuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic(1)
+}
+func (node *TimestampFuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &TimestampFuncExpr{
+		Name:  node.Name,
+		Expr1: node.Expr1.Clone(),
+		Expr2: node.Expr2.Clone(),
+		Unit:  node.Unit,
+	}
+}
+func (node *CurTimeFuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &CurTimeFuncExpr{
+		Name: node.Name,
+		Fsp:  node.Fsp.Clone(),
+	}
+}
+func (node *CaseExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic(1)
+}
+func (node *ValuesFuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ValuesFuncExpr{
+		Name: node.Name.Clone().(*ColName),
+	}
+}
+func (node *ConvertExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic(1)
+}
+func (node *SubstrExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &SubstrExpr{
+		Name:   node.Name,
+		StrVal: node.StrVal.Clone().(*Literal),
+		From:   node.From.Clone(),
+		To:     node.To.Clone(),
+	}
+}
+func (node *ConvertUsingExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ConvertUsingExpr{
+		Expr: node.Expr.Clone(),
+		Type: node.Type,
+	}
+}
+func (node *MatchExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic(1)
+}
+func (node *GroupConcatExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+
+	panic(1)
+}
+func (node *Default) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &Default{ColName: node.ColName}
+}
