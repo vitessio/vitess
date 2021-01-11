@@ -71,11 +71,11 @@ func pushProjection(expr []*sqlparser.AliasedExpr, plan logicalPlan, semTable *s
 			sel.SelectExprs = append(sel.SelectExprs, e)
 		}
 		return offset, nil
-	case *join2:
+	case *joinV4:
 		cols := make([]int, len(expr))
 		var lhs, rhs []*sqlparser.AliasedExpr
-		lhsSolves := node.Left.Solves()
-		rhsSolves := node.Right.Solves()
+		lhsSolves := node.Left.ContainsTables()
+		rhsSolves := node.Right.ContainsTables()
 		for i, e := range expr {
 			deps := semTable.Dependencies(e.Expr)
 			switch {
@@ -123,14 +123,14 @@ func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
-		finalExpr := reorderExpression(exprs[0], node.solvedTables, semTable)
+		finalExpr := reorderExpression(exprs[0], node.tables, semTable)
 		for i, expr := range exprs {
 			if i == 0 {
 				continue
 			}
 			finalExpr = &sqlparser.AndExpr{
 				Left:  finalExpr,
-				Right: reorderExpression(expr, node.solvedTables, semTable),
+				Right: reorderExpression(expr, node.tables, semTable),
 			}
 		}
 		if sel.Where != nil {
@@ -144,10 +144,10 @@ func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics
 			Expr: finalExpr,
 		}
 		return nil
-	case *join2:
+	case *joinV4:
 		var lhs, rhs []sqlparser.Expr
-		lhsSolves := node.Left.Solves()
-		rhsSolves := node.Right.Solves()
+		lhsSolves := node.Left.ContainsTables()
+		rhsSolves := node.Right.ContainsTables()
 		for _, expr := range exprs {
 			deps := semTable.Dependencies(expr)
 			switch {

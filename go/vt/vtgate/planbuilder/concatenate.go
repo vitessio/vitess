@@ -54,12 +54,12 @@ func (c *concatenate) Wireup(plan logicalPlan, jt *jointab) error {
 	return c.rhs.Wireup(plan, jt)
 }
 
-func (c *concatenate) Wireup2(semTable *semantics.SemTable) error {
-	err := c.lhs.Wireup2(semTable)
+func (c *concatenate) WireupV4(semTable *semantics.SemTable) error {
+	err := c.lhs.WireupV4(semTable)
 	if err != nil {
 		return err
 	}
-	return c.rhs.Wireup2(semTable)
+	return c.rhs.WireupV4(semTable)
 }
 
 func (c *concatenate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
@@ -93,8 +93,8 @@ func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
 	return nil
 }
 
-func (c *concatenate) Solves() semantics.TableSet {
-	return c.lhs.Solves().Merge(c.rhs.Solves())
+func (c *concatenate) ContainsTables() semantics.TableSet {
+	return c.lhs.ContainsTables().Merge(c.rhs.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface

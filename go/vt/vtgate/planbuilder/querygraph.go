@@ -107,8 +107,10 @@ func (qg *queryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.Se
 			}
 		}
 	case *sqlparser.ParenTableExpr:
-		if err := qg.collectTables(table.Exprs, semTable); err != nil {
-			return err
+		for _, expr := range table.Exprs {
+			if err := qg.collectTable(expr, semTable); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
