@@ -270,14 +270,6 @@ func replaceConvertUsingExprExpr(newNode, parent SQLNode) {
 	parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 }
 
-func replaceCreateIndexName(newNode, parent SQLNode) {
-	parent.(*CreateIndex).Name = newNode.(ColIdent)
-}
-
-func replaceCreateIndexTable(newNode, parent SQLNode) {
-	parent.(*CreateIndex).Table = newNode.(TableName)
-}
-
 func replaceCreateTableOptLike(newNode, parent SQLNode) {
 	parent.(*CreateTable).OptLike = newNode.(*OptLike)
 }
@@ -308,30 +300,6 @@ func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
 
 func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
-}
-
-func replaceDDLFromTables(newNode, parent SQLNode) {
-	parent.(*DDL).FromTables = newNode.(TableNames)
-}
-
-func replaceDDLOptLike(newNode, parent SQLNode) {
-	parent.(*DDL).OptLike = newNode.(*OptLike)
-}
-
-func replaceDDLPartitionSpec(newNode, parent SQLNode) {
-	parent.(*DDL).PartitionSpec = newNode.(*PartitionSpec)
-}
-
-func replaceDDLTable(newNode, parent SQLNode) {
-	parent.(*DDL).Table = newNode.(TableName)
-}
-
-func replaceDDLTableSpec(newNode, parent SQLNode) {
-	parent.(*DDL).TableSpec = newNode.(*TableSpec)
-}
-
-func replaceDDLToTables(newNode, parent SQLNode) {
-	parent.(*DDL).ToTables = newNode.(TableNames)
 }
 
 func replaceDeleteComments(newNode, parent SQLNode) {
@@ -394,6 +362,10 @@ func (r *replaceExprsItems) replace(newNode, container SQLNode) {
 
 func (r *replaceExprsItems) inc() {
 	*r++
+}
+
+func replaceFlushTableNames(newNode, parent SQLNode) {
+	parent.(*Flush).TableNames = newNode.(TableNames)
 }
 
 func replaceForeignKeyDefinitionOnDelete(newNode, parent SQLNode) {
@@ -667,8 +639,8 @@ func replaceReleaseName(newNode, parent SQLNode) {
 	parent.(*Release).Name = newNode.(ColIdent)
 }
 
-func replaceRenameTableTable(newNode, parent SQLNode) {
-	parent.(*RenameTable).Table = newNode.(TableName)
+func replaceRenameTableNameTable(newNode, parent SQLNode) {
+	parent.(*RenameTableName).Table = newNode.(TableName)
 }
 
 func replaceSRollbackName(newNode, parent SQLNode) {
@@ -907,6 +879,10 @@ func replaceTimestampFuncExprExpr1(newNode, parent SQLNode) {
 
 func replaceTimestampFuncExprExpr2(newNode, parent SQLNode) {
 	parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
+}
+
+func replaceTruncateTableTable(newNode, parent SQLNode) {
+	parent.(*TruncateTable).Table = newNode.(TableName)
 }
 
 func replaceUnaryExprExpr(newNode, parent SQLNode) {
@@ -1247,10 +1223,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *CreateDatabase:
 
-	case *CreateIndex:
-		a.apply(node, n.Name, replaceCreateIndexName)
-		a.apply(node, n.Table, replaceCreateIndexTable)
-
 	case *CreateTable:
 		a.apply(node, n.OptLike, replaceCreateTableOptLike)
 		a.apply(node, n.Table, replaceCreateTableTable)
@@ -1264,14 +1236,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *CurTimeFuncExpr:
 		a.apply(node, n.Fsp, replaceCurTimeFuncExprFsp)
 		a.apply(node, n.Name, replaceCurTimeFuncExprName)
-
-	case *DDL:
-		a.apply(node, n.FromTables, replaceDDLFromTables)
-		a.apply(node, n.OptLike, replaceDDLOptLike)
-		a.apply(node, n.PartitionSpec, replaceDDLPartitionSpec)
-		a.apply(node, n.Table, replaceDDLTable)
-		a.apply(node, n.TableSpec, replaceDDLTableSpec)
-		a.apply(node, n.ToTables, replaceDDLToTables)
 
 	case *Default:
 
@@ -1313,6 +1277,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}
+
+	case *Flush:
+		a.apply(node, n.TableNames, replaceFlushTableNames)
 
 	case *Force:
 
@@ -1489,7 +1456,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *RenameIndex:
 
 	case *RenameTable:
-		a.apply(node, n.Table, replaceRenameTableTable)
+
+	case *RenameTableName:
+		a.apply(node, n.Table, replaceRenameTableNameTable)
 
 	case *Rollback:
 
@@ -1633,6 +1602,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *TimestampFuncExpr:
 		a.apply(node, n.Expr1, replaceTimestampFuncExprExpr1)
 		a.apply(node, n.Expr2, replaceTimestampFuncExprExpr2)
+
+	case *TruncateTable:
+		a.apply(node, n.Table, replaceTruncateTableTable)
 
 	case *UnaryExpr:
 		a.apply(node, n.Expr, replaceUnaryExprExpr)

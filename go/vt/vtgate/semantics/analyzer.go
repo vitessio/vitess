@@ -23,8 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var debug = false
-
 type (
 	// analyzer is a struct to work with analyzing the query.
 	analyzer struct {
@@ -32,16 +30,14 @@ type (
 
 		scopes   []*scope
 		exprDeps map[sqlparser.Expr]TableSet
-		si       schemaInformation
 		err      error
 	}
 )
 
 // newAnalyzer create the semantic analyzer
-func newAnalyzer(si schemaInformation) *analyzer {
+func newAnalyzer() *analyzer {
 	return &analyzer{
 		exprDeps: map[sqlparser.Expr]TableSet{},
-		si:       si,
 	}
 }
 
@@ -50,7 +46,6 @@ func newAnalyzer(si schemaInformation) *analyzer {
 func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	current := a.currentScope()
 	n := cursor.Node()
-	log(n, "%p analyzeDown %T", current, n)
 	switch node := n.(type) {
 	case *sqlparser.Select:
 		a.push(newScope(current))
@@ -80,7 +75,7 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	var t table
 	var err error
 	if colName.Qualifier.IsEmpty() {
-		t, err = a.resolveUnQualifiedColumn(current, colName)
+		t, err = a.resolveUnQualifiedColumn(current)
 	} else {
 		t, err = a.resolveQualifiedColumn(current, colName)
 	}
@@ -100,7 +95,6 @@ func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
 }
 
 func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
-	log(tableExpr, "analyzeTableExpr %T", tableExpr)
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		return a.bindTable(table, table.Expr)
@@ -133,7 +127,7 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope) (table, error) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {
 			return tableExpr, nil
@@ -173,7 +167,6 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	log(statement, "analyse %T", statement)
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 
 	return a.err
@@ -192,12 +185,10 @@ func (a *analyzer) shouldContinue() bool {
 }
 
 func (a *analyzer) push(s *scope) {
-	log(nil, "enter new scope")
 	a.scopes = append(a.scopes, s)
 }
 
 func (a *analyzer) popScope() {
-	log(nil, "exit scope")
 	l := len(a.scopes) - 1
 	a.scopes = a.scopes[:l]
 }

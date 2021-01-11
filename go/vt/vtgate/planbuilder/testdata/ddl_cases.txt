@@ -293,3 +293,33 @@
     "Query": "drop view a"
   }
 }
+
+# Truncate table with qualifier
+"truncate user.user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "truncate user.user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "truncate table user_extra"
+  }
+}
+
+# Rename table
+"rename table a to main.b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table a to main.b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "rename table a to b"
+  }
+}

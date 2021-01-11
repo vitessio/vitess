@@ -350,6 +350,6 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	return oa.input.Wireup(plan, jt)
 }
 
-func (oa *orderedAggregate) Wireup2(semTable *semantics.SemTable) error {
-	return oa.input.Wireup2(semTable)
+func (oa *orderedAggregate) WireupV4(semTable *semantics.SemTable) error {
+	return oa.input.WireupV4(semTable)
 }

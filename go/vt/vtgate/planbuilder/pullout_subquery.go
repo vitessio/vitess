@@ -88,11 +88,11 @@ func (ps *pulloutSubquery) Wireup(plan logicalPlan, jt *jointab) error {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (ps *pulloutSubquery) Wireup2(semTable *semantics.SemTable) error {
-	if err := ps.underlying.Wireup2(semTable); err != nil {
+func (ps *pulloutSubquery) WireupV4(semTable *semantics.SemTable) error {
+	if err := ps.underlying.WireupV4(semTable); err != nil {
 		return err
 	}
-	return ps.subquery.Wireup2(semTable)
+	return ps.subquery.WireupV4(semTable)
 }
 
 // SupplyVar implements the logicalPlan interface
@@ -125,8 +125,8 @@ func (ps *pulloutSubquery) Rewrite(inputs ...logicalPlan) error {
 }
 
 // Solves implements the logicalPlan interface
-func (ps *pulloutSubquery) Solves() semantics.TableSet {
-	return ps.underlying.Solves().Merge(ps.subquery.Solves())
+func (ps *pulloutSubquery) ContainsTables() semantics.TableSet {
+	return ps.underlying.ContainsTables().Merge(ps.subquery.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface

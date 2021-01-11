@@ -49,8 +49,8 @@ type logicalPlan interface {
 	// the lhs nodes.
 	Wireup(lp logicalPlan, jt *jointab) error
 
-	// Wireup2 does the wire up work for the new planner
-	Wireup2(semTable *semantics.SemTable) error
+	// WireupV4 does the wire up work for the V4 planner
+	WireupV4(semTable *semantics.SemTable) error
 
 	// SupplyVar finds the common root between from and to. If it's
 	// the common root, it supplies the requested var to the rhs tree.
@@ -76,9 +76,15 @@ type logicalPlan interface {
 	// This function should only be called after Wireup is finished.
 	Primitive() engine.Primitive
 
+	// Inputs are the children of this plan
 	Inputs() []logicalPlan
+
+	// Rewrite replaces the inputs of this plan with the ones provided
 	Rewrite(inputs ...logicalPlan) error
-	Solves() semantics.TableSet
+
+	// ContainsTables keeps track which query tables are being solved by this logical plan
+	// This is only applicable for plans that have been built with the V4 planner
+	ContainsTables() semantics.TableSet
 }
 
 //-------------------------------------------------------------------------
@@ -152,8 +158,8 @@ func (bc *logicalPlanCommon) Wireup(plan logicalPlan, jt *jointab) error {
 	return bc.input.Wireup(plan, jt)
 }
 
-func (bc *logicalPlanCommon) Wireup2(semTable *semantics.SemTable) error {
-	return bc.input.Wireup2(semTable)
+func (bc *logicalPlanCommon) WireupV4(semTable *semantics.SemTable) error {
+	return bc.input.WireupV4(semTable)
 }
 
 func (bc *logicalPlanCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
@@ -183,8 +189,8 @@ func (bc *logicalPlanCommon) Inputs() []logicalPlan {
 }
 
 // Solves implements the logicalPlan interface
-func (bc *logicalPlanCommon) Solves() semantics.TableSet {
-	return bc.input.Solves()
+func (bc *logicalPlanCommon) ContainsTables() semantics.TableSet {
+	return bc.input.ContainsTables()
 }
 
 //-------------------------------------------------------------------------
