@@ -84,6 +84,6 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *mergeSort) Wireup2(semTable *semantics.SemTable) error {
-	return ms.input.Wireup2(semTable)
+func (ms *mergeSort) WireupV4(semTable *semantics.SemTable) error {
+	return ms.input.WireupV4(semTable)
 }

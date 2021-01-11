@@ -65,8 +65,8 @@ type route struct {
 	// eroute is the primitive being built.
 	eroute *engine.Route
 
-	// solvedTables keeps track of which tables this route is covering
-	solvedTables semantics.TableSet
+	// tables keeps track of which tables this route is covering
+	tables semantics.TableSet
 }
 
 type tableSubstitution struct {
@@ -133,7 +133,7 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (rb *route) Wireup2(semTable *semantics.SemTable) error {
+func (rb *route) WireupV4(semTable *semantics.SemTable) error {
 	rb.prepareTheAST()
 
 	rb.eroute.Query = sqlparser.String(rb.Select)
@@ -145,8 +145,8 @@ func (rb *route) Wireup2(semTable *semantics.SemTable) error {
 }
 
 // Solves implements the logicalPlan interface
-func (rb *route) Solves() semantics.TableSet {
-	return rb.solvedTables
+func (rb *route) ContainsTables() semantics.TableSet {
+	return rb.tables
 }
 
 // Wireup implements the logicalPlan interface

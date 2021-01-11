@@ -175,7 +175,7 @@ func TestQueryGraph(t *testing.T) {
 		t.Run(sql, func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyse(tree, &schemaInf{})
+			semTable, err := semantics.Analyse(tree)
 			require.NoError(t, err)
 			qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)

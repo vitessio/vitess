@@ -158,7 +158,7 @@ func TestNotUniqueTableName(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse, nil)
+			_, err := Analyse(parse)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -173,7 +173,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse, nil)
+			_, err := Analyse(parse)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Unknown table")
 		})
@@ -183,7 +183,7 @@ func TestMissingTable(t *testing.T) {
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	semTable, err := Analyse(parse, nil)
+	semTable, err := Analyse(parse)
 	require.NoError(t, err)
 	return parse, semTable
 }

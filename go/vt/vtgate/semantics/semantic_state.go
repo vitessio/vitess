@@ -17,11 +17,7 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql"
-
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -39,9 +35,7 @@ type (
 		Tables           []table
 		exprDependencies map[sqlparser.Expr]TableSet
 	}
-	schemaInformation interface {
-		FindTable(tablename sqlparser.TableName) (*vindexes.Table, error)
-	}
+
 	scope struct {
 		parent *scope
 		tables map[string]*sqlparser.AliasedTableExpr
@@ -88,25 +82,14 @@ func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 }
 
 // Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement, si schemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(si)
+func Analyse(statement sqlparser.Statement) (*SemTable, error) {
+	analyzer := newAnalyzer()
 	// Initial scope
 	err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
 	}
 	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
-}
-
-func log(node sqlparser.SQLNode, format string, args ...interface{}) {
-	if debug {
-		fmt.Printf(format, args...)
-		if node == nil {
-			fmt.Println()
-		} else {
-			fmt.Println(" - " + sqlparser.String(node))
-		}
-	}
 }
 
 // IsOverlapping returns true if at least one table exists in both sets
