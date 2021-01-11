@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 var _ logicalPlan = (*mergeSort)(nil)
@@ -81,4 +82,8 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	}
 	rb.eroute.TruncateColumnCount = ms.truncateColumnCount
 	return ms.input.Wireup(plan, jt)
+}
+
+func (ms *mergeSort) WireupV4(semTable *semantics.SemTable) error {
+	return ms.input.WireupV4(semTable)
 }

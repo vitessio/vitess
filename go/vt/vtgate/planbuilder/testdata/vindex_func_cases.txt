@@ -81,6 +81,8 @@
 # ambiguous vindex reference
 "select id, keyspace_id, id from hash_dup where id = :id"
 "ambiguous vindex reference: hash_dup"
+{
+}
 
 # disambiguated vindex reference
 "select id, keyspace_id, id from second_user.hash_dup where id = :id"

@@ -1278,6 +1278,14 @@ func (lock LockOptionType) ToString() string {
 	}
 }
 
+// CompliantName is used to get the name of the bind variable to use for this column name
+func (node *ColName) CompliantName(suffix string) string {
+	if !node.Qualifier.IsEmpty() {
+		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName() + suffix
+	}
+	return node.Name.CompliantName() + suffix
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
