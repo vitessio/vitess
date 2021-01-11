@@ -531,3 +531,41 @@
 # drop view with unknown view
 "drop view unknown"
 "keyspace not specified"
+
+# Truncate table without qualifier
+"truncate user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "truncate user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "truncate table user_extra"
+  }
+}
+
+# Rename table
+"rename table user_extra to b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table user_extra to b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "rename table user_extra to b"
+  }
+}
+
+# Rename table with different keyspace tables
+"rename table user_extra to b, main.a to b"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# Rename table with change in keyspace name
+"rename table user_extra to main.b"
+"Changing schema from 'user' to 'main' is not allowed (errno 1450) (sqlstate HY000)"

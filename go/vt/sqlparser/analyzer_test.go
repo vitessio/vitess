@@ -77,6 +77,7 @@ func TestPreview(t *testing.T) {
 		{"grant", StmtPriv},
 		{"revoke", StmtPriv},
 		{"truncate", StmtDDL},
+		{"flush", StmtFlush},
 		{"unknown", StmtUnknown},
 
 		{"/* leading comment */ select ...", StmtSelect},

@@ -54,7 +54,6 @@ func skipToEnd(yylex interface{}) {
   empty         struct{}
   statement     Statement
   selStmt       SelectStatement
-  ddl           *DDL
   ins           *Insert
   byt           byte
   bytes         []byte
@@ -133,7 +132,6 @@ func skipToEnd(yylex interface{}) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   selectInto	  *SelectInto
-  createIndex	  *CreateIndex
   createDatabase  *CreateDatabase
   alterDatabase  *AlterDatabase
   collateAndCharset CollateAndCharset
@@ -147,6 +145,7 @@ func skipToEnd(yylex interface{}) {
   alterOptions	   []AlterOption
   tableOption      *TableOption
   tableOptions     TableOptions
+  renameTablePairs []*RenameTablePair
 }
 
 %token LEX_ERROR
@@ -254,6 +253,9 @@ func skipToEnd(yylex interface{}) {
 // Lock type tokens
 %token <bytes> LOCAL LOW_PRIORITY
 
+// Flush tokens
+%token <bytes> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
+
 // TableOptions tokens
 %token <bytes> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
 %token <bytes> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
@@ -263,12 +265,12 @@ func skipToEnd(yylex interface{}) {
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
-%type <ddl> rename_list
+%type <renameTablePairs> rename_list
 %type <createTable> create_table_prefix
 %type <alterTable> alter_table_prefix
-%type <alterOption> alter_option alter_commands_modifier
-%type <alterOptions> alter_options alter_commands_list alter_commands_modifier_list
-%type <createIndex> create_index_prefix
+%type <alterOption> alter_option alter_commands_modifier lock_index algorithm_index
+%type <alterOptions> alter_options alter_commands_list alter_commands_modifier_list algorithm_lock_opt
+%type <alterTable> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
@@ -282,13 +284,13 @@ func skipToEnd(yylex interface{}) {
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <bytes> explain_synonyms
-%type <str> cache_opt separator_opt
+%type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt union_op replace_opt
+%type <boolean> distinct_opt union_op replace_opt local_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
-%type <strs> select_options
+%type <strs> select_options flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> definer_opt user
 %type <expr> expression
@@ -327,7 +329,7 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <selectInto> into_option
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt constraint_opt
+%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
@@ -380,8 +382,8 @@ func skipToEnd(yylex interface{}) {
 %type <indexInfo> index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
-%type <indexOption> index_option lock_index algorithm_index using_index_type
-%type <indexOptions> index_option_list index_option_list_opt algorithm_lock_opt using_opt
+%type <indexOption> index_option using_index_type
+%type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -754,9 +756,10 @@ create_statement:
   }
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
-    $1.Columns = $3
-    $1.Options = append($1.Options,$5...)
-    $1.Options = append($1.Options,$6...)
+    indexDef := $1.AlterOptions[0].(*AddIndexDefinition).IndexDefinition
+    indexDef.Columns = $3
+    indexDef.Options = append(indexDef.Options,$5...)
+    $1.AlterOptions = append($1.AlterOptions,$6...)
     $1.FullyParsed = true
     $$ = $1
   }
@@ -837,9 +840,24 @@ alter_table_prefix:
   }
 
 create_index_prefix:
-  CREATE constraint_opt INDEX id_or_var using_opt ON table_name
+  CREATE INDEX id_or_var using_opt ON table_name
   {
-    $$ = &CreateIndex{Constraint: $2, Name: $4, Options: $5, Table: $7}
+    $$ = &AlterTable{Table: $6, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$3, Type:string($2)}, Options:$4}}}}
+    setDDL(yylex, $$)
+  }
+| CREATE FULLTEXT INDEX id_or_var using_opt ON table_name
+  {
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Fulltext:true}, Options:$5}}}}
+    setDDL(yylex, $$)
+  }
+| CREATE SPATIAL INDEX id_or_var using_opt ON table_name
+  {
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Spatial:true}, Options:$5}}}}
+    setDDL(yylex, $$)
+  }
+| CREATE UNIQUE INDEX id_or_var using_opt ON table_name
+  {
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Unique:true}, Options:$5}}}}
     setDDL(yylex, $$)
   }
 
@@ -1960,7 +1978,7 @@ alter_option:
   }
 | RENAME to_opt table_name
   {
-    $$ = &RenameTable{Table:$3}
+    $$ = &RenameTableName{Table:$3}
   }
 | RENAME index_or_key id_or_var TO id_or_var
   {
@@ -2256,19 +2274,17 @@ partition_definition:
 rename_statement:
   RENAME TABLE rename_list
   {
-    $$ = $3
+    $$ = &RenameTable{TablePairs: $3}
   }
 
 rename_list:
   table_name TO table_name
   {
-    $$ = &DDL{Action: RenameDDLAction, FromTables: TableNames{$1}, ToTables: TableNames{$3}}
+    $$ = []*RenameTablePair{{FromTable: $1, ToTable: $3}}
   }
 | rename_list ',' table_name TO table_name
   {
-    $$ = $1
-    $$.FromTables = append($$.FromTables, $3)
-    $$.ToTables = append($$.ToTables, $5)
+    $$ = append($1, &RenameTablePair{FromTable: $3, ToTable: $5})
   }
 
 drop_statement:
@@ -2276,10 +2292,14 @@ drop_statement:
   {
     $$ = &DropTable{FromTables: $4, IfExists: $3}
   }
-| DROP INDEX id_or_var ON table_name ddl_skip_to_end
+| DROP INDEX id_or_var ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterDDLAction, Table: $5}
+    if $3.Lowered() == "primary" {
+      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
+    } else {
+      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3.String()}},$6...)}
+    }
   }
 | DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
@@ -2293,11 +2313,11 @@ drop_statement:
 truncate_statement:
   TRUNCATE TABLE table_name
   {
-    $$ = &DDL{Action: TruncateDDLAction, Table: $3}
+    $$ = &TruncateTable{Table: $3}
   }
 | TRUNCATE table_name
   {
-    $$ = &DDL{Action: TruncateDDLAction, Table: $2}
+    $$ = &TruncateTable{Table: $2}
   }
 analyze_statement:
   ANALYZE TABLE table_name
@@ -2366,9 +2386,13 @@ show_statement:
   {
     $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
   }
-|  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
+|  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
+  }
+|  SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
@@ -2777,10 +2801,113 @@ unlock_statement:
   }
 
 flush_statement:
-  FLUSH skip_to_end
+  FLUSH local_opt flush_option_list
   {
-    $$ = &DDL{Action: FlushDDLAction}
+    $$ = &Flush{IsLocal: $2, FlushOptions:$3}
   }
+| FLUSH local_opt TABLES
+  {
+    $$ = &Flush{IsLocal: $2}
+  }
+| FLUSH local_opt TABLES WITH READ LOCK
+  {
+    $$ = &Flush{IsLocal: $2, WithLock:true}
+  }
+| FLUSH local_opt TABLES table_name_list
+  {
+    $$ = &Flush{IsLocal: $2, TableNames:$4}
+  }
+| FLUSH local_opt TABLES table_name_list WITH READ LOCK
+  {
+    $$ = &Flush{IsLocal: $2, TableNames:$4, WithLock:true}
+  }
+| FLUSH local_opt TABLES table_name_list FOR EXPORT
+  {
+    $$ = &Flush{IsLocal: $2, TableNames:$4, ForExport:true}
+  }
+
+flush_option_list:
+  flush_option
+  {
+    $$ = []string{$1}
+  }
+| flush_option_list ',' flush_option
+  {
+    $$ = append($1,$3)
+  }
+
+flush_option:
+  BINARY LOGS
+  {
+    $$ = string($1) + " " + string($2)
+  }
+| ENGINE LOGS
+  {
+    $$ = string($1) + " " + string($2)
+  }
+| ERROR LOGS
+  {
+    $$ = string($1) + " " + string($2)
+  }
+| GENERAL LOGS
+  {
+    $$ = string($1) + " " + string($2)
+  }
+| HOSTS
+  {
+    $$ = string($1)
+  }
+| LOGS
+  {
+    $$ = string($1)
+  }
+| PRIVILEGES
+  {
+    $$ = string($1)
+  }
+| RELAY LOGS for_channel_opt
+  {
+    $$ = string($1) + " " + string($2) + $3
+  }
+| SLOW LOGS
+  {
+    $$ = string($1) + " " + string($2)
+  }
+| OPTIMIZER_COSTS
+  {
+    $$ = string($1)
+  }
+| STATUS
+  {
+    $$ = string($1)
+  }
+| USER_RESOURCES
+  {
+    $$ = string($1)
+  }
+
+local_opt:
+  {
+    $$ = false
+  }
+| LOCAL
+  {
+    $$ = true
+  }
+| NO_WRITE_TO_BINLOG
+  {
+    $$ = true
+  }
+
+for_channel_opt:
+  {
+    $$ = ""
+  }
+| FOR CHANNEL id_or_var
+  {
+    $$ = " " + string($1) + " " + string($2) + " " + $3.String()
+  }
+
 comment_opt:
   {
     setAllowComments(yylex, true)
@@ -4022,52 +4149,52 @@ algorithm_lock_opt:
   }
 | lock_index algorithm_index
   {
-     $$ = []*IndexOption{$1,$2}
+     $$ = []AlterOption{$1,$2}
   }
 | algorithm_index lock_index
   {
-     $$ = []*IndexOption{$1,$2}
+     $$ = []AlterOption{$1,$2}
   }
 | algorithm_index
   {
-     $$ = []*IndexOption{$1}
+     $$ = []AlterOption{$1}
   }
 | lock_index
   {
-     $$ = []*IndexOption{$1}
+     $$ = []AlterOption{$1}
   }
 
 
 lock_index:
   LOCK equal_opt DEFAULT
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:DefaultType}
   }
 | LOCK equal_opt NONE
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:NoneType}
   }
 | LOCK equal_opt SHARED
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:SharedType}
   }
 | LOCK equal_opt EXCLUSIVE
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = &LockOption{Type:ExclusiveType}
   }
 
 algorithm_index:
   ALGORITHM equal_opt DEFAULT
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = AlgorithmValue($3)
   }
 | ALGORITHM equal_opt INPLACE
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = AlgorithmValue($3)
   }
 | ALGORITHM equal_opt COPY
   {
-    $$ = &IndexOption{Name: string($1), String: string($3)}
+    $$ = AlgorithmValue($3)
   }
 
 algorithm_view:
@@ -4494,15 +4621,6 @@ to_opt:
 | AS
   { $$ = struct{}{} }
 
-constraint_opt:
-  { $$ = "" }
-| UNIQUE
-  { $$ = string($1) }
-| SPATIAL
-  { $$ = string($1) }
-| FULLTEXT
-  { $$ = string($1) }
-
 using_opt:
   { $$ = nil }
 | using_index_type
@@ -4636,6 +4754,7 @@ reserved_keyword:
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
+| NO_WRITE_TO_BINLOG
 | NOT
 | NTH_VALUE
 | NTILE
@@ -4643,6 +4762,7 @@ reserved_keyword:
 | OF
 | OFF
 | ON
+| OPTIMIZER_COSTS
 | OR
 | ORDER
 | OUTER
@@ -4716,6 +4836,7 @@ non_reserved_keyword:
 | BUCKETS
 | CASCADE
 | CASCADED
+| CHANNEL
 | CHAR
 | CHARACTER
 | CHARSET
@@ -4758,11 +4879,13 @@ non_reserved_keyword:
 | ENGINE
 | ENGINES
 | ENUM
+| ERROR
 | ESCAPED
 | EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
 | EXPANSION
+| EXPORT
 | EXTENDED
 | FLOAT_TYPE
 | FIELDS
@@ -4772,6 +4895,7 @@ non_reserved_keyword:
 | FOLLOWING
 | FORMAT
 | FUNCTION
+| GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
@@ -4780,6 +4904,7 @@ non_reserved_keyword:
 | HEADER
 | HISTOGRAM
 | HISTORY
+| HOSTS
 | IMPORT
 | INACTIVE
 | INPLACE
@@ -4804,6 +4929,7 @@ non_reserved_keyword:
 | LOAD
 | LOCAL
 | LOCKED
+| LOGS
 | LONGBLOB
 | LONGTEXT
 | MANIFEST
@@ -4868,6 +4994,7 @@ non_reserved_keyword:
 | REDUNDANT
 | REFERENCE
 | REFERENCES
+| RELAY
 | REMOVE
 | REORGANIZE
 | REPAIR
@@ -4895,6 +5022,7 @@ non_reserved_keyword:
 | SHARED
 | SIGNED
 | SKIP
+| SLOW
 | SMALLINT
 | SQL
 | SRID
@@ -4928,6 +5056,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | UPGRADE
+| USER_RESOURCES
 | VALIDATION
 | VARBINARY
 | VARCHAR

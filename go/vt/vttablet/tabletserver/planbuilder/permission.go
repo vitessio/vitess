@@ -53,6 +53,10 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		for _, t := range node.AffectedTables() {
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
 		}
+	case *sqlparser.Flush:
+		for _, t := range node.TableNames {
+			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
+		}
 	case *sqlparser.OtherAdmin:
 		// no op
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Load:
