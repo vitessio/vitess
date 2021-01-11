@@ -1079,12 +1079,30 @@ var (
 	}, {
 		input: "create table a",
 	}, {
+		input:  "CREATE TABLE a",
+		output: "create table a",
+	}, {
+		input:  "create table `a`",
+		output: "create table a",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
 		input: "create table `by` (\n\t`by` char\n)",
 	}, {
 		input: "create table test (\n\t__year year(4)\n)",
+	}, {
+		input: "create table a (\n\ta int not null\n)",
+	}, {
+		input: "create table a (\n\ta int not null default 0\n)",
+	}, {
+		input:  "create table a (a int not null default 0, primary key(a))",
+		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
+	}, {
+		input:  "create table a (`a column` int)",
+		output: "create table a (\n\t`a column` int\n)",
+	}, {
+		input: "create table a (\n\ta varchar(32) not null default ''\n)",
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
 		output: "create table if not exists a (\n\ta int\n)",
@@ -1097,6 +1115,9 @@ var (
 	}, {
 		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
+	}, {
+		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null, KEY b2_idx(b))",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null,\n\tKEY b2_idx (b)\n)",
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
