@@ -182,6 +182,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
 }
 
@@ -238,6 +239,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 
 	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "flush_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "show_cases.txt", testOutputTempDir, vschema)
 }
 

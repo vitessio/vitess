@@ -1,6 +1,7 @@
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -14,6 +15,7 @@ import (
 const (
 	ViewDifferentKeyspace string = "Select query does not belong to the same keyspace as the view statement"
 	ViewComplex           string = "Complex select queries are not supported in create or alter view statements"
+	DifferentDestinations string = "Tables or Views specified in the query do not belong to the same destination"
 )
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
@@ -44,21 +46,13 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 	var err error
 
 	switch ddl := ddlStatement.(type) {
-	case *sqlparser.CreateIndex, *sqlparser.AlterTable:
-		// For Create index and Alter Table, the table must already exist
+	case *sqlparser.AlterTable, *sqlparser.TruncateTable:
+		// For Alter Table and other statements, the table must already exist
 		// We should find the target of the query from this tables location
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
 		if err != nil {
 			return nil, nil, err
 		}
-	case *sqlparser.DDL:
-		// For DDL, it is only required that the keyspace exist
-		// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
-		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
-		if err != nil {
-			return nil, nil, err
-		}
-		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(vschema, ddl)
 		if err != nil {
@@ -78,6 +72,11 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		}
 	case *sqlparser.DropView, *sqlparser.DropTable:
 		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
+		if err != nil {
+			return nil, nil, err
+		}
+	case *sqlparser.RenameTable:
+		destination, keyspace, err = buildRenameTable(vschema, ddl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -241,7 +240,63 @@ func buildDropViewOrTable(vschema ContextVSchema, ddlStatement sqlparser.DDLStat
 			keyspace = keyspaceTab
 		}
 		if destination != destinationTab || keyspace != keyspaceTab {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Tables or Views specified in the query do not belong to the same destination")
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, DifferentDestinations)
+		}
+	}
+	return destination, keyspace, nil
+}
+
+func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable) (key.Destination, *vindexes.Keyspace, error) {
+	var destination key.Destination
+	var keyspace *vindexes.Keyspace
+
+	for _, tabPair := range renameTable.TablePairs {
+		var destinationFrom key.Destination
+		var keyspaceFrom *vindexes.Keyspace
+		var table *vindexes.Table
+		var err error
+		table, _, _, _, destinationFrom, err = vschema.FindTableOrVindex(tabPair.FromTable)
+
+		if err != nil {
+			_, isNotFound := err.(vindexes.NotFoundError)
+			if !isNotFound {
+				return nil, nil, err
+			}
+		}
+		if table == nil {
+			destinationFrom, keyspaceFrom, _, err = vschema.TargetDestination(tabPair.FromTable.Qualifier.String())
+			if err != nil {
+				return nil, nil, err
+			}
+			tabPair.FromTable = sqlparser.TableName{
+				Name: tabPair.FromTable.Name,
+			}
+		} else {
+			keyspaceFrom = table.Keyspace
+			tabPair.FromTable = sqlparser.TableName{
+				Name: table.Name,
+			}
+		}
+
+		if tabPair.ToTable.Qualifier.String() != "" {
+			_, keyspaceTo, _, err := vschema.TargetDestination(tabPair.ToTable.Qualifier.String())
+			if err != nil {
+				return nil, nil, err
+			}
+			if keyspaceTo.Name != keyspaceFrom.Name {
+				return nil, nil, mysql.NewSQLError(1450, mysql.SSUnknownSQLState, "Changing schema from '%s' to '%s' is not allowed", keyspaceFrom.Name, keyspaceTo.Name)
+			}
+			tabPair.ToTable = sqlparser.TableName{
+				Name: tabPair.ToTable.Name,
+			}
+		}
+
+		if destination == nil && keyspace == nil {
+			destination = destinationFrom
+			keyspace = keyspaceFrom
+		}
+		if destination != destinationFrom || keyspace != keyspaceFrom {
+			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil

@@ -259,7 +259,6 @@ const (
 	DropDDLAction
 	RenameDDLAction
 	TruncateDDLAction
-	FlushDDLAction
 	CreateVindexDDLAction
 	DropVindexDDLAction
 	AddVschemaTableDDLAction

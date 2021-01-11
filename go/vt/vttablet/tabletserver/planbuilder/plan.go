@@ -67,6 +67,8 @@ const (
 	PlanShowTables
 	// PlanLoad is for Load data statements
 	PlanLoad
+	// PlanFlush is for FLUSH statements
+	PlanFlush
 	PlanLockTables
 	PlanUnlockTables
 	NumPlans
@@ -95,6 +97,7 @@ var planName = []string{
 	"RollbackSavepoint",
 	"ShowTables",
 	"Load",
+	"Flush",
 	"LockTables",
 	"UnlockTables",
 }
@@ -209,6 +212,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = &Plan{PlanID: PlanSRollback}, nil
 	case *sqlparser.Load:
 		plan, err = &Plan{PlanID: PlanLoad}, nil
+	case *sqlparser.Flush:
+		plan, err = &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}

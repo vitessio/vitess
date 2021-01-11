@@ -879,8 +879,6 @@ func (action DDLAction) ToString() string {
 		return RenameStr
 	case TruncateDDLAction:
 		return TruncateStr
-	case FlushDDLAction:
-		return FlushStr
 	case CreateVindexDDLAction:
 		return CreateVindexStr
 	case DropVindexDDLAction:

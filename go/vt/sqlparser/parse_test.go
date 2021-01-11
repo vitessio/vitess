@@ -1202,11 +1202,14 @@ var (
 		output: "alter table b add spatial index a (col1)",
 	}, {
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
-		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string' algorithm inplace lock none",
+		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
 		output:     "alter table b add index a ()",
 		partialDDL: true,
+	}, {
+		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
+		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
@@ -1234,8 +1237,8 @@ var (
 		input:  "rename table a to b",
 		output: "rename table a to b",
 	}, {
-		input:  "rename table a to b, b to c",
-		output: "rename table a to b, b to c",
+		input:  "rename table x.a to b, b to c",
+		output: "rename table x.a to b, b to c",
 	}, {
 		input:  "drop view a,B,c",
 		output: "drop view a, b, c",
@@ -1252,17 +1255,29 @@ var (
 		input:  "drop view if exists a cascade",
 		output: "drop view if exists a",
 	}, {
-		input:  "drop index b on a",
-		output: "alter table a",
+		input:  "drop index b on a lock = none algorithm default",
+		output: "alter table a drop key b, lock none, algorithm = default",
+	}, {
+		input:  "drop index `PRIMARY` on a lock none",
+		output: "alter table a drop primary key, lock none",
 	}, {
 		input:  "analyze table a",
 		output: "otherread",
 	}, {
-		input:  "flush tables",
-		output: "flush",
+		input: "flush tables",
 	}, {
-		input:  "flush tables with read lock",
-		output: "flush",
+		input: "flush tables with read lock",
+	}, {
+		input: "flush tables a, c.v, b",
+	}, {
+		input: "flush local tables a, c.v, b with read lock",
+	}, {
+		input: "flush tables a, c.v, b for export",
+	}, {
+		input: "flush local binary logs, engine logs, error logs, general logs, hosts, logs, privileges, optimizer_costs",
+	}, {
+		input:  "flush no_write_to_binlog slow logs, status, user_resources, relay logs, relay logs for channel s",
+		output: "flush local slow logs, status, user_resources, relay logs, relay logs for channel s",
 	}, {
 		input:  "show binary logs",
 		output: "show binary logs",
@@ -1844,12 +1859,10 @@ func TestValid(t *testing.T) {
 				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 			}
 
-			// CREATE INDEX currently only has 5.7 specifications.
+			// Some statements currently only have 5.7 specifications.
 			// For mysql 8.0 syntax, the query is not entirely parsed.
 			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
 			switch x := tree.(type) {
-			case *CreateIndex:
-				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			case *CreateDatabase:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			case *AlterDatabase:
@@ -1952,7 +1965,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "drop table if exists B",
 	}, {
 		input:  "drop index b on A",
-		output: "alter table A",
+		output: "alter table A drop key b",
 	}, {
 		input: "select a from B",
 	}, {

@@ -59,6 +59,7 @@ const (
 	StmtVStream
 	StmtLockTables
 	StmtUnlockTables
+	StmtFlush
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -100,6 +101,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtLockTables
 	case *UnlockTables:
 		return StmtUnlockTables
+	case *Flush:
+		return StmtFlush
 	default:
 		return StmtUnknown
 	}
@@ -187,8 +190,10 @@ func Preview(sql string) StatementType {
 		return StmtRollback
 	}
 	switch loweredFirstWord {
-	case "create", "alter", "rename", "drop", "truncate", "flush":
+	case "create", "alter", "rename", "drop", "truncate":
 		return StmtDDL
+	case "flush":
+		return StmtFlush
 	case "set":
 		return StmtSet
 	case "show":
@@ -255,6 +260,8 @@ func (s StatementType) String() string {
 		return "LOCK_TABLES"
 	case StmtUnlockTables:
 		return "UNLOCK_TABLES"
+	case StmtFlush:
+		return "FLUSH"
 	default:
 		return "UNKNOWN"
 	}
