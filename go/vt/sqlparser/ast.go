@@ -3171,7 +3171,11 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "create table %v", node.Table)
+	if node.IfNotExists {
+		buf.astPrintf(node, "create table if not exists %v", node.Table)
+	} else {
+		buf.astPrintf(node, "create table %v", node.Table)
+	}
 	if node.OptLike != nil {
 		buf.astPrintf(node, " %v", node.OptLike)
 	}
