@@ -1087,10 +1087,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv)
 	vcursor.SetIgnoreMaxMemoryRows(true)
 	switch stmtType {
-	case sqlparser.StmtStream:
-		// this is a stream statement for messaging
-		// TODO: support keyRange syntax
-		return e.handleMessageStream(ctx, sql, target, callback, vcursor, logStats)
 	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
 		// These statements don't populate plan.Instructions. We want to make sure we don't try to
 		// dereference nil Instructions which would panic.
