@@ -1040,10 +1040,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
 	vcursor.SetIgnoreMaxMemoryRows(true)
 	switch stmtType {
-	case sqlparser.StmtStream:
-		// this is a stream statement for messaging
-		// TODO: support keyRange syntax
-		return e.handleMessageStream(ctx, sql, target, callback, vcursor, logStats)
 	case sqlparser.StmtSelect, sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtFlush:
 		// These may or may not all work, but getPlan() should either return a plan with instructions
