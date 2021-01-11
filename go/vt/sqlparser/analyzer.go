@@ -103,6 +103,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUnlockTables
 	case *Flush:
 		return StmtFlush
+	case *Stream:
+		return StmtStream
 	default:
 		return StmtUnknown
 	}
@@ -111,7 +113,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 //CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+	case *Select, *Union, *Insert, *Update, *Delete, *Set, *Stream:
 		return true
 	}
 	return false
@@ -121,7 +123,7 @@ func CanNormalize(stmt Statement) bool {
 func CachePlan(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *ParenSelect,
-		*Insert, *Update, *Delete:
+		*Insert, *Update, *Delete, *Stream:
 		return true
 	}
 	return false
