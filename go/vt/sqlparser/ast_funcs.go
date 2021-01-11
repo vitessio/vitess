@@ -816,6 +816,22 @@ func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
 }
 
+// AddWhere adds the boolean expression to the
+// WHERE clause as an AND condition.
+func (node *Update) AddWhere(expr Expr) {
+	if node.Where == nil {
+		node.Where = &Where{
+			Type: WhereClause,
+			Expr: expr,
+		}
+		return
+	}
+	node.Where.Expr = &AndExpr{
+		Left:  node.Where.Expr,
+		Right: expr,
+	}
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -863,8 +879,6 @@ func (action DDLAction) ToString() string {
 		return RenameStr
 	case TruncateDDLAction:
 		return TruncateStr
-	case FlushDDLAction:
-		return FlushStr
 	case CreateVindexDDLAction:
 		return CreateVindexStr
 	case DropVindexDDLAction:

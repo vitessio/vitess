@@ -715,7 +715,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"rename table a to b"
 }
 
 # multi-rename
@@ -740,7 +741,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"rename table a to b, b to a"
 }
 
 # drop
@@ -755,6 +757,20 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery": "drop table a"
+}
+
+# drop
+"truncate table a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "truncate table a"
 }
 
 # multi-drop
@@ -902,4 +918,22 @@ options:PassthroughDMLs
     }
   ],
   "FullQuery":"drop view a, b"
+}
+
+# flush statement
+"flush tables a,b"
+{
+  "PlanID": "Flush",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "flush tables a, b"
 }
