@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -157,6 +158,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:
 		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
+	case *sqlparser.Flush:
+		return buildFlushPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
@@ -232,4 +235,110 @@ func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema ContextVSchema) (
 		Keyspace:        keyspace,
 		AlterVschemaDDL: stmt,
 	}, nil
+}
+
+func buildFlushPlan(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+	if len(stmt.TableNames) == 0 {
+		return buildFlushOptions(stmt, vschema)
+	}
+	return buildFlushTables(stmt, vschema)
+}
+
+func buildFlushOptions(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+	destination, keyspace, _, err := vschema.TargetDestination("")
+	if err != nil {
+		return nil, err
+	}
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             sqlparser.String(stmt),
+		IsDML:             false,
+		SingleShardOnly:   false,
+	}, nil
+}
+
+func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+	type sendDest struct {
+		ks   *vindexes.Keyspace
+		dest key.Destination
+	}
+
+	flushStatements := map[sendDest]*sqlparser.Flush{}
+	for i, tab := range stmt.TableNames {
+		var destinationTab key.Destination
+		var keyspaceTab *vindexes.Keyspace
+		var table *vindexes.Table
+		var err error
+		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
+
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
+		}
+		keyspaceTab = table.Keyspace
+		stmt.TableNames[i] = sqlparser.TableName{
+			Name: table.Name,
+		}
+		if destinationTab == nil {
+			destinationTab = key.DestinationAllShards{}
+		}
+
+		flush, isAvail := flushStatements[sendDest{keyspaceTab, destinationTab}]
+		if isAvail {
+			flush.TableNames = append(flush.TableNames, stmt.TableNames[i])
+		} else {
+			flush = &sqlparser.Flush{
+				IsLocal:      stmt.IsLocal,
+				FlushOptions: nil,
+				TableNames:   sqlparser.TableNames{stmt.TableNames[i]},
+				WithLock:     stmt.WithLock,
+				ForExport:    stmt.ForExport,
+			}
+		}
+		flushStatements[sendDest{keyspaceTab, destinationTab}] = flush
+	}
+
+	if len(flushStatements) == 1 {
+		for sendDest, flush := range flushStatements {
+			return &engine.Send{
+				Keyspace:          sendDest.ks,
+				TargetDestination: sendDest.dest,
+				Query:             sqlparser.String(flush),
+				IsDML:             false,
+				SingleShardOnly:   false,
+			}, nil
+		}
+	}
+
+	keys := make([]sendDest, len(flushStatements))
+
+	// Collect keys of the map
+	i := 0
+	for k := range flushStatements {
+		keys[i] = k
+		i++
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].ks.Name < keys[j].ks.Name
+	})
+
+	finalPlan := &engine.Concatenate{
+		Sources: nil,
+	}
+	for _, sendDest := range keys {
+		plan := &engine.Send{
+			Keyspace:          sendDest.ks,
+			TargetDestination: sendDest.dest,
+			Query:             sqlparser.String(flushStatements[sendDest]),
+			IsDML:             false,
+			SingleShardOnly:   false,
+		}
+		finalPlan.Sources = append(finalPlan.Sources, plan)
+	}
+
+	return finalPlan, nil
 }

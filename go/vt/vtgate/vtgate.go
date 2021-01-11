@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
@@ -313,7 +312,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // by multiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, dest, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
@@ -321,26 +320,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
-	}
-
-	// TODO: This could be simplified to have a StreamExecute that takes
-	// a destTarget without explicit destination.
-	switch dest.(type) {
-	case key.DestinationShard:
-		err = vtg.resolver.StreamExecute(
-			ctx,
-			sql,
-			bindVariables,
-			destKeyspace,
-			destTabletType,
-			dest,
-			session.Options,
-			func(reply *sqltypes.Result) error {
-				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
-				return callback(reply)
-			})
-	default:
+	} else {
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
@@ -356,7 +336,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 				return callback(reply)
 			})
 	}
-handleError:
 	if err != nil {
 		query := map[string]interface{}{
 			"Sql":           sql,
