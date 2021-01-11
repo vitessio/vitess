@@ -425,7 +425,7 @@ func TestUseStmtInOLAP(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	queries := []string{"set workload='olap'", "use `ks:80-`"}
+	queries := []string{"set workload='olap'", "use `ks:80-`", "use `ks:-80`"}
 	for i, q := range queries {
 		t.Run(fmt.Sprintf("%d-%s", i, q), func(t *testing.T) {
 			exec(t, conn, q)
