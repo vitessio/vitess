@@ -99,7 +99,7 @@ func (vf *vindexFunc) Wireup(logicalPlan, *jointab) error {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (vf *vindexFunc) Wireup2(*semantics.SemTable) error {
+func (vf *vindexFunc) WireupV4(*semantics.SemTable) error {
 	return nil
 }
 
@@ -144,8 +144,8 @@ func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
 	return nil
 }
 
-// Solves implements the logicalPlan interface
-func (vf *vindexFunc) Solves() semantics.TableSet {
+// ContainsTables implements the logicalPlan interface
+func (vf *vindexFunc) ContainsTables() semantics.TableSet {
 	return 0
 }
 

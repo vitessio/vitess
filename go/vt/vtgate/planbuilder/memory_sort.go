@@ -128,6 +128,6 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *memorySort) Wireup2(semTable *semantics.SemTable) error {
-	return ms.input.Wireup2(semTable)
+func (ms *memorySort) WireupV4(semTable *semantics.SemTable) error {
+	return ms.input.WireupV4(semTable)
 }

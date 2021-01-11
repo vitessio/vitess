@@ -154,12 +154,12 @@ func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (jb *join) Wireup2(semTable *semantics.SemTable) error {
-	err := jb.Right.Wireup2(semTable)
+func (jb *join) WireupV4(semTable *semantics.SemTable) error {
+	err := jb.Right.WireupV4(semTable)
 	if err != nil {
 		return err
 	}
-	return jb.Left.Wireup2(semTable)
+	return jb.Left.WireupV4(semTable)
 }
 
 // SupplyVar implements the logicalPlan interface
@@ -247,8 +247,8 @@ func (jb *join) Rewrite(inputs ...logicalPlan) error {
 }
 
 // Solves implements the logicalPlan interface
-func (jb *join) Solves() semantics.TableSet {
-	return jb.Left.Solves().Merge(jb.Right.Solves())
+func (jb *join) ContainsTables() semantics.TableSet {
+	return jb.Left.ContainsTables().Merge(jb.Right.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface

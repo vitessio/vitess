@@ -31,7 +31,7 @@ import (
 )
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	semTable, err := semantics.Analyse(sel, nil) // TODO no nil no
+	semTable, err := semantics.Analyse(sel) // TODO no nil no
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	if err := plan.Wireup2(semTable); err != nil {
+	if err := plan.WireupV4(semTable); err != nil {
 		return nil, err
 	}
 	return plan.Primitive(), nil
@@ -101,8 +101,8 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 
 type (
 	joinTree interface {
-		// solves returns the table identifiers that are solved by this plan
-		solves() semantics.TableSet
+		// tables returns the table identifiers that are solved by this plan
+		tables() semantics.TableSet
 
 		// cost is simply the number of routes in the joinTree
 		cost() int
@@ -119,9 +119,9 @@ type (
 		solved      semantics.TableSet
 		keyspace    *vindexes.Keyspace
 
-		// tables contains all the tables that are solved by this plan.
+		// _tables contains all the tables that are solved by this plan.
 		// the tables also contain any predicates that only depend on that particular table
-		tables routeTables
+		_tables routeTables
 
 		// predicates are the predicates evaluated by this plan
 		predicates []sqlparser.Expr
@@ -154,8 +154,8 @@ func (rp *routePlan) clone() joinTree {
 	return &result
 }
 
-// solves returns the tables that this plan is solving
-func (rp *routePlan) solves() semantics.TableSet {
+// tables implements the joinTree interface
+func (rp *routePlan) tables() semantics.TableSet {
 	return rp.solved
 }
 
@@ -280,8 +280,8 @@ func (rp *routePlan) Predicates() sqlparser.Expr {
 	return result
 }
 
-func (jp *joinPlan) solves() semantics.TableSet {
-	return jp.lhs.solves() | jp.rhs.solves()
+func (jp *joinPlan) tables() semantics.TableSet {
+	return jp.lhs.tables() | jp.rhs.tables()
 }
 func (jp *joinPlan) cost() int {
 	return jp.lhs.cost() + jp.rhs.cost()
@@ -309,8 +309,8 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 	case *joinPlan:
 		// we need to figure out which predicates go where
 		var lhsPreds, rhsPreds []sqlparser.Expr
-		lhsSolves := node.lhs.solves()
-		rhsSolves := node.rhs.solves()
+		lhsSolves := node.lhs.tables()
+		rhsSolves := node.rhs.tables()
 		for _, expr := range exprs {
 			// TODO: we should not do this.
 			// we should instead do the same as go/vt/vtgate/planbuilder/jointree_transformers.go:46
@@ -365,43 +365,36 @@ type (
 	As an optimization, it first only considers joining tables that have predicates defined between them
 */
 func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
-	plans := make([]joinTree, len(qg.tables))
+	joinTrees, err := seedPlanList(qg, semTable, vschema)
 	planCache := cacheMap{}
-
-	// we start by seeding the table with the single routes
-	for i, table := range qg.tables {
-		solves := semTable.TableSetFor(table.alias)
-		plan, err := createRoutePlan(table, solves, vschema)
-		if err != nil {
-			return nil, err
-		}
-		plans[i] = plan
+	if err != nil {
+		return nil, err
 	}
 
 	crossJoinsOK := false
-	for len(plans) > 1 {
-		bestPlan, lIdx, rIdx, err := findBestJoin(qg, semTable, plans, planCache, crossJoinsOK)
+	for len(joinTrees) > 1 {
+		bestTree, lIdx, rIdx, err := findBestJoinTree(qg, semTable, joinTrees, planCache, crossJoinsOK)
 		if err != nil {
 			return nil, err
 		}
-		if bestPlan != nil {
-			// if we found a best plan, we'll replace the two plans that were joined with the join plan created
-			plans = removeAt(plans, rIdx)
-			plans = removeAt(plans, lIdx)
-			plans = append(plans, bestPlan)
+		if bestTree != nil {
+			// if we found a best plan, we'll replace the two joinTrees that were joined with the join plan created
+			joinTrees = removeAt(joinTrees, rIdx)
+			joinTrees = removeAt(joinTrees, lIdx)
+			joinTrees = append(joinTrees, bestTree)
 		} else {
 			// we will only fail to find a join plan when there are only cross joins left
 			// when that happens, we switch over to allow cross joins as well.
-			// this way we prioritize joining plans with predicates first
+			// this way we prioritize joining joinTrees with predicates first
 			crossJoinsOK = true
 		}
 	}
 
-	return plans[0], nil
+	return joinTrees[0], nil
 }
 
-func (cm cacheMap) getJoinFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
-	solves := tableSetPair{left: lhs.solves(), right: rhs.solves()}
+func (cm cacheMap) getJoinTreeFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
+	solves := tableSetPair{left: lhs.tables(), right: rhs.tables()}
 	cachedPlan := cm[solves]
 	if cachedPlan != nil {
 		return cachedPlan, nil
@@ -415,7 +408,7 @@ func (cm cacheMap) getJoinFor(lhs, rhs joinTree, joinPredicates []sqlparser.Expr
 	return join, nil
 }
 
-func findBestJoin(
+func findBestJoinTree(
 	qg *queryGraph,
 	semTable *semantics.SemTable,
 	plans []joinTree,
@@ -427,14 +420,14 @@ func findBestJoin(
 			if i == j {
 				continue
 			}
-			joinPredicates := qg.getPredicates(lhs.solves(), rhs.solves())
+			joinPredicates := qg.getPredicates(lhs.tables(), rhs.tables())
 			if len(joinPredicates) == 0 && !crossJoinsOK {
 				// if there are no predicates joining the two tables,
 				// creating a join between them would produce a
 				// cartesian product, which is almost always a bad idea
 				continue
 			}
-			plan, err := planCache.getJoinFor(lhs, rhs, joinPredicates, semTable)
+			plan, err := planCache.getJoinTreeFor(lhs, rhs, joinPredicates, semTable)
 			if err != nil {
 				return nil, 0, 0, err
 			}
@@ -450,6 +443,29 @@ func findBestJoin(
 }
 
 func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) (joinTree, error) {
+	plans, err := seedPlanList(qg, semTable, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	var acc joinTree
+	for _, plan := range plans {
+		if acc == nil {
+			acc = plan
+			continue
+		}
+		joinPredicates := qg.getPredicates(acc.tables(), plan.tables())
+		acc, err = mergeOrJoin(acc, plan, joinPredicates, semTable)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return acc, nil
+}
+
+// seedPlanList returns a routePlan for each table in the qg
+func seedPlanList(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVSchema) ([]joinTree, error) {
 	plans := make([]joinTree, len(qg.tables))
 
 	// we start by seeding the table with the single routes
@@ -461,22 +477,7 @@ func leftToRightSolve(qg *queryGraph, semTable *semantics.SemTable, vschema Cont
 		}
 		plans[i] = plan
 	}
-
-	var acc joinTree
-	var err error
-	for _, plan := range plans {
-		if acc == nil {
-			acc = plan
-			continue
-		}
-		joinPredicates := qg.getPredicates(acc.solves(), plan.solves())
-		acc, err = mergeOrJoin(acc, plan, joinPredicates, semTable)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return acc, nil
+	return plans, nil
 }
 
 func removeAt(plans []joinTree, idx int) []joinTree {
@@ -490,7 +491,7 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 	}
 	plan := &routePlan{
 		solved: solves,
-		tables: []*routeTable{{
+		_tables: []*routeTable{{
 			qtable: table,
 			vtable: vschemaTable,
 		}},
@@ -531,7 +532,7 @@ func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable)
 		return nil
 	}
 	leftDep := sem.Dependencies(left)
-	for _, table := range a.tables {
+	for _, table := range a._tables {
 		if leftDep.IsSolvedBy(table.qtable.tableID) {
 			for _, vindex := range table.vtable.ColumnVindexes {
 				singCol, isSingle := vindex.Vindex.(vindexes.SingleColumn)
@@ -596,7 +597,7 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 	r := &routePlan{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
-		tables:      append(aRoute.tables, bRoute.tables...),
+		_tables:     append(aRoute._tables, bRoute._tables...),
 		predicates: append(
 			append(aRoute.predicates, bRoute.predicates...),
 			joinPredicates...),

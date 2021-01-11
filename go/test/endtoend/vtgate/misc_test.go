@@ -425,7 +425,7 @@ func TestUseStmtInOLAP(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	queries := []string{"set workload='olap'", "use `ks:80-`"}
+	queries := []string{"set workload='olap'", "use `ks:80-`", "use `ks:-80`"}
 	for i, q := range queries {
 		t.Run(fmt.Sprintf("%d-%s", i, q), func(t *testing.T) {
 			exec(t, conn, q)
@@ -494,6 +494,15 @@ func TestCreateView(t *testing.T) {
 	// This wont work, since ALTER VSCHEMA ADD TABLE is only supported for unsharded keyspaces
 	exec(t, conn, "alter vschema add table v1")
 	assertMatches(t, conn, "select * from v1", `[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)] [INT64(5) INT64(5)]]`)
+}
+
+func TestFlush(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	exec(t, conn, "flush local tables t1, t2")
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

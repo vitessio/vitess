@@ -43,8 +43,8 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logica
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type encountered: %T", tree)
 }
 
-func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (*join2, error) {
-	lhsColList := extractColumnsNeededFromLHS(n, semTable, n.lhs.solves())
+func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (*joinV4, error) {
+	lhsColList := extractColumnsNeededFromLHS(n, semTable, n.lhs.tables())
 
 	var lhsColExpr []*sqlparser.AliasedExpr
 	for _, col := range lhsColList {
@@ -79,7 +79,7 @@ func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (*join2, error
 		return nil, err
 	}
 
-	return &join2{
+	return &joinV4{
 		Left:  lhs,
 		Right: rhs,
 		Vars:  vars,
@@ -90,8 +90,8 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
-	sort.Sort(n.tables)
-	for _, t := range n.tables {
+	sort.Sort(n._tables)
+	for _, t := range n._tables {
 		alias := sqlparser.AliasedTableExpr{
 			Expr: sqlparser.TableName{
 				Name: t.vtable.Name,
@@ -140,7 +140,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			From:  tablesForSelect,
 			Where: where,
 		},
-		solvedTables: n.solved,
+		tables: n.solved,
 	}, nil
 }
 

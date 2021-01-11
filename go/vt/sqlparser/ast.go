@@ -174,8 +174,8 @@ type (
 		Cols Columns
 	}
 
-	// RenameTable clause is used to rename the table in an alter table statement
-	RenameTable struct {
+	// RenameTableName clause is used to rename the table in an alter table statement
+	RenameTableName struct {
 		Table TableName
 	}
 
@@ -366,24 +366,29 @@ type (
 		FullyParsed         bool
 	}
 
-	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
-	DDL struct {
-		Action DDLAction
+	// Flush represents a FLUSH statement.
+	Flush struct {
+		IsLocal      bool
+		FlushOptions []string
+		TableNames   TableNames
+		WithLock     bool
+		ForExport    bool
+	}
 
-		// FromTables is set if Action is RenameDDLAction or DropDDLAction.
-		FromTables TableNames
+	// RenameTablePair represents the name of the original table and what it is going to be set in a RENAME TABLE statement.
+	RenameTablePair struct {
+		FromTable TableName
+		ToTable   TableName
+	}
 
-		// ToTables is set if Action is RenameDDLAction.
-		ToTables TableNames
+	// RenameTable represents a RENAME TABLE statement.
+	RenameTable struct {
+		TablePairs []*RenameTablePair
+	}
 
-		// Table is set if Action is other than RenameDDLAction or DropDDLAction.
+	// TruncateTable represents a TRUNCATE TABLE statement.
+	TruncateTable struct {
 		Table TableName
-
-		// The following fields are set if a DDL was fully analyzed.
-		IfExists      bool
-		TableSpec     *TableSpec
-		OptLike       *OptLike
-		PartitionSpec *PartitionSpec
 	}
 
 	// AlterVschema represents a ALTER VSCHEMA statement.
@@ -420,16 +425,6 @@ type (
 	DropView struct {
 		FromTables TableNames
 		IfExists   bool
-	}
-
-	// CreateIndex represents a CREATE INDEX query
-	CreateIndex struct {
-		Constraint  string
-		Name        ColIdent
-		Table       TableName
-		Columns     []*IndexColumn
-		Options     []*IndexOption
-		FullyParsed bool
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
@@ -561,7 +556,7 @@ func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
 func (*SetTransaction) iStatement()    {}
 func (*DropDatabase) iStatement()      {}
-func (*DDL) iStatement()               {}
+func (*Flush) iStatement()             {}
 func (*Show) iStatement()              {}
 func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
@@ -577,7 +572,6 @@ func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
-func (*CreateIndex) iStatement()       {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
 func (*CreateTable) iStatement()       {}
@@ -589,15 +583,17 @@ func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
+func (*TruncateTable) iStatement()     {}
+func (*RenameTable) iStatement()       {}
 
-func (*DDL) iDDLStatement()         {}
-func (*CreateIndex) iDDLStatement() {}
-func (*CreateView) iDDLStatement()  {}
-func (*AlterView) iDDLStatement()   {}
-func (*CreateTable) iDDLStatement() {}
-func (*DropTable) iDDLStatement()   {}
-func (*DropView) iDDLStatement()    {}
-func (*AlterTable) iDDLStatement()  {}
+func (*CreateView) iDDLStatement()    {}
+func (*AlterView) iDDLStatement()     {}
+func (*CreateTable) iDDLStatement()   {}
+func (*DropTable) iDDLStatement()     {}
+func (*DropView) iDDLStatement()      {}
+func (*AlterTable) iDDLStatement()    {}
+func (*TruncateTable) iDDLStatement() {}
+func (*RenameTable) iDDLStatement()   {}
 
 func (*AddConstraintDefinition) iAlterOption() {}
 func (*AddIndexDefinition) iAlterOption()      {}
@@ -614,19 +610,19 @@ func (*DropKey) iAlterOption()                 {}
 func (*Force) iAlterOption()                   {}
 func (*LockOption) iAlterOption()              {}
 func (*OrderByOption) iAlterOption()           {}
-func (*RenameTable) iAlterOption()             {}
+func (*RenameTableName) iAlterOption()         {}
 func (*RenameIndex) iAlterOption()             {}
 func (*Validation) iAlterOption()              {}
 func (TableOptions) iAlterOption()             {}
 
 // IsFullyParsed implements the DDLStatement interface
-func (*DDL) IsFullyParsed() bool {
-	return false
+func (*TruncateTable) IsFullyParsed() bool {
+	return true
 }
 
 // IsFullyParsed implements the DDLStatement interface
-func (node *CreateIndex) IsFullyParsed() bool {
-	return node.FullyParsed
+func (*RenameTable) IsFullyParsed() bool {
+	return true
 }
 
 // IsFullyParsed implements the DDLStatement interface
@@ -660,7 +656,7 @@ func (node *AlterView) IsFullyParsed() bool {
 }
 
 // GetTable implements the DDLStatement interface
-func (node *CreateIndex) GetTable() TableName {
+func (node *TruncateTable) GetTable() TableName {
 	return node.Table
 }
 
@@ -685,11 +681,6 @@ func (node *AlterView) GetTable() TableName {
 }
 
 // GetTable implements the DDLStatement interface
-func (node *DDL) GetTable() TableName {
-	return node.Table
-}
-
-// GetTable implements the DDLStatement interface
 func (node *DropView) GetTable() TableName {
 	return TableName{}
 }
@@ -699,14 +690,14 @@ func (node *DropTable) GetTable() TableName {
 	return TableName{}
 }
 
-// GetAction implements the DDLStatement interface
-func (node *DDL) GetAction() DDLAction {
-	return node.Action
+// GetTable implements the DDLStatement interface
+func (node *RenameTable) GetTable() TableName {
+	return TableName{}
 }
 
 // GetAction implements the DDLStatement interface
-func (node *CreateIndex) GetAction() DDLAction {
-	return AlterDDLAction
+func (node *TruncateTable) GetAction() DDLAction {
+	return TruncateDDLAction
 }
 
 // GetAction implements the DDLStatement interface
@@ -730,6 +721,11 @@ func (node *AlterView) GetAction() DDLAction {
 }
 
 // GetAction implements the DDLStatement interface
+func (node *RenameTable) GetAction() DDLAction {
+	return RenameDDLAction
+}
+
+// GetAction implements the DDLStatement interface
 func (node *DropTable) GetAction() DDLAction {
 	return DropDDLAction
 }
@@ -740,17 +736,17 @@ func (node *DropView) GetAction() DDLAction {
 }
 
 // GetOptLike implements the DDLStatement interface
-func (node *DDL) GetOptLike() *OptLike {
-	return node.OptLike
-}
-
-// GetOptLike implements the DDLStatement interface
 func (node *CreateTable) GetOptLike() *OptLike {
 	return node.OptLike
 }
 
 // GetOptLike implements the DDLStatement interface
-func (node *CreateIndex) GetOptLike() *OptLike {
+func (node *TruncateTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *RenameTable) GetOptLike() *OptLike {
 	return nil
 }
 
@@ -780,8 +776,8 @@ func (node *DropView) GetOptLike() *OptLike {
 }
 
 // GetIfExists implements the DDLStatement interface
-func (node *DDL) GetIfExists() bool {
-	return node.IfExists
+func (node *RenameTable) GetIfExists() bool {
+	return false
 }
 
 // GetIfExists implements the DDLStatement interface
@@ -790,7 +786,7 @@ func (node *CreateTable) GetIfExists() bool {
 }
 
 // GetIfExists implements the DDLStatement interface
-func (node *CreateIndex) GetIfExists() bool {
+func (node *TruncateTable) GetIfExists() bool {
 	return false
 }
 
@@ -820,17 +816,17 @@ func (node *DropView) GetIfExists() bool {
 }
 
 // GetTableSpec implements the DDLStatement interface
-func (node *DDL) GetTableSpec() *TableSpec {
-	return node.TableSpec
-}
-
-// GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
 }
 
 // GetTableSpec implements the DDLStatement interface
-func (node *CreateIndex) GetTableSpec() *TableSpec {
+func (node *RenameTable) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *TruncateTable) GetTableSpec() *TableSpec {
 	return nil
 }
 
@@ -860,12 +856,16 @@ func (node *DropView) GetTableSpec() *TableSpec {
 }
 
 // GetFromTables implements the DDLStatement interface
-func (node *DDL) GetFromTables() TableNames {
-	return node.FromTables
+func (node *RenameTable) GetFromTables() TableNames {
+	var fromTables TableNames
+	for _, pair := range node.TablePairs {
+		fromTables = append(fromTables, pair.FromTable)
+	}
+	return fromTables
 }
 
 // GetFromTables implements the DDLStatement interface
-func (node *CreateIndex) GetFromTables() TableNames {
+func (node *TruncateTable) GetFromTables() TableNames {
 	return nil
 }
 
@@ -900,12 +900,17 @@ func (node *AlterView) GetFromTables() TableNames {
 }
 
 // SetFromTables implements DDLStatement.
-func (node *DDL) SetFromTables(tables TableNames) {
-	node.FromTables = tables
+func (node *RenameTable) SetFromTables(tables TableNames) {
+	if len(node.TablePairs) != len(tables) {
+		return
+	}
+	for i := range node.TablePairs {
+		node.TablePairs[i].FromTable = tables[i]
+	}
 }
 
 // SetFromTables implements DDLStatement.
-func (node *CreateIndex) SetFromTables(tables TableNames) {
+func (node *TruncateTable) SetFromTables(tables TableNames) {
 	// irrelevant
 }
 
@@ -940,12 +945,16 @@ func (node *AlterView) SetFromTables(tables TableNames) {
 }
 
 // GetToTables implements the DDLStatement interface
-func (node *DDL) GetToTables() TableNames {
-	return node.ToTables
+func (node *RenameTable) GetToTables() TableNames {
+	var toTables TableNames
+	for _, pair := range node.TablePairs {
+		toTables = append(toTables, pair.ToTable)
+	}
+	return toTables
 }
 
 // GetToTables implements the DDLStatement interface
-func (node *CreateIndex) GetToTables() TableNames {
+func (node *TruncateTable) GetToTables() TableNames {
 	return nil
 }
 
@@ -953,7 +962,7 @@ func (node *CreateIndex) GetToTables() TableNames {
 func (node *AlterTable) GetToTables() TableNames {
 	for _, option := range node.AlterOptions {
 		switch altOption := option.(type) {
-		case *RenameTable:
+		case *RenameTableName:
 			return TableNames{altOption.Table}
 		}
 	}
@@ -986,14 +995,13 @@ func (node *DropView) GetToTables() TableNames {
 }
 
 // AffectedTables returns the list table names affected by the DDLStatement.
-func (node *DDL) AffectedTables() TableNames {
-	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
-		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
-		list = append(list, node.FromTables...)
-		list = append(list, node.ToTables...)
-		return list
+func (node *RenameTable) AffectedTables() TableNames {
+	list := make(TableNames, 0, 2*len(node.TablePairs))
+	for _, pair := range node.TablePairs {
+		list = append(list, pair.FromTable)
+		list = append(list, pair.ToTable)
 	}
-	return TableNames{node.Table}
+	return list
 }
 
 // AffectedTables returns the list table names affected by the DDLStatement.
@@ -1001,7 +1009,7 @@ func (node *AlterTable) AffectedTables() TableNames {
 	affectedTables := TableNames{node.Table}
 	for _, option := range node.AlterOptions {
 		switch altOption := option.(type) {
-		case *RenameTable:
+		case *RenameTableName:
 			affectedTables = append(affectedTables, altOption.Table)
 		}
 	}
@@ -1009,7 +1017,7 @@ func (node *AlterTable) AffectedTables() TableNames {
 }
 
 // AffectedTables implements DDLStatement.
-func (node *CreateIndex) AffectedTables() TableNames {
+func (node *TruncateTable) AffectedTables() TableNames {
 	return TableNames{node.Table}
 }
 
@@ -1039,13 +1047,7 @@ func (node *DropView) AffectedTables() TableNames {
 }
 
 // SetTable implements DDLStatement.
-func (node *CreateIndex) SetTable(qualifier string, name string) {
-	node.Table.Qualifier = NewTableIdent(qualifier)
-	node.Table.Name = NewTableIdent(name)
-}
-
-// SetTable implements DDLStatement.
-func (node *DDL) SetTable(qualifier string, name string) {
+func (node *TruncateTable) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewTableIdent(qualifier)
 	node.Table.Name = NewTableIdent(name)
 }
@@ -1073,6 +1075,9 @@ func (node *AlterView) SetTable(qualifier string, name string) {
 	node.ViewName.Qualifier = NewTableIdent(qualifier)
 	node.ViewName.Name = NewTableIdent(name)
 }
+
+// SetTable implements DDLStatement.
+func (node *RenameTable) SetTable(qualifier string, name string) {}
 
 // SetTable implements DDLStatement.
 func (node *DropTable) SetTable(qualifier string, name string) {}
@@ -1936,37 +1941,28 @@ func (node *DropDatabase) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *DDL) Format(buf *TrackedBuffer) {
-	switch node.Action {
-	case CreateDDLAction:
-		if node.OptLike != nil {
-			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.OptLike)
-		} else if node.TableSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.TableSpec)
-		} else {
-			buf.astPrintf(node, "%s table %v", CreateStr, node.Table)
+func (node *Flush) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s", FlushStr)
+	if node.IsLocal {
+		buf.WriteString(" local")
+	}
+	if len(node.FlushOptions) != 0 {
+		prefix := " "
+		for _, option := range node.FlushOptions {
+			buf.astPrintf(node, "%s%s", prefix, option)
+			prefix = ", "
 		}
-	case DropDDLAction:
-		exists := ""
-		if node.IfExists {
-			exists = " if exists"
+	} else {
+		buf.WriteString(" tables")
+		if len(node.TableNames) != 0 {
+			buf.astPrintf(node, " %v", node.TableNames)
 		}
-		buf.astPrintf(node, "%s table%s %v", DropStr, exists, node.FromTables)
-	case RenameDDLAction:
-		buf.astPrintf(node, "%s table %v to %v", RenameStr, node.FromTables[0], node.ToTables[0])
-		for i := 1; i < len(node.FromTables); i++ {
-			buf.astPrintf(node, ", %v to %v", node.FromTables[i], node.ToTables[i])
+		if node.ForExport {
+			buf.WriteString(" for export")
 		}
-	case AlterDDLAction:
-		if node.PartitionSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", AlterStr, node.Table, node.PartitionSpec)
-		} else {
-			buf.astPrintf(node, "%s table %v", AlterStr, node.Table)
+		if node.WithLock {
+			buf.WriteString(" with read lock")
 		}
-	case FlushDDLAction:
-		buf.astPrintf(node, "%s", FlushStr)
-	default:
-		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}
 }
 
@@ -3097,42 +3093,6 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *CreateIndex) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "alter table %v add", node.Table)
-	if node.Constraint != "" {
-		buf.WriteString(" " + node.Constraint)
-	}
-	buf.astPrintf(node, " index %v", node.Name)
-
-	buf.WriteString(" (")
-	for i, col := range node.Columns {
-		if i != 0 {
-			buf.astPrintf(node, ", %v", col.Column)
-		} else {
-			buf.astPrintf(node, "%v", col.Column)
-		}
-		if col.Length != nil {
-			buf.astPrintf(node, "(%v)", col.Length)
-		}
-		if col.Direction == DescOrder {
-			buf.WriteString(" desc")
-		}
-	}
-	buf.astPrintf(node, ")")
-	for _, opt := range node.Options {
-		//if opt == nil {
-		//	continue
-		//}
-		buf.WriteString(" " + strings.ToLower(opt.Name))
-		if opt.String != "" {
-			buf.WriteString(" " + opt.String)
-		} else {
-			buf.astPrintf(node, " %v", opt.Value)
-		}
-	}
-}
-
-// Format formats the node.
 func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 	buf.WriteString("create database")
 	if node.IfNotExists {
@@ -3172,7 +3132,11 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "create table %v", node.Table)
+	if node.IfNotExists {
+		buf.astPrintf(node, "create table if not exists %v", node.Table)
+	} else {
+		buf.astPrintf(node, "create table %v", node.Table)
+	}
 	if node.OptLike != nil {
 		buf.astPrintf(node, " %v", node.OptLike)
 	}
@@ -3402,7 +3366,7 @@ func (node *OrderByOption) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
-func (node *RenameTable) Format(buf *TrackedBuffer) {
+func (node *RenameTableName) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "rename %v", node.Table)
 }
 
@@ -3434,5 +3398,20 @@ func (node TableOptions) Format(buf *TrackedBuffer) {
 		} else {
 			buf.astPrintf(node, " (%v)", option.Tables)
 		}
+	}
+}
+
+// Format formats the node
+func (node *TruncateTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "truncate table %v", node.Table)
+}
+
+// Format formats the node.
+func (node *RenameTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename table")
+	prefix := " "
+	for _, pair := range node.TablePairs {
+		buf.astPrintf(node, "%s%v to %v", prefix, pair.FromTable, pair.ToTable)
+		prefix = ", "
 	}
 }

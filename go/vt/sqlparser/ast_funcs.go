@@ -816,6 +816,22 @@ func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
 }
 
+// AddWhere adds the boolean expression to the
+// WHERE clause as an AND condition.
+func (node *Update) AddWhere(expr Expr) {
+	if node.Where == nil {
+		node.Where = &Where{
+			Type: WhereClause,
+			Expr: expr,
+		}
+		return
+	}
+	node.Where.Expr = &AndExpr{
+		Left:  node.Where.Expr,
+		Right: expr,
+	}
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -863,8 +879,6 @@ func (action DDLAction) ToString() string {
 		return RenameStr
 	case TruncateDDLAction:
 		return TruncateStr
-	case FlushDDLAction:
-		return FlushStr
 	case CreateVindexDDLAction:
 		return CreateVindexStr
 	case DropVindexDDLAction:
@@ -1284,6 +1298,7 @@ const (
 	DoubleAt
 )
 
+// Clone implements the Expr interface
 func (node *Subquery) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1291,6 +1306,7 @@ func (node *Subquery) Clone() Expr {
 	panic(1)
 }
 
+// Clone implements the Expr interface
 func (node *AndExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1301,6 +1317,7 @@ func (node *AndExpr) Clone() Expr {
 	}
 }
 
+// Clone implements the Expr interface
 func (node *OrExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1311,6 +1328,7 @@ func (node *OrExpr) Clone() Expr {
 	}
 }
 
+// Clone implements the Expr interface
 func (node *XorExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1321,6 +1339,7 @@ func (node *XorExpr) Clone() Expr {
 	}
 }
 
+// Clone implements the Expr interface
 func (node *NotExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1330,6 +1349,7 @@ func (node *NotExpr) Clone() Expr {
 	}
 }
 
+// Clone implements the Expr interface
 func (node *ComparisonExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1341,6 +1361,8 @@ func (node *ComparisonExpr) Clone() Expr {
 		Escape:   node.Escape.Clone(),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *RangeCond) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1352,6 +1374,8 @@ func (node *RangeCond) Clone() Expr {
 		To:       node.To.Clone(),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *IsExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1361,6 +1385,8 @@ func (node *IsExpr) Clone() Expr {
 		Expr:     node.Expr.Clone(),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *ExistsExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1369,12 +1395,16 @@ func (node *ExistsExpr) Clone() Expr {
 		Subquery: node.Subquery.Clone().(*Subquery),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *Literal) Clone() Expr {
 	if node == nil {
 		return nil
 	}
 	return &Literal{}
 }
+
+// Clone implements the Expr interface
 func (node Argument) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1383,15 +1413,21 @@ func (node Argument) Clone() Expr {
 	copy(cpy, node)
 	return cpy
 }
+
+// Clone implements the Expr interface
 func (node *NullVal) Clone() Expr {
 	if node == nil {
 		return nil
 	}
 	return &NullVal{}
 }
+
+// Clone implements the Expr interface
 func (node BoolVal) Clone() Expr {
 	return node
 }
+
+// Clone implements the Expr interface
 func (node *ColName) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1402,6 +1438,8 @@ func (node *ColName) Clone() Expr {
 		Qualifier: node.Qualifier,
 	}
 }
+
+// Clone implements the Expr interface
 func (node ValTuple) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1410,6 +1448,8 @@ func (node ValTuple) Clone() Expr {
 	copy(cpy, node)
 	return cpy
 }
+
+// Clone implements the Expr interface
 func (node ListArg) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1418,6 +1458,8 @@ func (node ListArg) Clone() Expr {
 	copy(cpy, node)
 	return cpy
 }
+
+// Clone implements the Expr interface
 func (node *BinaryExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1428,6 +1470,8 @@ func (node *BinaryExpr) Clone() Expr {
 		Right:    node.Right.Clone(),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *UnaryExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1437,6 +1481,8 @@ func (node *UnaryExpr) Clone() Expr {
 		Expr:     node.Expr.Clone(),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *IntervalExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1446,6 +1492,8 @@ func (node *IntervalExpr) Clone() Expr {
 		Unit: node.Unit,
 	}
 }
+
+// Clone implements the Expr interface
 func (node *CollateExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1455,12 +1503,16 @@ func (node *CollateExpr) Clone() Expr {
 		Charset: node.Charset,
 	}
 }
+
+// Clone implements the Expr interface
 func (node *FuncExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
 	panic(1)
 }
+
+// Clone implements the Expr interface
 func (node *TimestampFuncExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1472,6 +1524,8 @@ func (node *TimestampFuncExpr) Clone() Expr {
 		Unit:  node.Unit,
 	}
 }
+
+// Clone implements the Expr interface
 func (node *CurTimeFuncExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1481,12 +1535,16 @@ func (node *CurTimeFuncExpr) Clone() Expr {
 		Fsp:  node.Fsp.Clone(),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *CaseExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
 	panic(1)
 }
+
+// Clone implements the Expr interface
 func (node *ValuesFuncExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1495,12 +1553,16 @@ func (node *ValuesFuncExpr) Clone() Expr {
 		Name: node.Name.Clone().(*ColName),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *ConvertExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
 	panic(1)
 }
+
+// Clone implements the Expr interface
 func (node *SubstrExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1512,6 +1574,8 @@ func (node *SubstrExpr) Clone() Expr {
 		To:     node.To.Clone(),
 	}
 }
+
+// Clone implements the Expr interface
 func (node *ConvertUsingExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1521,12 +1585,16 @@ func (node *ConvertUsingExpr) Clone() Expr {
 		Type: node.Type,
 	}
 }
+
+// Clone implements the Expr interface
 func (node *MatchExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
 	panic(1)
 }
+
+// Clone implements the Expr interface
 func (node *GroupConcatExpr) Clone() Expr {
 	if node == nil {
 		return nil
@@ -1534,6 +1602,8 @@ func (node *GroupConcatExpr) Clone() Expr {
 
 	panic(1)
 }
+
+// Clone implements the Expr interface
 func (node *Default) Clone() Expr {
 	if node == nil {
 		return nil
