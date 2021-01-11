@@ -104,6 +104,7 @@ type (
 
 		// KeyspaceAvailable returns true when a keyspace is visible from vtgate
 		KeyspaceAvailable(ks string) bool
+		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

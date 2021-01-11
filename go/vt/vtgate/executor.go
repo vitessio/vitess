@@ -1516,7 +1516,12 @@ func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }
 
-//ExecuteLock implments the IExecutor interface
+// ExecuteLock implements the IExecutor interface
 func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
 	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
+}
+
+// ExecuteMessageStream implements the IExecutor interface
+func (e *Executor) ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(reply *sqltypes.Result) error) error {
+	return e.scatterConn.MessageStream(ctx, rss, tableName, callback)
 }
