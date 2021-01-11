@@ -160,9 +160,26 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
 	case *sqlparser.Flush:
 		return buildFlushPlan(stmt, vschema)
+	case *sqlparser.Stream:
+		return buildStreamPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+}
+
+func buildStreamPlan(stmt *sqlparser.Stream, vschema ContextVSchema) (engine.Primitive, error) {
+	table, _, _, dest, err := vschema.FindTable(stmt.Table)
+	if err != nil {
+		return nil, err
+	}
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+	return &engine.MessageStream{
+		Keyspace:          table.Keyspace,
+		TargetDestination: dest,
+		TableName:         table.Name.CompliantName(),
+	}, nil
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {

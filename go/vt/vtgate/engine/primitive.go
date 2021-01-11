@@ -98,6 +98,7 @@ type (
 		LookupRowLockShardSession() vtgatepb.CommitOrder
 
 		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
+		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

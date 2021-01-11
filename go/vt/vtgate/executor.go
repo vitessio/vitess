@@ -1091,11 +1091,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		// this is a stream statement for messaging
 		// TODO: support keyRange syntax
 		return e.handleMessageStream(ctx, sql, target, callback, vcursor, logStats)
-	case sqlparser.StmtSelect, sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtFlush:
-		// These may or may not all work, but getPlan() should either return a plan with instructions
-		// or an error, so it's safe to try.
-		break
 	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
 		// These statements don't populate plan.Instructions. We want to make sure we don't try to
 		// dereference nil Instructions which would panic.
@@ -1103,8 +1098,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	case sqlparser.StmtVStream:
 		log.Infof("handleVStream called with target %v", target)
 		return e.handleVStream(ctx, sql, target, callback, vcursor, logStats)
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type for OLAP: %s", stmtType)
 	}
 
 	plan, err := e.getPlan(
@@ -1630,7 +1623,12 @@ func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }
 
-//ExecuteLock implments the IExecutor interface
+// ExecuteLock implements the IExecutor interface
 func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
 	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
+}
+
+// ExecuteMessageStream implements the IExecutor interface
+func (e *Executor) ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(reply *sqltypes.Result) error) error {
+	return e.scatterConn.MessageStream(ctx, rss, tableName, callback)
 }

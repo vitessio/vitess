@@ -57,6 +57,10 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t noopVCursor) MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
+	panic("implement me")
+}
+
 func (t noopVCursor) SetDDLStrategy(strategy string) {
 	panic("implement me")
 }
