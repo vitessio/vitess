@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -346,4 +348,8 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 		}
 	}
 	return oa.input.Wireup(plan, jt)
+}
+
+func (oa *orderedAggregate) WireupV4(semTable *semantics.SemTable) error {
+	return oa.input.WireupV4(semTable)
 }

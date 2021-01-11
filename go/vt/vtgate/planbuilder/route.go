@@ -19,6 +19,7 @@ package planbuilder
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -63,6 +64,9 @@ type route struct {
 
 	// eroute is the primitive being built.
 	eroute *engine.Route
+
+	// tables keeps track of which tables this route is covering
+	tables semantics.TableSet
 }
 
 type tableSubstitution struct {
@@ -126,6 +130,23 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
+}
+
+// Wireup2 implements the logicalPlan interface
+func (rb *route) WireupV4(semTable *semantics.SemTable) error {
+	rb.prepareTheAST()
+
+	rb.eroute.Query = sqlparser.String(rb.Select)
+	buffer := sqlparser.NewTrackedBuffer(nil)
+	sqlparser.FormatImpossibleQuery(buffer, rb.Select)
+	rb.eroute.FieldQuery = buffer.ParsedQuery().Query
+
+	return nil
+}
+
+// Solves implements the logicalPlan interface
+func (rb *route) ContainsTables() semantics.TableSet {
+	return rb.tables
 }
 
 // Wireup implements the logicalPlan interface
@@ -202,6 +223,23 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	rb.eroute.Query = buf.ParsedQuery().Query
 	rb.eroute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
+}
+
+// prepareTheAST does minor fixups of the SELECT struct before producing the query string
+func (rb *route) prepareTheAST() {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Select:
+			if len(node.SelectExprs) == 0 {
+				node.SelectExprs = []sqlparser.SelectExpr{
+					&sqlparser.AliasedExpr{
+						Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+					},
+				}
+			}
+		}
+		return true, nil
+	}, rb.Select)
 }
 
 // procureValues procures and converts the input into
@@ -393,7 +431,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 			return true
 		}
 		hasRuntimeRoutingPredicates := false
-		sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			col, ok := node.(*sqlparser.ColName)
 			if ok {
 				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)

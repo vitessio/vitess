@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -49,7 +50,23 @@ type ContextVSchema interface {
 	SysVarSetEnabled() bool
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
+	GetSemTable() *semantics.SemTable
+	Planner() PlannerVersion
 }
+
+// PlannerVersion is an alias here to make the code more readable
+type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
+
+const (
+	// V3 is also the default planner
+	V3 = querypb.ExecuteOptions_V3
+	// V4 uses the default V4 planner, which is the greedy planner
+	V4 = querypb.ExecuteOptions_V4
+	// V4GreedyOnly uses only the faster greedy planner
+	V4GreedyOnly = querypb.ExecuteOptions_V4Greedy
+	// V4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
+	V4Left2Right = querypb.ExecuteOptions_V4Left2Right
+)
 
 type truncater interface {
 	SetTruncateColumnCount(int)

@@ -108,7 +108,6 @@ type Executor struct {
 var executorOnce sync.Once
 
 const pathQueryPlans = "/debug/query_plans"
-
 const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 

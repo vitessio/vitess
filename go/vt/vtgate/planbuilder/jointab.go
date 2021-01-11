@@ -50,11 +50,7 @@ func (jt *jointab) Procure(plan logicalPlan, col *sqlparser.ColName, to int) str
 		suffix := ""
 		i := 0
 		for {
-			if !col.Qualifier.IsEmpty() {
-				joinVar = col.Qualifier.Name.CompliantName() + "_" + col.Name.CompliantName() + suffix
-			} else {
-				joinVar = col.Name.CompliantName() + suffix
-			}
+			joinVar = col.CompliantName(suffix)
 			if _, ok := jt.vars[joinVar]; !ok {
 				break
 			}

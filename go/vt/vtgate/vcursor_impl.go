@@ -23,6 +23,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/common/log"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
@@ -97,6 +101,7 @@ type vcursorImpl struct {
 	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
+	semTable              *semantics.SemTable
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
@@ -332,6 +337,7 @@ func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
 }
 
+// AllKeyspace implements the ContextVSchema interface
 func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
@@ -341,6 +347,32 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 		kss = append(kss, ks.Keyspace)
 	}
 	return kss, nil
+}
+
+// Planner implements the ContextVSchema interface
+func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
+	if vc.safeSession.Options != nil &&
+		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
+		return vc.safeSession.Options.PlannerVersion
+	}
+	switch strings.ToLower(*plannerVersion) {
+	case "v3":
+		return planbuilder.V3
+	case "v4":
+		return planbuilder.V4
+	case "v4greedy", "greedy":
+		return planbuilder.V4GreedyOnly
+	case "left2right":
+		return planbuilder.V4Left2Right
+	}
+
+	log.Warn("unknown planner version configured. using the default")
+	return planbuilder.V3
+}
+
+// GetSemTable implements the ContextVSchema interface
+func (vc *vcursorImpl) GetSemTable() *semantics.SemTable {
+	return vc.semTable
 }
 
 // TargetString returns the current TargetString of the session.
@@ -601,6 +633,11 @@ func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
 // SetWorkload implements the SessionActions interface
 func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
+}
+
+// SetPlannerVersion implements the SessionActions interface
+func (vc *vcursorImpl) SetPlannerVersion(v planbuilder.PlannerVersion) {
+	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
 // SetFoundRows implements the SessionActions interface

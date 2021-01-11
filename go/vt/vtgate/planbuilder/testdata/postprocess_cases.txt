@@ -154,6 +154,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # ORDER BY uses column numbers
 "select col from user where id = 1 order by 1"
@@ -175,6 +177,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # ORDER BY on scatter
@@ -311,6 +315,8 @@
     "Query": "select col from user order by null",
     "Table": "user"
   }
+}
+{
 }
 
 # ORDER BY after pull-out subquery
@@ -536,6 +542,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
@@ -638,6 +646,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # Order by, qualified '*' expression
 "select user.* from user where id = 5 order by user.col"
@@ -660,6 +670,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 # Order by, '*' expression with qualified reference
 "select * from user where id = 5 order by user.col"
@@ -681,6 +693,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # Order by, '*' expression in a subquery
@@ -757,6 +771,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 #Order by with math functions
 "select * from user where id = 5 order by -col1"
@@ -778,6 +794,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 #Order by with string operations
@@ -801,6 +819,8 @@
     "Vindex": "user_index"
   }
 }
+{
+}
 
 #Order by with math operations
 "select * from user where id = 5 order by id+col collate utf8_general_ci desc"
@@ -822,6 +842,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 #Order by subquery column
@@ -888,6 +910,8 @@
     ],
     "Vindex": "user_index"
   }
+}
+{
 }
 
 # limit for joins. Can't push down the limit because result
@@ -1063,6 +1087,8 @@
     "Query": "select col from ref limit 1",
     "Table": "ref"
   }
+}
+{
 }
 
 # invalid limit expression

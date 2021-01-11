@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type concatenate struct {
@@ -53,6 +54,14 @@ func (c *concatenate) Wireup(plan logicalPlan, jt *jointab) error {
 	return c.rhs.Wireup(plan, jt)
 }
 
+func (c *concatenate) WireupV4(semTable *semantics.SemTable) error {
+	err := c.lhs.WireupV4(semTable)
+	if err != nil {
+		return err
+	}
+	return c.rhs.WireupV4(semTable)
+}
+
 func (c *concatenate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	panic("implement me")
 }
@@ -82,6 +91,10 @@ func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
 	c.lhs = inputs[0]
 	c.rhs = inputs[1]
 	return nil
+}
+
+func (c *concatenate) ContainsTables() semantics.TableSet {
+	return c.lhs.ContainsTables().Merge(c.rhs.ContainsTables())
 }
 
 // Inputs implements the logicalPlan interface

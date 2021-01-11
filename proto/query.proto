@@ -297,6 +297,18 @@ message ExecuteOptions {
   // skip_query_plan_cache specifies if the query plan should be cached by vitess.
   // By default all query plans are cached.
   bool skip_query_plan_cache = 10;
+
+  enum PlannerVersion {
+    DEFAULT_PLANNER = 0;
+    V3 = 1;
+    V4 = 2;
+    V4Greedy = 3;
+    V4Left2Right = 4;
+  }
+  
+  // PlannerVersion specifies which planner to use. 
+  // If DEFAULT is chosen, whatever vtgate was started with will be used
+  PlannerVersion planner_version = 11;
 }
 
 // Field describes a single column returned by a query
