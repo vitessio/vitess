@@ -71,7 +71,7 @@ var (
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
-	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "UNSPECIFIED", "Default session workload (OLTP, OLAP, DBA)")
+	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "OLTP", "Default session workload (OLTP, OLAP, DBA)")
 	mysqlDefaultWorkload     int32
 
 	busyConnections int32
