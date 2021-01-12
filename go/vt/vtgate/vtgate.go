@@ -77,6 +77,15 @@ var (
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
+
+	// Flags for testing mode in vtgate
+	testHost    = flag.String("test_host", "", "hostname/IP of mysql server used for testing the vtgate.")
+	testPort    = flag.Int("test_port", 0, "port of mysql server used for testing.")
+	testUser    = flag.String("test_user", "", "username of mysql server used for testing.")
+	testPwd     = flag.String("test_password", "", "password of mysql server used for testing.")
+	testSslCa   = flag.String("test_ssl_ca", "", "Filename containing TLS CA certificate to verify against the TLS certificate of mysql server used for testing.")
+	testSslCert = flag.String("test_ssl_cert", "", "Filename containing mTLS client certificate to present as authentication to mysql server used for testing.")
+	testSslKey  = flag.String("test_ssl_key", "", "Filename containing mTLS client private key for use in authentication for mysql server used for testing.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
