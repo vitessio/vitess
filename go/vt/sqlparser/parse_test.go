@@ -1843,6 +1843,14 @@ var (
 		input: "release savepoint a",
 	}, {
 		input: "release savepoint `@@@;a`",
+	}, {
+		input: "call proc()",
+	}, {
+		input: "call qualified.proc()",
+	}, {
+		input: "call proc(1, 'foo')",
+	}, {
+		input: "call proc(@param)",
 	}}
 )
 
