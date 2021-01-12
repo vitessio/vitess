@@ -3,6 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
+    name: Run endtoend tests on Cluster (16)
     runs-on: ubuntu-latest
 
     steps:
