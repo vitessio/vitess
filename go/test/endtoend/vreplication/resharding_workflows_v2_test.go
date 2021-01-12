@@ -47,7 +47,7 @@ const (
 	workflowActionSwitchTraffic  = "SwitchTraffic"
 	workflowActionReverseTraffic = "ReverseTraffic"
 	workflowActionComplete       = "Complete"
-	workflowActionAbort          = "Abort"
+	workflowActionCancel         = "Cancel"
 )
 
 var (
@@ -154,8 +154,8 @@ func tstWorkflowComplete(t *testing.T) error {
 	return tstWorkflowAction(t, workflowActionComplete, "", "")
 }
 
-func tstWorkflowAbort(t *testing.T) error {
-	return tstWorkflowAction(t, workflowActionAbort, "", "")
+func tstWorkflowCancel(t *testing.T) error {
+	return tstWorkflowAction(t, workflowActionCancel, "", "")
 }
 
 func validateReadsRoute(t *testing.T, tabletTypes string, tablet *cluster.VttabletProcess) {
@@ -276,7 +276,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "Following workflow(s) found in keyspace customer: wf1")
 
-	err := tstWorkflowAbort(t)
+	err := tstWorkflowCancel(t)
 	require.NoError(t, err)
 
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
