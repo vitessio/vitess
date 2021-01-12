@@ -157,11 +157,11 @@ func buildShowTableStatusPlan(show *sqlparser.ShowTableStatus, vschema ContextVS
 	// Remove Database Name from the query.
 	show.DatabaseName = ""
 
-	s := sqlparser.String(show)
+	query := sqlparser.String(show)
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             s,
+		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
