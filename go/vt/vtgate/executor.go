@@ -1125,41 +1125,46 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	byteCount := 0
 	seenResults := false
 	var foundRows uint64
-	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
-		// If the row has field info, send it separately.
-		// TODO(sougou): this behavior is for handling tests because
-		// the framework currently sends all results as one packet.
-		if len(qr.Fields) > 0 {
-			qrfield := &sqltypes.Result{Fields: qr.Fields}
-			if err := callback(qrfield); err != nil {
-				return err
-			}
-			seenResults = true
-		}
-
-		foundRows += uint64(len(qr.Rows))
-		for _, row := range qr.Rows {
-			result.Rows = append(result.Rows, row)
-
-			for _, col := range row {
-				byteCount += col.Len()
-			}
-
-			if byteCount >= e.streamSize {
-				err := callback(result)
-				seenResults = true
-				result = &sqltypes.Result{}
-				byteCount = 0
-				if err != nil {
+	callbackGen := callback
+	if plan.Type != sqlparser.StmtStream {
+		callbackGen = func(qr *sqltypes.Result) error {
+			// If the row has field info, send it separately.
+			// TODO(sougou): this behavior is for handling tests because
+			// the framework currently sends all results as one packet.
+			if len(qr.Fields) > 0 {
+				qrfield := &sqltypes.Result{Fields: qr.Fields}
+				if err := callback(qrfield); err != nil {
 					return err
 				}
+				seenResults = true
 			}
+
+			foundRows += uint64(len(qr.Rows))
+			for _, row := range qr.Rows {
+				result.Rows = append(result.Rows, row)
+
+				for _, col := range row {
+					byteCount += col.Len()
+				}
+
+				if byteCount >= e.streamSize {
+					err := callback(result)
+					seenResults = true
+					result = &sqltypes.Result{}
+					byteCount = 0
+					if err != nil {
+						return err
+					}
+				}
+			}
+			return nil
 		}
-		return nil
-	})
+	}
+
+	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, callbackGen)
 
 	// Send left-over rows if there is no error on execution.
-	if err == nil {
+	if err == nil && plan.Type != sqlparser.StmtStream {
 		if len(result.Rows) > 0 || !seenResults {
 			if err := callback(result); err != nil {
 				return err
@@ -1175,36 +1180,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
-	return err
-}
-
-// handleMessageStream executes queries of the form 'stream * from t'
-func (e *Executor) handleMessageStream(ctx context.Context, sql string, target querypb.Target, callback func(*sqltypes.Result) error, vcursor *vcursorImpl, logStats *LogStats) error {
-	stmt, err := sqlparser.Parse(sql)
-	if err != nil {
-		logStats.Error = err
-		return err
-	}
-
-	streamStmt, ok := stmt.(*sqlparser.Stream)
-	if !ok {
-		logStats.Error = err
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized STREAM statement: %v", sql)
-	}
-
-	// TODO: Add support for destination target in streamed queries
-	table, _, _, _, err := vcursor.FindTable(streamStmt.Table)
-	if err != nil {
-		logStats.Error = err
-		return err
-	}
-
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-
-	err = e.MessageStream(ctx, table.Keyspace.Name, target.Shard, nil, table.Name.CompliantName(), callback)
-	logStats.Error = err
-	logStats.ExecuteTime = time.Since(execStart)
 	return err
 }
 
