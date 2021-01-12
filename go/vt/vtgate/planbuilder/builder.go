@@ -160,6 +160,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
 	case *sqlparser.Flush:
 		return buildFlushPlan(stmt, vschema)
+	case *sqlparser.CallProc:
+		return buildCallProcPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
