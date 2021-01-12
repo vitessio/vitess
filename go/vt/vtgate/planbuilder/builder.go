@@ -162,27 +162,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildFlushPlan(stmt, vschema)
 	case *sqlparser.Stream:
 		return buildStreamPlan(stmt, vschema)
+	case *sqlparser.VStream:
+		return buildVStreamPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
-}
-
-func buildStreamPlan(stmt *sqlparser.Stream, vschema ContextVSchema) (engine.Primitive, error) {
-	table, _, destTabletType, dest, err := vschema.FindTable(stmt.Table)
-	if err != nil {
-		return nil, err
-	}
-	if destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream is supported only for master tablet type, current type: %v", destTabletType)
-	}
-	if dest == nil {
-		dest = key.DestinationExactKeyRange{}
-	}
-	return &engine.MessageStream{
-		Keyspace:          table.Keyspace,
-		TargetDestination: dest,
-		TableName:         table.Name.CompliantName(),
-	}, nil
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {

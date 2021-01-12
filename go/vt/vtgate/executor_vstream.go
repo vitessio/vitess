@@ -56,7 +56,7 @@ func (e *Executor) handleVStream(ctx context.Context, sql string, target querypb
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
-	err = e.startVStream(ctx, table.Keyspace.Name, target.Shard, nil, vstreamStmt, callback)
+	err = e.startVStream(ctx, table.Keyspace.Name, target.Shard, vstreamStmt, callback)
 	logStats.Error = err
 	logStats.ExecuteTime = time.Since(execStart)
 	return err
@@ -89,11 +89,11 @@ func getVStreamStartPos(stmt *sqlparser.VStream) (string, error) {
 	return pos, nil
 }
 
-func (e *Executor) startVStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, stmt *sqlparser.VStream, callback func(*sqltypes.Result) error) error {
+func (e *Executor) startVStream(ctx context.Context, keyspace string, shard string, stmt *sqlparser.VStream, callback func(*sqltypes.Result) error) error {
 	tableName := stmt.Table.Name.CompliantName()
 	var pos string
 	var err error
-	gw := NewTabletGateway(ctx, vtgateHealthCheck /*discovery.Healthcheck*/, e.serv, e.cell)
+	gw := NewTabletGateway(ctx, vtgateHealthCheck, e.serv, e.cell)
 
 	srvResolver := srvtopo.NewResolver(e.serv, gw, e.cell)
 
