@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,6 +94,11 @@ CREATE TABLE allDefaults (
     }
 }
 `
+
+	createProcSQL = `use vt_customer;CREATE PROCEDURE GetAllT1()
+BEGIN
+	SELECT *  FROM t1;
+END`
 )
 
 func TestMain(m *testing.M) {
@@ -114,11 +121,19 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
+			log.Fatal(err.Error())
 			return 1
 		}
 
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
+			log.Fatal(err.Error())
+			return 1
+		}
+
+		masterProcess := clusterInstance.Keyspaces[0].Shards[0].MasterTablet().VttabletProcess
+		if _, err := masterProcess.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
+			log.Fatal(err.Error())
 			return 1
 		}
 
@@ -161,6 +176,21 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	query = `load data infile '` + directory + `x2.txt' replace into table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
 	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
+}
+
+func TestCallProcedure(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'foo'),(301,101,301,'bar')`)
+	assertMatches(t, conn, `CALL GetAllT1()`, `[[INT64(300) INT64(100) INT64(300) VARCHAR("foo")] [INT64(301) INT64(101) INT64(301) VARCHAR("bar")]]`)
 }
 
 func TestEmptyStatement(t *testing.T) {
