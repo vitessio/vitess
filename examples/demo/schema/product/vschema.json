@@ -1,0 +1,10 @@
+{
+  "sharded": false,
+  "tables": {
+    "product": {},
+    "customer_seq": { "type": "sequence" },
+    "corder_seq": { "type": "sequence" },
+    "corder_event_seq": { "type": "sequence" },
+    "corder_keyspace_idx": {}
+  }
+}
