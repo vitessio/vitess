@@ -2,7 +2,7 @@ name: golangci-lint
 on: [push, pull_request]
 jobs:
   build:
-    name: Build
+    name: Lint using golangci-lint
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.15
