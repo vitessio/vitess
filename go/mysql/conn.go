@@ -866,27 +866,36 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		return false
 	}
 
+	if c.testMysqlConn != nil {
+		dest, pos := c.testMysqlConn.startEphemeralPacketWithHeader(len(data))
+		copy(dest[pos:], data)
+		if err := c.testMysqlConn.writeEphemeralPacket(); err != nil {
+			log.Errorf("Error writing packet to test mysql connection: %v", err)
+		}
+	}
+
+	kontinue := true
 	switch data[0] {
 	case ComQuit:
 		c.recycleReadPacket()
-		return false
+		kontinue = false
 	case ComInitDB:
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
 		res := c.execQuery("use "+sqlescape.EscapeID(db), handler, false)
-		return res != connErr
+		kontinue = res != connErr
 	case ComQuery:
-		return c.handleComQuery(handler, data)
+		kontinue = c.handleComQuery(handler, data)
 	case ComPing:
-		return c.handleComPing()
+		kontinue = c.handleComPing()
 	case ComSetOption:
-		return c.handleComSetOption(data)
+		kontinue = c.handleComSetOption(data)
 	case ComPrepare:
-		return c.handleComPrepare(handler, data)
+		kontinue = c.handleComPrepare(handler, data)
 	case ComStmtExecute:
-		return c.handleComStmtExecute(handler, data)
+		kontinue = c.handleComStmtExecute(handler, data)
 	case ComStmtSendLongData:
-		return c.handleComStmtSendLongData(data)
+		kontinue = c.handleComStmtSendLongData(data)
 	case ComStmtClose:
 		stmtID, ok := c.parseComStmtClose(data)
 		c.recycleReadPacket()
@@ -894,20 +903,45 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			delete(c.PrepareData, stmtID)
 		}
 	case ComStmtReset:
-		return c.handleComStmtReset(data)
+		kontinue = c.handleComStmtReset(data)
 	case ComResetConnection:
 		c.handleComResetConnection(handler)
-		return true
+		kontinue = true
 
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
 		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]) {
-			return false
+			kontinue = false
 		}
 	}
 
-	return true
+	if c.testMysqlConn != nil {
+		switch data[0] {
+		case ComQuit:
+			c.testMysqlConn.Close()
+			return false
+		case ComStmtClose, ComStmtSendLongData:
+			return true
+		default:
+			resp, err := c.testMysqlConn.readEphemeralPacket()
+			if err != nil {
+				log.Errorf("Error reading packet from test mysql connection: %v", err)
+			}
+			c.testMysqlConn.recycleReadPacket()
+			data, pos := c.startEphemeralPacketWithHeader(len(resp))
+			copy(data[pos:], resp)
+			if err := c.writeEphemeralPacket(); err != nil {
+				log.Errorf("Error writing packet back to client received from test mysql connection: %v", err)
+			}
+			if resp[0] == ErrPacket {
+				return false
+			}
+			return true
+		}
+	}
+
+	return kontinue
 }
 
 func (c *Conn) handleComResetConnection(handler Handler) {
