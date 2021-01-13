@@ -104,6 +104,9 @@ type Conn struct {
 	// If there are any ongoing reads or writes, they may get interrupted.
 	conn net.Conn
 
+	// conn2 is used for swapping conns
+	conn2 net.Conn
+
 	// flavor contains the auto-detected flavor for this client
 	// connection. It is unused for server-side connections.
 	flavor flavor
@@ -186,6 +189,45 @@ type Conn struct {
 	testMysqlConn *Conn
 }
 
+type connByte struct {
+	data []byte
+}
+
+func (c *connByte) Read(b []byte) (n int, err error) {
+	copiedLen := copy(b, c.data)
+	c.data = nil
+	return copiedLen, nil
+}
+
+func (c *connByte) Write(b []byte) (n int, err error) {
+	c.data = append(c.data, b...)
+	return len(b), nil
+}
+
+func (c *connByte) Close() error {
+	return nil
+}
+
+func (c *connByte) LocalAddr() net.Addr {
+	panic("implement me")
+}
+
+func (c *connByte) RemoteAddr() net.Addr {
+	panic("implement me")
+}
+
+func (c *connByte) SetDeadline(t time.Time) error {
+	panic("implement me")
+}
+
+func (c connByte) SetReadDeadline(t time.Time) error {
+	panic("implement me")
+}
+
+func (c connByte) SetWriteDeadline(t time.Time) error {
+	panic("implement me")
+}
+
 // splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
 var splitStatementFunction func(blob string) (pieces []string, err error) = sqlparser.SplitStatementToPieces
 
@@ -245,6 +287,7 @@ func newServerConn(conn net.Conn, listener *Listener, testConnParams *ConnParams
 			log.Errorf("Error connecting to mysql for testing purposes: %v", err)
 		} else {
 			c.testMysqlConn = mysqlConn
+			c.conn2 = &connByte{}
 		}
 	}
 	return c
@@ -872,6 +915,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		if err := c.testMysqlConn.writeEphemeralPacket(); err != nil {
 			log.Errorf("Error writing packet to test mysql connection: %v", err)
 		}
+		c.conn2, c.conn = c.conn, c.conn2
 	}
 
 	kontinue := true
@@ -929,6 +973,15 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 				log.Errorf("Error reading packet from test mysql connection: %v", err)
 			}
 			c.testMysqlConn.recycleReadPacket()
+
+			// check the value c.conn and resp
+			respFromVTgate := make([]byte, MaxPacketSize)
+			lenRead, _ := c.conn.Read(respFromVTgate)
+			if string(resp) != string(respFromVTgate[packetHeaderSize:lenRead]) {
+				log.Errorf("Outputs from both sources are different, MySQL output :%s, VTgate output :%s", string(resp), string(respFromVTgate[packetHeaderSize:lenRead]))
+			}
+
+			c.conn2, c.conn = c.conn, c.conn2
 			data, pos := c.startEphemeralPacketWithHeader(len(resp))
 			copy(data[pos:], resp)
 			if err := c.writeEphemeralPacket(); err != nil {
