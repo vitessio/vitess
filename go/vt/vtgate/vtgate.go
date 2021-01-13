@@ -86,6 +86,8 @@ var (
 	testSslCa   = flag.String("test_ssl_ca", "", "Filename containing TLS CA certificate to verify against the TLS certificate of mysql server used for testing.")
 	testSslCert = flag.String("test_ssl_cert", "", "Filename containing mTLS client certificate to present as authentication to mysql server used for testing.")
 	testSslKey  = flag.String("test_ssl_key", "", "Filename containing mTLS client private key for use in authentication for mysql server used for testing.")
+	testCharset = flag.String("test_charset", "", "Charset for mysql used for testing. Only utf8 or latin1 based character sets are supported.")
+	testFlags   = flag.Uint64("test_flags", 0, "Flags for mysql used for testing.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {

@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -180,6 +181,9 @@ type Conn struct {
 
 	// Packet encoding variables.
 	sequence uint8
+
+	// testMysqlConn is used to test the vtgate by also routing all the packets here.
+	testMysqlConn *Conn
 }
 
 // splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
@@ -225,7 +229,7 @@ func newConn(conn net.Conn) *Conn {
 // It stashes a reference to the listener to be able to determine if
 // the server is shutting down, and has the ability to control buffer
 // size for reads.
-func newServerConn(conn net.Conn, listener *Listener) *Conn {
+func newServerConn(conn net.Conn, listener *Listener, testConnParams *ConnParams) *Conn {
 	c := &Conn{
 		conn:        conn,
 		listener:    listener,
@@ -234,6 +238,14 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	}
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+	}
+	if testConnParams != nil {
+		mysqlConn, err := Connect(context.Background(), testConnParams)
+		if err != nil {
+			log.Errorf("Error connecting to mysql for testing purposes: %v", err)
+		} else {
+			c.testMysqlConn = mysqlConn
+		}
 	}
 	return c
 }

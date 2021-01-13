@@ -416,6 +416,21 @@ func initMySQLProtocol() {
 		log.Exitf("-mysql_tcp_version must be one of [tcp, tcp4, tcp6]")
 	}
 
+	var testMysqlParams *mysql.ConnParams
+	if testHost != nil {
+		testMysqlParams = &mysql.ConnParams{
+			Host:    *testHost,
+			Port:    *testPort,
+			Uname:   *testUser,
+			Pass:    *testPwd,
+			Charset: *testCharset,
+			Flags:   *testFlags,
+			SslCa:   *testSslCa,
+			SslCert: *testSslCert,
+			SslKey:  *testSslKey,
+		}
+	}
+
 	// Create a Listener.
 	var err error
 	vtgateHandle = newVtgateHandler(rpcVTGate)
@@ -437,7 +452,7 @@ func initMySQLProtocol() {
 			mysqlListener.SlowConnectWarnThreshold.Set(*mysqlSlowConnectWarnThreshold)
 		}
 		// Start listening for tcp
-		go mysqlListener.Accept()
+		go mysqlListener.Accept(testMysqlParams)
 	}
 
 	if *mysqlServerSocketPath != "" {
@@ -451,7 +466,7 @@ func initMySQLProtocol() {
 			return
 		}
 		// Listen for unix socket
-		go mysqlUnixListener.Accept()
+		go mysqlUnixListener.Accept(testMysqlParams)
 	}
 }
 

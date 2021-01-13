@@ -52,7 +52,7 @@ func TestClearTextClientAuth(t *testing.T) {
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 	go func() {
-		l.Accept()
+		l.Accept(nil)
 	}()
 
 	// Setup the right parameters.
@@ -131,7 +131,7 @@ func TestSSLConnection(t *testing.T) {
 	}
 	l.TLSConfig.Store(serverConfig)
 	go func() {
-		l.Accept()
+		l.Accept(nil)
 	}()
 
 	// Setup the right parameters.

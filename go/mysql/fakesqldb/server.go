@@ -183,7 +183,7 @@ func New(t *testing.T) *DB {
 	db.acceptWG.Add(1)
 	go func() {
 		defer db.acceptWG.Done()
-		db.listener.Accept()
+		db.listener.Accept(nil)
 	}()
 
 	// Return the db.

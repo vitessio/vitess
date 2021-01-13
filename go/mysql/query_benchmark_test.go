@@ -53,7 +53,7 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 	defer l.Close()
 
 	go func() {
-		l.Accept()
+		l.Accept(nil)
 	}()
 
 	b.SetParallelism(threads)

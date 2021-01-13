@@ -274,7 +274,7 @@ func TestConnectionFromListener(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -307,7 +307,7 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -344,7 +344,7 @@ func TestConnectionWithSourceHost(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -381,7 +381,7 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -424,7 +424,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -454,7 +454,7 @@ func TestClientFoundRows(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -512,7 +512,7 @@ func TestConnCounts(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -584,7 +584,7 @@ func TestServer(t *testing.T) {
 	require.NoError(t, err)
 	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -703,7 +703,7 @@ func TestServerStats(t *testing.T) {
 	}
 	l.SlowConnectWarnThreshold.Set(time.Duration(time.Nanosecond * 1))
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -784,7 +784,7 @@ func TestClearTextServer(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -874,7 +874,7 @@ func TestDialogServer(t *testing.T) {
 	}
 	l.AllowClearTextWithoutTLS.Set(true)
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -949,7 +949,7 @@ func TestTLSServer(t *testing.T) {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	l.TLSConfig.Store(serverConfig)
-	go l.Accept()
+	go l.Accept(nil)
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -1056,7 +1056,7 @@ func TestTLSRequired(t *testing.T) {
 	}
 	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
-	go l.Accept()
+	go l.Accept(nil)
 
 	// Setup conn params without SSL.
 	params := &ConnParams{
@@ -1115,7 +1115,7 @@ func TestErrorCodes(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -1311,7 +1311,7 @@ func TestListenerShutdown(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 
@@ -1406,7 +1406,7 @@ func TestServerFlush(t *testing.T) {
 	l, err := NewListener("tcp", ":0", &AuthServerNone{}, th, 0, 0, false)
 	require.NoError(t, err)
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	host, port := getHostPort(t, l.Addr())
 	params := &ConnParams{

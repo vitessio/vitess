@@ -67,7 +67,7 @@ func TestValidCert(t *testing.T) {
 	}
 	l.TLSConfig.Store(serverConfig)
 	go func() {
-		l.Accept()
+		l.Accept(nil)
 	}()
 
 	// Setup the right parameters.
@@ -149,7 +149,7 @@ func TestNoCert(t *testing.T) {
 	}
 	l.TLSConfig.Store(serverConfig)
 	go func() {
-		l.Accept()
+		l.Accept(nil)
 	}()
 
 	// Setup the right parameters.

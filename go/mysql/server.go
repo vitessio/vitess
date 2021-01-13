@@ -246,7 +246,7 @@ func (l *Listener) Addr() net.Addr {
 }
 
 // Accept runs an accept loop until the listener is closed.
-func (l *Listener) Accept() {
+func (l *Listener) Accept(testConnParams *ConnParams) {
 	for {
 		conn, err := l.listener.Accept()
 		if err != nil {
@@ -263,17 +263,17 @@ func (l *Listener) Accept() {
 		connCount.Add(1)
 		connAccept.Add(1)
 
-		go l.handle(conn, connectionID, acceptTime)
+		go l.handle(conn, connectionID, acceptTime, testConnParams)
 	}
 }
 
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
-func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
+func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time, testConnParams *ConnParams) {
 	if l.connReadTimeout != 0 || l.connWriteTimeout != 0 {
 		conn = netutil.NewConnWithTimeouts(conn, l.connReadTimeout, l.connWriteTimeout)
 	}
-	c := newServerConn(conn, l)
+	c := newServerConn(conn, l, testConnParams)
 	c.ConnectionID = connectionID
 
 	// Catch panics, and close the connection in any case.

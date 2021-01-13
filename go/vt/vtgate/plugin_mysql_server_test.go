@@ -86,7 +86,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 		t.Fatalf("NewUnixSocket failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	params := &mysql.ConnParams{
 		UnixSocket: unixSocket.Name(),
@@ -118,7 +118,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 
 	params := &mysql.ConnParams{
 		UnixSocket: unixSocket.Name(),
@@ -149,7 +149,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 		t.Errorf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	go l.Accept()
+	go l.Accept(nil)
 	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	want := "listen unix"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
