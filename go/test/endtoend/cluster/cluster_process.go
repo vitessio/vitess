@@ -42,9 +42,12 @@ const (
 )
 
 var (
-	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
-	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
-	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
+	keepData           = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	topoFlavor         = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
+	isCoverage         = flag.Bool("is-coverage", false, "whether coverage is required")
+	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
+	forcePortStart     = flag.Int("force-port-start", 0, "force assigning ports based on this seed")
+	forceBaseTabletUID = flag.Int("force-base-tablet-uid", 0, "force assigning tablet ports based on this seed")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -57,6 +60,7 @@ type LocalProcessCluster struct {
 	TmpDirectory       string
 	OriginalVTDATAROOT string
 	CurrentVTDATAROOT  string
+	reusingVTDATAROOT  bool
 
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
@@ -192,10 +196,12 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		}
 	}
 
-	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
-	if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
-		log.Error(err)
-		return
+	if !cluster.reusingVTDATAROOT {
+		cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
+		if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
+			log.Error(err)
+			return
+		}
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
@@ -441,7 +447,15 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
-	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+	if *forceVTDATAROOT != "" {
+		cluster.CurrentVTDATAROOT = *forceVTDATAROOT
+	}
+	if _, err := os.Stat(cluster.CurrentVTDATAROOT); err == nil {
+		// path/to/whatever exists
+		cluster.reusingVTDATAROOT = true
+	} else {
+		_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+	}
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
@@ -591,7 +605,11 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBa
 // GetAndReservePort gives port for required process
 func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	if cluster.nextPortForProcess == 0 {
-		cluster.nextPortForProcess = getPort()
+		if *forcePortStart > 0 {
+			cluster.nextPortForProcess = *forcePortStart
+		} else {
+			cluster.nextPortForProcess = getPort()
+		}
 	}
 	for {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
@@ -634,7 +652,11 @@ func getPort() int {
 // GetAndReserveTabletUID gives tablet uid
 func (cluster *LocalProcessCluster) GetAndReserveTabletUID() int {
 	if cluster.BaseTabletUID == 0 {
-		cluster.BaseTabletUID = getRandomNumber(10000, 0)
+		if *forceBaseTabletUID > 0 {
+			cluster.BaseTabletUID = *forceBaseTabletUID
+		} else {
+			cluster.BaseTabletUID = getRandomNumber(10000, 0)
+		}
 	}
 	cluster.BaseTabletUID = cluster.BaseTabletUID + 1
 	return cluster.BaseTabletUID
