@@ -104,8 +104,9 @@ func TestCopyProgress(t *testing.T) {
 
 	expectCopyProgressQueries(t, tme)
 
-	cp, err2 := wf.GetCopyProgress()
-	require.NoError(t, err2)
+	var cp *CopyProgress
+	cp, err = wf.GetCopyProgress()
+	require.NoError(t, err)
 	log.Infof("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"])
 
 	require.Equal(t, int64(800), (*cp)["t1"].SourceRowCount)
@@ -117,6 +118,11 @@ func TestCopyProgress(t *testing.T) {
 	require.Equal(t, int64(400), (*cp)["t2"].TargetRowCount)
 	require.Equal(t, int64(4000), (*cp)["t2"].SourceTableSize)
 	require.Equal(t, int64(1000), (*cp)["t2"].TargetTableSize)
+
+	var isCopyInProgress bool
+	isCopyInProgress, err = wf.IsCopyInProgress()
+	require.NoError(t, err)
+	require.True(t, isCopyInProgress)
 }
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
@@ -147,6 +153,14 @@ func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
 		"t2|1000|2000")
 	db.AddQuery(query, result)
 
+	for _, id := range []int{1, 2} {
+		query = fmt.Sprintf("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d", id)
+		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"dummy",
+			"int64"),
+			"1")
+		db.AddQuery(query, result)
+	}
 }
 
 func TestMoveTablesV2(t *testing.T) {
