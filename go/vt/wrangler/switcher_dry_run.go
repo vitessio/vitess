@@ -73,9 +73,9 @@ func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, 
 		tabletTypes = append(tabletTypes, servedType.String())
 	}
 	tables := strings.Join(dr.ts.tables, ",")
-	dr.drLog.Log(fmt.Sprintf("Switch reads for tables %s to keyspace %s for tablet types %s",
+	dr.drLog.Log(fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [%s]",
 		tables, ks, strings.Join(tabletTypes, ",")))
-	dr.drLog.Log(fmt.Sprintf("Routing rules for tables %s will be updated", tables))
+	dr.drLog.Log(fmt.Sprintf("Routing rules for tables [%s] will be updated", tables))
 	return nil
 }
 
@@ -89,7 +89,7 @@ func (dr *switcherDryRun) createJournals(ctx context.Context, sourceWorkflows []
 }
 
 func (dr *switcherDryRun) allowTargetWrites(ctx context.Context) error {
-	dr.drLog.Log(fmt.Sprintf("Enable writes on keyspace %s tables %s", dr.ts.targetKeyspace, strings.Join(dr.ts.tables, ",")))
+	dr.drLog.Log(fmt.Sprintf("Enable writes on keyspace %s tables [%s]", dr.ts.targetKeyspace, strings.Join(dr.ts.tables, ",")))
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 	var deleteLogs, addLogs []string
 	if dr.ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		tables := strings.Join(dr.ts.tables, ",")
-		dr.drLog.Log(fmt.Sprintf("Routing rules for tables %s will be updated", tables))
+		dr.drLog.Log(fmt.Sprintf("Routing rules for tables [%s] will be updated", tables))
 		return nil
 	}
 	deleteLogs = nil
@@ -186,7 +186,7 @@ func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s at Position %s", dr.ts.sourceKeyspace, source.si.ShardName(), position))
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Stop writes on keyspace %s, tables %s:", dr.ts.sourceKeyspace, strings.Join(dr.ts.tables, ",")))
+		dr.drLog.Log(fmt.Sprintf("Stop writes on keyspace %s, tables [%s]:", dr.ts.sourceKeyspace, strings.Join(dr.ts.tables, ",")))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
@@ -307,7 +307,7 @@ func (dr *switcherDryRun) dropSourceBlacklistedTables(ctx context.Context) error
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.MasterAlias.Uid))
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Blacklisted tables %s will be removed from:", strings.Join(dr.ts.tables, ",")))
+		dr.drLog.Log(fmt.Sprintf("Blacklisted tables [%s] will be removed from:", strings.Join(dr.ts.tables, ",")))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
