@@ -23,6 +23,12 @@ linters:
     - gofmt
     - goimports
 
+issues:
+  exclude-rules:
+    - path: '^go/vt/proto/'
+      linters:
+      - goimports
+
 # https://github.com/golangci/golangci/wiki/Configuration
 service:
   golangci-lint-version: 1.31.0 # use the fixed version to not introduce new linters unexpectedly
