@@ -108,23 +108,27 @@ func TestMain(m *testing.M) {
 
 }
 
-// TestChange ...
-func TestChange(t *testing.T) {
+func TestShards(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
-	testWithInitialSchema(t)
 }
 
-func testWithInitialSchema(t *testing.T) {
-	// Create 4 tables
-	var sqlQuery = "" //nolint
+func TestDeploySchema(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	// Create n tables
 	for i := 0; i < totalTableCount; i++ {
-		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
+		sqlQuery := fmt.Sprintf(createTable, fmt.Sprintf("vt_upgrade_test_%02d", i))
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 		require.Nil(t, err)
 	}
 
-	// Check if 4 tables are created
+	checkTables(t, "", totalTableCount)
+}
+
+func TestTablesExist(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
 	checkTables(t, "", totalTableCount)
 }
 
