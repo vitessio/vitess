@@ -142,3 +142,9 @@
 2021-01-13T06:15:54Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/482053780
 2021-01-13T06:15:54Z,unit_race,https://github.com/vitessio/vitess/actions/runs/482053772
 2021-01-13T17:47:24Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/483404473
+2021-01-14T02:11:58Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/484315930
+2021-01-14T02:11:58Z,unit_race,https://github.com/vitessio/vitess/actions/runs/484315932
+2021-01-14T02:16:56Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/484323532
+2021-01-14T02:16:56Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/484323544
+2021-01-14T02:21:44Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/484331022
+2021-01-14T02:49:12Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/484370080
