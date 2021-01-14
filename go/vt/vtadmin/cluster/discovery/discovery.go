@@ -61,9 +61,9 @@ type Discovery interface {
 	// further. Which vtctld in a set of found vtctlds is returned is not
 	// specified by the interface, and can be implementation-specific.
 	DiscoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error)
-	// DiscoverVtctldAddr returns the address of a of vtctld found in the
-	// discovery service. Tags can optionally be used to filter the set of
-	// potential vtctld further. Which gate in a set of found vtctld is used to
+	// DiscoverVtctldAddr returns the address of a vtctld found in the discovery
+	// service. Tags can optionally be used to filter the set of potential
+	// vtctlds further. Which vtctld in a set of potential vtctld is used to
 	// return an address is not specified by the interface, and can be
 	// implementation-specific.
 	DiscoverVtctldAddr(ctx context.Context, tags []string) (string, error)
