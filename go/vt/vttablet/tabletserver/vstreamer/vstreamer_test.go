@@ -1512,6 +1512,7 @@ func TestTypes(t *testing.T) {
 		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
 		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
 		"create table vitess_null(id int, val varbinary(128), primary key(id))",
+		"create table vitess_decimal(id int, dec1 decimal(12,4), dec2 decimal(13,4), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1519,80 +1520,99 @@ func TestTypes(t *testing.T) {
 		"drop table vitess_strings",
 		"drop table vitess_misc",
 		"drop table vitess_null",
+		"drop table vitess_decimal",
 	})
 	engine.se.Reload(context.Background())
 
-	testcases := []testcase{{
-		input: []string{
-			"insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:<table_name:"vitess_ints" fields:<name:"tiny" type:INT8 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"tiny" column_length:4 charset:63 > fields:<name:"tinyu" type:UINT8 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"tinyu" column_length:3 charset:63 > fields:<name:"small" type:INT16 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"small" column_length:6 charset:63 > fields:<name:"smallu" type:UINT16 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"smallu" column_length:5 charset:63 > fields:<name:"medium" type:INT24 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"medium" column_length:9 charset:63 > fields:<name:"mediumu" type:UINT24 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"mediumu" column_length:8 charset:63 > fields:<name:"normal" type:INT32 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"normal" column_length:11 charset:63 > fields:<name:"normalu" type:UINT32 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"normalu" column_length:10 charset:63 > fields:<name:"big" type:INT64 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"big" column_length:20 charset:63 > fields:<name:"bigu" type:UINT64 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"bigu" column_length:20 charset:63 > fields:<name:"y" type:YEAR table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"y" column_length:4 charset:63 > > `,
-			`type:ROW row_event:<table_name:"vitess_ints" row_changes:<after:<lengths:4 lengths:3 lengths:6 lengths:5 lengths:8 lengths:8 lengths:11 lengths:10 lengths:20 lengths:20 lengths:4 values:"` +
-				`-128` +
-				`255` +
-				`-32768` +
-				`65535` +
-				`-8388608` +
-				`16777215` +
-				`-2147483648` +
-				`4294967295` +
-				`-9223372036854775808` +
-				`18446744073709551615` +
-				`2012` +
-				`" > > > `,
-			`gtid`,
-			`commit`,
-		}},
-	}, {
-		input: []string{
-			"insert into vitess_fracts values(1, 1.99, 2.99, 3.99, 4.99)",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:<table_name:"vitess_fracts" fields:<name:"id" type:INT32 table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"deci" type:DECIMAL table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"deci" column_length:7 charset:63 decimals:2 > fields:<name:"num" type:DECIMAL table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"num" column_length:7 charset:63 decimals:2 > fields:<name:"f" type:FLOAT32 table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"f" column_length:12 charset:63 decimals:31 > fields:<name:"d" type:FLOAT64 table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"d" column_length:22 charset:63 decimals:31 > > `,
-			`type:ROW row_event:<table_name:"vitess_fracts" row_changes:<after:<lengths:1 lengths:4 lengths:4 lengths:8 lengths:8 values:"11.992.993.99E+004.99E+00" > > > `,
-			`gtid`,
-			`commit`,
-		}},
-	}, {
-		// TODO(sougou): validate that binary and char data generate correct DMLs on the other end.
-		input: []string{
-			"insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:<table_name:"vitess_strings" fields:<name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 > fields:<name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:48 charset:33 > fields:<name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:48 charset:33 > fields:<name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 > fields:<name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 > fields:<name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 > fields:<name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:765 charset:33 > fields:<name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:196605 charset:33 > fields:<name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:3 charset:33 column_type:"enum('a','b')" > fields:<name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:9 charset:33 column_type:"set('a','b')" > > `,
-			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
-				`values:"abcdefgh13" > > > `,
-			`gtid`,
-			`commit`,
-		}},
-	}, {
-		// TODO(sougou): validate that the geometry value generates the correct DMLs on the other end.
-		input: []string{
-			"insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:<table_name:"vitess_misc" fields:<name:"id" type:INT32 table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"b" type:BIT table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"b" column_length:8 charset:63 > fields:<name:"d" type:DATE table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"d" column_length:10 charset:63 > fields:<name:"dt" type:DATETIME table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"dt" column_length:19 charset:63 > fields:<name:"t" type:TIME table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"t" column_length:10 charset:63 > fields:<name:"g" type:GEOMETRY table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"g" column_length:4294967295 charset:63 > > `,
-			`type:ROW row_event:<table_name:"vitess_misc" row_changes:<after:<lengths:1 lengths:1 lengths:10 lengths:19 lengths:8 lengths:25 values:"1\0012012-01-012012-01-01 15:45:4515:45:45\000\000\000\000\001\001\000\000\000\000\000\000\000\000\000\360?\000\000\000\000\000\000\000@" > > > `,
-			`gtid`,
-			`commit`,
-		}},
-	}, {
-		input: []string{
-			"insert into vitess_null values(1, null)",
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"id" type:INT32 table:"vitess_null" org_table:"vitess_null" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"vitess_null" org_table:"vitess_null" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
-			`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:-1 values:"1" > > > `,
-			`gtid`,
-			`commit`,
-		}},
-	}}
+	testcases := []testcase{
+		{
+			input: []string{
+				"insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:FIELD field_event:<table_name:"vitess_ints" fields:<name:"tiny" type:INT8 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"tiny" column_length:4 charset:63 > fields:<name:"tinyu" type:UINT8 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"tinyu" column_length:3 charset:63 > fields:<name:"small" type:INT16 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"small" column_length:6 charset:63 > fields:<name:"smallu" type:UINT16 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"smallu" column_length:5 charset:63 > fields:<name:"medium" type:INT24 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"medium" column_length:9 charset:63 > fields:<name:"mediumu" type:UINT24 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"mediumu" column_length:8 charset:63 > fields:<name:"normal" type:INT32 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"normal" column_length:11 charset:63 > fields:<name:"normalu" type:UINT32 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"normalu" column_length:10 charset:63 > fields:<name:"big" type:INT64 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"big" column_length:20 charset:63 > fields:<name:"bigu" type:UINT64 table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"bigu" column_length:20 charset:63 > fields:<name:"y" type:YEAR table:"vitess_ints" org_table:"vitess_ints" database:"vttest" org_name:"y" column_length:4 charset:63 > > `,
+				`type:ROW row_event:<table_name:"vitess_ints" row_changes:<after:<lengths:4 lengths:3 lengths:6 lengths:5 lengths:8 lengths:8 lengths:11 lengths:10 lengths:20 lengths:20 lengths:4 values:"` +
+					`-128` +
+					`255` +
+					`-32768` +
+					`65535` +
+					`-8388608` +
+					`16777215` +
+					`-2147483648` +
+					`4294967295` +
+					`-9223372036854775808` +
+					`18446744073709551615` +
+					`2012` +
+					`" > > > `,
+				`gtid`,
+				`commit`,
+			}},
+		}, {
+			input: []string{
+				"insert into vitess_fracts values(1, 1.99, 2.99, 3.99, 4.99)",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:FIELD field_event:<table_name:"vitess_fracts" fields:<name:"id" type:INT32 table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"deci" type:DECIMAL table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"deci" column_length:7 charset:63 decimals:2 > fields:<name:"num" type:DECIMAL table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"num" column_length:7 charset:63 decimals:2 > fields:<name:"f" type:FLOAT32 table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"f" column_length:12 charset:63 decimals:31 > fields:<name:"d" type:FLOAT64 table:"vitess_fracts" org_table:"vitess_fracts" database:"vttest" org_name:"d" column_length:22 charset:63 decimals:31 > > `,
+				`type:ROW row_event:<table_name:"vitess_fracts" row_changes:<after:<lengths:1 lengths:4 lengths:4 lengths:8 lengths:8 values:"11.992.993.99E+004.99E+00" > > > `,
+				`gtid`,
+				`commit`,
+			}},
+		}, {
+			// TODO(sougou): validate that binary and char data generate correct DMLs on the other end.
+			input: []string{
+				"insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:FIELD field_event:<table_name:"vitess_strings" fields:<name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 > fields:<name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:48 charset:33 > fields:<name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:48 charset:33 > fields:<name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 > fields:<name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 > fields:<name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 > fields:<name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:765 charset:33 > fields:<name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:196605 charset:33 > fields:<name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:3 charset:33 column_type:"enum('a','b')" > fields:<name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:9 charset:33 column_type:"set('a','b')" > > `,
+				`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
+					`values:"abcdefgh13" > > > `,
+				`gtid`,
+				`commit`,
+			}},
+		}, {
+			// TODO(sougou): validate that the geometry value generates the correct DMLs on the other end.
+			input: []string{
+				"insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:FIELD field_event:<table_name:"vitess_misc" fields:<name:"id" type:INT32 table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"b" type:BIT table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"b" column_length:8 charset:63 > fields:<name:"d" type:DATE table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"d" column_length:10 charset:63 > fields:<name:"dt" type:DATETIME table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"dt" column_length:19 charset:63 > fields:<name:"t" type:TIME table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"t" column_length:10 charset:63 > fields:<name:"g" type:GEOMETRY table:"vitess_misc" org_table:"vitess_misc" database:"vttest" org_name:"g" column_length:4294967295 charset:63 > > `,
+				`type:ROW row_event:<table_name:"vitess_misc" row_changes:<after:<lengths:1 lengths:1 lengths:10 lengths:19 lengths:8 lengths:25 values:"1\0012012-01-012012-01-01 15:45:4515:45:45\000\000\000\000\001\001\000\000\000\000\000\000\000\000\000\360?\000\000\000\000\000\000\000@" > > > `,
+				`gtid`,
+				`commit`,
+			}},
+		}, {
+			input: []string{
+				"insert into vitess_null values(1, null)",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"id" type:INT32 table:"vitess_null" org_table:"vitess_null" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"vitess_null" org_table:"vitess_null" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
+				`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:-1 values:"1" > > > `,
+				`gtid`,
+				`commit`,
+			}},
+		}, {
+			input: []string{
+				"insert into vitess_decimal values(1, 1.23, 1.23)",
+				"insert into vitess_decimal values(2, -1.23, -1.23)",
+			},
+			output: [][]string{{
+				`begin`,
+				`type:FIELD field_event:<table_name:"vitess_decimal" fields:<name:"id" type:INT32 table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"dec1" type:DECIMAL table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"dec1" column_length:14 charset:63 decimals:4 > fields:<name:"dec2" type:DECIMAL table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"dec2" column_length:15 charset:63 decimals:4 > > `,
+				`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:6 lengths:6 values:"11.23001.2300" > > > `,
+				`gtid`,
+				`commit`,
+			}, {
+				`begin`,
+				`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:7 lengths:7 values:"2-1.2300-1.2300" > > > `,
+				`gtid`,
+				`commit`,
+			}},
+		}}
 	runCases(t, nil, testcases, "", nil)
 }
 
