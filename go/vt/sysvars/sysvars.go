@@ -55,7 +55,8 @@ var (
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 	SessionUUID         = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
 	// Online DDL
-	DDLStrategy = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
+	DDLStrategy   = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
+	VitessVersion = SystemVariable{Name: "vitess_version", IdentifierAsString: true}
 
 	// Read After Write settings
 	ReadAfterWriteGTID    = SystemVariable{Name: "read_after_write_gtid"}
