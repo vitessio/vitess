@@ -2085,6 +2085,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
+		if vrwp.TabletTypes == "" {
+			vrwp.TabletTypes = "master,replica,rdonly"
+		}
 		vrwp.Timeout = *timeout
 		vrwp.EnableReverseReplication = *reverseReplication
 	case vReplicationWorkflowActionCancel:
@@ -2117,7 +2120,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		if copyProgress == nil {
 			wr.Logger().Printf("\nCopy Completed.\n")
 		} else {
-			wr.Logger().Printf("\nCopy Progress (approx.):\n")
+			wr.Logger().Printf("\nCopy Progress (approx):\n")
 			var tables []string
 			for table := range *copyProgress {
 				tables = append(tables, table)
