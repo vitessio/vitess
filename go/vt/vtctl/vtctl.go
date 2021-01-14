@@ -2561,7 +2561,14 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 		return err
 	}
 
-	return printJSON(wr.Logger(), result.Shards)
+	// reformat data into structure of old interface
+	legacyShardMap := make(map[string]*topodatapb.Shard, len(result.Shards))
+
+	for _, shard := range result.Shards {
+		legacyShardMap[shard.Name] = shard.Shard
+	}
+
+	return printJSON(wr.Logger(), legacyShardMap)
 }
 
 func commandValidate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
