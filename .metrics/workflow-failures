@@ -163,3 +163,5 @@
 2021-01-14T10:36:40Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/485133422
 2021-01-14T10:36:40Z,unit_race,https://github.com/vitessio/vitess/actions/runs/485133395
 2021-01-14T11:27:49Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/485230681
+2021-01-14T15:29:15Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/485722883
+2021-01-14T15:29:15Z,unit_race,https://github.com/vitessio/vitess/actions/runs/485722860
