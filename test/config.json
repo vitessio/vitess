@@ -441,6 +441,15 @@
 				"site_test"
 			]
 		},
+		"upgrade": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/versionupgrade80"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 28,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vertical_split": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"],
