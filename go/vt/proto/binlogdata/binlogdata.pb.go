@@ -8,7 +8,6 @@ import (
 	math "math"
 
 	proto "github.com/golang/protobuf/proto"
-
 	query "vitess.io/vitess/go/vt/proto/query"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
