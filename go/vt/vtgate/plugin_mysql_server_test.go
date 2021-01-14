@@ -234,7 +234,7 @@ func newTestAuthServerStatic() *mysql.AuthServerStatic {
 func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_UNSPECIFIED {
+	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
 		t.Fatalf("Expected default workload UNSPECIFIED")
 	}
 }
