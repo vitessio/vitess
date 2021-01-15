@@ -38,6 +38,28 @@ message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
 }
 
+message GetCellInfoNamesRequest {
+}
+
+message GetCellInfoNamesResponse {
+  repeated string names = 1;
+}
+
+message GetCellInfoRequest {
+  string cell = 1;
+}
+
+message GetCellInfoResponse {
+  topodata.CellInfo cell_info = 1;
+}
+
+message GetCellsAliasesRequest {
+}
+
+message GetCellsAliasesResponse {
+  map<string,topodata.CellsAlias> aliases = 1;
+}
+
 message GetKeyspacesRequest {
 }
 
