@@ -661,6 +661,12 @@ func (vc *vcursorImpl) GetSessionUUID() string {
 	return vc.safeSession.GetSessionUUID()
 }
 
+// SetAllowUseReservedConn implements the SessionActions interface
+func (vc *vcursorImpl) SetAllowUseReservedConn(allow bool) error {
+	vc.safeSession.SetAllowUseReservedConn(allow)
+	return nil
+}
+
 // SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
 	vc.safeSession.SetReadAfterWriteGTID(vtgtid)

@@ -43,17 +43,18 @@ var (
 	off  = "0"
 	utf8 = "'utf8'"
 
-	Autocommit          = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
-	ClientFoundRows     = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
-	SkipQueryPlanCache  = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
-	TxReadOnly          = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
-	TransactionReadOnly = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
-	SQLSelectLimit      = SystemVariable{Name: "sql_select_limit", Default: off}
-	TransactionMode     = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
-	Workload            = SystemVariable{Name: "workload", IdentifierAsString: true}
-	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
-	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
-	SessionUUID         = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
+	Autocommit           = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
+	ClientFoundRows      = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
+	SkipQueryPlanCache   = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
+	TxReadOnly           = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
+	TransactionReadOnly  = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
+	SQLSelectLimit       = SystemVariable{Name: "sql_select_limit", Default: off}
+	TransactionMode      = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
+	Workload             = SystemVariable{Name: "workload", IdentifierAsString: true}
+	Charset              = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
+	Names                = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
+	SessionUUID          = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
+	AllowUseReservedConn = SystemVariable{Name: "use_reserved_connection", IsBoolean: true, Default: off}
 	// Online DDL
 	DDLStrategy   = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
 	VitessVersion = SystemVariable{Name: "vitess_version", IdentifierAsString: true}
@@ -76,6 +77,7 @@ var (
 		Charset,
 		Names,
 		SessionUUID,
+		AllowUseReservedConn,
 		ReadAfterWriteGTID,
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,

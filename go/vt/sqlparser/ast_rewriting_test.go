@@ -29,7 +29,7 @@ import (
 type myTestCase struct {
 	in, expected                                                      string
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID bool
-	ddlStrategy, sessionUUID                                          bool
+	ddlStrategy, sessionUUID, allowUseReservedConn                    bool
 	udv                                                               int
 	autocommit, clientFoundRows, skipQueryPlanCache                   bool
 	sqlSelectLimit, transactionMode, workload, vitessVersion          bool
@@ -44,6 +44,10 @@ func TestRewrites(in *testing.T) {
 		in:            "SELECT @@vitess_version",
 		expected:      "SELECT :__vtvitess_version as `@@vitess_version`",
 		vitessVersion: true,
+	}, {
+		in:                   "SELECT @@use_reserved_connection",
+		expected:             "SELECT :__vtuse_reserved_connection as `@@use_reserved_connection`",
+		allowUseReservedConn: true,
 	}, {
 		in:       "SELECT last_insert_id()",
 		expected: "SELECT :__lastInsertId as `last_insert_id()`",
@@ -199,6 +203,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
 			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
 			assert.Equal(tc.sessionUUID, result.NeedsSysVar(sysvars.SessionUUID.Name), "should need sessionUUID")
+			assert.Equal(tc.allowUseReservedConn, result.NeedsSysVar(sysvars.AllowUseReservedConn.Name), "should need allowUseReservedConnection")
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
