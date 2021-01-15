@@ -210,7 +210,7 @@ func (d *StaticFileDiscovery) DiscoverVtctld(ctx context.Context, tags []string)
 
 	count := len(vtctlds)
 	if count == 0 {
-		return nil, ErrNoVTGates
+		return nil, ErrNoVtctlds
 	}
 
 	vtctld := vtctlds[rand.Intn(len(vtctlds))]
