@@ -206,3 +206,7 @@
 2021-01-15T11:47:38Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/487823704
 2021-01-15T11:47:38Z,endtoend,https://github.com/vitessio/vitess/actions/runs/487823688
 2021-01-15T11:47:38Z,unit_race,https://github.com/vitessio/vitess/actions/runs/487823685
+2021-01-15T12:41:58Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/487923126
+2021-01-15T12:41:58Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/487923132
+2021-01-15T12:41:58Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/487923103
+2021-01-15T12:41:58Z,local_example,https://github.com/vitessio/vitess/actions/runs/487923128
