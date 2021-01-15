@@ -106,6 +106,8 @@ type Conn struct {
 
 	// conn2 is used for swapping conns
 	conn2 net.Conn
+	// Packet encoding variables for conn2.
+	sequence2 uint8
 
 	// flavor contains the auto-detected flavor for this client
 	// connection. It is unused for server-side connections.
@@ -190,17 +192,31 @@ type Conn struct {
 }
 
 type connByte struct {
-	data []byte
+	data [][]byte
+}
+
+type fakeAddress struct {
+}
+
+func (f fakeAddress) Network() string {
+	return "connByte"
+}
+
+func (f fakeAddress) String() string {
+	return "connByte"
 }
 
 func (c *connByte) Read(b []byte) (n int, err error) {
-	copiedLen := copy(b, c.data)
-	c.data = nil
+	if len(c.data) == 0 {
+		return -1, nil
+	}
+	copiedLen := copy(b, c.data[0])
+	c.data = c.data[1:]
 	return copiedLen, nil
 }
 
 func (c *connByte) Write(b []byte) (n int, err error) {
-	c.data = append(c.data, b...)
+	c.data = append(c.data, b)
 	return len(b), nil
 }
 
@@ -213,7 +229,7 @@ func (c *connByte) LocalAddr() net.Addr {
 }
 
 func (c *connByte) RemoteAddr() net.Addr {
-	panic("implement me")
+	return fakeAddress{}
 }
 
 func (c *connByte) SetDeadline(t time.Time) error {
@@ -908,14 +924,17 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		}
 		return false
 	}
+	log.Infof("packet received %s", string(data))
 
 	if c.testMysqlConn != nil {
+		c.testMysqlConn.sequence = 0
 		dest, pos := c.testMysqlConn.startEphemeralPacketWithHeader(len(data))
 		copy(dest[pos:], data)
 		if err := c.testMysqlConn.writeEphemeralPacket(); err != nil {
 			log.Errorf("Error writing packet to test mysql connection: %v", err)
 		}
 		c.conn2, c.conn = c.conn, c.conn2
+		c.sequence2, c.sequence = c.sequence, c.sequence2
 	}
 
 	kontinue := true
@@ -961,6 +980,8 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	}
 
 	if c.testMysqlConn != nil {
+		c.conn2, c.conn = c.conn, c.conn2
+		c.sequence2, c.sequence = c.sequence, c.sequence2
 		switch data[0] {
 		case ComQuit:
 			c.testMysqlConn.Close()
@@ -968,28 +989,35 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		case ComStmtClose, ComStmtSendLongData:
 			return true
 		default:
-			resp, err := c.testMysqlConn.readEphemeralPacket()
-			if err != nil {
-				log.Errorf("Error reading packet from test mysql connection: %v", err)
-			}
-			c.testMysqlConn.recycleReadPacket()
-
-			// check the value c.conn and resp
 			respFromVTgate := make([]byte, MaxPacketSize)
-			lenRead, _ := c.conn.Read(respFromVTgate)
-			if string(resp) != string(respFromVTgate[packetHeaderSize:lenRead]) {
-				log.Errorf("Outputs from both sources are different, MySQL output :%s, VTgate output :%s", string(resp), string(respFromVTgate[packetHeaderSize:lenRead]))
+			lenRead, _ := c.conn2.Read(respFromVTgate)
+			for lenRead != -1 {
+				log.Infof("sequence value: %d, read length: %d", c.testMysqlConn.sequence, lenRead-packetHeaderSize)
+				resp, err := c.testMysqlConn.readEphemeralPacket()
+				if err != nil {
+					log.Errorf("Error reading packet from test mysql connection: %v", err)
+					return false
+				}
+				c.testMysqlConn.recycleReadPacket()
+				log.Infof("read length from mysql: %d", len(resp))
+
+				// check the value from c.conn and resp
+				if string(resp) != string(respFromVTgate[packetHeaderSize:lenRead]) {
+					log.Errorf("Outputs from both sources are different, MySQL output :%s, VTgate output :%s", string(resp), string(respFromVTgate[packetHeaderSize:lenRead]))
+				}
+
+				data, pos := c.startEphemeralPacketWithHeader(len(resp))
+				copy(data[pos:], resp)
+				if err := c.writeEphemeralPacket(); err != nil {
+					log.Errorf("Error writing packet back to client received from test mysql connection: %v", err)
+				}
+				if resp[0] == ErrPacket {
+					return false
+				}
+
+				lenRead, _ = c.conn2.Read(respFromVTgate)
 			}
 
-			c.conn2, c.conn = c.conn, c.conn2
-			data, pos := c.startEphemeralPacketWithHeader(len(resp))
-			copy(data[pos:], resp)
-			if err := c.writeEphemeralPacket(); err != nil {
-				log.Errorf("Error writing packet back to client received from test mysql connection: %v", err)
-			}
-			if resp[0] == ErrPacket {
-				return false
-			}
 			return true
 		}
 	}

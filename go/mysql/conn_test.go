@@ -558,7 +558,7 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 		cConn.Close()
 	}()
 
-	err := cConn.writeComInitDB("error")
+	err := cConn.WriteComInitDB("error")
 	require.NoError(t, err)
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error

@@ -52,10 +52,11 @@ func (c *Conn) WriteComQuery(query string) error {
 	return nil
 }
 
-// writeComInitDB changes the default database to use.
+// WriteComInitDB changes the default database to use.
 // Client -> Server.
 // Returns SQLError(CRServerGone) if it can't.
-func (c *Conn) writeComInitDB(db string) error {
+func (c *Conn) WriteComInitDB(db string) error {
+	c.sequence = 0
 	data, pos := c.startEphemeralPacketWithHeader(len(db) + 1)
 	data[pos] = ComInitDB
 	pos++

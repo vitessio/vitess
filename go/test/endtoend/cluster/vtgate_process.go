@@ -128,6 +128,77 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtgate.Name, <-vtgate.exit)
 }
 
+// SetupWithTestingMysql starts Vtgate process with required arguements including the testing mysql arguments
+func (vtgate *VtgateProcess) SetupWithTestingMysql(port int) (err error) {
+
+	args := []string{
+		"-topo_implementation", vtgate.CommonArg.TopoImplementation,
+		"-topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
+		"-topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
+		"-log_dir", vtgate.LogDir,
+		"-log_queries_to_file", vtgate.FileToLogQueries,
+		"-port", fmt.Sprintf("%d", vtgate.Port),
+		"-grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
+		"-mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
+		"-mysql_server_socket_path", vtgate.MySQLServerSocketPath,
+		"-cell", vtgate.Cell,
+		"-cells_to_watch", vtgate.CellsToWatch,
+		"-tablet_types_to_wait", vtgate.TabletTypesToWait,
+		"-gateway_implementation", vtgate.GatewayImplementation,
+		"-service_map", vtgate.ServiceMap,
+		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+		"-test_host", "localhost",
+		"-test_port", fmt.Sprintf("%d", port),
+		"-test_user", "root",
+		"-test_password", "",
+	}
+	if vtgate.SysVarSetEnabled {
+		args = append(args, "-enable_system_settings")
+	}
+	vtgate.proc = exec.Command(
+		vtgate.Binary,
+		args...,
+	)
+	if *isCoverage {
+		vtgate.proc.Args = append(vtgate.proc.Args, "-test.coverprofile="+getCoveragePath("vtgate.out"))
+	}
+
+	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
+
+	errFile, _ := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))
+	vtgate.proc.Stderr = errFile
+
+	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
+
+	log.Infof("Running vtgate with command: %v", strings.Join(vtgate.proc.Args, " "))
+
+	err = vtgate.proc.Start()
+	if err != nil {
+		return
+	}
+	vtgate.exit = make(chan error)
+	go func() {
+		if vtgate.proc != nil {
+			vtgate.exit <- vtgate.proc.Wait()
+		}
+	}()
+
+	timeout := time.Now().Add(60 * time.Second)
+	for time.Now().Before(timeout) {
+		if vtgate.WaitForStatus() {
+			return nil
+		}
+		select {
+		case err := <-vtgate.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+
+	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtgate.Name, <-vtgate.exit)
+}
+
 // WaitForStatus function checks if vtgate process is up and running
 func (vtgate *VtgateProcess) WaitForStatus() bool {
 	resp, err := http.Get(vtgate.VerifyURL)

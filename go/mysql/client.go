@@ -364,7 +364,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	// it now. This is what the 'mysql' client does.
 	if capabilities&CapabilityClientConnectWithDB == 0 && params.DbName != "" {
 		// Write the packet.
-		if err := c.writeComInitDB(params.DbName); err != nil {
+		if err := c.WriteComInitDB(params.DbName); err != nil {
 			return err
 		}
 

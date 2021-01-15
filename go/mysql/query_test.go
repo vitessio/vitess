@@ -83,8 +83,8 @@ func TestComInitDB(t *testing.T) {
 	}()
 
 	// Write ComInitDB packet, read it, compare.
-	if err := cConn.writeComInitDB("my_db"); err != nil {
-		t.Fatalf("writeComInitDB failed: %v", err)
+	if err := cConn.WriteComInitDB("my_db"); err != nil {
+		t.Fatalf("WriteComInitDB failed: %v", err)
 	}
 	data, err := sConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != ComInitDB {
