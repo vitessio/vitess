@@ -54,7 +54,6 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema ContextVSchema) (engine
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Query:             sqlparser.String(stmt),
-		SingleShardOnly:   true,
 	}, nil
 }
 
