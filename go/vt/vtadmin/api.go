@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -77,6 +78,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	httpAPI := vtadminhttp.NewAPI(api)
 
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
+	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
 
@@ -151,6 +153,59 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 
 	return &vtadminpb.GetGatesResponse{
 		Gates: gates,
+	}, nil
+}
+
+// GetKeyspaces is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetKeyspaces")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		keyspaces []*vtadminpb.Keyspace
+		wg        sync.WaitGroup
+		er        concurrency.AllErrorRecorder
+		m         sync.Mutex
+	)
+
+	for _, c := range clusters {
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			if err := c.Vtctld.Dial(ctx); err != nil {
+				er.RecordError(err)
+				return
+			}
+
+			resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+			if err != nil {
+				er.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			for _, ks := range resp.Keyspaces {
+				keyspaces = append(keyspaces, &vtadminpb.Keyspace{
+					Cluster:  c.ToProto(),
+					Keyspace: ks,
+				})
+			}
+			m.Unlock()
+		}(c)
+	}
+
+	wg.Wait()
+
+	if er.HasErrors() {
+		return nil, er.Error()
+	}
+
+	return &vtadminpb.GetKeyspacesResponse{
+		Keyspaces: keyspaces,
 	}, nil
 }
 
