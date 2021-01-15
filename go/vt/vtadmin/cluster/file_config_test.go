@@ -35,16 +35,19 @@ func TestFileConfigUnmarshalYAML(t *testing.T) {
 			name: "simple",
 			yaml: `defaults:
     discovery: consul
-    discovery-consul-vtgate-datacenter-tmpl: "dev-{{ .Cluster }}"
+    discovery-consul-vtctld-datacenter-tmpl: "dev-{{ .Cluster.Name }}"
+    discovery-consul-vtctld-service-name: vtctld-svc
+    discovery-consul-vtctld-addr-tmpl: "{{ .Hostname }}.example.com:15000"
+    discovery-consul-vtgate-datacenter-tmpl: "dev-{{ .Cluster.Name }}"
     discovery-consul-vtgate-service-name: vtgate-svc
     discovery-consul-vtgate-pool-tag: type
     discovery-consul-vtgate-cell-tag: zone
-    discovery-consul-vtgate-addr-tmpl: "{{ .Name }}.example.com:15999"
+    discovery-consul-vtgate-addr-tmpl: "{{ .Hostname }}.example.com:15999"
 
 clusters:
     c1:
         name: testcluster1
-        discovery-consul-vtgate-datacenter-tmpl: "dev-{{ .Cluster }}-test"
+        discovery-consul-vtgate-datacenter-tmpl: "dev-{{ .Cluster.Name }}-test"
     c2:
         name: devcluster`,
 			config: FileConfig{
@@ -52,11 +55,14 @@ clusters:
 					DiscoveryImpl: "consul",
 					DiscoveryFlagsByImpl: map[string]map[string]string{
 						"consul": {
-							"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}",
+							"vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+							"vtctld-service-name":    "vtctld-svc",
+							"vtctld-addr-tmpl":       "{{ .Hostname }}.example.com:15000",
+							"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
 							"vtgate-service-name":    "vtgate-svc",
 							"vtgate-pool-tag":        "type",
 							"vtgate-cell-tag":        "zone",
-							"vtgate-addr-tmpl":       "{{ .Name }}.example.com:15999",
+							"vtgate-addr-tmpl":       "{{ .Hostname }}.example.com:15999",
 						},
 					},
 				},
@@ -66,16 +72,18 @@ clusters:
 						Name: "testcluster1",
 						DiscoveryFlagsByImpl: map[string]map[string]string{
 							"consul": {
-								"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}-test",
+								"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test",
 							},
 						},
-						VtSQLFlags: map[string]string{},
+						VtSQLFlags:  map[string]string{},
+						VtctldFlags: map[string]string{},
 					},
 					"c2": {
 						ID:                   "c2",
 						Name:                 "devcluster",
 						DiscoveryFlagsByImpl: map[string]map[string]string{},
 						VtSQLFlags:           map[string]string{},
+						VtctldFlags:          map[string]string{},
 					},
 				},
 			},
@@ -153,7 +161,8 @@ func TestCombine(t *testing.T) {
 							"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}",
 						},
 					},
-					VtSQLFlags: map[string]string{},
+					VtSQLFlags:  map[string]string{},
+					VtctldFlags: map[string]string{},
 				},
 				{
 					ID:            "2",
@@ -164,7 +173,8 @@ func TestCombine(t *testing.T) {
 							"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}-test",
 						},
 					},
-					VtSQLFlags: map[string]string{},
+					VtSQLFlags:  map[string]string{},
+					VtctldFlags: map[string]string{},
 				},
 			},
 		},
@@ -212,7 +222,8 @@ func TestCombine(t *testing.T) {
 							"flag": "val",
 						},
 					},
-					VtSQLFlags: map[string]string{},
+					VtSQLFlags:  map[string]string{},
+					VtctldFlags: map[string]string{},
 				},
 				{
 					ID:            "c2",
@@ -223,7 +234,8 @@ func TestCombine(t *testing.T) {
 							"flag": "val",
 						},
 					},
-					VtSQLFlags: map[string]string{},
+					VtSQLFlags:  map[string]string{},
+					VtctldFlags: map[string]string{},
 				},
 				{
 					ID:            "c3",
@@ -234,7 +246,8 @@ func TestCombine(t *testing.T) {
 							"flag": "val",
 						},
 					},
-					VtSQLFlags: map[string]string{},
+					VtSQLFlags:  map[string]string{},
+					VtctldFlags: map[string]string{},
 				},
 			},
 		},

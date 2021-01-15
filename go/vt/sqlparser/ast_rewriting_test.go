@@ -32,7 +32,7 @@ type myTestCase struct {
 	ddlStrategy, sessionUUID                                          bool
 	udv                                                               int
 	autocommit, clientFoundRows, skipQueryPlanCache                   bool
-	sqlSelectLimit, transactionMode, workload                         bool
+	sqlSelectLimit, transactionMode, workload, vitessVersion          bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -40,6 +40,10 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT 42",
 		expected: "SELECT 42",
 		// no bindvar needs
+	}, {
+		in:            "SELECT @@vitess_version",
+		expected:      "SELECT :__vtvitess_version as `@@vitess_version`",
+		vitessVersion: true,
 	}, {
 		in:       "SELECT last_insert_id()",
 		expected: "SELECT :__lastInsertId as `last_insert_id()`",
@@ -198,6 +202,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
+			assert.Equal(tc.vitessVersion, result.NeedsSysVar(sysvars.VitessVersion.Name), "should need Vitess version")
 		})
 	}
 }
