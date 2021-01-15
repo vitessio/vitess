@@ -280,8 +280,10 @@ END`
 	expectFlag(t, "ReadQueryResult(1)", more, true)
 	assert.Equal(t, 1, len(qr.Rows))
 
-	_, err = conn.ReadPacket()
+	data, err := conn.ReadPacket()
 	require.NoError(t, err)
+
+	assert.Equal(t, mysql.OKPacket, data[0])
 }
 
 func expectNoError(t *testing.T, err error) {
