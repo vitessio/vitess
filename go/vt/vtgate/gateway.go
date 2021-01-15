@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"context"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -33,7 +34,7 @@ import (
 // a query targeted to a keyspace/shard/tablet_type and send it off.
 
 var (
-	// GatewayImplementation allows you to choose which gateway to use for vtgate routing. Defaults to discoverygateway, other option is tabletgateway
+	// GatewayImplementation allows you to choose which gateway to use for vtgate routing. Defaults to tabletgateway, other option is discoverygateway
 	GatewayImplementation = flag.String("gateway_implementation", "tabletgateway", "Allowed values: discoverygateway (deprecated), tabletgateway (default)")
 	initialTabletTimeout  = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the gateway will wait up to that duration to get one tablet per keyspace/shard/tablettype")
 	// RetryCount is the number of times a query will be retried on error
