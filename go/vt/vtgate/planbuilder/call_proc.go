@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/vt/key"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -35,23 +36,25 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema ContextVSchema) (engine
 		ks = stmt.Name.Qualifier.String()
 	}
 
-	destination, keyspace, _, err := vschema.TargetDestination(ks)
+	dest, keyspace, _, err := vschema.TargetDestination(ks)
 	if err != nil {
 		return nil, err
 	}
 
-	if keyspace.Sharded {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, errNotAllowWhenSharded)
+	if dest == nil {
+		if keyspace.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, errNotAllowWhenSharded)
+		}
+		dest = key.DestinationAnyShard{}
 	}
 
 	stmt.Name.Qualifier = sqlparser.NewTableIdent("")
 
 	return &engine.Send{
 		Keyspace:          keyspace,
-		TargetDestination: destination,
+		TargetDestination: dest,
 		Query:             sqlparser.String(stmt),
-		IsDML:             false,
-		SingleShardOnly:   false,
+		SingleShardOnly:   true,
 	}, nil
 }
 

@@ -98,6 +98,7 @@ CREATE TABLE allDefaults (
 	createProcSQL = `use vt_customer;CREATE PROCEDURE GetAllT1()
 BEGIN
 	SELECT *  FROM t1;
+	SELECT *  FROM t1;
 END`
 )
 
@@ -186,7 +187,7 @@ func TestCallProcedure(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 	defer exec(t, conn, `delete from t1`)
 	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'foo'),(301,101,301,'bar')`)
