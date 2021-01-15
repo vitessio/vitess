@@ -11,7 +11,7 @@ In this section, we'll get vtadmin-web, vtadmin-api, and Vitess all running loca
 	./docker/local/run.sh
 	```
 
-1. Create an empty vtgate credentials file to avoid the gRPC dialer bug mentioned in https://github.com/vitessio/vitess/pull/7187. Location and filename don't matter since you'll be passing this in as a flag; I put mine at ` /Users/sarabee/id1-grpc_vtgate_credentials.json`:
+1. Create an empty vtgate credentials file to avoid the gRPC dialer bug mentioned in https://github.com/vitessio/vitess/pull/7187. Location and filename don't matter since you'll be passing this in as a flag; I put mine at ` /Users/sarabee/vtadmin-creds.json`:
 
 	```json
 	{
@@ -28,14 +28,14 @@ In this section, we'll get vtadmin-web, vtadmin-api, and Vitess all running loca
 			{
 				"host": {
 					"hostname": "127.0.0.1:15991"
-				},
-				"tags": ["pool:pool1", "cell:zone1", "extra:tag"]
-			},
+				}
+			}
+		],
+		"vtctlds": [
 			{
 				"host": {
-					"hostname": "127.0.0.1:15992"
-				},
-				"tags": ["dead-dove-do-not-eat"]
+					"hostname": "127.0.0.1:15999"
+				}
 			}
 		]
 	}
@@ -47,9 +47,10 @@ In this section, we'll get vtadmin-web, vtadmin-api, and Vitess all running loca
 	make build
 
 	./bin/vtadmin \
-		--addr ":15999" \
-		--cluster-defaults "vtsql-credentials-path-tmpl=/Users/sarabee/id1-grpc_vtgate_credentials.json" \
-		--cluster "name=cluster1,id=id1,discovery=staticFile,discovery-staticFile-path=/Users/sarabee/vtadmin-cluster1.json,vtsql-discovery-tags=cell:zone1" 
+		--addr ":14200" \
+		--cluster-defaults "vtctld-credentials-path-tmpl=/Users/sarabee/vtadmin-creds.json,vtsql-credentials-path-tmpl=/Users/sarabee/vtadmin-creds.json" \
+		--cluster "name=cluster1,id=id1,discovery=staticFile,discovery-staticFile-path=/Users/sarabee/vtadmin-cluster1.json" \
+		--http-origin=http://localhost:3000
 	```
 
 1. Finally! Start up vtadmin-web on [http://localhost:3000](http://localhost:3000), pointed at the vtadmin-api server you started in the last step. 
@@ -57,7 +58,7 @@ In this section, we'll get vtadmin-web, vtadmin-api, and Vitess all running loca
 	```bash
 	cd web/vtadmin
 	npm install
-	REACT_APP_VTADMIN_API_ADDRESS="http://127.0.0.1:15999" npm start
+	REACT_APP_VTADMIN_API_ADDRESS="http://127.0.0.1:14200" npm start
 	```
 
 # Developer guide
