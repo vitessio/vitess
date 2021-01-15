@@ -19,10 +19,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/golang/protobuf/ptypes"
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/vt/log"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -43,6 +47,11 @@ var (
 		Aliases: []string{"getkeyspaces"},
 		Args:    cobra.NoArgs,
 		RunE:    commandGetKeyspaces,
+	}
+	initShardPrimaryCmd = &cobra.Command{
+		Use:  "InitShardPrimary",
+		Args: cobra.ExactArgs(2),
+		RunE: commandInitShardPrimary,
 	}
 )
 
@@ -91,8 +100,43 @@ func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var initShardPrimaryArgs = struct {
+	WaitReplicasTimeout time.Duration
+	Force               bool
+}{}
+
+func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.InitShardPrimary(commandCtx, &vtctldatapb.InitShardPrimaryRequest{
+		Keyspace:                keyspace,
+		Shard:                   shard,
+		PrimaryElectTabletAlias: tabletAlias,
+		WaitReplicasTimeout:     ptypes.DurationProto(initShardPrimaryArgs.WaitReplicasTimeout),
+		Force:                   initShardPrimaryArgs.Force,
+	})
+
+	for _, event := range resp.Events {
+		log.Infof("%v", event)
+	}
+
+	return err
+}
+
 func init() {
 	rootCmd.AddCommand(findAllShardsInKeyspaceCmd)
 	rootCmd.AddCommand(getKeyspaceCmd)
 	rootCmd.AddCommand(getKeyspacesCmd)
+
+	initShardPrimaryCmd.Flags().DurationVar(&initShardPrimaryArgs.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
+	initShardPrimaryCmd.Flags().BoolVar(&initShardPrimaryArgs.Force, "force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
+	rootCmd.AddCommand(initShardPrimaryCmd)
 }

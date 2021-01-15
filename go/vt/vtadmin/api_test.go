@@ -23,17 +23,27 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	"vitess.io/vitess/go/vt/vtadmin/http"
+	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestGetGates(t *testing.T) {
@@ -87,6 +97,91 @@ func TestGetGates(t *testing.T) {
 	resp, err = api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 	assert.Error(t, err)
 	assert.Nil(t, resp)
+}
+
+func TestGetKeyspaces(t *testing.T) {
+	ts1 := memorytopo.NewServer("c1_cell1")
+	ts2 := memorytopo.NewServer("c2_cell1")
+
+	testutil.AddKeyspace(context.Background(), t, ts1, &vtctldatapb.Keyspace{
+		Name:     "testkeyspace",
+		Keyspace: &topodatapb.Keyspace{},
+	})
+	testutil.AddKeyspace(context.Background(), t, ts1, &vtctldatapb.Keyspace{
+		Name: "snapshot",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+			BaseKeyspace: "testkeyspace",
+			SnapshotTime: &vttime.Time{Seconds: 10, Nanoseconds: 1},
+		},
+	})
+
+	testutil.AddKeyspace(context.Background(), t, ts2, &vtctldatapb.Keyspace{
+		Name:     "customer",
+		Keyspace: &topodatapb.Keyspace{},
+	})
+
+	testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(ts1), func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
+		testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(ts2), func(t *testing.T, cluster2Client vtctldclient.VtctldClient) {
+			c1 := buildCluster(1, cluster1Client, nil, nil)
+			c2 := buildCluster(2, cluster2Client, nil, nil)
+
+			api := NewAPI([]*cluster.Cluster{c1, c2}, grpcserver.Options{}, http.Options{})
+			resp, err := api.GetKeyspaces(context.Background(), &vtadminpb.GetKeyspacesRequest{})
+			require.NoError(t, err)
+
+			expected := &vtadminpb.GetKeyspacesResponse{
+				Keyspaces: []*vtadminpb.Keyspace{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name:     "testkeyspace",
+							Keyspace: &topodatapb.Keyspace{},
+						},
+					},
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name: "snapshot",
+							Keyspace: &topodatapb.Keyspace{
+								KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+								BaseKeyspace: "testkeyspace",
+								SnapshotTime: &vttime.Time{Seconds: 10, Nanoseconds: 1},
+							},
+						},
+					},
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c2",
+							Name: "cluster2",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name:     "customer",
+							Keyspace: &topodatapb.Keyspace{},
+						},
+					},
+				},
+			}
+			assert.ElementsMatch(t, expected.Keyspaces, resp.Keyspaces)
+
+			resp, err = api.GetKeyspaces(
+				context.Background(),
+				&vtadminpb.GetKeyspacesRequest{
+					ClusterIds: []string{"c1"},
+				},
+			)
+			require.NoError(t, err)
+
+			expected.Keyspaces = expected.Keyspaces[:2] // just c1
+			assert.ElementsMatch(t, expected.Keyspaces, resp.Keyspaces)
+		})
+	})
 }
 
 func TestGetTablets(t *testing.T) {
@@ -250,7 +345,7 @@ func TestGetTablets(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
-				cluster := buildCluster(i, tablets, tt.dbconfigs)
+				cluster := buildCluster(i, nil, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -511,7 +606,7 @@ func TestGetTablet(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
-				cluster := buildCluster(i, tablets, tt.dbconfigs)
+				cluster := buildCluster(i, nil, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -532,12 +627,13 @@ type dbcfg struct {
 	shouldErr bool
 }
 
-// shared helper for building a cluster that contains the given tablets.
-// dbconfigs contains an optional config for controlling the behavior of the
-// cluster's DB at the package sql level.
-func buildCluster(i int, tablets []*vtadminpb.Tablet, dbconfigs map[string]*dbcfg) *cluster.Cluster {
+// shared helper for building a cluster that contains the given tablets and
+// talking to the given vtctld server. dbconfigs contains an optional config
+// for controlling the behavior of the cluster's DB at the package sql level.
+func buildCluster(i int, vtctldClient vtctldclient.VtctldClient, tablets []*vtadminpb.Tablet, dbconfigs map[string]*dbcfg) *cluster.Cluster {
 	disco := fakediscovery.New()
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("cluster%d-gate", i)})
+	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{Hostname: "doesn't matter"})
 
 	cluster := &cluster.Cluster{
 		ID:        fmt.Sprintf("c%d", i),
@@ -558,7 +654,16 @@ func buildCluster(i int, tablets []*vtadminpb.Tablet, dbconfigs map[string]*dbcf
 		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: dbconfig.shouldErr}), nil
 	}
 
+	vtctld := vtadminvtctldclient.New(&vtadminvtctldclient.Config{
+		Cluster:   cluster.ToProto(),
+		Discovery: disco,
+	})
+	vtctld.DialFunc = func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+		return vtctldClient, nil
+	}
+
 	cluster.DB = db
+	cluster.Vtctld = vtctld
 
 	return cluster
 }

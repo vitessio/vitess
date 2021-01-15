@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -33,10 +34,8 @@ type Cluster struct {
 	Name      string
 	Discovery discovery.Discovery
 
-	// (TODO|@amason): after merging #7128, this still requires some additional
-	// work, so deferring this for now!
-	// vtctl vtctldclient.VtctldClient
-	DB vtsql.DB
+	DB     vtsql.DB
+	Vtctld vtctldclient.Proxy
 
 	// These fields are kept to power debug endpoints.
 	// (TODO|@amason): Figure out if these are needed or if there's a way to
@@ -60,14 +59,24 @@ func New(cfg Config) (*Cluster, error) {
 
 	cluster.Discovery = disco
 
+	protocluster := cluster.ToProto()
+
 	vtsqlargs := buildPFlagSlice(cfg.VtSQLFlags)
 
-	vtsqlCfg, err := vtsql.Parse(cluster.ToProto(), disco, vtsqlargs)
+	vtsqlCfg, err := vtsql.Parse(protocluster, disco, vtsqlargs)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating vtsql connection: %w", err)
+		return nil, fmt.Errorf("error while creating vtsql connection config: %w", err)
+	}
+
+	vtctldargs := buildPFlagSlice(cfg.VtctldFlags)
+
+	vtctldCfg, err := vtctldclient.Parse(protocluster, disco, vtctldargs)
+	if err != nil {
+		return nil, fmt.Errorf("error while creating vtctldclient proxy config: %w", err)
 	}
 
 	cluster.DB = vtsql.New(vtsqlCfg)
+	cluster.Vtctld = vtctldclient.New(vtctldCfg)
 
 	return cluster, nil
 }

@@ -24,6 +24,7 @@ package vtctldata;
 
 import "logutil.proto";
 import "topodata.proto";
+import "google/protobuf/duration.proto";
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -50,6 +51,18 @@ message GetKeyspaceRequest {
 
 message GetKeyspaceResponse {
   Keyspace keyspace = 1;
+}
+
+message InitShardPrimaryRequest {
+  string keyspace = 1;
+  string shard = 2;
+  topodata.TabletAlias primary_elect_tablet_alias = 3;
+  bool force = 4;
+  google.protobuf.Duration wait_replicas_timeout = 5;
+}
+
+message InitShardPrimaryResponse {
+  repeated logutil.Event events = 1;
 }
 
 message Keyspace {

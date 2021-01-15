@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtsql
+package vtctldclient
 
 import (
 	"fmt"
@@ -28,21 +28,17 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-// Config represents the options that modify the behavior of a vtqsl.VTGateProxy.
+// Config represents the options that modify the behavior of a Proxy.
 type Config struct {
-	Discovery     discovery.Discovery
-	DiscoveryTags []string
-	Credentials   Credentials
+	Discovery   discovery.Discovery
+	Credentials *grpcclient.StaticAuthClientCreds
 
-	// CredentialsPath is used only to power vtadmin debug endpoints; there may
-	// be a better way where we don't need to put this in the config, because
-	// it's not really an "option" in normal use.
 	CredentialsPath string
 
 	Cluster *vtadminpb.Cluster
 }
 
-// Parse returns a new config with the given cluster ID and name, after
+// Parse returns a new config with the given cluster and discovery, after
 // attempting to parse the command-line pflags into that Config. See
 // (*Config).Parse() for more details.
 func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string) (*Config, error) {
@@ -60,48 +56,28 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 }
 
 // Parse reads options specified as command-line pflags (--key=value, note the
-// double-dash!) into a vtsql.Config. It is meant to be called from
+// double-dash!) into a Config. It is meant to be called from
 // (*cluster.Cluster).New().
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 
-	fs.StringSliceVar(&c.DiscoveryTags, "discovery-tags", []string{},
-		"repeated, comma-separated list of tags to use when discovering a vtgate to connect to. "+
-			"the semantics of the tags may depend on the specific discovery implementation used")
-
 	credentialsTmplStr := fs.String("credentials-path-tmpl", "",
 		"Go template used to specify a path to a credentials file, which is a json file containing "+
-			"a Username and Password. Templates are given the context of the vtsql.Config, and primarily "+
-			"interoplate the cluster name and ID variables.")
-	effectiveUser := fs.String("effective-user", "", "username to send queries on behalf of")
+			"a Username and Password. Templates are given the context of the vtctldclient.Config, "+
+			"and primarily interoplate the cluster name and ID variables.")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	var creds *grpcclient.StaticAuthClientCreds
-
 	if *credentialsTmplStr != "" {
-		_creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)
+		creds, path, err := credentials.LoadFromTemplate(*credentialsTmplStr, c)
 		if err != nil {
 			return fmt.Errorf("cannot load credentials from path template %s: %w", *credentialsTmplStr, err)
 		}
 
 		c.CredentialsPath = path
-		creds = _creds
-	}
-
-	if creds != nil {
-		// If we did not receive an effective user, but loaded credentials, then the
-		// immediate user is the effective user.
-		if *effectiveUser == "" {
-			*effectiveUser = creds.Username
-		}
-
-		c.Credentials = &StaticAuthCredentials{
-			EffectiveUser:         *effectiveUser,
-			StaticAuthClientCreds: creds,
-		}
+		c.Credentials = creds
 	}
 
 	return nil

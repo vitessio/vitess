@@ -25,6 +25,7 @@ type Config struct {
 	DiscoveryImpl        string
 	DiscoveryFlagsByImpl FlagsByImpl
 	VtSQLFlags           map[string]string
+	VtctldFlags          map[string]string
 }
 
 // Cluster returns a new cluster instance from the given config.
@@ -82,6 +83,7 @@ func (cfg Config) Merge(override Config) Config {
 		DiscoveryImpl:        cfg.DiscoveryImpl,
 		DiscoveryFlagsByImpl: map[string]map[string]string{},
 		VtSQLFlags:           map[string]string{},
+		VtctldFlags:          map[string]string{},
 	}
 
 	if override.ID != "" {
@@ -103,6 +105,9 @@ func (cfg Config) Merge(override Config) Config {
 
 	mergeStringMap(merged.VtSQLFlags, cfg.VtSQLFlags)
 	mergeStringMap(merged.VtSQLFlags, override.VtSQLFlags)
+
+	mergeStringMap(merged.VtctldFlags, cfg.VtctldFlags)
+	mergeStringMap(merged.VtctldFlags, override.VtctldFlags)
 
 	return merged
 }

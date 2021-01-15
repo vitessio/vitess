@@ -2344,11 +2344,11 @@ show_statement:
   }
 | SHOW KEYSPACES like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+    $$ = &Show{&ShowBasic{Command: Keyspace, Filter: $3}}
   }
 | SHOW VITESS_KEYSPACES like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
+    $$ = &Show{&ShowBasic{Command: Keyspace, Filter: $3}}
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {

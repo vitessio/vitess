@@ -55,4 +55,4 @@ COPY --from=builder --chown=vitess:vitess /vt/install /vt
 VOLUME /vt/vtdataroot
 USER vitess
 
-CMD /vt/bin/vttestserver -port $PORT -keyspaces $KEYSPACES -num_shards $NUM_SHARDS
+CMD /vt/bin/vttestserver -port $PORT -keyspaces $KEYSPACES -num_shards $NUM_SHARDS -mysql_bind_host ${MYSQL_BIND_HOST:-127.0.0.1}

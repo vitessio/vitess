@@ -12,8 +12,8 @@
 /go/test/endtoend/vtgate @harshit-gangal @systay
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
-/go/vt/proto/vtadmin @ajm188 @doeg
 /go/vt/orchestrator @deepthi @shlomi-noach
+/go/vt/proto/vtadmin @ajm188 @doeg
 /go/vt/schema @shlomi-noach
 /go/vt/sqlparser @harshit-gangal @systay
 /go/vt/vtadmin @ajm188 @doeg
