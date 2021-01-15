@@ -404,15 +404,15 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	assertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
 
 	exec(t, conn, "set workload='olap'")
 
-	assertMatches(t, conn, "select @@workload", `[[VARCHAR("OLAP")]]`)
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLAP")]]`)
 
 	exec(t, conn, "set workload='oltp'")
 
-	assertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
 }
 
 func TestFoundRowsOnDualQueries(t *testing.T) {
