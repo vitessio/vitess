@@ -370,7 +370,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	if tsv.IsServingType() {
+	if IsServingType(tsv.sm.Target().TabletType) {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -387,8 +387,8 @@ func (tsv *TabletServer) IsHealthy() error {
 
 // IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
 // should not be serving in it's healthy state.
-func (tsv *TabletServer) IsServingType() bool {
-	switch tsv.sm.Target().TabletType {
+func IsServingType(tabletType topodatapb.TabletType) bool {
+	switch tabletType {
 	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
 		return true
 	default:
