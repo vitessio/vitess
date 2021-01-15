@@ -280,9 +280,8 @@ END`
 	expectFlag(t, "ReadQueryResult(1)", more, true)
 	assert.Equal(t, 1, len(qr.Rows))
 
-	data, err := conn.ReadPacket()
+	_, err = conn.ReadPacket()
 	require.NoError(t, err)
-	assert.Equal(t, 1, data)
 }
 
 func expectNoError(t *testing.T, err error) {
