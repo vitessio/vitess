@@ -937,3 +937,10 @@ options:PassthroughDMLs
   ],
   "FullQuery": "flush tables a, b"
 }
+
+# call proc
+"call getAllTheThings()"
+{
+  "PlanID": "CallProcedure",
+  "TableName": ""
+}

@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"context"
@@ -249,6 +251,38 @@ func TestMultiResultDeprecateEOF(t *testing.T) {
 }
 func TestMultiResultNoDeprecateEOF(t *testing.T) {
 	doTestMultiResult(t, true)
+}
+
+func TestCallProc(t *testing.T) {
+	ctx := context.Background()
+
+	conn, err := mysql.Connect(ctx, &connParams)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	createProc := `CREATE PROCEDURE GetTwoResults()
+BEGIN
+	SELECT 1;
+	SELECT 42;
+END`
+	qr, more, err := conn.ExecuteFetchMulti(createProc, 10, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(multi result)", more, false)
+	expectRows(t, "ExecuteMultiFetch(multi result)", qr, 0)
+
+	qr, more, err = conn.ExecuteFetchMulti("call GetTwoResults()", 10000, true)
+	expectNoError(t, err)
+	expectFlag(t, "ExecuteMultiFetch(single result)", more, true)
+	assert.Equal(t, 1, len(qr.Rows))
+
+	qr, more, _, err = conn.ReadQueryResult(1000, true)
+	expectNoError(t, err)
+	expectFlag(t, "ReadQueryResult(1)", more, true)
+	assert.Equal(t, 1, len(qr.Rows))
+
+	data, err := conn.ReadPacket()
+	require.NoError(t, err)
+	assert.Equal(t, 1, data)
 }
 
 func expectNoError(t *testing.T, err error) {
