@@ -78,6 +78,21 @@ func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctlda
 	}, nil
 }
 
+// GetCellInfoNames is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetCellInfoNames(ctx context.Context, req *vtctldatapb.GetCellInfoNamesRequest) (*vtctldatapb.GetCellInfoNamesResponse, error) {
+	panic("unimplemented!")
+}
+
+// GetCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetCellInfo(ctx context.Context, req *vtctldatapb.GetCellInfoRequest) (*vtctldatapb.GetCellInfoResponse, error) {
+	panic("unimplemented!")
+}
+
+// GetCellsAliases is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.GetCellsAliasesRequest) (*vtctldatapb.GetCellsAliasesResponse, error) {
+	panic("unimplemented!")
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
 	keyspace, err := s.ts.GetKeyspace(ctx, req.Keyspace)

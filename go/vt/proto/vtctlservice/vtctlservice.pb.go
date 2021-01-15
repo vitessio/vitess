@@ -29,24 +29,27 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 func init() { proto.RegisterFile("vtctlservice.proto", fileDescriptor_27055cdbb1148d2b) }
 
 var fileDescriptor_27055cdbb1148d2b = []byte{
-	// 263 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xdf, 0x4b, 0xc3, 0x30,
-	0x10, 0xc7, 0x55, 0x70, 0x0f, 0x71, 0xa0, 0x9c, 0x0f, 0xc2, 0x40, 0x85, 0x89, 0xc2, 0x14, 0x1a,
-	0x99, 0x7f, 0x81, 0x8a, 0xca, 0x10, 0xc4, 0x1f, 0xe0, 0x83, 0xe0, 0x43, 0x6c, 0x0e, 0x17, 0x68,
-	0x93, 0x2e, 0x77, 0x2b, 0xee, 0x9f, 0x17, 0x31, 0x25, 0x35, 0x88, 0x55, 0xdf, 0x7a, 0xdf, 0x1f,
-	0x9f, 0x6b, 0xe0, 0x04, 0xd4, 0x9c, 0x73, 0x41, 0xe8, 0x6b, 0x93, 0x63, 0x56, 0x79, 0xc7, 0x0e,
-	0xfa, 0xa9, 0x36, 0x58, 0x0f, 0x93, 0x56, 0xac, 0x1a, 0x7b, 0x3c, 0x13, 0xab, 0x8f, 0x9f, 0x12,
-	0x4c, 0xc5, 0xe6, 0xc5, 0x1b, 0xe6, 0x73, 0xc6, 0x30, 0x9f, 0xbb, 0xb2, 0x54, 0x56, 0xc3, 0x7e,
-	0xf6, 0xd5, 0xf8, 0xc1, 0xbf, 0xc7, 0xd9, 0x1c, 0x89, 0x07, 0x07, 0x7f, 0xc5, 0xa8, 0x72, 0x96,
-	0x70, 0xb8, 0x74, 0xbc, 0x3c, 0x7e, 0x5f, 0x11, 0xbd, 0x60, 0x6a, 0xf0, 0x62, 0xeb, 0xd2, 0x58,
-	0x7d, 0x5a, 0x14, 0x0f, 0x53, 0xe5, 0x35, 0x4d, 0xec, 0x35, 0x2e, 0xa8, 0x52, 0x39, 0xc2, 0x28,
-	0x21, 0x76, 0x64, 0xe2, 0xf2, 0xc3, 0xff, 0x44, 0xe3, 0x0f, 0xc0, 0x8d, 0x58, 0xbb, 0x42, 0x6e,
-	0xf7, 0x6c, 0x27, 0xe5, 0x44, 0x8f, 0xec, 0x9d, 0x2e, 0xbb, 0xe5, 0xdd, 0x89, 0x7e, 0x62, 0x10,
-	0x74, 0x34, 0x28, 0x12, 0x77, 0x3b, 0xfd, 0x16, 0xf9, 0x2c, 0x36, 0x26, 0xd6, 0x70, 0x78, 0xc4,
-	0xad, 0x37, 0xa5, 0xf2, 0x0b, 0x18, 0x26, 0xb5, 0xef, 0x66, 0x44, 0xef, 0xfd, 0x9a, 0x89, 0xf8,
-	0xb3, 0xa3, 0xa7, 0x51, 0x6d, 0x18, 0x89, 0x32, 0xe3, 0x64, 0xf3, 0x25, 0x5f, 0x9d, 0xac, 0x59,
-	0x86, 0x9b, 0x90, 0xe9, 0xc5, 0xbc, 0xf4, 0x82, 0x76, 0xf2, 0x11, 0x00, 0x00, 0xff, 0xff, 0xae,
-	0x74, 0xb6, 0x52, 0x5c, 0x02, 0x00, 0x00,
+	// 320 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x93, 0x5f, 0x4b, 0xf3, 0x30,
+	0x14, 0xc6, 0xdf, 0xf7, 0x62, 0xbb, 0x88, 0x83, 0x49, 0xbc, 0x10, 0x06, 0x4e, 0xac, 0x28, 0x4c,
+	0xa1, 0x95, 0xf9, 0x09, 0xe6, 0x50, 0x29, 0xc2, 0xf0, 0x0f, 0x78, 0x31, 0xf0, 0x22, 0xb6, 0x47,
+	0x17, 0x48, 0x93, 0x2e, 0x27, 0x2b, 0xee, 0x23, 0xf8, 0xad, 0xc5, 0xcc, 0xd4, 0xd8, 0xb5, 0xd3,
+	0xbb, 0xe4, 0xfc, 0x9e, 0xf3, 0xe4, 0x90, 0x87, 0x43, 0x68, 0x61, 0x12, 0x23, 0x10, 0x74, 0xc1,
+	0x13, 0x08, 0x73, 0xad, 0x8c, 0xa2, 0x1d, 0xbf, 0xd6, 0xeb, 0xda, 0x5b, 0xca, 0x0c, 0x5b, 0xe1,
+	0xe1, 0x9c, 0xb4, 0x1e, 0x3f, 0x4b, 0x74, 0x46, 0x76, 0x2e, 0xdf, 0x20, 0x59, 0x18, 0xb0, 0xf7,
+	0xb1, 0xca, 0x32, 0x26, 0x53, 0x7a, 0x14, 0x7e, 0x77, 0xd4, 0xf0, 0x7b, 0x98, 0x2f, 0x00, 0x4d,
+	0xef, 0xf8, 0x37, 0x19, 0xe6, 0x4a, 0x22, 0x04, 0xff, 0xce, 0xfe, 0x0f, 0xdf, 0x5b, 0xa4, 0x6d,
+	0x61, 0x4a, 0x35, 0xd9, 0xbd, 0xe2, 0x32, 0x1d, 0x09, 0xf1, 0x30, 0x63, 0x3a, 0xc5, 0x58, 0xde,
+	0xc0, 0x12, 0x73, 0x96, 0x00, 0x1d, 0x78, 0x8e, 0x0d, 0x1a, 0xf7, 0xf8, 0xc9, 0x5f, 0xa4, 0x6e,
+	0x00, 0xfa, 0x44, 0xb6, 0xaf, 0xc1, 0x8c, 0x41, 0x88, 0x58, 0xbe, 0xa8, 0x09, 0xcb, 0x00, 0x69,
+	0xe0, 0x39, 0x54, 0xa1, 0x7b, 0xe5, 0x70, 0xa3, 0xa6, 0xb4, 0x9f, 0x90, 0x2d, 0x8f, 0xd2, 0xbd,
+	0xfa, 0x2e, 0x67, 0xda, 0x6f, 0xc2, 0xa5, 0xdf, 0x94, 0x74, 0xbf, 0x00, 0x8e, 0x04, 0x67, 0x08,
+	0x48, 0x0f, 0xd6, 0x9b, 0x1c, 0x73, 0xbe, 0xc1, 0x26, 0x49, 0x65, 0xd6, 0xf2, 0xcb, 0x2b, 0xb3,
+	0x56, 0xbf, 0xb9, 0xdf, 0x84, 0x4b, 0xbf, 0x3b, 0xd2, 0xf1, 0x00, 0xd2, 0x86, 0x8e, 0x72, 0xca,
+	0xfd, 0x46, 0xee, 0xa7, 0x15, 0x4b, 0x6e, 0x6c, 0x9e, 0xb7, 0x9a, 0x67, 0x4c, 0x2f, 0x7f, 0xa4,
+	0x55, 0x85, 0x75, 0x69, 0xad, 0x6b, 0x9c, 0xfd, 0xc5, 0xe9, 0x74, 0x50, 0x70, 0x03, 0x88, 0x21,
+	0x57, 0xd1, 0xea, 0x14, 0xbd, 0xaa, 0xa8, 0x30, 0x91, 0x5d, 0x8f, 0xc8, 0x5f, 0x9e, 0xe7, 0xb6,
+	0xad, 0x9d, 0x7f, 0x04, 0x00, 0x00, 0xff, 0xff, 0x79, 0x0f, 0x93, 0xa5, 0x67, 0x03, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -160,8 +163,17 @@ var _Vtctl_serviceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type VtctldClient interface {
-	// FindAllShardsInKeyspace returns a map of shard names to shard references for a given keyspace.
+	// FindAllShardsInKeyspace returns a map of shard names to shard references
+	// for a given keyspace.
 	FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// GetCellInfoNames returns all the cells for which we have a CellInfo object,
+	// meaning we have a topology service registered.
+	GetCellInfoNames(ctx context.Context, in *vtctldata.GetCellInfoNamesRequest, opts ...grpc.CallOption) (*vtctldata.GetCellInfoNamesResponse, error)
+	// GetCellInfo returns the information for a cell.
+	GetCellInfo(ctx context.Context, in *vtctldata.GetCellInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetCellInfoResponse, error)
+	// GetCellsAliases returns a mapping of cell alias to cells identified by that
+	// alias.
+	GetCellsAliases(ctx context.Context, in *vtctldata.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldata.GetCellsAliasesResponse, error)
 	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
@@ -186,6 +198,33 @@ func NewVtctldClient(cc *grpc.ClientConn) VtctldClient {
 func (c *vtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
 	out := new(vtctldata.FindAllShardsInKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/FindAllShardsInKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetCellInfoNames(ctx context.Context, in *vtctldata.GetCellInfoNamesRequest, opts ...grpc.CallOption) (*vtctldata.GetCellInfoNamesResponse, error) {
+	out := new(vtctldata.GetCellInfoNamesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetCellInfoNames", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetCellInfo(ctx context.Context, in *vtctldata.GetCellInfoRequest, opts ...grpc.CallOption) (*vtctldata.GetCellInfoResponse, error) {
+	out := new(vtctldata.GetCellInfoResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetCellInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetCellsAliases(ctx context.Context, in *vtctldata.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldata.GetCellsAliasesResponse, error) {
+	out := new(vtctldata.GetCellsAliasesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetCellsAliases", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -221,8 +260,17 @@ func (c *vtctldClient) InitShardPrimary(ctx context.Context, in *vtctldata.InitS
 
 // VtctldServer is the server API for Vtctld service.
 type VtctldServer interface {
-	// FindAllShardsInKeyspace returns a map of shard names to shard references for a given keyspace.
+	// FindAllShardsInKeyspace returns a map of shard names to shard references
+	// for a given keyspace.
 	FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
+	// GetCellInfoNames returns all the cells for which we have a CellInfo object,
+	// meaning we have a topology service registered.
+	GetCellInfoNames(context.Context, *vtctldata.GetCellInfoNamesRequest) (*vtctldata.GetCellInfoNamesResponse, error)
+	// GetCellInfo returns the information for a cell.
+	GetCellInfo(context.Context, *vtctldata.GetCellInfoRequest) (*vtctldata.GetCellInfoResponse, error)
+	// GetCellsAliases returns a mapping of cell alias to cells identified by that
+	// alias.
+	GetCellsAliases(context.Context, *vtctldata.GetCellsAliasesRequest) (*vtctldata.GetCellsAliasesResponse, error)
 	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
@@ -242,6 +290,15 @@ type UnimplementedVtctldServer struct {
 
 func (*UnimplementedVtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindAllShardsInKeyspace not implemented")
+}
+func (*UnimplementedVtctldServer) GetCellInfoNames(ctx context.Context, req *vtctldata.GetCellInfoNamesRequest) (*vtctldata.GetCellInfoNamesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCellInfoNames not implemented")
+}
+func (*UnimplementedVtctldServer) GetCellInfo(ctx context.Context, req *vtctldata.GetCellInfoRequest) (*vtctldata.GetCellInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCellInfo not implemented")
+}
+func (*UnimplementedVtctldServer) GetCellsAliases(ctx context.Context, req *vtctldata.GetCellsAliasesRequest) (*vtctldata.GetCellsAliasesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCellsAliases not implemented")
 }
 func (*UnimplementedVtctldServer) GetKeyspace(ctx context.Context, req *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspace not implemented")
@@ -271,6 +328,60 @@ func _Vtctld_FindAllShardsInKeyspace_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).FindAllShardsInKeyspace(ctx, req.(*vtctldata.FindAllShardsInKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetCellInfoNames_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetCellInfoNamesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetCellInfoNames(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetCellInfoNames",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetCellInfoNames(ctx, req.(*vtctldata.GetCellInfoNamesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetCellInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetCellInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetCellInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetCellInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetCellInfo(ctx, req.(*vtctldata.GetCellInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetCellsAliases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetCellsAliasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetCellsAliases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetCellsAliases",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetCellsAliases(ctx, req.(*vtctldata.GetCellsAliasesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -336,6 +447,18 @@ var _Vtctld_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FindAllShardsInKeyspace",
 			Handler:    _Vtctld_FindAllShardsInKeyspace_Handler,
+		},
+		{
+			MethodName: "GetCellInfoNames",
+			Handler:    _Vtctld_GetCellInfoNames_Handler,
+		},
+		{
+			MethodName: "GetCellInfo",
+			Handler:    _Vtctld_GetCellInfo_Handler,
+		},
+		{
+			MethodName: "GetCellsAliases",
+			Handler:    _Vtctld_GetCellsAliases_Handler,
 		},
 		{
 			MethodName: "GetKeyspace",
