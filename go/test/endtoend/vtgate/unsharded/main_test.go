@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/google/go-cmp/cmp"
@@ -95,11 +97,28 @@ CREATE TABLE allDefaults (
 }
 `
 
-	createProcSQL = `use vt_customer;CREATE PROCEDURE GetAllT1()
+	createProcSQL = `use vt_customer;
+CREATE PROCEDURE GetAllT1Twice()
 BEGIN
-	SELECT *  FROM t1;
-	SELECT *  FROM t1;
-END`
+	SELECT * FROM t1;
+	SELECT * FROM t1;
+END;
+CREATE PROCEDURE sp_insert()
+BEGIN
+	insert into allDefaults () values ();
+END;
+CREATE PROCEDURE sp_delete()
+BEGIN
+	delete from t1;
+END;
+CREATE PROCEDURE sp_random()
+BEGIN
+	insert into allDefaults () values ();
+    select * from allDefaults;
+	delete from allDefaults;
+    set autocommit = 0;
+END;
+`
 )
 
 func TestMain(m *testing.M) {
@@ -183,15 +202,19 @@ func TestCallProcedure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:  "localhost",
+		Port:  clusterInstance.VtgateMySQLPort,
+		Flags: mysql.CapabilityClientMultiResults,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	defer exec(t, conn, `delete from t1`)
 	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'foo'),(301,101,301,'bar')`)
-	assertMatches(t, conn, `CALL GetAllT1()`, `[[INT64(300) INT64(100) INT64(300) VARCHAR("foo")] [INT64(301) INT64(101) INT64(301) VARCHAR("bar")]]`)
+	results := execMulti(t, conn, `CALL GetAllT1Twice()`)
+	require.Equal(t, 2, len(results), "didn't get the two expected result sets")
+	utils.MustMatch(t, `[[INT64(300) INT64(100) INT64(300) VARCHAR("foo")] [INT64(301) INT64(101) INT64(301) VARCHAR("bar")]]`, fmt.Sprintf("%v", results[0].Rows))
+	utils.MustMatch(t, `[[INT64(300) INT64(100) INT64(300) VARCHAR("foo")] [INT64(301) INT64(101) INT64(301) VARCHAR("bar")]]`, fmt.Sprintf("%v", results[1].Rows))
 }
 
 func TestEmptyStatement(t *testing.T) {
