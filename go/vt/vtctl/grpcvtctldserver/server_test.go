@@ -19,6 +19,7 @@ package grpcvtctldserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,6 +91,88 @@ func TestGetKeyspace(t *testing.T) {
 	assert.Equal(t, expected, ks)
 
 	_, err = vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: "notfound"})
+	assert.Error(t, err)
+}
+
+func TestGetCellInfoNames(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2", "cell3")
+	vtctld := NewVtctldServer(ts)
+
+	resp, err := vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{"cell1", "cell2", "cell3"}, resp.Names)
+
+	vtctld.ts = memorytopo.NewServer()
+
+	resp, err = vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+	assert.NoError(t, err)
+	assert.Empty(t, resp.Names)
+
+	var topofactory *memorytopo.Factory
+	vtctld.ts, topofactory = memorytopo.NewServerAndFactory("cell1")
+
+	topofactory.SetError(assert.AnError)
+	_, err = vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
+	assert.Error(t, err)
+}
+
+func TestGetCellInfo(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer()
+	vtctld := NewVtctldServer(ts)
+
+	expected := &topodatapb.CellInfo{
+		ServerAddress: "example.com",
+		Root:          "vitess",
+	}
+	input := *expected // shallow copy
+	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", &input))
+
+	resp, err := vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "cell1"})
+	assert.NoError(t, err)
+	assert.Equal(t, expected, resp.CellInfo)
+
+	_, err = vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "does_not_exist"})
+	assert.Error(t, err)
+
+	_, err = vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{})
+	assert.Error(t, err)
+}
+
+func TestGetCellsAliases(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("c11", "c12", "c13", "c21", "c22")
+	vtctld := NewVtctldServer(ts)
+
+	alias1 := &topodatapb.CellsAlias{
+		Cells: []string{"c11", "c12", "c13"},
+	}
+	alias2 := &topodatapb.CellsAlias{
+		Cells: []string{"c21", "c22"},
+	}
+
+	for i, alias := range []*topodatapb.CellsAlias{alias1, alias2} {
+		input := *alias // shallow copy
+		name := fmt.Sprintf("a%d", i+1)
+
+		require.NoError(t, ts.CreateCellsAlias(ctx, name, &input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, &input)
+	}
+
+	expected := map[string]*topodatapb.CellsAlias{
+		"a1": alias1,
+		"a2": alias2,
+	}
+
+	resp, err := vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
+	assert.NoError(t, err)
+	assert.Equal(t, expected, resp.Aliases)
+
+	ts, topofactory := memorytopo.NewServerAndFactory()
+	vtctld.ts = ts
+
+	topofactory.SetError(assert.AnError)
+	_, err = vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
 	assert.Error(t, err)
 }
 
