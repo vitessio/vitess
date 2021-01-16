@@ -1012,6 +1012,42 @@
   }
 }
 {
+  "QueryType": "SELECT",
+  "Original": "select unsharded.id from user join unsharded where unsharded.id = user.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "TableName": "unsharded_user",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded.id, unsharded.id from unsharded where 1 != 1",
+        "Query": "select unsharded.id, unsharded.id from unsharded",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user where 1 != 1",
+        "Query": "select 1 from user where user.id = :unsharded_id",
+        "Table": "user",
+        "Values": [
+          ":unsharded_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
 }
 
 # routing rules: choose the redirected table

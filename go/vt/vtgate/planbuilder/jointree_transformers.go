@@ -84,7 +84,11 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	}
 	var values []sqltypes.PlanValue
 	if len(n.conditions) == 1 {
-		value, err := sqlparser.NewPlanValue(n.conditions[0].(*sqlparser.ComparisonExpr).Right)
+		expr, err := n.conditions[0].(*sqlparser.ComparisonExpr).OtherSideOfColumnExpression()
+		if err != nil {
+			return nil, err
+		}
+		value, err := sqlparser.NewPlanValue(expr)
 		if err != nil {
 			return nil, err
 		}

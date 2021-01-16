@@ -1610,3 +1610,21 @@ func (node *Default) Clone() Expr {
 	}
 	return &Default{ColName: node.ColName}
 }
+
+// OtherSideOfColumnExpression returns the side of the comparison that is not ColName expression
+func (node *ComparisonExpr) OtherSideOfColumnExpression() (Expr, error) {
+	_, lok := node.Left.(*ColName)
+	_, rok := node.Right.(*ColName)
+	if lok && rok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "both sides are columns")
+	}
+	if !lok && !rok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "neither side is a column")
+	}
+
+	if lok {
+		return node.Right, nil
+	}
+
+	return node.Left, nil
+}

@@ -1163,6 +1163,8 @@
     ]
   }
 }
+{
+}
 
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
@@ -1206,8 +1208,8 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
-    "TableName": "user_user_extra",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1216,20 +1218,24 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.id, user.col from user where 1 != 1",
-        "Query": "select user.id, user.col from user",
-        "Table": "user"
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where user_extra.col = :user_id",
-        "Table": "user_extra"
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user where user.id = :user_extra_col",
+        "Table": "user",
+        "Values": [
+          ":user_extra_col"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }
@@ -2409,8 +2415,8 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
-    "TableName": "user_user_extra",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2419,20 +2425,24 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.id, user.id from user where 1 != 1",
-        "Query": "select user.id, user.id from user",
-        "Table": "user"
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra",
+        "Table": "user_extra"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where user_extra.id = :user_id",
-        "Table": "user_extra"
+        "FieldQuery": "select user.id from user where 1 != 1",
+        "Query": "select user.id from user where user.id = :user_extra_id",
+        "Table": "user",
+        "Values": [
+          ":user_extra_id"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }
