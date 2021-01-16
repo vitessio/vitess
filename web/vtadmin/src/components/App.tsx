@@ -1,5 +1,5 @@
 /**
- * Copyright 2020 The Vitess Authors.
+ * Copyright 2021 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,33 @@
  * limitations under the License.
  */
 import * as React from 'react';
+import { BrowserRouter as Router, Link, Redirect, Route, Switch } from 'react-router-dom';
 
 import style from './App.module.scss';
 import logo from '../img/vitess-icon-color.svg';
-import { TabletList } from './TabletList';
-import { useTablets } from '../hooks/api';
+import { Tablets } from './routes/Tablets';
+import { Debug } from './routes/Debug';
 
 export const App = () => {
-    const { data, error, isError, isSuccess } = useTablets();
-
-    // Placeholder UI :D
-    let content = <div>Loading...</div>;
-    if (isError) {
-        content = (
-            <div>
-                {error?.name}: {error?.message}
-            </div>
-        );
-    } else if (isSuccess) {
-        content = <TabletList tablets={data || []} />;
-    }
-
     return (
-        <div className={style.container}>
-            <img src={logo} alt="logo" height={40} />
-            <h1>VTAdmin</h1>
+        <Router>
+            <div className={style.container}>
+                <Link to="/">
+                    <img className={style.logo} src={logo} alt="logo" height={40} />
+                </Link>
 
-            {content}
-        </div>
+                <Switch>
+                    <Route path="/tablets">
+                        <Tablets />
+                    </Route>
+
+                    <Route path="/debug">
+                        <Debug />
+                    </Route>
+
+                    <Redirect exact from="/" to="/tablets" />
+                </Switch>
+            </div>
+        </Router>
     );
 };
