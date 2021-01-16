@@ -16,18 +16,24 @@
 @import "./style/fonts.css";
 
 :root {
-  --primaryForegroundRGB: 29, 28, 29;
-  --primaryForeground: rgb(var(--primaryForegroundRGB));
-  --invertedForegroundRGB: 255, 255, 255;
-  --invertedForeground: rgb(var(--invertedForegroundRGB));
-  --primaryBackgroundRGB: 255, 255, 255;
-  --primaryBackground: rgb(var(--primaryBackgroundRGB));
+  /* Light theme colour palette */
+  --backgroundLight: #fff;
+  --textColorPrimaryLight: #17171b;
+  --textColorSecondaryLight: #718096;
+  --textColorDisabledLight: #cbd5e0;
 
-  /* Grayscale */
-  --maxContrastGray: rgba(var(--primaryForegroundRGB), 0.7);
-  --highContrastGray: rgba(var(--primaryForegroundRGB), 0.5);
-  --lowContrastGray: rgba(var(--primaryForegroundRGB), 0.13);
-  --minContrastGray: rgba(var(--primaryForegroundRGB), 0.04);
+  /* Dark theme colour palette */
+  --backgroundDark: #17171b;
+  --textColorPrimaryDark: #fff;
+  --textColorSecondaryDark: #cbd5e0;
+  --textColorDisabledDark: #2d3748;
+
+  /* Greyscale */
+  --grey75: #fafafa;
+  --grey200: #edf2f7;
+  --grey400: #cbd5e0;
+  --grey600: #718096;
+  --grey800: #2d3748;
 
   /* Fonts */
   --fontFamilyPrimary:
@@ -52,20 +58,37 @@
   --fontSizeHeading1: 3.6rem;
   --fontSizeHeading2: 2.8rem;
   --fontSizeHeading3: 2rem;
+
+  /* Set default theme variables */
+  --backgroundPrimary: var(--backgroundLight);
+  --tableBorderColor: var(--grey400);
+  --textColorPrimary: var(--textColorPrimaryLight);
+  --textColorSecondary: var(--textColorSecondaryLight);
+  --textColorDisabled: var(--textColorDisabledLight);
+}
+
+/* Dark theme */
+[data-vtadmin-theme="dark"] {
+  --backgroundPrimary: var(--backgroundDark);
+  --tableBorderColor: var(--grey800);
+  --textColorPrimary: var(--textColorPrimaryDark);
+  --textColorSecondary: var(--textColorSecondaryDark);
+  --textColorDisabled: var(--textColorDisabledDark);
 }
 
 html {
   /**
    * Set a base font size of 1rem == 10px, based on the common browser default of 16px.
    * This lets us use rem values everywhere for accessibility, while still
-   * "pinning" to reasonable defaults.
+   * "pinning" to reasonable defaults. For a really good article on this,
+   * see https://www.24a11y.com/2019/pixels-vs-relative-units-in-css-why-its-still-a-big-deal/
    */
   font-size: 62.5%;
 }
 
 body {
-  background: var(--primaryBackground);
-  color: var(--primaryForeground);
+  background: var(--backgroundPrimary);
+  color: var(--textColorPrimary);
   font-size: var(--fontSizeDefault);
   margin: 0;
   font-family: var(--fontFamilyPrimary);
@@ -75,16 +98,19 @@ body {
 
 /* Typography */
 h1 {
+  color: var(--textColorPrimary);
   font-size: var(--fontSizeHeading1);
   font-weight: 700;
 }
 
 h2 {
+  color: var(--textColorPrimary);
   font-size: var(--fontSizeHeading2);
   font-weight: 700;
 }
 
 h3 {
+  color: var(--textColorPrimary);
   font-size: var(--fontSizeHeading3);
   font-weight: 700;
 }
@@ -105,6 +131,6 @@ table th {
 }
 
 table tbody td {
-  border: solid 1px var(--lowContrastGray);
+  border: solid 1px var(--tableBorderColor);
   padding: 12px;
 }
