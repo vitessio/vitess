@@ -24,7 +24,7 @@
   --grey800: #2d3748;
   --grey900: #1e2531;
 
-  /* Common colours */
+  /* Invariant colours common across all themes */
   --colorSuccess: #00893e;
   --colorSuccess50: #4cba6a;
   --colorSuccess200: #005a13;
