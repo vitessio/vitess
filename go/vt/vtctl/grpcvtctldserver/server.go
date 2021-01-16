@@ -152,6 +152,16 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
 }
 
+// GetTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetTablet(ctx context.Context, req *vtctldatapb.GetTabletRequest) (*vtctldatapb.GetTabletResponse, error) {
+	panic("unimplemented!")
+}
+
+// GetTablets is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTabletsRequest) (*vtctldatapb.GetTabletsResponse, error) {
+	panic("unimplemented!")
+}
+
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.InitShardPrimaryRequest) (*vtctldatapb.InitShardPrimaryResponse, error) {
 	if req.Keyspace == "" {
