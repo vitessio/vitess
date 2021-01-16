@@ -218,6 +218,10 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid output format, got %s", getTabletsArgs.Format)
 	}
 
+	if getTabletsArgs.Keyspace == "" && getTabletsArgs.Shard != "" {
+		return fmt.Errorf("--shard (= %s) cannot be passed without also passing --keyspace", getTabletsArgs.Shard)
+	}
+
 	resp, err := client.GetTablets(commandCtx, &vtctldatapb.GetTabletsRequest{
 		Cells:    getTabletsArgs.Cells,
 		Keyspace: getTabletsArgs.Keyspace,
