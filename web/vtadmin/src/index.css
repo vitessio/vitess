@@ -36,23 +36,22 @@
   --colorError200: #9a0007;
 
   /* Light theme colour palette */
-  --backgroundLight: #fff;
-  --colorPrimaryLight: #3d5afe;
-  --colorPrimary50Light: #8187ff;
-  --colorPrimary200Light: #0031ca;
-  --textColorPrimaryLight: #17171b;
-  --textColorSecondaryLight: #718096;
-  --textColorDisabledLight: #cbd5e0;
-
+  --background_light: #fff;
+  --colorPrimary_light: #3d5afe;
+  --colorPrimary50_light: #8187ff;
+  --colorPrimary200_light: #0031ca;
+  --textColorPrimary_light: #17171b;
+  --textColorSecondary_light: #718096;
+  --textColorDisabled_light: #cbd5e0;
 
   /* Dark theme colour palette */
-  --backgroundDark: #17171b;
-  --colorPrimaryDark: #8187ff;
-  --colorPrimary50Dark: #b6b7ff;
-  --colorPrimary200Dark: #4a5acb;
-  --textColorPrimaryDark: #fff;
-  --textColorSecondaryDark: #cbd5e0;
-  --textColorDisabledDark: #2d3748;
+  --background_dark: #17171b;
+  --colorPrimary_dark: #8187ff;
+  --colorPrimary50_dark: #b6b7ff;
+  --colorPrimary200_dark: #4a5acb;
+  --textColorPrimary_dark: #fff;
+  --textColorSecondary_dark: #cbd5e0;
+  --textColorDisabled_dark: #2d3748;
 
   /* Fonts */
   --fontFamilyPrimary:
@@ -78,23 +77,21 @@
   --fontSizeHeading2: 2.8rem;
   --fontSizeHeading3: 2rem;
 
-
-
-  /* Set default theme variables */
-  --backgroundPrimary: var(--backgroundLight);
+  /* Layout variables, set to light theme by default */
+  --backgroundPrimary: var(--background_light);
   --tableBorderColor: var(--grey400);
-  --textColorPrimary: var(--textColorPrimaryLight);
-  --textColorSecondary: var(--textColorSecondaryLight);
-  --textColorDisabled: var(--textColorDisabledLight);
+  --textColorPrimary: var(--textColorPrimary_light);
+  --textColorSecondary: var(--textColorSecondary_light);
+  --textColorDisabled: var(--textColorDisabled_light);
 }
 
 /* Dark theme */
 [data-vtadmin-theme="dark"] {
-  --backgroundPrimary: var(--backgroundDark);
+  --backgroundPrimary: var(--background_dark);
   --tableBorderColor: var(--grey800);
-  --textColorPrimary: var(--textColorPrimaryDark);
-  --textColorSecondary: var(--textColorSecondaryDark);
-  --textColorDisabled: var(--textColorDisabledDark);
+  --textColorPrimary: var(--textColorPrimary_dark);
+  --textColorSecondary: var(--textColorSecondary_dark);
+  --textColorDisabled: var(--textColorDisabled_dark);
 }
 
 html {
