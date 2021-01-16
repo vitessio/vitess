@@ -109,6 +109,8 @@ type (
 
 		// creates a copy of the joinTree that can be updated without changing the original
 		clone() joinTree
+
+		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) int
 	}
 	routeTable struct {
 		qtable *queryTable
@@ -133,13 +135,24 @@ type (
 		// here we store the possible vindexes we can use so that when we add predicates to the plan,
 		// we can quickly check if the new predicates enables any new vindex options
 		vindexPreds []*vindexPlusPredicates
+
+		// columns needed to feed other plans
+		columns []*sqlparser.ColName
 	}
 	joinPlan struct {
-		predicates []sqlparser.Expr
-		lhs, rhs   joinTree
+		// columns needed to feed other plans
+		columns []int
+
+		// arguments that need to be copied from the LHS/RHS
+		vars map[string]int
+
+		lhs, rhs joinTree
 	}
 	routeTables []*routeTable
 )
+
+var _ joinTree = (*routePlan)(nil)
+var _ joinTree = (*joinPlan)(nil)
 
 // clone returns a copy of the struct with copies of slices,
 // so changing the the contents of them will not be reflected in the original
@@ -213,14 +226,19 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 						// already covered by an earlier predicate
 						continue
 					}
-					column := node.Left.(*sqlparser.ColName)
-					for _, col := range v.vindex.Columns {
-						// If the column for the predicate matches any column in the vindex add it to the list
-						if column.Name.Equal(col) {
-							v.predicates = append(v.predicates, node)
-							// Vindex is covered if all the columns in the vindex have a associated predicate
-							v.covered = len(v.predicates) == len(v.vindex.Columns)
-							newVindexFound = newVindexFound || v.covered
+					column, ok := node.Left.(*sqlparser.ColName)
+					if !ok {
+						column, ok = node.Right.(*sqlparser.ColName)
+					}
+					if ok {
+						for _, col := range v.vindex.Columns {
+							// If the column for the predicate matches any column in the vindex add it to the list
+							if column.Name.Equal(col) {
+								v.predicates = append(v.predicates, node)
+								// Vindex is covered if all the columns in the vindex have a associated predicate
+								v.covered = len(v.predicates) == len(v.vindex.Columns)
+								newVindexFound = newVindexFound || v.covered
+							}
 						}
 					}
 				}
@@ -280,20 +298,54 @@ func (rp *routePlan) Predicates() sqlparser.Expr {
 	return result
 }
 
+func (rp *routePlan) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) int {
+	newCol := len(rp.columns)
+	rp.columns = append(rp.columns, col...)
+	return newCol
+}
+
 func (jp *joinPlan) tables() semantics.TableSet {
 	return jp.lhs.tables() | jp.rhs.tables()
 }
+
 func (jp *joinPlan) cost() int {
 	return jp.lhs.cost() + jp.rhs.cost()
 }
+
 func (jp *joinPlan) clone() joinTree {
 	result := &joinPlan{
-		predicates: make([]sqlparser.Expr, len(jp.predicates)),
-		lhs:        jp.lhs.clone(),
-		rhs:        jp.rhs.clone(),
+		lhs: jp.lhs.clone(),
+		rhs: jp.rhs.clone(),
 	}
-	copy(result.predicates, jp.predicates)
 	return result
+}
+
+func (jp *joinPlan) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) int {
+	resultIdx := len(jp.columns)
+	var toTheLeft []bool
+	var lhs, rhs []*sqlparser.ColName
+	for _, col := range columns {
+		if semTable.Dependencies(col).IsSolvedBy(jp.lhs.tables()) {
+			lhs = append(lhs, col)
+			toTheLeft = append(toTheLeft, true)
+		} else {
+			rhs = append(rhs, col)
+			toTheLeft = append(toTheLeft, false)
+		}
+	}
+	lhsOffset := jp.lhs.pushOutputColumns(lhs, semTable)
+	rhsOffset := -jp.rhs.pushOutputColumns(rhs, semTable)
+
+	for _, left := range toTheLeft {
+		if left {
+			jp.columns = append(jp.columns, lhsOffset)
+			lhsOffset++
+		} else {
+			jp.columns = append(jp.columns, rhsOffset)
+			rhsOffset--
+		}
+	}
+	return resultIdx
 }
 
 func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.SemTable) (joinTree, error) {
@@ -307,39 +359,51 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 		return plan, nil
 
 	case *joinPlan:
-		// we need to figure out which predicates go where
-		var lhsPreds, rhsPreds []sqlparser.Expr
+		// we break up the predicates so that colnames from the LHS are replaced by arguments
+		var rhsPreds []sqlparser.Expr
+		var lhsColumns []*sqlparser.ColName
 		lhsSolves := node.lhs.tables()
-		rhsSolves := node.rhs.tables()
 		for _, expr := range exprs {
-			// TODO: we should not do this.
-			// we should instead do the same as go/vt/vtgate/planbuilder/jointree_transformers.go:46
-			deps := semTable.Dependencies(expr)
-			switch {
-			case deps.IsSolvedBy(lhsSolves):
-				lhsPreds = append(lhsPreds, expr)
-			case deps.IsSolvedBy(rhsSolves):
-				rhsPreds = append(rhsPreds, expr)
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
+			cols, predicate, err := breakPredicateInLHSandRHS(expr, semTable, lhsSolves)
+			if err != nil {
+				return nil, err
 			}
+			lhsColumns = append(lhsColumns, cols...)
+			rhsPreds = append(rhsPreds, predicate)
 		}
-		lhsPlan, err := pushPredicate2(lhsPreds, node.lhs, semTable)
-		if err != nil {
-			return nil, err
-		}
+		node.pushOutputColumns(lhsColumns, semTable)
 		rhsPlan, err := pushPredicate2(rhsPreds, node.rhs, semTable)
 		if err != nil {
 			return nil, err
 		}
 		return &joinPlan{
-			predicates: exprs,
-			lhs:        lhsPlan,
-			rhs:        rhsPlan,
+			lhs: node.lhs,
+			rhs: rhsPlan,
 		}, nil
 	default:
 		panic(fmt.Sprintf("BUG: unknown type %T", node))
 	}
+}
+
+func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
+	predicate = expr.Clone()
+	sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			deps := semTable.Dependencies(node)
+			if deps == 0 {
+				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
+				return false
+			}
+			if deps.IsSolvedBy(lhs) {
+				columns = append(columns, node)
+				arg := sqlparser.NewArgument([]byte(":" + node.CompliantName("")))
+				cursor.Replace(arg)
+			}
+		}
+		return true
+	})
+	return
 }
 
 func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) (joinTree, error) {
@@ -348,7 +412,8 @@ func mergeOrJoin(lhs, rhs joinTree, joinPredicates []sqlparser.Expr, semTable *s
 		return newPlan, nil
 	}
 
-	return pushPredicate2(joinPredicates, &joinPlan{lhs: lhs, rhs: rhs}, semTable)
+	tree := &joinPlan{lhs: lhs.clone(), rhs: rhs.clone()}
+	return pushPredicate2(joinPredicates, tree, semTable)
 }
 
 type (
@@ -377,10 +442,16 @@ func greedySolve(qg *queryGraph, semTable *semantics.SemTable, vschema ContextVS
 		if err != nil {
 			return nil, err
 		}
+		// if we found a best plan, we'll replace the two plans that were joined with the join plan created
 		if bestTree != nil {
-			// if we found a best plan, we'll replace the two joinTrees that were joined with the join plan created
-			joinTrees = removeAt(joinTrees, rIdx)
-			joinTrees = removeAt(joinTrees, lIdx)
+			// we need to remove the larger of the two plans first
+			if rIdx > lIdx {
+				joinTrees = removeAt(joinTrees, rIdx)
+				joinTrees = removeAt(joinTrees, lIdx)
+			} else {
+				joinTrees = removeAt(joinTrees, lIdx)
+				joinTrees = removeAt(joinTrees, rIdx)
+			}
 			joinTrees = append(joinTrees, bestTree)
 		} else {
 			// we will only fail to find a join plan when there are only cross joins left

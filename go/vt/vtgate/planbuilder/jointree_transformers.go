@@ -22,13 +22,12 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
@@ -43,46 +42,20 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logica
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type encountered: %T", tree)
 }
 
-func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (*joinV4, error) {
-	lhsColList := extractColumnsNeededFromLHS(n, semTable, n.lhs.tables())
-
-	var lhsColExpr []*sqlparser.AliasedExpr
-	for _, col := range lhsColList {
-		lhsColExpr = append(lhsColExpr, &sqlparser.AliasedExpr{
-			Expr: col,
-		})
-	}
-
+func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	lhs, err := transformToLogicalPlan(n.lhs, semTable)
 	if err != nil {
 		return nil, err
 	}
-	offset, err := pushProjection(lhsColExpr, lhs, semTable)
-	if err != nil {
-		return nil, err
-	}
-
-	vars := map[string]int{}
-
-	for _, col := range lhsColList {
-		vars[col.CompliantName("")] = offset
-		offset++
-	}
-
 	rhs, err := transformToLogicalPlan(n.rhs, semTable)
 	if err != nil {
 		return nil, err
 	}
-
-	err = pushPredicate(n.predicates, rhs, semTable)
-	if err != nil {
-		return nil, err
-	}
-
 	return &joinV4{
 		Left:  lhs,
 		Right: rhs,
-		Vars:  vars,
+		Cols:  n.columns,
+		Vars:  n.vars,
 	}, nil
 }
 
@@ -122,6 +95,11 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 		singleColumn = n.vindex.(vindexes.SingleColumn)
 	}
 
+	var expressions sqlparser.SelectExprs
+	for _, col := range n.columns {
+		expressions = append(expressions, &sqlparser.AliasedExpr{Expr: col})
+	}
+
 	var tableNames []string
 	for name := range tableNameMap {
 		tableNames = append(tableNames, name)
@@ -137,32 +115,10 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			Values:    values,
 		},
 		Select: &sqlparser.Select{
-			From:  tablesForSelect,
-			Where: where,
+			SelectExprs: expressions,
+			From:        tablesForSelect,
+			Where:       where,
 		},
 		tables: n.solved,
 	}, nil
-}
-
-func extractColumnsNeededFromLHS(n *joinPlan, semTable *semantics.SemTable, lhsSolves semantics.TableSet) []*sqlparser.ColName {
-	lhsColMap := map[*sqlparser.ColName]sqlparser.Argument{}
-	for _, predicate := range n.predicates {
-		sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
-			switch node := cursor.Node().(type) {
-			case *sqlparser.ColName:
-				if semTable.Dependencies(node).IsSolvedBy(lhsSolves) {
-					arg := sqlparser.NewArgument([]byte(":" + node.CompliantName("")))
-					lhsColMap[node] = arg
-					cursor.Replace(arg)
-				}
-			}
-			return true
-		}, nil)
-	}
-
-	var lhsColList []*sqlparser.ColName
-	for col := range lhsColMap {
-		lhsColList = append(lhsColList, col)
-	}
-	return lhsColList
 }
