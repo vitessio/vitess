@@ -44,22 +44,57 @@
     'Helvetica Neue',
     sans-serif;
   --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
+
+  /* Font sizing */
+  --fontSizeDefault: 1.5rem;
+  --fontSizeLarge: 1.7rem;
+  --fontSizeSmall: 1.3rem;
+  --fontSizeHeading1: 3.6rem;
+  --fontSizeHeading2: 2.8rem;
+  --fontSizeHeading3: 2rem;
+}
+
+html {
+  /**
+   * Set a base font size of 1rem == 10px, based on the common browser default of 16px.
+   * This lets us use rem values everywhere for accessibility, while still
+   * "pinning" to reasonable defaults.
+   */
+  font-size: 62.5%;
 }
 
 body {
   background: var(--primaryBackground);
   color: var(--primaryForeground);
+  font-size: var(--fontSizeDefault);
   margin: 0;
   font-family: var(--fontFamilyPrimary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-  font-family: var(--fontFamilyMonospace);
-  font-size: 0.9em;
+/* Typography */
+h1 {
+  font-size: var(--fontSizeHeading1);
+  font-weight: 700;
 }
 
+h2 {
+  font-size: var(--fontSizeHeading2);
+  font-weight: 700;
+}
+
+h3 {
+  font-size: var(--fontSizeHeading3);
+  font-weight: 700;
+}
+
+code {
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeDefault);
+}
+
+/* Tables */
 table {
   border-collapse: collapse;
   width: 100%;
