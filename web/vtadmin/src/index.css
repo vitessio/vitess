@@ -69,13 +69,17 @@
     sans-serif;
   --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
 
-  /* Font sizing */
+  /* Body text */
   --fontSizeDefault: 1.5rem;
   --fontSizeLarge: 1.7rem;
   --fontSizeSmall: 1.3rem;
+  --lineHeightBody: 1.36;
+
+  /* Headings */
   --fontSizeHeading1: 3.6rem;
   --fontSizeHeading2: 2.8rem;
   --fontSizeHeading3: 2rem;
+  --lineHeightHeading: 1.36;
 
   /* Layout variables, set to light theme by default */
   --backgroundPrimary: var(--background_light);
@@ -108,6 +112,7 @@ body {
   background: var(--backgroundPrimary);
   color: var(--textColorPrimary);
   font-size: var(--fontSizeDefault);
+  line-height: var(--lineHeightBody);
   margin: 0;
   font-family: var(--fontFamilyPrimary);
   -webkit-font-smoothing: antialiased;
@@ -119,18 +124,21 @@ h1 {
   color: var(--textColorPrimary);
   font-size: var(--fontSizeHeading1);
   font-weight: 700;
+  line-height: var(--lineHeightHeading);
 }
 
 h2 {
   color: var(--textColorPrimary);
   font-size: var(--fontSizeHeading2);
   font-weight: 700;
+  line-height: var(--lineHeightHeading);
 }
 
 h3 {
   color: var(--textColorPrimary);
   font-size: var(--fontSizeHeading3);
   font-weight: 700;
+  line-height: var(--lineHeightHeading);
 }
 
 code {
