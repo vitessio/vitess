@@ -1298,6 +1298,13 @@ const (
 	DoubleAt
 )
 
+func nilOrClone(in Expr) Expr {
+	if in == nil {
+		return nil
+	}
+	return in.Clone()
+}
+
 // Clone implements the Expr interface
 func (node *Subquery) Clone() Expr {
 	if node == nil {
@@ -1312,8 +1319,8 @@ func (node *AndExpr) Clone() Expr {
 		return nil
 	}
 	return &AndExpr{
-		Left:  node.Left.Clone(),
-		Right: node.Right.Clone(),
+		Left:  nilOrClone(node.Left),
+		Right: nilOrClone(node.Right),
 	}
 }
 
@@ -1323,8 +1330,8 @@ func (node *OrExpr) Clone() Expr {
 		return nil
 	}
 	return &OrExpr{
-		Left:  node.Left.Clone(),
-		Right: node.Right.Clone(),
+		Left:  nilOrClone(node.Left),
+		Right: nilOrClone(node.Right),
 	}
 }
 
@@ -1334,8 +1341,8 @@ func (node *XorExpr) Clone() Expr {
 		return nil
 	}
 	return &XorExpr{
-		Left:  node.Left.Clone(),
-		Right: node.Right.Clone(),
+		Left:  nilOrClone(node.Left),
+		Right: nilOrClone(node.Right),
 	}
 }
 
@@ -1345,7 +1352,7 @@ func (node *NotExpr) Clone() Expr {
 		return nil
 	}
 	return &NotExpr{
-		Expr: node.Clone(),
+		Expr: nilOrClone(node),
 	}
 }
 
@@ -1356,9 +1363,9 @@ func (node *ComparisonExpr) Clone() Expr {
 	}
 	return &ComparisonExpr{
 		Operator: node.Operator,
-		Left:     node.Left.Clone(),
-		Right:    node.Right.Clone(),
-		Escape:   node.Escape.Clone(),
+		Left:     nilOrClone(node.Left),
+		Right:    nilOrClone(node.Right),
+		Escape:   nilOrClone(node.Escape),
 	}
 }
 
@@ -1369,9 +1376,9 @@ func (node *RangeCond) Clone() Expr {
 	}
 	return &RangeCond{
 		Operator: node.Operator,
-		Left:     node.Left.Clone(),
-		From:     node.From.Clone(),
-		To:       node.To.Clone(),
+		Left:     nilOrClone(node.Left),
+		From:     nilOrClone(node.From),
+		To:       nilOrClone(node.To),
 	}
 }
 
@@ -1382,7 +1389,7 @@ func (node *IsExpr) Clone() Expr {
 	}
 	return &IsExpr{
 		Operator: node.Operator,
-		Expr:     node.Expr.Clone(),
+		Expr:     nilOrClone(node.Expr),
 	}
 }
 
@@ -1392,7 +1399,7 @@ func (node *ExistsExpr) Clone() Expr {
 		return nil
 	}
 	return &ExistsExpr{
-		Subquery: node.Subquery.Clone().(*Subquery),
+		Subquery: nilOrClone(node.Subquery).(*Subquery),
 	}
 }
 
@@ -1429,14 +1436,7 @@ func (node BoolVal) Clone() Expr {
 
 // Clone implements the Expr interface
 func (node *ColName) Clone() Expr {
-	if node == nil {
-		return nil
-	}
-	return &ColName{
-		Metadata:  node.Metadata,
-		Name:      node.Name,
-		Qualifier: node.Qualifier,
-	}
+	return node
 }
 
 // Clone implements the Expr interface
@@ -1466,8 +1466,8 @@ func (node *BinaryExpr) Clone() Expr {
 	}
 	return &BinaryExpr{
 		Operator: node.Operator,
-		Left:     node.Left.Clone(),
-		Right:    node.Right.Clone(),
+		Left:     nilOrClone(node.Left),
+		Right:    nilOrClone(node.Right),
 	}
 }
 
@@ -1478,7 +1478,7 @@ func (node *UnaryExpr) Clone() Expr {
 	}
 	return &UnaryExpr{
 		Operator: node.Operator,
-		Expr:     node.Expr.Clone(),
+		Expr:     nilOrClone(node.Expr),
 	}
 }
 
@@ -1488,7 +1488,7 @@ func (node *IntervalExpr) Clone() Expr {
 		return nil
 	}
 	return &IntervalExpr{
-		Expr: node.Expr.Clone(),
+		Expr: nilOrClone(node.Expr),
 		Unit: node.Unit,
 	}
 }
@@ -1499,7 +1499,7 @@ func (node *CollateExpr) Clone() Expr {
 		return nil
 	}
 	return &CollateExpr{
-		Expr:    node.Expr.Clone(),
+		Expr:    nilOrClone(node.Expr),
 		Charset: node.Charset,
 	}
 }
@@ -1519,8 +1519,8 @@ func (node *TimestampFuncExpr) Clone() Expr {
 	}
 	return &TimestampFuncExpr{
 		Name:  node.Name,
-		Expr1: node.Expr1.Clone(),
-		Expr2: node.Expr2.Clone(),
+		Expr1: nilOrClone(node.Expr1),
+		Expr2: nilOrClone(node.Expr2),
 		Unit:  node.Unit,
 	}
 }
@@ -1532,7 +1532,7 @@ func (node *CurTimeFuncExpr) Clone() Expr {
 	}
 	return &CurTimeFuncExpr{
 		Name: node.Name,
-		Fsp:  node.Fsp.Clone(),
+		Fsp:  nilOrClone(node.Fsp),
 	}
 }
 
@@ -1550,7 +1550,7 @@ func (node *ValuesFuncExpr) Clone() Expr {
 		return nil
 	}
 	return &ValuesFuncExpr{
-		Name: node.Name.Clone().(*ColName),
+		Name: nilOrClone(node.Name).(*ColName),
 	}
 }
 
@@ -1569,9 +1569,9 @@ func (node *SubstrExpr) Clone() Expr {
 	}
 	return &SubstrExpr{
 		Name:   node.Name,
-		StrVal: node.StrVal.Clone().(*Literal),
-		From:   node.From.Clone(),
-		To:     node.To.Clone(),
+		StrVal: nilOrClone(node.StrVal).(*Literal),
+		From:   nilOrClone(node.From),
+		To:     nilOrClone(node.To),
 	}
 }
 
@@ -1581,7 +1581,7 @@ func (node *ConvertUsingExpr) Clone() Expr {
 		return nil
 	}
 	return &ConvertUsingExpr{
-		Expr: node.Expr.Clone(),
+		Expr: nilOrClone(node.Expr),
 		Type: node.Type,
 	}
 }
