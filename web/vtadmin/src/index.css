@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@import "./style/fonts.css";
+
 :root {
   --primaryForegroundRGB: 29, 28, 29;
   --primaryForeground: rgb(var(--primaryForegroundRGB));
@@ -26,15 +28,12 @@
   --highContrastGray: rgba(var(--primaryForegroundRGB), 0.5);
   --lowContrastGray: rgba(var(--primaryForegroundRGB), 0.13);
   --minContrastGray: rgba(var(--primaryForegroundRGB), 0.04);
-}
 
-body {
-  background: var(--primaryBackground);
-  color: var(--primaryForeground);
-  margin: 0;
-  font-family:
+  /* Fonts */
+  --fontFamilyPrimary:
+    'NotoSans',
     -apple-system,
-    BlinkMacSystemFont,
+    blinkmacsystemfont,
     'Segoe UI',
     'Roboto',
     'Oxygen',
@@ -44,12 +43,20 @@ body {
     'Droid Sans',
     'Helvetica Neue',
     sans-serif;
+  --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
+}
+
+body {
+  background: var(--primaryBackground);
+  color: var(--primaryForeground);
+  margin: 0;
+  font-family: var(--fontFamilyPrimary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-family: var(--fontFamilyMonospace);
   font-size: 0.9em;
 }
 
