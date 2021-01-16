@@ -16,24 +16,43 @@
 @import "./style/fonts.css";
 
 :root {
-  /* Light theme colour palette */
-  --backgroundLight: #fff;
-  --textColorPrimaryLight: #17171b;
-  --textColorSecondaryLight: #718096;
-  --textColorDisabledLight: #cbd5e0;
-
-  /* Dark theme colour palette */
-  --backgroundDark: #17171b;
-  --textColorPrimaryDark: #fff;
-  --textColorSecondaryDark: #cbd5e0;
-  --textColorDisabledDark: #2d3748;
-
   /* Greyscale */
   --grey75: #fafafa;
   --grey200: #edf2f7;
   --grey400: #cbd5e0;
   --grey600: #718096;
   --grey800: #2d3748;
+  --grey900: #1e2531;
+
+  /* Common colours */
+  --colorSuccess: #00893e;
+  --colorSuccess50: #4cba6a;
+  --colorSuccess200: #005a13;
+  --colorInfo: #ffab40;
+  --colorInfo50: #ffdd71;
+  --colorInfo200: #c77c02;
+  --colorError: #d32f2f;
+  --colorError50: #ff6659;
+  --colorError200: #9a0007;
+
+  /* Light theme colour palette */
+  --backgroundLight: #fff;
+  --colorPrimaryLight: #3d5afe;
+  --colorPrimary50Light: #8187ff;
+  --colorPrimary200Light: #0031ca;
+  --textColorPrimaryLight: #17171b;
+  --textColorSecondaryLight: #718096;
+  --textColorDisabledLight: #cbd5e0;
+
+
+  /* Dark theme colour palette */
+  --backgroundDark: #17171b;
+  --colorPrimaryDark: #8187ff;
+  --colorPrimary50Dark: #b6b7ff;
+  --colorPrimary200Dark: #4a5acb;
+  --textColorPrimaryDark: #fff;
+  --textColorSecondaryDark: #cbd5e0;
+  --textColorDisabledDark: #2d3748;
 
   /* Fonts */
   --fontFamilyPrimary:
@@ -58,6 +77,8 @@
   --fontSizeHeading1: 3.6rem;
   --fontSizeHeading2: 2.8rem;
   --fontSizeHeading3: 2rem;
+
+
 
   /* Set default theme variables */
   --backgroundPrimary: var(--backgroundLight);
