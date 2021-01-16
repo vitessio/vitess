@@ -25,8 +25,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -63,6 +66,16 @@ var (
 		Aliases: []string{"getkeyspaces"},
 		Args:    cobra.NoArgs,
 		RunE:    commandGetKeyspaces,
+	}
+	getTabletCmd = &cobra.Command{
+		Use:  "GetTablet alias",
+		Args: cobra.ExactArgs(1),
+		RunE: commandGetTablet,
+	}
+	getTabletsCmd = &cobra.Command{
+		Use:  "GetTablets [--cell $c1, ...] [--keyspace $ks [--shard $shard]]",
+		Args: cobra.NoArgs,
+		RunE: commandGetTablets,
 	}
 	initShardPrimaryCmd = &cobra.Command{
 		Use:  "InitShardPrimary",
@@ -166,6 +179,96 @@ func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandGetTablet(cmd *cobra.Command, args []string) error {
+	aliasStr := cmd.Flags().Arg(0)
+	alias, err := topoproto.ParseTabletAlias(aliasStr)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.GetTablet(commandCtx, &vtctldatapb.GetTabletRequest{TabletAlias: alias})
+	if err != nil {
+		return err
+	}
+
+	data, err := MarshalJSON(resp.Tablet)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+var getTabletsArgs = struct {
+	Cells    []string
+	Keyspace string
+	Shard    string
+
+	Format string
+}{}
+
+func commandGetTablets(cmd *cobra.Command, args []string) error {
+	format := strings.ToLower(getTabletsArgs.Format)
+
+	switch format {
+	case "awk", "json":
+	default:
+		return fmt.Errorf("invalid output format, got %s", getTabletsArgs.Format)
+	}
+
+	resp, err := client.GetTablets(commandCtx, &vtctldatapb.GetTabletsRequest{
+		Cells:    getTabletsArgs.Cells,
+		Keyspace: getTabletsArgs.Keyspace,
+		Shard:    getTabletsArgs.Shard,
+	})
+	if err != nil {
+		return err
+	}
+
+	switch format {
+	case "awk":
+		lineFn := func(t *topodatapb.Tablet) string {
+			ti := topo.TabletInfo{
+				Tablet: t,
+			}
+
+			keyspace := t.Keyspace
+			if keyspace == "" {
+				keyspace = "<null>"
+			}
+
+			shard := t.Shard
+			if shard == "" {
+				shard = "<null>"
+			}
+
+			mtst := "<null>"
+			// special case for old primary that hasn't been updated in the topo
+			// yet.
+			if t.MasterTermStartTime != nil && t.MasterTermStartTime.Seconds > 0 {
+				mtst = logutil.ProtoToTime(t.MasterTermStartTime).Format(time.RFC3339)
+			}
+
+			return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(t.Alias), keyspace, shard, topoproto.TabletTypeLString(t.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(t.Tags), mtst)
+		}
+
+		for _, t := range resp.Tablets {
+			fmt.Println(lineFn(t))
+		}
+	case "json":
+		data, err := MarshalJSON(resp.Tablets)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%s\n", data)
+	}
+
+	return nil
+}
+
 var initShardPrimaryArgs = struct {
 	WaitReplicasTimeout time.Duration
 	Force               bool
@@ -199,11 +302,20 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 
 func init() {
 	rootCmd.AddCommand(findAllShardsInKeyspaceCmd)
+
 	rootCmd.AddCommand(getCellInfoNamesCmd)
 	rootCmd.AddCommand(getCellInfoCmd)
 	rootCmd.AddCommand(getCellsAliasesCmd)
+
 	rootCmd.AddCommand(getKeyspaceCmd)
 	rootCmd.AddCommand(getKeyspacesCmd)
+
+	rootCmd.AddCommand(getTabletCmd)
+	getTabletsCmd.Flags().StringSliceVarP(&getTabletsArgs.Cells, "cell", "c", nil, "TODO")
+	getTabletsCmd.Flags().StringVarP(&getTabletsArgs.Keyspace, "keyspace", "k", "", "TODO")
+	getTabletsCmd.Flags().StringVarP(&getTabletsArgs.Shard, "shard", "s", "", "TODO")
+	getTabletsCmd.Flags().StringVar(&getTabletsArgs.Format, "format", "awk", "Output format to use; valid choices are (json, awk)")
+	rootCmd.AddCommand(getTabletsCmd)
 
 	initShardPrimaryCmd.Flags().DurationVar(&initShardPrimaryArgs.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
 	initShardPrimaryCmd.Flags().BoolVar(&initShardPrimaryArgs.Force, "force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
