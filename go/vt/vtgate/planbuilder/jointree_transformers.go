@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -82,18 +81,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	if predicates != nil {
 		where = &sqlparser.Where{Expr: predicates, Type: sqlparser.WhereClause}
 	}
-	var values []sqltypes.PlanValue
-	if len(n.conditions) == 1 {
-		expr, err := n.conditions[0].(*sqlparser.ComparisonExpr).OtherSideOfColumnExpression()
-		if err != nil {
-			return nil, err
-		}
-		value, err := sqlparser.NewPlanValue(expr)
-		if err != nil {
-			return nil, err
-		}
-		values = []sqltypes.PlanValue{value}
-	}
+
 	var singleColumn vindexes.SingleColumn
 	if n.vindex != nil {
 		singleColumn = n.vindex.(vindexes.SingleColumn)
@@ -116,7 +104,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			TableName: strings.Join(tableNames, ", "),
 			Keyspace:  n.keyspace,
 			Vindex:    singleColumn,
-			Values:    values,
+			Values:    n.vindexValues,
 		},
 		Select: &sqlparser.Select{
 			SelectExprs: expressions,

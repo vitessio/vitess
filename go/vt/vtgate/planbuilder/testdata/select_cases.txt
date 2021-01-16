@@ -851,6 +851,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # sharded limit offset
 "select user_id from music order by user_id limit 10, 20"

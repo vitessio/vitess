@@ -92,6 +92,8 @@
     "Table": "user"
   }
 }
+{
+}
 
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
@@ -1601,6 +1603,25 @@
     "FieldQuery": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where 1 != 1",
     "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
     "Table": "user",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select user_extra.Id from user, user_extra where 1 != 1",
+    "Query": "select user_extra.Id from user, user_extra where user.Id = 5 and user.iD = user_extra.User_Id",
+    "Table": "user, user_extra",
     "Values": [
       5
     ],

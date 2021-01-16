@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"fmt"
 	"sort"
+	"strings"
+
+	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -128,9 +131,9 @@ type (
 		// predicates are the predicates evaluated by this plan
 		predicates []sqlparser.Expr
 
-		// vindex and conditions is set if a vindex will be used for this route.
-		vindex     vindexes.Vindex
-		conditions []sqlparser.Expr
+		// vindex and vindexValues is set if a vindex will be used for this route.
+		vindex       vindexes.Vindex
+		vindexValues []sqltypes.PlanValue
 
 		// here we store the possible vindexes we can use so that when we add predicates to the plan,
 		// we can quickly check if the new predicates enables any new vindex options
@@ -197,8 +200,8 @@ func (rp *routePlan) cost() int {
 
 // vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
 type vindexPlusPredicates struct {
-	vindex     *vindexes.ColumnVindex
-	predicates []sqlparser.Expr
+	vindex *vindexes.ColumnVindex
+	values []sqltypes.PlanValue
 	// Vindex is covered if all the columns in the vindex have an associated predicate
 	covered bool
 }
@@ -227,16 +230,27 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 						continue
 					}
 					column, ok := node.Left.(*sqlparser.ColName)
+					other := node.Right
 					if !ok {
 						column, ok = node.Right.(*sqlparser.ColName)
+						other = node.Left
+					}
+					value, err := sqlparser.NewPlanValue(other)
+					if err != nil {
+						// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail
+						if strings.Contains(err.Error(), "expression is too complex") {
+							continue
+						}
+						// something else went wrong, return the error
+						return err
 					}
 					if ok {
 						for _, col := range v.vindex.Columns {
 							// If the column for the predicate matches any column in the vindex add it to the list
 							if column.Name.Equal(col) {
-								v.predicates = append(v.predicates, node)
+								v.values = append(v.values, value)
 								// Vindex is covered if all the columns in the vindex have a associated predicate
-								v.covered = len(v.predicates) == len(v.vindex.Columns)
+								v.covered = len(v.values) == len(v.vindex.Columns)
 								newVindexFound = newVindexFound || v.covered
 							}
 						}
@@ -267,7 +281,7 @@ func (rp *routePlan) pickBestAvailableVindex() {
 		// Choose the minimum cost vindex from the ones which are covered
 		if rp.vindex == nil || v.vindex.Vindex.Cost() < rp.vindex.Cost() {
 			rp.vindex = v.vindex.Vindex
-			rp.conditions = v.predicates
+			rp.vindexValues = v.values
 		}
 	}
 
