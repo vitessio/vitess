@@ -101,6 +101,7 @@ func createQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *se
 			}
 			qg = append(qg, qgr...)
 		}
+		return qg, nil
 	case *sqlparser.ParenSelect:
 		return createQGFromSelectStatement(stmt.Select, semTable)
 	}
