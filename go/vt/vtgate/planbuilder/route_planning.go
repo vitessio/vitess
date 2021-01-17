@@ -65,10 +65,38 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
+	plan, err = planLimit(sel.Limit, plan)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := plan.WireupV4(semTable); err != nil {
 		return nil, err
 	}
 	return plan.Primitive(), nil
+}
+
+func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
+	if limit == nil {
+		return plan, nil
+	}
+	rb, ok := plan.(*route)
+	if ok && rb.isSingleShard() {
+		rb.SetLimit(limit)
+		return plan, nil
+	}
+
+	lPlan, err := createLimit(plan, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// visit does not modify the plan.
+	_, err = visit(lPlan, setUpperLimit)
+	if err != nil {
+		return nil, err
+	}
+	return lPlan, nil
 }
 
 func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) error {
@@ -78,7 +106,6 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 		ast.Distinct = sel.Distinct
 		ast.GroupBy = sel.GroupBy
 		ast.OrderBy = sel.OrderBy
-		ast.Limit = sel.Limit
 		ast.SelectExprs = sel.SelectExprs
 		ast.Comments = sel.Comments
 	} else {

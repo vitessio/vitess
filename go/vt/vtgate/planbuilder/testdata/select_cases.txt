@@ -127,6 +127,8 @@
     ]
   }
 }
+{
+}
 
 # select with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
@@ -222,6 +224,8 @@
       }
     ]
   }
+}
+{
 }
 
 # qualified '*' expression for simple route
