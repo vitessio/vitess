@@ -236,7 +236,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
-	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	if !cluster.reusingVTDATAROOT {
+		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	}
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -364,11 +366,13 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
-	// Create Keyspace
-	err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
-	if err != nil {
-		log.Error(err)
-		return
+	if !cluster.reusingVTDATAROOT {
+		// Create Keyspace
+		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 	}
 
 	// Create shard
