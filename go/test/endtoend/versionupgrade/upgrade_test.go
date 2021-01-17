@@ -150,7 +150,7 @@ func TestDeploySchema(t *testing.T) {
 
 		{
 			sqlQuery := fmt.Sprintf(createTable, tableName)
-			err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
+			_, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, "")
 			require.Nil(t, err)
 		}
 		for i := range clusterInstance.Keyspaces[0].Shards {
