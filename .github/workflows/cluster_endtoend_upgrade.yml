@@ -41,17 +41,17 @@ jobs:
         # We build v8.0.0 binaries and save them in a temporary location
         source build.env
         make build
-        mkdir -p /tmp/vitess-build-v800/
-        cp -R bin /tmp/vitess-build-v800/
+        mkdir -p /tmp/vitess-build-v8.0.0/
+        cp -R bin /tmp/vitess-build-v8.0.0/
 
-    - name: Check out PR
+    - name: Check out HEAD
       uses: actions/checkout@v2
 
     - name: Run cluster endtoend test v8.0.0 (create cluster)
       timeout-minutes: 5
       run: |
         # By checking out we deleted bin/ directory. We now restore our pre-built v8.0.0 binaries
-        cp -R /tmp/vitess-build-v800/bin .
+        cp -R /tmp/vitess-build-v8.0.0/bin .
         # create the directory where we store test data; ensure it is empty:
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
@@ -59,23 +59,27 @@ jobs:
         # We pass -skip-build so that we use he v8.0.0 binaries, not HEAD binaries
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
-    - name: Check out PR
+    - name: Check out HEAD
       uses: actions/checkout@v2
 
-    - name: Get dependencies
+
+    - name: Building HEAD binaries
+      timeout-minutes: 10
       run: |
         go mod download
 
-    - name: Run cluster endtoend test HEAD based on v8.0.0 data (upgrade path)
-      timeout-minutes: 10
-      run: |
-        # /tmp/vtdataroot exists from previous test
         source build.env
         make build
         mkdir -p /tmp/vitess-build-head/
         cp -R bin /tmp/vitess-build-head/
 
-        # We again built manually and there's no need for the test to build.
+    - name: Run cluster endtoend test HEAD based on v8.0.0 data (upgrade path)
+      timeout-minutes: 5
+      run: |
+        # /tmp/vtdataroot exists from previous test
+
+        source build.env
+        # We built HEAD binaries manually in previous step and there's no need for the test to build.
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
     - name: Run cluster endtoend test HEAD (create cluster)
@@ -94,7 +98,7 @@ jobs:
       timeout-minutes: 5
       run: |
         # /tmp/vtdataroot exists from previous test
-        cp -R /tmp/vitess-build-v800/bin .
+        cp -R /tmp/vitess-build-v8.0.0/bin .
 
         source build.env
         # We again built manually and there's no need for the test to build.
