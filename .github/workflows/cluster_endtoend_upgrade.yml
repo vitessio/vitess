@@ -19,6 +19,8 @@ jobs:
 
     - name: Get dependencies
       run: |
+        # This prepares general purpose binary dependencies
+        # as well as v8.0.0 specific go modules
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
@@ -36,9 +38,9 @@ jobs:
     - name: Building v8.0.0 binaries
       timeout-minutes: 30
       run: |
+        # We build v8.0.0 binaries and save them in a temporary location
         source build.env
         make build
-        echo "check binaries after build:"
         mkdir -p /tmp/vitess-build/
         cp -R bin /tmp/vitess-build/
 
@@ -48,10 +50,12 @@ jobs:
     - name: Run cluster endtoend test v8.0.0
       timeout-minutes: 30
       run: |
+        # By checking out we deleted bin/ directory. We now restore our pre-built v8.0.0 binaries
         cp -R /tmp/vitess-build/bin .
         # create the directory where we store test data:
         mkdir -p /tmp/vtdataroot
         source build.env
+        # We pass -skip-build so that we use he v8.0.0 binaries, not HEAD binaries
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
     - name: Check out PR
@@ -67,4 +71,5 @@ jobs:
         # /tmp/vtdataroot exists from previous test
         ls -l /tmp/vtdataroot
         source build.env
+        # This time we let the test build HEAD
         eatmydata -- go run test.go -keep-data -docker=false -print-log -follow -shard 28
