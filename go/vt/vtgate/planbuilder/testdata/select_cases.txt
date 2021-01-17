@@ -15,8 +15,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # '*' expression for simple route
 "select user.* from user"
@@ -35,8 +34,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unqualified '*' expression for simple route
 "select * from user"
@@ -55,8 +53,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # select with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user"
@@ -75,8 +72,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # select aggregation with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user"
@@ -127,8 +123,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # select with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
@@ -147,8 +142,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # select aggregation with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -225,8 +219,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # qualified '*' expression for simple route
 "select user.* from user"
@@ -245,8 +238,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # fully qualified '*' expression for simple route
 "select user.user.* from user.user"
@@ -461,8 +453,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # select from dual on unqualified keyspace
 "select @@session.auto_increment_increment from dual"
@@ -481,8 +472,7 @@
     "Table": "dual"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # select from pinned table
 "select * from pin_test"
@@ -523,8 +513,7 @@
     "Table": "dual"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # RHS route referenced
 "select user_extra.id from user join user_extra"
@@ -562,8 +551,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Both routes referenced
 "select user.col, user_extra.id from user join user_extra"
@@ -601,8 +589,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Expression with single-route reference
 "select user.col, user_extra.id + user_extra.col from user join user_extra"
@@ -640,8 +627,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Jumbled references
 "select user.col, user_extra.id, user.col2 from user join user_extra"
@@ -679,8 +665,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Comments
 "select /* comment */ user.col from user join user_extra"
@@ -829,14 +814,12 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # syntax error
 "the quick brown fox"
 "syntax error at position 4 near 'the'"
-{
-}
+Gen4 plan same as above
 
 # Hex number is not treated as a simple value
 "select * from user where id = 0x04"
@@ -903,8 +886,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Multiple parenthesized expressions
 "select * from user where (id = 4) AND (name ='abc') limit 5"
@@ -927,8 +909,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Multiple parenthesized expressions
 "select * from user where (id = 4 and name ='abc') limit 5"
@@ -951,8 +932,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Column Aliasing with Table.Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2"
@@ -975,8 +955,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
@@ -999,8 +978,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Booleans and parenthesis
 "select * from user where (id = 1) AND name = true limit 5"
@@ -1023,8 +1001,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Column as boolean-ish
 "select * from user where (id = 1) AND name limit 5"
@@ -1047,8 +1024,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # PK as fake boolean, and column as boolean-ish
 "select * from user where (id = 5) AND name = true limit 5"
@@ -1071,8 +1047,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # top level subquery in select
 "select a, (select col from user) from unsharded"
@@ -1214,8 +1189,7 @@
     "Query": "select * from information_schema.a union select * from information_schema.b"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # union with the same target shard
 "select * from music where user_id = 1 union select * from user where id = 1"
@@ -1238,8 +1212,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # union with the same target shard last_insert_id
 "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1"
@@ -1262,8 +1235,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
@@ -1315,8 +1287,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
 {
@@ -1334,8 +1305,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
 {
@@ -1353,8 +1323,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
 {
@@ -1372,8 +1341,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # routing rules: ensure directives are not lost
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
@@ -1474,8 +1442,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # sql_calc_found_rows with limit
 "select sql_calc_found_rows * from music limit 100"
@@ -1681,8 +1648,7 @@
 # Union after into outfile is incorrect
 "select id from user into outfile 'out_file_name' union all select id from music"
 "Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
-{
-}
+Gen4 plan same as above
 
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"

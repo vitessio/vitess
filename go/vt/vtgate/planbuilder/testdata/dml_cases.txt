@@ -1,14 +1,12 @@
 # update table not found
 "update nouser set val = 1"
 "table nouser not found"
-{
-}
+Gen4 plan same as above
 
 # delete table not found
 "delete from nouser"
 "table nouser not found"
-{
-}
+Gen4 plan same as above
 
 # explicit keyspace reference
 "update main.m1 set val = 1"
@@ -27,8 +25,7 @@
     "Query": "update m1 set val = 1"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update unsharded
 "update unsharded set val = 1"
@@ -47,8 +44,7 @@
     "Query": "update unsharded set val = 1"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # subqueries in unsharded update
 "update unsharded set col = (select col from unsharded limit 1)"
@@ -67,8 +63,7 @@
     "Query": "update unsharded set col = (select col from unsharded limit 1)"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unsharded union in subquery of unsharded update
 "update unsharded set col = (select id from unsharded union select id from unsharded)"
@@ -87,8 +82,7 @@
     "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unsharded join in subquery of unsharded update
 "update unsharded set col = (select id from unsharded a join unsharded b on a.id = b.id)"
@@ -107,8 +101,7 @@
     "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with join subquery
 "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000"
@@ -127,8 +120,7 @@
     "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # routing rules: updated of a routed table
 "update route1 set a=1 where id=1"
@@ -152,8 +144,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update: routing rules for subquery.
 "update unsharded_a set a=(select a from route2)"
@@ -172,8 +163,7 @@
     "Query": "update unsharded_a set a = (select a from unsharded as route2)"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete unsharded
 "delete from unsharded"
@@ -192,8 +182,7 @@
     "Query": "delete from unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id
 "update user set val = 1 where id = 1"
@@ -217,8 +206,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id with alias
 "update user as user_alias set val = 1 where user_alias.id = 1"
@@ -242,8 +230,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id with parenthesized expression
 "update user set val = 1 where (id = 1)"
@@ -267,8 +254,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id with multi-part where clause with parens
 "update user set val = 1 where (name = 'foo' and id = 1)"
@@ -292,8 +278,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id, changing one vindex column
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1"
@@ -322,14 +307,12 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id, changing same vindex twice
 "update user_metadata set email = 'a', email = 'b' where user_id = 1"
 "column has duplicate set values: 'email'"
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id, changing multiple vindex columns
 "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1"
@@ -359,8 +342,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id, changing one vindex column, using order by and limit
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10"
@@ -389,8 +371,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id, stray where clause
 "update user set val = 1 where id = id2 and id = 1"
@@ -414,8 +395,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by primary keyspace id, stray where clause with conversion error
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
@@ -439,8 +419,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from by primary keyspace id
 "delete from user where id = 1"
@@ -466,8 +445,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # multi-table delete with comma join
 "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1"
@@ -486,8 +464,7 @@
     "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # multi-table delete with ansi join
 "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1"
@@ -506,8 +483,7 @@
     "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
   }
 }
-{
-}
+Gen4 plan same as above
 
 #delete with join from subquery
 "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
@@ -526,8 +502,7 @@
     "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # routing rules: deleted from a routed table
 "delete from route1 where id = 1"
@@ -553,8 +528,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete: routing rules for subquery
 "delete from  unsharded_a where a=(select a from route2)"
@@ -573,8 +547,7 @@
     "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by lookup
 "update music set val = 1 where id = 1"
@@ -598,8 +571,7 @@
     "Vindex": "music_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update multi-table ansi join
 "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1"
@@ -618,8 +590,7 @@
     "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update multi-table comma join
 "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1"
@@ -638,8 +609,7 @@
     "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from by lookup
 "delete from music where id = 1"
@@ -665,8 +635,7 @@
     "Vindex": "music_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from, no owned vindexes
 "delete from music_extra where user_id = 1"
@@ -690,8 +659,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # simple insert, no values
 "insert into unsharded values()"
@@ -711,8 +679,7 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # simple insert unsharded
 "insert into unsharded values(1, 2)"
@@ -732,8 +699,7 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # simple upsert unsharded
 "insert into unsharded values(1, 2) on duplicate key update x = 3"
@@ -753,8 +719,7 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unsharded insert, no col list with auto-inc and authoritative column list
 "insert into unsharded_authoritative values(1,1)"
@@ -774,8 +739,7 @@
     "TableName": "unsharded_authoritative"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # sharded upsert with sharding key set to vindex column
 "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(user_id)"
@@ -795,8 +759,7 @@
     "TableName": "music"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # sharded bulk upsert with sharding key set to vindex column
 "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)"
@@ -816,8 +779,7 @@
     "TableName": "music"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert unsharded with select
 "insert into unsharded select id from unsharded_auto"
@@ -837,8 +799,7 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert unsharded with select with join
 "insert into unsharded select id from unsharded join unsharded_auto"
@@ -858,14 +819,12 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert unsharded, invalid value for auto-inc
 "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
-{
-}
+Gen4 plan same as above
 
 # insert unsharded, column present
 "insert into unsharded_auto(id, val) values(1, 'aa')"
@@ -885,8 +844,7 @@
     "TableName": "unsharded_auto"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert unsharded, column absent
 "insert into unsharded_auto(val) values('aa')"
@@ -906,8 +864,7 @@
     "TableName": "unsharded_auto"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert unsharded, column absent
 "insert into unsharded_auto(val) values(false)"
@@ -927,8 +884,7 @@
     "TableName": "unsharded_auto"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert unsharded, multi-val
 "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
@@ -948,8 +904,7 @@
     "TableName": "unsharded_auto"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unsharded insert subquery in insert value
 "insert into unsharded values((select 1 from dual), 1)"
@@ -969,8 +924,7 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # sharded insert subquery in insert value
 "insert into user(id, val) values((select 1), 1)"
@@ -990,8 +944,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert into a routed table
 "insert into route1(id) values (1)"
@@ -1011,14 +964,12 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with mimatched column list
 "insert into user(id) values (1, 2)"
 "column list doesn't match values"
-{
-}
+Gen4 plan same as above
 
 # insert no column list for sharded authoritative table
 "insert into authoritative values(1, 2, 3)"
@@ -1038,8 +989,7 @@
     "TableName": "authoritative"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert sharded, no values
 "insert into user values()"
@@ -1059,8 +1009,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with one vindex
 "insert into user(id) values (1)"
@@ -1080,8 +1029,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert ignore sharded
 "insert ignore into user(id) values (1)"
@@ -1101,8 +1049,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert on duplicate key
 "insert into user(id) values(1) on duplicate key update col = 2"
@@ -1122,8 +1069,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with one vindex and bind var
 "insert into user(id) values (:aa)"
@@ -1143,8 +1089,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with non vindex
 "insert into user(nonid) values (2)"
@@ -1164,8 +1109,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with default seq
 "insert into user(id, nonid) values (default, 2)"
@@ -1185,8 +1129,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with non vindex bool value
 "insert into user(nonid) values (true)"
@@ -1206,8 +1149,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with all vindexes supplied
 "insert into user(nonid, name, id) values (2, 'foo', 1)"
@@ -1227,8 +1169,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert for non-vindex autoinc
 "insert into user_extra(nonid) values (2)"
@@ -1248,8 +1189,7 @@
     "TableName": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert for non-compliant names
 "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)"
@@ -1269,8 +1209,7 @@
     "TableName": "weird`name"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unsharded insert from union
 "insert into unsharded select 1 from dual union select 1 from dual"
@@ -1290,32 +1229,27 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
-{
-}
+Gen4 plan same as above
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, 18446744073709551616)"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
-{
-}
+Gen4 plan same as above
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
 "could not compute value for vindex or auto-inc column: expression is too complex 'id'"
-{
-}
+Gen4 plan same as above
 
 # insert invalid table
 "insert into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
-{
-}
+Gen4 plan same as above
 
 # insert with multiple rows
 "insert into user(id) values (1), (2)"
@@ -1335,8 +1269,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with query timeout
 "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)"
@@ -1357,8 +1290,7 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert with multiple rows - multi-shard autocommit
 "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)"
@@ -1378,14 +1310,12 @@
     "TableName": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert into a vindex not allowed
 "insert into user_index(id) values(1)"
 "unsupported: multi-shard or vindex write statement"
-{
-}
+Gen4 plan same as above
 
 # simple replace unsharded
 "replace into unsharded values(1, 2)"
@@ -1405,8 +1335,7 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # replace unsharded with select
 "replace into unsharded select id from unsharded_auto"
@@ -1426,14 +1355,12 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # replace unsharded, invalid value for auto-inc
 "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
 "could not compute value for vindex or auto-inc column: strconv.ParseUint: parsing "18446744073709551616": value out of range"
-{
-}
+Gen4 plan same as above
 
 # replace unsharded, column present
 "replace into unsharded_auto(id, val) values(1, 'aa')"
@@ -1453,8 +1380,7 @@
     "TableName": "unsharded_auto"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # replace unsharded, column absent
 "replace into unsharded_auto(val) values('aa')"
@@ -1474,8 +1400,7 @@
     "TableName": "unsharded_auto"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # replace unsharded, multi-val
 "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
@@ -1495,14 +1420,12 @@
     "TableName": "unsharded_auto"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # replace invalid table
 "replace into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
-{
-}
+Gen4 plan same as above
 
 # insert a row in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4)"
@@ -1522,8 +1445,7 @@
     "TableName": "multicolvin"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert for overlapped vindex columns
 "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)"
@@ -1543,8 +1465,7 @@
     "TableName": "overlap_vindex"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert multiple rows in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)"
@@ -1564,8 +1485,7 @@
     "TableName": "multicolvin"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete row in a multi column vindex table
 "delete from multicolvin where kid=1"
@@ -1591,8 +1511,7 @@
     "Vindex": "kid_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update columns of multi column vindex
 "update multicolvin set column_b = 1, column_c = 2 where kid = 1"
@@ -1621,8 +1540,7 @@
     "Vindex": "kid_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update multiple vindexes, with multi column vindex
 "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1"
@@ -1652,8 +1570,7 @@
     "Vindex": "kid_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with no primary vindex on where clause (scatter update)
 "update user_extra set val = 1"
@@ -1673,8 +1590,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with target destination
 "update `user[-]`.user_extra set val = 1"
@@ -1694,8 +1610,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with no primary vindex on where clause (scatter update)   - multi shard autocommit
 "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */  user_extra set val = 1"
@@ -1715,8 +1630,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with no primary vindex on where clause (scatter update)   - query timeout
 "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1"
@@ -1737,8 +1651,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with non-comparison expr
 "update user_extra set val = 1 where id between 1 and 2"
@@ -1758,8 +1671,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with primary id through IN clause
 "update user_extra set val = 1 where user_id in (1, 2)"
@@ -1786,8 +1698,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with non-unique key
 "update user_extra set val = 1 where name = 'foo'"
@@ -1807,8 +1718,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update by lookup with IN clause
 "update user_extra set val = 1 where id in (1, 2)"
@@ -1828,8 +1738,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with where clause with parens
 "update user_extra set val = 1 where (name = 'foo' or id = 1)"
@@ -1849,8 +1758,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from with no where clause
 "delete from user_extra"
@@ -1870,8 +1778,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete with target destination
 "delete from `user[-]`.user_extra"
@@ -1891,8 +1798,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete with non-comparison expr
 "delete from user_extra where user_id between 1 and 2"
@@ -1912,8 +1818,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from with no index match
 "delete from user_extra where name = 'jose'"
@@ -1933,8 +1838,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from with no index match - multi shard autocommit
 "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'"
@@ -1954,8 +1858,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from with no index match - query timeout
 "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'"
@@ -1976,8 +1879,7 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from with primary id in through IN clause
 "delete from user_extra where user_id in (1, 2)"
@@ -2004,8 +1906,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unsharded update where inner query references outer query
 "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
@@ -2024,8 +1925,7 @@
     "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # unsharded delete where inner query references outer query
 "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
@@ -2044,8 +1944,7 @@
     "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update vindex value to null
 "update user set name = null where id = 1"
@@ -2074,8 +1973,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # insert using last_insert_id
 "insert into unsharded values(last_insert_id(), 2)"
@@ -2095,8 +1993,7 @@
     "TableName": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update vindex value to null with multiple primary keyspace id
 "update user set name = null where id in (1, 2, 3)"
@@ -2129,8 +2026,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update vindex value to null without a where clause
 "update user set name = null"
@@ -2155,8 +2051,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update vindex value to null with complex where clause
 "update user set name = null where id + 1 = 2"
@@ -2181,8 +2076,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from user by primary keyspace id with in clause
 "delete from user where id in (1, 2, 3)"
@@ -2212,8 +2106,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from user by complex expression
 "delete from user where id + 1 = 2"
@@ -2235,8 +2128,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete from user without a where clause
 "delete from user"
@@ -2258,8 +2150,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete with single table targets
 "delete music from music where id = 1"
@@ -2285,8 +2176,7 @@
     "Vindex": "music_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # scatter update table with owned vindexes without changing lookup vindex
 "update user set val = 1"
@@ -2306,8 +2196,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # scatter delete with owned lookup vindex
 "delete from user"
@@ -2329,8 +2218,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update multi column vindex, without values for all the vindex columns
 "update multicolvin set column_c = 2 where kid = 1"
@@ -2359,8 +2247,7 @@
     "Vindex": "kid_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with binary value
 "update user set name = _binary 'abc' where id = 1"
@@ -2389,8 +2276,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete with binary value
 "delete from user where name = _binary 'abc'"
@@ -2412,8 +2298,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # delete with shard targeting
 "delete from `user[-]`.user"
@@ -2435,8 +2320,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with shard targeting
 "update `user[-]`.user set name = 'myname'"
@@ -2461,8 +2345,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # update with shard targeting without vindex
 "update `user[-]`.user_extra set val = 1"
@@ -2482,5 +2365,4 @@
     "Table": "user_extra"
   }
 }
-{
-}
+Gen4 plan same as above
