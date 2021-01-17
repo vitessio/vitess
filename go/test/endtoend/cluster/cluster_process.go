@@ -60,7 +60,7 @@ type LocalProcessCluster struct {
 	TmpDirectory       string
 	OriginalVTDATAROOT string
 	CurrentVTDATAROOT  string
-	reusingVTDATAROOT  bool
+	ReusingVTDATAROOT  bool
 
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
@@ -196,7 +196,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		}
 	}
 
-	if !cluster.reusingVTDATAROOT {
+	if !cluster.ReusingVTDATAROOT {
 		cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 		if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 			log.Error(err)
@@ -236,7 +236,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
-	if !cluster.reusingVTDATAROOT {
+	if !cluster.ReusingVTDATAROOT {
 		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
 	}
 	var mysqlctlProcessList []*exec.Cmd
@@ -264,7 +264,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 			// Start Mysqlctl process
 			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.reusingVTDATAROOT)
+			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
@@ -287,7 +287,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
-			if cluster.reusingVTDATAROOT {
+			if cluster.ReusingVTDATAROOT {
 				tablet.VttabletProcess.ServingStatus = "SERVING"
 			}
 			shard.Vttablets = append(shard.Vttablets, tablet)
@@ -309,7 +309,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 		for _, tablet := range shard.Vttablets {
-			if !cluster.reusingVTDATAROOT {
+			if !cluster.ReusingVTDATAROOT {
 				if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
 					log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
 					return
@@ -371,7 +371,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
-	if !cluster.reusingVTDATAROOT {
+	if !cluster.ReusingVTDATAROOT {
 		// Create Keyspace
 		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
 		if err != nil {
@@ -461,7 +461,7 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	}
 	if _, err := os.Stat(cluster.CurrentVTDATAROOT); err == nil {
 		// path/to/whatever exists
-		cluster.reusingVTDATAROOT = true
+		cluster.ReusingVTDATAROOT = true
 	} else {
 		_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
 	}
