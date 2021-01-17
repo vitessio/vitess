@@ -41,6 +41,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -151,6 +152,9 @@ func TestDeploySchema(t *testing.T) {
 		{
 			sqlQuery := fmt.Sprintf(createTable, tableName)
 			err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
+			if err != nil {
+				log.Infof("ERROR: %+v", err)
+			}
 			require.Nil(t, err)
 		}
 		for i := range clusterInstance.Keyspaces[0].Shards {
