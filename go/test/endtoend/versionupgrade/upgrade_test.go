@@ -14,6 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+
+ABOUT THIS TEST
+===============
+
+This test plays part in testing an upgrade path from a previous version/tag. It takes a GitHub workflow file to complete the functionality.
+What's in this file is the setting up of a cluster, sharded and unsharded keyspace, creating and populating some tables, then testing retrieval of data.
+The twist here is that you can run this test over pre-existing vtdataroot, which means this test can reuse existing etcd, existing tables, existing mysql,
+in which case it will not attempt to create keyspaces/schemas/tables, nor will it populate table data. Instead, it will only check for retrieval of data.
+
+The game is to setup the cluster with a stable version (say `v8.0.0`), take it down (and preserve data), then setup a new cluster with a new version (namely the branch/PR head) and attempt to read the data.
+
+Both executions must force some settings so that both reuse same directories, ports, etc. An invocation will look like:
+go test ./go/test/endtoend/versionupgrade80/upgrade80_test.go --keep-data -force-vtdataroot /tmp/vtdataroot/vtroot_10901 --force-port-start 11900 --force-base-tablet-uid 1190
+
+*/
+
 package versionupgrade
 
 import (
