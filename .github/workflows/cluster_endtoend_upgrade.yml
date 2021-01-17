@@ -33,11 +33,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-        mkdir -p /tmp/vtdataroot
-
     - name: Run cluster endtoend test v8.0.0
       timeout-minutes: 30
       run: |
+        # create the directory where we store test data:
+        mkdir -p /tmp/vtdataroot
         source build.env
         eatmydata -- go run test.go -docker=false -print-log -follow -shard 28
 
@@ -51,5 +51,7 @@ jobs:
     - name: Run cluster endtoend test HEAD vs v8.0.0
       timeout-minutes: 30
       run: |
+        # /tmp/vtdataroot exists from previous test
+        ls -l /tmp/vtdataroot
         source build.env
         eatmydata -- go run test.go -docker=false -print-log -follow -shard 28

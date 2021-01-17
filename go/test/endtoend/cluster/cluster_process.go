@@ -466,6 +466,8 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 		_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
 	}
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
+	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
+
 	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
 }
