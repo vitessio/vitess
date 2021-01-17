@@ -40,11 +40,18 @@ var (
 	schemaChangeDirectory = ""
 	totalTableCount       = 4
 	createTable           = `
-		CREATE TABLE IF NOT EXISTS %s (
+		CREATE TABLE %s (
 			id bigint(20) NOT NULL,
 			msg varchar(64),
 			PRIMARY KEY (id)
-		) ENGINE=InnoDB;`
+		) ENGINE=InnoDB;
+		`
+	insertIntoTable = `
+		INSERT INTO %s (id, msg) VALUES (17, 'abc');
+		`
+	selectFromTable = `
+		SELECT id, msg FROM %s LIMIT 1;
+		`
 )
 
 // TestMain is the main entry point
@@ -116,11 +123,25 @@ func TestShards(t *testing.T) {
 func TestDeploySchema(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	// Create n tables
+	if clusterInstance.ReusingVTDATAROOT {
+		// we assume data is already deployed
+		return
+	}
+	// Create n tables, populate
 	for i := 0; i < totalTableCount; i++ {
-		sqlQuery := fmt.Sprintf(createTable, fmt.Sprintf("vt_upgrade_test_%02d", i))
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
-		require.Nil(t, err)
+		tableName := fmt.Sprintf("vt_upgrade_test_%02d", i)
+
+		{
+			sqlQuery := fmt.Sprintf(createTable, tableName)
+			err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
+			require.Nil(t, err)
+		}
+		for i := range clusterInstance.Keyspaces[0].Shards {
+			sqlQuery := fmt.Sprintf(insertIntoTable, tableName)
+			tablet := clusterInstance.Keyspaces[0].Shards[i].Vttablets[0]
+			_, err := tablet.VttabletProcess.QueryTablet(sqlQuery, keyspaceName, true)
+			require.Nil(t, err)
+		}
 	}
 
 	checkTables(t, "", totalTableCount)
@@ -145,4 +166,24 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, expectCount, len(queryResult.Rows))
+}
+
+// TestTablesData checks the data in tables
+func TestTablesData(t *testing.T) {
+	// Create n tables, populate
+	for i := 0; i < totalTableCount; i++ {
+		tableName := fmt.Sprintf("vt_upgrade_test_%02d", i)
+
+		for i := range clusterInstance.Keyspaces[0].Shards {
+			sqlQuery := fmt.Sprintf(selectFromTable, tableName)
+			tablet := clusterInstance.Keyspaces[0].Shards[i].Vttablets[0]
+			queryResult, err := tablet.VttabletProcess.QueryTablet(sqlQuery, keyspaceName, true)
+			require.Nil(t, err)
+			require.NotNil(t, queryResult)
+			row := queryResult.Named().Row()
+			require.NotNil(t, row)
+			require.Equal(t, int64(17), row.AsInt64("id", 0))
+			require.Equal(t, "abc", row.AsString("msg", ""))
+		}
+	}
 }
