@@ -12,8 +12,10 @@ jobs:
       with:
         go-version: 1.15
 
-    - name: Check out code
+    - name: Check out v8.0.0
       uses: actions/checkout@v2
+      with:
+        ref: v8.0.0
 
     - name: Get dependencies
       run: |
@@ -31,7 +33,22 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    - name: Run cluster endtoend test
+        mkdir -p /tmp/vtdataroot
+
+    - name: Run cluster endtoend test v8.0.0
+      timeout-minutes: 30
+      run: |
+        source build.env
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard 28
+
+    - name: Check out PR
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        go mod download
+
+    - name: Run cluster endtoend test HEAD vs v8.0.0
       timeout-minutes: 30
       run: |
         source build.env
