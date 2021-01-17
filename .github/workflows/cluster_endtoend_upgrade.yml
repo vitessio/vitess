@@ -52,7 +52,8 @@ jobs:
       timeout-minutes: 30
       run: |
         make build
-        cp -R /tmp/vitess-build/bin/* bin/
+        # cp -R /tmp/vitess-build/bin/* bin/
+        # cp -R /tmp/vitess-build/bin /vt/src/vitess.io/vitess/
         echo "check binaries after build and checkout:"
         [ -d bin ] && ls -l bin/
         # create the directory where we store test data:
