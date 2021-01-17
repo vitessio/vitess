@@ -77,6 +77,10 @@ func (t noopVCursor) SetAllowUseReservedConn(allow bool) error {
 	panic("implement me")
 }
 
+func (t noopVCursor) GetAllowUseReservedConn() bool {
+	panic("implement me")
+}
+
 func (t noopVCursor) SetReadAfterWriteTimeout(f float64) {
 	panic("implement me")
 }

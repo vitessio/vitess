@@ -54,7 +54,7 @@ var (
 	Charset              = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names                = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 	SessionUUID          = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
-	AllowUseReservedConn = SystemVariable{Name: "use_reserved_connection", IsBoolean: true, Default: off}
+	AllowUseReservedConn = SystemVariable{Name: "use_reserved_connection", IsBoolean: true, Default: on}
 	// Online DDL
 	DDLStrategy   = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
 	VitessVersion = SystemVariable{Name: "vitess_version", IdentifierAsString: true}
