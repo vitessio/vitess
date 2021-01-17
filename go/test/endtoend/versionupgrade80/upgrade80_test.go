@@ -40,7 +40,7 @@ var (
 	schemaChangeDirectory = ""
 	totalTableCount       = 4
 	createTable           = `
-		CREATE TABLE %s (
+		CREATE TABLE IF NOT EXISTS %s (
 			id bigint(20) NOT NULL,
 			msg varchar(64),
 			PRIMARY KEY (id)

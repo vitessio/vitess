@@ -264,7 +264,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 			// Start Mysqlctl process
 			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
+			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.reusingVTDATAROOT)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
@@ -287,6 +287,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
+			if cluster.reusingVTDATAROOT {
+				tablet.VttabletProcess.ServingStatus = "SERVING"
+			}
 			shard.Vttablets = append(shard.Vttablets, tablet)
 			// Apply customizations
 			for _, customizer := range customizers {
@@ -306,9 +309,11 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 		for _, tablet := range shard.Vttablets {
-			if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
-				log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
-				return
+			if !cluster.reusingVTDATAROOT {
+				if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
+					log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
+					return
+				}
 			}
 
 			log.Infof("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort)
