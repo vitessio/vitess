@@ -109,21 +109,19 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 		ast.SelectExprs = sel.SelectExprs
 		ast.Comments = sel.Comments
 	} else {
-		var projections []*sqlparser.AliasedExpr
 
 		// TODO real horizon planning to be done
 		for _, expr := range sel.SelectExprs {
 			switch e := expr.(type) {
 			case *sqlparser.AliasedExpr:
-				projections = append(projections, e)
+				if _, err := pushProjection(e, plan, semTable); err != nil {
+					return err
+				}
 			default:
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", e)
 			}
 		}
 
-		if _, err := pushProjection(projections, plan, semTable); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -460,27 +458,18 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logica
 func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (*joinV4, error) {
 	lhsColList := extractColumnsNeededFromLHS(n, semTable, n.lhs.tables())
 
-	var lhsColExpr []*sqlparser.AliasedExpr
-	for _, col := range lhsColList {
-		lhsColExpr = append(lhsColExpr, &sqlparser.AliasedExpr{
-			Expr: col,
-		})
-	}
-
 	lhs, err := transformToLogicalPlan(n.lhs, semTable)
-	if err != nil {
-		return nil, err
-	}
-	offset, err := pushProjection(lhsColExpr, lhs, semTable)
 	if err != nil {
 		return nil, err
 	}
 
 	vars := map[string]int{}
-
 	for _, col := range lhsColList {
+		offset, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, lhs, semTable)
+		if err != nil {
+			return nil, err
+		}
 		vars[col.CompliantName("")] = offset
-		offset++
 	}
 
 	rhs, err := transformToLogicalPlan(n.rhs, semTable)
