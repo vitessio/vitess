@@ -20,8 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"

@@ -21,9 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -176,19 +178,21 @@ func TestStateChangeTabletType(t *testing.T) {
 		Uid:  2,
 	}
 
-	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_MASTER)
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite)
 	require.NoError(t, err)
 	ti, err := ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	assert.NotNil(t, ti.MasterTermStartTime)
+	assert.Equal(t, "master", statsTabletType.Get())
 
-	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA)
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.MasterTermStartTime)
+	assert.Equal(t, "replica", statsTabletType.Get())
 }
 
 func TestPublishStateNew(t *testing.T) {

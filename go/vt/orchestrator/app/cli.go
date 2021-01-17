@@ -683,42 +683,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(instanceKey.DisplayString())
 		}
-	case registerCliCommand("enable-semi-sync-master", "Replication, general", `Enable semi-sync replication (master-side)`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			_, err := inst.SetSemiSyncMaster(instanceKey, true)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Println(instanceKey.DisplayString())
-		}
-	case registerCliCommand("disable-semi-sync-master", "Replication, general", `Disable semi-sync replication (master-side)`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			_, err := inst.SetSemiSyncMaster(instanceKey, false)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Println(instanceKey.DisplayString())
-		}
-	case registerCliCommand("enable-semi-sync-replica", "Replication, general", `Enable semi-sync replication (replica-side)`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			_, err := inst.SetSemiSyncReplica(instanceKey, true)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Println(instanceKey.DisplayString())
-		}
-	case registerCliCommand("disable-semi-sync-replica", "Replication, general", `Disable semi-sync replication (replica-side)`):
-		{
-			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			_, err := inst.SetSemiSyncReplica(instanceKey, false)
-			if err != nil {
-				log.Fatale(err)
-			}
-			fmt.Println(instanceKey.DisplayString())
-		}
 	case registerCliCommand("restart-slave-statements", "Replication, general", `Get a list of statements to execute to stop then restore replica to same execution state. Provide --statement for injected statement`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)

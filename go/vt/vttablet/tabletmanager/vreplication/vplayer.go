@@ -24,7 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -103,6 +104,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 
 	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.pkInfoMap, vp.copyState)
 	if err != nil {
+		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
 	}
 	vp.replicatorPlan = plan
@@ -135,7 +137,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
+	relay := newRelayLog(ctx, *relayLogMaxItems, *relayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -243,8 +245,10 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) updateTime(ts int64) (err error) {
-	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, time.Now().Unix(), ts)
+func (vp *vplayer) recordHeartbeat() (err error) {
+	tm := time.Now().Unix()
+	vp.vr.stats.RecordHeartbeat(tm)
+	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, tm)
 	if err != nil {
 		return err
 	}
@@ -366,6 +370,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					}
 				}
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
+					if err != io.EOF {
+						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
+						log.Errorf("Error applying event: %s", err.Error())
+					}
 					return err
 				}
 			}
@@ -594,7 +602,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if !vp.vr.dbClient.InTransaction {
-			err := vp.updateTime(event.Timestamp)
+			err := vp.recordHeartbeat()
 			if err != nil {
 				return err
 			}

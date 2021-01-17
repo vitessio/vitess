@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
+	"io"
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -31,7 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -53,11 +55,15 @@ var (
 	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 
 	// Flags for PITR
-	binlogHost           = flag.String("binlog_host", "", "(PITR restore parameter) host name of binlog server.")
-	binlogPort           = flag.Int("binlog_port", 0, "(PITR restore parameter) port of binlog server.")
-	binlogUser           = flag.String("binlog_user", "", "(PITR restore parameter) username of binlog server.")
-	binlogPwd            = flag.String("binlog_password", "", "(PITR restore parameter) password of binlog server.")
-	timeoutForGTIDLookup = flag.Duration("pitr_gtid_lookup_timeout", 60*time.Second, "(PITR restore parameter) timeout for fetching gtid from timestamp.")
+	binlogHost           = flag.String("binlog_host", "", "PITR restore parameter: hostname/IP of binlog server.")
+	binlogPort           = flag.Int("binlog_port", 0, "PITR restore parameter: port of binlog server.")
+	binlogUser           = flag.String("binlog_user", "", "PITR restore parameter: username of binlog server.")
+	binlogPwd            = flag.String("binlog_password", "", "PITR restore parameter: password of binlog server.")
+	timeoutForGTIDLookup = flag.Duration("pitr_gtid_lookup_timeout", 60*time.Second, "PITR restore parameter: timeout for fetching gtid from timestamp.")
+	binlogSslCa          = flag.String("binlog_ssl_ca", "", "PITR restore parameter: Filename containing TLS CA certificate to verify binlog server TLS certificate against.")
+	binlogSslCert        = flag.String("binlog_ssl_cert", "", "PITR restore parameter: Filename containing mTLS client certificate to present to binlog server as authentication.")
+	binlogSslKey         = flag.String("binlog_ssl_key", "", "PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.")
+	binlogSslServerName  = flag.String("binlog_ssl_server_name", "", "PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).")
 )
 
 // RestoreData is the main entry point for backup restore.
@@ -129,7 +135,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	if originalType == topodatapb.TabletType_MASTER {
 		originalType = tm.baseTabletType
 	}
-	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE); err != nil {
+	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE, DBActionNone); err != nil {
 		return err
 	}
 	// Loop until a backup exists, unless we were told to give up immediately.
@@ -178,7 +184,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// No-op, starting with empty database.
 	default:
 		// If anything failed, we should reset the original tablet type
-		if err := tm.tmState.ChangeTabletType(ctx, originalType); err != nil {
+		if err := tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone); err != nil {
 			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
 		}
 		return vterrors.Wrap(err, "Can't restore backup")
@@ -194,13 +200,13 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 
 	// Change type back to original type if we're ok to serve.
-	return tm.tmState.ChangeTabletType(ctx, originalType)
+	return tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone)
 }
 
 // restoreToTimeFromBinlog restores to the snapshot time of the keyspace
 // currently this works with mysql based database only (as it uses mysql specific queries for restoring)
 func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.Position, restoreTime *vttime.Time) error {
-	// validate the dependent settings
+	// validate the minimal settings necessary for connecting to binlog server
 	if *binlogHost == "" || *binlogPort <= 0 || *binlogUser == "" {
 		log.Warning("invalid binlog server setting, restoring to last available backup.")
 		return nil
@@ -241,12 +247,19 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 // beforePos will be used to check if replication was able to catch up from the binlog server
 func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (afterPos string, beforePos string, err error) {
 	connParams := &mysql.ConnParams{
-		Host:  *binlogHost,
-		Port:  *binlogPort,
-		Uname: *binlogUser,
+		Host:       *binlogHost,
+		Port:       *binlogPort,
+		Uname:      *binlogUser,
+		SslCa:      *binlogSslCa,
+		SslCert:    *binlogSslCert,
+		SslKey:     *binlogSslKey,
+		ServerName: *binlogSslServerName,
 	}
-	if binlogPwd != nil && *binlogPwd != "" {
+	if *binlogPwd != "" {
 		connParams.Pass = *binlogPwd
+	}
+	if *binlogSslCa != "" || *binlogSslCert != "" {
+		connParams.EnableSSL()
 	}
 	dbCfgs := &dbconfigs.DBConfigs{
 		Host: connParams.Host,
@@ -272,7 +285,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return "", "", err
 	}
 
-	gtidsChan := make(chan []string)
+	gtidsChan := make(chan []string, 1)
 
 	go func() {
 		err := vsClient.VStream(ctx, mysql.EncodePosition(pos), filter, func(events []*binlogdatapb.VEvent) error {
@@ -287,19 +300,20 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 					if event.Timestamp >= restoreTime {
 						afterPos = event.Gtid
 						gtidsChan <- []string{event.Gtid, beforePos}
-						break
+						return io.EOF
 					}
 
 					if eventPos.AtLeast(lastPos) {
 						gtidsChan <- []string{"", beforePos}
-						break
+						return io.EOF
 					}
 					beforePos = event.Gtid
 				}
 			}
 			return nil
 		})
-		if err != nil {
+		if err != nil && err != io.EOF {
+			log.Warningf("Error using VStream to find timestamp for GTID position: %v error: %v", pos, err)
 			gtidsChan <- []string{"", ""}
 		}
 	}()
@@ -337,8 +351,26 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 	cmds := []string{
 		"STOP SLAVE FOR CHANNEL '' ",
 		"STOP SLAVE IO_THREAD FOR CHANNEL ''",
-		fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s',MASTER_PORT=%d, MASTER_USER='%s', MASTER_AUTO_POSITION = 1;", *binlogHost, *binlogPort, *binlogUser),
 	}
+
+	if *binlogSslCa != "" || *binlogSslCert != "" {
+		// We need to use TLS
+		changeMasterCmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
+		if *binlogSslCa != "" {
+			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
+		}
+		if *binlogSslCert != "" {
+			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
+		}
+		if *binlogSslKey != "" {
+			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
+		}
+		cmds = append(cmds, changeMasterCmd+";")
+	} else {
+		// No TLS
+		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", *binlogHost, *binlogPort, *binlogUser, *binlogPwd))
+	}
+
 	if afterGTIDPos == "" { // when the there is no afterPos, that means need to replicate completely
 		cmds = append(cmds, "START SLAVE")
 	} else {
@@ -386,8 +418,8 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		}
 		return vterrors.Wrap(err, "error while fetching the current GTID position")
 	case <-ctx.Done():
-		log.Warningf("Could not copy till GTID.")
-		return vterrors.Wrapf(err, "context timeout while restoring upto specified GTID - %s", beforeGTIDPos)
+		log.Warningf("Could not copy up to GTID.")
+		return vterrors.Wrapf(err, "context timeout while restoring up to specified GTID - %s", beforeGTIDPos)
 	}
 }
 

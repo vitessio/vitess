@@ -20,9 +20,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -75,6 +77,7 @@ func TestPreview(t *testing.T) {
 		{"grant", StmtPriv},
 		{"revoke", StmtPriv},
 		{"truncate", StmtDDL},
+		{"flush", StmtFlush},
 		{"unknown", StmtUnknown},
 
 		{"/* leading comment */ select ...", StmtSelect},
@@ -87,6 +90,7 @@ func TestPreview(t *testing.T) {
 
 		{"/* leading comment no end select ...", StmtUnknown},
 		{"-- leading single line comment no end select ...", StmtUnknown},
+		{"/*!40000 ALTER TABLE `t1` DISABLE KEYS */", StmtComment},
 	}
 	for _, tcase := range testcases {
 		if got := Preview(tcase.sql); got != tcase.want {
@@ -413,7 +417,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewFloat64(2.1)},
 	}, {
 		in: &UnaryExpr{
-			Operator: Latin1Str,
+			Operator: Latin1Op,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -422,7 +426,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: UBinaryStr,
+			Operator: UBinaryOp,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -431,7 +435,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: Utf8mb4Str,
+			Operator: Utf8mb4Op,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -440,7 +444,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: Utf8Str,
+			Operator: Utf8Op,
 			Expr: &Literal{
 				Type: StrVal,
 				Val:  []byte("strval"),
@@ -449,7 +453,7 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
-			Operator: MinusStr,
+			Operator: UMinusOp,
 			Expr: &Literal{
 				Type: FloatVal,
 				Val:  []byte("2.1"),

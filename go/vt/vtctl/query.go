@@ -24,9 +24,11 @@ import (
 	"io"
 	"strconv"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -445,6 +447,13 @@ func (lw loggerWriter) Write(p []byte) (int, error) {
 
 // printQueryResult will pretty-print a QueryResult to the logger.
 func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
+	if qr == nil {
+		return
+	}
+	if len(qr.Rows) == 0 {
+		return
+	}
+
 	table := tablewriter.NewWriter(writer)
 	table.SetAutoFormatHeaders(false)
 

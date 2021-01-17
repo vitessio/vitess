@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -508,7 +509,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, commonTabletArg...)
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, "-restore_from_backup", "-enable_semi_sync")
 
-	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	err = localCluster.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	require.NoError(t, err)
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd

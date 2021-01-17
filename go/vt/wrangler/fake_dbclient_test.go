@@ -19,7 +19,12 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -44,7 +49,8 @@ type dbResult struct {
 
 func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
 	if dbrs.exhausted() {
-		return nil, fmt.Errorf("query results exhausted: %s", query)
+		log.Infof(fmt.Sprintf("Unexpected query >%s<", query))
+		return nil, fmt.Errorf("code executed this query, but the test did not expect it: %s", query)
 	}
 	i := dbrs.index
 	dbrs.index++
@@ -127,6 +133,9 @@ func (dc *fakeDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	if testMode == "debug" {
+		fmt.Printf("ExecuteFetch: %s\n", query)
+	}
 	if dbrs := dc.queries[query]; dbrs != nil {
 		return dbrs.next(query)
 	}
@@ -138,6 +147,13 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	if result := dc.invariants[query]; result != nil {
 		return result, nil
 	}
+	for q, result := range dc.invariants { //supports allowing just a prefix of an expected query
+		if strings.Contains(query, q) {
+			return result, nil
+		}
+	}
+
+	log.Infof("Missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", query)
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
@@ -145,12 +161,12 @@ func (dc *fakeDBClient) verifyQueries(t *testing.T) {
 	t.Helper()
 	for query, dbrs := range dc.queries {
 		if !dbrs.exhausted() {
-			t.Errorf("query: %v has unreturned results", query)
+			assert.FailNowf(t, "expected query did not get executed during the test", query)
 		}
 	}
 	for query, dbrs := range dc.queriesRE {
 		if !dbrs.exhausted() {
-			t.Errorf("query: %v has unreturned results", query)
+			assert.FailNowf(t, "expected regex query did not get executed during the test", query)
 		}
 	}
 }

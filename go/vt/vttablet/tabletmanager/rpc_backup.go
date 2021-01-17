@@ -20,7 +20,8 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -84,7 +85,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone); err != nil {
 			return err
 		}
 	}
@@ -115,7 +116,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 
 		// Change our type back to the original value.
 		// Original type could be master so pass in a real value for masterTermStartTime
-		if err := tm.changeTypeLocked(bgCtx, originalType); err != nil {
+		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
 			if returnErr != nil {

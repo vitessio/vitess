@@ -18,74 +18,32 @@ package reparent
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
+)
+
+var (
+	masterTablet  *cluster.Vttablet
+	replicaTablet *cluster.Vttablet
 )
 
 func TestReparentGracefulRangeBased(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet} {
-		// create database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
+	shardName = "0000000000000000-ffffffffffffffff"
+	defer func() { shardName = "0" }()
 
-	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Force the replica to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1Name), masterTablet.Alias)
-	require.NoError(t, err)
-
-	// Validate topology
-	validateTopology(t, true)
-
-	// create Tables
-	runSQL(ctx, t, sqlSchema, masterTablet)
-
-	checkMasterTablet(t, masterTablet)
-
-	validateTopology(t, false)
-
-	// Run this to make sure it succeeds.
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shard1Name))
-	require.NoError(t, err)
-	strArray := strings.Split(output, "\n")
-	if strArray[len(strArray)-1] == "" {
-		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
-	}
-	assert.Equal(t, 2, len(strArray))         // one master, one replica
-	assert.Contains(t, strArray[0], "master") // master first
+	setupRangeBasedCluster(ctx, t)
+	defer teardownCluster()
 
 	// Perform a graceful reparent operation
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shard1Name),
-		"-new_master", replicaTablet.Alias)
+	_, err := prs(t, replicaTablet)
 	require.NoError(t, err)
-
-	// Validate topology
 	validateTopology(t, false)
-
 	checkMasterTablet(t, replicaTablet)
-
-	// insert data into the new master, check the connected replica work
-	insertSQL := fmt.Sprintf(insertSQL, 1, 1)
-	runSQL(ctx, t, insertSQL, replicaTablet)
-	err = checkInsertedValues(ctx, t, masterTablet, 1)
-	require.NoError(t, err)
+	confirmReplication(t, replicaTablet, []*cluster.Vttablet{masterTablet})
 }

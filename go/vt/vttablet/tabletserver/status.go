@@ -73,7 +73,6 @@ var (
       <a href="{{.Prefix}}/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
       <a href="{{.Prefix}}/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
       <a href="{{.Prefix}}/queryz">Query&nbsp;Stats</a></br>
-      <a href="{{.Prefix}}/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
     </td>
     <td width="25%" border="">
       <a href="{{.Prefix}}/debug/consolidations">Consolidations</a></br>
@@ -84,8 +83,9 @@ var (
     <td width="25%" border="">
       <a href="{{.Prefix}}/healthz">Health Check</a></br>
       <a href="{{.Prefix}}/debug/health">Query Service Health Check</a></br>
-      <a href="{{.Prefix}}/streamqueryz">Current Stream Queries</a></br>
+      <a href="{{.Prefix}}/livequeryz/">Real-time Queries</a></br>
       <a href="{{.Prefix}}/debug/status_details">JSON Status Details</a></br>
+      <a href="{{.Prefix}}/debug/env">View/Change Environment variables</a></br>
     </td>
   </tr>
 </table>
@@ -246,8 +246,8 @@ func (tsv *TabletServer) AddStatusPart() {
 		} else {
 			status.Latest = &historyRecord{}
 		}
-		status.Details = tsv.sm.ApppendDetails(nil)
-		status.Details = tsv.hs.ApppendDetails(status.Details)
+		status.Details = tsv.sm.AppendDetails(nil)
+		status.Details = tsv.hs.AppendDetails(status.Details)
 		rates := tsv.stats.QPSRates.Get()
 		if qps, ok := rates["All"]; ok && len(qps) > 0 {
 			status.CurrentQPS = qps[0]
@@ -257,8 +257,8 @@ func (tsv *TabletServer) AddStatusPart() {
 
 	tsv.exporter.HandleFunc("/debug/status_details", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		details := tsv.sm.ApppendDetails(nil)
-		details = tsv.hs.ApppendDetails(details)
+		details := tsv.sm.AppendDetails(nil)
+		details = tsv.hs.AppendDetails(details)
 		b, err := json.MarshalIndent(details, "", " ")
 		if err != nil {
 			w.Write([]byte(err.Error()))

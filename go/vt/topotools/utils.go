@@ -21,7 +21,7 @@ import (
 	"sort"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -66,6 +66,20 @@ func GetAllTablets(ctx context.Context, ts *topo.Server, cell string) ([]*topo.T
 	}
 
 	return tablets, nil
+}
+
+// GetTabletMapForCell returns a map of TabletInfo keyed by alias as string
+func GetTabletMapForCell(ctx context.Context, ts *topo.Server, cell string) (map[string]*topo.TabletInfo, error) {
+	aliases, err := ts.GetTabletsByCell(ctx, cell)
+	if err != nil {
+		return nil, err
+	}
+	tabletMap, err := ts.GetTabletMap(ctx, aliases)
+	if err != nil {
+		// we got another error than topo.ErrNoNode
+		return nil, err
+	}
+	return tabletMap, nil
 }
 
 // GetAllTabletsAcrossCells returns all tablets from known cells.

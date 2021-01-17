@@ -1,0 +1,35 @@
+# show columns from user keyspace
+"show full columns from user_extra"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user_extra",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from user_extra",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns from routed table
+"show full fields from `route1`"
+{
+  "QueryType": "SHOW",
+  "Original": "show full fields from `route1`",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from user",
+    "SingleShardOnly": true
+  }
+}

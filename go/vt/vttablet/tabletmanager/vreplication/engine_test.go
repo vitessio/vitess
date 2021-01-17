@@ -24,9 +24,11 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -53,6 +55,7 @@ func TestEngineOpen(t *testing.T) {
 		),
 		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
 	), nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
@@ -160,6 +163,7 @@ func TestEngineExec(t *testing.T) {
 		),
 		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
 	), nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
@@ -201,6 +205,7 @@ func TestEngineExec(t *testing.T) {
 		),
 		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
 	), nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
@@ -411,10 +416,8 @@ func TestWaitForPosError(t *testing.T) {
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = "unexpected result: &{[] 0 0 [[]]}"
-	if err == nil || err.Error() != want {
-		t.Errorf("WaitForPos: %v, want %v", err, want)
-	}
+	want = "unexpected result: &{[] 0 0 [[]] }"
+	assert.EqualError(t, err, want, "WaitForPos:")
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -422,10 +425,8 @@ func TestWaitForPosError(t *testing.T) {
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = `unexpected result: &{[] 0 0 [[VARBINARY("MariaDB/0-1-1083")] [VARBINARY("MariaDB/0-1-1083")]]}`
-	if err == nil || err.Error() != want {
-		t.Errorf("WaitForPos: %v, want %v", err, want)
-	}
+	want = `unexpected result: &{[] 0 0 [[VARBINARY("MariaDB/0-1-1083")] [VARBINARY("MariaDB/0-1-1083")]] }`
+	assert.EqualError(t, err, want, "WaitForPos:")
 }
 
 func TestWaitForPosCancel(t *testing.T) {
@@ -521,6 +522,7 @@ func TestCreateDBAndTable(t *testing.T) {
 		),
 		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
 	), nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)

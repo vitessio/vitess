@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -510,15 +511,6 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 				fmt.Sprintf("%s/%s", keyspaceName, shard))
 			require.NoError(t, err)
 		}
-	}
-
-	if isExternal {
-		// get status for the destination master tablet, make sure we have it all
-		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3956, 2002)
-		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4048, 2002)
-	} else {
-		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
-		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
 	}
 
 	// check we can't migrate the master just yet

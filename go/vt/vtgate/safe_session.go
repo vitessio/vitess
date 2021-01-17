@@ -19,8 +19,10 @@ package vtgate
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -38,6 +40,10 @@ type SafeSession struct {
 	mustRollback    bool
 	autocommitState autocommitState
 	commitOrder     vtgatepb.CommitOrder
+
+	// this is a signal that found_rows has already been handles by the primitives,
+	// and doesn't have to be updated by the executor
+	foundRowsHandled bool
 	*vtgatepb.Session
 }
 
@@ -193,8 +199,11 @@ func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgate
 			sess.Target.TabletType == shardSession.Target.TabletType &&
 			sess.Target.Shard == shardSession.Target.Shard
 		if targetedAtSameTablet {
-			if sess.TabletAlias.Cell != shardSession.TabletAlias.Cell || sess.TabletAlias.Uid != shardSession.TabletAlias.Uid {
-				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+			if !proto.Equal(sess.TabletAlias, shardSession.TabletAlias) {
+				errorDetails := fmt.Sprintf("got non-matching aliases (%v vs %v) for the same target (keyspace: %v, tabletType: %v, shard: %v)",
+					sess.TabletAlias, shardSession.TabletAlias,
+					sess.Target.Keyspace, sess.Target.TabletType, sess.Target.Shard)
+				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, errorDetails)
 			}
 			// replace the old info with the new one
 			sessions[i] = shardSession
@@ -214,7 +223,10 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	if session.autocommitState == autocommitted {
+	// additional check of transaction id is required
+	// as now in autocommit mode there can be session due to reserved connection
+	// that needs to be stored as shard session.
+	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
 		// Should be unreachable
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected autocommit state")
 	}
@@ -320,35 +332,35 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
-//SetOptions sets the options
+// SetOptions sets the options
 func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Options = options
 }
 
-//StoreSavepoint stores the savepoint and release savepoint queries in the session
+// StoreSavepoint stores the savepoint and release savepoint queries in the session
 func (session *SafeSession) StoreSavepoint(sql string) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Savepoints = append(session.Savepoints, sql)
 }
 
-//InReservedConn returns true if the session needs to execute on a dedicated connection
+// InReservedConn returns true if the session needs to execute on a dedicated connection
 func (session *SafeSession) InReservedConn() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.Session.InReservedConn
 }
 
-//SetReservedConn set the InReservedConn setting.
+// SetReservedConn set the InReservedConn setting.
 func (session *SafeSession) SetReservedConn(reservedConn bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.InReservedConn = reservedConn
 }
 
-//SetPreQueries returns the prequeries that need to be run when reserving a connection
+// SetPreQueries returns the prequeries that need to be run when reserving a connection
 func (session *SafeSession) SetPreQueries() []string {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -361,28 +373,44 @@ func (session *SafeSession) SetPreQueries() []string {
 	return result
 }
 
-//SetLockSession sets the lock session.
+// SetLockSession sets the lock session.
 func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSession) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = lockSession
+	session.LastLockHeartbeat = time.Now().Unix()
 }
 
-//InLockSession returns whether locking is used on this session.
+// UpdateLockHeartbeat updates the LastLockHeartbeat time
+func (session *SafeSession) UpdateLockHeartbeat() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LastLockHeartbeat = time.Now().Unix()
+}
+
+// TriggerLockHeartBeat returns if it time to trigger next lock heartbeat
+func (session *SafeSession) TriggerLockHeartBeat() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	now := time.Now().Unix()
+	return now-session.LastLockHeartbeat >= int64(lockHeartbeatTime.Seconds())
+}
+
+// InLockSession returns whether locking is used on this session.
 func (session *SafeSession) InLockSession() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.LockSession != nil
 }
 
-//ResetLock resets the lock session
+// ResetLock resets the lock session
 func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = nil
 }
 
-//ResetAll resets the shard sessions and lock session.
+// ResetAll resets the shard sessions and lock session.
 func (session *SafeSession) ResetAll() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -397,7 +425,7 @@ func (session *SafeSession) ResetAll() {
 	session.LockSession = nil
 }
 
-//ResetShard reset the shard session for the provided tablet alias.
+// ResetShard reset the shard session for the provided tablet alias.
 func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -429,6 +457,57 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 	return nil
 }
 
+// SetDDLStrategy set the DDLStrategy setting.
+func (session *SafeSession) SetDDLStrategy(strategy string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.DDLStrategy = strategy
+}
+
+// GetDDLStrategy returns the DDLStrategy value.
+func (session *SafeSession) GetDDLStrategy() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.DDLStrategy
+}
+
+// GetSessionUUID returns the SessionUUID value.
+func (session *SafeSession) GetSessionUUID() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.SessionUUID
+}
+
+// SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
+func (session *SafeSession) SetReadAfterWriteGTID(vtgtid string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteGtid = vtgtid
+}
+
+// SetReadAfterWriteTimeout set the ReadAfterWriteTimeout setting.
+func (session *SafeSession) SetReadAfterWriteTimeout(timeout float64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteTimeout = timeout
+}
+
+// SetSessionTrackGtids set the SessionTrackGtids setting.
+func (session *SafeSession) SetSessionTrackGtids(enable bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.SessionTrackGtids = enable
+}
+
 func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
 	idx := -1
 	for i, session := range sessions {
@@ -445,7 +524,7 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 	return append(sessions[:idx], sessions[idx+1:]...), nil
 }
 
-//GetOrCreateOptions will return the current options struct, or create one and return it if no-one exists
+// GetOrCreateOptions will return the current options struct, or create one and return it if no-one exists
 func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 	if session.Session.Options == nil {
 		session.Session.Options = &querypb.ExecuteOptions{}

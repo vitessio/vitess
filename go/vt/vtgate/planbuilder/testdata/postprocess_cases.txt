@@ -154,6 +154,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY uses column numbers
 "select col from user where id = 1 order by 1"
@@ -176,6 +177,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY on scatter
 "select col from user order by col"
@@ -190,6 +192,7 @@
       "Sharded": true
     },
     "FieldQuery": "select col from user where 1 != 1",
+    "OrderBy": "0 ASC",
     "Query": "select col from user order by col asc",
     "Table": "user"
   }
@@ -208,6 +211,7 @@
       "Sharded": true
     },
     "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
+    "OrderBy": "0 ASC",
     "Query": "select user_id, col1, col2 from authoritative order by user_id asc",
     "Table": "authoritative"
   }
@@ -226,6 +230,7 @@
       "Sharded": true
     },
     "FieldQuery": "select user_id, col1, col2, weight_string(col1) from authoritative where 1 != 1",
+    "OrderBy": "3 ASC",
     "Query": "select user_id, col1, col2, weight_string(col1) from authoritative order by col1 asc",
     "Table": "authoritative"
   }
@@ -244,6 +249,7 @@
       "Sharded": true
     },
     "FieldQuery": "select a, textcol1, b, weight_string(textcol1) from user where 1 != 1",
+    "OrderBy": "0 ASC, 3 ASC, 2 ASC",
     "Query": "select a, textcol1, b, weight_string(textcol1) from user order by a asc, textcol1 asc, b asc",
     "Table": "user"
   }
@@ -262,6 +268,7 @@
       "Sharded": true
     },
     "FieldQuery": "select a, user.textcol1, b, weight_string(user.textcol1) from user where 1 != 1",
+    "OrderBy": "0 ASC, 3 ASC, 2 ASC",
     "Query": "select a, user.textcol1, b, weight_string(user.textcol1) from user order by a asc, textcol1 asc, b asc",
     "Table": "user"
   }
@@ -280,6 +287,7 @@
       "Sharded": true
     },
     "FieldQuery": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user where 1 != 1",
+    "OrderBy": "0 ASC, 4 ASC, 2 ASC, 5 ASC",
     "Query": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user order by a asc, textcol1 asc, b asc, textcol2 asc",
     "Table": "user"
   }
@@ -306,6 +314,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY after pull-out subquery
 "select col from user where col in (select col2 from user) order by col"
@@ -335,6 +344,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from user where 1 != 1",
+        "OrderBy": "0 ASC",
         "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
         "Table": "user"
       }
@@ -529,6 +539,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
@@ -631,6 +642,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Order by, qualified '*' expression
 "select user.* from user where id = 5 order by user.col"
@@ -653,6 +665,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Order by, '*' expression with qualified reference
 "select * from user where id = 5 order by user.col"
@@ -675,6 +688,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Order by, '*' expression in a subquery
 "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)"
@@ -750,6 +764,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by with math functions
 "select * from user where id = 5 order by -col1"
@@ -772,6 +787,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by with string operations
 "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc"
@@ -794,6 +810,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by with math operations
 "select * from user where id = 5 order by id+col collate utf8_general_ci desc"
@@ -816,6 +833,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 #Order by subquery column
 "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
@@ -882,6 +900,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # limit for joins. Can't push down the limit because result
 # counts get multiplied by join operations.
@@ -950,6 +969,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # limit for scatter with bind var
 "select col from user limit :a"
@@ -974,6 +994,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # cross-shard expression in parenthesis with limit
 "select * from user where (id1 = 4 AND name1 ='abc') limit 5"
@@ -998,6 +1019,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"
@@ -1057,7 +1079,9 @@
     "Table": "ref"
   }
 }
+Gen4 plan same as above
 
 # invalid limit expression
 "select id from user limit 1+1"
 "unexpected expression in LIMIT: expression is too complex '1 + 1'"
+Gen4 plan same as above

@@ -20,14 +20,16 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*memorySort)(nil)
+var _ logicalPlan = (*memorySort)(nil)
 
-// memorySort is the builder for engine.Limit.
+// memorySort is the logicalPlan for engine.Limit.
 // This gets built if a limit needs to be applied
 // after rows are returned from an underlying
 // operation. Since a limit is the final operation
@@ -38,10 +40,10 @@ type memorySort struct {
 }
 
 // newMemorySort builds a new memorySort.
-func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error) {
+func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, error) {
 	eMemorySort := &engine.MemorySort{}
 	ms := &memorySort{
-		resultsBuilder: newResultsBuilder(bldr, eMemorySort),
+		resultsBuilder: newResultsBuilder(plan, eMemorySort),
 		eMemorySort:    eMemorySort,
 	}
 	for _, order := range orderBy {
@@ -60,6 +62,18 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 					break
 				}
 			}
+		case *sqlparser.UnaryExpr:
+			colName, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
+			}
+			c := colName.Metadata.(*column)
+			for i, rc := range ms.ResultColumns() {
+				if rc.column == c {
+					colNumber = i
+					break
+				}
+			}
 		default:
 			return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
 		}
@@ -70,60 +84,30 @@ func newMemorySort(bldr builder, orderBy sqlparser.OrderBy) (*memorySort, error)
 		}
 		ob := engine.OrderbyParams{
 			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescScr,
+			Desc: order.Direction == sqlparser.DescOrder,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}
 	return ms, nil
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (ms *memorySort) Primitive() engine.Primitive {
 	ms.eMemorySort.Input = ms.input.Primitive()
 	return ms.eMemorySort
 }
 
-// PushLock satisfies the builder interface.
-func (ms *memorySort) PushLock(lock string) error {
-	return ms.input.PushLock(lock)
-}
-
-// PushFilter satisfies the builder interface.
-func (ms *memorySort) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	return errors.New("memorySort.PushFilter: unreachable")
-}
-
-// PushSelect satisfies the builder interface.
-func (ms *memorySort) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return nil, 0, errors.New("memorySort.PushSelect: unreachable")
-}
-
-// MakeDistinct satisfies the builder interface.
-func (ms *memorySort) MakeDistinct() error {
-	return errors.New("memorySort.MakeDistinct: unreachable")
-}
-
-// PushGroupBy satisfies the builder interface.
-func (ms *memorySort) PushGroupBy(_ sqlparser.GroupBy) error {
-	return errors.New("memorySort.PushGroupBy: unreachable")
-}
-
-// PushGroupBy satisfies the builder interface.
-func (ms *memorySort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, errors.New("memorySort.PushOrderBy: unreachable")
-}
-
-// SetLimit satisfies the builder interface.
+// SetLimit implements the logicalPlan interface
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
 	return errors.New("memorySort.Limit: unreachable")
 }
 
-// Wireup satisfies the builder interface.
+// Wireup implements the logicalPlan interface
 // If text columns are detected in the keys, then the function modifies
 // the primitive to pull a corresponding weight_string from mysql and
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
-func (ms *memorySort) Wireup(bldr builder, jt *jointab) error {
+func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 	for i, orderby := range ms.eMemorySort.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
 		if sqltypes.IsText(rc.column.typ) {
@@ -141,12 +125,9 @@ func (ms *memorySort) Wireup(bldr builder, jt *jointab) error {
 			ms.eMemorySort.TruncateColumnCount = len(ms.resultColumns)
 		}
 	}
-	return ms.input.Wireup(bldr, jt)
+	return ms.input.Wireup(plan, jt)
 }
 
-// SetUpperLimit satisfies the builder interface.
-// This is a no-op because we actually call SetLimit for this primitive.
-// In the future, we may have to honor this call for subqueries.
-func (ms *memorySort) SetUpperLimit(count sqlparser.Expr) {
-	ms.eMemorySort.UpperLimit, _ = sqlparser.NewPlanValue(count)
+func (ms *memorySort) WireupV4(semTable *semantics.SemTable) error {
+	return ms.input.WireupV4(semTable)
 }

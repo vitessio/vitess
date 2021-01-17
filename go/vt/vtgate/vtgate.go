@@ -26,16 +26,16 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -60,6 +60,7 @@ var (
 	_                  = flag.Bool("disable_local_gateway", false, "deprecated: if specified, this process will not route any queries to local tablets in the local cell")
 	maxMemoryRows      = flag.Int("max_memory_rows", 300000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
 	warnMemoryRows     = flag.Int("warn_memory_rows", 30000, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
+	defaultDDLStrategy = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 
 	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
@@ -72,6 +73,10 @@ var (
 
 	// Put set-passthrough under a flag.
 	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	plannerVersion   = flag.String("planner_version", "v3", "Sets the default planner to use when the session has not changed it. Valid values are: V3, V4 and V4Greedy. All V4 versions should be considered experimental!")
+
+	// lockHeartbeatTime is used to set the next heartbeat time.
+	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -163,6 +168,9 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		}
 	}
 
+	if _, _, err := schema.ParseDDLStrategy(*defaultDDLStrategy); err != nil {
+		log.Fatalf("Invalid value for -ddl_strategy: %v", err.Error())
+	}
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
@@ -304,7 +312,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 // by multiple go routines.
 func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	// In this context, we don't care if we can't fully parse destination
-	destKeyspace, destTabletType, dest, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
@@ -312,26 +320,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
-	}
-
-	// TODO: This could be simplified to have a StreamExecute that takes
-	// a destTarget without explicit destination.
-	switch dest.(type) {
-	case key.DestinationShard:
-		err = vtg.resolver.StreamExecute(
-			ctx,
-			sql,
-			bindVariables,
-			destKeyspace,
-			destTabletType,
-			dest,
-			session.Options,
-			func(reply *sqltypes.Result) error {
-				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
-				return callback(reply)
-			})
-	default:
+	} else {
 		err = vtg.executor.StreamExecute(
 			ctx,
 			"StreamExecute",
@@ -347,7 +336,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 				return callback(reply)
 			})
 	}
-handleError:
 	if err != nil {
 		query := map[string]interface{}{
 			"Sql":           sql,

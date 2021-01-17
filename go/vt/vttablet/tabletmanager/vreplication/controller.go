@@ -26,8 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
@@ -146,13 +147,16 @@ func (ct *controller) run(ctx context.Context) {
 		// Sometimes, canceled contexts get wrapped as errors.
 		select {
 		case <-ctx.Done():
+			log.Warningf("context canceled: %s", err.Error())
 			return
 		default:
 		}
 		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
+		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		timer := time.NewTimer(*retryDelay)
 		select {
 		case <-ctx.Done():
+			log.Warningf("context canceled: %s", err.Error())
 			timer.Stop()
 			return
 		case <-timer.C:
@@ -192,17 +196,24 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
 		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
 		if err != nil {
+			select {
+			case <-ctx.Done():
+			default:
+				ct.blpStats.ErrorCounts.Add([]string{"No Source Tablet Found"}, 1)
+				ct.setMessage(dbClient, fmt.Sprintf("Error picking tablet: %s", err.Error()))
+			}
 			return err
 		}
+		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
 		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
 		ct.sourceTablet.Set(tablet.Alias.String())
 	}
-
 	switch {
 	case len(ct.source.Tables) > 0:
 		// Table names can have search patterns. Resolve them against the schema.
 		tables, err := mysqlctl.ResolveTables(ctx, ct.mysqld, dbClient.DBName(), ct.source.Tables)
 		if err != nil {
+			ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 			return vterrors.Wrap(err, "failed to resolve table names")
 		}
 
@@ -239,11 +250,24 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+
 		return vr.Replicate(ctx)
 	}
+	ct.blpStats.ErrorCounts.Add([]string{"Invalid Source"}, 1)
 	return fmt.Errorf("missing source")
 }
 
+func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {
+	ct.blpStats.History.Add(&binlogplayer.StatsHistoryRecord{
+		Time:    time.Now(),
+		Message: message,
+	})
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set message: %v: %v", query, err)
+	}
+	return nil
+}
 func (ct *controller) Stop() {
 	ct.cancel()
 	<-ct.done

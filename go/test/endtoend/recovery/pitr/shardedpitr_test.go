@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -58,6 +59,7 @@ var (
 	shard1Name     = "80-"
 	dbName         = "vt_ks"
 	mysqlUserName  = "vt_dba"
+	mysqlPassword  = "password"
 	vSchema        = `{
 		"sharded": true,
 		"vindexes": {
@@ -279,7 +281,6 @@ func TestPITRRecovery(t *testing.T) {
 	// | 14 | prd-14 | 1597219142 |
 	// +----+--------+------------+
 	testTabletRecovery(t, bs1, "2m", restoreKS3Name, "80-", "INT64(7)")
-
 }
 
 func performResharding(t *testing.T) {
@@ -347,6 +348,7 @@ func startBinlogServer(t *testing.T, masterTablet *cluster.Vttablet) *binLogServ
 		hostname: binlogHost,
 		port:     masterTablet.MysqlctlProcess.MySQLPort,
 		username: mysqlUserName,
+		password: mysqlPassword,
 	})
 	require.NoError(t, err)
 	return bs
@@ -405,7 +407,7 @@ func initializeCluster(t *testing.T) {
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-restore_from_backup", "-enable_semi_sync")
 
-	err = clusterInstance.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	require.NoError(t, err)
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
@@ -424,7 +426,7 @@ func initializeCluster(t *testing.T) {
 	}
 
 	queryCmds := []string{
-		fmt.Sprintf("CREATE USER '%s'@'%%';", mysqlUserName),
+		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
 		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
 		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
 		fmt.Sprintf("create database %s;", "vt_ks"),
@@ -520,6 +522,7 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		"-binlog_host", binlogServer.hostname,
 		"-binlog_port", fmt.Sprintf("%d", binlogServer.port),
 		"-binlog_user", binlogServer.username,
+		"-binlog_password", binlogServer.password,
 		"-pitr_gtid_lookup_timeout", lookupTimeout,
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",

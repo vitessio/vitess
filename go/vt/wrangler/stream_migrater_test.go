@@ -24,7 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -34,23 +35,31 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
+var (
+	rdOnly  = []topodatapb.TabletType{topodatapb.TabletType_RDONLY}
+	replica = []topodatapb.TabletType{topodatapb.TabletType_REPLICA}
+)
+
 func TestStreamMigrateMainflow(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
+
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tme.expectCheckJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	tme.expectCheckJournals()
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
 		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
@@ -108,6 +117,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 				sourceRows[i]...),
 				nil)
 		}
+
 	}
 	stopStreams()
 
@@ -162,7 +172,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	tme.expectCreateReverseVReplication()
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -178,7 +188,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	tme.expectDeleteReverseVReplication()
 	tme.expectDeleteTargetVReplication()
-	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false); err != nil {
+	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", DropTable, false, false, false); err != nil {
 		t.Fatal(err)
 	}
 	verifyQueries(t, tme.allDBClients)
@@ -189,12 +199,14 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +346,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -356,12 +368,14 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +480,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -487,12 +501,14 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-80", "80-"}, []string{"-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -600,7 +616,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -620,12 +636,14 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -788,7 +806,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false); err != nil {
+	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -810,12 +828,14 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -917,7 +937,7 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 	tme.expectCancelMigration()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "does not match"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites err: %v, want %s", err, want)
@@ -930,12 +950,14 @@ func TestStreamMigrateCancel(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1009,7 +1031,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites err: %v, want %s", err, want)
@@ -1033,12 +1055,14 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1077,7 +1101,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 	}
 	stopStreams()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "cannot migrate until all streams are running: 0: 10"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
@@ -1090,12 +1114,14 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1143,7 +1169,7 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 
 	tme.expectCancelMigration()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1155,12 +1181,14 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1203,7 +1231,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	}
 	stopStreams()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "cannot migrate while vreplication streams in source shards are still copying: 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
@@ -1216,12 +1244,14 @@ func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1263,7 +1293,7 @@ func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 	}
 	stopStreams()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "VReplication streams must have named workflows for migration: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
@@ -1276,12 +1306,14 @@ func TestStreamMigrateDupWorkflow(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1323,7 +1355,7 @@ func TestStreamMigrateDupWorkflow(t *testing.T) {
 	}
 	stopStreams()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "VReplication stream has the same workflow name as the resharding workflow: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("SwitchWrites err: %v, want %v", err, want)
@@ -1337,12 +1369,14 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 	tme := newTestShardMigrater(ctx, t, []string{"-80", "80-"}, []string{"-"})
 	defer tme.stopTablets(t)
 
+	tme.expectNoPreviousJournals()
 	// Migrate reads
-	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward, false)
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward, false)
+	tme.expectNoPreviousJournals()
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, DirectionForward, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1394,7 +1428,7 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 	}
 	stopStreams()
 
-	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true, false)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "streams are mismatched across source shards"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("SwitchWrites err: %v, must contain %v", err, want)

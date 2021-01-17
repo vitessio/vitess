@@ -34,6 +34,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -289,9 +290,6 @@ func TestVerticalSplit(t *testing.T) {
 		"--min_healthy_rdonly_tablets", "1",
 		"destination_keyspace/0")
 	require.NoError(t, err)
-
-	// get status for destination master tablet, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, destinationMasterTablet, 700, 300)
 
 	// check query service is off on destination master, as filtered
 	// replication is enabled. Even health check should not interfere.

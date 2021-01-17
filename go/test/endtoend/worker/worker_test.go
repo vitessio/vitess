@@ -34,6 +34,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -576,7 +577,7 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, commonTabletArg...)
 
-	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	err = localCluster.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	assert.Nil(t, err)
 
 	// Start MySql

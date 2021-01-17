@@ -17,24 +17,27 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ builder = (*pulloutSubquery)(nil)
+var _ logicalPlan = (*pulloutSubquery)(nil)
 
-// pulloutSubquery is the builder for engine.PulloutSubquery.
+// pulloutSubquery is the logicalPlan for engine.PulloutSubquery.
 // This gets built if a subquery is not correlated and can
 // therefore can be pulled out and executed upfront.
 type pulloutSubquery struct {
 	order      int
-	subquery   builder
-	underlying builder
+	subquery   logicalPlan
+	underlying logicalPlan
 	eSubquery  *engine.PulloutSubquery
 }
 
 // newPulloutSubquery builds a new pulloutSubquery.
-func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, subquery builder) *pulloutSubquery {
+func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, subquery logicalPlan) *pulloutSubquery {
 	return &pulloutSubquery{
 		subquery: subquery,
 		eSubquery: &engine.PulloutSubquery{
@@ -46,103 +49,53 @@ func newPulloutSubquery(opcode engine.PulloutOpcode, sqName, hasValues string, s
 }
 
 // setUnderlying sets the underlying primitive.
-func (ps *pulloutSubquery) setUnderlying(underlying builder) {
+func (ps *pulloutSubquery) setUnderlying(underlying logicalPlan) {
 	ps.underlying = underlying
 	ps.underlying.Reorder(ps.subquery.Order())
 	ps.order = ps.underlying.Order() + 1
 }
 
-// Order satisfies the builder interface.
+// Order implements the logicalPlan interface
 func (ps *pulloutSubquery) Order() int {
 	return ps.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder implements the logicalPlan interface
 func (ps *pulloutSubquery) Reorder(order int) {
 	ps.subquery.Reorder(order)
 	ps.underlying.Reorder(ps.subquery.Order())
 	ps.order = ps.underlying.Order() + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (ps *pulloutSubquery) Primitive() engine.Primitive {
 	ps.eSubquery.Subquery = ps.subquery.Primitive()
 	ps.eSubquery.Underlying = ps.underlying.Primitive()
 	return ps.eSubquery
 }
 
-// PushLock satisfies the builder interface.
-func (ps *pulloutSubquery) PushLock(lock string) error {
-	err := ps.subquery.PushLock(lock)
-	if err != nil {
-		return err
-	}
-
-	return ps.underlying.PushLock(lock)
-}
-
-// First satisfies the builder interface.
-func (ps *pulloutSubquery) First() builder {
-	return ps.underlying.First()
-}
-
-// ResultColumns satisfies the builder interface.
+// ResultColumns implements the logicalPlan interface
 func (ps *pulloutSubquery) ResultColumns() []*resultColumn {
 	return ps.underlying.ResultColumns()
 }
 
-// PushFilter satisfies the builder interface.
-func (ps *pulloutSubquery) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	return ps.underlying.PushFilter(pb, filter, whereType, origin)
-}
-
-// PushSelect satisfies the builder interface.
-func (ps *pulloutSubquery) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return ps.underlying.PushSelect(pb, expr, origin)
-}
-
-// MakeDistinct satisfies the builder interface.
-func (ps *pulloutSubquery) MakeDistinct() error {
-	return ps.underlying.MakeDistinct()
-}
-
-// PushGroupBy satisfies the builder interface.
-func (ps *pulloutSubquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	return ps.underlying.PushGroupBy(groupBy)
-}
-
-// PushOrderBy satisfies the builder interface.
-func (ps *pulloutSubquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	bldr, err := ps.underlying.PushOrderBy(orderBy)
-	if err != nil {
-		return nil, err
-	}
-	ps.underlying = bldr
-	return ps, nil
-}
-
-// SetUpperLimit satisfies the builder interface.
-// This is a no-op because we actually call SetLimit for this primitive.
-// In the future, we may have to honor this call for subqueries.
-func (ps *pulloutSubquery) SetUpperLimit(count sqlparser.Expr) {
-	ps.underlying.SetUpperLimit(count)
-}
-
-// PushMisc satisfies the builder interface.
-func (ps *pulloutSubquery) PushMisc(sel *sqlparser.Select) {
-	ps.subquery.PushMisc(sel)
-	ps.underlying.PushMisc(sel)
-}
-
-// Wireup satisfies the builder interface.
-func (ps *pulloutSubquery) Wireup(bldr builder, jt *jointab) error {
-	if err := ps.underlying.Wireup(bldr, jt); err != nil {
+// Wireup implements the logicalPlan interface
+func (ps *pulloutSubquery) Wireup(plan logicalPlan, jt *jointab) error {
+	if err := ps.underlying.Wireup(plan, jt); err != nil {
 		return err
 	}
-	return ps.subquery.Wireup(bldr, jt)
+	return ps.subquery.Wireup(plan, jt)
 }
 
-// SupplyVar satisfies the builder interface.
+// Wireup2 implements the logicalPlan interface
+func (ps *pulloutSubquery) WireupV4(semTable *semantics.SemTable) error {
+	if err := ps.underlying.WireupV4(semTable); err != nil {
+		return err
+	}
+	return ps.subquery.WireupV4(semTable)
+}
+
+// SupplyVar implements the logicalPlan interface
 func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if from <= ps.subquery.Order() {
 		ps.subquery.SupplyVar(from, to, col, varname)
@@ -151,12 +104,32 @@ func (ps *pulloutSubquery) SupplyVar(from, to int, col *sqlparser.ColName, varna
 	ps.underlying.SupplyVar(from, to, col, varname)
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol implements the logicalPlan interface
 func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	return ps.underlying.SupplyCol(col)
 }
 
-// SupplyWeightString satisfies the builder interface.
+// SupplyWeightString implements the logicalPlan interface
 func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return ps.underlying.SupplyWeightString(colNumber)
+}
+
+// Rewrite implements the logicalPlan interface
+func (ps *pulloutSubquery) Rewrite(inputs ...logicalPlan) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pulloutSubquery: wrong number of inputs")
+	}
+	ps.underlying = inputs[0]
+	ps.subquery = inputs[1]
+	return nil
+}
+
+// Solves implements the logicalPlan interface
+func (ps *pulloutSubquery) ContainsTables() semantics.TableSet {
+	return ps.underlying.ContainsTables().Merge(ps.subquery.ContainsTables())
+}
+
+// Inputs implements the logicalPlan interface
+func (ps *pulloutSubquery) Inputs() []logicalPlan {
+	return []logicalPlan{ps.underlying, ps.subquery}
 }

@@ -1,4 +1,13 @@
-FROM vitess/bootstrap:percona80
+ARG bootstrap_version=1
+ARG image="vitess/bootstrap:${bootstrap_version}-percona80"
+
+FROM "${image}"
+
+# Allows some docker builds to disable CGO
+ARG CGO_ENABLED=0
+
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
 
 # Re-copy sources from working tree
 USER root

@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
@@ -207,7 +207,8 @@ func (dg *DiscoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 		return err
 	}
 
-	return dg.tsc.WaitForAllServingTablets(ctx, targets)
+	filteredTargets := discovery.FilterTargetsByKeyspaces(discovery.KeyspacesToWatch, targets)
+	return dg.tsc.WaitForAllServingTablets(ctx, filteredTargets)
 }
 
 // Close shuts down underlying connections.

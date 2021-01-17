@@ -45,7 +45,7 @@ type (
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
 		Evaluate(env ExpressionEnv) (EvalResult, error)
-		Type(env ExpressionEnv) querypb.Type
+		Type(env ExpressionEnv) (querypb.Type, error)
 		String() string
 	}
 
@@ -74,7 +74,7 @@ type (
 
 //Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
-	return castFromNumeric(e, e.typ)
+	return e.toSQLValue(e.typ)
 }
 
 //NewLiteralIntFromBytes returns a literal expression
@@ -202,27 +202,37 @@ func (s *Subtraction) Type(left querypb.Type) querypb.Type {
 }
 
 //Type implements the Expr interface
-func (b *BinaryOp) Type(env ExpressionEnv) querypb.Type {
-	ltype := b.Left.Type(env)
-	rtype := b.Right.Type(env)
+func (b *BinaryOp) Type(env ExpressionEnv) (querypb.Type, error) {
+	ltype, err := b.Left.Type(env)
+	if err != nil {
+		return 0, err
+	}
+	rtype, err := b.Right.Type(env)
+	if err != nil {
+		return 0, err
+	}
 	typ := mergeNumericalTypes(ltype, rtype)
-	return b.Expr.Type(typ)
+	return b.Expr.Type(typ), nil
 }
 
 //Type implements the Expr interface
-func (b *BindVariable) Type(env ExpressionEnv) querypb.Type {
+func (b *BindVariable) Type(env ExpressionEnv) (querypb.Type, error) {
 	e := env.BindVars
-	return e[b.Key].Type
+	v, found := e[b.Key]
+	if !found {
+		return querypb.Type_NULL_TYPE, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", b.Key)
+	}
+	return v.Type, nil
 }
 
 //Type implements the Expr interface
-func (l *Literal) Type(ExpressionEnv) querypb.Type {
-	return l.Val.typ
+func (l *Literal) Type(ExpressionEnv) (querypb.Type, error) {
+	return l.Val.typ, nil
 }
 
 //Type implements the Expr interface
-func (c *Column) Type(ExpressionEnv) querypb.Type {
-	return sqltypes.Float64
+func (c *Column) Type(ExpressionEnv) (querypb.Type, error) {
+	return sqltypes.Float64, nil
 }
 
 //String implements the BinaryExpr interface
@@ -287,6 +297,12 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 			ival = 0
 		}
 		return EvalResult{typ: sqltypes.Int64, ival: ival}, nil
+	case sqltypes.Int32:
+		ival, err := strconv.ParseInt(string(val.Value), 10, 32)
+		if err != nil {
+			ival = 0
+		}
+		return EvalResult{typ: sqltypes.Int32, ival: ival}, nil
 	case sqltypes.Uint64:
 		uval, err := strconv.ParseUint(string(val.Value), 10, 64)
 		if err != nil {
@@ -310,4 +326,16 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 // debugString is
 func (e *EvalResult) debugString() string {
 	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
+}
+
+// AreExprEqual checks if the provided Expr are the same or not
+func AreExprEqual(expr1 Expr, expr2 Expr) bool {
+	// Check the types of the two expressions, if they don't match then the two are not equal
+	if fmt.Sprintf("%T", expr1) != fmt.Sprintf("%T", expr2) {
+		return false
+	}
+	if expr1.String() == expr2.String() {
+		return true
+	}
+	return false
 }

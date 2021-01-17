@@ -24,7 +24,12 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
+
+	"github.com/stretchr/testify/assert"
+
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
@@ -95,7 +100,16 @@ var executorVSchema = `
 		},
 		"krcol_vdx": {
 			"type": "keyrange_lookuper"
-		}
+		},
+    	"t1_lkp_vdx": {
+      		"type": "consistent_lookup_unique",
+      		"params": {
+        		"table": "t1_lkp_idx",
+        		"from": "unq_col",
+        		"to": "keyspace_id"
+      		},
+      	"owner": "t1"
+    	}
 	},
 	"tables": {
 		"user": {
@@ -231,6 +245,26 @@ var executorVSchema = `
 					"name": "keyspace_id"
 				}
 			]
+		},
+		"t1": {
+      		"column_vindexes": [
+				{
+				  	"column": "id",
+				  	"name": "hash_index"
+				},
+				{
+				  	"column": "unq_col",
+				  	"name": "t1_lkp_vdx"
+				}
+            ]
+    	},
+		"t1_lkp_idx": {
+			"column_vindexes": [
+				{
+					"column": "unq_col",
+				  	"name": "hash_index"
+				}
+			]
 		}
 	}
 }
@@ -349,7 +383,7 @@ func createLegacyExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandb
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 	// Create these connections so scatter queries don't fail.
 	_ = hc.AddTestTablet(cell, "20-40", 1, "TestExecutor", "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	_ = hc.AddTestTablet(cell, "60-60", 1, "TestExecutor", "60-80", topodatapb.TabletType_MASTER, true, 1, nil)
+	_ = hc.AddTestTablet(cell, "60-80", 1, "TestExecutor", "60-80", topodatapb.TabletType_MASTER, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "80-a0", 1, "TestExecutor", "80-a0", topodatapb.TabletType_MASTER, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "a0-c0", 1, "TestExecutor", "a0-c0", topodatapb.TabletType_MASTER, true, 1, nil)
 	_ = hc.AddTestTablet(cell, "c0-e0", 1, "TestExecutor", "c0-e0", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -516,19 +550,14 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	t.Helper()
 
 	logStats := getQueryLog(logChan)
-	if logStats == nil {
-		t.Errorf("logstats: no querylog in channel, want sql %s", sql)
-		return nil
-	}
+	require.NotNil(t, logStats)
 
 	var log bytes.Buffer
 	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
 	fields := strings.Split(log.String(), "\t")
 
 	// fields[0] is the method
-	if method != fields[0] {
-		t.Errorf("logstats: method want %q got %q", method, fields[0])
-	}
+	assert.Equal(t, method, fields[0], "logstats: method")
 
 	// fields[1] - fields[6] are the caller id, start/end times, etc
 
@@ -558,22 +587,16 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	// fields[11] is the statement type
-	if stmtType != fields[11] {
-		t.Errorf("logstats: stmtType want %q got %q", stmtType, fields[11])
-	}
+	assert.Equal(t, stmtType, fields[11], "logstats: stmtType")
 
 	// fields[12] is the original sql
 	wantSQL := fmt.Sprintf("%q", sql)
-	if wantSQL != fields[12] {
-		t.Errorf("logstats: SQL want %s got %s", wantSQL, fields[12])
-	}
+	assert.Equal(t, wantSQL, fields[12], "logstats: SQL")
 
 	// fields[13] contains the formatted bind vars
 
 	// fields[14] is the count of shard queries
-	if fmt.Sprintf("%v", shardQueries) != fields[14] {
-		t.Errorf("logstats: ShardQueries want %v got %v", shardQueries, fields[14])
-	}
+	assert.Equal(t, fmt.Sprintf("%v", shardQueries), fields[14], "logstats: ShardQueries")
 
 	return logStats
 }

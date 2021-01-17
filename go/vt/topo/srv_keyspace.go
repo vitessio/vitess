@@ -25,7 +25,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -401,7 +402,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 		return err
 	}
 
-	// The caller intents to update all cells in this case
+	// The caller intends to update all cells in this case
 	if len(cells) == 0 {
 		cells, err = ts.GetCellInfoNames(ctx)
 		if err != nil {

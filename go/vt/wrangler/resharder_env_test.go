@@ -19,10 +19,13 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -44,6 +47,10 @@ type testResharderEnv struct {
 	cell     string
 	tmc      *testResharderTMClient
 }
+
+var (
+	testMode = "" //"debug"
+)
 
 //----------------------------------------------
 // testResharderEnv
@@ -79,6 +86,7 @@ func (env *testResharderEnv) expectValidation() {
 		tabletID := int(tablet.Alias.Uid)
 		// wr.validateNewWorkflow
 		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
+		env.tmc.expectVRQuery(tabletID, rsSelectFrozenQuery, &sqltypes.Result{})
 
 		if tabletID >= 200 {
 			// validateTargets
@@ -92,7 +100,7 @@ func (env *testResharderEnv) expectNoRefStream() {
 		tabletID := int(tablet.Alias.Uid)
 		if tabletID < 200 {
 			// readRefStreams
-			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
+			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), &sqltypes.Result{})
 		}
 	}
 }
@@ -177,9 +185,14 @@ func (tmc *testResharderTMClient) expectVRQuery(tabletID int, query string, resu
 func (tmc *testResharderTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
-
+	if testMode == "debug" {
+		fmt.Printf("Got: %d:%s\n", tablet.Alias.Uid, query)
+	}
 	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
 	if len(qrs) == 0 {
+		if testMode == "debug" {
+			fmt.Printf("Want: %d:%s, Stack:\n%v\n", tablet.Alias.Uid, query, debug.Stack())
+		}
 		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
 	}
 	matched := false
@@ -212,7 +225,7 @@ func (tmc *testResharderTMClient) verifyQueries(t *testing.T) {
 			for _, qr := range qrs {
 				list = append(list, qr.query)
 			}
-			t.Errorf("tablet %v: has unreturned results: %v", tabletID, list)
+			t.Errorf("tablet %v: following queries were not run during the test: \n%v", tabletID, strings.Join(list, "\n"))
 		}
 	}
 }

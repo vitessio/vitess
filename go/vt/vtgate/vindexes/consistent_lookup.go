@@ -164,7 +164,7 @@ func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_PRE)
+	results, err := lu.lkp.Lookup(vcursor, ids, vcursor.LookupRowLockShardSession())
 	if err != nil {
 		return nil, err
 	}

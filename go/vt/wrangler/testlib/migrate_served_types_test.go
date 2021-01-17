@@ -24,7 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -111,7 +111,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		TabletKeyspaceShard(t, "ks", "80-"))
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, "ks", []string{"cell1"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, "ks", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		TabletKeyspaceShard(t, "ks", "c0-"))
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, "ks", []string{"cell1"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, "ks", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}

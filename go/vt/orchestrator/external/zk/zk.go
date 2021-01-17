@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/samuel/go-zookeeper/zk"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 

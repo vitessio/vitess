@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 
 	proxyproto "github.com/pires/go-proxyproto"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -454,7 +455,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	// Negotiation worked, send OK packet.
-	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
 		log.Errorf("Cannot write OK packet to %s: %v", c, err)
 		return
 	}
@@ -470,8 +471,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	for {
-		err := c.handleNextCommand(l.handler)
-		if err != nil {
+		kontinue := c.handleNextCommand(l.handler)
+		if !kontinue {
 			return
 		}
 	}

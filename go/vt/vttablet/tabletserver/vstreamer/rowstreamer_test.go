@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -61,12 +62,44 @@ func TestStreamRowsScan(t *testing.T) {
 
 	engine.se.Reload(context.Background())
 
-	// t1: all rows
+	// t1: simulates rollup
 	wantStream := []string{
+		`fields:<name:"1" type:INT64 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:1 values:"1" > rows:<lengths:1 values:"1" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery := "select id, val from t1 order by id"
+	checkStream(t, "select 1 from t1", nil, wantQuery, wantStream)
+
+	// t1: simulates rollup, with non-pk column
+	wantStream = []string{
+		`fields:<name:"1" type:INT64 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"1bbb" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery = "select id, val from t1 order by id"
+	checkStream(t, "select 1, val from t1", nil, wantQuery, wantStream)
+
+	// t1: simulates rollup, with pk and non-pk column
+	wantStream = []string{
+		`fields:<name:"1" type:INT64 > fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:1 lengths:1 lengths:3 values:"11aaa" > rows:<lengths:1 lengths:1 lengths:3 values:"12bbb" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery = "select id, val from t1 order by id"
+	checkStream(t, "select 1, id, val from t1", nil, wantQuery, wantStream)
+
+	// t1: no pk in select list
+	wantStream = []string{
+		`fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
+		`rows:<lengths:3 values:"aaa" > rows:<lengths:3 values:"bbb" > lastpk:<lengths:1 values:"2" > `,
+	}
+	wantQuery = "select id, val from t1 order by id"
+	checkStream(t, "select val from t1", nil, wantQuery, wantStream)
+
+	// t1: all rows
+	wantStream = []string{
 		`fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 values:"2" > `,
 	}
-	wantQuery := "select id, val from t1 order by id"
+	wantQuery = "select id, val from t1 order by id"
 	checkStream(t, "select * from t1", nil, wantQuery, wantStream)
 
 	// t1: lastpk=1
@@ -132,6 +165,14 @@ func TestStreamRowsScan(t *testing.T) {
 	}
 	wantQuery = "select id1, id2, id3, val from t4 where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
 	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
+
+	// t1: test for unsupported integer literal
+	wantError := "only the integer literal 1 is supported"
+	expectStreamError(t, "select 2 from t1", wantError)
+
+	// t1: test for unsupported literal type
+	wantError = "only integer literals are supported"
+	expectStreamError(t, "select 'a' from t1", wantError)
 }
 
 func TestStreamRowsUnicode(t *testing.T) {
@@ -388,4 +429,16 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 	for err := range ch {
 		t.Error(err)
 	}
+}
+
+func expectStreamError(t *testing.T, query string, want string) {
+	t.Helper()
+	ch := make(chan error)
+	go func() {
+		defer close(ch)
+		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+			return nil
+		})
+		require.EqualError(t, err, want, "Got incorrect error")
+	}()
 }

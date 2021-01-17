@@ -2524,7 +2524,7 @@ func RegroupReplicasGTID(
 		}
 	}
 
-	if err := TabletSetMaster(candidateReplica.Key); err != nil {
+	if err := SwitchMaster(candidateReplica.Key, *masterKey); err != nil {
 		return emptyReplicas, emptyReplicas, emptyReplicas, candidateReplica, err
 	}
 

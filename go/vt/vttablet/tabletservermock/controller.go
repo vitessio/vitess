@@ -20,7 +20,7 @@ package tabletservermock
 import (
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"time"
 
@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -171,6 +172,11 @@ func (tqsc *Controller) IsHealthy() error {
 
 // ReloadSchema is part of the tabletserver.Controller interface
 func (tqsc *Controller) ReloadSchema(ctx context.Context) error {
+	return nil
+}
+
+// OnlineDDLExecutor is part of the tabletserver.Controller interface
+func (tqsc *Controller) OnlineDDLExecutor() *onlineddl.Executor {
 	return nil
 }
 

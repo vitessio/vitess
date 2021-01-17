@@ -30,7 +30,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -61,7 +63,7 @@ const (
 // We will use credentials in the following order
 // 1. Direct Command Line Flag (azblob_backup_account_name, azblob_backup_account_key)
 // 2. Environment variables
-func azCredentials() (*azblob.SharedKeyCredential, error) {
+func azInternalCredentials() (string, string, error) {
 	actName := *accountName
 	if actName == "" {
 		// Check the Environmental Value
@@ -73,7 +75,7 @@ func azCredentials() (*azblob.SharedKeyCredential, error) {
 		log.Infof("Getting Azure Storage Account key from file: %s", *accountKeyFile)
 		dat, err := ioutil.ReadFile(*accountKeyFile)
 		if err != nil {
-			return nil, err
+			return "", "", err
 		}
 		actKey = string(dat)
 	} else {
@@ -81,7 +83,15 @@ func azCredentials() (*azblob.SharedKeyCredential, error) {
 	}
 
 	if actName == "" || actKey == "" {
-		return nil, fmt.Errorf("Azure Storage Account credentials not found in command-line flags or environment variables")
+		return "", "", fmt.Errorf("Azure Storage Account credentials not found in command-line flags or environment variables")
+	}
+	return actName, actKey, nil
+}
+
+func azCredentials() (*azblob.SharedKeyCredential, error) {
+	actName, actKey, err := azInternalCredentials()
+	if err != nil {
+		return nil, err
 	}
 	return azblob.NewSharedKeyCredential(actName, actKey)
 }
@@ -95,6 +105,33 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 			// this should be set to a very nigh number (they claim 60s per MB).
 			// That could end up being days so we are limiting this to four hours.
 			TryTimeout: 4 * time.Hour,
+		},
+		Log: pipeline.LogOptions{
+			Log: func(level pipeline.LogLevel, message string) {
+				switch level {
+				case pipeline.LogFatal, pipeline.LogPanic:
+					log.Fatal(message)
+				case pipeline.LogError:
+					log.Error(message)
+				case pipeline.LogWarning:
+					log.Warning(message)
+				case pipeline.LogInfo, pipeline.LogDebug:
+					log.Info(message)
+				}
+			},
+			ShouldLog: func(level pipeline.LogLevel) bool {
+				switch level {
+				case pipeline.LogFatal, pipeline.LogPanic:
+					return bool(log.V(3))
+				case pipeline.LogError:
+					return bool(log.V(3))
+				case pipeline.LogWarning:
+					return bool(log.V(2))
+				case pipeline.LogInfo, pipeline.LogDebug:
+					return bool(log.V(1))
+				}
+				return false
+			},
 		},
 	})
 	u := url.URL{
@@ -240,14 +277,19 @@ func (bs *AZBlobBackupStorage) containerURL() (*azblob.ContainerURL, error) {
 
 // ListBackups implements BackupStorage.
 func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	log.Infof("ListBackups: [azblob] container: %s, directory: %v", *containerName, objName(dir, ""))
+	var searchPrefix string
+	if dir == "/" {
+		searchPrefix = "/"
+	} else {
+		searchPrefix = objName(dir, "")
+	}
+
+	log.Infof("ListBackups: [azblob] container: %s, directory: %v", *containerName, searchPrefix)
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
 		return nil, err
 	}
-
-	searchPrefix := objName(dir, "")
 
 	result := make([]backupstorage.BackupHandle, 0)
 	var subdirs []string
@@ -325,7 +367,7 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 		// One day we will be able to use this https://docs.microsoft.com/en-us/rest/api/storageservices/blob-batch
 		// but currently it is listed as a preview and its not in the go API
 		for _, item := range resp.Segment.BlobItems {
-			_, err = containerURL.NewBlobURL(item.Name).Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
+			_, err := containerURL.NewBlobURL(item.Name).Delete(ctx, azblob.DeleteSnapshotsOptionInclude, azblob.BlobAccessConditions{})
 			if err != nil {
 				return err
 			}
@@ -333,7 +375,24 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 		marker = resp.NextMarker
 	}
 
-	return nil
+	// Delete the blob representing the folder of the backup, remove any trailing slash to signify we want to remove the folder
+	// NOTE: you must set DeleteSnapshotsOptionNone or this will error out with a server side error
+	for retry := 0; retry < defaultRetryCount; retry = retry + 1 {
+		// Since the deletion of blob's is asyncronious we may need to wait a bit before we delete the folder
+		// Also refresh the client just for good measure
+		time.Sleep(10 * time.Second)
+		containerURL, err = bs.containerURL()
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Removing backup directory: %v", strings.TrimSuffix(searchPrefix, "/"))
+		_, err = containerURL.NewBlobURL(strings.TrimSuffix(searchPrefix, "/")).Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
+		if err == nil {
+			break
+		}
+	}
+	return err
 }
 
 // Close implements BackupStorage.

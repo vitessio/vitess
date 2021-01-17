@@ -25,10 +25,15 @@ import (
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func TestConcatenate_NoSourcesErr(t *testing.T) {
+func r(names, types string, rows ...string) *sqltypes.Result {
+	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(names, types), rows...)
+}
+
+func TestConcatenate_NoErrors(t *testing.T) {
 	type testCase struct {
 		testName       string
 		inputs         []*sqltypes.Result
@@ -39,212 +44,107 @@ func TestConcatenate_NoSourcesErr(t *testing.T) {
 	testCases := []*testCase{{
 		testName: "empty results",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id2|col21|col22", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id3|col31|col32", "int64|varbinary|varbinary")),
+			r("id1|col11|col12", "int64|varbinary|varbinary"),
+			r("id2|col21|col22", "int64|varbinary|varbinary"),
+			r("id3|col31|col32", "int64|varbinary|varbinary"),
 		},
-		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
+		expectedResult: r("id1|col11|col12", "int64|varbinary|varbinary"),
 	}, {
 		testName: "2 non empty result",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "11|m1|n1", "22|m2|n2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+			r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2"),
+			r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
+			r("id2|col2|col3", "int64|varchar|varbinary", "3|a3|b3"),
+			r("id2|col2|col3", "int64|varchar|varbinary", "4|a4|b4"),
 		},
-		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2"),
+		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "11|m1|n1", "22|m2|n2", "1|a1|b1", "2|a2|b2", "3|a3|b3", "4|a4|b4"),
 	}, {
 		testName: "mismatch field type",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
+			r("id|col1|col2", "int64|varbinary|varbinary", "1|a1|b1", "2|a2|b2"),
+			r("id|col3|col4", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
-		expectedError: "column field type does not match for name: (col1, col3) types: (VARBINARY, VARCHAR)",
+		expectedError: "column field type does not match for name",
 	}, {
 		testName: "input source has different column count",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varchar"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4|col5", "int64|varchar|varchar|int32"), "1|a1|b1|5", "2|a2|b2|6"),
+			r("id|col1|col2", "int64|varchar|varchar", "1|a1|b1", "2|a2|b2"),
+			r("id|col1|col2", "int64|varchar|varchar", "1|a1|b1", "2|a2|b2"),
+			r("id|col3|col4|col5", "int64|varchar|varchar|int32", "1|a1|b1|5", "2|a2|b2|6"),
 		},
-		expectedError: "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000)",
+		expectedError: "The used SELECT statements have a different number of columns",
 	}, {
 		testName: "1 empty result and 1 non empty result",
 		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+			r("myid|mycol1|mycol2", "int64|varchar|varbinary"),
+			r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 		},
-		expectedResult: sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
+		expectedResult: r("myid|mycol1|mycol2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2"),
 	}}
 
 	for _, tc := range testCases {
-		t.Run(tc.testName, func(t *testing.T) {
-			var fps []Primitive
-			for _, input := range tc.inputs {
-				fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{input, input}, sendErr: errors.New("abc")})
-			}
-			concatenate := &Concatenate{Sources: fps}
+		var sources []Primitive
+		for _, input := range tc.inputs {
+			// input is added twice, since the first one is used by execute and the next by stream execute
+			sources = append(sources, &fakePrimitive{results: []*sqltypes.Result{input, input}})
+		}
+		concatenate := &Concatenate{
+			Sources: sources,
+		}
 
-			t.Run("Execute wantfields true", func(t *testing.T) {
-				qr, err := concatenate.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
-				if tc.expectedError == "" {
-					require.NoError(t, err)
-					require.Equal(t, tc.expectedResult, qr)
-				} else {
-					require.EqualError(t, err, tc.expectedError)
-				}
-			})
-
-			t.Run("StreamExecute wantfields true", func(t *testing.T) {
-				qr, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
-				if tc.expectedError == "" {
-					require.NoError(t, err)
-					require.Equal(t, utils.SortString(fmt.Sprintf("%v", tc.expectedResult.Rows)), utils.SortString(fmt.Sprintf("%v", qr.Rows)))
-				} else {
-					require.EqualError(t, err, tc.expectedError)
-				}
-			})
-		})
-	}
-}
-
-func TestConcatenate_WithSourcesErrFirst(t *testing.T) {
-	type testCase struct {
-		testName string
-		inputs   []*sqltypes.Result
-	}
-
-	strFailed := "failed"
-	executeErr := "Concatenate.Execute: " + strFailed
-	testCases := []*testCase{{
-		testName: "empty results",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id2|col21|col22", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id3|col31|col32", "int64|varbinary|varbinary")),
-		},
-	}, {
-		testName: "2 non empty result",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "11|m1|n1", "22|m2|n2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
-		},
-	}, {
-		testName: "mismatch field type",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
-		},
-	}, {
-		testName: "input source has different column count",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varchar"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4|col5", "int64|varchar|varchar|int32"), "1|a1|b1|5", "2|a2|b2|6"),
-		},
-	}, {
-		testName: "1 empty result and 1 non empty result",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
-		},
-	}}
-
-	for _, tc := range testCases {
-		t.Run(tc.testName, func(t *testing.T) {
-			var fps []Primitive
-			fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)})
-			for _, input := range tc.inputs {
-				fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{input, input}})
-			}
-			concatenate := &Concatenate{Sources: fps}
-
-			t.Run("Execute wantfields true", func(t *testing.T) {
-				_, err := concatenate.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
-				require.EqualError(t, err, executeErr)
-
-			})
-
-			t.Run("StreamExecute wantfields true", func(t *testing.T) {
-				_, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
-				require.EqualError(t, err, strFailed)
-			})
-		})
-	}
-}
-
-func TestConcatenate_WithSourcesErrLast(t *testing.T) {
-	type testCase struct {
-		testName               string
-		inputs                 []*sqltypes.Result
-		execErr, streamExecErr string
-		nonDeterministicErr    bool
-	}
-
-	strFailed := "failed"
-	executeErr := "Concatenate.Execute: " + strFailed
-	testCases := []*testCase{{
-		testName: "empty results",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id1|col11|col12", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id2|col21|col22", "int64|varbinary|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id3|col31|col32", "int64|varbinary|varbinary")),
-		},
-		execErr:       executeErr,
-		streamExecErr: strFailed,
-	}, {
-		testName: "2 non empty result",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary"), "11|m1|n1", "22|m2|n2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
-		},
-		execErr:       executeErr,
-		streamExecErr: strFailed,
-	}, {
-		testName: "mismatch field type",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varbinary|varbinary"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
-		},
-		execErr:             "column field type does not match for name: (col1, col3) types: (VARBINARY, VARCHAR)",
-		streamExecErr:       "column field type does not match for name: (col1, col3) types: (VARBINARY, VARCHAR)",
-		nonDeterministicErr: true,
-	}, {
-		testName: "input source has different column count",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varchar"), "1|a1|b1", "2|a2|b2"),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col3|col4|col5", "int64|varchar|varchar|int32"), "1|a1|b1|5", "2|a2|b2|6"),
-		},
-		execErr:             "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000)",
-		streamExecErr:       strFailed,
-		nonDeterministicErr: true,
-	}, {
-		testName: "1 empty result and 1 non empty result",
-		inputs: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("myid|mycol1|mycol2", "int64|varchar|varbinary")),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col1|col2", "int64|varchar|varbinary"), "1|a1|b1", "2|a2|b2"),
-		},
-		execErr:       executeErr,
-		streamExecErr: strFailed,
-	}}
-
-	for _, tc := range testCases {
-		t.Run(tc.testName, func(t *testing.T) {
-			var fps []Primitive
-			for _, input := range tc.inputs {
-				fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{input, input}})
-			}
-			fps = append(fps, &fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)})
-			concatenate := &Concatenate{Sources: fps}
-
-			t.Run("Execute wantfields true", func(t *testing.T) {
-				_, err := concatenate.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
-				require.EqualError(t, err, tc.execErr)
-			})
-
-			t.Run("StreamExecute wantfields true", func(t *testing.T) {
-				_, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
+		t.Run(tc.testName+"-Execute", func(t *testing.T) {
+			qr, err := concatenate.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedResult, qr)
+			} else {
 				require.Error(t, err)
-				if !tc.nonDeterministicErr {
-					require.EqualError(t, err, tc.streamExecErr)
-				}
-			})
+				require.Contains(t, err.Error(), tc.expectedError)
+			}
+		})
+
+		t.Run(tc.testName+"-StreamExecute", func(t *testing.T) {
+			qr, err := wrapStreamExecute(concatenate, &noopVCursor{ctx: context.Background()}, nil, true)
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				require.Equal(t, utils.SortString(fmt.Sprintf("%v", tc.expectedResult.Rows)), utils.SortString(fmt.Sprintf("%v", qr.Rows)))
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expectedError)
+			}
 		})
 	}
+}
+
+func TestConcatenate_WithErrors(t *testing.T) {
+	strFailed := "failed"
+	errString := "Concatenate.Execute: " + strFailed
+
+	fake := r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2")
+	concatenate := &Concatenate{
+		Sources: []Primitive{
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
+			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
+		},
+	}
+	ctx := context.Background()
+	_, err := concatenate.Execute(&noopVCursor{ctx: ctx}, nil, true)
+	require.EqualError(t, err, errString)
+
+	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
+	require.EqualError(t, err, strFailed)
+
+	concatenate = &Concatenate{
+		Sources: []Primitive{
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
+			&fakePrimitive{results: []*sqltypes.Result{nil, nil}, sendErr: errors.New(strFailed)},
+			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
+		},
+	}
+	_, err = concatenate.Execute(&noopVCursor{ctx: ctx}, nil, true)
+	require.EqualError(t, err, errString)
+	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
+	require.EqualError(t, err, strFailed)
 }

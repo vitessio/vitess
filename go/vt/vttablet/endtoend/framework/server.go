@@ -22,12 +22,14 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/yaml2"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -111,6 +113,9 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.TwoPCCoordinatorAddress = "fake"
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
+	config.GracePeriods.ShutdownSeconds = 2
+	gotBytes, _ := yaml2.Marshal(config)
+	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(connParams, connAppDebugParams, dbName, config)
 }
 

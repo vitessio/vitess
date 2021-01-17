@@ -17,8 +17,10 @@
 package app
 
 import (
+	"flag"
 	"net"
 	nethttp "net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -35,10 +37,14 @@ import (
 	"github.com/martini-contrib/auth"
 	"github.com/martini-contrib/gzip"
 	"github.com/martini-contrib/render"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
 const discoveryMetricsName = "DISCOVERY_METRICS"
+
+// TODO(sougou): see if this can be rice-boxed.
+var webDir = flag.String("orc_web_dir", "web/orchestrator", "Orchestrator http file location")
 
 var sslPEMPassword []byte
 var agentSSLPEMPassword []byte
@@ -109,11 +115,11 @@ func standardHttp(continuousDiscovery bool) {
 	m.Use(gzip.All())
 	// Render html templates from templates directory
 	m.Use(render.Renderer(render.Options{
-		Directory:       "web/orchestrator",
+		Directory:       *webDir,
 		Layout:          "templates/layout",
 		HTMLContentType: "text/html",
 	}))
-	m.Use(martini.Static("web/orchestrator/public", martini.StaticOptions{Prefix: config.Config.URLPrefix}))
+	m.Use(martini.Static(path.Join(*webDir, "public"), martini.StaticOptions{Prefix: config.Config.URLPrefix}))
 	if config.Config.UseMutualTLS {
 		m.Use(ssl.VerifyOUs(config.Config.SSLValidOUs))
 	}

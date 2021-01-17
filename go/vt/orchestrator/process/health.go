@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/util"
 
 	"github.com/patrickmn/go-cache"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 )

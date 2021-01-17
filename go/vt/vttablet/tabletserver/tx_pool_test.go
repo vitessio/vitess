@@ -19,18 +19,19 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"gotest.tools/assert"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,7 +41,7 @@ import (
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 
 	sql := "select 'this is a query'"
@@ -48,7 +49,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 
-	id := conn.ID()
+	id := conn.ReservedID()
 	conn.Unlock()
 
 	// get the connection and execute a query on it
@@ -74,7 +75,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollback(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 
 	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
@@ -92,7 +93,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 }
 
 func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 
 	conn, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
@@ -109,7 +110,7 @@ func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 
 	// start two transactions, and mark one of them as unused
@@ -120,14 +121,14 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	conn2.Unlock() // this marks conn2 as NonBusy
 
 	// This should rollback only txid2.
-	txPool.RollbackNonBusy(ctx)
+	txPool.Shutdown(ctx)
 
 	// committing tx1 should not be an issue
 	_, err = txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 
 	// Trying to get back to conn2 should not work since the transaction has been rolled back
-	_, err = txPool.GetAndLock(conn2.ID(), "")
+	_, err = txPool.GetAndLock(conn2.ReservedID(), "")
 	require.Error(t, err)
 
 	conn1.Release(tx.TxCommit)
@@ -135,7 +136,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 }
 
 func TestTxPoolTransactionIsolation(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 
 	c2, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED}, false, 0, nil)
@@ -146,7 +147,7 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 }
 
 func TestTxPoolAutocommit(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 
 	// Start a transaction with autocommit. This will ensure that the executor does not send begin/commit statements
@@ -192,7 +193,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
 func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool) {
 	t.Helper()
 	db := fakesqldb.New(t)
-	txPool := newTxPool()
+	txPool, _ := newTxPool()
 	// Set the capacity to 1 to ensure that the db connection is reused.
 	txPool.scp.conns.SetCapacity(1)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
@@ -209,17 +210,42 @@ func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool) {
 }
 
 func TestTxPoolBeginWithError(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, limiter, closer := setup(t)
 	defer closer()
 	db.AddRejectedQuery("begin", errRejected)
-	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+
+	im := &querypb.VTGateCallerID{
+		Username: "user",
+	}
+	ef := &vtrpcpb.CallerID{
+		Principal: "principle",
+	}
+
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+	_, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "error: rejected")
 	require.Equal(t, vtrpcpb.Code_UNKNOWN, vterrors.Code(err), "wrong error code for Begin error")
+
+	// Regression test for #6727: make sure the tx limiter is decremented if grabbing a connection
+	// errors for whatever reason.
+	require.Equal(t,
+		[]fakeLimiterEntry{
+			{
+				immediate: im,
+				effective: ef,
+				isRelease: false,
+			},
+			{
+				immediate: im,
+				effective: ef,
+				isRelease: true,
+			},
+		}, limiter.Actions())
 }
 
 func TestTxPoolBeginWithPreQueryError(t *testing.T) {
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 	db.AddRejectedQuery("pre_query", errRejected)
 	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, []string{"pre_query"})
@@ -230,7 +256,7 @@ func TestTxPoolBeginWithPreQueryError(t *testing.T) {
 
 func TestTxPoolCancelledContextError(t *testing.T) {
 	// given
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
@@ -251,7 +277,7 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 	env.Config().TxPool.MaxWaiters = 0
 	env.Config().TxPool.TimeoutSeconds = 1
 	// given
-	db, txPool, closer := setupWithEnv(t, env)
+	db, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 
 	// lock the only connection in the pool.
@@ -272,7 +298,7 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 
 func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 	sql := "alter table test_table add test_column int"
-	db, txPool, closer := setup(t)
+	db, txPool, _, closer := setup(t)
 	defer closer()
 	db.AddRejectedQuery("rollback", errRejected)
 
@@ -291,10 +317,10 @@ func TestTxPoolRollbackFailIsPassedThrough(t *testing.T) {
 }
 
 func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
-	db, txPool, _ := setup(t)
+	db, txPool, _, _ := setup(t)
 	defer db.Close()
 	conn1, _, _ := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	id := conn1.ID()
+	id := conn1.ReservedID()
 	conn1.Unlock()
 	txPool.Close()
 
@@ -312,11 +338,11 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	assertErrorMatch(id, "pool closed")
 
-	txPool = newTxPool()
+	txPool, _ = newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	id = conn1.ID()
+	id = conn1.ReservedID()
 	_, err := txPool.Commit(ctx, conn1)
 	require.NoError(t, err)
 
@@ -324,21 +350,21 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	assertErrorMatch(id, "transaction committed")
 
-	txPool = newTxPool()
+	txPool, _ = newTxPool()
 	txPool.SetTimeout(1 * time.Millisecond)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
 	conn1, _, _ = txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	conn1.Unlock()
-	id = conn1.ID()
+	id = conn1.ReservedID()
 	time.Sleep(20 * time.Millisecond)
 
 	assertErrorMatch(id, "exceeded timeout: 1ms")
 }
 
 func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
-	_, txPool, closer := setup(t)
+	_, txPool, _, closer := setup(t)
 	defer closer()
 
 	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
@@ -354,13 +380,59 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	require.Equal(t, 0, txPool.scp.Capacity())
 }
 
-func newTxPool() *TxPool {
+func TestTxTimeoutKillsTransactions(t *testing.T) {
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().TxPool.MaxWaiters = 0
+	env.Config().Oltp.TxTimeoutSeconds = 1
+	_, txPool, limiter, closer := setupWithEnv(t, env)
+	defer closer()
+	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
+
+	im := &querypb.VTGateCallerID{
+		Username: "user",
+	}
+	ef := &vtrpcpb.CallerID{
+		Principal: "principle",
+	}
+
+	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
+
+	// Start transaction.
+	conn, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
+	require.NoError(t, err)
+	conn.Unlock()
+
+	// Let it time out and get killed by the tx killer.
+	time.Sleep(1200 * time.Millisecond)
+
+	// Verify that the tx killer rand.
+	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
+
+	// Regression test for #6727: make sure the tx limiter is decremented when the tx killer closes
+	// a transaction.
+	require.Equal(t,
+		[]fakeLimiterEntry{
+			{
+				immediate: im,
+				effective: ef,
+				isRelease: false,
+			},
+			{
+				immediate: im,
+				effective: ef,
+				isRelease: true,
+			},
+		}, limiter.Actions())
+}
+
+func newTxPool() (*TxPool, *fakeLimiter) {
 	return newTxPoolWithEnv(newEnv("TabletServerTest"))
 }
 
-func newTxPoolWithEnv(env tabletenv.Env) *TxPool {
-	limiter := &txlimiter.TxAllowAll{}
-	return NewTxPool(env, limiter)
+func newTxPoolWithEnv(env tabletenv.Env) (*TxPool, *fakeLimiter) {
+	limiter := &fakeLimiter{}
+	return NewTxPool(env, limiter), limiter
 }
 
 func newEnv(exporterName string) tabletenv.Env {
@@ -376,27 +448,67 @@ func newEnv(exporterName string) tabletenv.Env {
 	return env
 }
 
-func setup(t *testing.T) (*fakesqldb.DB, *TxPool, func()) {
+type fakeLimiterEntry struct {
+	immediate *querypb.VTGateCallerID
+	effective *vtrpcpb.CallerID
+	isRelease bool
+}
+
+type fakeLimiter struct {
+	actions []fakeLimiterEntry
+	mu      sync.Mutex
+}
+
+func (fl *fakeLimiter) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) bool {
+	fl.mu.Lock()
+	defer fl.mu.Unlock()
+	fl.actions = append(fl.actions, fakeLimiterEntry{
+		immediate: immediate,
+		effective: effective,
+		isRelease: false,
+	})
+	return true
+}
+
+func (fl *fakeLimiter) Release(immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) {
+	fl.mu.Lock()
+	defer fl.mu.Unlock()
+	fl.actions = append(fl.actions, fakeLimiterEntry{
+		immediate: immediate,
+		effective: effective,
+		isRelease: true,
+	})
+}
+
+func (fl *fakeLimiter) Actions() []fakeLimiterEntry {
+	fl.mu.Lock()
+	defer fl.mu.Unlock()
+	result := make([]fakeLimiterEntry, len(fl.actions))
+	copy(result, fl.actions)
+	return result
+}
+
+func setup(t *testing.T) (*fakesqldb.DB, *TxPool, *fakeLimiter, func()) {
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
-	txPool := newTxPool()
+	txPool, limiter := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
-	return db, txPool, func() {
+	return db, txPool, limiter, func() {
 		txPool.Close()
 		db.Close()
 	}
 }
 
-func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, func()) {
+func setupWithEnv(t *testing.T, env tabletenv.Env) (*fakesqldb.DB, *TxPool, *fakeLimiter, func()) {
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
-	txPool := newTxPoolWithEnv(env)
+	txPool, limiter := newTxPoolWithEnv(env)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
-	return db, txPool, func() {
+	return db, txPool, limiter, func() {
 		txPool.Close()
 		db.Close()
 	}

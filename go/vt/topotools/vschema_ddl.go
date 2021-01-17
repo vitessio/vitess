@@ -29,7 +29,7 @@ import (
 
 // ApplyVSchemaDDL applies the given DDL statement to the vschema
 // keyspace definition and returns the modified keyspace object.
-func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) (*vschemapb.Keyspace, error) {
+func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlparser.AlterVschema) (*vschemapb.Keyspace, error) {
 	if ks == nil {
 		ks = new(vschemapb.Keyspace)
 	}
@@ -44,14 +44,14 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 	var tableName string
 	var table *vschemapb.Table
-	if !ddl.Table.IsEmpty() {
-		tableName = ddl.Table.Name.String()
+	if !alterVschema.Table.IsEmpty() {
+		tableName = alterVschema.Table.Name.String()
 		table = ks.Tables[tableName]
 	}
 
-	switch ddl.Action {
-	case sqlparser.CreateVindexStr:
-		name := ddl.VindexSpec.Name.String()
+	switch alterVschema.Action {
+	case sqlparser.CreateVindexDDLAction:
+		name := alterVschema.VindexSpec.Name.String()
 		if _, ok := ks.Vindexes[name]; ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s already exists in keyspace %s", name, ksName)
 		}
@@ -62,17 +62,17 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 			ks.Sharded = true
 		}
 
-		owner, params := ddl.VindexSpec.ParseParams()
+		owner, params := alterVschema.VindexSpec.ParseParams()
 		ks.Vindexes[name] = &vschemapb.Vindex{
-			Type:   ddl.VindexSpec.Type.String(),
+			Type:   alterVschema.VindexSpec.Type.String(),
 			Params: params,
 			Owner:  owner,
 		}
 
 		return ks, nil
 
-	case sqlparser.DropVindexStr:
-		name := ddl.VindexSpec.Name.String()
+	case sqlparser.DropVindexDDLAction:
+		name := alterVschema.VindexSpec.Name.String()
 		if _, ok := ks.Vindexes[name]; !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s does not exists in keyspace %s", name, ksName)
 		}
@@ -90,12 +90,12 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 		return ks, nil
 
-	case sqlparser.AddVschemaTableStr:
+	case sqlparser.AddVschemaTableDDLAction:
 		if ks.Sharded {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add vschema table: unsupported on sharded keyspace %s", ksName)
 		}
 
-		name := ddl.Table.Name.String()
+		name := alterVschema.Table.Name.String()
 		if _, ok := ks.Tables[name]; ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema already contains table %s in keyspace %s", name, ksName)
 		}
@@ -104,8 +104,8 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 		return ks, nil
 
-	case sqlparser.DropVschemaTableStr:
-		name := ddl.Table.Name.String()
+	case sqlparser.DropVschemaTableDDLAction:
+		name := alterVschema.Table.Name.String()
 		if _, ok := ks.Tables[name]; !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
 		}
@@ -114,7 +114,7 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 		return ks, nil
 
-	case sqlparser.AddColVindexStr:
+	case sqlparser.AddColVindexDDLAction:
 		// Support two cases:
 		//
 		// 1. The vindex type / params / owner are specified. If the
@@ -123,7 +123,7 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 		//
 		// 2. The vindex type is not specified. Make sure the vindex
 		//    already exists.
-		spec := ddl.VindexSpec
+		spec := alterVschema.VindexSpec
 		name := spec.Name.String()
 		if !spec.Type.IsEmpty() {
 			owner, params := spec.ParseParams()
@@ -171,8 +171,8 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 			}
 		}
 
-		columns := make([]string, len(ddl.VindexCols))
-		for i, col := range ddl.VindexCols {
+		columns := make([]string, len(alterVschema.VindexCols))
+		for i, col := range alterVschema.VindexCols {
 			columns[i] = col.String()
 		}
 		table.ColumnVindexes = append(table.ColumnVindexes, &vschemapb.ColumnVindex{
@@ -183,8 +183,8 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 		return ks, nil
 
-	case sqlparser.DropColVindexStr:
-		spec := ddl.VindexSpec
+	case sqlparser.DropColVindexDDLAction:
+		spec := alterVschema.VindexSpec
 		name := spec.Name.String()
 		if table == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s.%s not defined in vschema", ksName, tableName)
@@ -201,12 +201,12 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
 
-	case sqlparser.AddSequenceStr:
+	case sqlparser.AddSequenceDDLAction:
 		if ks.Sharded {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add sequence table: unsupported on sharded keyspace %s", ksName)
 		}
 
-		name := ddl.Table.Name.String()
+		name := alterVschema.Table.Name.String()
 		if _, ok := ks.Tables[name]; ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema already contains sequence %s in keyspace %s", name, ksName)
 		}
@@ -215,8 +215,8 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 
 		return ks, nil
 
-	case sqlparser.AddAutoIncStr:
-		name := ddl.Table.Name.String()
+	case sqlparser.AddAutoIncDDLAction:
+		name := alterVschema.Table.Name.String()
 		table := ks.Tables[name]
 		if table == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
@@ -226,19 +226,19 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema already contains auto inc %v on table %s in keyspace %s", table.AutoIncrement, name, ksName)
 		}
 
-		sequence := ddl.AutoIncSpec.Sequence
+		sequence := alterVschema.AutoIncSpec.Sequence
 		sequenceFqn := sequence.Name.String()
 		if sequence.Qualifier.String() != "" {
 			sequenceFqn = fmt.Sprintf("%s.%s", sequence.Qualifier.String(), sequenceFqn)
 		}
 
 		table.AutoIncrement = &vschemapb.AutoIncrement{
-			Column:   ddl.AutoIncSpec.Column.String(),
+			Column:   alterVschema.AutoIncSpec.Column.String(),
 			Sequence: sequenceFqn,
 		}
 
 		return ks, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", alterVschema.Action.ToString())
 }
