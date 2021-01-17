@@ -135,6 +135,7 @@ type (
 		GetSessionUUID() string
 
 		SetAllowUseReservedConn(bool) error
+		GetAllowUseReservedConn() bool
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)

@@ -342,9 +342,10 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 				IncludedFields: querypb.ExecuteOptions_ALL,
 				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
 			},
-			Autocommit:  true,
-			DDLStrategy: *defaultDDLStrategy,
-			SessionUUID: u.String(),
+			Autocommit:            true,
+			DDLStrategy:           *defaultDDLStrategy,
+			SessionUUID:           u.String(),
+			UseReservedConnection: true,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
