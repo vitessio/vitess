@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type tcase struct {
@@ -126,6 +125,25 @@ var tcases = []tcase{{
 			Right: equals(literalInt(12), literalString("12")),
 		},
 	},
+}, {
+	input: "select 1 from t where exists (select 1)",
+	output: &queryGraph{
+		tables: []*queryTable{{
+			tableID: 1,
+			alias:   tableAlias("t"),
+			table:   tableName("t"),
+		}},
+		crossTable: map[semantics.TableSet][]sqlparser.Expr{},
+		noDeps: &sqlparser.ExistsExpr{
+			Subquery: &sqlparser.Subquery{
+				Select: &sqlparser.Select{
+					SelectExprs: sqlparser.SelectExprs{&sqlparser.AliasedExpr{Expr: newIntLiteral("1")}},
+					From:        sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: sqlparser.NewTableIdent("dual")}}},
+				},
+			},
+		},
+		subqueries: map[*sqlparser.Subquery][]*queryGraph{},
+	},
 }}
 
 func literalInt(i int) *sqlparser.Literal {
@@ -163,12 +181,6 @@ func tableName(name string) sqlparser.TableName {
 	return sqlparser.TableName{Name: sqlparser.NewTableIdent(name)}
 }
 
-type schemaInf struct{}
-
-func (node *schemaInf) FindTable(tablename sqlparser.TableName) (*vindexes.Table, error) {
-	return nil, nil
-}
-
 func TestQueryGraph(t *testing.T) {
 	for _, tc := range tcases {
 		sql := tc.input
@@ -180,6 +192,7 @@ func TestQueryGraph(t *testing.T) {
 			qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
 			mustMatch(t, tc.output, qgraph, "incorrect query graph")
+
 		})
 	}
 }
@@ -190,5 +203,5 @@ var mustMatch = utils.MustMatchFn(
 		queryTable{},
 		sqlparser.TableIdent{},
 	},
-	[]string{}, // ignored fields
+	[]string{".subqueries"}, // ignored fields
 )
