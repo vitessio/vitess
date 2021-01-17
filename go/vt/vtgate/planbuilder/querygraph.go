@@ -42,6 +42,7 @@ type (
 		// noDeps contains the predicates that can be evaluated anywhere.
 		noDeps sqlparser.Expr
 
+		// subqueries contains the subqueries that depend on this query graph
 		subqueries map[*sqlparser.Subquery][]*queryGraph
 	}
 
