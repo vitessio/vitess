@@ -443,7 +443,7 @@
 		},
 		"upgrade": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/versionupgrade80"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/versionupgrade"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 28,
