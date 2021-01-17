@@ -981,6 +981,8 @@
     ]
   }
 }
+{
+}
 
 # limit for scatter with bind var
 "select col from user limit :a"
@@ -1005,6 +1007,8 @@
     ]
   }
 }
+{
+}
 
 # cross-shard expression in parenthesis with limit
 "select * from user where (id1 = 4 AND name1 ='abc') limit 5"
@@ -1028,6 +1032,8 @@
       }
     ]
   }
+}
+{
 }
 
 # scatter limit after pullout subquery
@@ -1094,3 +1100,5 @@
 # invalid limit expression
 "select id from user limit 1+1"
 "unexpected expression in LIMIT: expression is too complex '1 + 1'"
+{
+}

@@ -491,6 +491,8 @@
 # create view with sharded limit
 "create view user.view_a as select id from user order by id limit 10"
 "Complex select queries are not supported in create or alter view statements"
+{
+}
 
 # create view with top level subquery in select
 "create view user.view_a as select a, (select col from user) from unsharded"
@@ -499,10 +501,14 @@
 # create view with sql_calc_found_rows with limit
 "create view user.view_a as select sql_calc_found_rows * from music limit 100"
 "Complex select queries are not supported in create or alter view statements"
+{
+}
 
 # create view with sql_calc_found_rows with group by and having
 "create view user.view_a as select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
 "Complex select queries are not supported in create or alter view statements"
+{
+}
 
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
