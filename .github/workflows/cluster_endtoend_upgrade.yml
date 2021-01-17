@@ -37,11 +37,11 @@ jobs:
       timeout-minutes: 30
       run: |
         echo "check binaries before build:"
-        ls -l bin/
+        [ -d bin ] && ls -l bin/
         source build.env
         make build
         echo "check binaries after build:"
-        ls -l bin/
+        [ -d bin ] && ls -l bin/
 
     - name: Check out PR to get upgrade test
       uses: actions/checkout@v2
@@ -50,6 +50,7 @@ jobs:
       timeout-minutes: 30
       run: |
         echo "check binaries after build and checkout:"
+        [ -d bin ] && ls -l bin/
         # create the directory where we store test data:
         mkdir -p /tmp/vtdataroot
         source build.env
