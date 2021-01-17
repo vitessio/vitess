@@ -51,7 +51,8 @@ jobs:
     - name: Run cluster endtoend test v8.0.0
       timeout-minutes: 30
       run: |
-        cp -R /tmp/vitess-build/bin .
+        make build
+        cp -R /tmp/vitess-build/bin/* bin/
         echo "check binaries after build and checkout:"
         [ -d bin ] && ls -l bin/
         # create the directory where we store test data:
