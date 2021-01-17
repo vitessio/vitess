@@ -39,7 +39,7 @@ jobs:
         # create the directory where we store test data:
         mkdir -p /tmp/vtdataroot
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 28
+        eatmydata -- go run test.go -keep-data -docker=false -print-log -follow -shard 28
 
     - name: Check out PR
       uses: actions/checkout@v2
@@ -54,4 +54,4 @@ jobs:
         # /tmp/vtdataroot exists from previous test
         ls -l /tmp/vtdataroot
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 28
+        eatmydata -- go run test.go -keep-data -docker=false -print-log -follow -shard 28
