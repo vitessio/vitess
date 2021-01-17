@@ -15,8 +15,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Query that always return empty
 "select id from user where someColumn = null"
@@ -35,8 +34,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table unique vindex route
 "select id from user where user.id = 5"
@@ -59,8 +57,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table unique vindex route, but complex expr
 "select id from user where user.id = 5+5"
@@ -101,8 +98,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table multiple non-unique vindex match
 "select id from user where costly = 'aa' and name = 'bb'"
@@ -125,8 +121,7 @@
     "Vindex": "name_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table multiple non-unique vindex match for IN clause
 "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')"
@@ -298,8 +293,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Composite IN: multiple vindex matches
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -393,8 +387,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Composite IN: RHS not tuple
 "select id from user where (col1, name) in (select * from music where music.user_id=user.id)"
@@ -431,8 +424,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # IN clause: LHS is neither column nor composite tuple
 "select Id from user where 1 in ('aa', 'bb')"
@@ -469,8 +461,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table equality route with val arg
 "select id from user where name = :a"
@@ -493,8 +484,7 @@
     "Vindex": "name_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table equality route with unsigned value
 "select id from user where name = 18446744073709551615"
@@ -517,8 +507,7 @@
     "Vindex": "name_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table in clause list arg
 "select id from user where name in ::list"
@@ -670,8 +659,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
@@ -867,8 +855,7 @@
     "Vindex": "name_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
@@ -891,8 +878,7 @@
     "Vindex": "name_user_map"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
@@ -915,8 +901,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
@@ -939,8 +924,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Route with OR and AND clause, must parenthesize correctly.
 "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)"
@@ -959,8 +943,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Unsharded route
 "select unsharded.id from user join unsharded where unsharded.id = user.id"
@@ -998,8 +981,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # routing rules: choose the redirected table
 "select col from route1 where id = 1"
@@ -1600,8 +1582,7 @@
     "Table": "music"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # SELECT with IS NULL
 "select id from music where id is null"
@@ -1642,8 +1623,7 @@
     "Table": "music"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table with unique vindex match and null match
 "select id from music where user_id = 4 and id = null"
@@ -1662,8 +1642,7 @@
     "Table": "music"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table with unique vindex match and IN (null)
 "select id from music where user_id = 4 and id IN (null)"
@@ -1704,8 +1683,7 @@
     "Vindex": "user_index"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table with unique vindex match and NOT IN (null, 1, 2)
 "select id from music where user_id = 4 and id NOT IN (null, 1, 2)"

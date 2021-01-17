@@ -53,6 +53,8 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.err = err
 			return false
 		}
+	case *sqlparser.DerivedTable, *sqlparser.Subquery:
+		a.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not supported", node)
 	case *sqlparser.TableExprs:
 		// this has already been visited when we encountered the SELECT struct
 		return false
@@ -99,6 +101,9 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 	case *sqlparser.AliasedTableExpr:
 		return a.bindTable(table, table.Expr)
 	case *sqlparser.JoinTableExpr:
+		if table.Join != sqlparser.NormalJoinType {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Join type not supported: %s", table.Join.ToString())
+		}
 		if err := a.analyzeTableExpr(table.LeftExpr); err != nil {
 			return err
 		}
