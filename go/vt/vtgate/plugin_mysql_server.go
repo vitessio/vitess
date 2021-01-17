@@ -32,11 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
-	"vitess.io/vitess/go/trace"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
@@ -45,6 +45,8 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -52,7 +54,7 @@ var (
 	mysqlServerBindAddress        = flag.String("mysql_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
 	mysqlServerSocketPath         = flag.String("mysql_server_socket_path", "", "This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket")
 	mysqlTCPVersion               = flag.String("mysql_tcp_version", "tcp", "Select tcp, tcp4, or tcp6 to control the socket type.")
-	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
+	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use. Options: none, ldap, clientcert, static, vault.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 	mysqlServerVersion            = flag.String("mysql_server_version", mysql.DefaultServerVersion, "MySQL server version to advertise.")
 	mysqlProxyProtocol            = flag.Bool("proxy_protocol", false, "Enable HAProxy PROXY protocol on MySQL listener socket")
@@ -147,20 +149,25 @@ func startSpanTestable(ctx context.Context, query, label string,
 	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context, error) {
 	_, comments := sqlparser.SplitMarginComments(query)
 	match := r.FindStringSubmatch(comments.Leading)
-	var span trace.Span
-	if len(match) == 0 {
-		span, ctx = newSpan(ctx, label)
-	} else {
-		var err error
-		span, ctx, err = newSpanFromString(ctx, match[1], label)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
+	span, ctx := getSpan(ctx, match, newSpan, label, newSpanFromString)
 
 	trace.AnnotateSQL(span, query)
 
 	return span, ctx, nil
+}
+
+func getSpan(ctx context.Context, match []string, newSpan func(context.Context, string) (trace.Span, context.Context), label string, newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context) {
+	var span trace.Span
+	if len(match) != 0 {
+		var err error
+		span, ctx, err = newSpanFromString(ctx, match[1], label)
+		if err == nil {
+			return span, ctx
+		}
+		log.Warningf("Unable to parse VT_SPAN_CONTEXT: %s", err.Error())
+	}
+	span, ctx = newSpan(ctx, label)
+	return span, ctx
 }
 
 func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {
@@ -220,9 +227,9 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 	if session.InTransaction {
-		c.StatusFlags |= mysql.ServerStatusInTransaction
+		c.StatusFlags |= mysql.ServerStatusInTrans
 	} else {
-		c.StatusFlags &= mysql.NoServerStatusInTransaction
+		c.StatusFlags &= mysql.NoServerStatusInTrans
 	}
 	if session.Autocommit {
 		c.StatusFlags |= mysql.ServerStatusAutocommit
@@ -329,12 +336,15 @@ func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
+		u, _ := uuid.NewUUID()
 		session = &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
 			},
-			Autocommit: true,
+			Autocommit:  true,
+			DDLStrategy: *defaultDDLStrategy,
+			SessionUUID: u.String(),
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true

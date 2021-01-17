@@ -57,6 +57,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -307,8 +308,6 @@ func resetMetrics(t *testing.T) {
 	engine.vstreamerEventsStreamed.Reset()
 	engine.resultStreamerNumRows.Reset()
 	engine.rowStreamerNumRows.Reset()
-	engine.vstreamerPhaseTimings.Reset()
-	engine.vstreamerPhaseTimings.Reset()
 	engine.vstreamerPhaseTimings.Reset()
 }
 

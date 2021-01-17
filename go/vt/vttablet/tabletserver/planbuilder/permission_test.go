@@ -86,6 +86,15 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.ADMIN,
 		}},
 	}, {
+		input: "flush tables t1, t2",
+		output: []Permission{{
+			TableName: "t1",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "t2",
+			Role:      tableacl.ADMIN,
+		}},
+	}, {
 		input: "drop table t",
 		output: []Permission{{
 			TableName: "t",

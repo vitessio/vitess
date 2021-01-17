@@ -18,644 +18,243 @@ package reparent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+var (
+	cell1         = "zone1"
+	cell2         = "zone2"
+	shardName     = "0"
+	keyspaceShard = keyspaceName + "/" + shardName
+
+	tab1, tab2, tab3, tab4 *cluster.Vttablet
 )
 
 func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
 
-	// need at least one replica because of semi-sync
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044} {
-
-		// Start the tablet
-		err := tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-
-		// Create Database
-		err = tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-	}
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Init Shard Master
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
 	// We cannot change a master to spare
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tablet62344.Alias, "spare")
+	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
 	require.Error(t, err, out)
 	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
-
-	//kill Tablets
-	err = tablet62344.VttabletProcess.TearDown()
-	require.NoError(t, err)
-	err = tablet62044.VttabletProcess.TearDown()
-	require.NoError(t, err)
 }
 
 func TestReparentDownMaster(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+
 	ctx := context.Background()
 
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// Create Database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Reset status, don't wait for the tablet status. We will check it later
-		tablet.VttabletProcess.ServingStatus = ""
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Init Shard Master
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	// create Tables
-	runSQL(ctx, t, sqlSchema, tablet62344)
-
 	// Make the current master agent and database unavailable.
-	err = tablet62344.VttabletProcess.TearDown()
-	require.NoError(t, err)
-	err = tablet62344.MysqlctlProcess.Stop()
-	require.NoError(t, err)
+	stopTablet(t, tab1, true)
 
 	// Perform a planned reparent operation, will try to contact
 	// the current master and fail somewhat quickly
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"-action_timeout", "1s",
-		"PlannedReparentShard",
-		"-wait_replicas_timeout", "5s",
-		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+	_, err := prsWithTimeout(t, tab2, false, "1s", "5s")
 	require.Error(t, err)
 
+	validateTopology(t, false)
+
 	// Run forced reparent operation, this should now proceed unimpeded.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"EmergencyReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias,
-		"-wait_replicas_timeout", "30s")
+	out, err := ers(t, tab2, "30s")
 	log.Infof("EmergencyReparentShard Output: %v", out)
-	require.Nil(t, err)
 	require.NoError(t, err)
 
 	// Check that old master tablet is left around for human intervention.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
-	require.Error(t, err)
-	require.Contains(t, out, "already has master")
+	confirmOldMasterIsHangingAround(t)
 
 	// Now we'll manually remove it, simulating a human cleaning up a dead master.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"DeleteTablet",
-		"-allow_master",
-		tablet62344.Alias)
-	require.NoError(t, err)
+	deleteTablet(t, tab1)
 
 	// Now validate topo is correct.
 	validateTopology(t, false)
-
-	checkMasterTablet(t, tablet62044)
-
-	// insert data into the new master, check the connected replica work
-	insertSQL := fmt.Sprintf(insertSQL, 2, 2)
-	runSQL(ctx, t, insertSQL, tablet62044)
-	err = checkInsertedValues(ctx, t, tablet41983, 2)
-	require.NoError(t, err)
-	err = checkInsertedValues(ctx, t, tablet31981, 2)
-	require.NoError(t, err)
-
-	// bring back the old master as a replica, check that it catches up
-	tablet62344.MysqlctlProcess.InitMysql = false
-	err = tablet62344.MysqlctlProcess.Start()
-	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
-
-	// As there is already a master the new replica will come directly in SERVING state
-	tablet62344.VttabletProcess.ServingStatus = "SERVING"
-	// Start the tablet
-	err = tablet62344.VttabletProcess.Setup()
-	require.NoError(t, err)
-
-	err = checkInsertedValues(ctx, t, tablet62344, 2)
-	require.NoError(t, err)
-
-	// Kill tablets
-	killTablets(t)
+	checkMasterTablet(t, tab2)
+	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
+	resurrectTablet(ctx, t, tab1)
 }
 
 func TestReparentNoChoiceDownMaster(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+	var err error
 	ctx := context.Background()
 
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// Create Database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Reset status, don't wait for the tablet status. We will check it later
-		tablet.VttabletProcess.ServingStatus = ""
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Init Shard Master
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	// create Tables
-	runSQL(ctx, t, sqlSchema, tablet62344)
-
-	// insert data into the old master, check the connected replica work
-	insertSQL1 := fmt.Sprintf(insertSQL, 2, 2)
-	runSQL(ctx, t, insertSQL1, tablet62344)
-	err = checkInsertedValues(ctx, t, tablet62044, 2)
-	require.NoError(t, err)
-	err = checkInsertedValues(ctx, t, tablet41983, 2)
-	require.NoError(t, err)
-	err = checkInsertedValues(ctx, t, tablet31981, 2)
-	require.NoError(t, err)
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
 
 	// Make the current master agent and database unavailable.
-	err = tablet62344.VttabletProcess.TearDown()
-	require.NoError(t, err)
-	err = tablet62344.MysqlctlProcess.Stop()
-	require.NoError(t, err)
+	stopTablet(t, tab1, true)
 
 	// Run forced reparent operation, this should now proceed unimpeded.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"EmergencyReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-wait_replicas_timeout", "30s")
+	out, err := ers(t, nil, "61s")
 	require.NoError(t, err, out)
 
 	// Check that old master tablet is left around for human intervention.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
-	require.Error(t, err)
-	require.Contains(t, out, "already has master")
-
+	confirmOldMasterIsHangingAround(t)
 	// Now we'll manually remove the old master, simulating a human cleaning up a dead master.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"DeleteTablet",
-		"-allow_master",
-		tablet62344.Alias)
-	require.NoError(t, err)
-
-	// Now validate topo is correct.
+	deleteTablet(t, tab1)
 	validateTopology(t, false)
-
-	var newMasterTablet *cluster.Vttablet
-	for _, tablet := range []*cluster.Vttablet{tablet62044, tablet41983, tablet31981} {
-		if isHealthyMasterTablet(t, tablet) {
-			newMasterTablet = tablet
-			break
-		}
-	}
-	require.NotNil(t, newMasterTablet)
+	newMaster := getNewMaster(t)
 	// Validate new master is not old master.
-	require.NotEqual(t, newMasterTablet.Alias, tablet62344.Alias)
+	require.NotEqual(t, newMaster.Alias, tab1.Alias)
 
 	// Check new master has latest transaction.
-	err = checkInsertedValues(ctx, t, newMasterTablet, 2)
+	err = checkInsertedValues(ctx, t, newMaster, 2)
 	require.NoError(t, err)
 
 	// bring back the old master as a replica, check that it catches up
-	tablet62344.MysqlctlProcess.InitMysql = false
-	err = tablet62344.MysqlctlProcess.Start()
-	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
-
-	// As there is already a master the new replica will come directly in SERVING state
-	tablet62344.VttabletProcess.ServingStatus = "SERVING"
-	// Start the tablet
-	err = tablet62344.VttabletProcess.Setup()
-	require.NoError(t, err)
-
-	err = checkInsertedValues(ctx, t, tablet62344, 2)
-	require.NoError(t, err)
-
-	// Kill tablets
-	killTablets(t)
+	resurrectTablet(ctx, t, tab1)
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+	var err error
 	ctx := context.Background()
 
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// Create Database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.Nil(t, err)
-
-		// Reset status, don't wait for the tablet status. We will check it later
-		tablet.VttabletProcess.ServingStatus = ""
-		// Init Tablet
-		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shardName)
-		require.Nil(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.Nil(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.Nil(t, err)
-	}
-
-	// Init Shard Master.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.Nil(t, err, out)
-
-	validateTopology(t, true)
-
-	// Create Tables.
-	runSQL(ctx, t, sqlSchema, tablet62344)
-
-	// insert data into the old master, check the connected replica work
-	insertSQL1 := fmt.Sprintf(insertSQL, 2, 2)
-	runSQL(ctx, t, insertSQL1, tablet62344)
-	err = checkInsertedValues(ctx, t, tablet62044, 2)
-	require.Nil(t, err)
-	err = checkInsertedValues(ctx, t, tablet41983, 2)
-	require.Nil(t, err)
-	err = checkInsertedValues(ctx, t, tablet31981, 2)
-	require.Nil(t, err)
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
 
 	// Make the current master agent and database unavailable.
-	err = tablet62344.VttabletProcess.TearDown()
-	require.Nil(t, err)
-	err = tablet62344.MysqlctlProcess.Stop()
-	require.Nil(t, err)
+	stopTablet(t, tab1, true)
 
 	// Take down a replica - this should cause the emergency reparent to fail.
-	err = tablet41983.VttabletProcess.TearDown()
-	require.Nil(t, err)
-	err = tablet41983.MysqlctlProcess.Stop()
-	require.Nil(t, err)
+	stopTablet(t, tab3, true)
 
 	// We expect this one to fail because we have an unreachable replica
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"EmergencyReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-wait_replicas_timeout", "30s")
+	out, err := ers(t, nil, "30s")
 	require.NotNil(t, err, out)
 
 	// Now let's run it again, but set the command to ignore the unreachable replica.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"EmergencyReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-ignore_replicas", tablet41983.Alias,
-		"-wait_replicas_timeout", "30s")
+	out, err = ersIgnoreTablet(t, nil, "30s", tab3)
 	require.Nil(t, err, out)
 
 	// We'll bring back the replica we took down.
-	tablet41983.MysqlctlProcess.InitMysql = false
-	err = tablet41983.MysqlctlProcess.Start()
-	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tablet41983, tablet41983.Cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
+	restartTablet(t, tab3)
 
 	// Check that old master tablet is left around for human intervention.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	require.Error(t, err)
-
-	// Now we'll manually remove the old master, simulating a human cleaning up a dead master.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"DeleteTablet",
-		"-allow_master",
-		tablet62344.Alias)
-	require.Nil(t, err)
-
-	// Now validate topo is correct.
+	confirmOldMasterIsHangingAround(t)
+	deleteTablet(t, tab1)
 	validateTopology(t, false)
 
-	var newMasterTablet *cluster.Vttablet
-	for _, tablet := range []*cluster.Vttablet{tablet62044, tablet41983, tablet31981} {
-		if isHealthyMasterTablet(t, tablet) {
-			newMasterTablet = tablet
-			break
-		}
-	}
-	require.NotNil(t, newMasterTablet)
-
+	newMaster := getNewMaster(t)
 	// Check new master has latest transaction.
-	err = checkInsertedValues(ctx, t, newMasterTablet, 2)
+	err = checkInsertedValues(ctx, t, newMaster, 2)
 	require.Nil(t, err)
 
 	// bring back the old master as a replica, check that it catches up
-	tablet62344.MysqlctlProcess.InitMysql = false
-	err = tablet62344.MysqlctlProcess.Start()
-	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
-	require.Nil(t, err)
-
-	// As there is already a master the new replica will come directly in SERVING state
-	tablet62344.VttabletProcess.ServingStatus = "SERVING"
-	// Start the tablet
-	err = tablet62344.VttabletProcess.Setup()
-	require.Nil(t, err)
-
-	err = checkInsertedValues(ctx, t, tablet62344, 2)
-	require.Nil(t, err)
-
-	// Kill tablets
-	killTablets(t)
+	resurrectTablet(ctx, t, tab1)
 }
 
 func TestReparentCrossCell(t *testing.T) {
-
 	defer cluster.PanicHandler(t)
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// create database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Force the replica to reparent assuming that all the datasets are identical.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	checkMasterTablet(t, tablet62344)
+	setupReparentCluster(t)
+	defer teardownCluster()
 
 	// Perform a graceful reparent operation to another cell.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet31981.Alias)
-	require.NoError(t, err, out)
+	_, err := prs(t, tab4)
+	require.NoError(t, err)
 
 	validateTopology(t, false)
-
-	checkMasterTablet(t, tablet31981)
-
-	// Kill tablets
-	killTablets(t)
-
+	checkMasterTablet(t, tab4)
 }
 
 func TestReparentGraceful(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// create database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Force the replica to reparent assuming that all the datasets are identical.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	// create Tables
-	runSQL(ctx, t, sqlSchema, tablet62344)
-
-	checkMasterTablet(t, tablet62344)
-
-	validateTopology(t, false)
+	setupReparentCluster(t)
+	defer teardownCluster()
 
 	// Run this to make sure it succeeds.
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shardName))
-	require.NoError(t, err)
-	strArray := strings.Split(output, "\n")
-	if strArray[len(strArray)-1] == "" {
-		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
-	}
+	strArray := getShardReplicationPositions(t, keyspaceName, shardName, false)
 	assert.Equal(t, 4, len(strArray))         // one master, three replicas
 	assert.Contains(t, strArray[0], "master") // master first
 
 	// Perform a graceful reparent operation
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
-		"-new_master", tablet62044.Alias)
-	require.NoError(t, err)
-
+	prs(t, tab2)
 	validateTopology(t, false)
-
-	checkMasterTablet(t, tablet62044)
+	checkMasterTablet(t, tab2)
 
 	// A graceful reparent to the same master should be idempotent.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName),
-		"-new_master", tablet62044.Alias)
-	require.NoError(t, err)
-
+	prs(t, tab2)
 	validateTopology(t, false)
+	checkMasterTablet(t, tab2)
 
-	checkMasterTablet(t, tablet62044)
-
-	// insert data into the new master, check the connected replica work
-	insertSQL := fmt.Sprintf(insertSQL, 1, 1)
-	runSQL(ctx, t, insertSQL, tablet62044)
-	err = checkInsertedValues(ctx, t, tablet41983, 1)
-	require.NoError(t, err)
-	err = checkInsertedValues(ctx, t, tablet62344, 1)
-	require.NoError(t, err)
-
-	// Kill tablets
-	killTablets(t)
+	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab3, tab4})
 }
 
 func TestReparentReplicaOffline(t *testing.T) {
 	defer cluster.PanicHandler(t)
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// create database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Force the replica to reparent assuming that all the datasets are identical.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", keyspaceShard, tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	checkMasterTablet(t, tablet62344)
+	setupReparentCluster(t)
+	defer teardownCluster()
 
 	// Kill one tablet so we seem offline
-	err = tablet31981.VttabletProcess.TearDown()
-	require.NoError(t, err)
+	stopTablet(t, tab4, true)
 
 	// Perform a graceful reparent operation.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias,
-		"-wait_replicas_timeout", "31s")
-
+	out, err := prsWithTimeout(t, tab2, false, "", "31s")
 	require.Error(t, err)
-	assert.Contains(t, out, "tablet zone2-0000031981 SetMaster failed")
-
-	checkMasterTablet(t, tablet62044)
-
-	killTablets(t)
+	assert.Contains(t, out, fmt.Sprintf("tablet %s SetMaster failed", tab4.Alias))
+	checkMasterTablet(t, tab2)
 }
 
 func TestReparentAvoid(t *testing.T) {
 	defer cluster.PanicHandler(t)
-
-	// Remove tablet41983 from topology as that tablet is not required for this test
-	// Ignore error. Depending on previous tests this topo entry may or may not exist
-	// TODO: fix inter-test dependencies
-	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet41983.Alias)
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet31981} {
-		// create database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Force the replica to reparent assuming that all the dataset's are identical.
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", keyspaceShard, tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	checkMasterTablet(t, tablet62344)
+	setupReparentCluster(t)
+	defer teardownCluster()
+	deleteTablet(t, tab3)
 
 	// Perform a reparent operation with avoid_master pointing to non-master. It
 	// should succeed without doing anything.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-avoid_master", tablet62044.Alias)
+	_, err := prsAvoid(t, tab2)
 	require.NoError(t, err)
 
 	validateTopology(t, false)
-
-	checkMasterTablet(t, tablet62344)
+	checkMasterTablet(t, tab1)
 
 	// Perform a reparent operation with avoid_master pointing to master.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-avoid_master", tablet62344.Alias)
+	_, err = prsAvoid(t, tab1)
 	require.NoError(t, err)
-
 	validateTopology(t, false)
 
-	// 62044 is in the same cell and 31981 is in a different cell, so we must land on 62044
-	checkMasterTablet(t, tablet62044)
+	// tab2 is in the same cell and tab4 is in a different cell, so we must land on tab2
+	checkMasterTablet(t, tab2)
 
 	// If we kill the tablet in the same cell as master then reparent -avoid_master will fail.
-	err = tablet62344.VttabletProcess.TearDown()
-	require.NoError(t, err)
-
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-avoid_master", tablet62044.Alias)
+	stopTablet(t, tab1, true)
+	out, err := prsAvoid(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, output, "cannot find a tablet to reparent to")
-
+	assert.Contains(t, out, "cannot find a tablet to reparent to")
 	validateTopology(t, false)
-
-	checkMasterTablet(t, tablet62044)
-
-	killTablets(t)
+	checkMasterTablet(t, tab2)
 }
 
 func TestReparentFromOutside(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
 	reparentFromOutside(t, false)
 }
 
 func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
 	reparentFromOutside(t, true)
 
+	// FIXME: @Deepthi: is this needed, since we teardown the cluster, does this achieve any additional test coverage?
 	// We will have to restart mysql to avoid hanging/locks due to external Reparent
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
+	for _, tablet := range []cluster.Vttablet{*tab1, *tab2, *tab3, *tab4} {
 		log.Infof("Restarting MySql for tablet %v", tablet.Alias)
 		err := tablet.MysqlctlProcess.Stop()
 		require.NoError(t, err)
@@ -673,195 +272,109 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
 	//Args:
 	//downMaster: kills the old master first
-	defer cluster.PanicHandler(t)
-
 	ctx := context.Background()
 
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// create database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Reparent as a starting point
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	checkMasterTablet(t, tablet62344)
-
 	// now manually reparent 1 out of 2 tablets
-	// 62044 will be the new master
-	// 31981 won't be re-parented, so it will be busted
+	// tab2 will be the new master
+	// tab3 won't be re-parented, so it will be busted
 
 	if !downMaster {
 		// commands to stop the current master
 		demoteMasterCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
-		runSQL(ctx, t, demoteMasterCommands, tablet62344)
+		runSQL(ctx, t, demoteMasterCommands, tab1)
 
 		//Get the position of the old master and wait for the new one to catch up.
-		err = waitForReplicationPosition(t, tablet62344, tablet62044)
+		err := waitForReplicationPosition(t, tab1, tab2)
 		require.NoError(t, err)
 	}
 
 	// commands to convert a replica to a master
 	promoteReplicaCommands := "STOP SLAVE; RESET SLAVE ALL; SET GLOBAL read_only = OFF;"
-	runSQL(ctx, t, promoteReplicaCommands, tablet62044)
+	runSQL(ctx, t, promoteReplicaCommands, tab2)
 
 	// Get master position
-	_, gtID := cluster.GetMasterPosition(t, *tablet62044, hostname)
+	_, gtID := cluster.GetMasterPosition(t, *tab2, hostname)
 
-	// 62344 will now be a replica of 62044
+	// tab1 will now be a replica of tab2
 	changeMasterCommands := fmt.Sprintf("RESET MASTER; RESET SLAVE; SET GLOBAL gtid_purged = '%s';"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-		"START SLAVE;", gtID, hostname, tablet62044.MySQLPort)
-	runSQL(ctx, t, changeMasterCommands, tablet62344)
+		"START SLAVE;", gtID, hostname, tab2.MySQLPort)
+	runSQL(ctx, t, changeMasterCommands, tab1)
 
-	// Capture time when we made tablet62044 master
+	// Capture time when we made tab2 master
 	baseTime := time.Now().UnixNano() / 1000000000
 
-	// 41983 will be a replica of 62044
+	// tab3 will be a replica of tab2
 	changeMasterCommands = fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
-		"START SLAVE;", gtID, hostname, tablet62044.MySQLPort)
-	runSQL(ctx, t, changeMasterCommands, tablet41983)
+		"START SLAVE;", gtID, hostname, tab2.MySQLPort)
+	runSQL(ctx, t, changeMasterCommands, tab3)
 
 	// To test the downMaster, we kill the old master first and delete its tablet record
 	if downMaster {
-		err := tablet62344.VttabletProcess.TearDown()
+		err := tab1.VttabletProcess.TearDown()
 		require.NoError(t, err)
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
-			"-allow_master", tablet62344.Alias)
+			"-allow_master", tab1.Alias)
 		require.NoError(t, err)
 	}
 
 	// update topology with the new server
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented",
-		tablet62044.Alias)
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented",
+		tab2.Alias)
 	require.NoError(t, err)
 
-	checkReparentFromOutside(t, tablet62044, downMaster, baseTime)
+	checkReparentFromOutside(t, tab2, downMaster, baseTime)
 
 	if !downMaster {
-		err := tablet62344.VttabletProcess.TearDown()
+		err := tab1.VttabletProcess.TearDown()
 		require.NoError(t, err)
 	}
-
-	killTablets(t)
 }
 
 func TestReparentWithDownReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
 	ctx := context.Background()
 
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		// Create Database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Init Shard Master
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
-
-	// create Tables
-	runSQL(ctx, t, sqlSchema, tablet62344)
-
 	// Stop replica mysql Process
-	err = tablet41983.MysqlctlProcess.Stop()
+	err := tab3.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+	out, err := prs(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, output, "TabletManager.SetMaster on zone1-0000041983 error")
+	assert.Contains(t, out, fmt.Sprintf("tablet %s SetMaster failed", tab3.Alias))
 
 	// insert data into the new master, check the connected replica work
-	insertSQL := fmt.Sprintf(insertSQL, 3, 3)
-	runSQL(ctx, t, insertSQL, tablet62044)
-	err = checkInsertedValues(ctx, t, tablet31981, 3)
-	require.NoError(t, err)
-	err = checkInsertedValues(ctx, t, tablet62344, 3)
-	require.NoError(t, err)
+	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab4})
 
 	// restart mysql on the old replica, should still be connecting to the old master
-	tablet41983.MysqlctlProcess.InitMysql = false
-	err = tablet41983.MysqlctlProcess.Start()
+	tab3.MysqlctlProcess.InitMysql = false
+	err = tab3.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
 	// Use the same PlannedReparentShard command to fix up the tablet.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+	_, err = prs(t, tab2)
 	require.NoError(t, err)
 
 	// wait until it gets the data
-	err = checkInsertedValues(ctx, t, tablet41983, 3)
+	err = checkInsertedValues(ctx, t, tab3, 2)
 	require.NoError(t, err)
-
-	killTablets(t)
 }
 
 func TestChangeTypeSemiSync(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
 	ctx := context.Background()
 
 	// Create new names for tablets, so this test is less confusing.
-	master := tablet62344
-	replica := tablet62044
-	rdonly1 := tablet41983
-	rdonly2 := tablet31981
-
-	for _, tablet := range []cluster.Vttablet{*master, *replica, *rdonly1, *rdonly2} {
-		// Create Database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range []cluster.Vttablet{*master, *replica, *rdonly1, *rdonly2} {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Init Shard Master
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), master.Alias)
-	require.NoError(t, err, out)
+	master, replica, rdonly1, rdonly2 := tab1, tab2, tab3, tab4
 
 	// Updated rdonly tablet and set tablet type to rdonly
-	// TODO: replace with ChangeTabletType once ChangeSlaveType is removed
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
 	require.NoError(t, err)
@@ -911,228 +424,22 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	require.NoError(t, err)
 	checkDBvar(ctx, t, rdonly2, "rpl_semi_sync_slave_enabled", "ON")
 	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
-
-	killTablets(t)
 }
 
 func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	tablets := []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981}
-	for _, tablet := range tablets {
-		// Create Database
-		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.NoError(t, err)
-
-		// Start the tablet
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-
-	for _, tablet := range tablets {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		require.NoError(t, err)
-	}
-
-	// Init Shard Master
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
-	require.NoError(t, err, out)
-
-	validateTopology(t, true)
+	setupReparentCluster(t)
+	defer teardownCluster()
 
 	// Change the schema of the _vt.reparent_journal table, so that
 	// inserts into it will fail. That will make the master fail.
-	_, err = tablet62344.VttabletProcess.QueryTabletWithDB(
+	_, err := tab1.VttabletProcess.QueryTabletWithDB(
 		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
 	require.NoError(t, err)
 
 	// Perform a planned reparent operation, the master will fail the
 	// insert.  The replicas should then abort right away.
-	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", keyspaceShard,
-		"-new_master", tablet62044.Alias)
+	out, err := prs(t, tab2)
 	require.Error(t, err)
 	assert.Contains(t, out, "master failed to PopulateReparentJournal")
-
-	killTablets(t)
-}
-
-//	Waits for tablet B to catch up to the replication position of tablet A.
-func waitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
-	posA, _ := cluster.GetMasterPosition(t, *tabletA, hostname)
-	timeout := time.Now().Add(5 * time.Second)
-	for time.Now().Before(timeout) {
-		posB, _ := cluster.GetMasterPosition(t, *tabletB, hostname)
-		if positionAtLeast(t, tabletB, posA, posB) {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return fmt.Errorf("failed to catch up on replication position")
-}
-
-func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
-	isAtleast := false
-	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
-	require.NoError(t, err)
-	if strings.Contains(val, "true") {
-		isAtleast = true
-	}
-	return isAtleast
-}
-
-func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downMaster bool, baseTime int64) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, keyspaceShard)
-	require.Nil(t, err, "error should be Nil")
-	if !downMaster {
-		assertNodeCount(t, result, int(3))
-	} else {
-		assertNodeCount(t, result, int(2))
-	}
-
-	// make sure the master status page says it's the master
-	status := tablet.VttabletProcess.GetStatus()
-	assert.Contains(t, status, "Tablet Type: MASTER")
-
-	// make sure the master health stream says it's the master too
-	// (health check is disabled on these servers, force it first)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
-	require.NoError(t, err)
-
-	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth",
-		"-count", "1", tablet.Alias)
-	require.NoError(t, err)
-
-	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	require.NoError(t, err)
-	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_MASTER)
-	assert.True(t, streamHealthResponse.TabletExternallyReparentedTimestamp >= baseTime)
-
-}
-
-func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]interface{})
-	err := json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
-
-	nodes := reflect.ValueOf(resultMap["nodes"])
-	got := nodes.Len()
-	assert.Equal(t, want, got)
-}
-
-func checkDBvar(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
-	tabletParams := getMysqlConnParam(tablet)
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	qr := execute(t, conn, fmt.Sprintf("show variables like '%s'", variable))
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
-	assert.Equal(t, want, got)
-}
-
-func checkDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
-	tabletParams := getMysqlConnParam(tablet)
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	qr := execute(t, conn, fmt.Sprintf("show status like '%s'", variable))
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
-	assert.Equal(t, want, got)
-}
-
-func checkReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) {
-	qr := runSQL(ctx, t, "show slave status", tablet)
-	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])  // Slave_IO_Running
-	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10]) // Slave_SQL_Running
-	assert.Equal(t, IOThreadRunning, "VARCHAR(\"No\")")
-	assert.Equal(t, SQLThreadRunning, "VARCHAR(\"No\")")
-}
-
-// Makes sure the tablet type is master, and its health check agrees.
-func checkMasterTablet(t *testing.T, tablet *cluster.Vttablet) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
-	require.NoError(t, err)
-	var tabletInfo topodatapb.Tablet
-	err = json2.Unmarshal([]byte(result), &tabletInfo)
-	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, tabletInfo.GetType())
-
-	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
-	require.NoError(t, err)
-	var streamHealthResponse querypb.StreamHealthResponse
-
-	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.NoError(t, err)
-
-	assert.True(t, streamHealthResponse.GetServing())
-	tabletType := streamHealthResponse.GetTarget().GetTabletType()
-	assert.Equal(t, topodatapb.TabletType_MASTER, tabletType)
-}
-
-// isHealthyMasterTablet will return if tablet is master AND healthy.
-func isHealthyMasterTablet(t *testing.T, tablet *cluster.Vttablet) bool {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
-	require.Nil(t, err)
-	var tabletInfo topodatapb.Tablet
-	err = json2.Unmarshal([]byte(result), &tabletInfo)
-	require.Nil(t, err)
-	if tabletInfo.GetType() != topodatapb.TabletType_MASTER {
-		return false
-	}
-
-	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
-	require.Nil(t, err)
-	var streamHealthResponse querypb.StreamHealthResponse
-
-	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.Nil(t, err)
-
-	assert.True(t, streamHealthResponse.GetServing())
-	tabletType := streamHealthResponse.GetTarget().GetTabletType()
-	return tabletType == topodatapb.TabletType_MASTER
-}
-
-func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
-	// wait until it gets the data
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
-		qr := runSQL(ctx, t, selectSQL, tablet)
-		if len(qr.Rows) == 1 {
-			return nil
-		}
-		time.Sleep(300 * time.Millisecond)
-	}
-	return fmt.Errorf("data is not yet replicated")
-}
-
-func validateTopology(t *testing.T, pingTablets bool) {
-	if pingTablets {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets=true")
-		require.NoError(t, err)
-	} else {
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-		require.NoError(t, err)
-	}
-}
-
-func killTablets(t *testing.T) {
-	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		log.Infof("Calling TearDown on tablet %v", tablet.Alias)
-		err := tablet.VttabletProcess.TearDown()
-		require.NoError(t, err)
-
-		// Reset status and type
-		tablet.VttabletProcess.ServingStatus = ""
-		tablet.Type = "replica"
-	}
 }

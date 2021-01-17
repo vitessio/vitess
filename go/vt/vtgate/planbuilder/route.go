@@ -17,8 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-	"strings"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -26,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ builder = (*route)(nil)
+var _ logicalPlan = (*route)(nil)
 
 // route is used to build a Route primitive.
 // It's used to build one of the Select routes like
@@ -63,6 +64,9 @@ type route struct {
 
 	// eroute is the primitive being built.
 	eroute *engine.Route
+
+	// tables keeps track of which tables this route is covering
+	tables semantics.TableSet
 }
 
 type tableSubstitution struct {
@@ -87,66 +91,31 @@ func (rb *route) Resolve() *route {
 	return rb
 }
 
-// Order satisfies the builder interface.
+// Order implements the logicalPlan interface
 func (rb *route) Order() int {
 	return rb.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder implements the logicalPlan interface
 func (rb *route) Reorder(order int) {
 	rb.order = order + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (rb *route) Primitive() engine.Primitive {
 	return rb.eroute
 }
 
-// PushLock satisfies the builder interface.
-func (rb *route) PushLock(lock string) error {
-	rb.Select.SetLock(lock)
-	return nil
-}
-
-// First satisfies the builder interface.
-func (rb *route) First() builder {
-	return rb
-}
-
-// ResultColumns satisfies the builder interface.
+// ResultColumns implements the logicalPlan interface
 func (rb *route) ResultColumns() []*resultColumn {
 	return rb.resultColumns
-}
-
-// PushFilter satisfies the builder interface.
-// The primitive will be updated if the new filter improves the plan.
-func (rb *route) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, _ builder) error {
-	sel := rb.Select.(*sqlparser.Select)
-	switch whereType {
-	case sqlparser.WhereStr:
-		sel.AddWhere(filter)
-	case sqlparser.HavingStr:
-		sel.AddHaving(filter)
-	}
-	rb.UpdatePlan(pb, filter)
-	return nil
-}
-
-// PushSelect satisfies the builder interface.
-func (rb *route) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
-	sel := rb.Select.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, expr)
-
-	rc = newResultColumn(expr, rb)
-	rb.resultColumns = append(rb.resultColumns, rc)
-
-	return rc, len(rb.resultColumns) - 1, nil
 }
 
 // PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
 // into the select expression list of the route. This function is
 // similar to PushSelect.
 func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
+	// TODO: we should not assume that the query is a SELECT
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
 
@@ -158,109 +127,36 @@ func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
 	return rc
 }
 
-// MakeDistinct satisfies the builder interface.
-func (rb *route) MakeDistinct() error {
-	rb.Select.(*sqlparser.Select).Distinct = true
-	return nil
-}
-
-// PushGroupBy satisfies the builder interface.
-func (rb *route) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	rb.Select.(*sqlparser.Select).GroupBy = groupBy
-	return nil
-}
-
-// PushOrderBy satisfies the builder interface.
-func (rb *route) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	switch len(orderBy) {
-	case 0:
-		return rb, nil
-	case 1:
-		isSpecial := false
-		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
-			isSpecial = true
-		} else if f, ok := orderBy[0].Expr.(*sqlparser.FuncExpr); ok {
-			if f.Name.Lowered() == "rand" {
-				isSpecial = true
-			}
-		}
-		if isSpecial {
-			rb.Select.AddOrder(orderBy[0])
-			return rb, nil
-		}
-	}
-
-	if rb.isSingleShard() {
-		for _, order := range orderBy {
-			rb.Select.AddOrder(order)
-		}
-		return rb, nil
-	}
-
-	// If it's a scatter, we have to populate the OrderBy field.
-	for _, order := range orderBy {
-		colNumber := -1
-		switch expr := order.Expr.(type) {
-		case *sqlparser.Literal:
-			var err error
-			if colNumber, err = ResultFromNumber(rb.resultColumns, expr); err != nil {
-				return nil, err
-			}
-		case *sqlparser.ColName:
-			c := expr.Metadata.(*column)
-			for i, rc := range rb.resultColumns {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
-		default:
-			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
-		}
-		// If column is not found, then the order by is referencing
-		// a column that's not on the select list.
-		if colNumber == -1 {
-			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
-		}
-		ob := engine.OrderbyParams{
-			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescScr,
-		}
-		rb.eroute.OrderBy = append(rb.eroute.OrderBy, ob)
-
-		rb.Select.AddOrder(order)
-	}
-	return newMergeSort(rb), nil
-}
-
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.SetLimit(limit)
 }
 
-// SetUpperLimit satisfies the builder interface.
-// The route pushes the limit regardless of the plan.
-// If it's a scatter query, the rows returned will be
-// more than the upper limit, but enough for the limit
-// primitive to chop off where needed.
-func (rb *route) SetUpperLimit(count sqlparser.Expr) {
-	rb.Select.SetLimit(&sqlparser.Limit{Rowcount: count})
+// Wireup2 implements the logicalPlan interface
+func (rb *route) WireupV4(semTable *semantics.SemTable) error {
+	rb.prepareTheAST()
+
+	rb.eroute.Query = sqlparser.String(rb.Select)
+	buffer := sqlparser.NewTrackedBuffer(nil)
+	sqlparser.FormatImpossibleQuery(buffer, rb.Select)
+	rb.eroute.FieldQuery = buffer.ParsedQuery().Query
+
+	return nil
 }
 
-// PushMisc satisfies the builder interface.
-func (rb *route) PushMisc(sel *sqlparser.Select) {
-	rb.Select.(*sqlparser.Select).Comments = sel.Comments
-	rb.Select.(*sqlparser.Select).Lock = sel.Lock
+// Solves implements the logicalPlan interface
+func (rb *route) ContainsTables() semantics.TableSet {
+	return rb.tables
 }
 
-// Wireup satisfies the builder interface.
-func (rb *route) Wireup(bldr builder, jt *jointab) error {
+// Wireup implements the logicalPlan interface
+func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 	// Precaution: update ERoute.Values only if it's not set already.
 	if rb.eroute.Values == nil {
-		// Resolve values stored in the builder.
+		// Resolve values stored in the logical plan.
 		switch vals := rb.condition.(type) {
 		case *sqlparser.ComparisonExpr:
-			pv, err := rb.procureValues(bldr, jt, vals.Right)
+			pv, err := rb.procureValues(plan, jt, vals.Right)
 			if err != nil {
 				return err
 			}
@@ -269,7 +165,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		case nil:
 			// no-op.
 		default:
-			pv, err := rb.procureValues(bldr, jt, vals)
+			pv, err := rb.procureValues(plan, jt, vals)
 			if err != nil {
 				return err
 			}
@@ -289,7 +185,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				})
 			}
 		case *sqlparser.ComparisonExpr:
-			if node.Operator == sqlparser.EqualStr {
+			if node.Operator == sqlparser.EqualOp {
 				if rb.exprIsValue(node.Left) && !rb.exprIsValue(node.Right) {
 					node.Left, node.Right = node.Right, node.Left
 				}
@@ -308,12 +204,12 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
-				joinVar := jt.Procure(bldr, node, rb.Order())
+				joinVar := jt.Procure(plan, node, rb.Order())
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
 		case sqlparser.TableName:
-			if !systemTable(node.Qualifier.String()) {
+			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
@@ -329,21 +225,31 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	return nil
 }
 
-func systemTable(qualifier string) bool {
-	return strings.EqualFold(qualifier, "information_schema") ||
-		strings.EqualFold(qualifier, "performance_schema") ||
-		strings.EqualFold(qualifier, "sys") ||
-		strings.EqualFold(qualifier, "mysql")
+// prepareTheAST does minor fixups of the SELECT struct before producing the query string
+func (rb *route) prepareTheAST() {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Select:
+			if len(node.SelectExprs) == 0 {
+				node.SelectExprs = []sqlparser.SelectExpr{
+					&sqlparser.AliasedExpr{
+						Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+					},
+				}
+			}
+		}
+		return true, nil
+	}, rb.Select)
 }
 
 // procureValues procures and converts the input into
 // the expected types for rb.Values.
-func (rb *route) procureValues(bldr builder, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
+func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr) (sqltypes.PlanValue, error) {
 	switch val := val.(type) {
 	case sqlparser.ValTuple:
 		pv := sqltypes.PlanValue{}
 		for _, val := range val {
-			v, err := rb.procureValues(bldr, jt, val)
+			v, err := rb.procureValues(plan, jt, val)
 			if err != nil {
 				return pv, err
 			}
@@ -351,7 +257,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val sqlparser.Expr) (s
 		}
 		return pv, nil
 	case *sqlparser.ColName:
-		joinVar := jt.Procure(bldr, val, rb.Order())
+		joinVar := jt.Procure(plan, val, rb.Order())
 		return sqltypes.PlanValue{Key: joinVar}, nil
 	default:
 		return sqlparser.NewPlanValue(val)
@@ -375,7 +281,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				return
 			}
 		case sqlparser.TableName:
-			if !systemTable(node.Qualifier.String()) {
+			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
 			}
@@ -391,14 +297,14 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 	return query.Query
 }
 
-// SupplyVar satisfies the builder interface.
+// SupplyVar implements the logicalPlan interface
 func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	// route is an atomic primitive. So, SupplyVar cannot be
 	// called on it.
 	panic("BUG: route is an atomic node.")
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol implements the logicalPlan interface
 func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range rb.resultColumns {
@@ -410,29 +316,58 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 	// A new result has to be returned.
 	rc = &resultColumn{column: c}
 	rb.resultColumns = append(rb.resultColumns, rc)
+	// TODO: we should not assume that the query is a SELECT query
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, &sqlparser.AliasedExpr{Expr: col})
 	return rc, len(rb.resultColumns) - 1
 }
 
-// SupplyWeightString satisfies the builder interface.
+// SupplyWeightString implements the logicalPlan interface
 func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	rc := rb.resultColumns[colNumber]
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
 		return weightcolNumber, nil
 	}
+	s, ok := rb.Select.(*sqlparser.Select)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+	}
+
+	aliasExpr, ok := s.SelectExprs[colNumber].(*sqlparser.AliasedExpr)
+	if !ok {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
+	}
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
 			Name: sqlparser.NewColIdent("weight_string"),
 			Exprs: []sqlparser.SelectExpr{
-				rb.Select.(*sqlparser.Select).SelectExprs[colNumber],
+				&sqlparser.AliasedExpr{
+					Expr: aliasExpr.Expr,
+				},
 			},
 		},
 	}
-	// It's ok to pass nil for pb and builder because PushSelect doesn't use them.
-	_, weightcolNumber, _ = rb.PushSelect(nil, expr, nil)
+	// It's ok to pass nil for pb and logicalPlan because PushSelect doesn't use them.
+	// TODO: we are ignoring a potential error here. need to clean this up
+	_, _, weightcolNumber, err = planProjection(nil, rb, expr, nil)
+	if err != nil {
+		return 0, err
+	}
 	rb.weightStrings[rc] = weightcolNumber
 	return weightcolNumber, nil
+}
+
+// Rewrite implements the logicalPlan interface
+func (rb *route) Rewrite(inputs ...logicalPlan) error {
+	if len(inputs) != 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "route: wrong number of inputs")
+	}
+	return nil
+}
+
+// Inputs implements the logicalPlan interface
+func (rb *route) Inputs() []logicalPlan {
+	return []logicalPlan{}
 }
 
 // MergeSubquery returns true if the subquery route could successfully be merged
@@ -448,8 +383,8 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 
 // MergeUnion returns true if the rhs route could successfully be merged
 // with the rb route.
-func (rb *route) MergeUnion(right *route) bool {
-	if rb.UnionCanMerge(right) {
+func (rb *route) MergeUnion(right *route, isDistinct bool) bool {
+	if rb.unionCanMerge(right, isDistinct) {
 		rb.substitutions = append(rb.substitutions, right.substitutions...)
 		right.Redirect = rb
 		return true
@@ -465,10 +400,10 @@ func (rb *route) isSingleShard() bool {
 	return false
 }
 
-// JoinCanMerge, SubqueryCanMerge and UnionCanMerge have subtly different behaviors.
+// JoinCanMerge, SubqueryCanMerge and unionCanMerge have subtly different behaviors.
 // The difference in behavior is around SelectReference.
 // It's not worth trying to reuse the code between them.
-func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr) bool {
+func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser.JoinTableExpr, where sqlparser.Expr) bool {
 	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
 		return false
 	}
@@ -477,7 +412,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		return true
 	}
 	switch rb.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA:
+	case engine.SelectUnsharded:
 		return rb.eroute.Opcode == rrb.eroute.Opcode
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
@@ -488,6 +423,22 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		return true
 	case engine.SelectNext:
 		return false
+	case engine.SelectDBA:
+		if rrb.eroute.Opcode != engine.SelectDBA {
+			return false
+		}
+		if where == nil {
+			return true
+		}
+		hasRuntimeRoutingPredicates := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			col, ok := node.(*sqlparser.ColName)
+			if ok {
+				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)
+			}
+			return !hasRuntimeRoutingPredicates, nil
+		}, where)
+		return !hasRuntimeRoutingPredicates
 	}
 	if ajoin == nil {
 		return false
@@ -529,18 +480,20 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 	return false
 }
 
-func (rb *route) UnionCanMerge(rrb *route) bool {
-	if rb.eroute.Keyspace.Name != rrb.eroute.Keyspace.Name {
+func (rb *route) unionCanMerge(other *route, distinct bool) bool {
+	if rb.eroute.Keyspace.Name != other.eroute.Keyspace.Name {
 		return false
 	}
 	switch rb.eroute.Opcode {
 	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
-		return rb.eroute.Opcode == rrb.eroute.Opcode
+		return rb.eroute.Opcode == other.eroute.Opcode
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
-		if rrb.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == rrb.eroute.Vindex && valEqual(rb.condition, rrb.condition) {
+		if other.eroute.Opcode == engine.SelectEqualUnique && rb.eroute.Vindex == other.eroute.Vindex && valEqual(rb.condition, other.condition) {
 			return true
 		}
+	case engine.SelectScatter:
+		return other.eroute.Opcode == engine.SelectScatter && !distinct
 	case engine.SelectNext:
 		return false
 	}
@@ -555,7 +508,7 @@ func (rb *route) canMergeOnFilter(pb *primitiveBuilder, rrb *route, filter sqlpa
 	if !ok {
 		return false
 	}
-	if comparison.Operator != sqlparser.EqualStr {
+	if comparison.Operator != sqlparser.EqualOp {
 		return false
 	}
 	left := comparison.Left
@@ -617,9 +570,18 @@ func (rb *route) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 				rb.updateRoute(opcode, vindex, values)
 			}
 		}
+	case engine.SelectMultiEqual:
+		switch opcode {
+		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN:
+			rb.updateRoute(opcode, vindex, values)
+		case engine.SelectMultiEqual:
+			if vindex.Cost() < rb.eroute.Vindex.Cost() {
+				rb.updateRoute(opcode, vindex, values)
+			}
+		}
 	case engine.SelectScatter:
 		switch opcode {
-		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectNone:
+		case engine.SelectEqualUnique, engine.SelectEqual, engine.SelectIN, engine.SelectMultiEqual, engine.SelectNone:
 			rb.updateRoute(opcode, vindex, values)
 		}
 	}
@@ -636,11 +598,11 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
-		case sqlparser.EqualStr:
+		case sqlparser.EqualOp:
 			return rb.computeEqualPlan(pb, node)
-		case sqlparser.InStr:
+		case sqlparser.InOp:
 			return rb.computeINPlan(pb, node)
-		case sqlparser.NotInStr:
+		case sqlparser.NotInOp:
 			return rb.computeNotInPlan(node.Right), nil, nil
 		}
 	case *sqlparser.IsExpr:
@@ -675,10 +637,10 @@ func (rb *route) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.Co
 	return engine.SelectEqual, vindex, right
 }
 
-// computeEqualPlan computes the plan for an equality constraint.
-func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+// computeIS computes the plan for an equality constraint.
+func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
-	if comparison.Operator != sqlparser.IsNullStr {
+	if comparison.Operator != sqlparser.IsNullOp {
 		return engine.SelectScatter, nil, nil
 	}
 
@@ -694,7 +656,18 @@ func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExp
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
+	switch comparison.Left.(type) {
+	case *sqlparser.ColName:
+		return rb.computeSimpleINPlan(pb, comparison)
+	case sqlparser.ValTuple:
+		return rb.computeCompositeINPlan(pb, comparison)
+	}
+	return engine.SelectScatter, nil, nil
+}
+
+// computeSimpleINPlan computes the plan for a simple IN constraint.
+func (rb *route) computeSimpleINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, expr sqlparser.Expr) {
 	vindex = pb.st.Vindex(comparison.Left, rb)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -715,6 +688,86 @@ func (rb *route) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.Compa
 		return engine.SelectIN, vindex, comparison
 	}
 	return engine.SelectScatter, nil, nil
+}
+
+// computeCompositeINPlan computes the plan for a composite IN constraint.
+func (rb *route) computeCompositeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+	leftTuple := comparison.Left.(sqlparser.ValTuple)
+	return rb.iterateCompositeIN(pb, comparison, nil, leftTuple)
+}
+
+// iterateCompositeIN recursively walks the LHS tuple of the IN clause looking
+// for column names. For those that match a vindex, it builds a multi-value plan
+// using the corresponding values in the RHS. It returns the best of the plans built.
+func (rb *route) iterateCompositeIN(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int, tuple sqlparser.ValTuple) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+	opcode = engine.SelectScatter
+
+	cindex := len(coordinates)
+	coordinates = append(coordinates, 0)
+	for idx, expr := range tuple {
+		coordinates[cindex] = idx
+		switch expr := expr.(type) {
+		case sqlparser.ValTuple:
+			newOpcode, newVindex, newValues := rb.iterateCompositeIN(pb, comparison, coordinates, expr)
+			opcode, vindex, values = bestOfComposite(opcode, newOpcode, vindex, newVindex, values, newValues)
+		case *sqlparser.ColName:
+			newVindex := pb.st.Vindex(expr, rb)
+			if newVindex != nil {
+				newOpcode, newValues := rb.compositePlanForCol(pb, comparison, coordinates)
+				opcode, vindex, values = bestOfComposite(opcode, newOpcode, vindex, newVindex, values, newValues)
+			}
+		}
+	}
+	return opcode, vindex, values
+}
+
+// compositePlanForCol builds a plan for a matched column in the LHS
+// of a composite IN clause.
+func (rb *route) compositePlanForCol(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr, coordinates []int) (opcode engine.RouteOpcode, values sqlparser.Expr) {
+	rightTuple, ok := comparison.Right.(sqlparser.ValTuple)
+	if !ok {
+		return engine.SelectScatter, nil
+	}
+	retVal := make(sqlparser.ValTuple, len(rightTuple))
+	for i, rval := range rightTuple {
+		val := tupleAccess(rval, coordinates)
+		if val == nil {
+			return engine.SelectScatter, nil
+		}
+		if !rb.exprIsValue(val) {
+			return engine.SelectScatter, nil
+		}
+		retVal[i] = val
+	}
+	return engine.SelectMultiEqual, retVal
+}
+
+// tupleAccess returns the value of the expression that corresponds
+// to the specified coordinates.
+func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
+	tuple, _ := expr.(sqlparser.ValTuple)
+	for _, idx := range coordinates {
+		if idx >= len(tuple) {
+			return nil
+		}
+		expr = tuple[idx]
+		tuple, _ = expr.(sqlparser.ValTuple)
+	}
+	return expr
+}
+
+// bestOfComposite returns the best of two composite IN clause plans.
+func bestOfComposite(opcode1, opcode2 engine.RouteOpcode, vindex1, vindex2 vindexes.SingleColumn, values1, values2 sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, values sqlparser.Expr) {
+	if opcode1 == engine.SelectScatter {
+		return opcode2, vindex2, values2
+	}
+	if opcode2 == engine.SelectScatter {
+		return opcode1, vindex1, values1
+	}
+	if vindex1.Cost() < vindex2.Cost() {
+		return opcode1, vindex1, values1
+	}
+	return opcode2, vindex2, values2
 }
 
 // computeNotInPlan looks for null values to produce a SelectNone if found

@@ -23,7 +23,7 @@ import (
 	"path"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -280,7 +280,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 		// Rebuild the SrvKeyspace object, so we can support
 		// range-based sharding queries, and export the redirects.
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil); err != nil {
+		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, false); err != nil {
 			return fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 		}
 	}
@@ -657,11 +657,6 @@ func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(ctx context.Context, 
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-// Deprecated
-func (itmc *internalTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
-	return nil, fmt.Errorf("not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -674,28 +669,7 @@ func (itmc *internalTabletManagerClient) WaitForPosition(ctx context.Context, ta
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-// Deprecated
-func (itmc *internalTabletManagerClient) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-// Deprecated
-func (itmc *internalTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, stopPos string, waitTime time.Duration) (string, error) {
-	return "", fmt.Errorf("not implemented in vtcombo")
-}
-
-// Deprecated
-func (itmc *internalTabletManagerClient) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-// Deprecated
-func (itmc *internalTabletManagerClient) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-// Deprecated
-func (itmc *internalTabletManagerClient) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
+func (itmc *internalTabletManagerClient) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
@@ -719,11 +693,6 @@ func (itmc *internalTabletManagerClient) PopulateReparentJournal(ctx context.Con
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-// Deprecated
-func (itmc *internalTabletManagerClient) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
@@ -732,17 +701,7 @@ func (itmc *internalTabletManagerClient) UndoDemoteMaster(ctx context.Context, t
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-// Deprecated
-func (itmc *internalTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
 func (itmc *internalTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
-	return fmt.Errorf("not implemented in vtcombo")
-}
-
-// Deprecated
-func (itmc *internalTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

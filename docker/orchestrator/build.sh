@@ -23,7 +23,7 @@ script="go get vitess.io/vitess/go/cmd/vtctlclient && \
   go install github.com/openark/orchestrator/go/cmd/orchestrator"
 
 echo "Building orchestrator..."
-docker run -ti --name=vt_orc_build golang:1.14.4-stretch bash -c "$script"
+docker run -ti --name=vt_orc_build golang:1.14.4-buster bash -c "$script"
 docker cp vt_orc_build:/go/bin/orchestrator $tmpdir
 docker cp vt_orc_build:/go/bin/vtctlclient $tmpdir
 docker cp vt_orc_build:/go/src/github.com/openark/orchestrator/resources $tmpdir

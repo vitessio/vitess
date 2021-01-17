@@ -26,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
@@ -112,11 +112,10 @@ func (tp *TxPool) AdjustLastID(id int64) {
 	tp.scp.AdjustLastID(id)
 }
 
-// RollbackNonBusy rolls back all transactions that are not in use.
-// Transactions can be in use for situations like executing statements
-// or in prepared state.
-func (tp *TxPool) RollbackNonBusy(ctx context.Context) {
-	for _, v := range tp.scp.GetOutdated(time.Duration(0), "for transition") {
+// Shutdown immediately rolls back all transactions that are not in use.
+// In-use connections will be closed when they are unlocked (not in use).
+func (tp *TxPool) Shutdown(ctx context.Context) {
+	for _, v := range tp.scp.ShutdownAll() {
 		tp.RollbackAndRelease(ctx, v)
 	}
 }
@@ -139,6 +138,9 @@ func (tp *TxPool) transactionKiller() {
 		// For logging, as transaction is killed as the connection is closed.
 		if conn.IsTainted() && conn.IsInTransaction() {
 			tp.env.Stats().KillCounters.Add("Transactions", 1)
+		}
+		if conn.IsInTransaction() {
+			tp.txComplete(conn, tx.TxKill)
 		}
 		conn.Releasef("exceeded timeout: %v", tp.Timeout())
 	}
@@ -236,6 +238,13 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 			return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 		}
 		conn, err = tp.createConn(ctx, options)
+		defer func() {
+			if err != nil {
+				// The transaction limiter frees transactions on rollback or commit. If we fail to create the transaction,
+				// release immediately since there will be no rollback or commit.
+				tp.limiter.Release(immediateCaller, effectiveCaller)
+			}
+		}()
 	}
 	if err != nil {
 		return nil, "", err

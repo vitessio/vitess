@@ -25,7 +25,7 @@ import (
 	"io"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
@@ -231,6 +231,16 @@ func (client *FakeTabletManagerClient) WaitForPosition(ctx context.Context, tabl
 	return nil
 }
 
+// VExec is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
+	// This result satisfies a generic VExec command
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id", "int"),
+		"complete",
+	)
+	return sqltypes.ResultToProto3(result), nil
+}
+
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	// This result satisfies 'select pos from _vt.vreplication...' called from split clone unit tests in go/vt/worker.
@@ -288,51 +298,6 @@ func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.C
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return "", nil
-}
-
-// StopSlave is deprecated
-func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return nil
-}
-
-// StopSlaveMinimum is deprecated
-func (client *FakeTabletManagerClient) StopSlaveMinimum(ctx context.Context, tablet *topodatapb.Tablet, minPos string, waitTime time.Duration) (string, error) {
-	return "", nil
-}
-
-// StartSlave is deprecated
-func (client *FakeTabletManagerClient) StartSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return nil
-}
-
-// StartSlaveUntilAfter is deprecated
-func (client *FakeTabletManagerClient) StartSlaveUntilAfter(ctx context.Context, tablet *topodatapb.Tablet, position string, duration time.Duration) error {
-	return nil
-}
-
-// GetSlaves is deprecated
-func (client *FakeTabletManagerClient) GetSlaves(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
-	return nil, nil
-}
-
-// SlaveStatus is deprecated
-func (client *FakeTabletManagerClient) SlaveStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
-	return &replicationdatapb.Status{}, nil
-}
-
-// InitSlave is deprecated
-func (client *FakeTabletManagerClient) InitSlave(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
-	return nil
-}
-
-// SlaveWasPromoted is deprecated
-func (client *FakeTabletManagerClient) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
-	return nil
-}
-
-// SlaveWasRestarted is deprecated
-func (client *FakeTabletManagerClient) SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error {
-	return nil
 }
 
 //

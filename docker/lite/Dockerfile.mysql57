@@ -17,10 +17,13 @@
 #       ensure images contain the right binaries.
 
 # Use a temporary layer for the build stage.
-FROM vitess/bootstrap:mysql57 AS builder
+ARG bootstrap_version=1
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
-# Allows some docker builds to disable CGO
-ARG CGO_ENABLED=0
+FROM "${image}" AS builder
+
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
 
 # Re-copy sources from working tree.
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
@@ -30,7 +33,7 @@ USER vitess
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM debian:stretch-slim
+FROM debian:buster-slim
 
 # Install dependencies
 COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
@@ -47,6 +50,7 @@ ENV PATH $VTROOT/bin:$PATH
 
 # Copy artifacts from builder layer.
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
+COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/orchestrator /vt/web/orchestrator
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot

@@ -19,7 +19,9 @@ package srvtopo
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
+
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -63,10 +65,33 @@ func initResolver(t *testing.T, name string) *Resolver {
 
 	// And rebuild both.
 	for _, keyspace := range []string{"sks", "uks"} {
-		if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, keyspace, []string{cell}); err != nil {
+		if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, keyspace, []string{cell}, false); err != nil {
 			t.Fatalf("RebuildKeyspace(%v) failed: %v", keyspace, err)
 		}
 	}
+
+	// Create snapshot keyspace and shard.
+	err = ts.CreateKeyspace(ctx, "rks", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT})
+	require.NoError(t, err, "CreateKeyspace(rks) failed: %v")
+	err = ts.CreateShard(ctx, "rks", "-80")
+	require.NoError(t, err, "CreateShard(-80) failed: %v")
+
+	// Rebuild should error because allowPartial is false and shard does not cover full keyrange
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "rks", []string{cell}, false)
+	require.Error(t, err, "RebuildKeyspace(rks) failed")
+	require.EqualError(t, err, "keyspace partition for MASTER in cell cell1 does not end with max key")
+
+	// Rebuild should succeed with allowPartial true
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "rks", []string{cell}, true)
+	require.NoError(t, err, "RebuildKeyspace(rks) failed")
+
+	// Create missing shard
+	err = ts.CreateShard(ctx, "rks", "80-")
+	require.NoError(t, err, "CreateShard(80-) failed: %v")
+
+	// Rebuild should now succeed even with allowPartial false
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "rks", []string{cell}, false)
+	require.NoError(t, err, "RebuildKeyspace(rks) failed")
 
 	return NewResolver(rs, &tabletconntest.FakeQueryService{}, cell)
 }

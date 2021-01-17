@@ -47,7 +47,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	}
 
 	// Get the result.
-	_, _, colNumber, _, _, err := c.readComQueryResponse()
+	colNumber, _, err := c.readComQueryResponse()
 	if err != nil {
 		return err
 	}

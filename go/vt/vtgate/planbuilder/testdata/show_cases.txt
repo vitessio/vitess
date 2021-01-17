@@ -1,0 +1,245 @@
+# Show table status without database name or conditions.
+"SHOW table StatUs"
+{
+  "QueryType": "SHOW",
+  "Original": "SHOW table StatUs",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show table status",
+    "SingleShardOnly": true
+  }
+}
+
+# Show Table status with a keyspace name
+"SHOW table StatUs from main"
+{
+  "QueryType": "SHOW",
+  "Original": "SHOW table StatUs from main",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show table status",
+    "SingleShardOnly": true
+  }
+}
+
+# Show Table status with a keyspace name using IN
+"SHOW table StatUs In main"
+{
+  "QueryType": "SHOW",
+  "Original": "SHOW table StatUs In main",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show table status",
+    "SingleShardOnly": true
+  }
+}
+
+# Show Table status with a keyspace name with a condition
+"SHOW table StatUs In user WHERE Rows > 70"
+{
+  "QueryType": "SHOW",
+  "Original": "SHOW table StatUs In user WHERE Rows \u003e 70",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show table status where Rows \u003e 70",
+    "SingleShardOnly": true
+  }
+}
+
+# Show Table status with a Like condition
+"SHOW table StatUs LIKe '%a'"
+{
+  "QueryType": "SHOW",
+  "Original": "SHOW table StatUs LIKe '%a'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show table status like '%a'",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns from user keyspace
+"show full columns from user.user_extra"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user.user_extra",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from user_extra",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns from main keyspace
+"show full columns from unsharded"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from unsharded",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from unsharded",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns pass as dbname in from clause supersedes the qualifier
+"show full columns from user.unsharded from main"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user.unsharded from main",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from unsharded",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns fails as table does not exists in user keyspace
+"show full columns from unsharded from user"
+"table unsharded not found"
+
+# show columns fails as table does not exists in user keyspace
+"show full columns from user.unsharded"
+"table unsharded not found"
+
+# show charset
+"show charset"
+{
+  "QueryType": "SHOW",
+  "Original": "show charset",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# show function
+"show function status"
+{
+  "QueryType": "SHOW",
+  "Original": "show function status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show function status",
+    "SingleShardOnly": true
+  }
+}
+
+# show privileges
+"show privileges"
+{
+  "QueryType": "SHOW",
+  "Original": "show privileges",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show privileges",
+    "SingleShardOnly": true
+  }
+}
+
+# show procedure status
+"show procedure status"
+{
+  "QueryType": "SHOW",
+  "Original": "show procedure status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show procedure status",
+    "SingleShardOnly": true
+  }
+}
+
+
+# show variables
+"show variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show variables",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show variables",
+    "SingleShardOnly": true
+  }
+}
+
+
+# show databases
+"show databases"
+{
+  "QueryType": "SHOW",
+  "Original": "show databases",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}

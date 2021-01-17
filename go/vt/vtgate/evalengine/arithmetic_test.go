@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -33,6 +34,15 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+)
+
+var (
+	NULL       = sqltypes.NULL
+	NewInt32   = sqltypes.NewInt32
+	NewInt64   = sqltypes.NewInt64
+	NewUint64  = sqltypes.NewUint64
+	NewFloat64 = sqltypes.NewFloat64
+	TestValue  = sqltypes.TestValue
 )
 
 func TestArithmetics(t *testing.T) {
@@ -50,204 +60,204 @@ func TestArithmetics(t *testing.T) {
 		f:        Subtract,
 		cases: []tcase{{
 			// All Nulls
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// First value null.
-			v1:  sqltypes.NewInt32(1),
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NewInt32(1),
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// Second value null.
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NewInt32(1),
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NewInt32(1),
+			out: NULL,
 		}, {
 			// case with negative value
-			v1:  sqltypes.NewInt64(-1),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewInt64(1),
+			v1:  NewInt64(-1),
+			v2:  NewInt64(-2),
+			out: NewInt64(1),
 		}, {
 			// testing for int64 overflow with min negative value
-			v1:  sqltypes.NewInt64(math.MinInt64),
-			v2:  sqltypes.NewInt64(1),
+			v1:  NewInt64(math.MinInt64),
+			v2:  NewInt64(1),
 			err: "BIGINT value is out of range in -9223372036854775808 - 1",
 		}, {
-			v1:  sqltypes.NewUint64(4),
-			v2:  sqltypes.NewInt64(5),
+			v1:  NewUint64(4),
+			v2:  NewInt64(5),
 			err: "BIGINT UNSIGNED value is out of range in 4 - 5",
 		}, {
 			// testing uint - int
-			v1:  sqltypes.NewUint64(7),
-			v2:  sqltypes.NewInt64(5),
-			out: sqltypes.NewUint64(2),
+			v1:  NewUint64(7),
+			v2:  NewInt64(5),
+			out: NewUint64(2),
 		}, {
-			v1:  sqltypes.NewUint64(math.MaxUint64),
-			v2:  sqltypes.NewInt64(0),
-			out: sqltypes.NewUint64(math.MaxUint64),
+			v1:  NewUint64(math.MaxUint64),
+			v2:  NewInt64(0),
+			out: NewUint64(math.MaxUint64),
 		}, {
 			// testing for int64 overflow
-			v1:  sqltypes.NewInt64(math.MinInt64),
-			v2:  sqltypes.NewUint64(0),
+			v1:  NewInt64(math.MinInt64),
+			v2:  NewUint64(0),
 			err: "BIGINT UNSIGNED value is out of range in -9223372036854775808 - 0",
 		}, {
-			v1:  sqltypes.TestValue(querypb.Type_VARCHAR, "c"),
-			v2:  sqltypes.NewInt64(1),
-			out: sqltypes.NewInt64(-1),
+			v1:  TestValue(querypb.Type_VARCHAR, "c"),
+			v2:  NewInt64(1),
+			out: NewInt64(-1),
 		}, {
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.TestValue(querypb.Type_VARCHAR, "c"),
-			out: sqltypes.NewUint64(1),
+			v1:  NewUint64(1),
+			v2:  TestValue(querypb.Type_VARCHAR, "c"),
+			out: NewUint64(1),
 		}, {
 			// testing for error for parsing float value to uint64
-			v1:  sqltypes.TestValue(querypb.Type_UINT64, "1.2"),
-			v2:  sqltypes.NewInt64(2),
+			v1:  TestValue(querypb.Type_UINT64, "1.2"),
+			v2:  NewInt64(2),
 			err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for error for parsing float value to uint64
-			v1:  sqltypes.NewUint64(2),
-			v2:  sqltypes.TestValue(querypb.Type_UINT64, "1.2"),
+			v1:  NewUint64(2),
+			v2:  TestValue(querypb.Type_UINT64, "1.2"),
 			err: "strconv.ParseUint: parsing \"1.2\": invalid syntax",
 		}, {
 			// uint64 - uint64
-			v1:  sqltypes.NewUint64(8),
-			v2:  sqltypes.NewUint64(4),
-			out: sqltypes.NewUint64(4),
+			v1:  NewUint64(8),
+			v2:  NewUint64(4),
+			out: NewUint64(4),
 		}, {
 			// testing for float subtraction: float - int
-			v1:  sqltypes.NewFloat64(1.2),
-			v2:  sqltypes.NewInt64(2),
-			out: sqltypes.NewFloat64(-0.8),
+			v1:  NewFloat64(1.2),
+			v2:  NewInt64(2),
+			out: NewFloat64(-0.8),
 		}, {
 			// testing for float subtraction: float - uint
-			v1:  sqltypes.NewFloat64(1.2),
-			v2:  sqltypes.NewUint64(2),
-			out: sqltypes.NewFloat64(-0.8),
+			v1:  NewFloat64(1.2),
+			v2:  NewUint64(2),
+			out: NewFloat64(-0.8),
 		}, {
-			v1:  sqltypes.NewInt64(-1),
-			v2:  sqltypes.NewUint64(2),
+			v1:  NewInt64(-1),
+			v2:  NewUint64(2),
 			err: "BIGINT UNSIGNED value is out of range in -1 - 2",
 		}, {
-			v1:  sqltypes.NewInt64(2),
-			v2:  sqltypes.NewUint64(1),
-			out: sqltypes.NewUint64(1),
+			v1:  NewInt64(2),
+			v2:  NewUint64(1),
+			out: NewUint64(1),
 		}, {
 			// testing int64 - float64 method
-			v1:  sqltypes.NewInt64(-2),
-			v2:  sqltypes.NewFloat64(1.0),
-			out: sqltypes.NewFloat64(-3.0),
+			v1:  NewInt64(-2),
+			v2:  NewFloat64(1.0),
+			out: NewFloat64(-3.0),
 		}, {
 			// testing uint64 - float64 method
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.NewFloat64(-2.0),
-			out: sqltypes.NewFloat64(3.0),
+			v1:  NewUint64(1),
+			v2:  NewFloat64(-2.0),
+			out: NewFloat64(3.0),
 		}, {
 			// testing uint - int to return uintplusint
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewUint64(3),
+			v1:  NewUint64(1),
+			v2:  NewInt64(-2),
+			out: NewUint64(3),
 		}, {
 			// testing for float - float
-			v1:  sqltypes.NewFloat64(1.2),
-			v2:  sqltypes.NewFloat64(3.2),
-			out: sqltypes.NewFloat64(-2),
+			v1:  NewFloat64(1.2),
+			v2:  NewFloat64(3.2),
+			out: NewFloat64(-2),
 		}, {
 			// testing uint - uint if v2 > v1
-			v1:  sqltypes.NewUint64(2),
-			v2:  sqltypes.NewUint64(4),
+			v1:  NewUint64(2),
+			v2:  NewUint64(4),
 			err: "BIGINT UNSIGNED value is out of range in 2 - 4",
 		}, {
 			// testing uint - (- int)
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewUint64(3),
+			v1:  NewUint64(1),
+			v2:  NewInt64(-2),
+			out: NewUint64(3),
 		}},
 	}, {
 		operator: "+",
 		f:        Add,
 		cases: []tcase{{
 			// All Nulls
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// First value null.
-			v1:  sqltypes.NewInt32(1),
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NewInt32(1),
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// Second value null.
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NewInt32(1),
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NewInt32(1),
+			out: NULL,
 		}, {
 			// case with negatives
-			v1:  sqltypes.NewInt64(-1),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewInt64(-3),
+			v1:  NewInt64(-1),
+			v2:  NewInt64(-2),
+			out: NewInt64(-3),
 		}, {
 			// testing for overflow int64, result will be unsigned int
-			v1:  sqltypes.NewInt64(math.MaxInt64),
-			v2:  sqltypes.NewUint64(2),
-			out: sqltypes.NewUint64(9223372036854775809),
+			v1:  NewInt64(math.MaxInt64),
+			v2:  NewUint64(2),
+			out: NewUint64(9223372036854775809),
 		}, {
-			v1:  sqltypes.NewInt64(-2),
-			v2:  sqltypes.NewUint64(1),
+			v1:  NewInt64(-2),
+			v2:  NewUint64(1),
 			err: "BIGINT UNSIGNED value is out of range in 1 + -2",
 		}, {
-			v1:  sqltypes.NewInt64(math.MaxInt64),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewInt64(9223372036854775805),
+			v1:  NewInt64(math.MaxInt64),
+			v2:  NewInt64(-2),
+			out: NewInt64(9223372036854775805),
 		}, {
 			// Normal case
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.NewUint64(2),
-			out: sqltypes.NewUint64(3),
+			v1:  NewUint64(1),
+			v2:  NewUint64(2),
+			out: NewUint64(3),
 		}, {
 			// testing for overflow uint64
-			v1:  sqltypes.NewUint64(math.MaxUint64),
-			v2:  sqltypes.NewUint64(2),
+			v1:  NewUint64(math.MaxUint64),
+			v2:  NewUint64(2),
 			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2",
 		}, {
 			// int64 underflow
-			v1:  sqltypes.NewInt64(math.MinInt64),
-			v2:  sqltypes.NewInt64(-2),
+			v1:  NewInt64(math.MinInt64),
+			v2:  NewInt64(-2),
 			err: "BIGINT value is out of range in -9223372036854775808 + -2",
 		}, {
 			// checking int64 max value can be returned
-			v1:  sqltypes.NewInt64(math.MaxInt64),
-			v2:  sqltypes.NewUint64(0),
-			out: sqltypes.NewUint64(9223372036854775807),
+			v1:  NewInt64(math.MaxInt64),
+			v2:  NewUint64(0),
+			out: NewUint64(9223372036854775807),
 		}, {
 			// testing whether uint64 max value can be returned
-			v1:  sqltypes.NewUint64(math.MaxUint64),
-			v2:  sqltypes.NewInt64(0),
-			out: sqltypes.NewUint64(math.MaxUint64),
+			v1:  NewUint64(math.MaxUint64),
+			v2:  NewInt64(0),
+			out: NewUint64(math.MaxUint64),
 		}, {
-			v1:  sqltypes.NewUint64(math.MaxInt64),
-			v2:  sqltypes.NewInt64(1),
-			out: sqltypes.NewUint64(9223372036854775808),
+			v1:  NewUint64(math.MaxInt64),
+			v2:  NewInt64(1),
+			out: NewUint64(9223372036854775808),
 		}, {
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.TestValue(querypb.Type_VARCHAR, "c"),
-			out: sqltypes.NewUint64(1),
+			v1:  NewUint64(1),
+			v2:  TestValue(querypb.Type_VARCHAR, "c"),
+			out: NewUint64(1),
 		}, {
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.TestValue(querypb.Type_VARCHAR, "1.2"),
-			out: sqltypes.NewFloat64(2.2),
+			v1:  NewUint64(1),
+			v2:  TestValue(querypb.Type_VARCHAR, "1.2"),
+			out: NewFloat64(2.2),
 		}, {
-			v1:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
-			v2:  sqltypes.NewInt64(2),
+			v1:  TestValue(querypb.Type_INT64, "1.2"),
+			v2:  NewInt64(2),
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
-			v1:  sqltypes.NewInt64(2),
-			v2:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+			v1:  NewInt64(2),
+			v2:  TestValue(querypb.Type_INT64, "1.2"),
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for uint64 overflow with max uint64 + int value
-			v1:  sqltypes.NewUint64(math.MaxUint64),
-			v2:  sqltypes.NewInt64(2),
+			v1:  NewUint64(math.MaxUint64),
+			v2:  NewInt64(2),
 			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2",
 		}},
 	}, {
@@ -255,83 +265,83 @@ func TestArithmetics(t *testing.T) {
 		f:        Divide,
 		cases: []tcase{{
 			//All Nulls
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// First value null.
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NewInt32(1),
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NewInt32(1),
+			out: NULL,
 		}, {
 			// Second value null.
-			v1:  sqltypes.NewInt32(1),
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NewInt32(1),
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// Second arg 0
-			v1:  sqltypes.NewInt32(5),
-			v2:  sqltypes.NewInt32(0),
-			out: sqltypes.NULL,
+			v1:  NewInt32(5),
+			v2:  NewInt32(0),
+			out: NULL,
 		}, {
 			// Both arguments zero
-			v1:  sqltypes.NewInt32(0),
-			v2:  sqltypes.NewInt32(0),
-			out: sqltypes.NULL,
+			v1:  NewInt32(0),
+			v2:  NewInt32(0),
+			out: NULL,
 		}, {
 			// case with negative value
-			v1:  sqltypes.NewInt64(-1),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewFloat64(0.5000),
+			v1:  NewInt64(-1),
+			v2:  NewInt64(-2),
+			out: NewFloat64(0.5000),
 		}, {
 			// float64 division by zero
-			v1:  sqltypes.NewFloat64(2),
-			v2:  sqltypes.NewFloat64(0),
-			out: sqltypes.NULL,
+			v1:  NewFloat64(2),
+			v2:  NewFloat64(0),
+			out: NULL,
 		}, {
 			// Lower bound for int64
-			v1:  sqltypes.NewInt64(math.MinInt64),
-			v2:  sqltypes.NewInt64(1),
-			out: sqltypes.NewFloat64(math.MinInt64),
+			v1:  NewInt64(math.MinInt64),
+			v2:  NewInt64(1),
+			out: NewFloat64(math.MinInt64),
 		}, {
 			// upper bound for uint64
-			v1:  sqltypes.NewUint64(math.MaxUint64),
-			v2:  sqltypes.NewUint64(1),
-			out: sqltypes.NewFloat64(math.MaxUint64),
+			v1:  NewUint64(math.MaxUint64),
+			v2:  NewUint64(1),
+			out: NewFloat64(math.MaxUint64),
 		}, {
 			// testing for error in types
-			v1:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
-			v2:  sqltypes.NewInt64(2),
+			v1:  TestValue(querypb.Type_INT64, "1.2"),
+			v2:  NewInt64(2),
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for error in types
-			v1:  sqltypes.NewInt64(2),
-			v2:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+			v1:  NewInt64(2),
+			v2:  TestValue(querypb.Type_INT64, "1.2"),
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for uint/int
-			v1:  sqltypes.NewUint64(4),
-			v2:  sqltypes.NewInt64(5),
-			out: sqltypes.NewFloat64(0.8),
+			v1:  NewUint64(4),
+			v2:  NewInt64(5),
+			out: NewFloat64(0.8),
 		}, {
 			// testing for uint/uint
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.NewUint64(2),
-			out: sqltypes.NewFloat64(0.5),
+			v1:  NewUint64(1),
+			v2:  NewUint64(2),
+			out: NewFloat64(0.5),
 		}, {
 			// testing for float64/int64
-			v1:  sqltypes.TestValue(querypb.Type_FLOAT64, "1.2"),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewFloat64(-0.6),
+			v1:  TestValue(querypb.Type_FLOAT64, "1.2"),
+			v2:  NewInt64(-2),
+			out: NewFloat64(-0.6),
 		}, {
 			// testing for float64/uint64
-			v1:  sqltypes.TestValue(querypb.Type_FLOAT64, "1.2"),
-			v2:  sqltypes.NewUint64(2),
-			out: sqltypes.NewFloat64(0.6),
+			v1:  TestValue(querypb.Type_FLOAT64, "1.2"),
+			v2:  NewUint64(2),
+			out: NewFloat64(0.6),
 		}, {
 			// testing for overflow of float64
-			v1:  sqltypes.NewFloat64(math.MaxFloat64),
-			v2:  sqltypes.NewFloat64(0.5),
+			v1:  NewFloat64(math.MaxFloat64),
+			v2:  NewFloat64(0.5),
 			err: "BIGINT is out of range in 1.7976931348623157e+308 / 0.5",
 		}},
 	}, {
@@ -339,77 +349,77 @@ func TestArithmetics(t *testing.T) {
 		f:        Multiply,
 		cases: []tcase{{
 			//All Nulls
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// First value null.
-			v1:  sqltypes.NewInt32(1),
-			v2:  sqltypes.NULL,
-			out: sqltypes.NULL,
+			v1:  NewInt32(1),
+			v2:  NULL,
+			out: NULL,
 		}, {
 			// Second value null.
-			v1:  sqltypes.NULL,
-			v2:  sqltypes.NewInt32(1),
-			out: sqltypes.NULL,
+			v1:  NULL,
+			v2:  NewInt32(1),
+			out: NULL,
 		}, {
 			// case with negative value
-			v1:  sqltypes.NewInt64(-1),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewInt64(2),
+			v1:  NewInt64(-1),
+			v2:  NewInt64(-2),
+			out: NewInt64(2),
 		}, {
 			// testing for int64 overflow with min negative value
-			v1:  sqltypes.NewInt64(math.MinInt64),
-			v2:  sqltypes.NewInt64(1),
-			out: sqltypes.NewInt64(math.MinInt64),
+			v1:  NewInt64(math.MinInt64),
+			v2:  NewInt64(1),
+			out: NewInt64(math.MinInt64),
 		}, {
 			// testing for error in types
-			v1:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
-			v2:  sqltypes.NewInt64(2),
+			v1:  TestValue(querypb.Type_INT64, "1.2"),
+			v2:  NewInt64(2),
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for error in types
-			v1:  sqltypes.NewInt64(2),
-			v2:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+			v1:  NewInt64(2),
+			v2:  TestValue(querypb.Type_INT64, "1.2"),
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for uint*int
-			v1:  sqltypes.NewUint64(4),
-			v2:  sqltypes.NewInt64(5),
-			out: sqltypes.NewUint64(20),
+			v1:  NewUint64(4),
+			v2:  NewInt64(5),
+			out: NewUint64(20),
 		}, {
 			// testing for uint*uint
-			v1:  sqltypes.NewUint64(1),
-			v2:  sqltypes.NewUint64(2),
-			out: sqltypes.NewUint64(2),
+			v1:  NewUint64(1),
+			v2:  NewUint64(2),
+			out: NewUint64(2),
 		}, {
 			// testing for float64*int64
-			v1:  sqltypes.TestValue(querypb.Type_FLOAT64, "1.2"),
-			v2:  sqltypes.NewInt64(-2),
-			out: sqltypes.NewFloat64(-2.4),
+			v1:  TestValue(querypb.Type_FLOAT64, "1.2"),
+			v2:  NewInt64(-2),
+			out: NewFloat64(-2.4),
 		}, {
 			// testing for float64*uint64
-			v1:  sqltypes.TestValue(querypb.Type_FLOAT64, "1.2"),
-			v2:  sqltypes.NewUint64(2),
-			out: sqltypes.NewFloat64(2.4),
+			v1:  TestValue(querypb.Type_FLOAT64, "1.2"),
+			v2:  NewUint64(2),
+			out: NewFloat64(2.4),
 		}, {
 			// testing for overflow of int64
-			v1:  sqltypes.NewInt64(math.MaxInt64),
-			v2:  sqltypes.NewInt64(2),
+			v1:  NewInt64(math.MaxInt64),
+			v2:  NewInt64(2),
 			err: "BIGINT value is out of range in 9223372036854775807 * 2",
 		}, {
 			// testing for underflow of uint64*max.uint64
-			v1:  sqltypes.NewInt64(2),
-			v2:  sqltypes.NewUint64(math.MaxUint64),
+			v1:  NewInt64(2),
+			v2:  NewUint64(math.MaxUint64),
 			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 * 2",
 		}, {
-			v1:  sqltypes.NewUint64(math.MaxUint64),
-			v2:  sqltypes.NewUint64(1),
-			out: sqltypes.NewUint64(math.MaxUint64),
+			v1:  NewUint64(math.MaxUint64),
+			v2:  NewUint64(1),
+			out: NewUint64(math.MaxUint64),
 		}, {
 			//Checking whether maxInt value can be passed as uint value
-			v1:  sqltypes.NewUint64(math.MaxInt64),
-			v2:  sqltypes.NewInt64(3),
+			v1:  NewUint64(math.MaxInt64),
+			v2:  NewInt64(3),
 			err: "BIGINT UNSIGNED value is out of range in 9223372036854775807 * 3",
 		}},
 	}}
@@ -439,44 +449,44 @@ func TestNullsafeAdd(t *testing.T) {
 		err    error
 	}{{
 		// All nulls.
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NULL,
-		out: sqltypes.NewInt64(0),
+		v1:  NULL,
+		v2:  NULL,
+		out: NewInt64(0),
 	}, {
 		// First value null.
-		v1:  sqltypes.NewInt32(1),
-		v2:  sqltypes.NULL,
-		out: sqltypes.NewInt64(1),
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NewInt64(1),
 	}, {
 		// Second value null.
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NewInt32(1),
-		out: sqltypes.NewInt64(1),
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NewInt64(1),
 	}, {
 		// Normal case.
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NewInt64(2),
-		out: sqltypes.NewInt64(3),
+		v1:  NewInt64(1),
+		v2:  NewInt64(2),
+		out: NewInt64(3),
 	}, {
 		// Make sure underlying error is returned for LHS.
-		v1:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
-		v2:  sqltypes.NewInt64(2),
+		v1:  TestValue(querypb.Type_INT64, "1.2"),
+		v2:  NewInt64(2),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Make sure underlying error is returned for RHS.
-		v1:  sqltypes.NewInt64(2),
-		v2:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+		v1:  NewInt64(2),
+		v2:  TestValue(querypb.Type_INT64, "1.2"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Make sure underlying error is returned while adding.
-		v1:  sqltypes.NewInt64(-1),
-		v2:  sqltypes.NewUint64(2),
-		out: sqltypes.NewInt64(-9223372036854775808),
+		v1:  NewInt64(-1),
+		v2:  NewUint64(2),
+		out: NewInt64(-9223372036854775808),
 	}, {
 		// Make sure underlying error is returned while converting.
-		v1:  sqltypes.NewFloat64(1),
-		v2:  sqltypes.NewFloat64(2),
-		out: sqltypes.NewInt64(3),
+		v1:  NewFloat64(1),
+		v2:  NewFloat64(2),
+		out: NewInt64(3),
 	}}
 	for _, tcase := range tcases {
 		got := NullsafeAdd(tcase.v1, tcase.v2, querypb.Type_INT64)
@@ -494,68 +504,68 @@ func TestNullsafeCompare(t *testing.T) {
 		err    error
 	}{{
 		// All nulls.
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NULL,
+		v1:  NULL,
+		v2:  NULL,
 		out: 0,
 	}, {
 		// LHS null.
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NewInt64(1),
+		v1:  NULL,
+		v2:  NewInt64(1),
 		out: -1,
 	}, {
 		// RHS null.
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NULL,
+		v1:  NewInt64(1),
+		v2:  NULL,
 		out: 1,
 	}, {
 		// LHS Text
-		v1:  sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
-		v2:  sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
+		v1:  TestValue(querypb.Type_VARCHAR, "abcd"),
+		v2:  TestValue(querypb.Type_VARCHAR, "abcd"),
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}, {
 		// Make sure underlying error is returned for LHS.
-		v1:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
-		v2:  sqltypes.NewInt64(2),
+		v1:  TestValue(querypb.Type_INT64, "1.2"),
+		v2:  NewInt64(2),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Make sure underlying error is returned for RHS.
-		v1:  sqltypes.NewInt64(2),
-		v2:  sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+		v1:  NewInt64(2),
+		v2:  TestValue(querypb.Type_INT64, "1.2"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Numeric equal.
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NewUint64(1),
+		v1:  NewInt64(1),
+		v2:  NewUint64(1),
 		out: 0,
 	}, {
 		// Numeric unequal.
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NewUint64(2),
+		v1:  NewInt64(1),
+		v2:  NewUint64(2),
 		out: -1,
 	}, {
 		// Non-numeric equal
-		v1:  sqltypes.TestValue(querypb.Type_VARBINARY, "abcd"),
-		v2:  sqltypes.TestValue(querypb.Type_BINARY, "abcd"),
+		v1:  TestValue(querypb.Type_VARBINARY, "abcd"),
+		v2:  TestValue(querypb.Type_BINARY, "abcd"),
 		out: 0,
 	}, {
 		// Non-numeric unequal
-		v1:  sqltypes.TestValue(querypb.Type_VARBINARY, "abcd"),
-		v2:  sqltypes.TestValue(querypb.Type_BINARY, "bcde"),
+		v1:  TestValue(querypb.Type_VARBINARY, "abcd"),
+		v2:  TestValue(querypb.Type_BINARY, "bcde"),
 		out: -1,
 	}, {
 		// Date/Time types
-		v1:  sqltypes.TestValue(querypb.Type_DATETIME, "1000-01-01 00:00:00"),
-		v2:  sqltypes.TestValue(querypb.Type_BINARY, "1000-01-01 00:00:00"),
+		v1:  TestValue(querypb.Type_DATETIME, "1000-01-01 00:00:00"),
+		v2:  TestValue(querypb.Type_BINARY, "1000-01-01 00:00:00"),
 		out: 0,
 	}, {
 		// Date/Time types
-		v1:  sqltypes.TestValue(querypb.Type_DATETIME, "2000-01-01 00:00:00"),
-		v2:  sqltypes.TestValue(querypb.Type_BINARY, "1000-01-01 00:00:00"),
+		v1:  TestValue(querypb.Type_DATETIME, "2000-01-01 00:00:00"),
+		v2:  TestValue(querypb.Type_BINARY, "1000-01-01 00:00:00"),
 		out: 1,
 	}, {
 		// Date/Time types
-		v1:  sqltypes.TestValue(querypb.Type_DATETIME, "1000-01-01 00:00:00"),
-		v2:  sqltypes.TestValue(querypb.Type_BINARY, "2000-01-01 00:00:00"),
+		v1:  TestValue(querypb.Type_DATETIME, "1000-01-01 00:00:00"),
+		v2:  TestValue(querypb.Type_BINARY, "2000-01-01 00:00:00"),
 		out: -1,
 	}}
 	for _, tcase := range tcases {
@@ -581,79 +591,79 @@ func TestCast(t *testing.T) {
 		err error
 	}{{
 		typ: querypb.Type_VARCHAR,
-		v:   sqltypes.NULL,
-		out: sqltypes.NULL,
+		v:   NULL,
+		out: NULL,
 	}, {
 		typ: querypb.Type_VARCHAR,
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "exact types"),
-		out: sqltypes.TestValue(querypb.Type_VARCHAR, "exact types"),
+		v:   TestValue(querypb.Type_VARCHAR, "exact types"),
+		out: TestValue(querypb.Type_VARCHAR, "exact types"),
 	}, {
 		typ: querypb.Type_INT64,
-		v:   sqltypes.TestValue(querypb.Type_INT32, "32"),
-		out: sqltypes.TestValue(querypb.Type_INT64, "32"),
+		v:   TestValue(querypb.Type_INT32, "32"),
+		out: TestValue(querypb.Type_INT64, "32"),
 	}, {
 		typ: querypb.Type_INT24,
-		v:   sqltypes.TestValue(querypb.Type_UINT64, "64"),
-		out: sqltypes.TestValue(querypb.Type_INT24, "64"),
+		v:   TestValue(querypb.Type_UINT64, "64"),
+		out: TestValue(querypb.Type_INT24, "64"),
 	}, {
 		typ: querypb.Type_INT24,
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "bad int"),
+		v:   TestValue(querypb.Type_VARCHAR, "bad int"),
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseInt: parsing "bad int": invalid syntax`),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   sqltypes.TestValue(querypb.Type_UINT32, "32"),
-		out: sqltypes.TestValue(querypb.Type_UINT64, "32"),
+		v:   TestValue(querypb.Type_UINT32, "32"),
+		out: TestValue(querypb.Type_UINT64, "32"),
 	}, {
 		typ: querypb.Type_UINT24,
-		v:   sqltypes.TestValue(querypb.Type_INT64, "64"),
-		out: sqltypes.TestValue(querypb.Type_UINT24, "64"),
+		v:   TestValue(querypb.Type_INT64, "64"),
+		out: TestValue(querypb.Type_UINT24, "64"),
 	}, {
 		typ: querypb.Type_UINT24,
-		v:   sqltypes.TestValue(querypb.Type_INT64, "-1"),
+		v:   TestValue(querypb.Type_INT64, "-1"),
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseUint: parsing "-1": invalid syntax`),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   sqltypes.TestValue(querypb.Type_INT64, "64"),
-		out: sqltypes.TestValue(querypb.Type_FLOAT64, "64"),
+		v:   TestValue(querypb.Type_INT64, "64"),
+		out: TestValue(querypb.Type_FLOAT64, "64"),
 	}, {
 		typ: querypb.Type_FLOAT32,
-		v:   sqltypes.TestValue(querypb.Type_FLOAT64, "64"),
-		out: sqltypes.TestValue(querypb.Type_FLOAT32, "64"),
+		v:   TestValue(querypb.Type_FLOAT64, "64"),
+		out: TestValue(querypb.Type_FLOAT32, "64"),
 	}, {
 		typ: querypb.Type_FLOAT32,
-		v:   sqltypes.TestValue(querypb.Type_DECIMAL, "1.24"),
-		out: sqltypes.TestValue(querypb.Type_FLOAT32, "1.24"),
+		v:   TestValue(querypb.Type_DECIMAL, "1.24"),
+		out: TestValue(querypb.Type_FLOAT32, "1.24"),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "1.25"),
-		out: sqltypes.TestValue(querypb.Type_FLOAT64, "1.25"),
+		v:   TestValue(querypb.Type_VARCHAR, "1.25"),
+		out: TestValue(querypb.Type_FLOAT64, "1.25"),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "bad float"),
+		v:   TestValue(querypb.Type_VARCHAR, "bad float"),
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, `strconv.ParseFloat: parsing "bad float": invalid syntax`),
 	}, {
 		typ: querypb.Type_VARCHAR,
-		v:   sqltypes.TestValue(querypb.Type_INT64, "64"),
-		out: sqltypes.TestValue(querypb.Type_VARCHAR, "64"),
+		v:   TestValue(querypb.Type_INT64, "64"),
+		out: TestValue(querypb.Type_VARCHAR, "64"),
 	}, {
 		typ: querypb.Type_VARBINARY,
-		v:   sqltypes.TestValue(querypb.Type_FLOAT64, "64"),
-		out: sqltypes.TestValue(querypb.Type_VARBINARY, "64"),
+		v:   TestValue(querypb.Type_FLOAT64, "64"),
+		out: TestValue(querypb.Type_VARBINARY, "64"),
 	}, {
 		typ: querypb.Type_VARBINARY,
-		v:   sqltypes.TestValue(querypb.Type_DECIMAL, "1.24"),
-		out: sqltypes.TestValue(querypb.Type_VARBINARY, "1.24"),
+		v:   TestValue(querypb.Type_DECIMAL, "1.24"),
+		out: TestValue(querypb.Type_VARBINARY, "1.24"),
 	}, {
 		typ: querypb.Type_VARBINARY,
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "1.25"),
-		out: sqltypes.TestValue(querypb.Type_VARBINARY, "1.25"),
+		v:   TestValue(querypb.Type_VARCHAR, "1.25"),
+		out: TestValue(querypb.Type_VARBINARY, "1.25"),
 	}, {
 		typ: querypb.Type_VARCHAR,
-		v:   sqltypes.TestValue(querypb.Type_VARBINARY, "valid string"),
-		out: sqltypes.TestValue(querypb.Type_VARCHAR, "valid string"),
+		v:   TestValue(querypb.Type_VARBINARY, "valid string"),
+		out: TestValue(querypb.Type_VARCHAR, "valid string"),
 	}, {
 		typ: querypb.Type_VARCHAR,
-		v:   sqltypes.TestValue(sqltypes.Expression, "bad string"),
+		v:   TestValue(sqltypes.Expression, "bad string"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(bad string) cannot be cast to VARCHAR"),
 	}}
 	for _, tcase := range tcases {
@@ -677,16 +687,16 @@ func TestToUint64(t *testing.T) {
 		out uint64
 		err error
 	}{{
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
+		v:   TestValue(querypb.Type_VARCHAR, "abcd"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}, {
-		v:   sqltypes.NewInt64(-1),
+		v:   NewInt64(-1),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: -1"),
 	}, {
-		v:   sqltypes.NewInt64(1),
+		v:   NewInt64(1),
 		out: 1,
 	}, {
-		v:   sqltypes.NewUint64(1),
+		v:   NewUint64(1),
 		out: 1,
 	}}
 	for _, tcase := range tcases {
@@ -710,16 +720,16 @@ func TestToInt64(t *testing.T) {
 		out int64
 		err error
 	}{{
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
+		v:   TestValue(querypb.Type_VARCHAR, "abcd"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}, {
-		v:   sqltypes.NewUint64(18446744073709551615),
+		v:   NewUint64(18446744073709551615),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: 18446744073709551615"),
 	}, {
-		v:   sqltypes.NewInt64(1),
+		v:   NewInt64(1),
 		out: 1,
 	}, {
-		v:   sqltypes.NewUint64(1),
+		v:   NewUint64(1),
 		out: 1,
 	}}
 	for _, tcase := range tcases {
@@ -743,22 +753,22 @@ func TestToFloat64(t *testing.T) {
 		out float64
 		err error
 	}{{
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
+		v:   TestValue(querypb.Type_VARCHAR, "abcd"),
 		out: 0,
 	}, {
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "1.2"),
+		v:   TestValue(querypb.Type_VARCHAR, "1.2"),
 		out: 1.2,
 	}, {
-		v:   sqltypes.NewInt64(1),
+		v:   NewInt64(1),
 		out: 1,
 	}, {
-		v:   sqltypes.NewUint64(1),
+		v:   NewUint64(1),
 		out: 1,
 	}, {
-		v:   sqltypes.NewFloat64(1.2),
+		v:   NewFloat64(1.2),
 		out: 1.2,
 	}, {
-		v:   sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+		v:   TestValue(querypb.Type_INT64, "1.2"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}}
 	for _, tcase := range tcases {
@@ -778,88 +788,88 @@ func TestToNative(t *testing.T) {
 		in  sqltypes.Value
 		out interface{}
 	}{{
-		in:  sqltypes.NULL,
+		in:  NULL,
 		out: nil,
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_INT8, "1"),
+		in:  TestValue(querypb.Type_INT8, "1"),
 		out: int64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_INT16, "1"),
+		in:  TestValue(querypb.Type_INT16, "1"),
 		out: int64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_INT24, "1"),
+		in:  TestValue(querypb.Type_INT24, "1"),
 		out: int64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_INT32, "1"),
+		in:  TestValue(querypb.Type_INT32, "1"),
 		out: int64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_INT64, "1"),
+		in:  TestValue(querypb.Type_INT64, "1"),
 		out: int64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_UINT8, "1"),
+		in:  TestValue(querypb.Type_UINT8, "1"),
 		out: uint64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_UINT16, "1"),
+		in:  TestValue(querypb.Type_UINT16, "1"),
 		out: uint64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_UINT24, "1"),
+		in:  TestValue(querypb.Type_UINT24, "1"),
 		out: uint64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_UINT32, "1"),
+		in:  TestValue(querypb.Type_UINT32, "1"),
 		out: uint64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_UINT64, "1"),
+		in:  TestValue(querypb.Type_UINT64, "1"),
 		out: uint64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_FLOAT32, "1"),
+		in:  TestValue(querypb.Type_FLOAT32, "1"),
 		out: float64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_FLOAT64, "1"),
+		in:  TestValue(querypb.Type_FLOAT64, "1"),
 		out: float64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_TIMESTAMP, "2012-02-24 23:19:43"),
+		in:  TestValue(querypb.Type_TIMESTAMP, "2012-02-24 23:19:43"),
 		out: []byte("2012-02-24 23:19:43"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_DATE, "2012-02-24"),
+		in:  TestValue(querypb.Type_DATE, "2012-02-24"),
 		out: []byte("2012-02-24"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_TIME, "23:19:43"),
+		in:  TestValue(querypb.Type_TIME, "23:19:43"),
 		out: []byte("23:19:43"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_DATETIME, "2012-02-24 23:19:43"),
+		in:  TestValue(querypb.Type_DATETIME, "2012-02-24 23:19:43"),
 		out: []byte("2012-02-24 23:19:43"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_YEAR, "1"),
+		in:  TestValue(querypb.Type_YEAR, "1"),
 		out: uint64(1),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_DECIMAL, "1"),
+		in:  TestValue(querypb.Type_DECIMAL, "1"),
 		out: []byte("1"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_TEXT, "a"),
+		in:  TestValue(querypb.Type_TEXT, "a"),
 		out: []byte("a"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_BLOB, "a"),
+		in:  TestValue(querypb.Type_BLOB, "a"),
 		out: []byte("a"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_VARCHAR, "a"),
+		in:  TestValue(querypb.Type_VARCHAR, "a"),
 		out: []byte("a"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_VARBINARY, "a"),
+		in:  TestValue(querypb.Type_VARBINARY, "a"),
 		out: []byte("a"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_CHAR, "a"),
+		in:  TestValue(querypb.Type_CHAR, "a"),
 		out: []byte("a"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_BINARY, "a"),
+		in:  TestValue(querypb.Type_BINARY, "a"),
 		out: []byte("a"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_BIT, "1"),
+		in:  TestValue(querypb.Type_BIT, "1"),
 		out: []byte("1"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_ENUM, "a"),
+		in:  TestValue(querypb.Type_ENUM, "a"),
 		out: []byte("a"),
 	}, {
-		in:  sqltypes.TestValue(querypb.Type_SET, "a"),
+		in:  TestValue(querypb.Type_SET, "a"),
 		out: []byte("a"),
 	}}
 	for _, tcase := range testcases {
@@ -873,7 +883,7 @@ func TestToNative(t *testing.T) {
 	}
 
 	// Test Expression failure.
-	_, err := ToNative(sqltypes.TestValue(querypb.Type_EXPRESSION, "aa"))
+	_, err := ToNative(TestValue(querypb.Type_EXPRESSION, "aa"))
 	want := vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(aa) cannot be converted to a go type")
 	if !vterrors.Equals(err, want) {
 		t.Errorf("ToNative(EXPRESSION): %v, want %v", vterrors.Print(err), vterrors.Print(want))
@@ -893,36 +903,36 @@ func TestNewNumeric(t *testing.T) {
 		out EvalResult
 		err error
 	}{{
-		v:   sqltypes.NewInt64(1),
+		v:   NewInt64(1),
 		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
 	}, {
-		v:   sqltypes.NewUint64(1),
+		v:   NewUint64(1),
 		out: EvalResult{typ: querypb.Type_UINT64, uval: 1},
 	}, {
-		v:   sqltypes.NewFloat64(1),
+		v:   NewFloat64(1),
 		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
 	}, {
 		// For non-number type, Int64 is the default.
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "1"),
+		v:   TestValue(querypb.Type_VARCHAR, "1"),
 		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
 	}, {
 		// If Int64 can't work, we use Float64.
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "1.2"),
+		v:   TestValue(querypb.Type_VARCHAR, "1.2"),
 		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
-		v:   sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+		v:   TestValue(querypb.Type_INT64, "1.2"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Only valid Uint64 allowed if type is Uint64.
-		v:   sqltypes.TestValue(querypb.Type_UINT64, "1.2"),
+		v:   TestValue(querypb.Type_UINT64, "1.2"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Only valid Float64 allowed if type is Float64.
-		v:   sqltypes.TestValue(querypb.Type_FLOAT64, "abcd"),
+		v:   TestValue(querypb.Type_FLOAT64, "abcd"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
+		v:   TestValue(querypb.Type_VARCHAR, "abcd"),
 		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 0},
 	}}
 	for _, tcase := range tcases {
@@ -944,32 +954,32 @@ func TestNewIntegralNumeric(t *testing.T) {
 		out EvalResult
 		err error
 	}{{
-		v:   sqltypes.NewInt64(1),
+		v:   NewInt64(1),
 		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
 	}, {
-		v:   sqltypes.NewUint64(1),
+		v:   NewUint64(1),
 		out: EvalResult{typ: querypb.Type_UINT64, uval: 1},
 	}, {
-		v:   sqltypes.NewFloat64(1),
+		v:   NewFloat64(1),
 		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
 	}, {
 		// For non-number type, Int64 is the default.
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "1"),
+		v:   TestValue(querypb.Type_VARCHAR, "1"),
 		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
 	}, {
 		// If Int64 can't work, we use Uint64.
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "18446744073709551615"),
+		v:   TestValue(querypb.Type_VARCHAR, "18446744073709551615"),
 		out: EvalResult{typ: querypb.Type_UINT64, uval: 18446744073709551615},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
-		v:   sqltypes.TestValue(querypb.Type_INT64, "1.2"),
+		v:   TestValue(querypb.Type_INT64, "1.2"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}, {
 		// Only valid Uint64 allowed if type is Uint64.
-		v:   sqltypes.TestValue(querypb.Type_UINT64, "1.2"),
+		v:   TestValue(querypb.Type_UINT64, "1.2"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
 	}, {
-		v:   sqltypes.TestValue(querypb.Type_VARCHAR, "abcd"),
+		v:   TestValue(querypb.Type_VARCHAR, "abcd"),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
 	}}
 	for _, tcase := range tcases {
@@ -1101,7 +1111,7 @@ func TestPrioritize(t *testing.T) {
 	}
 }
 
-func TestCastFromNumeric(t *testing.T) {
+func TestToSqlValue(t *testing.T) {
 	tcases := []struct {
 		typ querypb.Type
 		v   EvalResult
@@ -1110,189 +1120,107 @@ func TestCastFromNumeric(t *testing.T) {
 	}{{
 		typ: querypb.Type_INT64,
 		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: sqltypes.NewInt64(1),
+		out: NewInt64(1),
 	}, {
 		typ: querypb.Type_INT64,
 		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: sqltypes.NewInt64(1),
+		out: NewInt64(1),
 	}, {
 		typ: querypb.Type_INT64,
 		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
-		out: sqltypes.NewInt64(0),
+		out: NewInt64(0),
 	}, {
 		typ: querypb.Type_UINT64,
 		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: sqltypes.NewUint64(1),
+		out: NewUint64(1),
 	}, {
 		typ: querypb.Type_UINT64,
 		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: sqltypes.NewUint64(1),
+		out: NewUint64(1),
 	}, {
 		typ: querypb.Type_UINT64,
 		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
-		out: sqltypes.NewUint64(0),
+		out: NewUint64(0),
 	}, {
 		typ: querypb.Type_FLOAT64,
 		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: sqltypes.TestValue(querypb.Type_FLOAT64, "1"),
+		out: TestValue(querypb.Type_FLOAT64, "1"),
 	}, {
 		typ: querypb.Type_FLOAT64,
 		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: sqltypes.TestValue(querypb.Type_FLOAT64, "1"),
+		out: TestValue(querypb.Type_FLOAT64, "1"),
 	}, {
 		typ: querypb.Type_FLOAT64,
 		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
-		out: sqltypes.TestValue(querypb.Type_FLOAT64, "1.2e-16"),
+		out: TestValue(querypb.Type_FLOAT64, "1.2e-16"),
 	}, {
 		typ: querypb.Type_DECIMAL,
 		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: sqltypes.TestValue(querypb.Type_DECIMAL, "1"),
+		out: TestValue(querypb.Type_DECIMAL, "1"),
 	}, {
 		typ: querypb.Type_DECIMAL,
 		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: sqltypes.TestValue(querypb.Type_DECIMAL, "1"),
+		out: TestValue(querypb.Type_DECIMAL, "1"),
 	}, {
 		// For float, we should not use scientific notation.
 		typ: querypb.Type_DECIMAL,
 		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
-		out: sqltypes.TestValue(querypb.Type_DECIMAL, "0.00000000000000012"),
+		out: TestValue(querypb.Type_DECIMAL, "0.00000000000000012"),
 	}}
 	for _, tcase := range tcases {
-		got := castFromNumeric(tcase.v, tcase.typ)
+		got := tcase.v.toSQLValue(tcase.typ)
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("castFromNumeric(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
+			t.Errorf("toSQLValue(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
 		}
 	}
 }
 
 func TestCompareNumeric(t *testing.T) {
-	tcases := []struct {
-		v1, v2 EvalResult
-		out    int
-	}{{
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 1,
-	}, {
-		// Special case.
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: -1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 1,
-	}, {
-		// Special case.
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: -1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		out: 1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 0,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: -1,
-	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		out: 1,
-	}}
-	for _, tcase := range tcases {
-		got := compareNumeric(tcase.v1, tcase.v2)
-		if got != tcase.out {
-			t.Errorf("equalNumeric(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
+	values := []EvalResult{
+		{typ: querypb.Type_INT64, ival: 1},
+		{typ: querypb.Type_INT64, ival: -1},
+		{typ: querypb.Type_INT64, ival: 0},
+		{typ: querypb.Type_INT64, ival: 2},
+		{typ: querypb.Type_UINT64, uval: 1},
+		{typ: querypb.Type_UINT64, uval: 0},
+		{typ: querypb.Type_UINT64, uval: 2},
+		{typ: querypb.Type_FLOAT64, fval: 1},
+		{typ: querypb.Type_FLOAT64, fval: -1},
+		{typ: querypb.Type_FLOAT64, fval: 0},
+		{typ: querypb.Type_FLOAT64, fval: 2},
+	}
+
+	// cmpResults is a 2D array with the comparison expectations if we compare all values with each other
+	cmpResults := [][]int{
+		// LHS ->  1  -1   0  2  u1  u0 u2 1.0 -1.0 0.0  2.0
+		/*RHS 1*/ {0, 1, 1, -1, 0, 1, -1, 0, 1, 1, -1},
+		/*   -1*/ {-1, 0, -1, -1, -1, -1, -1, -1, 0, -1, -1},
+		/*    0*/ {-1, 1, 0, -1, -1, 0, -1, -1, 1, 0, -1},
+		/*    2*/ {1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0},
+		/*   u1*/ {0, 1, 1, -1, 0, 1, -1, 0, 1, 1, -1},
+		/*   u0*/ {-1, 1, 0, -1, -1, 0, -1, -1, 1, 0, -1},
+		/*   u2*/ {1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0},
+		/*  1.0*/ {0, 1, 1, -1, 0, 1, -1, 0, 1, 1, -1},
+		/* -1.0*/ {-1, 0, -1, -1, -1, -1, -1, -1, 0, -1, -1},
+		/*  0.0*/ {-1, 1, 0, -1, -1, 0, -1, -1, 1, 0, -1},
+		/*  2.0*/ {1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0},
+	}
+
+	for aIdx, aVal := range values {
+		for bIdx, bVal := range values {
+			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, aVal.debugString(), bVal.debugString()), func(t *testing.T) {
+				result, err := compareNumeric(aVal, bVal)
+				require.NoError(t, err)
+				assert.Equal(t, cmpResults[aIdx][bIdx], result)
+
+				// if two values are considered equal, they must also produce the same hashcode
+				if result == 0 {
+					aHash := hashCode(aVal)
+					bHash := hashCode(bVal)
+					assert.Equal(t, aHash, bHash, "hash code does not match")
+				}
+			})
 		}
 	}
 }
@@ -1303,32 +1231,32 @@ func TestMin(t *testing.T) {
 		min    sqltypes.Value
 		err    error
 	}{{
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NULL,
-		min: sqltypes.NULL,
+		v1:  NULL,
+		v2:  NULL,
+		min: NULL,
 	}, {
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NULL,
-		min: sqltypes.NewInt64(1),
+		v1:  NewInt64(1),
+		v2:  NULL,
+		min: NewInt64(1),
 	}, {
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NewInt64(1),
-		min: sqltypes.NewInt64(1),
+		v1:  NULL,
+		v2:  NewInt64(1),
+		min: NewInt64(1),
 	}, {
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NewInt64(2),
-		min: sqltypes.NewInt64(1),
+		v1:  NewInt64(1),
+		v2:  NewInt64(2),
+		min: NewInt64(1),
 	}, {
-		v1:  sqltypes.NewInt64(2),
-		v2:  sqltypes.NewInt64(1),
-		min: sqltypes.NewInt64(1),
+		v1:  NewInt64(2),
+		v2:  NewInt64(1),
+		min: NewInt64(1),
 	}, {
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NewInt64(1),
-		min: sqltypes.NewInt64(1),
+		v1:  NewInt64(1),
+		v2:  NewInt64(1),
+		min: NewInt64(1),
 	}, {
-		v1:  sqltypes.TestValue(querypb.Type_VARCHAR, "aa"),
-		v2:  sqltypes.TestValue(querypb.Type_VARCHAR, "aa"),
+		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
+		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
@@ -1352,32 +1280,32 @@ func TestMax(t *testing.T) {
 		max    sqltypes.Value
 		err    error
 	}{{
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NULL,
-		max: sqltypes.NULL,
+		v1:  NULL,
+		v2:  NULL,
+		max: NULL,
 	}, {
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NULL,
-		max: sqltypes.NewInt64(1),
+		v1:  NewInt64(1),
+		v2:  NULL,
+		max: NewInt64(1),
 	}, {
-		v1:  sqltypes.NULL,
-		v2:  sqltypes.NewInt64(1),
-		max: sqltypes.NewInt64(1),
+		v1:  NULL,
+		v2:  NewInt64(1),
+		max: NewInt64(1),
 	}, {
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NewInt64(2),
-		max: sqltypes.NewInt64(2),
+		v1:  NewInt64(1),
+		v2:  NewInt64(2),
+		max: NewInt64(2),
 	}, {
-		v1:  sqltypes.NewInt64(2),
-		v2:  sqltypes.NewInt64(1),
-		max: sqltypes.NewInt64(2),
+		v1:  NewInt64(2),
+		v2:  NewInt64(1),
+		max: NewInt64(2),
 	}, {
-		v1:  sqltypes.NewInt64(1),
-		v2:  sqltypes.NewInt64(1),
-		max: sqltypes.NewInt64(1),
+		v1:  NewInt64(1),
+		v2:  NewInt64(1),
+		max: NewInt64(1),
 	}, {
-		v1:  sqltypes.TestValue(querypb.Type_VARCHAR, "aa"),
-		v2:  sqltypes.TestValue(querypb.Type_VARCHAR, "aa"),
+		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
+		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
@@ -1393,6 +1321,25 @@ func TestMax(t *testing.T) {
 			t.Errorf("Max(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.max)
 		}
 	}
+}
+
+func TestHashCodes(t *testing.T) {
+	n1 := sqltypes.NULL
+	n2 := sqltypes.Value{}
+
+	h1, err := NullsafeHashcode(n1)
+	require.NoError(t, err)
+	h2, err := NullsafeHashcode(n2)
+	require.NoError(t, err)
+	assert.Equal(t, h1, h2)
+
+	char := TestValue(querypb.Type_VARCHAR, "aa")
+	_, err = NullsafeHashcode(char)
+	require.Error(t, err)
+
+	num := TestValue(querypb.Type_INT64, "123")
+	_, err = NullsafeHashcode(num)
+	require.NoError(t, err)
 }
 
 func printValue(v sqltypes.Value) string {

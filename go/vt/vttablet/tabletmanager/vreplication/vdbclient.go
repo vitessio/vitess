@@ -20,7 +20,8 @@ import (
 	"io"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -92,8 +93,8 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 
 // Execute is ExecuteFetch without the maxrows.
 func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
-	// Number of rows should never exceed relayLogMaxSize.
-	return vc.ExecuteFetch(query, relayLogMaxSize)
+	// Number of rows should never exceed relayLogMaxItems.
+	return vc.ExecuteFetch(query, *relayLogMaxItems)
 }
 
 func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -128,8 +129,8 @@ func (vc *vdbClient) Retry() (*sqltypes.Result, error) {
 			}
 			continue
 		}
-		// Number of rows should never exceed relayLogMaxSize.
-		result, err := vc.DBClient.ExecuteFetch(q, relayLogMaxSize)
+		// Number of rows should never exceed relayLogMaxItems.
+		result, err := vc.DBClient.ExecuteFetch(q, *relayLogMaxItems)
 		if err != nil {
 			return nil, err
 		}

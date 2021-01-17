@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -27,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
@@ -57,10 +58,10 @@ func encodeTableName(tableName string) string {
 	return buf.String()
 }
 
-// tableListSql returns an IN clause "('t1', 't2'...) for a list of tables."
-func tableListSql(tables []string) (string, error) {
+// tableListSQL returns an IN clause "('t1', 't2'...) for a list of tables."
+func tableListSQL(tables []string) (string, error) {
 	if len(tables) == 0 {
-		return "", vterrors.New(vtrpc.Code_INTERNAL, "no tables for tableListSql")
+		return "", vterrors.New(vtrpc.Code_INTERNAL, "no tables for tableListSQL")
 	}
 
 	encodedTables := make([]string, len(tables))
@@ -127,7 +128,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		go func() {
 			defer wg.Done()
 
-			log.Infof("mysqld GetSchema: GetPrimaryKeyColumns")
 			var err error
 			colMap, err = mysqld.getPrimaryKeyColumns(ctx, dbName, tableNames...)
 			if err != nil {
@@ -135,7 +135,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 				cancel()
 				return
 			}
-			log.Infof("mysqld GetSchema: GetPrimaryKeyColumns done")
 		}()
 	}
 
@@ -144,11 +143,9 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		return nil, err
 	}
 
-	log.Infof("mysqld GetSchema: Collecting all table schemas")
 	for _, td := range tds {
 		td.PrimaryKeyColumns = colMap[td.Name]
 	}
-	log.Infof("mysqld GetSchema: Collecting all table schemas done")
 
 	sd.TableDefinitions = tds
 
@@ -175,7 +172,7 @@ func (mysqld *Mysqld) collectBasicTableData(ctx context.Context, dbName string, 
 		return nil, err
 	}
 
-	tds := make([]*tabletmanagerdatapb.TableDefinition, 0, len(qr.Rows))
+	tds := make(tableDefinitions, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
 		tableType := row[1].ToString()
@@ -211,6 +208,8 @@ func (mysqld *Mysqld) collectBasicTableData(ctx context.Context, dbName string, 
 		})
 	}
 
+	sort.Sort(tds)
+
 	return tds, nil
 }
 
@@ -231,7 +230,7 @@ func (mysqld *Mysqld) collectSchema(ctx context.Context, dbName, tableName, tabl
 // normalizedSchema returns a table schema with database names replaced, and auto_increment annotations removed.
 func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, tableType string) (string, error) {
 	backtickDBName := sqlescape.EscapeID(dbName)
-	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", dbName, sqlescape.EscapeID(tableName)))
+	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlescape.EscapeID(tableName)))
 	if fetchErr != nil {
 		return "", fetchErr
 	}
@@ -305,7 +304,7 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	}
 	defer conn.Recycle()
 
-	tableList, err := tableListSql(tables)
+	tableList, err := tableListSQL(tables)
 	if err != nil {
 		return nil, err
 	}
@@ -476,3 +475,20 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
+
+//tableDefinitions is a sortable collection of table definitions
+type tableDefinitions []*tabletmanagerdatapb.TableDefinition
+
+func (t tableDefinitions) Len() int {
+	return len(t)
+}
+
+func (t tableDefinitions) Less(i, j int) bool {
+	return t[i].Name < t[j].Name
+}
+
+func (t tableDefinitions) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+var _ sort.Interface = (tableDefinitions)(nil)

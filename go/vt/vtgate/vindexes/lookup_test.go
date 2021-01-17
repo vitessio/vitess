@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/key"
@@ -48,6 +49,10 @@ type vcursor struct {
 	autocommits int
 	pre, post   int
 	keys        []sqltypes.Value
+}
+
+func (vc *vcursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	panic("implement me")
 }
 
 func (vc *vcursor) InTransactionAndIsDML() bool {

@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -31,6 +31,16 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+// DBAction is used to tell ChangeTabletType whether to call SetReadOnly on change to
+// MASTER tablet type
+type DBAction int
+
+// Allowed values for DBAction
+const (
+	DBActionNone = DBAction(iota)
+	DBActionSetReadWrite
 )
 
 // This file contains the implementations of RPCTM methods.
@@ -62,11 +72,11 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 		return err
 	}
 	defer tm.unlock()
-	return tm.changeTypeLocked(ctx, tabletType)
+	return tm.changeTypeLocked(ctx, tabletType, DBActionNone)
 }
 
 // ChangeType changes the tablet type
-func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType) error {
+func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
 	// We don't want to allow multiple callers to claim a tablet as drained. There is a race that could happen during
 	// horizontal resharding where two vtworkers will try to DRAIN the same tablet. This check prevents that race from
 	// causing errors.
@@ -74,7 +84,7 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
 
-	if err := tm.tmState.ChangeTabletType(ctx, tabletType); err != nil {
+	if err := tm.tmState.ChangeTabletType(ctx, tabletType, action); err != nil {
 		return err
 	}
 

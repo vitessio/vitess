@@ -15,6 +15,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # '*' expression for simple route
 "select user.* from user"
@@ -33,6 +34,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # unqualified '*' expression for simple route
 "select * from user"
@@ -51,6 +53,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # select with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user"
@@ -69,6 +72,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # select aggregation with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user"
@@ -119,6 +123,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # select with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
@@ -137,6 +142,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # select aggregation with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -213,6 +219,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # qualified '*' expression for simple route
 "select user.* from user"
@@ -231,6 +238,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # fully qualified '*' expression for simple route
 "select user.user.* from user.user"
@@ -445,6 +453,7 @@
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # select from dual on unqualified keyspace
 "select @@session.auto_increment_increment from dual"
@@ -463,6 +472,7 @@
     "Table": "dual"
   }
 }
+Gen4 plan same as above
 
 # select from pinned table
 "select * from pin_test"
@@ -503,6 +513,7 @@
     "Table": "dual"
   }
 }
+Gen4 plan same as above
 
 # RHS route referenced
 "select user_extra.id from user join user_extra"
@@ -540,6 +551,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Both routes referenced
 "select user.col, user_extra.id from user join user_extra"
@@ -577,6 +589,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Expression with single-route reference
 "select user.col, user_extra.id + user_extra.col from user join user_extra"
@@ -614,6 +627,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Jumbled references
 "select user.col, user_extra.id, user.col2 from user join user_extra"
@@ -651,6 +665,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Comments
 "select /* comment */ user.col from user join user_extra"
@@ -799,10 +814,12 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # syntax error
 "the quick brown fox"
 "syntax error at position 4 near 'the'"
+Gen4 plan same as above
 
 # Hex number is not treated as a simple value
 "select * from user where id = 0x04"
@@ -840,6 +857,7 @@
           "Sharded": true
         },
         "FieldQuery": "select user_id from music where 1 != 1",
+        "OrderBy": "0 ASC",
         "Query": "select user_id from music order by user_id asc limit :__upper_limit",
         "Table": "music"
       }
@@ -860,7 +878,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where name = 'abc' and id = 4 limit 5",
+    "Query": "select * from user where `name` = 'abc' and id = 4 limit 5",
     "Table": "user",
     "Values": [
       4
@@ -868,6 +886,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Multiple parenthesized expressions
 "select * from user where (id = 4) AND (name ='abc') limit 5"
@@ -882,7 +901,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -890,6 +909,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Multiple parenthesized expressions
 "select * from user where (id = 4 and name ='abc') limit 5"
@@ -904,7 +924,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
+    "Query": "select * from user where id = 4 and `name` = 'abc' limit 5",
     "Table": "user",
     "Values": [
       4
@@ -912,6 +932,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Column Aliasing with Table.Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2"
@@ -934,6 +955,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
@@ -956,6 +978,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Booleans and parenthesis
 "select * from user where (id = 1) AND name = true limit 5"
@@ -970,7 +993,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name = true limit 5",
+    "Query": "select * from user where id = 1 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       1
@@ -978,6 +1001,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Column as boolean-ish
 "select * from user where (id = 1) AND name limit 5"
@@ -992,7 +1016,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 1 and name limit 5",
+    "Query": "select * from user where id = 1 and `name` limit 5",
     "Table": "user",
     "Values": [
       1
@@ -1000,6 +1024,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # PK as fake boolean, and column as boolean-ish
 "select * from user where (id = 5) AND name = true limit 5"
@@ -1014,7 +1039,7 @@
       "Sharded": true
     },
     "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 and name = true limit 5",
+    "Query": "select * from user where id = 5 and `name` = true limit 5",
     "Table": "user",
     "Values": [
       5
@@ -1022,6 +1047,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # top level subquery in select
 "select a, (select col from user) from unsharded"
@@ -1163,6 +1189,7 @@
     "Query": "select * from information_schema.a union select * from information_schema.b"
   }
 }
+Gen4 plan same as above
 
 # union with the same target shard
 "select * from music where user_id = 1 union select * from user where id = 1"
@@ -1185,6 +1212,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # union with the same target shard last_insert_id
 "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1"
@@ -1207,6 +1235,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
@@ -1236,8 +1265,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select id, name from unsharded where 1 != 1",
-    "Query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+    "FieldQuery": "select id, `name` from unsharded where 1 != 1",
+    "Query": "select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
     "Table": "unsharded"
   }
 }
@@ -1258,6 +1287,7 @@
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
 {
@@ -1275,6 +1305,7 @@
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
 {
@@ -1287,11 +1318,12 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)",
-    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1)",
+    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)",
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
 {
@@ -1309,6 +1341,7 @@
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # routing rules: ensure directives are not lost
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
@@ -1383,6 +1416,281 @@
     "Inputs": [
       {
         "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows without limit
+"select sql_calc_found_rows * from music where user_id = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from music where 1 != 1",
+    "Query": "select * from music where user_id = 1",
+    "Table": "music",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above
+
+# sql_calc_found_rows with limit
+"select sql_calc_found_rows * from music limit 100"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music limit 100",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 100,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from music where 1 != 1",
+            "Query": "select * from music limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Distinct": "false",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from music where 1 != 1",
+            "Query": "select count(*) from music",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows with SelectEqualUnique plans
+"select sql_calc_found_rows * from music where user_id = 1 limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music where 1 != 1",
+        "Query": "select * from music where user_id = 1 limit 2",
+        "Table": "music",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from music where 1 != 1",
+        "Query": "select count(*) from music where user_id = 1",
+        "Table": "music",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows with group by and having
+"select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, count(id) from music where 1 != 1 group by user_id",
+            "OrderBy": "0 ASC",
+            "Query": "select user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Distinct": "false",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from (select user_id, count(id) from music where 1 != 1 group by user_id) as t where 1 != 1",
+            "Query": "select count(*) from (select user_id, count(id) from music group by user_id having count(user_id) = 1) as t",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# sql_calc_found_rows in sub queries
+"select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)"
+"Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS' (errno 1234) (sqlstate 42000)"
+
+# sql_calc_found_rows in derived table
+"select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1"
+"Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS' (errno 1234) (sqlstate 42000)"
+
+# select from unsharded keyspace into dumpfile
+"select * from main.unsharded into Dumpfile 'x.txt'"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from main.unsharded into Dumpfile 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from unsharded where 1 != 1",
+    "Query": "select * from unsharded into dumpfile 'x.txt'",
+    "Table": "unsharded"
+  }
+}
+
+# select from unsharded keyspace into outfile
+"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from unsharded where 1 != 1",
+    "Query": "select * from unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+    "Table": "unsharded"
+  }
+}
+
+# select from unsharded keyspace into outfile s3
+"select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from unsharded where 1 != 1",
+    "Query": "select * from unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+    "Table": "unsharded"
+  }
+}
+
+# Union after into outfile is incorrect
+"select id from user into outfile 'out_file_name' union all select id from music"
+"Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
+Gen4 plan same as above
+
+# Into outfile s3 in sub-query is incorrect
+"select id from (select id from user into outfile s3 'inner_outfile') as t2"
+"Incorrect usage/placement of 'INTO' (errno 1234) (sqlstate 42000)"
+
+# Distinct with cross shard query
+"select distinct user.a from user join user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.a from user join user_extra",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "TableName": "user_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user.a from user where 1 != 1",
+            "Query": "select user.a from user",
+            "Table": "user"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
       }
     ]
   }

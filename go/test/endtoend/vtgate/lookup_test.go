@@ -161,7 +161,7 @@ func TestConsistentLookup(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(5) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
-	exec(t, conn, "delete from t1 where id1=1")
+	exec(t, conn, "delete from t1 where id2=5")
 }
 
 func TestDMLScatter(t *testing.T) {
@@ -410,14 +410,8 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	defer conn2.Close()
 
 	// DB should start out clean
-	qr := exec(t, conn, "select count(*) from t2_id4_idx")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select count(*) from t2")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, "select count(*) from t2_id4_idx", "[[INT64(0)]]")
+	assertMatches(t, conn, "select count(*) from t2", "[[INT64(0)]]")
 
 	// Try inserting a bunch of ids at once
 	exec(t, conn, "begin")
@@ -425,14 +419,8 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	exec(t, conn, "commit")
 
 	// Verify
-	qr = exec(t, conn, "select id3, id4 from t2 order by id3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = exec(t, conn, "select id3, id4 from t2_id4_idx order by id3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	assertMatches(t, conn, "select id3, id4 from t2 order by id3", "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]")
+	assertMatches(t, conn, "select id3, id4 from t2_id4_idx order by id3", "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]")
 }
 
 func TestConsistentLookupUpdate(t *testing.T) {
@@ -510,18 +498,32 @@ func TestSelectNullLookup(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "begin")
 	exec(t, conn, "insert into t6(id1, id2) values(1, 'a'), (2, 'b'), (3, null)")
-	exec(t, conn, "commit")
+	defer exec(t, conn, "set workload = oltp;delete from t6")
 
-	assertMatches(t, conn, "select id1, id2 from t6 order by id1", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")] [INT64(3) NULL]]")
-	assertIsEmpty(t, conn, "select id1, id2 from t6 where id2 = null")
-	assertMatches(t, conn, "select id1, id2 from t6 where id2 is null", "[[INT64(3) NULL]]")
-	assertMatches(t, conn, "select id1, id2 from t6 where id2 is not null order by id1", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
-	assertIsEmpty(t, conn, "select id1, id2 from t6 where id1 IN (null)")
-	assertMatches(t, conn, "select id1, id2 from t6 where id1 IN (1,2,null) order by id1", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
-	assertIsEmpty(t, conn, "select id1, id2 from t6 where id1 NOT IN (1,null) order by id1")
-	assertMatches(t, conn, "select id1, id2 from t6 where id1 NOT IN (1,3)", "[[INT64(2) VARCHAR(\"b\")]]")
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			exec(t, conn, "set workload = "+workload)
+			assertMatches(t, conn, "select id1, id2 from t6 order by id1", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")] [INT64(3) NULL]]")
+			assertIsEmpty(t, conn, "select id1, id2 from t6 where id2 = null")
+			assertMatches(t, conn, "select id1, id2 from t6 where id2 is null", "[[INT64(3) NULL]]")
+			assertMatches(t, conn, "select id1, id2 from t6 where id2 is not null order by id1", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
+			assertIsEmpty(t, conn, "select id1, id2 from t6 where id1 IN (null)")
+			assertMatches(t, conn, "select id1, id2 from t6 where id1 IN (1,2,null) order by id1", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
+			assertIsEmpty(t, conn, "select id1, id2 from t6 where id1 NOT IN (1,null) order by id1")
+			assertMatches(t, conn, "select id1, id2 from t6 where id1 NOT IN (1,3)", "[[INT64(2) VARCHAR(\"b\")]]")
+		})
+	}
+}
 
-	exec(t, conn, "delete from t6")
+func TestUnicodeLooseMD5CaseInsensitive(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "insert into t4(id1, id2) values(1, 'test')")
+	defer exec(t, conn, "delete from t4")
+
+	assertMatches(t, conn, "SELECT id1, id2 from t4 where id2 = 'Test'", `[[INT64(1) VARCHAR("test")]]`)
 }

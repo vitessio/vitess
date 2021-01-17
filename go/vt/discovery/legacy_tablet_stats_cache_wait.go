@@ -19,8 +19,9 @@ package discovery
 import (
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -84,6 +85,11 @@ func (tc *LegacyTabletStatsCache) waitForTablets(ctx context.Context, targets []
 		timer := time.NewTimer(waitAvailableTabletInterval)
 		select {
 		case <-ctx.Done():
+			for _, target := range targets {
+				if target != nil {
+					log.Infof("couldn't find tablets for target: %v", target)
+				}
+			}
 			timer.Stop()
 			return ctx.Err()
 		case <-timer.C:

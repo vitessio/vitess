@@ -23,7 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/withddl"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
@@ -73,7 +73,9 @@ type heartbeatWriter struct {
 // newHeartbeatWriter creates a new heartbeatWriter.
 func newHeartbeatWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *heartbeatWriter {
 	config := env.Config()
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat {
+
+	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler {
 		return &heartbeatWriter{}
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
@@ -111,7 +113,7 @@ func (w *heartbeatWriter) Open() {
 	log.Info("Hearbeat Writer: opening")
 
 	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
-	w.ticks.Start(w.writeHeartbeat)
+	w.enableWrites(true)
 	w.isOpen = true
 }
 
@@ -126,7 +128,7 @@ func (w *heartbeatWriter) Close() {
 		return
 	}
 
-	w.ticks.Stop()
+	w.enableWrites(false)
 	w.pool.Close()
 	w.isOpen = false
 	log.Info("Hearbeat Writer: closed")
@@ -181,4 +183,16 @@ func (w *heartbeatWriter) write() error {
 func (w *heartbeatWriter) recordError(err error) {
 	w.errorLog.Errorf("%v", err)
 	writeErrors.Add(1)
+}
+
+// enableWrites actives or deactives heartbeat writes
+func (w *heartbeatWriter) enableWrites(enable bool) {
+	if w.ticks == nil {
+		return
+	}
+	if enable {
+		w.ticks.Start(w.writeHeartbeat)
+	} else {
+		w.ticks.Stop()
+	}
 }

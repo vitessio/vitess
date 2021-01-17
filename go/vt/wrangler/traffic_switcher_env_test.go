@@ -21,9 +21,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -42,6 +45,7 @@ import (
 
 const vreplQueryks = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks'"
 const vreplQueryks2 = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
+const vreplQueryks1 = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test_reverse' and db_name='vt_ks1'"
 
 type testMigraterEnv struct {
 	ts              *topo.Server
@@ -153,11 +157,11 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"})
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"})
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,6 +189,31 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types",
+			"int64|varchar|varchar|varchar|varchar"),
+			rows...),
+		)
+	}
+
+	for i, sourceShard := range sourceShards {
+		var rows []string
+		for j, targetShard := range targetShards {
+			bls := &binlogdatapb.BinlogSource{
+				Keyspace: "ks2",
+				Shard:    targetShard,
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{{
+						Match:  "t1",
+						Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t1 where in_keyrange('%s')", sourceShard)),
+					}, {
+						Match:  "t2",
+						Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t2 where in_keyrange('%s')", sourceShard)),
+					}},
+				},
+			}
+			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
+		}
+		tme.dbSourceClients[i].addInvariant(vreplQueryks1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
@@ -276,7 +305,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks", nil)
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks", nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,6 +390,7 @@ func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
 		master.TM.VREngine.Open(ctx)
 	}
 	for _, master := range tme.targetMasters {
+		log.Infof("Adding as targetMaster %s", master.Tablet.Alias)
 		dbclient := newFakeDBClient()
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
@@ -393,6 +423,20 @@ func (tme *testMigraterEnv) setMasterPositions() {
 				},
 			},
 		}
+	}
+}
+
+func (tme *testMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
+}
+
+func (tme *testMigraterEnv) expectNoPreviousReverseJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbTargetClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
 	}
 }
 
@@ -493,4 +537,11 @@ func (tme *testShardMigraterEnv) expectCancelMigration() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
 	tme.expectDeleteReverseVReplication()
+}
+
+func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
 }

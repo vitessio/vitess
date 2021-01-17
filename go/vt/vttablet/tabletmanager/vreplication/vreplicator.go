@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -42,8 +43,8 @@ var (
 	// between the two timeouts.
 	idleTimeout         = 1100 * time.Millisecond
 	dbLockRetryDelay    = 1 * time.Second
-	relayLogMaxSize     = 30000
-	relayLogMaxItems    = 1000
+	relayLogMaxSize     = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
+	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 	copyTimeout         = 1 * time.Hour
 	replicaLagTolerance = 10 * time.Second
 )
@@ -121,7 +122,8 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
-		if err := vr.setMessage(err.Error()); err != nil {
+		log.Errorf("Replicate error: %s", err.Error())
+		if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
 			log.Errorf("Failed to set error state: %v", err)
 		}
 	}
@@ -165,10 +167,12 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return err
 			}
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
+				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
 			}
 		case settings.StartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
+				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
 			}
 		default:
@@ -180,6 +184,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
 			}
 			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
+				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
 			return newVPlayer(vr, settings, nil, mysql.Position{}, "replicate").play(ctx)
@@ -189,9 +194,11 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 
 // PrimaryKeyInfo is used to store charset and collation for primary keys where applicable
 type PrimaryKeyInfo struct {
-	Name      string
-	CharSet   string
-	Collation string
+	Name       string
+	CharSet    string
+	Collation  string
+	DataType   string
+	ColumnType string
 }
 
 func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*PrimaryKeyInfo, error) {
@@ -199,7 +206,7 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 	if err != nil {
 		return nil, err
 	}
-	queryTemplate := "select character_set_name, collation_name,column_name,data_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
 	pkInfoMap := make(map[string][]*PrimaryKeyInfo)
 	for _, td := range schema.TableDefinitions {
 
@@ -208,8 +215,8 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 		if err != nil {
 			return nil, err
 		}
-		if len(qr.Rows) > 0 && len(qr.Fields) != 4 {
-			return nil, fmt.Errorf("incorrect result returned for collation query")
+		if len(qr.Rows) == 0 {
+			return nil, fmt.Errorf("no data returned from information_schema.columns")
 		}
 
 		var pks []string
@@ -222,6 +229,7 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 		for _, pk := range pks {
 			charSet := ""
 			collation := ""
+			var dataType, columnType string
 			for _, row := range qr.Rows {
 				columnName := row[2].ToString()
 				if strings.EqualFold(columnName, pk) {
@@ -232,17 +240,27 @@ func (vr *vreplicator) buildPkInfoMap(ctx context.Context) (map[string][]*Primar
 							break
 						}
 					}
-					if currentField != nil && sqltypes.IsText(currentField.Type) {
+					if currentField == nil {
+						continue
+					}
+					dataType = row[3].ToString()
+					columnType = row[4].ToString()
+					if sqltypes.IsText(currentField.Type) {
 						charSet = row[0].ToString()
 						collation = row[1].ToString()
 					}
 					break
 				}
 			}
+			if dataType == "" || columnType == "" {
+				return nil, fmt.Errorf("no dataType/columnType found in information_schema.columns for table %s, column %s", td.Name, pk)
+			}
 			pkInfos = append(pkInfos, &PrimaryKeyInfo{
-				Name:      pk,
-				CharSet:   charSet,
-				Collation: collation,
+				Name:       pk,
+				CharSet:    charSet,
+				Collation:  collation,
+				DataType:   dataType,
+				ColumnType: columnType,
 			})
 		}
 		pkInfoMap[td.Name] = pkInfos

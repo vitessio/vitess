@@ -21,10 +21,13 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
+	"vitess.io/vitess/go/test/utils"
+
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"golang.org/x/sync/errgroup"
 
@@ -32,10 +35,11 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -53,7 +57,43 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t noopVCursor) SetDDLStrategy(strategy string) {
+	panic("implement me")
+}
+
+func (t noopVCursor) GetDDLStrategy() string {
+	panic("implement me")
+}
+
+func (t noopVCursor) GetSessionUUID() string {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetReadAfterWriteGTID(s string) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetReadAfterWriteTimeout(f float64) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetSessionTrackGTIDs(b bool) {
+	panic("implement me")
+}
+
+func (t noopVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
+}
+
 func (t noopVCursor) InTransactionAndIsDML() bool {
+	panic("implement me")
+}
+
+func (t noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.Table, error) {
 	panic("implement me")
 }
 
@@ -80,7 +120,7 @@ func (t noopVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	panic("implement me")
 }
 
-func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.DDL) error {
+func (t noopVCursor) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error {
 	panic("implement me")
 }
 
@@ -92,15 +132,15 @@ func (t noopVCursor) SetAutocommit(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetClientFoundRows(bool) {
+func (t noopVCursor) SetClientFoundRows(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetSkipQueryPlanCache(bool) {
+func (t noopVCursor) SetSkipQueryPlanCache(bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetSQLSelectLimit(int64) {
+func (t noopVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 
@@ -109,6 +149,10 @@ func (t noopVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
 }
 
 func (t noopVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
+	panic("implement me")
+}
+
+func (t noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
 	panic("implement me")
 }
 
@@ -130,14 +174,18 @@ func (t noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
 	return !testIgnoreMaxMemoryRows && numRows > testMaxMemoryRows
 }
 
+func (t noopVCursor) GetKeyspace() string {
+	return ""
+}
+
 func (t noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	return func() {}
 }
 
-func (t noopVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+func (t noopVCursor) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
 	g, ctx := errgroup.WithContext(t.ctx)
 	t.ctx = ctx
-	return g
+	return g, func() {}
 }
 
 func (t noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -171,6 +219,10 @@ func (t noopVCursor) ResolveDestinations(keyspace string, ids []*querypb.Value, 
 	panic("unimplemented")
 }
 
+func (t noopVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
+	panic("unimplemented")
+}
+
 var _ VCursor = (*loggingVCursor)(nil)
 var _ SessionActions = (*loggingVCursor)(nil)
 
@@ -197,10 +249,24 @@ type loggingVCursor struct {
 	log []string
 
 	resolvedTargetTabletType topodatapb.TabletType
+
+	tableRoutes tableRoutes
+}
+
+type tableRoutes struct {
+	tbl *vindexes.Table
+}
+
+func (f *loggingVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) InTransactionAndIsDML() bool {
 	return false
+}
+
+func (f *loggingVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) SetUDV(key string, value interface{}) error {
@@ -223,7 +289,7 @@ func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
 	return nil
 }
 
-func (f *loggingVCursor) ExecuteVSchema(string, *sqlparser.DDL) error {
+func (f *loggingVCursor) ExecuteVSchema(string, *sqlparser.AlterVschema) error {
 	panic("implement me")
 }
 
@@ -244,8 +310,12 @@ func (f *loggingVCursor) SetContextTimeout(time.Duration) context.CancelFunc {
 	return func() {}
 }
 
-func (f *loggingVCursor) ErrorGroupCancellableContext() *errgroup.Group {
+func (f *loggingVCursor) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) GetKeyspace() string {
+	return ""
 }
 
 func (f *loggingVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -280,6 +350,11 @@ func (f *loggingVCursor) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries
 
 func (f *loggingVCursor) AutocommitApproval() bool {
 	return true
+}
+
+func (f *loggingVCursor) SubmitOnlineDDL(onlineDDL *schema.OnlineDDL) error {
+	f.log = append(f.log, fmt.Sprintf("SubmitOnlineDDL: %s", onlineDDL.ToString()))
+	return nil
 }
 
 func (f *loggingVCursor) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
@@ -365,14 +440,13 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if len(want) == 0 && len(f.log) == 0 {
-		// both are empty. no need to compare empty array with nil
+	if len(f.log) == 0 && len(want) == 0 {
 		return
 	}
-	diff := cmp.Diff(want, f.log)
-	if diff != "" {
-		t.Fatalf("log not what was expected: %s", diff)
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
+	utils.MustMatch(t, want, f.log, "")
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {
@@ -393,15 +467,15 @@ func (f *loggingVCursor) SetAutocommit(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetClientFoundRows(bool) {
+func (f *loggingVCursor) SetClientFoundRows(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetSkipQueryPlanCache(bool) {
+func (f *loggingVCursor) SetSkipQueryPlanCache(bool) error {
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetSQLSelectLimit(int64) {
+func (f *loggingVCursor) SetSQLSelectLimit(int64) error {
 	panic("implement me")
 }
 
@@ -411,6 +485,15 @@ func (f *loggingVCursor) SetTransactionMode(vtgatepb.TransactionMode) {
 
 func (f *loggingVCursor) SetWorkload(querypb.ExecuteOptions_Workload) {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
+	panic("implement me")
+}
+
+func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Table, error) {
+	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(tbl)))
+	return f.tableRoutes.tbl, nil
 }
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {

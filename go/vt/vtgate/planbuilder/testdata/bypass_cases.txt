@@ -15,6 +15,7 @@
     "SingleShardOnly": false
   }
 }
+Gen4 plan same as above
 
 # update bypass
 "update user set val = 1 where id = 18446744073709551616 and id = 1"
@@ -33,6 +34,7 @@
     "SingleShardOnly": false
   }
 }
+Gen4 plan same as above
 
 # delete bypass
 "DELETE FROM USER WHERE ID = 42"
@@ -51,6 +53,7 @@
     "SingleShardOnly": false
   }
 }
+Gen4 plan same as above
 
 # insert bypass
 "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')"
@@ -65,10 +68,11 @@
     },
     "TargetDestination": "Shard(-80)",
     "IsDML": true,
-    "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
+    "Query": "insert into USER(ID, `NAME`) values (42, 'ms X')",
     "SingleShardOnly": false
   }
 }
+Gen4 plan same as above
 
 # insert bypass with sequence: sequences ignored
 "insert into user(nonid) values (2)"
@@ -87,3 +91,77 @@
     "SingleShardOnly": false
   }
 }
+Gen4 plan same as above
+
+# bypass query for into outfile s3
+"select count(*), col from unsharded into outfile S3 'x.txt'"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*), col from unsharded into outfile S3 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": false,
+    "Query": "select count(*), col from unsharded into outfile s3 'x.txt'",
+    "SingleShardOnly": false
+  }
+}
+Gen4 plan same as above
+
+"select * from user into outfile S3 'x.txt'"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user into outfile S3 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": false,
+    "Query": "select * from user into outfile s3 'x.txt'",
+    "SingleShardOnly": false
+  }
+}
+Gen4 plan same as above
+
+"load data from s3 'x.txt' into table x"
+{
+  "QueryType": "OTHER",
+  "Original": "load data from s3 'x.txt' into table x",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": true,
+    "Query": "load data from s3 'x.txt' into table x",
+    "SingleShardOnly": true
+  }
+}
+Gen4 plan same as above
+
+"load data from s3 'x.txt'"
+{
+  "QueryType": "OTHER",
+  "Original": "load data from s3 'x.txt'",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": true,
+    "Query": "load data from s3 'x.txt'",
+    "SingleShardOnly": true
+  }
+}
+Gen4 plan same as above

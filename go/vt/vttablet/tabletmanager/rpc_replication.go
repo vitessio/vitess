@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -244,11 +244,7 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-		return "", err
-	}
-
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite); err != nil {
 		return "", err
 	}
 
@@ -285,7 +281,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	// is used on the old master when using InitShardMaster with
 	// -force, and the new master is different from the old master.
 	if tm.Tablet().Type == topodatapb.TabletType_MASTER {
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
 	}
@@ -524,7 +520,7 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 	// unintentionally change the type of RDONLY tablets
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_MASTER {
-		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA); err != nil {
+		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
 	}
@@ -626,7 +622,7 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	if tablet.Type != topodatapb.TabletType_MASTER {
 		return nil
 	}
-	return tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA)
+	return tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 }
 
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
@@ -737,13 +733,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER); err != nil {
-		return "", err
-	}
-
-	// We call SetReadOnly only after the topo has been updated to avoid
-	// situations where two tablets are master at the DB level but not at the vitess level
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite); err != nil {
 		return "", err
 	}
 
@@ -880,49 +870,4 @@ func (tm *TabletManager) repairReplication(ctx context.Context) error {
 	}
 
 	return tm.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
-}
-
-// SlaveStatus is deprecated
-func (tm *TabletManager) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
-	return tm.ReplicationStatus(ctx)
-}
-
-// StopSlave is deprecated
-func (tm *TabletManager) StopSlave(ctx context.Context) error {
-	return tm.StopReplication(ctx)
-}
-
-// StopSlaveMinimum is deprecated
-func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
-	return tm.StopReplicationMinimum(ctx, position, waitTime)
-}
-
-// StartSlave is deprecated
-func (tm *TabletManager) StartSlave(ctx context.Context) error {
-	return tm.StartReplication(ctx)
-}
-
-// StartSlaveUntilAfter is deprecated
-func (tm *TabletManager) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
-	return tm.StartReplicationUntilAfter(ctx, position, waitTime)
-}
-
-// GetSlaves is deprecated
-func (tm *TabletManager) GetSlaves(ctx context.Context) ([]string, error) {
-	return tm.GetReplicas(ctx)
-}
-
-// InitSlave is deprecated
-func (tm *TabletManager) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
-	return tm.InitReplica(ctx, parent, position, timeCreatedNS)
-}
-
-// SlaveWasPromoted is deprecated
-func (tm *TabletManager) SlaveWasPromoted(ctx context.Context) error {
-	return tm.ReplicaWasPromoted(ctx)
-}
-
-// SlaveWasRestarted is deprecated
-func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
-	return tm.ReplicaWasRestarted(ctx, parent)
 }

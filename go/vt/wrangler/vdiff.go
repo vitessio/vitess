@@ -28,8 +28,10 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -75,6 +77,7 @@ type vdiff struct {
 
 	workflow       string
 	targetKeyspace string
+	tables         []string
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -116,8 +119,7 @@ type shardStreamer struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
-	filteredReplicationWaitTime time.Duration,
-	format string) (map[string]*DiffReport, error) {
+	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
 		targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
@@ -146,12 +148,16 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		wr.Logger().Errorf("buildTrafficSwitcher: %v", err)
 		return nil, err
 	}
-	if err := ts.validate(ctx, false /* isWrite */); err != nil {
+	if err := ts.validate(ctx); err != nil {
 		ts.wr.Logger().Errorf("validate: %v", err)
 		return nil, err
 	}
-
-	// Initialize vdiff.
+	tables = strings.TrimSpace(tables)
+	var includeTables []string
+	if tables != "" {
+		includeTables = strings.Split(tables, ",")
+	}
+	// Initialize vdiff
 	df := &vdiff{
 		ts:             ts,
 		sourceCell:     sourceCell,
@@ -161,6 +167,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		targets:        make(map[string]*shardStreamer),
 		workflow:       workflow,
 		targetKeyspace: targetKeyspace,
+		tables:         includeTables,
 	}
 	for shard, source := range ts.sources {
 		df.sources[shard] = &shardStreamer{
@@ -183,9 +190,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
-	if err = df.buildVDiffPlan(ctx, oneFilter, schm); err != nil {
+	if err = df.buildVDiffPlan(ctx, oneFilter, schm, df.tables); err != nil {
 		return nil, vterrors.Wrap(err, "buildVDiffPlan")
 	}
+
 	if err := df.selectTablets(ctx); err != nil {
 		return nil, vterrors.Wrap(err, "selectTablets")
 	}
@@ -202,31 +210,15 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	defer cancel()
 
 	// TODO(sougou): parallelize
+	rowsToCompare := maxRows
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
-		// Stop the targets and record their source positions.
-		if err := df.stopTargets(ctx); err != nil {
-			return nil, vterrors.Wrap(err, "stopTargets")
-		}
-		// Make sure all sources are past the target's positions and start a query stream that records the current source positions.
-		if err := df.startQueryStreams(ctx, df.ts.sourceKeyspace, df.sources, td.sourceExpression, filteredReplicationWaitTime); err != nil {
-			return nil, vterrors.Wrap(err, "startQueryStreams(sources)")
-		}
-		// Fast forward the targets to the newly recorded source positions.
-		if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
-			return nil, vterrors.Wrap(err, "syncTargets")
-		}
-		// Sources and targets are in sync. Start query streams on the targets.
-		if err := df.startQueryStreams(ctx, df.ts.targetKeyspace, df.targets, td.targetExpression, filteredReplicationWaitTime); err != nil {
-			return nil, vterrors.Wrap(err, "startQueryStreams(targets)")
-		}
-		// Now that queries are running, target vreplication streams can be restarted.
-		if err := df.restartTargets(ctx); err != nil {
-			return nil, vterrors.Wrap(err, "restartTargets")
+		if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
+			return nil, err
 		}
 		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, df.ts.wr)
+		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
@@ -250,8 +242,53 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	return diffReports, nil
 }
 
+func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *tableDiffer, filteredReplicationWaitTime time.Duration) error {
+	log.Infof("Starting vdiff for table %s", table)
+
+	log.Infof("Locking target keyspace %s", df.targetKeyspace)
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, df.targetKeyspace, "vdiff")
+	if lockErr != nil {
+		log.Errorf("LockKeyspace failed: %v", lockErr)
+		wr.Logger().Errorf("LockKeyspace %s failed: %v", df.targetKeyspace)
+		return lockErr
+	}
+
+	var err error
+	defer func() {
+		unlock(&err)
+		if err != nil {
+			log.Errorf("UnlockKeyspace %s failed: %v", df.targetKeyspace, lockErr)
+		}
+	}()
+
+	defer func() {
+		log.Errorf("restarting targets for workflow %s in keyspace %s", df.workflow, df.targetKeyspace)
+		if err := df.restartTargets(ctx); err != nil {
+			log.Errorf("Error restarting targets for workflow %s in keyspace %s", df.workflow, df.targetKeyspace)
+		}
+	}()
+	// Stop the targets and record their source positions.
+	if err := df.stopTargets(ctx); err != nil {
+		return vterrors.Wrap(err, "stopTargets")
+	}
+	// Make sure all sources are past the target's positions and start a query stream that records the current source positions.
+	if err := df.startQueryStreams(ctx, df.ts.sourceKeyspace, df.sources, td.sourceExpression, filteredReplicationWaitTime); err != nil {
+		return vterrors.Wrap(err, "startQueryStreams(sources)")
+	}
+	// Fast forward the targets to the newly recorded source positions.
+	if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
+		return vterrors.Wrap(err, "syncTargets")
+	}
+	// Sources and targets are in sync. Start query streams on the targets.
+	if err := df.startQueryStreams(ctx, df.ts.targetKeyspace, df.targets, td.targetExpression, filteredReplicationWaitTime); err != nil {
+		return vterrors.Wrap(err, "startQueryStreams(targets)")
+	}
+	// Now that queries are running, target vreplication streams can be restarted.
+	return nil
+}
+
 // buildVDiffPlan builds all the differs.
-func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) error {
+func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition, tablesToInclude []string) error {
 	df.differs = make(map[string]*tableDiffer)
 	for _, table := range schm.TableDefinitions {
 		rule, err := vreplication.MatchTable(table.Name, filter)
@@ -267,10 +304,26 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
 			query = buf.String()
 		}
-		df.differs[table.Name], err = df.buildTablePlan(table, query)
-		if err != nil {
-			return err
+		include := true
+		if len(tablesToInclude) > 0 {
+			include = false
+			for _, t := range tablesToInclude {
+				if t == table.Name {
+					include = true
+					break
+				}
+			}
 		}
+		if include {
+			df.differs[table.Name], err = df.buildTablePlan(table, query)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if len(tablesToInclude) > 0 && len(tablesToInclude) != len(df.differs) {
+		log.Errorf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs)
+		return fmt.Errorf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs)
 	}
 	return nil
 }
@@ -305,7 +358,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 		}
 		orderby = append(orderby, &sqlparser.Order{
 			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
-			Direction: sqlparser.AscScr,
+			Direction: sqlparser.AscOrder,
 		})
 	}
 	return orderby, nil
@@ -558,9 +611,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 		}
 		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), mysql.EncodePosition(participant.position))
 		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
-			if err.Error() == "context deadline exceeded" {
-				return fmt.Errorf("VDiff timed out for tablet %v: you may want to increase it with the flag -filtered_replication_wait_time=<timeoutSeconds>", topoproto.TabletAliasString(participant.tablet.Alias))
-			}
+			log.Errorf("WaitForPosition error: %s", err)
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
@@ -804,7 +855,7 @@ func logSteps(n int64) string {
 //-----------------------------------------------------------------
 // tableDiffer
 
-func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *int64) (*DiffReport, error) {
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
 	dr := &DiffReport{}
@@ -814,7 +865,12 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler) (*DiffReport, err
 	advanceTarget := true
 	for {
 		if s := logSteps(int64(dr.ProcessedRows)); s != "" {
-			log.Infof("VDiff processed %s rows", s)
+			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, s)
+		}
+		*rowsToCompare--
+		if *rowsToCompare < 0 {
+			log.Infof("Stopping vdiff, specified limit reached")
+			return dr, nil
 		}
 		if advanceSource {
 			sourceRow, err = sourceExecutor.next()

@@ -286,6 +286,9 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 			}
 		}
 	}
+	if err != nil {
+		uvs.vse.errorCounts.Add("Send", 1)
+	}
 	return err
 }
 
@@ -298,7 +301,7 @@ func (uvs *uvstreamer) sendEventsForCurrentPos() error {
 		Type: binlogdatapb.VEventType_OTHER,
 	}}
 	if err := uvs.send(evs); err != nil {
-		return wrapError(err, uvs.pos)
+		return wrapError(err, uvs.pos, uvs.vse)
 	}
 	return nil
 }
@@ -320,6 +323,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 		return vterrors.Wrap(err, "could not decode position")
 	}
 	if !curPos.AtLeast(pos) {
+		uvs.vse.errorCounts.Add("GTIDSet Mismatch", 1)
 		return fmt.Errorf("GTIDSet Mismatch: requested source position:%v, current target vrep position: %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 	}
 	uvs.pos = pos
@@ -362,6 +366,7 @@ func (uvs *uvstreamer) Stream() error {
 		log.Info("TablePKs is not nil: starting vs.copy()")
 		if err := uvs.copy(uvs.ctx); err != nil {
 			log.Infof("uvstreamer.Stream() copy returned with err %s", err)
+			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}
 		uvs.sendTestEvent("Copy Done")

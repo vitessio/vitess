@@ -1,8 +1,11 @@
-FROM vitess/bootstrap:common
+ARG bootstrap_version
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM "${image}"
 
 # Install Percona 5.7
 RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done && \
-    add-apt-repository 'deb http://repo.percona.com/apt stretch main' && \
+    add-apt-repository 'deb http://repo.percona.com/apt buster main' && \
     { \
         echo debconf debconf/frontend select Noninteractive; \
         echo percona-server-server-5.7 percona-server-server/root_password password 'unused'; \
@@ -11,7 +14,7 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --r
     apt-get update && \
     apt-get install -y --no-install-recommends \
         percona-server-server-5.7 \
-	libperconaserverclient18.1-dev percona-xtrabackup-24 && \
+	libperconaserverclient20-dev percona-xtrabackup-24 && \
     rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess

@@ -17,18 +17,19 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type concatenate struct {
-	lhs, rhs builder
+	lhs, rhs logicalPlan
 	order    int
 }
 
-var _ builder = (*concatenate)(nil)
+var _ logicalPlan = (*concatenate)(nil)
 
 func (c *concatenate) Order() int {
 	return c.order
@@ -44,26 +45,21 @@ func (c *concatenate) Reorder(order int) {
 	c.order = c.rhs.Order() + 1
 }
 
-func (c *concatenate) First() builder {
-	panic("implement me")
-}
-
-func (c *concatenate) SetUpperLimit(count sqlparser.Expr) {
-	// not doing anything by design
-}
-
-func (c *concatenate) PushMisc(sel *sqlparser.Select) {
-	c.lhs.PushMisc(sel)
-	c.rhs.PushMisc(sel)
-}
-
-func (c *concatenate) Wireup(bldr builder, jt *jointab) error {
+func (c *concatenate) Wireup(plan logicalPlan, jt *jointab) error {
 	// TODO systay should we do something different here?
-	err := c.lhs.Wireup(bldr, jt)
+	err := c.lhs.Wireup(plan, jt)
 	if err != nil {
 		return err
 	}
-	return c.rhs.Wireup(bldr, jt)
+	return c.rhs.Wireup(plan, jt)
+}
+
+func (c *concatenate) WireupV4(semTable *semantics.SemTable) error {
+	err := c.lhs.WireupV4(semTable)
+	if err != nil {
+		return err
+	}
+	return c.rhs.WireupV4(semTable)
 }
 
 func (c *concatenate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
@@ -78,29 +74,6 @@ func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, er
 	panic("implement me")
 }
 
-func (c *concatenate) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	return unreachable("Filter")
-}
-
-func (c *concatenate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return nil, 0, unreachable("Select")
-}
-
-func (c *concatenate) MakeDistinct() error {
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "only union-all is supported for this operator")
-}
-
-func (c *concatenate) PushGroupBy(by sqlparser.GroupBy) error {
-	return unreachable("GroupBy")
-}
-
-func (c *concatenate) PushOrderBy(by sqlparser.OrderBy) (builder, error) {
-	if by == nil {
-		return c, nil
-	}
-	return nil, unreachable("OrderBy")
-}
-
 func (c *concatenate) Primitive() engine.Primitive {
 	lhs := c.lhs.Primitive()
 	rhs := c.rhs.Primitive()
@@ -110,15 +83,21 @@ func (c *concatenate) Primitive() engine.Primitive {
 	}
 }
 
-// PushLock satisfies the builder interface.
-func (c *concatenate) PushLock(lock string) error {
-	err := c.lhs.PushLock(lock)
-	if err != nil {
-		return err
+// Rewrite implements the logicalPlan interface
+func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "concatenate: wrong number of inputs")
 	}
-	return c.rhs.PushLock(lock)
+	c.lhs = inputs[0]
+	c.rhs = inputs[1]
+	return nil
 }
 
-func unreachable(name string) error {
-	return vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "concatenate.%s: unreachable", name)
+func (c *concatenate) ContainsTables() semantics.TableSet {
+	return c.lhs.ContainsTables().Merge(c.rhs.ContainsTables())
+}
+
+// Inputs implements the logicalPlan interface
+func (c *concatenate) Inputs() []logicalPlan {
+	return []logicalPlan{c.lhs, c.rhs}
 }

@@ -328,14 +328,6 @@ func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table stri
 	return float64(float64(totalFound) * 100 / float64(count) / 2)
 }
 
-// CheckRunningBinlogPlayer Checks binlog player is running and showing in status
-func CheckRunningBinlogPlayer(t *testing.T, vttablet cluster.Vttablet, numberOfQueries int, numberOfTxns int) {
-	status := vttablet.VttabletProcess.GetStatus()
-	assert.Contains(t, status, "VReplication state: Open")
-	assert.Contains(t, status, fmt.Sprintf("<td><b>All</b>: %d<br><b>Query</b>: %d<br><b>Transaction</b>: %d<br></td>", numberOfQueries+numberOfTxns, numberOfQueries, numberOfTxns))
-	assert.Contains(t, status, "</html>")
-}
-
 // CheckTabletQueryServices check that the query service is enabled or disabled on the specified tablets.
 func CheckTabletQueryServices(t *testing.T, vttablets []cluster.Vttablet, expectedStatus string, tabletControlEnabled bool, ci cluster.LocalProcessCluster) {
 	for _, tablet := range vttablets {

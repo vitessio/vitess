@@ -18,6 +18,11 @@ package planbuilder
 
 import (
 	"errors"
+	"sort"
+
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -29,96 +34,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-//-------------------------------------------------------------------------
-
-// builder defines the interface that a primitive must
-// satisfy.
-type builder interface {
-	// Order is the execution order of the primitive. If there are subprimitives,
-	// the order is one above the order of the subprimitives.
-	// This is because the primitive executes its subprimitives first and
-	// processes their results to generate its own values.
-	// Please copy code from an existing primitive to define this function.
-	Order() int
-
-	// ResultColumns returns the list of result columns the
-	// primitive returns.
-	// Please copy code from an existing primitive to define this function.
-	ResultColumns() []*resultColumn
-
-	// Reorder reassigns order for the primitive and its sub-primitives.
-	// The input is the order of the previous primitive that should
-	// execute before this one.
-	Reorder(int)
-
-	// First returns the first builder of the tree,
-	// which is usually the left most.
-	First() builder
-
-	// PushFilter pushes a WHERE or HAVING clause expression
-	// to the specified origin.
-	PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error
-
-	// PushSelect pushes the select expression to the specified
-	// originator. If successful, the originator must create
-	// a resultColumn entry and return it. The top level caller
-	// must accumulate these result columns and set the symtab
-	// after analysis.
-	PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error)
-
-	// MakeDistinct makes the primitive handle the distinct clause.
-	MakeDistinct() error
-	// PushGroupBy makes the primitive handle the GROUP BY clause.
-	PushGroupBy(sqlparser.GroupBy) error
-
-	// PushOrderBy pushes the ORDER BY clause. It returns the
-	// the current primitive or a replacement if a new one was
-	// created.
-	PushOrderBy(sqlparser.OrderBy) (builder, error)
-
-	// SetUpperLimit is an optimization hint that tells that primitive
-	// that it does not need to return more than the specified number of rows.
-	// A primitive that cannot perform this can ignore the request.
-	SetUpperLimit(count sqlparser.Expr)
-
-	// PushMisc pushes miscelleaneous constructs to all the primitives.
-	PushMisc(sel *sqlparser.Select)
-
-	// Wireup performs the wire-up work. Nodes should be traversed
-	// from right to left because the rhs nodes can request vars from
-	// the lhs nodes.
-	Wireup(bldr builder, jt *jointab) error
-
-	// SupplyVar finds the common root between from and to. If it's
-	// the common root, it supplies the requested var to the rhs tree.
-	// If the primitive already has the column in its list, it should
-	// just supply it to the 'to' node. Otherwise, it should request
-	// for it by calling SupplyCol on the 'from' sub-tree to request the
-	// column, and then supply it to the 'to' node.
-	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
-
-	// SupplyCol is meant to be used for the wire-up process. This function
-	// changes the primitive to supply the requested column and returns
-	// the resultColumn and column number of the result. SupplyCol
-	// is different from PushSelect because it may reuse an existing
-	// resultColumn, whereas PushSelect guarantees the addition of a new
-	// result column and returns a distinct symbol for it.
-	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
-
-	// SupplyWeightString must supply a weight_string expression of the
-	// specified column.
-	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
-
-	// PushLock pushes "FOR UPDATE", "LOCK IN SHARE MODE" down to all routes
-	PushLock(lock string) error
-
-	// Primitive returns the underlying primitive.
-	// This function should only be called after Wireup is finished.
-	Primitive() engine.Primitive
-}
-
-//-------------------------------------------------------------------------
 
 // ContextVSchema defines the interface for this package to fetch
 // info about tables.
@@ -133,143 +48,38 @@ type ContextVSchema interface {
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
+	KeyspaceExists(keyspace string) bool
+	AllKeyspace() ([]*vindexes.Keyspace, error)
+	GetSemTable() *semantics.SemTable
+	Planner() PlannerVersion
 }
 
-//-------------------------------------------------------------------------
+// PlannerVersion is an alias here to make the code more readable
+type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
 
-// builderCommon implements some common functionality of builders.
-// Make sure to override in case behavior needs to be changed.
-type builderCommon struct {
-	order int
-	input builder
-}
-
-func newBuilderCommon(input builder) builderCommon {
-	return builderCommon{input: input}
-}
-
-func (bc *builderCommon) Order() int {
-	return bc.order
-}
-
-func (bc *builderCommon) Reorder(order int) {
-	bc.input.Reorder(order)
-	bc.order = bc.input.Order() + 1
-}
-
-func (bc *builderCommon) First() builder {
-	return bc.input.First()
-}
-
-func (bc *builderCommon) ResultColumns() []*resultColumn {
-	return bc.input.ResultColumns()
-}
-
-func (bc *builderCommon) SetUpperLimit(count sqlparser.Expr) {
-	bc.input.SetUpperLimit(count)
-}
-
-func (bc *builderCommon) PushMisc(sel *sqlparser.Select) {
-	bc.input.PushMisc(sel)
-}
-
-func (bc *builderCommon) Wireup(bldr builder, jt *jointab) error {
-	return bc.input.Wireup(bldr, jt)
-}
-
-func (bc *builderCommon) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	bc.input.SupplyVar(from, to, col, varname)
-}
-
-func (bc *builderCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	return bc.input.SupplyCol(col)
-}
-
-func (bc *builderCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	return bc.input.SupplyWeightString(colNumber)
-}
-
-//-------------------------------------------------------------------------
+const (
+	// V3 is also the default planner
+	V3 = querypb.ExecuteOptions_V3
+	// V4 uses the default V4 planner, which is the greedy planner
+	V4 = querypb.ExecuteOptions_V4
+	// V4GreedyOnly uses only the faster greedy planner
+	V4GreedyOnly = querypb.ExecuteOptions_V4Greedy
+	// V4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
+	V4Left2Right = querypb.ExecuteOptions_V4Left2Right
+)
 
 type truncater interface {
 	SetTruncateColumnCount(int)
 }
 
-// resultsBuilder is a superset of builderCommon. It also handles
-// resultsColumn functionality.
-type resultsBuilder struct {
-	builderCommon
-	resultColumns []*resultColumn
-	weightStrings map[*resultColumn]int
-	truncater     truncater
-}
-
-func newResultsBuilder(input builder, truncater truncater) resultsBuilder {
-	return resultsBuilder{
-		builderCommon: newBuilderCommon(input),
-		resultColumns: input.ResultColumns(),
-		weightStrings: make(map[*resultColumn]int),
-		truncater:     truncater,
-	}
-}
-
-func (rsb *resultsBuilder) ResultColumns() []*resultColumn {
-	return rsb.resultColumns
-}
-
-// SupplyCol is currently unreachable because the builders using resultsBuilder
-// are currently above a join, which is the only builder that uses it for now.
-// This can change if we start supporting correlated subqueries.
-func (rsb *resultsBuilder) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	c := col.Metadata.(*column)
-	for i, rc := range rsb.resultColumns {
-		if rc.column == c {
-			return rc, i
-		}
-	}
-	rc, colNumber = rsb.input.SupplyCol(col)
-	if colNumber < len(rsb.resultColumns) {
-		return rc, colNumber
-	}
-	// Add result columns from input until colNumber is reached.
-	for colNumber >= len(rsb.resultColumns) {
-		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
-	}
-	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
-	return rc, colNumber
-}
-
-func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	rc := rsb.resultColumns[colNumber]
-	if weightcolNumber, ok := rsb.weightStrings[rc]; ok {
-		return weightcolNumber, nil
-	}
-	weightcolNumber, err = rsb.input.SupplyWeightString(colNumber)
-	if err != nil {
-		return 0, nil
-	}
-	rsb.weightStrings[rc] = weightcolNumber
-	if weightcolNumber < len(rsb.resultColumns) {
-		return weightcolNumber, nil
-	}
-	// Add result columns from input until weightcolNumber is reached.
-	for weightcolNumber >= len(rsb.resultColumns) {
-		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
-	}
-	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
-	return weightcolNumber, nil
-}
-
-//-------------------------------------------------------------------------
-
-// Build builds a plan for a query based on the specified vschema.
+// TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
-func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
+func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt)
+	result, err := sqlparser.RewriteAST(stmt, "")
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +91,7 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	instruction, err := createInstructionFor(query, stmt, vschema)
 	if err != nil {
 		return nil, err
@@ -305,7 +115,7 @@ func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(sta
 func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		return buildRoutePlan(stmt, vschema, buildSelectPlan)
+		return buildRoutePlan(stmt, vschema, buildSelectPlan(query))
 	case *sqlparser.Insert:
 		return buildRoutePlan(stmt, vschema, buildInsertPlan)
 	case *sqlparser.Update:
@@ -314,15 +124,14 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildDeletePlan)
 	case *sqlparser.Union:
 		return buildRoutePlan(stmt, vschema, buildUnionPlan)
-	case *sqlparser.DDL:
-		if sqlparser.IsVschemaDDL(stmt) {
-			return buildVSchemaDDLPlan(stmt, vschema)
-		}
-		return buildDDLPlan(query, stmt, vschema)
+	case sqlparser.DDLStatement:
+		return buildGeneralDDLPlan(query, stmt, vschema)
+	case *sqlparser.AlterVschema:
+		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:
-		if stmt.Type == sqlparser.VitessStr {
+		if stmt.Type == sqlparser.VitessType {
 			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema)
 			if err != nil {
 				return nil, err
@@ -334,14 +143,202 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
 		return buildSetPlan(stmt, vschema)
-	case *sqlparser.DBDDL:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Database DDL %v", sqlparser.String(stmt))
-	case *sqlparser.Show, *sqlparser.SetTransaction:
+	case *sqlparser.Load:
+		return buildLoadPlan(query, vschema)
+	case sqlparser.DBDDLStatement:
+		return buildRoutePlan(stmt, vschema, buildDBDDLPlan)
+	case *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
+	case *sqlparser.Show:
+		return buildShowPlan(stmt, vschema)
+	case *sqlparser.LockTables:
+		return buildRoutePlan(stmt, vschema, buildLockPlan)
+	case *sqlparser.UnlockTables:
+		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
+	case *sqlparser.Flush:
+		return buildFlushPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+}
+
+func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	dbDDLstmt := stmt.(sqlparser.DBDDLStatement)
+	ksName := dbDDLstmt.GetDatabaseName()
+	if ksName == "" {
+		ks, err := vschema.DefaultKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		ksName = ks.Name
+	}
+	ksExists := vschema.KeyspaceExists(ksName)
+
+	switch dbDDL := dbDDLstmt.(type) {
+	case *sqlparser.DropDatabase:
+		if dbDDL.IfExists && !ksExists {
+			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
+		}
+		if !ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", ksName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
+	case *sqlparser.AlterDatabase:
+		if !ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot alter database '%s'; database does not exists", ksName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database not allowed")
+	case *sqlparser.CreateDatabase:
+		if dbDDL.IfNotExists && ksExists {
+			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
+		}
+		if !dbDDL.IfNotExists && ksExists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "cannot create database '%s'; database exists", ksName)
+		}
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDLstmt))
+}
+
+func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	destination := vschema.Destination()
+	if destination == nil {
+		if keyspace.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+		}
+		destination = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             query,
+		IsDML:             true,
+		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema ContextVSchema) (engine.Primitive, error) {
+	_, keyspace, _, err := vschema.TargetDestination(stmt.Table.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	return &engine.AlterVSchema{
+		Keyspace:        keyspace,
+		AlterVschemaDDL: stmt,
+	}, nil
+}
+
+func buildFlushPlan(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+	if len(stmt.TableNames) == 0 {
+		return buildFlushOptions(stmt, vschema)
+	}
+	return buildFlushTables(stmt, vschema)
+}
+
+func buildFlushOptions(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+	destination, keyspace, _, err := vschema.TargetDestination("")
+	if err != nil {
+		return nil, err
+	}
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             sqlparser.String(stmt),
+		IsDML:             false,
+		SingleShardOnly:   false,
+	}, nil
+}
+
+func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
+	type sendDest struct {
+		ks   *vindexes.Keyspace
+		dest key.Destination
+	}
+
+	flushStatements := map[sendDest]*sqlparser.Flush{}
+	for i, tab := range stmt.TableNames {
+		var destinationTab key.Destination
+		var keyspaceTab *vindexes.Keyspace
+		var table *vindexes.Table
+		var err error
+		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
+
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
+		}
+		keyspaceTab = table.Keyspace
+		stmt.TableNames[i] = sqlparser.TableName{
+			Name: table.Name,
+		}
+		if destinationTab == nil {
+			destinationTab = key.DestinationAllShards{}
+		}
+
+		flush, isAvail := flushStatements[sendDest{keyspaceTab, destinationTab}]
+		if isAvail {
+			flush.TableNames = append(flush.TableNames, stmt.TableNames[i])
+		} else {
+			flush = &sqlparser.Flush{
+				IsLocal:      stmt.IsLocal,
+				FlushOptions: nil,
+				TableNames:   sqlparser.TableNames{stmt.TableNames[i]},
+				WithLock:     stmt.WithLock,
+				ForExport:    stmt.ForExport,
+			}
+		}
+		flushStatements[sendDest{keyspaceTab, destinationTab}] = flush
+	}
+
+	if len(flushStatements) == 1 {
+		for sendDest, flush := range flushStatements {
+			return &engine.Send{
+				Keyspace:          sendDest.ks,
+				TargetDestination: sendDest.dest,
+				Query:             sqlparser.String(flush),
+				IsDML:             false,
+				SingleShardOnly:   false,
+			}, nil
+		}
+	}
+
+	keys := make([]sendDest, len(flushStatements))
+
+	// Collect keys of the map
+	i := 0
+	for k := range flushStatements {
+		keys[i] = k
+		i++
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].ks.Name < keys[j].ks.Name
+	})
+
+	finalPlan := &engine.Concatenate{
+		Sources: nil,
+	}
+	for _, sendDest := range keys {
+		plan := &engine.Send{
+			Keyspace:          sendDest.ks,
+			TargetDestination: sendDest.dest,
+			Query:             sqlparser.String(flushStatements[sendDest]),
+			IsDML:             false,
+			SingleShardOnly:   false,
+		}
+		finalPlan.Sources = append(finalPlan.Sources, plan)
+	}
+
+	return finalPlan, nil
 }

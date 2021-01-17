@@ -34,7 +34,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
-	rb, err := pb.processDMLTable(exprs)
+	rb, err := pb.processDMLTable(exprs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 		}
 		return buildInsertUnshardedPlan(ins, vschemaTable)
 	}
-	if ins.Action == sqlparser.ReplaceStr {
+	if ins.Action == sqlparser.ReplaceAct {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
 	return buildInsertShardedPlan(ins, vschemaTable)
@@ -115,7 +115,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 		table,
 		table.Keyspace,
 	)
-	if ins.Ignore != "" {
+	if ins.Ignore {
 		eins.Opcode = engine.InsertShardedIgnore
 	}
 	if ins.OnDup != nil {
@@ -127,8 +127,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	if len(ins.Columns) == 0 {
 		if table.ColumnListAuthoritative {
 			populateInsertColumnlist(ins, table)
-		} else {
-			return nil, errors.New("no column list")
 		}
 	}
 
@@ -208,7 +206,7 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	eins.Mid = make([]string, len(valueTuples))
 	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
-		node.Comments, node.Ignore,
+		node.Comments, node.Ignore.ToString(),
 		node.Table, node.Columns)
 	eins.Prefix = prefixBuf.String()
 	for rowNum, val := range valueTuples {

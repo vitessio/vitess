@@ -25,7 +25,7 @@ import (
 // contains any duplicates. The IDs start at 1 and increase without bound, but
 // will never be larger than the peak number of concurrent uses.
 //
-// IDPool's Get() and Set() methods can be used concurrently.
+// IDPool's Get() and Put() methods can be used concurrently.
 type IDPool struct {
 	sync.Mutex
 
@@ -36,9 +36,10 @@ type IDPool struct {
 }
 
 // NewIDPool creates and initializes an IDPool.
-func NewIDPool() *IDPool {
+func NewIDPool(initValue uint32) *IDPool {
 	return &IDPool{
-		used: make(map[uint32]bool),
+		used:    make(map[uint32]bool),
+		maxUsed: initValue,
 	}
 }
 
@@ -54,7 +55,7 @@ func (pool *IDPool) Get() (id uint32) {
 	}
 
 	// No recycled IDs are available, so increase the pool size.
-	pool.maxUsed += 1
+	pool.maxUsed++
 	return pool.maxUsed
 }
 

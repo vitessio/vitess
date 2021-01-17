@@ -24,7 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -113,16 +114,27 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
 				return
 			}
-
-			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(master.DbName()), encodeString(workflow))
-			p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, query)
-			if err != nil {
-				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
-				return
-			}
-			if len(p3qr.Rows) != 0 {
-				allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s", workflow, keyspace))
-				return
+			validations := []struct {
+				query string
+				msg   string
+			}{{
+				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(master.DbName()), encodeString(workflow)),
+				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %d", workflow, keyspace, master.Alias.Uid),
+			}, {
+				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN'", encodeString(master.DbName())),
+				fmt.Sprintf("found previous frozen workflow on tablet %d, please review and delete it first before creating a new workflow",
+					master.Alias.Uid),
+			}}
+			for _, validation := range validations {
+				p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, validation.query)
+				if err != nil {
+					allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
+					return
+				}
+				if p3qr != nil && len(p3qr.Rows) != 0 {
+					allErrors.RecordError(vterrors.Wrap(fmt.Errorf(validation.msg), "validateWorkflowName.VReplicationExec"))
+					return
+				}
 			}
 		}(si)
 	}
@@ -1173,7 +1185,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 
 	// rebuild the keyspace serving graph if there was no error
 	if err == nil {
-		err = topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells)
+		err = topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells, false)
 	}
 
 	return err

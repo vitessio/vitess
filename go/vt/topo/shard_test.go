@@ -20,7 +20,9 @@ import (
 	"reflect"
 	"testing"
 
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
+
+	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -100,6 +102,57 @@ func lockedKeyspaceContext(keyspace string) context.Context {
 			keyspace: {},
 		},
 	})
+}
+
+func addToBlacklist(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
+	if err := si.UpdateSourceBlacklistedTables(ctx, tabletType, cells, false, tables); err != nil {
+		return err
+	}
+	return nil
+}
+
+func removeFromBlacklist(ctx context.Context, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) error {
+	if err := si.UpdateSourceBlacklistedTables(ctx, tabletType, cells, true, tables); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateBlacklist(t *testing.T, si *ShardInfo, tabletType topodatapb.TabletType, cells, tables []string) {
+	tc := si.GetTabletControl(tabletType)
+	require.ElementsMatch(t, tc.Cells, cells)
+	require.ElementsMatch(t, tc.BlacklistedTables, tables)
+}
+
+func TestUpdateSourceMasterBlacklistedTables(t *testing.T) {
+	master := topodatapb.TabletType_MASTER
+	si := NewShardInfo("ks", "sh", &topodatapb.Shard{}, nil)
+	ctx := lockedKeyspaceContext("ks")
+	t1, t2, t3, t4 := "t1", "t2", "t3", "t4"
+	tables1 := []string{t1, t2}
+	tables2 := []string{t3, t4}
+
+	require.NoError(t, addToBlacklist(ctx, si, master, nil, tables1))
+	validateBlacklist(t, si, master, nil, tables1)
+
+	require.NoError(t, addToBlacklist(ctx, si, master, nil, tables2))
+	validateBlacklist(t, si, master, nil, append(tables1, tables2...))
+
+	require.Error(t, addToBlacklist(ctx, si, master, nil, tables2), blTablesAlreadyPresent)
+	require.Error(t, addToBlacklist(ctx, si, master, nil, []string{t1}), blTablesAlreadyPresent)
+
+	require.NoError(t, removeFromBlacklist(ctx, si, master, nil, tables2))
+	validateBlacklist(t, si, master, nil, tables1)
+
+	require.Error(t, removeFromBlacklist(ctx, si, master, nil, tables2), blTablesNotPresent)
+	require.Error(t, removeFromBlacklist(ctx, si, master, nil, []string{t3}), blTablesNotPresent)
+	validateBlacklist(t, si, master, nil, tables1)
+
+	require.NoError(t, removeFromBlacklist(ctx, si, master, nil, []string{t1}))
+	require.NoError(t, removeFromBlacklist(ctx, si, master, nil, []string{t2}))
+	require.Nil(t, si.GetTabletControl(master))
+
+	require.Error(t, addToBlacklist(ctx, si, master, []string{"cell"}, tables1), blNoCellsForMaster)
 }
 
 func TestUpdateSourceBlacklistedTables(t *testing.T) {

@@ -27,6 +27,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/tableacl/acl"

@@ -26,7 +26,8 @@ import (
 
 	rice "github.com/GeertJohan/go.rice"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/acl"
@@ -53,49 +54,49 @@ func InitVtctld(ts *topo.Server) {
 
 	// keyspace actions
 	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
 			return "", wr.ValidateKeyspace(ctx, keyspace, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
 			return "", wr.ValidateSchemaKeyspace(ctx, keyspace, nil, false, false)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
 			return "", wr.ValidateVersionKeyspace(ctx, keyspace)
 		})
 
 	actionRepo.RegisterKeyspaceAction("ValidatePermissionsKeyspace",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (string, error) {
 			return "", wr.ValidatePermissionsKeyspace(ctx, keyspace)
 		})
 
 	// shard actions
 	actionRepo.RegisterShardAction("ValidateShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
 			return "", wr.ValidateShard(ctx, keyspace, shard, false)
 		})
 
 	actionRepo.RegisterShardAction("ValidateSchemaShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
 			return "", wr.ValidateSchemaShard(ctx, keyspace, shard, nil, false)
 		})
 
 	actionRepo.RegisterShardAction("ValidateVersionShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
 			return "", wr.ValidateVersionShard(ctx, keyspace, shard)
 		})
 
 	actionRepo.RegisterShardAction("ValidatePermissionsShard",
-		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
 			return "", wr.ValidatePermissionsShard(ctx, keyspace, shard)
 		})
 
 	// tablet actions
 	actionRepo.RegisterTabletAction("Ping", "",
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
@@ -104,7 +105,7 @@ func InitVtctld(ts *topo.Server) {
 		})
 
 	actionRepo.RegisterTabletAction("RefreshState", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
 			ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 			if err != nil {
 				return "", err
@@ -113,12 +114,12 @@ func InitVtctld(ts *topo.Server) {
 		})
 
 	actionRepo.RegisterTabletAction("DeleteTablet", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
 			return "", wr.DeleteTablet(ctx, tabletAlias, false)
 		})
 
 	actionRepo.RegisterTabletAction("ReloadSchema", acl.ADMIN,
-		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (string, error) {
+		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
 			return "", wr.ReloadSchema(ctx, tabletAlias)
 		})
 
@@ -178,6 +179,9 @@ func InitVtctld(ts *topo.Server) {
 
 	// Init workflow manager.
 	initWorkflowManager(ts)
+
+	// Init online DDL schema manager
+	initSchemaManager(ts)
 
 	// Setup reverse proxy for all vttablets through /vttablet/.
 	initVTTabletRedirection(ts)

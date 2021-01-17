@@ -23,7 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -33,9 +33,20 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-//StatefulConnectionPool keeps track of currently and future active connections
-//it's used whenever the session has some state that requires a dedicated connection
+const (
+	scpClosed = int64(iota)
+	scpOpen
+	scpKillingNonTx
+	scpKillingAll
+)
+
+// StatefulConnectionPool keeps track of currently and future active connections
+// it's used whenever the session has some state that requires a dedicated connection
 type StatefulConnectionPool struct {
+	env tabletenv.Env
+
+	state sync2.AtomicInt64
+
 	// conns is the 'regular' pool. By default, connections
 	// are pulled from here for starting transactions.
 	conns *connpool.Pool
@@ -47,7 +58,6 @@ type StatefulConnectionPool struct {
 	foundRowsPool *connpool.Pool
 	active        *pools.Numbered
 	lastID        sync2.AtomicInt64
-	env           tabletenv.Env
 }
 
 //NewStatefulConnPool creates an ActivePool
@@ -72,6 +82,7 @@ func (sf *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbco
 	foundRowsParam.EnableClientFoundRows()
 	appParams = dbconfigs.New(foundRowsParam)
 	sf.foundRowsPool.Open(appParams, dbaParams, appDebugParams)
+	sf.state.Set(scpOpen)
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
@@ -89,6 +100,29 @@ func (sf *StatefulConnectionPool) Close() {
 	}
 	sf.conns.Close()
 	sf.foundRowsPool.Close()
+	sf.state.Set(scpClosed)
+}
+
+// ShutdownNonTx enters the state where all non-transactional connections are killed.
+// InUse connections will be killed as they are returned.
+func (sf *StatefulConnectionPool) ShutdownNonTx() {
+	sf.state.Set(scpKillingNonTx)
+	conns := mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc interface{}) bool {
+		return !sc.(*StatefulConnection).IsInTransaction()
+	}))
+	for _, sc := range conns {
+		sc.Releasef("kill non-tx")
+	}
+}
+
+// ShutdownAll enters the state where all connections are to be killed.
+// It returns all connections that are not in use. They must be rolled back
+// by the caller (TxPool). InUse connections will be killed as they are returned.
+func (sf *StatefulConnectionPool) ShutdownAll() []*StatefulConnection {
+	sf.state.Set(scpKillingAll)
+	return mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc interface{}) bool {
+		return true
+	}))
 }
 
 // AdjustLastID adjusts the last transaction id to be at least
@@ -103,6 +137,7 @@ func (sf *StatefulConnectionPool) AdjustLastID(id int64) {
 
 // GetOutdated returns a list of connections that are older than age.
 // It does not return any connections that are in use.
+// TODO(sougou): deprecate.
 func (sf *StatefulConnectionPool) GetOutdated(age time.Duration, purpose string) []*StatefulConnection {
 	return mapToTxConn(sf.active.GetOutdated(age, purpose))
 }
@@ -131,8 +166,8 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 	return conn.(*StatefulConnection), nil
 }
 
-//NewConn creates a new StatefulConnection. It will be created from either the normal pool or
-//the found_rows pool, depending on the options provided
+// NewConn creates a new StatefulConnection. It will be created from either the normal pool or
+// the found_rows pool, depending on the options provided
 func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
 
 	var conn *connpool.DBConn
@@ -169,7 +204,7 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 	return sf.GetAndLock(sfConn.ConnID, "new connection")
 }
 
-//ForAllTxProperties executes a function an every connection that has a not-nil TxProperties
+// ForAllTxProperties executes a function an every connection that has a not-nil TxProperties
 func (sf *StatefulConnectionPool) ForAllTxProperties(f func(*tx.Properties)) {
 	for _, connection := range mapToTxConn(sf.active.GetAll()) {
 		props := connection.txProps
@@ -184,9 +219,22 @@ func (sf *StatefulConnectionPool) unregister(id tx.ConnID, reason string) {
 	sf.active.Unregister(id, reason)
 }
 
-//markAsNotInUse marks the connection as not in use at the moment
-func (sf *StatefulConnectionPool) markAsNotInUse(id tx.ConnID, updateTime bool) {
-	sf.active.Put(id, updateTime)
+// markAsNotInUse marks the connection as not in use at the moment
+func (sf *StatefulConnectionPool) markAsNotInUse(sc *StatefulConnection, updateTime bool) {
+	switch sf.state.Get() {
+	case scpKillingNonTx:
+		if !sc.IsInTransaction() {
+			sc.Releasef("kill non-tx")
+			return
+		}
+	case scpKillingAll:
+		if sc.IsInTransaction() {
+			sc.Close()
+		}
+		sc.Releasef("kill all")
+		return
+	}
+	sf.active.Put(sc.ConnID, updateTime)
 }
 
 // Capacity returns the pool capacity.
@@ -194,7 +242,7 @@ func (sf *StatefulConnectionPool) Capacity() int {
 	return int(sf.conns.Capacity())
 }
 
-//renewConn unregister and registers with new id.
+// renewConn unregister and registers with new id.
 func (sf *StatefulConnectionPool) renewConn(sc *StatefulConnection) error {
 	sf.active.Unregister(sc.ConnID, "renew existing connection")
 	sc.ConnID = sf.lastID.Add(1)

@@ -17,15 +17,12 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ builder = (*mergeSort)(nil)
+var _ logicalPlan = (*mergeSort)(nil)
 
 // mergeSort is a pseudo-primitive. It amends the
 // the underlying Route to perform a merge sort.
@@ -55,45 +52,13 @@ func (ms *mergeSort) SetTruncateColumnCount(count int) {
 	ms.truncateColumnCount = count
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
 }
 
-// PushLock satisfies the builder interface.
-func (ms *mergeSort) PushLock(lock string) error {
-	return ms.input.PushLock(lock)
-}
-
-// PushFilter satisfies the builder interface.
-func (ms *mergeSort) PushFilter(pb *primitiveBuilder, expr sqlparser.Expr, whereType string, origin builder) error {
-	return ms.input.PushFilter(pb, expr, whereType, origin)
-}
-
-// PushSelect satisfies the builder interface.
-func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	return ms.input.PushSelect(pb, expr, origin)
-}
-
-// MakeDistinct satisfies the builder interface.
-func (ms *mergeSort) MakeDistinct() error {
-	return ms.input.MakeDistinct()
-}
-
-// PushGroupBy satisfies the builder interface.
-func (ms *mergeSort) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	return ms.input.PushGroupBy(groupBy)
-}
-
-// PushOrderBy satisfies the builder interface.
-// A merge sort is created due to the push of an ORDER BY clause.
-// So, this function should never get called.
-func (ms *mergeSort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
-}
-
-// Wireup satisfies the builder interface.
-func (ms *mergeSort) Wireup(bldr builder, jt *jointab) error {
+// Wireup implements the logicalPlan interface
+func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	// If the route has to do the ordering, and if any columns are Text,
 	// we have to request the corresponding weight_string from mysql
 	// and use that value instead. This is because we cannot mimic
@@ -116,5 +81,9 @@ func (ms *mergeSort) Wireup(bldr builder, jt *jointab) error {
 		}
 	}
 	rb.eroute.TruncateColumnCount = ms.truncateColumnCount
-	return ms.input.Wireup(bldr, jt)
+	return ms.input.Wireup(plan, jt)
+}
+
+func (ms *mergeSort) WireupV4(semTable *semantics.SemTable) error {
+	return ms.input.WireupV4(semTable)
 }

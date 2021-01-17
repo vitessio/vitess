@@ -19,7 +19,7 @@ package tabletmanager
 import (
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
@@ -77,26 +77,7 @@ type RPCTM interface {
 	ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error)
 
 	// Replication related methods
-
-	//Deprecated
-	SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error)
-
 	MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error)
-
-	//Deprecated
-	StopSlave(ctx context.Context) error
-
-	//Deprecated
-	StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
-
-	//Deprecated
-	StartSlave(ctx context.Context) error
-
-	//Deprecated
-	StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
-
-	//Deprecated
-	GetSlaves(ctx context.Context) ([]string, error)
 
 	ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
@@ -114,6 +95,9 @@ type RPCTM interface {
 
 	WaitForPosition(ctx context.Context, pos string) error
 
+	// VExec generic API
+	VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error)
+
 	// VReplication API
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int, pos string) error
@@ -126,24 +110,15 @@ type RPCTM interface {
 
 	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
 
-	// Deprecated
-	InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
-
 	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
 	DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error)
 
 	UndoDemoteMaster(ctx context.Context) error
 
-	// Deprecated
-	SlaveWasPromoted(ctx context.Context) error
-
 	ReplicaWasPromoted(ctx context.Context) error
 
 	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
-
-	// Deprecated
-	SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
 	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)
 

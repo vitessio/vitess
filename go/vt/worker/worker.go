@@ -25,7 +25,7 @@ import (
 	"html/template"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/stats"
 )
