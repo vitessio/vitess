@@ -58,7 +58,7 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "")
+	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "direct")
 	return err
 }
 
@@ -96,7 +96,7 @@ func (vtctlclient *VtctlClientProcess) OnlineDDLCancelMigration(Keyspace, uuid s
 	)
 }
 
-// OnlineDDLCancelMigration cancels a given migration uuid
+// OnlineDDLCancelAllMigrations cancels all migrations for a keyspace
 func (vtctlclient *VtctlClientProcess) OnlineDDLCancelAllMigrations(Keyspace string) (result string, err error) {
 	return vtctlclient.ExecuteCommandWithOutput(
 		"OnlineDDL",
