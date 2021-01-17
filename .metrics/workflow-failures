@@ -243,3 +243,5 @@
 2021-01-17T09:31:11Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/491393364
 2021-01-17T09:43:34Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/491407664
 2021-01-17T09:43:34Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/491407659
+2021-01-17T10:43:57Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/491473215
+2021-01-17T10:57:59Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/491488496
