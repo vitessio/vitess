@@ -508,7 +508,7 @@
 		},
 		"vtgate_testing_mode": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/testing_mode"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/testingmode"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,
