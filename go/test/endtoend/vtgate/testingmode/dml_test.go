@@ -39,6 +39,6 @@ func TestInsertTable(t *testing.T) {
 	require.Equal(t, mysql.OKPacket, int(data[0]))
 	require.NoError(t, err)
 
-	execute(t, conn, "insert into t1 values (1,2),(2,3)")
+	execute(t, conn, "insert into t1(id1, id2) values (1, 2), (2, 3)")
 	assertMatches(t, conn, "select * from t1", "[[INT64(1) INT64(2)] [INT64(2) INT64(3)]]")
 }

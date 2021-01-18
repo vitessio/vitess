@@ -31,6 +31,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"vitess.io/vitess/go/sqlescape"
 
 	"vitess.io/vitess/go/bucketpool"
@@ -946,6 +948,8 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		c.sequence2, c.sequence = c.sequence, c.sequence2
 	}
 
+	var results []*sqltypes.Result
+
 	kontinue := true
 	switch data[0] {
 	case ComQuit:
@@ -954,10 +958,10 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	case ComInitDB:
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
-		res := c.execQuery("use "+sqlescape.EscapeID(db), handler, false)
+		res, _ := c.execQuery("use "+sqlescape.EscapeID(db), handler, false)
 		kontinue = res != connErr
 	case ComQuery:
-		kontinue = c.handleComQuery(handler, data)
+		kontinue, results = c.handleComQuery(handler, data)
 	case ComPing:
 		kontinue = c.handleComPing()
 	case ComSetOption:
@@ -998,49 +1002,61 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		case ComStmtClose, ComStmtSendLongData:
 			return true
 		case ComQuery:
-			result, more, warnings, err := c.testMysqlConn.ReadQueryResult(math.MaxUint32, true)
-			if err != nil {
-				log.Errorf("error in reading query result from test mysql connection: %v", err)
-				c.writeErrorPacketFromError(err)
-				return false
+			c.conn2.(*connByte).data = nil
+			if len(results) == 0 {
+				results = []*sqltypes.Result{nil}
 			}
+			for _, resultFromVtGate := range results {
+				result, more, warnings, err := c.testMysqlConn.ReadQueryResult(math.MaxUint32, true)
+				difference := cmp.Diff(resultFromVtGate, result)
 
-			flag := c.StatusFlags
-			if more {
-				flag |= ServerMoreResultsExists
-			}
+				if difference != "" {
+					log.Errorf("Outputs from both sources are different, Difference :%s", difference)
+				}
 
-			if len(result.Fields) == 0 {
-				ok := PacketOK{
-					affectedRows:     result.RowsAffected,
-					lastInsertID:     result.InsertID,
-					statusFlags:      flag,
-					warnings:         warnings,
-					info:             "",
-					sessionStateData: result.SessionStateChanges,
-				}
-				err = c.writeOKPacket(&ok)
 				if err != nil {
-					log.Errorf("error in writing ok packet from test mysql connection: %v", err)
-					return false
-				}
-			} else {
-				err = c.writeFields(result)
-				if err != nil {
-					log.Errorf("error in writing fields from test mysql connection: %v", err)
+					log.Errorf("error in reading query result from test mysql connection: %v", err)
+					c.writeErrorPacketFromError(err)
 					return false
 				}
 
-				err = c.writeRows(result)
-				if err != nil {
-					log.Errorf("error in writing fields from test mysql connection: %v", err)
-					return false
+				flag := c.StatusFlags
+				if more {
+					flag |= ServerMoreResultsExists
 				}
 
-				err = c.writeEndResult(more, 0, 0, warnings)
-				if err != nil {
-					log.Errorf("error in writing end result from test mysql connection: %v", err)
-					return false
+				if len(result.Fields) == 0 {
+					ok := PacketOK{
+						affectedRows:     result.RowsAffected,
+						lastInsertID:     result.InsertID,
+						statusFlags:      flag,
+						warnings:         warnings,
+						info:             "",
+						sessionStateData: result.SessionStateChanges,
+					}
+					err = c.writeOKPacket(&ok)
+					if err != nil {
+						log.Errorf("error in writing ok packet from test mysql connection: %v", err)
+						return false
+					}
+				} else {
+					err = c.writeFields(result)
+					if err != nil {
+						log.Errorf("error in writing fields from test mysql connection: %v", err)
+						return false
+					}
+
+					err = c.writeRows(result)
+					if err != nil {
+						log.Errorf("error in writing fields from test mysql connection: %v", err)
+						return false
+					}
+
+					err = c.writeEndResult(more, 0, 0, warnings)
+					if err != nil {
+						log.Errorf("error in writing end result from test mysql connection: %v", err)
+						return false
+					}
 				}
 			}
 		default:
@@ -1361,7 +1377,7 @@ func (c *Conn) handleComPing() bool {
 	return true
 }
 
-func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
+func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool, results []*sqltypes.Result) {
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
@@ -1380,7 +1396,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 		queries, err = splitStatementFunction(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
-			return c.writeErrorPacketFromErrorAndLog(err)
+			return c.writeErrorPacketFromErrorAndLog(err), nil
 		}
 	} else {
 		queries = []string{query}
@@ -1388,7 +1404,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 
 	if len(queries) == 0 {
 		err := NewSQLError(EREmptyQuery, SSSyntaxErrorOrAccessViolation, "Query was empty")
-		return c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(err), nil
 	}
 
 	for index, sql := range queries {
@@ -1396,22 +1412,26 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 		if index != len(queries)-1 {
 			more = true
 		}
-		res := c.execQuery(sql, handler, more)
+		res, result := c.execQuery(sql, handler, more)
+		results = append(results, result)
 		if res != execSuccess {
-			return res != connErr
+			return res != connErr, nil
 		}
 	}
 
 	timings.Record(queryTimingKey, queryStart)
-	return true
+	return true, results
 }
 
-func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
+func (c *Conn) execQuery(query string, handler Handler, more bool) (execResult, *sqltypes.Result) {
 	callbackCalled := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
+	var res *sqltypes.Result = nil
+
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+		res = qr
 		flag := c.StatusFlags
 		if more {
 			flag |= ServerMoreResultsExists
@@ -1458,15 +1478,15 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
-			return connErr
+			return connErr, nil
 		}
-		return execErr
+		return execErr, nil
 	}
 	if err != nil {
 		// We can't send an error in the middle of a stream.
 		// All we can do is abort the send, which will cause a 2013.
 		log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-		return connErr
+		return connErr, nil
 	}
 
 	// Send the end packet only sendFinished is false (results were streamed).
@@ -1475,11 +1495,11 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	if !sendFinished {
 		if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
 			log.Errorf("Error writing result to %s: %v", c, err)
-			return connErr
+			return connErr, nil
 		}
 	}
 
-	return execSuccess
+	return execSuccess, res
 }
 
 //
