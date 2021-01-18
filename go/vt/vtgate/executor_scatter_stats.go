@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"time"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/logz"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -61,7 +60,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	plans := make([]*engine.Plan, 0)
 	routes := make([]*engine.Route, 0)
 	// First we go over all plans and collect statistics and all query plans for scatter queries
-	e.plans.ForEach(func(value cache.Value) bool {
+	e.plans.ForEach(func(value interface{}) bool {
 		plan := value.(*engine.Plan)
 		scatter := engine.Find(findScatter, plan.Instructions)
 		readOnly := !engine.Exists(isUpdating, plan.Instructions)

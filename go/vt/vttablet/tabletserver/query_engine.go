@@ -55,6 +55,7 @@ import (
 // and track stats.
 type TabletPlan struct {
 	*planbuilder.Plan
+	Original   string
 	Fields     []*querypb.Field
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
@@ -65,11 +66,6 @@ type TabletPlan struct {
 	MysqlTime  time.Duration
 	RowCount   int64
 	ErrorCount int64
-}
-
-// Size allows TabletPlan to be in cache.LRUCache.
-func (*TabletPlan) Size() int {
-	return 1
 }
 
 // AddStats updates the stats for the current TabletPlan.
@@ -120,7 +116,7 @@ type QueryEngine struct {
 	// mu protects the following fields.
 	mu               sync.RWMutex
 	tables           map[string]*schema.Table
-	plans            *cache.LRUCache
+	plans            cache.Cache
 	queryRuleSources *rules.Map
 
 	// Pools
@@ -211,12 +207,18 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
 
-	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", qe.plans.Length)
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.Size)
+	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", func() int64 {
+		return qe.plans.Stats().Length
+	})
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", func() int64 {
+		return qe.plans.Stats().Size
+	})
 	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
-	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
+	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
+		return qe.plans.Stats().Evictions
+	})
 	env.Exporter().Publish("QueryCacheOldest", stats.StringFunc(func() string {
-		return fmt.Sprintf("%v", qe.plans.Oldest())
+		return fmt.Sprintf("%v", qe.plans.Stats().Oldest)
 	}))
 	qe.queryCounts = env.Exporter().NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
@@ -305,7 +307,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	plan := &TabletPlan{Plan: splan}
+	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
@@ -329,7 +331,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		return plan, nil
 	}
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) {
-		qe.plans.Set(sql, plan)
+		qe.plans.Set(sql, plan, plan.CachedSize(true))
 	}
 	return plan, nil
 }
@@ -343,7 +345,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string, isReservedConn bool) (*TabletPl
 	if err != nil {
 		return nil, err
 	}
-	plan := &TabletPlan{Plan: splan}
+	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	return plan, nil
@@ -440,9 +442,9 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	}
 
 	response.Header().Set("Content-Type", "text/plain")
-	qe.plans.ForEach(func(value cache.Value) bool {
+	qe.plans.ForEach(func(value interface{}) bool {
 		plan := value.(*TabletPlan)
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.FullQuery.Query))))
+		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.Original))))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
 		} else {
@@ -460,11 +462,11 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	}
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	var qstats []perQueryStats
-	qe.plans.ForEach(func(value cache.Value) bool {
+	qe.plans.ForEach(func(value interface{}) bool {
 		plan := value.(*TabletPlan)
 
 		var pqstats perQueryStats
-		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.FullQuery.Query))
+		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.Original))
 		pqstats.Table = plan.TableName().String()
 		pqstats.Plan = plan.PlanID
 		pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()

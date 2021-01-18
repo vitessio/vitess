@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -132,7 +131,7 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	e.plans.ForEach(func(value cache.Value) bool {
+	e.plans.ForEach(func(value interface{}) bool {
 		plan := value.(*engine.Plan)
 		Value := &queryzRow{
 			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.Original)),

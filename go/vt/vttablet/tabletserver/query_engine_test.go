@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"expvar"
 	"net/http"
 	"net/http/httptest"
@@ -24,8 +25,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/streamlog"
 
@@ -137,6 +136,17 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	}
 }
 
+func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
+	var size int
+	qe.plans.ForEach(func(_ interface{}) bool {
+		size++
+		return true
+	})
+	if size != expected {
+		t.Fatalf("expected query plan cache to contain %d entries, found %d", expected, size)
+	}
+}
+
 func TestQueryPlanCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -174,9 +184,7 @@ func TestQueryPlanCache(t *testing.T) {
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
 	})
-	if qe.plans.Size() == 0 {
-		t.Fatalf("query plan cache should not be 0")
-	}
+	assertPlanCacheSize(t, qe, 1)
 	qe.ClearQueryPlanCache()
 }
 
@@ -206,9 +214,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	if qe.plans.Size() != 0 {
-		t.Fatalf("query plan cache should be 0")
-	}
+	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
 
@@ -238,9 +244,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	if qe.plans.Size() != 0 {
-		t.Fatalf("query plan cache should be 0")
-	}
+	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
 

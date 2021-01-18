@@ -47,10 +47,6 @@ type unregistered struct {
 	timeUnregistered time.Time
 }
 
-func (u *unregistered) Size() int {
-	return 1
-}
-
 //NewNumbered creates a new numbered
 func NewNumbered() *Numbered {
 	n := &Numbered{
@@ -90,7 +86,7 @@ func (nu *Numbered) Unregister(id int64, reason string) {
 	success := nu.unregister(id)
 	if success {
 		nu.recentlyUnregistered.Set(
-			fmt.Sprintf("%v", id), &unregistered{reason: reason, timeUnregistered: time.Now()})
+			fmt.Sprintf("%v", id), &unregistered{reason: reason, timeUnregistered: time.Now()}, 1)
 	}
 }
 

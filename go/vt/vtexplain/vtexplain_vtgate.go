@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -201,7 +200,7 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 	}
 
 	var plans []*engine.Plan
-	planCache.ForEach(func(value cache.Value) bool {
+	planCache.ForEach(func(value interface{}) bool {
 		plan := value.(*engine.Plan)
 		plan.ExecTime = 0
 		plans = append(plans, plan)

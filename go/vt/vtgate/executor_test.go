@@ -1485,10 +1485,10 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	}
 }
 
-func assertCacheSize(t *testing.T, c *cache.LRUCache, expected int) {
+func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
 	t.Helper()
 	var size int
-	c.ForEach(func(_ cache.Value) bool {
+	c.ForEach(func(_ interface{}) bool {
 		size++
 		return true
 	})
@@ -1497,7 +1497,7 @@ func assertCacheSize(t *testing.T, c *cache.LRUCache, expected int) {
 	}
 }
 
-func assertCacheContains(t *testing.T, c *cache.LRUCache, want []string) {
+func assertCacheContains(t *testing.T, c cache.Cache, want []string) {
 	t.Helper()
 	for _, wantKey := range want {
 		if _, ok := c.Get(wantKey); !ok {
@@ -1513,9 +1513,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	logStats1 := NewLogStats(ctx, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	require.NoError(t, err)
-	if r.plans.Size() != 0 {
-		t.Errorf("getPlan() expected cache to have size 0, but got: %b", r.plans.Size())
-	}
+	assertCacheSize(t, r.plans, 0)
 	wantSQL := query1 + " /* comment */"
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
@@ -1523,9 +1521,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	logStats2 := NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	require.NoError(t, err)
-	if r.plans.Size() != 1 {
-		t.Errorf("getPlan() expected cache to have size 1, but got: %b", r.plans.Size())
-	}
+	assertCacheSize(t, r.plans, 1)
 	wantSQL = query1 + " /* comment 2 */"
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
@@ -1567,9 +1563,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	logStats1 := NewLogStats(ctx, "Test", "", nil)
 	_, err := r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */, logStats1)
 	require.NoError(t, err)
-	if r.plans.Size() != 0 {
-		t.Errorf("getPlan() expected cache to have size 0, but got: %b", r.plans.Size())
-	}
+	assertCacheSize(t, r.plans, 0)
 	wantSQL := "select * from music_user_map where id = :vtg1 /* comment */"
 	if logStats1.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
@@ -1577,9 +1571,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	logStats2 := NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false /* skipQueryPlanCache */, logStats2)
 	require.NoError(t, err)
-	if r.plans.Size() != 1 {
-		t.Errorf("getPlan() expected cache to have size 1, but got: %b", r.plans.Size())
-	}
+	assertCacheSize(t, r.plans, 1)
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
