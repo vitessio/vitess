@@ -329,7 +329,7 @@ func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *vcursorImpl) SysVarSetEnabled() bool {
-	return vc.GetAllowUseReservedConn() && *sysVarSetEnabled
+	return vc.GetSessionEnableSystemSettings() && *sysVarSetEnabled
 }
 
 // KeyspaceExists provides whether the keyspace exists or not.
@@ -661,15 +661,15 @@ func (vc *vcursorImpl) GetSessionUUID() string {
 	return vc.safeSession.GetSessionUUID()
 }
 
-// SetAllowUseReservedConn implements the SessionActions interface
-func (vc *vcursorImpl) SetAllowUseReservedConn(allow bool) error {
-	vc.safeSession.SetAllowUseReservedConn(allow)
+// SetSessionEnableSystemSettings implements the SessionActions interface
+func (vc *vcursorImpl) SetSessionEnableSystemSettings(allow bool) error {
+	vc.safeSession.SetSessionEnableSystemSettings(allow)
 	return nil
 }
 
-// GetAllowUseReservedConn implements the SessionActions interface
-func (vc *vcursorImpl) GetAllowUseReservedConn() bool {
-	return vc.safeSession.GetAllowUseReservedConn()
+// GetSessionEnableSystemSettings implements the SessionActions interface
+func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
+	return vc.safeSession.GetSessionEnableSystemSettings()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface

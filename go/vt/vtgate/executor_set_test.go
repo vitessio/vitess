@@ -229,23 +229,23 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in:  "set @@use_reserved_connection = on",
-		out: &vtgatepb.Session{Autocommit: true, UseReservedConnection: true},
+		in:  "set @@enable_system_settings = on",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
 	}, {
-		in:  "set @@use_reserved_connection = off",
-		out: &vtgatepb.Session{Autocommit: true, UseReservedConnection: false},
+		in:  "set @@enable_system_settings = off",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}, {
-		in:  "set @@use_reserved_connection = 1",
-		out: &vtgatepb.Session{Autocommit: true, UseReservedConnection: true},
+		in:  "set @@enable_system_settings = 1",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
 	}, {
-		in:  "set @@use_reserved_connection = 0",
-		out: &vtgatepb.Session{Autocommit: true, UseReservedConnection: false},
+		in:  "set @@enable_system_settings = 0",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}, {
-		in:  "set @@use_reserved_connection = true",
-		out: &vtgatepb.Session{Autocommit: true, UseReservedConnection: true},
+		in:  "set @@enable_system_settings = true",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
 	}, {
-		in:  "set @@use_reserved_connection = false",
-		out: &vtgatepb.Session{Autocommit: true, UseReservedConnection: false},
+		in:  "set @@enable_system_settings = false",
+		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
@@ -348,7 +348,7 @@ func TestExecutorSetOp(t *testing.T) {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewAutocommitSession(masterSession)
 			session.TargetString = KsTestUnsharded
-			session.UseReservedConnection = !tcase.disallowResConn
+			session.EnableSystemSettings = !tcase.disallowResConn
 			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
 			_, err := executor.Execute(
 				context.Background(),

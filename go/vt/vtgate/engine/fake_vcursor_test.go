@@ -73,11 +73,11 @@ func (t noopVCursor) SetReadAfterWriteGTID(s string) {
 	panic("implement me")
 }
 
-func (t noopVCursor) SetAllowUseReservedConn(allow bool) error {
+func (t noopVCursor) SetSessionEnableSystemSettings(allow bool) error {
 	panic("implement me")
 }
 
-func (t noopVCursor) GetAllowUseReservedConn() bool {
+func (t noopVCursor) GetSessionEnableSystemSettings() bool {
 	panic("implement me")
 }
 
