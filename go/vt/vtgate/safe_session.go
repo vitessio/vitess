@@ -478,18 +478,18 @@ func (session *SafeSession) GetSessionUUID() string {
 	return session.SessionUUID
 }
 
-// SetAllowUseReservedConn set the AllowUseReservedConn setting.
-func (session *SafeSession) SetAllowUseReservedConn(allow bool) {
+// SetSessionEnableSystemSettings set the SessionEnableSystemSettings setting.
+func (session *SafeSession) SetSessionEnableSystemSettings(allow bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.UseReservedConnection = allow
+	session.EnableSystemSettings = allow
 }
 
-// GetAllowUseReservedConn returns the AllowUseReservedConn value.
-func (session *SafeSession) GetAllowUseReservedConn() bool {
+// GetSessionEnableSystemSettings returns the SessionEnableSystemSettings value.
+func (session *SafeSession) GetSessionEnableSystemSettings() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return session.UseReservedConnection
+	return session.EnableSystemSettings
 }
 
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
