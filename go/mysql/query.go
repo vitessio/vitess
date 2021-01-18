@@ -319,6 +319,10 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	}
 
 	res, more, _, err := c.ReadQueryResult(maxrows, wantfields)
+	if err != nil {
+		return nil, false, err
+	}
+	res.More = more
 	return res, more, err
 }
 
