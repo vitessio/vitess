@@ -75,6 +75,29 @@ message GetKeyspaceResponse {
   Keyspace keyspace = 1;
 }
 
+message GetTabletRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetTabletResponse {
+  topodata.Tablet tablet = 1;
+}
+
+message GetTabletsRequest {
+  // Keyspace is the name of the keyspace to return tablets for. Omit to return
+  // all tablets.
+  string keyspace = 1;
+  // Shard is the name of the shard to return tablets for. This field is ignored
+  // if Keyspace is not set.
+  string shard = 2;
+  // Cells is an optional set of cells to return tablets for.
+  repeated string cells = 3;
+}
+
+message GetTabletsResponse {
+  repeated topodata.Tablet tablets = 1;
+}
+
 message InitShardPrimaryRequest {
   string keyspace = 1;
   string shard = 2;
