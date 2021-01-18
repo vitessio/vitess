@@ -40,5 +40,5 @@ func TestInsertTable(t *testing.T) {
 	require.NoError(t, err)
 
 	execute(t, conn, "insert into t1 values (1,2),(2,3)")
-	assertMatches(t, conn, "select * from t1", "[[1,2],[2,3]]")
+	assertMatches(t, conn, "select * from t1", "[[INT64(1) INT64(2)] [INT64(2) INT64(3)]]")
 }

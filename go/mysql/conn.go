@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -996,25 +997,68 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			return false
 		case ComStmtClose, ComStmtSendLongData:
 			return true
+		case ComQuery:
+			result, more, warnings, err := c.testMysqlConn.ReadQueryResult(math.MaxUint32, true)
+			if err != nil {
+				log.Errorf("error in reading query result from test mysql connection: %v", err)
+				c.writeErrorPacketFromError(err)
+				return false
+			}
+
+			flag := c.StatusFlags
+			if more {
+				flag |= ServerMoreResultsExists
+			}
+
+			if len(result.Fields) == 0 {
+				ok := PacketOK{
+					affectedRows:     result.RowsAffected,
+					lastInsertID:     result.InsertID,
+					statusFlags:      flag,
+					warnings:         warnings,
+					info:             "",
+					sessionStateData: result.SessionStateChanges,
+				}
+				err = c.writeOKPacket(&ok)
+				if err != nil {
+					log.Errorf("error in writing ok packet from test mysql connection: %v", err)
+					return false
+				}
+			} else {
+				err = c.writeFields(result)
+				if err != nil {
+					log.Errorf("error in writing fields from test mysql connection: %v", err)
+					return false
+				}
+
+				err = c.writeRows(result)
+				if err != nil {
+					log.Errorf("error in writing fields from test mysql connection: %v", err)
+					return false
+				}
+
+				err = c.writeEndResult(more, 0, 0, warnings)
+				if err != nil {
+					log.Errorf("error in writing end result from test mysql connection: %v", err)
+					return false
+				}
+			}
 		default:
 			respFromVTgate := make([]byte, MaxPacketSize)
 			lenRead, _ := c.conn2.Read(respFromVTgate)
 			for lenRead != -1 {
-				log.Infof("sequence value: %d, read length: %d", c.testMysqlConn.sequence, lenRead)
 				resp, err := c.testMysqlConn.readEphemeralPacket()
 				if err != nil {
 					log.Errorf("Error reading packet from test mysql connection: %v", err)
 					return false
 				}
 				c.testMysqlConn.recycleReadPacket()
-				log.Infof("read length from mysql: %d", len(resp))
 
 				// check the value from c.conn and resp
 				if string(resp) != string(respFromVTgate[0:lenRead]) {
 					log.Errorf("Outputs from both sources are different, MySQL output :%X, VTgate output :%X", string(resp), string(respFromVTgate[0:lenRead]))
 				}
 
-				log.Infof("response sent back to the user: %X", resp)
 				data, pos := c.startEphemeralPacketWithHeader(len(resp))
 				copy(data[pos:], resp)
 				if err := c.writeEphemeralPacket(); err != nil {
