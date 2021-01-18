@@ -101,7 +101,7 @@ type Executor struct {
 	vschema      *vindexes.VSchema
 	normalize    bool
 	streamSize   int
-	plans        *cache.LRUCache
+	plans        cache.Cache
 	vschemaStats *VSchemaStats
 
 	vm *VSchemaManager
@@ -131,12 +131,18 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	e.vm.watchSrvVSchema(ctx, cell)
 
 	executorOnce.Do(func() {
-		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
+		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
+			return e.plans.Stats().Length
+		})
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", func() int64 {
+			return e.plans.Stats().Size
+		})
 		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
-		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
+		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
+			return e.plans.Stats().Evictions
+		})
 		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", e.plans.Oldest())
+			return fmt.Sprintf("%v", e.plans.Stats().Oldest)
 		}))
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
@@ -1326,7 +1332,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
-		e.plans.Set(planKey, plan)
+		e.plans.Set(planKey, plan, plan.CachedSize(true))
 	}
 	return plan, nil
 }
@@ -1345,7 +1351,7 @@ type cacheItem struct {
 }
 
 func (e *Executor) debugCacheEntries() (items []cacheItem) {
-	e.plans.ForEach(func(value cache.Value) bool {
+	e.plans.ForEach(func(value interface{}) bool {
 		plan := value.(*engine.Plan)
 		items = append(items, cacheItem{
 			Key:   plan.Original,
@@ -1388,7 +1394,7 @@ func returnAsJSON(response http.ResponseWriter, stuff interface{}) {
 }
 
 // Plans returns the LRU plan cache
-func (e *Executor) Plans() *cache.LRUCache {
+func (e *Executor) Plans() cache.Cache {
 	return e.plans
 }
 

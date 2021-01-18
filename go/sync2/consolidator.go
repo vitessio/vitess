@@ -104,7 +104,7 @@ func (cc *ConsolidatorCache) Record(query string) {
 		v.(*ccount).add(1)
 	} else {
 		c := ccount(1)
-		cc.Set(query, &c)
+		cc.Set(query, &c, 1)
 	}
 }
 
@@ -127,13 +127,6 @@ func (cc *ConsolidatorCache) Items() []ConsolidatorCacheItem {
 // ccount elements are used with a cache.LRUCache object to track if another
 // request for the same query is already in progress.
 type ccount int64
-
-// Size always returns 1 because we use the cache only to track queries,
-// independent of the number of requests waiting for them.
-// This implements the cache.Value interface.
-func (cc *ccount) Size() int {
-	return 1
-}
 
 func (cc *ccount) add(n int64) int64 {
 	return atomic.AddInt64((*int64)(cc), n)

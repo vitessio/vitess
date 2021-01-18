@@ -238,13 +238,6 @@ func Exists(m Match, p Primitive) bool {
 	return Find(m, p) != nil
 }
 
-// Size is defined so that Plan can be given to a cache.LRUCache.
-// VTGate needs to maintain a cache of plans. It uses LRUCache, which
-// in turn requires its objects to define a Size function.
-func (p *Plan) Size() int {
-	return 1
-}
-
 //MarshalJSON serializes the plan into a JSON representation.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	var instructions *PrimitiveDescription

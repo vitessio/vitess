@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -141,13 +140,13 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			return row1.timePQ() > row2.timePQ()
 		},
 	}
-	qe.plans.ForEach(func(value cache.Value) bool {
+	qe.plans.ForEach(func(value interface{}) bool {
 		plan := value.(*TabletPlan)
 		if plan == nil {
 			return true
 		}
 		Value := &queryzRow{
-			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.FullQuery.Query)),
+			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.Original)),
 			Table: plan.TableName().String(),
 			Plan:  plan.PlanID,
 		}

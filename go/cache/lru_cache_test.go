@@ -22,36 +22,30 @@ import (
 	"time"
 )
 
-type CacheValue struct {
-	size int
-}
-
-func (cv *CacheValue) Size() int {
-	return cv.size
-}
+type CacheValue struct{}
 
 func TestInitialState(t *testing.T) {
 	cache := NewLRUCache(5)
-	l, sz, c, e, _ := cache.Stats()
-	if l != 0 {
-		t.Errorf("length = %v, want 0", l)
+	stats := cache.Stats()
+	if stats.Length != 0 {
+		t.Errorf("length = %v, want 0", stats.Length)
 	}
-	if sz != 0 {
-		t.Errorf("size = %v, want 0", sz)
+	if stats.Size != 0 {
+		t.Errorf("size = %v, want 0", stats.Size)
 	}
-	if c != 5 {
-		t.Errorf("capacity = %v, want 5", c)
+	if stats.Capacity != 5 {
+		t.Errorf("capacity = %v, want 5", stats.Capacity)
 	}
-	if e != 0 {
-		t.Errorf("evictions = %v, want 0", c)
+	if stats.Evictions != 0 {
+		t.Errorf("evictions = %v, want 0", stats.Evictions)
 	}
 }
 
 func TestSetInsertsValue(t *testing.T) {
 	cache := NewLRUCache(100)
-	data := &CacheValue{0}
+	data := &CacheValue{}
 	key := "key"
-	cache.Set(key, data)
+	cache.Set(key, data, 0)
 
 	v, ok := cache.Get(key)
 	if !ok || v.(*CacheValue) != data {
@@ -66,9 +60,9 @@ func TestSetInsertsValue(t *testing.T) {
 
 func TestGetValueWithMultipleTypes(t *testing.T) {
 	cache := NewLRUCache(100)
-	data := &CacheValue{0}
+	data := &CacheValue{}
 	key := "key"
-	cache.Set(key, data)
+	cache.Set(key, data, 0)
 
 	v, ok := cache.Get("key")
 	if !ok || v.(*CacheValue) != data {
@@ -83,27 +77,27 @@ func TestGetValueWithMultipleTypes(t *testing.T) {
 
 func TestSetUpdatesSize(t *testing.T) {
 	cache := NewLRUCache(100)
-	emptyValue := &CacheValue{0}
+	emptyValue := &CacheValue{}
 	key := "key1"
-	cache.Set(key, emptyValue)
-	if _, sz, _, _, _ := cache.Stats(); sz != 0 {
-		t.Errorf("cache.Size() = %v, expected 0", sz)
+	cache.Set(key, emptyValue, 0)
+	if stats := cache.Stats(); stats.Size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected 0", stats.Size)
 	}
-	someValue := &CacheValue{20}
+	someValue := &CacheValue{}
 	key = "key2"
-	cache.Set(key, someValue)
-	if _, sz, _, _, _ := cache.Stats(); sz != 20 {
-		t.Errorf("cache.Size() = %v, expected 20", sz)
+	cache.Set(key, someValue, 20)
+	if stats := cache.Stats(); stats.Size != 20 {
+		t.Errorf("cache.CachedSize() = %v, expected 20", stats.Size)
 	}
 }
 
 func TestSetWithOldKeyUpdatesValue(t *testing.T) {
 	cache := NewLRUCache(100)
-	emptyValue := &CacheValue{0}
+	emptyValue := &CacheValue{}
 	key := "key1"
-	cache.Set(key, emptyValue)
-	someValue := &CacheValue{20}
-	cache.Set(key, someValue)
+	cache.Set(key, emptyValue, 0)
+	someValue := &CacheValue{}
+	cache.Set(key, someValue, 20)
 
 	v, ok := cache.Get(key)
 	if !ok || v.(*CacheValue) != someValue {
@@ -113,19 +107,19 @@ func TestSetWithOldKeyUpdatesValue(t *testing.T) {
 
 func TestSetWithOldKeyUpdatesSize(t *testing.T) {
 	cache := NewLRUCache(100)
-	emptyValue := &CacheValue{0}
+	emptyValue := &CacheValue{}
 	key := "key1"
-	cache.Set(key, emptyValue)
+	cache.Set(key, emptyValue, 0)
 
-	if _, sz, _, _, _ := cache.Stats(); sz != 0 {
-		t.Errorf("cache.Size() = %v, expected %v", sz, 0)
+	if stats := cache.Stats(); stats.Size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected %v", stats.Size, 0)
 	}
 
-	someValue := &CacheValue{20}
-	cache.Set(key, someValue)
-	expected := int64(someValue.size)
-	if _, sz, _, _, _ := cache.Stats(); sz != expected {
-		t.Errorf("cache.Size() = %v, expected %v", sz, expected)
+	someValue := &CacheValue{}
+	cache.Set(key, someValue, 20)
+	expected := int64(20)
+	if stats := cache.Stats(); stats.Size != expected {
+		t.Errorf("cache.CachedSize() = %v, expected %v", stats.Size, expected)
 	}
 }
 
@@ -139,21 +133,21 @@ func TestGetNonExistent(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	cache := NewLRUCache(100)
-	value := &CacheValue{1}
+	value := &CacheValue{}
 	key := "key"
 
-	if cache.Delete(key) {
+	if cache.delete(key) {
 		t.Error("Item unexpectedly already in cache.")
 	}
 
-	cache.Set(key, value)
+	cache.Set(key, value, 1)
 
-	if !cache.Delete(key) {
+	if !cache.delete(key) {
 		t.Error("Expected item to be in cache.")
 	}
 
-	if _, sz, _, _, _ := cache.Stats(); sz != 0 {
-		t.Errorf("cache.Size() = %v, expected 0", sz)
+	if stats := cache.Stats(); stats.Size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected 0", stats.Size)
 	}
 
 	if _, ok := cache.Get(key); ok {
@@ -163,14 +157,14 @@ func TestDelete(t *testing.T) {
 
 func TestClear(t *testing.T) {
 	cache := NewLRUCache(100)
-	value := &CacheValue{1}
+	value := &CacheValue{}
 	key := "key"
 
-	cache.Set(key, value)
+	cache.Set(key, value, 1)
 	cache.Clear()
 
-	if _, sz, _, _, _ := cache.Stats(); sz != 0 {
-		t.Errorf("cache.Size() = %v, expected 0 after Clear()", sz)
+	if stats := cache.Stats(); stats.Size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected 0 after Clear()", stats.Size)
 	}
 }
 
@@ -178,41 +172,41 @@ func TestCapacityIsObeyed(t *testing.T) {
 	size := int64(3)
 	cache := NewLRUCache(100)
 	cache.SetCapacity(size)
-	value := &CacheValue{1}
+	value := &CacheValue{}
 
 	// Insert up to the cache's capacity.
-	cache.Set("key1", value)
-	cache.Set("key2", value)
-	cache.Set("key3", value)
-	if _, sz, _, _, _ := cache.Stats(); sz != size {
-		t.Errorf("cache.Size() = %v, expected %v", sz, size)
+	cache.Set("key1", value, 1)
+	cache.Set("key2", value, 1)
+	cache.Set("key3", value, 1)
+	if stats := cache.Stats(); stats.Size != size {
+		t.Errorf("cache.CachedSize() = %v, expected %v", stats.Size, size)
 	}
 	// Insert one more; something should be evicted to make room.
-	cache.Set("key4", value)
-	_, sz, _, evictions, _ := cache.Stats()
-	if sz != size {
-		t.Errorf("post-evict cache.Size() = %v, expected %v", sz, size)
+	cache.Set("key4", value, 1)
+	st := cache.Stats()
+	if st.Size != size {
+		t.Errorf("post-evict cache.CachedSize() = %v, expected %v", st.Size, size)
 	}
-	if evictions != 1 {
-		t.Errorf("post-evict cache.evictions = %v, expected 1", evictions)
+	if st.Evictions != 1 {
+		t.Errorf("post-evict cache.evictions = %v, expected 1", st.Evictions)
 	}
 
 	// Check json stats
-	data := cache.StatsJSON()
+	data := st.JSON()
 	m := make(map[string]interface{})
 	if err := json.Unmarshal([]byte(data), &m); err != nil {
 		t.Errorf("cache.StatsJSON() returned bad json data: %v %v", data, err)
 	}
-	if m["Size"].(float64) != float64(size) {
+	if m["CachedSize"].(float64) != float64(size) {
 		t.Errorf("cache.StatsJSON() returned bad size: %v", m)
 	}
 
 	// Check various other stats
-	if l := cache.Length(); l != size {
-		t.Errorf("cache.StatsJSON() returned bad length: %v", l)
+	if st.Length != size {
+		t.Errorf("cache.StatsJSON() returned bad length: %v", st.Length)
 	}
-	if s := cache.Size(); s != size {
-		t.Errorf("cache.StatsJSON() returned bad size: %v", s)
+	if st.Size != size {
+		t.Errorf("cache.StatsJSON() returned bad size: %v", st.Size)
 	}
 	if c := cache.Capacity(); c != size {
 		t.Errorf("cache.StatsJSON() returned bad length: %v", c)
@@ -220,7 +214,7 @@ func TestCapacityIsObeyed(t *testing.T) {
 
 	// checks StatsJSON on nil
 	cache = nil
-	if s := cache.StatsJSON(); s != "{}" {
+	if s := cache.Stats().JSON(); s != "{}" {
 		t.Errorf("cache.StatsJSON() on nil object returned %v", s)
 	}
 }
@@ -229,9 +223,9 @@ func TestLRUIsEvicted(t *testing.T) {
 	size := int64(3)
 	cache := NewLRUCache(size)
 
-	cache.Set("key1", &CacheValue{1})
-	cache.Set("key2", &CacheValue{1})
-	cache.Set("key3", &CacheValue{1})
+	cache.Set("key1", &CacheValue{}, 1)
+	cache.Set("key2", &CacheValue{}, 1)
+	cache.Set("key3", &CacheValue{}, 1)
 	// lru: [key3, key2, key1]
 
 	// Look up the elements. This will rearrange the LRU ordering.
@@ -242,7 +236,7 @@ func TestLRUIsEvicted(t *testing.T) {
 	cache.Get("key1")
 	// lru: [key1, key2, key3]
 
-	cache.Set("key0", &CacheValue{1})
+	cache.Set("key0", &CacheValue{}, 1)
 	// lru: [key0, key1, key2]
 
 	// The least recently used one should have been evicted.
@@ -250,12 +244,14 @@ func TestLRUIsEvicted(t *testing.T) {
 		t.Error("Least recently used element was not evicted.")
 	}
 
+	st := cache.Stats()
+
 	// Check oldest
-	if o := cache.Oldest(); o.Before(beforeKey2) || o.After(afterKey2) {
+	if o := st.Oldest; o.Before(beforeKey2) || o.After(afterKey2) {
 		t.Errorf("cache.Oldest returned an unexpected value: got %v, expected a value between %v and %v", o, beforeKey2, afterKey2)
 	}
 
-	if e, want := cache.Evictions(), int64(1); e != want {
+	if e, want := st.Evictions, int64(1); e != want {
 		t.Errorf("evictions: %d, want: %d", e, want)
 	}
 }
