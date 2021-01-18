@@ -14,32 +14,39 @@
  * limitations under the License.
  */
 import * as React from 'react';
-import { BrowserRouter as Router, Link, Redirect, Route, Switch } from 'react-router-dom';
+import { BrowserRouter as Router, Redirect, Route, Switch } from 'react-router-dom';
 
 import style from './App.module.scss';
-import logo from '../img/vitess-icon-color.svg';
 import { Tablets } from './routes/Tablets';
 import { Debug } from './routes/Debug';
+import { NavRail } from './NavRail';
+import { Error404 } from './routes/Error404';
 
 export const App = () => {
     return (
         <Router>
             <div className={style.container}>
-                <Link to="/">
-                    <img className={style.logo} src={logo} alt="logo" height={40} />
-                </Link>
+                <div className={style.navContainer}>
+                    <NavRail />
+                </div>
 
-                <Switch>
-                    <Route path="/tablets">
-                        <Tablets />
-                    </Route>
+                <div className={style.mainContainer}>
+                    <Switch>
+                        <Route path="/tablets">
+                            <Tablets />
+                        </Route>
 
-                    <Route path="/debug">
-                        <Debug />
-                    </Route>
+                        <Route path="/debug">
+                            <Debug />
+                        </Route>
 
-                    <Redirect exact from="/" to="/tablets" />
-                </Switch>
+                        <Redirect exact from="/" to="/tablets" />
+
+                        <Route>
+                            <Error404 />
+                        </Route>
+                    </Switch>
+                </div>
             </div>
         </Router>
     );

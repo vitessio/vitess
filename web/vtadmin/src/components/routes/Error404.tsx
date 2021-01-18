@@ -1,5 +1,5 @@
 /**
- * Copyright 2020 The Vitess Authors.
+ * Copyright 2021 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,29 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.container {
-  display: grid;
-  grid-template-areas: 'nav content';
-  grid-template-rows: auto;
-  grid-template-columns: 240px auto;
-  height: 100vh;
-  overflow: hidden;
-  position: relative;
-  width: 100vw;
-}
+import style from './Error404.module.scss';
 
-.logo {
-  display: block;
-  margin: 0 auto 48px auto;
-}
-
-.navContainer {
-  grid-area: nav;
-  height: 100vh;
-}
-
-.mainContainer {
-  grid-area: content;
-  overflow: auto;
-  padding: 24px;
-}
+export const Error404 = () => {
+    return (
+        <div className={style.container}>
+            <h1>☹️ 404 ☹️</h1>
+        </div>
+    );
+};
