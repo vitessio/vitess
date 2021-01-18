@@ -83,6 +83,9 @@
 
   /* Layout variables, set to light theme by default */
   --backgroundPrimary: var(--background_light);
+  --colorPrimary: var(--colorPrimary_light);
+  --colorPrimary50: var(--colorPrimary50_light);
+  --colorPrimary200: var(--colorPrimary200_light);
   --tableBorderColor: var(--grey400);
   --textColorPrimary: var(--textColorPrimary_light);
   --textColorSecondary: var(--textColorSecondary_light);
@@ -92,6 +95,9 @@
 /* Dark theme */
 [data-vtadmin-theme="dark"] {
   --backgroundPrimary: var(--background_dark);
+  --colorPrimary: var(--colorPrimary_dark);
+  --colorPrimary50: var(--colorPrimary50_dark);
+  --colorPrimary200: var(--colorPrimary200_dark);
   --tableBorderColor: var(--grey800);
   --textColorPrimary: var(--textColorPrimary_dark);
   --textColorSecondary: var(--textColorSecondary_dark);
