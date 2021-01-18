@@ -53,7 +53,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.err = err
 			return false
 		}
-	case *sqlparser.DerivedTable, *sqlparser.Subquery:
+	case *sqlparser.DerivedTable:
 		a.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not supported", node)
 	case *sqlparser.TableExprs:
 		// this has already been visited when we encountered the SELECT struct

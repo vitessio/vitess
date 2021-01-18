@@ -109,6 +109,18 @@ func (ts TableSet) NumberOfTables() int {
 	return count
 }
 
+// Constituents returns an slice with all the
+// individual tables in their own TableSet identifier
+func (ts TableSet) Constituents() (result []TableSet) {
+	for i := 0; i < 64; i++ {
+		i2 := TableSet(1 << i)
+		if ts&i2 == i2 {
+			result = append(result, i2)
+		}
+	}
+	return
+}
+
 // Merge creates a TableSet that contains both inputs
 func (ts TableSet) Merge(other TableSet) TableSet {
 	return ts | other
