@@ -265,77 +265,91 @@ func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	*sysVarSetEnabled = true
 
-	sbclookup.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_mode", "varchar"), "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_safe_updates", "int64"), "1"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("tx_isolation", "varchar"), "read-committed"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("sql_quote_show_create", "int64"), "0"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("foreign_key_checks", "int64")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("unique_checks", "int64"), "0"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_write_timeout", "int64"), "600"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("net_read_timeout", "int64"), "300"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_client", "varchar"), "utf8"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("client_found_rows", "int64")),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("client_found_rows", "int64")),
-	})
+	returnResult := func(columnName, typ, value string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ), value)
+	}
+	returnNoResult := func(columnName, typ string) *sqltypes.Result {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields(columnName, typ))
+	}
 
 	testcases := []struct {
-		in      string
-		warning []*querypb.QueryWarning
-		sysVars map[string]string
+		in              string
+		warning         []*querypb.QueryWarning
+		sysVars         map[string]string
+		disallowResConn bool
+		result          *sqltypes.Result
 	}{{
 		in: "set big_tables = 1", //ignore
 	}, {
 		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
 		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},
+		result:  returnResult("sql_mode", "varchar", "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+	}, {
+		// even though the tablet is saying that the value has changed,
+		// useReservedConn is false, so we won't allow this change
+		in:              "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
+		result:          returnResult("sql_mode", "varchar", "STRICT_ALL_TABLES,NO_AUTO_UPDATES"),
+		sysVars:         nil,
+		disallowResConn: true,
 	}, {
 		in:      "set sql_safe_updates = 1",
 		sysVars: map[string]string{"sql_safe_updates": "1"},
+		result:  returnResult("sql_safe_updates", "int64", "1"),
 	}, {
 		in:      "set tx_isolation = 'read-committed'",
 		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
+		result:  returnResult("tx_isolation", "varchar", "read-committed"),
 	}, {
 		in:      "set sql_quote_show_create = 0",
 		sysVars: map[string]string{"sql_quote_show_create": "0"},
+		result:  returnResult("sql_quote_show_create", "int64", "0"),
 	}, {
-		in: "set foreign_key_checks = 1",
+		in:     "set foreign_key_checks = 1",
+		result: returnNoResult("foreign_key_checks", "int64"),
 	}, {
 		in:      "set unique_checks = 0",
 		sysVars: map[string]string{"unique_checks": "0"},
+		result:  returnResult("unique_checks", "int64", "0"),
 	}, {
-		in: "set net_write_timeout = 600",
+		in:     "set net_write_timeout = 600",
+		result: returnResult("net_write_timeout", "int64", "600"),
 	}, {
-		in: "set net_read_timeout = 600",
+		in:     "set net_read_timeout = 600",
+		result: returnResult("net_read_timeout", "int64", "300"),
 	}, {
-		in: "set character_set_client = utf8",
+		in:     "set character_set_client = utf8",
+		result: returnResult("character_set_client", "varchar", "utf8"),
 	}, {
-		in: "set character_set_results=null",
+		in:     "set character_set_results=null",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='binary'",
+		in:     "set character_set_results='binary'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='utf8'",
+		in:     "set character_set_results='utf8'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results=utf8mb4",
+		in:     "set character_set_results=utf8mb4",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='latin1'",
+		in:     "set character_set_results='latin1'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set character_set_results='abcd'",
+		in:     "set character_set_results='abcd'",
+		result: returnNoResult("character_set_results", "varchar"),
 	}, {
-		in: "set @@global.client_found_rows = 1",
+		in:     "set @@global.client_found_rows = 1",
+		result: returnNoResult("client_found_rows", "int64"),
 	}, {
-		in: "set global client_found_rows = 1",
+		in:     "set global client_found_rows = 1",
+		result: returnNoResult("client_found_rows", "int64"),
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			session := NewAutocommitSession(masterSession)
 			session.TargetString = KsTestUnsharded
-			session.UseReservedConnection = true
+			session.UseReservedConnection = !tcase.disallowResConn
+			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
 			_, err := executor.Execute(
 				context.Background(),
 				"TestExecute",
