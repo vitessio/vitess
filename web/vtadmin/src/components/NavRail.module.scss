@@ -18,7 +18,7 @@ $navRailHoverTransition: background-color 0.1s ease-in-out;
 
 .container {
   background: var(--backgroundSecondary);
-  border: solid 1px var(--backgroundSecondaryHighlight);
+  border-right: solid 1px var(--backgroundSecondaryHighlight);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
