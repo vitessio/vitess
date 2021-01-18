@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -1455,9 +1456,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	want := []string{
 		"@unknown:" + query1,
 	}
-	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
-		t.Errorf("Plan keys: %s, want %s", keys, want)
-	}
+	assertCacheContains(t, r.plans, want)
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
@@ -1480,14 +1479,30 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		KsTestUnsharded + "@unknown:" + query1,
 		"@unknown:" + query1,
 	}
-	if diff := cmp.Diff(want, r.plans.Keys()); diff != "" {
-		t.Errorf("\n-want,+got:\n%s", diff)
-	}
-	//if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
-	//	t.Errorf("Plan keys: %s, want %s", keys, want)
-	//}
+	assertCacheContains(t, r.plans, want)
 	if logStats4.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
+	}
+}
+
+func assertCacheSize(t *testing.T, c *cache.LRUCache, expected int) {
+	t.Helper()
+	var size int
+	c.ForEach(func(_ cache.Value) bool {
+		size++
+		return true
+	})
+	if size != expected {
+		t.Errorf("getPlan() expected cache to have size %d, but got: %d", expected, size)
+	}
+}
+
+func assertCacheContains(t *testing.T, c *cache.LRUCache, want []string) {
+	t.Helper()
+	for _, wantKey := range want {
+		if _, ok := c.Get(wantKey); !ok {
+			t.Errorf("missing key in plan cache: %v", wantKey)
+		}
 	}
 }
 
@@ -1524,32 +1539,24 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	logStats1 = NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 0 {
-		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 0)
 
 	query1 = "insert into user(id) values (1), (2)"
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 1 {
-		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 1)
 
 	// the target string will be resolved and become part of the plan cache key, which adds a new entry
 	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil)
 	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 2 {
-		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 2)
 
 	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
 	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil)
 	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 2 {
-		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 2)
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {
@@ -1586,32 +1593,24 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	logStats1 = NewLogStats(ctx, "Test", "", nil)
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 0 {
-		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 0)
 
 	query1 = "insert into user(id) values (1), (2)"
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 1 {
-		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 1)
 
 	// the target string will be resolved and become part of the plan cache key, which adds a new entry
 	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil)
 	_, err = r.getPlan(ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 2 {
-		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 2)
 
 	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
 	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil)
 	_, err = r.getPlan(ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 2 {
-		t.Errorf("Plan keys should be 2, got: %v", len(r.plans.Keys()))
-	}
+	assertCacheSize(t, r.plans, 2)
 }
 
 func TestGetPlanNormalized(t *testing.T) {
@@ -1635,9 +1634,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	want := []string{
 		"@unknown:" + normalized,
 	}
-	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
-		t.Errorf("Plan keys: %s, want %s", keys, want)
-	}
+	assertCacheContains(t, r.plans, want)
 
 	wantSQL := normalized + " /* comment 1 */"
 	if logStats1.SQL != wantSQL {
@@ -1691,9 +1688,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		KsTestUnsharded + "@unknown:" + normalized,
 		"@unknown:" + normalized,
 	}
-	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
-		t.Errorf("Plan keys: %s, want %s", keys, want)
-	}
+	assertCacheContains(t, r.plans, want)
 
 	// Errors
 	logStats7 := NewLogStats(ctx, "Test", "", nil)
@@ -1702,9 +1697,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
-		t.Errorf("Plan keys: %s, want %s", keys, want)
-	}
+	assertCacheContains(t, r.plans, want)
 }
 
 func TestPassthroughDDL(t *testing.T) {

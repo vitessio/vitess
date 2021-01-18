@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -134,20 +135,19 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 	defer logz.EndHTMLTable(w)
 	w.Write(queryzHeader)
 
-	keys := qe.plans.Keys()
 	sorter := queryzSorter{
-		rows: make([]*queryzRow, 0, len(keys)),
+		rows: nil,
 		less: func(row1, row2 *queryzRow) bool {
 			return row1.timePQ() > row2.timePQ()
 		},
 	}
-	for _, v := range qe.plans.Keys() {
-		plan := qe.peekQuery(v)
+	qe.plans.ForEach(func(value cache.Value) bool {
+		plan := value.(*TabletPlan)
 		if plan == nil {
-			continue
+			return true
 		}
 		Value := &queryzRow{
-			Query: logz.Wrappable(sqlparser.TruncateForUI(v)),
+			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.FullQuery.Query)),
 			Table: plan.TableName().String(),
 			Plan:  plan.PlanID,
 		}
@@ -164,7 +164,8 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			Value.Color = "high"
 		}
 		sorter.rows = append(sorter.rows, Value)
-	}
+		return true
+	})
 	sort.Sort(&sorter)
 	for _, Value := range sorter.rows {
 		if err := queryzTmpl.Execute(w, Value); err != nil {
