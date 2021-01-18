@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/logz"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -56,12 +57,12 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	totalExecTime := time.Duration(0)
 	totalCount := uint64(0)
 
+	var err error
 	plans := make([]*engine.Plan, 0)
 	routes := make([]*engine.Route, 0)
 	// First we go over all plans and collect statistics and all query plans for scatter queries
-	for _, item := range e.plans.Items() {
-		plan := item.Value.(*engine.Plan)
-
+	e.plans.ForEach(func(value cache.Value) bool {
+		plan := value.(*engine.Plan)
 		scatter := engine.Find(findScatter, plan.Instructions)
 		readOnly := !engine.Exists(isUpdating, plan.Instructions)
 		isScatter := scatter != nil
@@ -69,7 +70,8 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 		if isScatter {
 			route, isRoute := scatter.(*engine.Route)
 			if !isRoute {
-				return statsResults{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected a route, but found a %v", scatter)
+				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "expected a route, but found a %v", scatter)
+				return false
 			}
 			plans = append(plans, plan)
 			routes = append(routes, route)
@@ -83,6 +85,10 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 
 		totalExecTime += plan.ExecTime
 		totalCount += plan.ExecCount
+		return true
+	})
+	if err != nil {
+		return statsResults{}, err
 	}
 
 	// Now we'll go over all scatter queries we've found and produce result items for each

@@ -37,45 +37,52 @@ func TestQueryzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 	qe := newTestQueryEngine(100, 10*time.Second, true, &dbconfigs.DBConfigs{})
 
+	const query1 = "select name from test_table"
 	plan1 := &TabletPlan{
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
-			PlanID: planbuilder.PlanSelect,
+			Table:     &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			PlanID:    planbuilder.PlanSelect,
+			FullQuery: sqlparser.BuildParsedQuery(query1),
 		},
 	}
 	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)
-	qe.plans.Set("select name from test_table", plan1)
+	qe.plans.Set(query1, plan1)
 
+	const query2 = "insert into test_table values 1"
 	plan2 := &TabletPlan{
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
-			PlanID: planbuilder.PlanDDL,
+			Table:     &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			PlanID:    planbuilder.PlanDDL,
+			FullQuery: sqlparser.BuildParsedQuery(query2),
 		},
 	}
 	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
-	qe.plans.Set("insert into test_table values 1", plan2)
+	qe.plans.Set(query2, plan2)
 
+	const query3 = "show tables"
 	plan3 := &TabletPlan{
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
-			PlanID: planbuilder.PlanOtherRead,
+			Table:     &schema.Table{Name: sqlparser.NewTableIdent("")},
+			PlanID:    planbuilder.PlanOtherRead,
+			FullQuery: sqlparser.BuildParsedQuery(query3),
 		},
 	}
 	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
-	qe.plans.Set("show tables", plan3)
+	qe.plans.Set(query3, plan3)
 	qe.plans.Set("", (*TabletPlan)(nil))
 
-	plan4 := &TabletPlan{
-		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
-			PlanID: planbuilder.PlanOtherRead,
-		},
-	}
-	plan4.AddStats(1, 1*time.Millisecond, 1*time.Millisecond, 1, 0)
 	hugeInsert := "insert into test_table values 0"
 	for i := 1; i < 1000; i++ {
 		hugeInsert = hugeInsert + fmt.Sprintf(", %d", i)
 	}
+	plan4 := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			Table:     &schema.Table{Name: sqlparser.NewTableIdent("")},
+			PlanID:    planbuilder.PlanOtherRead,
+			FullQuery: sqlparser.BuildParsedQuery(hugeInsert),
+		},
+	}
+	plan4.AddStats(1, 1*time.Millisecond, 1*time.Millisecond, 1, 0)
 	qe.plans.Set(hugeInsert, plan4)
 	qe.plans.Set("", (*TabletPlan)(nil))
 

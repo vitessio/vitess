@@ -58,32 +58,9 @@ func TestSetInsertsValue(t *testing.T) {
 		t.Errorf("Cache has incorrect value: %v != %v", data, v)
 	}
 
-	k := cache.Keys()
-	if len(k) != 1 || k[0] != key {
-		t.Errorf("Cache.Keys() returned incorrect values: %v", k)
-	}
 	values := cache.Items()
 	if len(values) != 1 || values[0].Key != key {
 		t.Errorf("Cache.Values() returned incorrect values: %v", values)
-	}
-}
-
-func TestSetIfAbsent(t *testing.T) {
-	cache := NewLRUCache(100)
-	data := &CacheValue{0}
-	key := "key"
-	cache.SetIfAbsent(key, data)
-
-	v, ok := cache.Get(key)
-	if !ok || v.(*CacheValue) != data {
-		t.Errorf("Cache has incorrect value: %v != %v", data, v)
-	}
-
-	cache.SetIfAbsent(key, &CacheValue{1})
-
-	v, ok = cache.Get(key)
-	if !ok || v.(*CacheValue) != data {
-		t.Errorf("Cache has incorrect value: %v != %v", data, v)
 	}
 }
 
@@ -157,25 +134,6 @@ func TestGetNonExistent(t *testing.T) {
 
 	if _, ok := cache.Get("notthere"); ok {
 		t.Error("Cache returned a notthere value after no inserts.")
-	}
-}
-
-func TestPeek(t *testing.T) {
-	cache := NewLRUCache(2)
-	val1 := &CacheValue{1}
-	cache.Set("key1", val1)
-	val2 := &CacheValue{1}
-	cache.Set("key2", val2)
-	// Make key1 the most recent.
-	cache.Get("key1")
-	// Peek key2.
-	if v, ok := cache.Peek("key2"); ok && v.(*CacheValue) != val2 {
-		t.Errorf("key2 received: %v, want %v", v, val2)
-	}
-	// Push key2 out
-	cache.Set("key3", &CacheValue{1})
-	if v, ok := cache.Peek("key2"); ok {
-		t.Errorf("key2 received: %v, want absent", v)
 	}
 }
 

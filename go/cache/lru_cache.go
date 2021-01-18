@@ -89,18 +89,6 @@ func (lru *LRUCache) Get(key string) (v Value, ok bool) {
 	return element.Value.(*entry).value, true
 }
 
-// Peek returns a value from the cache without changing the LRU order.
-func (lru *LRUCache) Peek(key string) (v Value, ok bool) {
-	lru.mu.Lock()
-	defer lru.mu.Unlock()
-
-	element := lru.table[key]
-	if element == nil {
-		return nil, false
-	}
-	return element.Value.(*entry).value, true
-}
-
 // Set sets a value in the cache.
 func (lru *LRUCache) Set(key string, value Value) {
 	lru.mu.Lock()
@@ -108,19 +96,6 @@ func (lru *LRUCache) Set(key string, value Value) {
 
 	if element := lru.table[key]; element != nil {
 		lru.updateInplace(element, value)
-	} else {
-		lru.addNew(key, value)
-	}
-}
-
-// SetIfAbsent will set the value in the cache if not present. If the
-// value exists in the cache, we don't set it.
-func (lru *LRUCache) SetIfAbsent(key string, value Value) {
-	lru.mu.Lock()
-	defer lru.mu.Unlock()
-
-	if element := lru.table[key]; element != nil {
-		lru.moveToFront(element)
 	} else {
 		lru.addNew(key, value)
 	}
@@ -221,17 +196,18 @@ func (lru *LRUCache) Oldest() (oldest time.Time) {
 	return
 }
 
-// Keys returns all the keys for the cache, ordered from most recently
+// ForEach yields all the values for the cache, ordered from most recently
 // used to least recently used.
-func (lru *LRUCache) Keys() []string {
+func (lru *LRUCache) ForEach(callback func(value Value) bool) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
-	keys := make([]string, 0, lru.list.Len())
 	for e := lru.list.Front(); e != nil; e = e.Next() {
-		keys = append(keys, e.Value.(*entry).key)
+		v := e.Value.(*entry)
+		if !callback(v.value) {
+			break
+		}
 	}
-	return keys
 }
 
 // Items returns all the values for the cache, ordered from most recently

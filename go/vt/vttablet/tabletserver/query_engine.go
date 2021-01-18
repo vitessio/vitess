@@ -399,14 +399,6 @@ func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
 	return nil
 }
 
-// peekQuery fetches the plan without changing the LRU order.
-func (qe *QueryEngine) peekQuery(sql string) *TabletPlan {
-	if cacheResult, ok := qe.plans.Peek(sql); ok {
-		return cacheResult.(*TabletPlan)
-	}
-	return nil
-}
-
 // SetQueryPlanCacheCap sets the query plan cache capacity.
 func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
 	if size <= 0 {
@@ -446,20 +438,19 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 		acl.SendError(response, err)
 		return
 	}
-	keys := qe.plans.Keys()
+
 	response.Header().Set("Content-Type", "text/plain")
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
-	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
-		if plan := qe.peekQuery(v); plan != nil {
-			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
-				response.Write([]byte(err.Error()))
-			} else {
-				response.Write(b)
-			}
-			response.Write(([]byte)("\n\n"))
+	qe.plans.ForEach(func(value cache.Value) bool {
+		plan := value.(*TabletPlan)
+		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(plan.FullQuery.Query))))
+		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
+			response.Write([]byte(err.Error()))
+		} else {
+			response.Write(b)
 		}
-	}
+		response.Write(([]byte)("\n\n"))
+		return true
+	})
 }
 
 func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, request *http.Request) {
@@ -467,20 +458,20 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 		acl.SendError(response, err)
 		return
 	}
-	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	qstats := make([]perQueryStats, 0, len(keys))
-	for _, v := range keys {
-		if plan := qe.peekQuery(v); plan != nil {
-			var pqstats perQueryStats
-			pqstats.Query = unicoded(sqlparser.TruncateForUI(v))
-			pqstats.Table = plan.TableName().String()
-			pqstats.Plan = plan.PlanID
-			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
+	var qstats []perQueryStats
+	qe.plans.ForEach(func(value cache.Value) bool {
+		plan := value.(*TabletPlan)
 
-			qstats = append(qstats, pqstats)
-		}
-	}
+		var pqstats perQueryStats
+		pqstats.Query = unicoded(sqlparser.TruncateForUI(plan.FullQuery.Query))
+		pqstats.Table = plan.TableName().String()
+		pqstats.Plan = plan.PlanID
+		pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
+
+		qstats = append(qstats, pqstats)
+		return true
+	})
 	if b, err := json.MarshalIndent(qstats, "", "  "); err != nil {
 		response.Write([]byte(err.Error()))
 	} else {
