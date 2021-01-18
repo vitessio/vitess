@@ -1,5 +1,5 @@
 /**
- * Copyright 2020 The Vitess Authors.
+ * Copyright 2021 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,28 +13,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@import "./style/fonts.css";
+
 :root {
-  --primaryForegroundRGB: 29, 28, 29;
-  --primaryForeground: rgb(var(--primaryForegroundRGB));
-  --invertedForegroundRGB: 255, 255, 255;
-  --invertedForeground: rgb(var(--invertedForegroundRGB));
-  --primaryBackgroundRGB: 255, 255, 255;
-  --primaryBackground: rgb(var(--primaryBackgroundRGB));
+  /* Greyscale */
+  --grey75: #fafafa;
+  --grey200: #edf2f7;
+  --grey400: #cbd5e0;
+  --grey600: #718096;
+  --grey800: #2d3748;
+  --grey900: #1e2531;
 
-  /* Grayscale */
-  --maxContrastGray: rgba(var(--primaryForegroundRGB), 0.7);
-  --highContrastGray: rgba(var(--primaryForegroundRGB), 0.5);
-  --lowContrastGray: rgba(var(--primaryForegroundRGB), 0.13);
-  --minContrastGray: rgba(var(--primaryForegroundRGB), 0.04);
-}
+  /* Invariant colours common across all themes */
+  --colorSuccess: #00893e;
+  --colorSuccess50: #4cba6a;
+  --colorSuccess200: #005a13;
+  --colorInfo: #ffab40;
+  --colorInfo50: #ffdd71;
+  --colorInfo200: #c77c02;
+  --colorError: #d32f2f;
+  --colorError50: #ff6659;
+  --colorError200: #9a0007;
 
-body {
-  background: var(--primaryBackground);
-  color: var(--primaryForeground);
-  margin: 0;
-  font-family:
+  /* Light theme colour palette */
+  --background_light: #fff;
+  --colorPrimary_light: #3d5afe;
+  --colorPrimary50_light: #8187ff;
+  --colorPrimary200_light: #0031ca;
+  --textColorPrimary_light: #17171b;
+  --textColorSecondary_light: #718096;
+  --textColorDisabled_light: #cbd5e0;
+
+  /* Dark theme colour palette */
+  --background_dark: #17171b;
+  --colorPrimary_dark: #8187ff;
+  --colorPrimary50_dark: #b6b7ff;
+  --colorPrimary200_dark: #4a5acb;
+  --textColorPrimary_dark: #fff;
+  --textColorSecondary_dark: #cbd5e0;
+  --textColorDisabled_dark: #2d3748;
+
+  /* Fonts */
+  --fontFamilyPrimary:
+    'NotoSans',
     -apple-system,
-    BlinkMacSystemFont,
+    blinkmacsystemfont,
     'Segoe UI',
     'Roboto',
     'Oxygen',
@@ -44,15 +67,86 @@ body {
     'Droid Sans',
     'Helvetica Neue',
     sans-serif;
+  --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
+
+  /* Body text */
+  --fontSizeDefault: 1.5rem;
+  --fontSizeLarge: 1.7rem;
+  --fontSizeSmall: 1.3rem;
+  --lineHeightBody: 1.36;
+
+  /* Headings */
+  --fontSizeHeading1: 3.6rem;
+  --fontSizeHeading2: 2.8rem;
+  --fontSizeHeading3: 2rem;
+  --lineHeightHeading: 1.36;
+
+  /* Layout variables, set to light theme by default */
+  --backgroundPrimary: var(--background_light);
+  --tableBorderColor: var(--grey400);
+  --textColorPrimary: var(--textColorPrimary_light);
+  --textColorSecondary: var(--textColorSecondary_light);
+  --textColorDisabled: var(--textColorDisabled_light);
+}
+
+/* Dark theme */
+[data-vtadmin-theme="dark"] {
+  --backgroundPrimary: var(--background_dark);
+  --tableBorderColor: var(--grey800);
+  --textColorPrimary: var(--textColorPrimary_dark);
+  --textColorSecondary: var(--textColorSecondary_dark);
+  --textColorDisabled: var(--textColorDisabled_dark);
+}
+
+html {
+  /**
+   * Set a base font size of 1rem == 10px, based on the common browser default of 16px.
+   * This lets us use rem values everywhere for accessibility, while still
+   * "pinning" to reasonable defaults. For a really good article on this,
+   * see https://www.24a11y.com/2019/pixels-vs-relative-units-in-css-why-its-still-a-big-deal/
+   */
+  font-size: 62.5%;
+}
+
+body {
+  background: var(--backgroundPrimary);
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeDefault);
+  line-height: var(--lineHeightBody);
+  margin: 0;
+  font-family: var(--fontFamilyPrimary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
-  font-size: 0.9em;
+/* Typography */
+h1 {
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeHeading1);
+  font-weight: 700;
+  line-height: var(--lineHeightHeading);
 }
 
+h2 {
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeHeading2);
+  font-weight: 700;
+  line-height: var(--lineHeightHeading);
+}
+
+h3 {
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeHeading3);
+  font-weight: 700;
+  line-height: var(--lineHeightHeading);
+}
+
+code {
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeDefault);
+}
+
+/* Tables */
 table {
   border-collapse: collapse;
   width: 100%;
@@ -63,6 +157,6 @@ table th {
 }
 
 table tbody td {
-  border: solid 1px var(--lowContrastGray);
+  border: solid 1px var(--tableBorderColor);
   padding: 12px;
 }
