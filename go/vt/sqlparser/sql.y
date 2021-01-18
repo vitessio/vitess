@@ -4700,6 +4700,7 @@ reserved_keyword:
 | BINARY
 | BY
 | CASE
+| CALL
 | CHANGE
 | CHECK
 | COLLATE
