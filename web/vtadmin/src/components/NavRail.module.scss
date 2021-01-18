@@ -13,8 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+$navRailHoverTransition: background-color 0.1s ease-in-out;
+
 .container {
-  background: var(--grey75);
+  background: var(--backgroundSecondary);
+  border: solid 1px var(--backgroundSecondaryHighlight);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -43,7 +47,7 @@
 
   &::after {
     content: '';
-    background-color: var(--grey400);
+    background-color: var(--colorScaffolding);
     display: block;
     height: 1px;
     margin: 20px 24px;
@@ -64,6 +68,7 @@ a.navLink {
   font-weight: 500;
   padding: 12px 24px 12px 20px;
   text-decoration: none;
+  transition: $navRailHoverTransition;
 
   &.navLinkActive {
     border-color: var(--colorPrimary);
@@ -71,23 +76,24 @@ a.navLink {
   }
 
   &:hover {
-    background: var(--grey200);
+    background: var(--backgroundSecondaryHighlight);
     color: var(--colorPrimary);
   }
 }
 
 .badge {
-  background-color: var(--grey200);
+  background-color: var(--backgroundSecondaryHighlight);
   border-radius: 20px;
   color: var(--textColorSecondary);
   display: inline-block;
-  font-size: var(--fontSizeSmall);
+  font-size: 1.2rem;
   margin-left: auto;
-  padding: 2px 10px;
+  padding: 2px 8px;
+  transition: $navRailHoverTransition;
 }
 
 a.navLinkActive .badge,
 a.navLink:hover .badge {
-  background-color: rgba(61, 90, 254, 0.1);
+  background-color: var(--backgroundPrimaryHighlight);
   color: var(--colorPrimary);
 }
