@@ -1,3 +1,8 @@
+<!--
+  How to contribute: https://vitess.io/docs/contributing/
+  We’re looking forward to any contribution! Before you start larger contributions, make sure to reach out first and discuss your plans with us.
+ -->
+
 <!-- if this PR is Work in Progress please create it as a Draft Pull Request -->
 
 ## Description
