@@ -62,55 +62,34 @@ func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (en
 	}
 }
 
-func pushProjection(expr []*sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
 		offset := len(sel.SelectExprs)
-		for _, e := range expr {
-			sel.SelectExprs = append(sel.SelectExprs, e)
-		}
+		sel.SelectExprs = append(sel.SelectExprs, expr)
 		return offset, nil
 	case *joinV4:
-		cols := make([]int, len(expr))
-		var lhs, rhs []*sqlparser.AliasedExpr
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
-		for i, e := range expr {
-			deps := semTable.Dependencies(e.Expr)
-			switch {
-			case deps.IsSolvedBy(lhsSolves):
-				lhs = append(lhs, e)
-				cols[i] = -1
-			case deps.IsSolvedBy(rhsSolves):
-				rhs = append(rhs, e)
-				cols[i] = 1
-			default:
-				return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(e.Expr))
+		deps := semTable.Dependencies(expr.Expr)
+		switch {
+		case deps.IsSolvedBy(lhsSolves):
+			offset, err := pushProjection(expr, node.Left, semTable)
+			if err != nil {
+				return 0, err
 			}
-		}
-		lOffset, err := pushProjection(lhs, node.Left, semTable)
-		if err != nil {
-			return 0, err
-		}
-		rOffset, err := pushProjection(rhs, node.Right, semTable)
-		if err != nil {
-			return 0, err
-		}
-		rOffset++
-		lOffset = -(lOffset + 1)
-		for i, col := range cols {
-			if col == -1 {
-				cols[i] = lOffset
-				lOffset--
-			} else {
-				cols[i] = rOffset
-				rOffset++
+			node.Cols = append(node.Cols, -(offset + 1))
+		case deps.IsSolvedBy(rhsSolves):
+			offset, err := pushProjection(expr, node.Right, semTable)
+			if err != nil {
+				return 0, err
 			}
+			node.Cols = append(node.Cols, offset+1)
+		default:
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
 		}
-		node.Cols = cols
-		return 0, nil
-
+		return len(node.Cols) - 1, nil
 	default:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
 	}

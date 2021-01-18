@@ -57,7 +57,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
 		sqlparser.VariableGlobal, sqlparser.VariableSession:
 		return showSendAnywhere(show, vschema)
-	case sqlparser.Database:
+	case sqlparser.Database, sqlparser.Keyspace:
 		ks, err := vschema.AllKeyspace()
 		if err != nil {
 			return nil, err
@@ -73,7 +73,17 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 			filter = regexp.MustCompile(".*")
 		}
 
-		rows := make([][]sqltypes.Value, 0, len(ks))
+		//rows := make([][]sqltypes.Value, 0, len(ks)+4)
+		var rows [][]sqltypes.Value
+
+		if show.Command == sqlparser.Database {
+			//Hard code default databases
+			rows = append(rows, buildVarCharRow("information_schema"))
+			rows = append(rows, buildVarCharRow("mysql"))
+			rows = append(rows, buildVarCharRow("sys"))
+			rows = append(rows, buildVarCharRow("performance_schema"))
+		}
+
 		for _, v := range ks {
 			if filter.MatchString(v.Name) {
 				rows = append(rows, buildVarCharRow(v.Name))

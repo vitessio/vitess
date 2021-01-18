@@ -149,6 +149,8 @@ func init() {
 	vindexes.Register("costly", newCostlyIndex)
 }
 
+const samePlanMarker = "Gen4 plan same as above\n"
+
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "schema_test.json"),
@@ -418,9 +420,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 			if tcase.output2ndPlanner == "" {
 				empty = true
 			}
-			if tcase.output2ndPlanner == "{\n}\n" {
-				tcase.output2ndPlanner = tcase.output
-			}
 
 			vschema.version = V4
 			out, err := getPlanOutput(tcase, vschema)
@@ -444,7 +443,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 					}
 
 					if tcase.output == out {
-						expected.WriteString("{\n}\n")
+						expected.WriteString(samePlanMarker)
 					} else {
 						expected.WriteString(out)
 					}
@@ -555,7 +554,9 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			if err != nil && err != io.EOF {
 				panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
 			}
-			if len(binput) > 0 && (binput[0] == '"' || binput[0] == '{') {
+			if len(binput) > 0 && string(binput) == samePlanMarker {
+				output2Planner = output
+			} else if len(binput) > 0 && (binput[0] == '"' || binput[0] == '{') {
 				output2Planner = append(output2Planner, binput...)
 				for {
 					l, err := r.ReadBytes('\n')
@@ -572,9 +573,6 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 						output2Planner = output2Planner[1 : len(output2Planner)-2]
 						break
 					}
-				}
-				if string(output2Planner) == "{\n}" {
-					output2Planner = output
 				}
 			}
 

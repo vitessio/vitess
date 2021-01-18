@@ -31,10 +31,26 @@ service Vtctl {
 
 // Service Vtctld exposes gRPC endpoints for each vt command.
 service Vtctld {
-  // FindAllShardsInKeyspace returns a map of shard names to shard references for a given keyspace.
+  // FindAllShardsInKeyspace returns a map of shard names to shard references
+  // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
+  // GetCellInfoNames returns all the cells for which we have a CellInfo object,
+  // meaning we have a topology service registered.
+  rpc GetCellInfoNames(vtctldata.GetCellInfoNamesRequest) returns (vtctldata.GetCellInfoNamesResponse) {};
+  // GetCellInfo returns the information for a cell.
+  rpc GetCellInfo(vtctldata.GetCellInfoRequest) returns (vtctldata.GetCellInfoResponse) {};
+  // GetCellsAliases returns a mapping of cell alias to cells identified by that
+  // alias.
+  rpc GetCellsAliases(vtctldata.GetCellsAliasesRequest) returns (vtctldata.GetCellsAliasesResponse) {};
   // GetKeyspace reads the given keyspace from the topo and returns it.
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // InitShardPrimary sets the initial primary for a shard. Will make all other
+  // tablets in the shard replicas of the provided primary.
+  //
+  // WARNING: This could cause data loss on an already replicating shard.
+  // PlannedReparentShard or EmergencyReparentShard should be used in those
+  // cases instead.
+  rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
 }

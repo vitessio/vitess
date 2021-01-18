@@ -72,6 +72,20 @@ func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
 	}, nil
 }
 
+// NewWithDialOpts returns a vtctldclient.VtctldClient configured with the given
+// DialOptions. It is exported for use in vtadmin.
+func NewWithDialOpts(addr string, failFast grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+	conn, err := grpcclient.Dial(addr, failFast, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gRPCVtctldClient{
+		cc: conn,
+		c:  vtctlservicepb.NewVtctldClient(conn),
+	}, nil
+}
+
 func (client *gRPCVtctldClient) Close() error {
 	err := client.cc.Close()
 	if err == nil {

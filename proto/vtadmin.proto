@@ -22,6 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 package vtadmin;
 
 import "topodata.proto";
+import "vtctldata.proto";
 
 /* Services */
 
@@ -30,6 +31,8 @@ import "topodata.proto";
 service VTAdmin {
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
+    // GetKeyspaces returns all keyspaces across the specified clusters.
+    rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
@@ -45,6 +48,13 @@ message Cluster {
     string name = 2;
 }
 
+// Keyspace represents information about a keyspace in a particular Vitess
+// cluster.
+message Keyspace {
+    Cluster cluster = 1;
+    vtctldata.Keyspace keyspace = 2;
+}
+
 // Tablet groups the topo information of a tablet together with the Vitess
 // cluster it belongs to.
 message Tablet {
@@ -58,6 +68,12 @@ message Tablet {
     }
 
     ServingState state = 3;
+}
+
+// Vtctld represents information about a single Vtctld host.
+message Vtctld {
+    string hostname = 1;
+    Cluster cluster = 2;
 }
 
 // VTGate represents information about a single VTGate host.
@@ -84,6 +100,14 @@ message GetGatesRequest {
 
 message GetGatesResponse {
     repeated VTGate gates = 1;
+}
+
+message GetKeyspacesRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetKeyspacesResponse {
+    repeated Keyspace keyspaces = 1;
 }
 
 message GetTabletRequest {

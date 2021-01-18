@@ -46,6 +46,7 @@ func TestMergeConfig(t *testing.T) {
 				DiscoveryImpl:        "consul",
 				DiscoveryFlagsByImpl: FlagsByImpl{},
 				VtSQLFlags:           map[string]string{},
+				VtctldFlags:          map[string]string{},
 			},
 		},
 		{
@@ -81,17 +82,22 @@ func TestMergeConfig(t *testing.T) {
 						"foo": "baz",
 					},
 				},
-				VtSQLFlags: map[string]string{},
+				VtSQLFlags:  map[string]string{},
+				VtctldFlags: map[string]string{},
 			},
 		},
 		{
-			name: "merging vtsql flags",
+			name: "merging vtsql/vtctld flags",
 			base: Config{
 				ID:   "c1",
 				Name: "cluster1",
 				VtSQLFlags: map[string]string{
 					"one": "one",
 					"two": "2",
+				},
+				VtctldFlags: map[string]string{
+					"a": "A",
+					"b": "B",
 				},
 			},
 			override: Config{
@@ -100,6 +106,10 @@ func TestMergeConfig(t *testing.T) {
 				VtSQLFlags: map[string]string{
 					"two":   "two",
 					"three": "three",
+				},
+				VtctldFlags: map[string]string{
+					"a": "alpha",
+					"c": "C",
 				},
 			},
 			expected: Config{
@@ -110,6 +120,11 @@ func TestMergeConfig(t *testing.T) {
 					"one":   "one",
 					"two":   "two",
 					"three": "three",
+				},
+				VtctldFlags: map[string]string{
+					"a": "alpha",
+					"b": "B",
+					"c": "C",
 				},
 			},
 		},

@@ -66,10 +66,38 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
+	plan, err = planLimit(sel.Limit, plan)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := plan.WireupV4(semTable); err != nil {
 		return nil, err
 	}
 	return plan.Primitive(), nil
+}
+
+func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
+	if limit == nil {
+		return plan, nil
+	}
+	rb, ok := plan.(*route)
+	if ok && rb.isSingleShard() {
+		rb.SetLimit(limit)
+		return plan, nil
+	}
+
+	lPlan, err := createLimit(plan, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// visit does not modify the plan.
+	_, err = visit(lPlan, setUpperLimit)
+	if err != nil {
+		return nil, err
+	}
+	return lPlan, nil
 }
 
 func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) error {
@@ -79,25 +107,22 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 		ast.Distinct = sel.Distinct
 		ast.GroupBy = sel.GroupBy
 		ast.OrderBy = sel.OrderBy
-		ast.Limit = sel.Limit
 		ast.SelectExprs = sel.SelectExprs
 		ast.Comments = sel.Comments
 	} else {
-		var projections []*sqlparser.AliasedExpr
 
 		// TODO real horizon planning to be done
 		for _, expr := range sel.SelectExprs {
 			switch e := expr.(type) {
 			case *sqlparser.AliasedExpr:
-				projections = append(projections, e)
+				if _, err := pushProjection(e, plan, semTable); err != nil {
+					return err
+				}
 			default:
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", e)
 			}
 		}
 
-		if _, err := pushProjection(projections, plan, semTable); err != nil {
-			return err
-		}
 	}
 	return nil
 }
