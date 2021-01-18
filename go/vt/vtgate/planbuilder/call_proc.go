@@ -26,13 +26,7 @@ import (
 
 func buildCallProcPlan(stmt *sqlparser.CallProc, vschema ContextVSchema) (engine.Primitive, error) {
 	var ks string
-	if stmt.Name.Qualifier.IsEmpty() {
-		keyspace, err := vschema.DefaultKeyspace()
-		if err != nil {
-			return nil, err
-		}
-		ks = keyspace.Name
-	} else {
+	if !stmt.Name.Qualifier.IsEmpty() {
 		ks = stmt.Name.Qualifier.String()
 	}
 

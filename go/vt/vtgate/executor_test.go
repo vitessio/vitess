@@ -2319,8 +2319,7 @@ func TestExecutorCallProc(t *testing.T) {
 
 			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), "CALL proc()", nil)
 			if tc.hasNoKeyspaceErr {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "no keyspace in database name specified")
+				assert.EqualError(t, err, "keyspace not specified")
 			} else if tc.unshardedOnlyErr {
 				require.EqualError(t, err, "CALL is only allowed for targeted queries or on unsharded keyspaces")
 			} else {
