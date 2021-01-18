@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testing_mode
+package testingmode
 
 import (
 	"context"
@@ -450,18 +450,20 @@ func TestMain(m *testing.M) {
 		}
 		fmt.Println("starting the test case")
 
+		defer func() {
+			if mysqld != nil {
+				fmt.Println("killing mysqld after tests")
+				mysqld.Process.Signal(syscall.SIGKILL)
+			}
+		}()
+
 		return m.Run()
 	}()
-
-	if mysqld != nil {
-		fmt.Println("killing mysqld after tests")
-		mysqld.Process.Signal(syscall.SIGKILL)
-	}
 
 	os.Exit(exitCode)
 }
 
-func TestTesting(t *testing.T) {
+func TestTestingCode(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -469,15 +471,12 @@ func TestTesting(t *testing.T) {
 	defer conn.Close()
 	err = conn.WriteComInitDB(KeyspaceName)
 	require.NoError(t, err)
+	data, err := conn.ReadPacket()
+	require.Equal(t, mysql.OKPacket, int(data[0]))
+	require.NoError(t, err)
 
 	assertMatches(t, conn, "select 1+2", "[[INT64(3)]]")
-
-	res, err := conn.ExecuteFetch(`show tables`, 1000, true)
-	require.NotNil(t, res)
-	require.NoError(t, err)
-	res, err = conn.ExecuteFetch(`show tables`, 1000, true)
-	require.NotNil(t, res)
-	require.NoError(t, err)
+	assertMatches(t, conn, "show tables", `[[VARCHAR("aggr_test")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("vstream_test")]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

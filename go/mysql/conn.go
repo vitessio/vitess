@@ -207,16 +207,24 @@ func (f fakeAddress) String() string {
 }
 
 func (c *connByte) Read(b []byte) (n int, err error) {
+	for len(c.data) > 0 && len(c.data[0]) == 0 {
+		c.data = c.data[1:]
+	}
 	if len(c.data) == 0 {
 		return -1, nil
 	}
-	copiedLen := copy(b, c.data[0])
-	c.data = c.data[1:]
+	length := int(uint32(c.data[0][0]) | uint32(c.data[0][1])<<8 | uint32(c.data[0][2])<<16)
+
+	copiedLen := copy(b, c.data[0][packetHeaderSize:length+packetHeaderSize])
+	c.data[0] = c.data[0][length+packetHeaderSize:]
+
 	return copiedLen, nil
 }
 
 func (c *connByte) Write(b []byte) (n int, err error) {
-	c.data = append(c.data, b)
+	newByte := make([]byte, len(b))
+	copy(newByte, b)
+	c.data = append(c.data, newByte)
 	return len(b), nil
 }
 
@@ -992,7 +1000,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			respFromVTgate := make([]byte, MaxPacketSize)
 			lenRead, _ := c.conn2.Read(respFromVTgate)
 			for lenRead != -1 {
-				log.Infof("sequence value: %d, read length: %d", c.testMysqlConn.sequence, lenRead-packetHeaderSize)
+				log.Infof("sequence value: %d, read length: %d", c.testMysqlConn.sequence, lenRead)
 				resp, err := c.testMysqlConn.readEphemeralPacket()
 				if err != nil {
 					log.Errorf("Error reading packet from test mysql connection: %v", err)
@@ -1002,10 +1010,11 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 				log.Infof("read length from mysql: %d", len(resp))
 
 				// check the value from c.conn and resp
-				if string(resp) != string(respFromVTgate[packetHeaderSize:lenRead]) {
-					log.Errorf("Outputs from both sources are different, MySQL output :%s, VTgate output :%s", string(resp), string(respFromVTgate[packetHeaderSize:lenRead]))
+				if string(resp) != string(respFromVTgate[0:lenRead]) {
+					log.Errorf("Outputs from both sources are different, MySQL output :%X, VTgate output :%X", string(resp), string(respFromVTgate[0:lenRead]))
 				}
 
+				log.Infof("response sent back to the user: %X", resp)
 				data, pos := c.startEphemeralPacketWithHeader(len(resp))
 				copy(data[pos:], resp)
 				if err := c.writeEphemeralPacket(); err != nil {
