@@ -31,6 +31,7 @@ type Result struct {
 	InsertID            uint64           `json:"insert_id"`
 	Rows                [][]Value        `json:"rows"`
 	SessionStateChanges string           `json:"session_state_changes"`
+	More                bool             `json:"more"`
 }
 
 // ResultStream is an interface for receiving Result. It is used for

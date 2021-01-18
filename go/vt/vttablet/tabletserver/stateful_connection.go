@@ -113,6 +113,14 @@ func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, m
 	return nil
 }
 
+// FetchNext returns the next result set.
+func (sc *StatefulConnection) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	if sc.IsClosed() {
+		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "connection is closed")
+	}
+	return sc.dbConn.FetchNext(ctx, maxrows, wantfields)
+}
+
 // Unlock returns the connection to the pool. The connection remains active.
 // This method is idempotent and can be called multiple times
 func (sc *StatefulConnection) Unlock() {
