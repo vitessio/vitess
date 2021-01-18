@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/vt/sysvars"
 
 	"context"
@@ -315,6 +317,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				}
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.VitessVersion.Name:
+			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		}
 	}
 

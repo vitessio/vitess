@@ -15,8 +15,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single table unsharded
 "select col from unsharded"
@@ -35,8 +34,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Select from sequence
 "select next 2 values from seq"
@@ -55,8 +53,7 @@
     "Table": "seq"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Select from reference
 "select * from ref"
@@ -75,8 +72,7 @@
     "Table": "ref"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # Single information_schema query
 "select col from information_schema.foo"
@@ -164,8 +160,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # routing rules where table name matches, and there's no alias.
 "select * from second_user.user"
@@ -184,8 +179,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
@@ -204,8 +198,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # routing rules where table name does not match, and there's no alias.
 "select * from route1"
@@ -264,14 +257,12 @@
 # routing rules bad table
 "select * from bad_table"
 "keyspace noks not found in vschema"
-{
-}
+Gen4 plan same as above
 
 # routing rules disabled table
 "select * from disabled"
 "table disabled has been disabled"
-{
-}
+Gen4 plan same as above
 
 # ',' join
 "select music.col from user, music"
@@ -309,8 +300,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # ',' join unsharded
 "select u1.a, u2.a from unsharded u1, unsharded u2"
@@ -329,8 +319,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # ',' join information_schema
 "select a.id,b.id from information_schema.a as a, information_schema.b as b"
@@ -1120,8 +1109,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # sharded join, non-col reference LHS
 "select user.col from user join user_extra on 5 = user.id"
@@ -1163,8 +1151,7 @@
     ]
   }
 }
-{
-}
+Gen4 plan same as above
 
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
@@ -2350,8 +2337,7 @@
     "Table": "user"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # last_insert_id for unsharded route
 "select last_insert_id() from main.unsharded"
@@ -2370,8 +2356,7 @@
     "Table": "unsharded"
   }
 }
-{
-}
+Gen4 plan same as above
 
 # join with USING construct
 "select user.id from user join user_extra using(id)"
@@ -2455,8 +2440,7 @@
 # first expression fails for ',' join (code coverage: ensure error is returned)
 "select user.foo.col from user.foo, user"
 "table foo not found"
-{
-}
+Gen4 plan same as above
 
 # table names should be case-sensitive
 "select unsharded.id from unsharded where Unsharded.val = 1"
@@ -2465,8 +2449,7 @@
 # implicit table reference for sharded keyspace
 "select user.foo.col from user.foo"
 "table foo not found"
-{
-}
+Gen4 plan same as above
 
 # duplicate symbols
 "select user.id from user join user"
@@ -2479,8 +2462,7 @@
 # non-existent table
 "select c from t"
 "table t not found"
-{
-}
+Gen4 plan same as above
 
 # non-existent table on left of join
 "select c from t join user"

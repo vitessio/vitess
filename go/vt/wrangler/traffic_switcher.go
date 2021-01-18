@@ -570,7 +570,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 	return ts.id, sw.logs(), nil
 }
 
-// DropTargets cleans up target tables, shards and blacklisted tables if a MoveTables/Reshard is aborted
+// DropTargets cleans up target tables, shards and blacklisted tables if a MoveTables/Reshard is cancelled
 func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {

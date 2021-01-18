@@ -22,7 +22,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start generate_ci_workflows
 
 all: build
 
@@ -179,10 +179,10 @@ ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
 
-$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
+$(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
-		goimports -local vitess.io/vitess -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
+		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
+		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
@@ -325,3 +325,9 @@ vtadmin_web_install:
 # While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
 vtadmin_web_proto_types: vtadmin_web_install
 	./web/vtadmin/bin/generate-proto-types.sh
+
+# Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
+# Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json
+# is changed by adding a new test to an existing shard. Any new or modified files need to be committed into git
+generate_ci_workflows:
+	cd test && go run ci_workflow_gen.go && cd ..

@@ -37,6 +37,33 @@ func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in 
 	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
 }
 
+// GetCellInfo is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetCellInfo(ctx context.Context, in *vtctldatapb.GetCellInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetCellInfo(ctx, in, opts...)
+}
+
+// GetCellInfoNames is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetCellInfoNames(ctx context.Context, in *vtctldatapb.GetCellInfoNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoNamesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetCellInfoNames(ctx, in, opts...)
+}
+
+// GetCellsAliases is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetCellsAliases(ctx context.Context, in *vtctldatapb.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellsAliasesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetCellsAliases(ctx, in, opts...)
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
 	if client.c == nil {
@@ -53,4 +80,13 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	}
 
 	return client.c.GetKeyspaces(ctx, in, opts...)
+}
+
+// InitShardPrimary is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctldatapb.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldatapb.InitShardPrimaryResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.InitShardPrimary(ctx, in, opts...)
 }
