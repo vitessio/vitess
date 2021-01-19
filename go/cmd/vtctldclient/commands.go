@@ -256,7 +256,7 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 				mtst = logutil.ProtoToTime(t.MasterTermStartTime).Format(time.RFC3339)
 			}
 
-			return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(t.Alias), keyspace, shard, topoproto.TabletTypeLString(t.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(t.Tags), mtst)
+			return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(t.Alias), keyspace, shard, topoproto.TabletTypeLString(t.Type), ti.Addr(), ti.MysqlAddr(), cli.MarshalMapAWK(t.Tags), mtst)
 		}
 
 		for _, t := range resp.Tablets {
