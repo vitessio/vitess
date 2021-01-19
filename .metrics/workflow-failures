@@ -423,3 +423,13 @@
 2021-01-19T06:13:38Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/495295134
 2021-01-19T06:13:38Z,endtoend,https://github.com/vitessio/vitess/actions/runs/495295124
 2021-01-19T06:13:38Z,unit_race,https://github.com/vitessio/vitess/actions/runs/495295114
+2021-01-19T08:53:06Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/495566987
+2021-01-19T08:53:06Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/495566978
+2021-01-19T08:53:06Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/495566985
+2021-01-19T08:53:06Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/495566990
+2021-01-19T08:53:06Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/495566973
+2021-01-19T08:53:06Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/495566997
+2021-01-19T08:53:06Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/495566970
+2021-01-19T08:53:06Z,endtoend,https://github.com/vitessio/vitess/actions/runs/495566964
+2021-01-19T08:53:06Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/495566998
+2021-01-19T08:53:06Z,unit_race,https://github.com/vitessio/vitess/actions/runs/495567003
