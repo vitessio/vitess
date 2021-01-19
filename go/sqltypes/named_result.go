@@ -78,6 +78,22 @@ func (r RowNamedValues) AsUint64(fieldName string, def uint64) uint64 {
 	return def
 }
 
+// AsFloat64 returns the named field as float64, or default value if nonexistent/error
+func (r RowNamedValues) AsFloat64(fieldName string, def float64) float64 {
+	if v, err := r.ToFloat64(fieldName); err == nil {
+		return v
+	}
+	return def
+}
+
+// ToFloat64 returns the named field as float64
+func (r RowNamedValues) ToFloat64(fieldName string) (float64, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToFloat64()
+	}
+	return 0, ErrNoSuchField
+}
+
 // ToBool returns the named field as bool
 func (r RowNamedValues) ToBool(fieldName string) (bool, error) {
 	if v, ok := r[fieldName]; ok {
