@@ -517,11 +517,17 @@
 2021-01-19T12:31:57Z,unit_race,https://github.com/vitessio/vitess/actions/runs/495981770
 2021-01-19T14:23:11Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/496187089
 2021-01-19T16:07:31Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/496423148
+2021-01-19T16:07:31Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/496423124
 2021-01-19T16:07:31Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/496423134
+2021-01-19T16:07:31Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/496423166
 2021-01-19T16:07:31Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/496423147
+2021-01-19T16:07:31Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/496423151
 2021-01-19T16:07:31Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/496423142
 2021-01-19T16:07:31Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/496423146
+2021-01-19T16:07:31Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/496423129
 2021-01-19T16:07:31Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/496423158
+2021-01-19T16:07:31Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/496423141
+2021-01-19T16:07:31Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/496423133
 2021-01-19T16:07:31Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/496423139
 2021-01-19T16:07:31Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/496423152
 2021-01-19T16:07:31Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/496423125
@@ -533,5 +539,9 @@
 2021-01-19T16:07:31Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/496423162
 2021-01-19T16:07:31Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/496423130
 2021-01-19T16:07:31Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/496423155
+2021-01-19T16:07:31Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/496423149
+2021-01-19T16:07:31Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/496423143
+2021-01-19T16:07:31Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/496423163
 2021-01-19T16:07:31Z,endtoend,https://github.com/vitessio/vitess/actions/runs/496423153
 2021-01-19T16:07:31Z,unit_race,https://github.com/vitessio/vitess/actions/runs/496423160
+2021-01-19T16:41:34Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/496496653
