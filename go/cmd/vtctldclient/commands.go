@@ -24,6 +24,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -94,7 +95,7 @@ func commandFindAllShardsInKeyspace(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := MarshalJSON(resp)
+	data, err := cli.MarshalJSON(resp)
 	if err != nil {
 		return err
 	}
@@ -122,7 +123,7 @@ func commandGetCellInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := MarshalJSON(resp.CellInfo)
+	data, err := cli.MarshalJSON(resp.CellInfo)
 	if err != nil {
 		return err
 	}
@@ -138,7 +139,7 @@ func commandGetCellsAliases(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := MarshalJSON(resp.Aliases)
+	data, err := cli.MarshalJSON(resp.Aliases)
 	if err != nil {
 		return err
 	}
@@ -169,7 +170,7 @@ func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := MarshalJSON(resp.Keyspaces)
+	data, err := cli.MarshalJSON(resp.Keyspaces)
 	if err != nil {
 		return err
 	}
@@ -191,7 +192,7 @@ func commandGetTablet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	data, err := MarshalJSON(resp.Tablet)
+	data, err := cli.MarshalJSON(resp.Tablet)
 	if err != nil {
 		return err
 	}
@@ -262,7 +263,7 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 			fmt.Println(lineFn(t))
 		}
 	case "json":
-		data, err := MarshalJSON(resp.Tablets)
+		data, err := cli.MarshalJSON(resp.Tablets)
 		if err != nil {
 			return err
 		}
