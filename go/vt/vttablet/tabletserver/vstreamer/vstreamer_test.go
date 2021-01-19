@@ -1598,6 +1598,8 @@ func TestTypes(t *testing.T) {
 		input: []string{
 			"insert into vitess_decimal values(1, 1.23, 1.23)",
 			"insert into vitess_decimal values(2, -1.23, -1.23)",
+			"insert into vitess_decimal values(3, 0000000001.23, 0000000001.23)",
+			"insert into vitess_decimal values(4, -0000000001.23, -0000000001.23)",
 		},
 		output: [][]string{{
 			`begin`,
@@ -1608,6 +1610,16 @@ func TestTypes(t *testing.T) {
 		}, {
 			`begin`,
 			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:7 lengths:7 values:"2-1.2300-1.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:6 lengths:6 values:"31.23001.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:7 lengths:7 values:"4-1.2300-1.2300" > > > `,
 			`gtid`,
 			`commit`,
 		}},
