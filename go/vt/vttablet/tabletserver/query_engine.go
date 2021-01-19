@@ -216,18 +216,11 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
 
 	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", func() int64 {
-		return qe.plans.Stats().Length
+		return int64(qe.plans.Len())
 	})
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", func() int64 {
-		return qe.plans.Stats().Size
-	})
-	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.Capacity)
-	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", func() int64 {
-		return qe.plans.Stats().Evictions
-	})
-	env.Exporter().Publish("QueryCacheOldest", stats.StringFunc(func() string {
-		return fmt.Sprintf("%v", qe.plans.Stats().Oldest)
-	}))
+	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query cache size", qe.plans.UsedCapacity)
+	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query cache capacity", qe.plans.MaxCapacity)
+	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query cache evictions", qe.plans.Evictions)
 	qe.queryCounts = env.Exporter().NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
 	qe.queryRowCounts = env.Exporter().NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
@@ -419,7 +412,7 @@ func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
 
 // QueryPlanCacheCap returns the capacity of the query cache.
 func (qe *QueryEngine) QueryPlanCacheCap() int {
-	return int(qe.plans.Capacity())
+	return int(qe.plans.MaxCapacity())
 }
 
 // AddStats adds the given stats for the planName.tableName

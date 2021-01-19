@@ -84,7 +84,7 @@ func (lru *LRUCache) Get(key string) (v interface{}, ok bool) {
 }
 
 // Set sets a value in the cache.
-func (lru *LRUCache) Set(key string, value interface{}, valueSize int64) {
+func (lru *LRUCache) Set(key string, value interface{}, valueSize int64) bool {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -93,6 +93,8 @@ func (lru *LRUCache) Set(key string, value interface{}, valueSize int64) {
 	} else {
 		lru.addNew(key, value, valueSize)
 	}
+	// the LRU cache cannot fail to insert items; it always returns true
+	return true
 }
 
 // Delete removes an entry from the cache, and returns if the entry existed.
@@ -126,6 +128,13 @@ func (lru *LRUCache) Clear() {
 	lru.size = 0
 }
 
+// Len returns the size of the cache (in entries)
+func (lru *LRUCache) Len() int {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.list.Len()
+}
+
 // SetCapacity will set the capacity of the cache. If the capacity is
 // smaller, and the current cache size exceed that capacity, the cache
 // will be shrank.
@@ -137,32 +146,26 @@ func (lru *LRUCache) SetCapacity(capacity int64) {
 	lru.checkCapacity()
 }
 
-// Stats returns a few stats on the cache.
-func (lru *LRUCache) Stats() *Stats {
-	if lru == nil {
-		return nil
-	}
+// Wait is a no-op in the LRU cache
+func (lru *LRUCache) Wait() {}
 
-	lru.mu.Lock()
-	defer lru.mu.Unlock()
-
-	stats := &Stats{
-		Length:    int64(lru.list.Len()),
-		Size:      lru.size,
-		Capacity:  lru.capacity,
-		Evictions: lru.evictions,
-	}
-	if lastElem := lru.list.Back(); lastElem != nil {
-		stats.Oldest = lastElem.Value.(*entry).timeAccessed
-	}
-	return stats
+// UsedCapacity returns the size of the cache (in bytes)
+func (lru *LRUCache) UsedCapacity() int64 {
+	return lru.size
 }
 
-// Capacity returns the cache maximum capacity.
-func (lru *LRUCache) Capacity() int64 {
+// MaxCapacity returns the cache maximum capacity.
+func (lru *LRUCache) MaxCapacity() int64 {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	return lru.capacity
+}
+
+// Evictions returns the number of evictions
+func (lru *LRUCache) Evictions() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.evictions
 }
 
 // ForEach yields all the values for the cache, ordered from most recently

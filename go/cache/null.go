@@ -25,7 +25,9 @@ func (n *nullCache) Get(_ string) (interface{}, bool) {
 }
 
 // Set is a no-op in the nullCache
-func (n *nullCache) Set(_ string, _ interface{}, _ int64) {}
+func (n *nullCache) Set(_ string, _ interface{}, _ int64) bool {
+	return false
+}
 
 // ForEach iterates the nullCache, which is always empty
 func (n *nullCache) ForEach(_ func(interface{}) bool) {}
@@ -36,15 +38,26 @@ func (n *nullCache) Delete(_ string) {}
 // Clear is a no-op in the nullCache
 func (n *nullCache) Clear() {}
 
-// Stats returns a nil stats object for the nullCache
-func (n *nullCache) Stats() *Stats {
-	return &Stats{}
+// Wait is a no-op in the nullcache
+func (n *nullCache) Wait() {}
+
+func (n *nullCache) Len() int {
+	return 0
 }
 
 // Capacity returns the capacity of the nullCache, which is always 0
-func (n *nullCache) Capacity() int64 {
+func (n *nullCache) UsedCapacity() int64 {
+	return 0
+}
+
+// Capacity returns the capacity of the nullCache, which is always 0
+func (n *nullCache) MaxCapacity() int64 {
 	return 0
 }
 
 // SetCapacity sets the capacity of the null cache, which is a no-op
 func (n *nullCache) SetCapacity(_ int64) {}
+
+func (n *nullCache) Evictions() int64 {
+	return 0
+}
