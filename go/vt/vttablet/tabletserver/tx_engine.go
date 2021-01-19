@@ -583,5 +583,6 @@ func (te *TxEngine) FetchNext(ctx context.Context, connID int64, maxrows int) (*
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Unlock()
 	return conn.FetchNext(ctx, maxrows, true)
 }
