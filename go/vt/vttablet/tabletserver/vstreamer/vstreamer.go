@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -57,6 +59,17 @@ var HeartbeatTime = 900 * time.Millisecond
 // counter, which will let the tests poll for it to change.
 // TODO(sougou): find a better way for this.
 var vschemaUpdateCount sync2.AtomicInt64
+
+const (
+	throttleCheckDuration = 250 * time.Millisecond
+	throttlerAppName      = "vstreamer"
+)
+
+var (
+	throttleFlags = &throttle.CheckFlags{
+		LowPriority: true,
+	}
+)
 
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
@@ -82,6 +95,9 @@ type vstreamer struct {
 
 	phase string
 	vse   *Engine
+
+	lagThrottler                *throttle.Throttler
+	lastSuccessfulThrottleCheck time.Time
 }
 
 // CopyState contains the last PK for tables to be copied
@@ -164,6 +180,25 @@ func (vs *vstreamer) Stream() error {
 	return vs.replicate(ctx)
 }
 
+func (vs *vstreamer) throttleStatusOK(ctx context.Context) bool {
+	if vs.lagThrottler == nil {
+		// no throttler
+		return true
+	}
+	if time.Since(vs.lastSuccessfulThrottleCheck) <= throttleCheckDuration {
+		// if last check was OK just very recently there is no need to check again
+		return true
+	}
+	// It's time to run a throttler check
+	checkResult := vs.lagThrottler.CheckSelf(ctx, throttlerAppName, "", throttleFlags)
+	if checkResult.StatusCode != http.StatusOK {
+		// sorry, we got throttled.
+		return false
+	}
+	vs.lastSuccessfulThrottleCheck = time.Now()
+	return true
+}
+
 // Stream streams binlog events.
 func (vs *vstreamer) replicate(ctx context.Context) error {
 	// Ensure se is Open. If vttablet came up in a non_serving role,
@@ -177,6 +212,7 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 		return wrapError(err, vs.pos, vs.vse)
 	}
 	defer conn.Close()
+
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
 		return wrapError(err, vs.pos, vs.vse)
@@ -274,6 +310,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		select {
 		case <-timer.C:
 		default:
+		}
+
+		// We introduce throttling based on the tablet's "self" check, which means if the tablet itself is lagging,
+		// we hold off reads so as to ease the load and let it regain its health
+		for !vs.throttleStatusOK(ctx) {
+			// Sorry, got throttled. Sleep some time, then check again
+			time.Sleep(throttleCheckDuration)
 		}
 
 		select {
