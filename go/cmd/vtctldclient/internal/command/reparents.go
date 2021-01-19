@@ -37,7 +37,7 @@ var (
 	}
 )
 
-var initShardPrimaryArgs = struct {
+var initShardPrimaryOptions = struct {
 	WaitReplicasTimeout time.Duration
 	Force               bool
 }{}
@@ -57,8 +57,8 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 		Keyspace:                keyspace,
 		Shard:                   shard,
 		PrimaryElectTabletAlias: tabletAlias,
-		WaitReplicasTimeout:     ptypes.DurationProto(initShardPrimaryArgs.WaitReplicasTimeout),
-		Force:                   initShardPrimaryArgs.Force,
+		WaitReplicasTimeout:     ptypes.DurationProto(initShardPrimaryOptions.WaitReplicasTimeout),
+		Force:                   initShardPrimaryOptions.Force,
 	})
 
 	for _, event := range resp.Events {
@@ -69,7 +69,7 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	InitShardPrimary.Flags().DurationVar(&initShardPrimaryArgs.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
-	InitShardPrimary.Flags().BoolVar(&initShardPrimaryArgs.Force, "force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
+	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
+	InitShardPrimary.Flags().BoolVar(&initShardPrimaryOptions.Force, "force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	Root.AddCommand(InitShardPrimary)
 }
