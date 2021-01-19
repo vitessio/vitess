@@ -329,7 +329,7 @@ func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *vcursorImpl) SysVarSetEnabled() bool {
-	return vc.GetSessionEnableSystemSettings() && *sysVarSetEnabled
+	return vc.GetSessionEnableSystemSettings()
 }
 
 // KeyspaceExists provides whether the keyspace exists or not.
