@@ -69,7 +69,7 @@ func commandGetTablet(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-var getTabletsArgs = struct {
+var getTabletsOptions = struct {
 	Cells    []string
 	Keyspace string
 	Shard    string
@@ -78,22 +78,22 @@ var getTabletsArgs = struct {
 }{}
 
 func commandGetTablets(cmd *cobra.Command, args []string) error {
-	format := strings.ToLower(getTabletsArgs.Format)
+	format := strings.ToLower(getTabletsOptions.Format)
 
 	switch format {
 	case "awk", "json":
 	default:
-		return fmt.Errorf("invalid output format, got %s", getTabletsArgs.Format)
+		return fmt.Errorf("invalid output format, got %s", getTabletsOptions.Format)
 	}
 
-	if getTabletsArgs.Keyspace == "" && getTabletsArgs.Shard != "" {
-		return fmt.Errorf("--shard (= %s) cannot be passed without also passing --keyspace", getTabletsArgs.Shard)
+	if getTabletsOptions.Keyspace == "" && getTabletsOptions.Shard != "" {
+		return fmt.Errorf("--shard (= %s) cannot be passed without also passing --keyspace", getTabletsOptions.Shard)
 	}
 
 	resp, err := client.GetTablets(commandCtx, &vtctldatapb.GetTabletsRequest{
-		Cells:    getTabletsArgs.Cells,
-		Keyspace: getTabletsArgs.Keyspace,
-		Shard:    getTabletsArgs.Shard,
+		Cells:    getTabletsOptions.Cells,
+		Keyspace: getTabletsOptions.Keyspace,
+		Shard:    getTabletsOptions.Shard,
 	})
 	if err != nil {
 		return err
@@ -144,9 +144,9 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 func init() {
 	Root.AddCommand(GetTablet)
 
-	GetTablets.Flags().StringSliceVarP(&getTabletsArgs.Cells, "cell", "c", nil, "list of cells to filter tablets by")
-	GetTablets.Flags().StringVarP(&getTabletsArgs.Keyspace, "keyspace", "k", "", "keyspace to filter tablets by")
-	GetTablets.Flags().StringVarP(&getTabletsArgs.Shard, "shard", "s", "", "shard to filter tablets by")
-	GetTablets.Flags().StringVar(&getTabletsArgs.Format, "format", "awk", "Output format to use; valid choices are (json, awk)")
+	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "list of cells to filter tablets by")
+	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "keyspace to filter tablets by")
+	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "shard to filter tablets by")
+	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk)")
 	Root.AddCommand(GetTablets)
 }
