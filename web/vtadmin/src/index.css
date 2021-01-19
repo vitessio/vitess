@@ -35,24 +35,6 @@
   --colorError50: #ff6659;
   --colorError200: #9a0007;
 
-  /* Light theme colour palette */
-  --background_light: #fff;
-  --colorPrimary_light: #3d5afe;
-  --colorPrimary50_light: #8187ff;
-  --colorPrimary200_light: #0031ca;
-  --textColorPrimary_light: #17171b;
-  --textColorSecondary_light: #718096;
-  --textColorDisabled_light: #cbd5e0;
-
-  /* Dark theme colour palette */
-  --background_dark: #17171b;
-  --colorPrimary_dark: #8187ff;
-  --colorPrimary50_dark: #b6b7ff;
-  --colorPrimary200_dark: #4a5acb;
-  --textColorPrimary_dark: #fff;
-  --textColorSecondary_dark: #cbd5e0;
-  --textColorDisabled_dark: #2d3748;
-
   /* Fonts */
   --fontFamilyPrimary:
     'NotoSans',
@@ -82,20 +64,34 @@
   --lineHeightHeading: 1.36;
 
   /* Layout variables, set to light theme by default */
-  --backgroundPrimary: var(--background_light);
+  --backgroundPrimary: #fff;
+  --backgroundPrimaryHighlight: rgba(61, 90, 254, 0.1);
+  --backgroundSecondary: var(--grey75);
+  --backgroundSecondaryHighlight: var(--grey200);
+  --colorPrimary: #3d5afe;
+  --colorPrimary50: #8187ff;
+  --colorPrimary200: #0031ca;
+  --colorScaffolding: var(--grey400);
   --tableBorderColor: var(--grey400);
-  --textColorPrimary: var(--textColorPrimary_light);
-  --textColorSecondary: var(--textColorSecondary_light);
-  --textColorDisabled: var(--textColorDisabled_light);
+  --textColorPrimary: #17171b;
+  --textColorSecondary: #718096;
+  --textColorDisabled: #cbd5e0;
 }
 
 /* Dark theme */
 [data-vtadmin-theme="dark"] {
-  --backgroundPrimary: var(--background_dark);
+  --backgroundPrimary: #17171b;
+  --backgroundPrimaryHighlight: rgba(129, 135, 255, 0.2);
+  --backgroundSecondary: var(--grey900);
+  --backgroundSecondaryHighlight: var(--grey800);
+  --colorPrimary: #8187ff;
+  --colorPrimary50: #b6b7ff;
+  --colorPrimary200: #4a5acb;
+  --colorScaffolding: var(--grey600);
   --tableBorderColor: var(--grey800);
-  --textColorPrimary: var(--textColorPrimary_dark);
-  --textColorSecondary: var(--textColorSecondary_dark);
-  --textColorDisabled: var(--textColorDisabled_dark);
+  --textColorPrimary: #fff;
+  --textColorSecondary: #cbd5e0;
+  --textColorDisabled: #2d3748;
 }
 
 html {
