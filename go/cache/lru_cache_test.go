@@ -17,27 +17,24 @@ limitations under the License.
 package cache
 
 import (
-	"encoding/json"
 	"testing"
-	"time"
 )
 
 type CacheValue struct{}
 
 func TestInitialState(t *testing.T) {
 	cache := NewLRUCache(5)
-	stats := cache.Stats()
-	if stats.Length != 0 {
-		t.Errorf("length = %v, want 0", stats.Length)
+	if cache.Len() != 0 {
+		t.Errorf("length = %v, want 0", cache.Len())
 	}
-	if stats.Size != 0 {
-		t.Errorf("size = %v, want 0", stats.Size)
+	if cache.UsedCapacity() != 0 {
+		t.Errorf("size = %v, want 0", cache.UsedCapacity())
 	}
-	if stats.Capacity != 5 {
-		t.Errorf("capacity = %v, want 5", stats.Capacity)
+	if cache.MaxCapacity() != 5 {
+		t.Errorf("capacity = %v, want 5", cache.MaxCapacity())
 	}
-	if stats.Evictions != 0 {
-		t.Errorf("evictions = %v, want 0", stats.Evictions)
+	if cache.Evictions() != 0 {
+		t.Errorf("evictions = %v, want 0", cache.Evictions())
 	}
 }
 
@@ -80,14 +77,14 @@ func TestSetUpdatesSize(t *testing.T) {
 	emptyValue := &CacheValue{}
 	key := "key1"
 	cache.Set(key, emptyValue, 0)
-	if stats := cache.Stats(); stats.Size != 0 {
-		t.Errorf("cache.CachedSize() = %v, expected 0", stats.Size)
+	if size := cache.UsedCapacity(); size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected 0", size)
 	}
 	someValue := &CacheValue{}
 	key = "key2"
 	cache.Set(key, someValue, 20)
-	if stats := cache.Stats(); stats.Size != 20 {
-		t.Errorf("cache.CachedSize() = %v, expected 20", stats.Size)
+	if size := cache.UsedCapacity(); size != 20 {
+		t.Errorf("cache.CachedSize() = %v, expected 20", size)
 	}
 }
 
@@ -111,15 +108,15 @@ func TestSetWithOldKeyUpdatesSize(t *testing.T) {
 	key := "key1"
 	cache.Set(key, emptyValue, 0)
 
-	if stats := cache.Stats(); stats.Size != 0 {
-		t.Errorf("cache.CachedSize() = %v, expected %v", stats.Size, 0)
+	if size := cache.UsedCapacity(); size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected %v", size, 0)
 	}
 
 	someValue := &CacheValue{}
 	cache.Set(key, someValue, 20)
 	expected := int64(20)
-	if stats := cache.Stats(); stats.Size != expected {
-		t.Errorf("cache.CachedSize() = %v, expected %v", stats.Size, expected)
+	if size := cache.UsedCapacity(); size != expected {
+		t.Errorf("cache.CachedSize() = %v, expected %v", size, expected)
 	}
 }
 
@@ -146,8 +143,8 @@ func TestDelete(t *testing.T) {
 		t.Error("Expected item to be in cache.")
 	}
 
-	if stats := cache.Stats(); stats.Size != 0 {
-		t.Errorf("cache.CachedSize() = %v, expected 0", stats.Size)
+	if size := cache.UsedCapacity(); size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected 0", size)
 	}
 
 	if _, ok := cache.Get(key); ok {
@@ -163,8 +160,8 @@ func TestClear(t *testing.T) {
 	cache.Set(key, value, 1)
 	cache.Clear()
 
-	if stats := cache.Stats(); stats.Size != 0 {
-		t.Errorf("cache.CachedSize() = %v, expected 0 after Clear()", stats.Size)
+	if size := cache.UsedCapacity(); size != 0 {
+		t.Errorf("cache.CachedSize() = %v, expected 0 after Clear()", size)
 	}
 }
 
@@ -178,44 +175,20 @@ func TestCapacityIsObeyed(t *testing.T) {
 	cache.Set("key1", value, 1)
 	cache.Set("key2", value, 1)
 	cache.Set("key3", value, 1)
-	if stats := cache.Stats(); stats.Size != size {
-		t.Errorf("cache.CachedSize() = %v, expected %v", stats.Size, size)
+	if usedCap := cache.UsedCapacity(); usedCap != size {
+		t.Errorf("cache.CachedSize() = %v, expected %v", usedCap, size)
 	}
 	// Insert one more; something should be evicted to make room.
 	cache.Set("key4", value, 1)
-	st := cache.Stats()
-	if st.Size != size {
-		t.Errorf("post-evict cache.CachedSize() = %v, expected %v", st.Size, size)
+	if cache.UsedCapacity() != size {
+		t.Errorf("post-evict cache.CachedSize() = %v, expected %v", cache.UsedCapacity(), size)
 	}
-	if st.Evictions != 1 {
-		t.Errorf("post-evict cache.evictions = %v, expected 1", st.Evictions)
+	if cache.Evictions() != 1 {
+		t.Errorf("post-evict cache.evictions = %v, expected 1", cache.Evictions())
 	}
-
-	// Check json stats
-	data := st.JSON()
-	m := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(data), &m); err != nil {
-		t.Errorf("cache.StatsJSON() returned bad json data: %v %v", data, err)
-	}
-	if m["CachedSize"].(float64) != float64(size) {
-		t.Errorf("cache.StatsJSON() returned bad size: %v", m)
-	}
-
 	// Check various other stats
-	if st.Length != size {
-		t.Errorf("cache.StatsJSON() returned bad length: %v", st.Length)
-	}
-	if st.Size != size {
-		t.Errorf("cache.StatsJSON() returned bad size: %v", st.Size)
-	}
-	if c := cache.Capacity(); c != size {
-		t.Errorf("cache.StatsJSON() returned bad length: %v", c)
-	}
-
-	// checks StatsJSON on nil
-	cache = nil
-	if s := cache.Stats().JSON(); s != "{}" {
-		t.Errorf("cache.StatsJSON() on nil object returned %v", s)
+	if cache.Len() != int(size) {
+		t.Errorf("cache.StatsJSON() returned bad length: %v", cache.Len())
 	}
 }
 
@@ -230,9 +203,7 @@ func TestLRUIsEvicted(t *testing.T) {
 
 	// Look up the elements. This will rearrange the LRU ordering.
 	cache.Get("key3")
-	beforeKey2 := time.Now()
 	cache.Get("key2")
-	afterKey2 := time.Now()
 	cache.Get("key1")
 	// lru: [key1, key2, key3]
 
@@ -244,14 +215,7 @@ func TestLRUIsEvicted(t *testing.T) {
 		t.Error("Least recently used element was not evicted.")
 	}
 
-	st := cache.Stats()
-
-	// Check oldest
-	if o := st.Oldest; o.Before(beforeKey2) || o.After(afterKey2) {
-		t.Errorf("cache.Oldest returned an unexpected value: got %v, expected a value between %v and %v", o, beforeKey2, afterKey2)
-	}
-
-	if e, want := st.Evictions, int64(1); e != want {
+	if e, want := cache.Evictions(), int64(1); e != want {
 		t.Errorf("evictions: %d, want: %d", e, want)
 	}
 }

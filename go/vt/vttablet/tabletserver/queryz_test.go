@@ -86,6 +86,9 @@ func TestQueryzHandler(t *testing.T) {
 	qe.plans.Set(hugeInsert, plan4, plan4.CachedSize(true))
 	qe.plans.Set("", (*TabletPlan)(nil), 1)
 
+	// Wait for cache to settle
+	qe.plans.Wait()
+
 	queryzHandler(qe, resp, req)
 	body, _ := ioutil.ReadAll(resp.Body)
 	planPattern1 := []string{

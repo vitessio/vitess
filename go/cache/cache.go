@@ -16,52 +16,29 @@ limitations under the License.
 
 package cache
 
-import (
-	"encoding/json"
-	"time"
-)
-
 // Cache is a generic interface type for a data structure that keeps recently used
 // objects in memory and evicts them when it becomes full.
 type Cache interface {
 	Get(key string) (interface{}, bool)
-	Set(key string, val interface{}, valueSize int64)
+	Set(key string, val interface{}, valueSize int64) bool
 	ForEach(callback func(interface{}) bool)
 
 	Delete(key string)
 	Clear()
+	Wait()
 
-	Stats() *Stats
-	Capacity() int64
+	Len() int
+	Evictions() int64
+	UsedCapacity() int64
+	MaxCapacity() int64
 	SetCapacity(int64)
 }
 
-// Stats are the internal statistics about a live Cache that can be queried at runtime
-type Stats struct {
-	Length    int64     `json:"Length"`
-	Size      int64     `json:"CachedSize"`
-	Capacity  int64     `json:"Capacity"`
-	Evictions int64     `json:"Evictions"`
-	Oldest    time.Time `json:"OldestAccess"`
-}
-
-// JSON returns the serialized statistics in JSON form
-func (s *Stats) JSON() string {
-	if s == nil {
-		return "{}"
-	}
-	buf, err := json.Marshal(s)
-	if err != nil {
-		panic("cache.Stats failed to serialize (should never happen)")
-	}
-	return string(buf)
-}
-
-// NewDefaultCacheImpl returns a new cache instance using the default Cache implementation
-// (right now this is cache.LRUCache)
-func NewDefaultCacheImpl(maxCost, _ int64) Cache {
+// NewDefaultCacheImpl returns the default cache implementation for Vitess, which at the moment
+// is based on Ristretto
+func NewDefaultCacheImpl(maxCost, averageItem int64) Cache {
 	if maxCost == 0 {
 		return &nullCache{}
 	}
-	return NewLRUCache(maxCost)
+	return NewRistrettoCache(maxCost, averageItem)
 }
