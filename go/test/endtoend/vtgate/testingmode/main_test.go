@@ -433,12 +433,15 @@ func TestMain(m *testing.M) {
 		log.Infof("Starting vtgate on port %d", vtgateInstance.Port)
 		log.Infof("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", clusterInstance.VtgateMySQLPort)
 
+		// start a mysql instance
 		startVanillaMySQL()
 
+		// initialize the mysql with the schema sql
 		initializeMysql()
 
 		fmt.Println("initialization of vanilla mysql complete")
 
+		// setup the vtgate with the mysql port as input
 		err = clusterInstance.VtgateProcess.SetupWithTestingMysql(tmpPort)
 		if err != nil {
 			return 1
@@ -450,6 +453,7 @@ func TestMain(m *testing.M) {
 		}
 		fmt.Println("starting the test case")
 
+		// kill the mysqld process
 		defer func() {
 			if mysqld != nil {
 				fmt.Println("killing mysqld after tests")
@@ -469,6 +473,7 @@ func TestTestingCode(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	// required for setup in mysql
 	err = conn.WriteComInitDB(KeyspaceName)
 	require.NoError(t, err)
 	data, err := conn.ReadPacket()

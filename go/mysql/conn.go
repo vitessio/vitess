@@ -194,6 +194,7 @@ type Conn struct {
 	testMysqlConn *Conn
 }
 
+// connByte is a dummy connection that just stores the received packets and sends them back on read
 type connByte struct {
 	data [][]byte
 }
@@ -210,23 +211,31 @@ func (f fakeAddress) String() string {
 }
 
 func (c *connByte) Read(b []byte) (n int, err error) {
+	// while the first slice is empty, remove it
 	for len(c.data) > 0 && len(c.data[0]) == 0 {
 		c.data = c.data[1:]
 	}
+	// return the read length to be -1 as an indication that there is nothing to read
 	if len(c.data) == 0 {
 		return -1, nil
 	}
+
+	// find the length of the packet from the header
 	length := int(uint32(c.data[0][0]) | uint32(c.data[0][1])<<8 | uint32(c.data[0][2])<<16)
 
+	// copy as much data as the length
 	copiedLen := copy(b, c.data[0][packetHeaderSize:length+packetHeaderSize])
+	// remove the read data from the slice
 	c.data[0] = c.data[0][length+packetHeaderSize:]
 
 	return copiedLen, nil
 }
 
 func (c *connByte) Write(b []byte) (n int, err error) {
+	// create a new slice with the same information so that if the input slice is changed, the stored packet does not change
 	newByte := make([]byte, len(b))
 	copy(newByte, b)
+	// append the byte slice to the array of slices
 	c.data = append(c.data, newByte)
 	return len(b), nil
 }
@@ -314,6 +323,7 @@ func newServerConn(conn net.Conn, listener *Listener, testConnParams *ConnParams
 			log.Errorf("Error connecting to mysql for testing purposes: %v", err)
 		} else {
 			c.testMysqlConn = mysqlConn
+			// connByte is a dummy connection that just stores the received packets and sends them back on read
 			c.conn2 = &connByte{}
 		}
 	}
@@ -937,13 +947,17 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	}
 	log.Infof("packet received %s", string(data))
 
+	// If we are in the testing mode
 	if c.testMysqlConn != nil {
+		// send the recieved packet to mysql connection
 		c.testMysqlConn.sequence = 0
 		dest, pos := c.testMysqlConn.startEphemeralPacketWithHeader(len(data))
 		copy(dest[pos:], data)
 		if err := c.testMysqlConn.writeEphemeralPacket(); err != nil {
 			log.Errorf("Error writing packet to test mysql connection: %v", err)
 		}
+
+		// replace the connection with a dummy connection which only stores the received packets
 		c.conn2, c.conn = c.conn, c.conn2
 		c.sequence2, c.sequence = c.sequence, c.sequence2
 	}
@@ -993,32 +1007,45 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	}
 
 	if c.testMysqlConn != nil {
+		// revert the connections back
 		c.conn2, c.conn = c.conn, c.conn2
 		c.sequence2, c.sequence = c.sequence, c.sequence2
 		switch data[0] {
 		case ComQuit:
+			// if Com_Quit packet is received, close the mysql connection
 			c.testMysqlConn.Close()
 			return false
 		case ComStmtClose, ComStmtSendLongData:
+			// No response for these packets
 			return true
 		case ComQuery:
 			c.conn2.(*connByte).data = nil
+			// in case no results were returned from vtgate, then an error occurred there. Assume that it is a single query then
 			if len(results) == 0 {
 				results = []*sqltypes.Result{nil}
 			}
-			for _, resultFromVtGate := range results {
-				result, more, warnings, err := c.testMysqlConn.ReadQueryResult(math.MaxUint32, true)
-				difference := cmp.Diff(resultFromVtGate, result)
 
+			// for each response, read a response from mysql. This is done to handle multi statement queries
+			for _, resultFromVtGate := range results {
+				// read the query result from mysql
+				result, more, warnings, err := c.testMysqlConn.ReadQueryResult(math.MaxUint32, true)
+
+				// compare the results from both the sources
+				difference := cmp.Diff(resultFromVtGate, result)
 				if difference != "" {
+					// if their is a difference, then log it
 					log.Errorf("Outputs from both sources are different, Difference :%s", difference)
 				}
 
+				// return the error in case it is encountered
 				if err != nil {
 					log.Errorf("error in reading query result from test mysql connection: %v", err)
 					c.writeErrorPacketFromError(err)
 					return false
 				}
+
+				// from here on, use the result to send appropriate packets back to the user.
+				// handled in the same way as execQuery
 
 				flag := c.StatusFlags
 				if more {
@@ -1061,8 +1088,10 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			}
 		default:
 			respFromVTgate := make([]byte, MaxPacketSize)
+			// keep reading response from vtgate till there is nothing left
 			lenRead, _ := c.conn2.Read(respFromVTgate)
 			for lenRead != -1 {
+				// read a response from mysql too
 				resp, err := c.testMysqlConn.readEphemeralPacket()
 				if err != nil {
 					log.Errorf("Error reading packet from test mysql connection: %v", err)
@@ -1070,11 +1099,12 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 				}
 				c.testMysqlConn.recycleReadPacket()
 
-				// check the value from c.conn and resp
+				// check if the values c.conn and resp are the same or not.
 				if string(resp) != string(respFromVTgate[0:lenRead]) {
 					log.Errorf("Outputs from both sources are different, MySQL output :%X, VTgate output :%X", string(resp), string(respFromVTgate[0:lenRead]))
 				}
 
+				// send the response to the user
 				data, pos := c.startEphemeralPacketWithHeader(len(resp))
 				copy(data[pos:], resp)
 				if err := c.writeEphemeralPacket(); err != nil {
