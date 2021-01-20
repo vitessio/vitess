@@ -137,7 +137,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qr, nil
 	case p.PlanSelectLock:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanCallProc:
+	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execOther()
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execOther()
@@ -145,6 +145,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execAutocommit(qre.txConnExec)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
+	case p.PlanCallProc:
+		return qre.execCallProc()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -740,6 +742,30 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
+}
+
+func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
+	conn, err := qre.getConn()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	qr, err := qre.execDBConn(conn, qre.query, true)
+	if err != nil {
+		return nil, err
+	}
+	moreResultSet := false
+	for qr.More {
+		moreResultSet = true
+		qr, err = conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if moreResultSet {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	}
+	return qr, nil
 }
 
 // resolveNumber extracts a number from a bind variable or sql value.
