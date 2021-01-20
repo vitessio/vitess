@@ -68,7 +68,7 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	vtgateSession.TargetString = opts.Target
 
 	streamSize := 10
-	queryPlanCacheSize := int64(10)
+	queryPlanCacheSize := int64(64 * 1024 * 1024)
 	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, streamSize, queryPlanCacheSize)
 
 	return nil
