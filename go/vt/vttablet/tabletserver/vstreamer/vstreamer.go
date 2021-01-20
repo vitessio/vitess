@@ -269,6 +269,23 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// Main loop: calls bufferAndTransmit as events arrive.
 	timer := time.NewTimer(HeartbeatTime)
 	defer timer.Stop()
+
+	// throttledEvents can be read just like you would read from events
+	// throttledEvents pulls data from events, but throttles pulling data,
+	// which in turn blocks the BinlogConnection from pushing events to the channel
+	throttledEvents := make(chan mysql.BinlogEvent)
+	go func() {
+		for {
+			// throttle for as long as needed
+			vs.vse.throttle(ctx)
+			ev, ok := <-events
+			if ok {
+				throttledEvents <- ev
+			} else {
+				close(throttledEvents)
+			}
+		}
+	}()
 	for {
 		timer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
@@ -277,11 +294,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		default:
 		}
 
-		// throttle for as long as needed
-		vs.vse.throttle(ctx)
-
 		select {
-		case ev, ok := <-events:
+		case ev, ok := <-throttledEvents:
 			if !ok {
 				select {
 				case <-ctx.Done():
