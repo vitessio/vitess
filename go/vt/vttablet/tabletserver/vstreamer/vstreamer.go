@@ -96,7 +96,6 @@ type vstreamer struct {
 	phase string
 	vse   *Engine
 
-	lagThrottler                *throttle.Throttler
 	lastSuccessfulThrottleCheck time.Time
 }
 
@@ -181,7 +180,7 @@ func (vs *vstreamer) Stream() error {
 }
 
 func (vs *vstreamer) throttleStatusOK(ctx context.Context) bool {
-	if vs.lagThrottler == nil {
+	if vs.vse.lagThrottler == nil {
 		// no throttler
 		return true
 	}
@@ -190,7 +189,7 @@ func (vs *vstreamer) throttleStatusOK(ctx context.Context) bool {
 		return true
 	}
 	// It's time to run a throttler check
-	checkResult := vs.lagThrottler.CheckSelf(ctx, throttlerAppName, "", throttleFlags)
+	checkResult := vs.vse.lagThrottler.CheckSelf(ctx, throttlerAppName, "", throttleFlags)
 	if checkResult.StatusCode != http.StatusOK {
 		// sorry, we got throttled.
 		return false

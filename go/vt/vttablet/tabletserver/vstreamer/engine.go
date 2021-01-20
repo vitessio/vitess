@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -84,17 +85,20 @@ type Engine struct {
 	errorCounts               *stats.CountersWithSingleLabel
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
+
+	lagThrottler *throttle.Throttler
 }
 
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
-func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, cell string) *Engine {
+func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrottler *throttle.Throttler, cell string) *Engine {
 	vse := &Engine{
-		env:  env,
-		ts:   ts,
-		se:   se,
-		cell: cell,
+		env:          env,
+		ts:           ts,
+		se:           se,
+		cell:         cell,
+		lagThrottler: lagThrottler,
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
