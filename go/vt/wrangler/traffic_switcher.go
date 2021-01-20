@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/topotools"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/log"
@@ -346,6 +348,39 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	return ts, ws, nil
 }
 
+func (wr *Wrangler) doCellsHaveRdonlyTablets(ctx context.Context, cells []string) (bool, error) {
+	areAnyRdonly := func(tablets []*topo.TabletInfo) bool {
+		for _, tablet := range tablets {
+			if tablet.Type == topodatapb.TabletType_RDONLY {
+				return true
+			}
+		}
+		return false
+	}
+
+	if len(cells) == 0 {
+		tablets, err := topotools.GetAllTabletsAcrossCells(ctx, wr.ts)
+		if err != nil {
+			return false, err
+		}
+		if areAnyRdonly(tablets) {
+			return true, nil
+		}
+
+	} else {
+		for _, cell := range cells {
+			tablets, err := topotools.GetAllTablets(ctx, wr.ts, cell)
+			if err != nil {
+				return false, err
+			}
+			if areAnyRdonly(tablets) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
 func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow string, servedTypes []topodatapb.TabletType,
 	cells []string, direction TrafficSwitchDirection, dryRun bool) (*[]string, error) {
@@ -360,7 +395,8 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		wr.Logger().Errorf(errorMsg)
 		return nil, fmt.Errorf(errorMsg)
 	}
-	wr.Logger().Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflow, servedTypes, cells, ws)
+	log.Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflow, servedTypes, cells, ws)
+	var switchReplicas, switchRdonly bool
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
@@ -371,6 +407,26 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		if direction == DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")
 		}
+		switch servedType {
+		case topodatapb.TabletType_REPLICA:
+			switchReplicas = true
+		case topodatapb.TabletType_RDONLY:
+			switchRdonly = true
+		}
+	}
+
+	// if there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
+	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
+	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent rdonly tablets
+	if switchReplicas && !switchRdonly {
+		var err error
+		rdonlyTabletsExist, err := wr.doCellsHaveRdonlyTablets(ctx, cells)
+		if err != nil {
+			return nil, err
+		}
+		if !rdonlyTabletsExist {
+			servedTypes = append(servedTypes, topodatapb.TabletType_RDONLY)
+		}
 	}
 
 	// If journals exist notify user and fail
@@ -380,7 +436,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return nil, err
 	}
 	if journalsExist {
-		wr.Logger().Errorf("Found a previous journal entry for %d", ts.id)
+		log.Infof("Found a previous journal entry for %d", ts.id)
 	}
 	var sw iswitcher
 	if dryRun {

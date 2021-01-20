@@ -41,7 +41,7 @@ var dryRunResultsSwitchWritesCustomerShard = []string{
 
 var dryRunResultsReadCustomerShard = []string{
 	"Lock keyspace product",
-	"Switch reads for tables [customer] to keyspace customer for tablet types [REPLICA]",
+	"Switch reads for tables [customer] to keyspace customer for tablet types [REPLICA,RDONLY]",
 	"Routing rules for tables [customer] will be updated",
 	"Unlock keyspace product",
 }
