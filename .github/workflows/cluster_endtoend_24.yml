@@ -1,4 +1,4 @@
-name: Cluster (24)
+name: Cluster (vreplication_basic)
 on: [push, pull_request]
 jobs:
 
