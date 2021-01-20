@@ -442,7 +442,6 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		case metric := <-throttler.mysqlThrottleMetricChan:
 			{
 				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-				fmt.Printf("==== <-throttler.mysqlThrottleMetricChan: %s, %v\n", metric.GetClusterInstanceKey(), metric.Value)
 				throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
 			}
 		case <-mysqlRefreshTicker.C:
@@ -455,7 +454,6 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		case probes := <-throttler.mysqlClusterProbesChan:
 			{
 				// incoming structural update, sparse, as result of refreshMySQLInventory()
-				fmt.Printf("==== <-throttler.mysqlClusterProbesChan: %+v, %+v\n", probes, probes.InstanceProbes)
 				throttler.updateMySQLClusterProbes(ctx, probes)
 			}
 		case <-mysqlAggregateTicker.C:
