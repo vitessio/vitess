@@ -25,6 +25,7 @@ package cache
 
 import (
 	"container/list"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -212,6 +213,7 @@ func (lru *LRUCache) addNew(key string, value interface{}, valueSize int64) {
 	element := lru.list.PushFront(newEntry)
 	lru.table[key] = element
 	lru.size += newEntry.size
+	fmt.Printf("CACHE: insert %d (%d / %d, %f)\n", valueSize, lru.size, lru.capacity, float64(lru.size)/float64(lru.capacity))
 	lru.checkCapacity()
 }
 

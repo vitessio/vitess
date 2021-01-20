@@ -304,7 +304,7 @@ var unshardedVSchema = `
 
 const (
 	testBufferSize = 10
-	testCacheSize  = int64(10)
+	testCacheSize  = int64(64 * 1024 * 1024)
 )
 
 type DestinationAnyShardPickerFirstShard struct{}

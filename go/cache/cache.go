@@ -28,7 +28,7 @@ type Cache interface {
 	Set(key string, val interface{}, valueSize int64)
 	ForEach(callback func(interface{}) bool)
 
-	Delete(key string) bool
+	Delete(key string)
 	Clear()
 
 	Stats() *Stats
@@ -55,4 +55,13 @@ func (s *Stats) JSON() string {
 		panic("cache.Stats failed to serialize (should never happen)")
 	}
 	return string(buf)
+}
+
+// NewDefaultCacheImpl returns a new cache instance using the default Cache implementation
+// (right now this is cache.LRUCache)
+func NewDefaultCacheImpl(maxCost, _ int64) Cache {
+	if maxCost == 0 {
+		return &nullCache{}
+	}
+	return NewLRUCache(maxCost)
 }
