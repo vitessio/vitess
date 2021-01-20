@@ -46,6 +46,8 @@ service Vtctld {
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetSrvVSchema returns a the SrvVSchema for a cell.
+  rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
   // GetTablet returns information about a tablet.
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
