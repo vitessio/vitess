@@ -23,6 +23,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"time"
 
 	"vitess.io/vitess/go/vt/servenv"
 
@@ -39,6 +40,17 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+const (
+	throttleCheckDuration = 250 * time.Millisecond
+	throttlerAppName      = "vstreamer"
+)
+
+var (
+	throttleFlags = &throttle.CheckFlags{
+		LowPriority: true,
+	}
 )
 
 // Engine is the engine for handling vreplication streaming requests.
@@ -86,7 +98,8 @@ type Engine struct {
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
 
-	lagThrottler *throttle.Throttler
+	lagThrottler                *throttle.Throttler
+	lastSuccessfulThrottleCheck time.Time
 }
 
 // NewEngine creates a new Engine.
@@ -181,7 +194,37 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 	return vse.lvschema.vschema
 }
 
+func (vse *Engine) throttleStatusOK(ctx context.Context) bool {
+	if vse.lagThrottler == nil {
+		// no throttler
+		return true
+	}
+	if time.Since(vse.lastSuccessfulThrottleCheck) <= throttleCheckDuration {
+		// if last check was OK just very recently there is no need to check again
+		return true
+	}
+	// It's time to run a throttler check
+	checkResult := vse.lagThrottler.CheckSelf(ctx, throttlerAppName, "", throttleFlags)
+	if checkResult.StatusCode != http.StatusOK {
+		// sorry, we got throttled.
+		return false
+	}
+	vse.lastSuccessfulThrottleCheck = time.Now()
+	return true
+}
+
+// throttle will wait until the throttler's "check-self" check is satisfied
+func (vse *Engine) throttle(ctx context.Context) {
+	// We introduce throttling based on the tablet's "self" check, which means if the tablet itself is lagging,
+	// we hold off reads so as to ease the load and let it regain its health
+	for !vse.throttleStatusOK(ctx) {
+		// Sorry, got throttled. Sleep some time, then check again
+		time.Sleep(throttleCheckDuration)
+	}
+}
+
 // Stream starts a new stream.
+// This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
@@ -221,6 +264,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 }
 
 // StreamRows streams rows.
+// This streams the table data rows (so we can copy the table data snapshot)
 func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
@@ -235,6 +279,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+
 		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer

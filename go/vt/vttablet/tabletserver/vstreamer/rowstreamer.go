@@ -88,6 +88,10 @@ func (rs *rowStreamer) Cancel() {
 }
 
 func (rs *rowStreamer) Stream() error {
+
+	// throttle for as long as needed
+	rs.vse.throttle(rs.ctx)
+
 	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := rs.se.Open(); err != nil {

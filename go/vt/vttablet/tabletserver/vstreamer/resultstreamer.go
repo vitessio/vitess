@@ -58,6 +58,10 @@ func (rs *resultStreamer) Cancel() {
 }
 
 func (rs *resultStreamer) Stream() error {
+
+	// throttle for as long as needed
+	rs.vse.throttle(rs.ctx)
+
 	_, fromTable, err := analyzeSelect(rs.query)
 	if err != nil {
 		return err
