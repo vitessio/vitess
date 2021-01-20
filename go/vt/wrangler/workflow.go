@@ -26,7 +26,7 @@ const (
 
 // Workflow state display strings
 const (
-	WorkflowStateNotStarted     = "Not Started"
+	WorkflowStateNotCreated     = "Not Created"
 	WorkflowStateNotSwitched    = "Reads Not Switched. Writes Not Switched"
 	WorkflowStateReadsSwitched  = "All Reads Switched. Writes Not Switched"
 	WorkflowStateWritesSwitched = "Reads Not Switched. Writes Switched"
@@ -82,7 +82,7 @@ func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VR
 		return nil, err
 	}
 	log.Infof("Workflow state is %+v", ws)
-	if ts != nil { //Other than on Start we need to get SourceKeyspace from the workflow
+	if ts != nil { //Other than on create we need to get SourceKeyspace from the workflow
 		vrw.params.TargetKeyspace = ts.targetKeyspace
 		vrw.params.Workflow = ts.workflow
 		vrw.params.SourceKeyspace = ts.sourceKeyspace
@@ -120,7 +120,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 	var stateInfo []string
 	s := ""
 	if !vrw.Exists() {
-		stateInfo = append(stateInfo, WorkflowStateNotStarted)
+		stateInfo = append(stateInfo, WorkflowStateNotCreated)
 	} else {
 		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
 			s = "All Reads Switched"
@@ -155,14 +155,14 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 	return strings.Join(stateInfo, ". ")
 }
 
-// Start initiates a workflow
-func (vrw *VReplicationWorkflow) Start() error {
+// Create initiates a workflow
+func (vrw *VReplicationWorkflow) Create() error {
 	var err error
 	if vrw.Exists() {
-		return fmt.Errorf("workflow already exists found")
+		return fmt.Errorf("workflow already exists")
 	}
-	if vrw.CachedState() != WorkflowStateNotStarted {
-		return fmt.Errorf("workflow has already been started, state is %s", vrw.CachedState())
+	if vrw.CachedState() != WorkflowStateNotCreated {
+		return fmt.Errorf("workflow has already been created, state is %s", vrw.CachedState())
 	}
 	switch vrw.workflowType {
 	case MoveTablesWorkflow:
@@ -228,12 +228,24 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection) (*[]string, error) {
 	var dryRunResults []string
 	var rdDryRunResults, wrDryRunResults *[]string
+	var isCopyInProgress bool
 	var err error
+	var hasReplica, hasRdonly, hasMaster bool
+
 	if !vrw.Exists() {
 		return nil, fmt.Errorf("workflow has not yet been started")
 	}
+
+	isCopyInProgress, err = vrw.IsCopyInProgress()
+	if err != nil {
+		return nil, err
+	}
+	if isCopyInProgress {
+		return nil, fmt.Errorf("cannot switch traffic at this time, copy is still in progress for this workflow")
+	}
+
 	vrw.params.Direction = direction
-	hasReplica, hasRdonly, hasMaster, err := vrw.parseTabletTypes()
+	hasReplica, hasRdonly, hasMaster, err = vrw.parseTabletTypes()
 	if err != nil {
 		return nil, err
 	}
@@ -409,6 +421,25 @@ type TableCopyProgress struct {
 
 // CopyProgress stores the TableCopyProgress for all tables still being copied
 type CopyProgress map[string]*TableCopyProgress
+
+// IsCopyInProgress returns true if any table remains to be copied
+func (vrw *VReplicationWorkflow) IsCopyInProgress() (bool, error) {
+	ctx := context.Background()
+	getTablesQuery := "select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
+	for _, target := range vrw.ts.targets {
+		for id := range target.sources {
+			query := fmt.Sprintf(getTablesQuery, id)
+			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.master.Tablet, true, []byte(query), 1, false, false)
+			if err != nil {
+				return false, err
+			}
+			if len(p3qr.Rows) > 0 {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
 
 // GetCopyProgress returns the progress of all tables being copied in the workflow
 func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
