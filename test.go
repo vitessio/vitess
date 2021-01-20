@@ -90,6 +90,7 @@ var (
 	printLog         = flag.Bool("print-log", false, "print the log of each failed test (or all tests if -log-pass) to the console")
 	follow           = flag.Bool("follow", false, "print test output as it runs, instead of waiting to see if it passes or fails")
 	parallel         = flag.Int("parallel", 1, "number of tests to run in parallel")
+	skipBuild        = flag.Bool("skip-build", false, "skip running 'make build'. Assumes pre-existing binaries exist")
 
 	remoteStats = flag.String("remote-stats", "", "url to send remote stats")
 )
@@ -380,6 +381,8 @@ func main() {
 			log.Printf("Can't set permissions on temp dir %v: %v: %s", tmpDir, err, out)
 		}
 		vtRoot = tmpDir
+	} else if *skipBuild {
+		log.Printf("Skipping build...")
 	} else {
 		// Since we're sharing the working dir, do the build once for all tests.
 		log.Printf("Running make build...")
