@@ -566,3 +566,5 @@
 2021-01-20T05:39:29Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/497783520
 2021-01-20T05:39:29Z,endtoend,https://github.com/vitessio/vitess/actions/runs/497783541
 2021-01-20T05:40:21Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/497785036
+2021-01-20T13:49:51Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/498685952
+2021-01-20T13:49:51Z,endtoend,https://github.com/vitessio/vitess/actions/runs/498685944
