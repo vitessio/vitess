@@ -1625,12 +1625,12 @@ func (tsv *TabletServer) registerThrottlerStatusHandler() {
 func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 	tsv.exporter.HandleFunc("/throttler/throttle-app/", func(w http.ResponseWriter, r *http.Request) {
 		appName := r.URL.Query().Get("app")
-		dur, err := time.ParseDuration(r.URL.Query().Get("duration"))
+		d, err := time.ParseDuration(r.URL.Query().Get("duration"))
 		if err != nil {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(dur), 1)
+		tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), 1)
 
 		w.Write([]byte("ok"))
 	})
