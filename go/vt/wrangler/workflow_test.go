@@ -281,13 +281,13 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	wf.params.TabletTypes = "rdonly"
 	wf.params.Cells = "cell1"
 	require.NoError(t, testSwitchForward(t, wf))
-	require.Equal(t, "Reads partially switched. Replica switched in cells: cell1. Rdonly not switched. Writes Not Switched", wf.CurrentState())
+	require.Equal(t, "Reads partially switched. Replica not switched. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "rdonly"
 	wf.params.Cells = "cell2"
 	require.NoError(t, testSwitchForward(t, wf))
-	require.Equal(t, "Reads partially switched. All Replica Reads Switched. Rdonly not switched. Writes Not Switched", wf.CurrentState())
+	require.Equal(t, "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "replica"
@@ -304,13 +304,13 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	wf.params.TabletTypes = "replica"
 	wf.params.Cells = "cell1"
 	require.NoError(t, testSwitchForward(t, wf))
-	require.Equal(t, "Reads partially switched. Replica not switched. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
+	require.Equal(t, "Reads partially switched. Replica switched in cells: cell1. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "replica"
 	wf.params.Cells = "cell2"
 	require.NoError(t, testSwitchForward(t, wf))
-	require.Equal(t, "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched", wf.CurrentState())
+	require.Equal(t, "All Reads Switched. Writes Not Switched", wf.CurrentState())
 }
 
 func TestMoveTablesV2Cancel(t *testing.T) {
