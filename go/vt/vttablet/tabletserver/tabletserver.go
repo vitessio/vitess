@@ -1621,10 +1621,33 @@ func (tsv *TabletServer) registerThrottlerStatusHandler() {
 	})
 }
 
+// registerThrottlerThrottleAppHandler registers a throttler "throttle-app" request
+func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
+	tsv.exporter.HandleFunc("/throttler/throttle-app/", func(w http.ResponseWriter, r *http.Request) {
+		appName := r.URL.Query().Get("app")
+		d := r.URL.Query().Get("duration")
+		dur, err := time.ParseDuration(d)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
+			return
+		}
+		tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(dur), 1)
+
+		w.Write([]byte("ok"))
+	})
+	tsv.exporter.HandleFunc("/throttler/unthrottle-app/", func(w http.ResponseWriter, r *http.Request) {
+		appName := r.URL.Query().Get("app")
+		tsv.lagThrottler.UnthrottleApp(appName)
+
+		w.Write([]byte("ok"))
+	})
+}
+
 // registerThrottlerHandlers registers all throttler handlers
 func (tsv *TabletServer) registerThrottlerHandlers() {
 	tsv.registerThrottlerCheckHandlers()
 	tsv.registerThrottlerStatusHandler()
+	tsv.registerThrottlerThrottleAppHandler()
 }
 
 func (tsv *TabletServer) registerDebugEnvHandler() {
