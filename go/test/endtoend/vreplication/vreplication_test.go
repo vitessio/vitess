@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -41,11 +43,20 @@ var (
 	defaultRdonly   int
 	defaultReplicas int
 	allCellNames    string
+	httpClient      = throttlebase.SetupHTTPClient(time.Second)
 )
 
 func init() {
 	defaultRdonly = 0
 	defaultReplicas = 1
+}
+
+func throttleStreamer(tablet *cluster.VttabletProcess) (*http.Response, error) {
+	return httpClient.Head(fmt.Sprintf("http://localhost:%d/throttle-app/?app=streamer&duration=1h", tablet.Port))
+}
+
+func unthrottleStreamer(tablet *cluster.VttabletProcess) (*http.Response, error) {
+	return httpClient.Head(fmt.Sprintf("http://localhost:%d/unthrottle-app/?app=streamer", tablet.Port))
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
@@ -181,6 +192,11 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 
 func insertMoreProducts(t *testing.T) {
 	sql := "insert into product(pid, description) values(3, 'cpu'),(4, 'camera'),(5, 'mouse');"
+	execVtgateQuery(t, vtgateConn, "product", sql)
+}
+
+func insertMoreProductsForThrottler(t *testing.T) {
+	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
@@ -523,6 +539,24 @@ func materializeProduct(t *testing.T) {
 	for _, tab := range customerTablets {
 		validateCountInTablet(t, tab, keyspace, workflow, 5)
 	}
+
+	for _, tab := range customerTablets {
+		_, err := throttleStreamer(tab)
+		assert.NoError(t, err)
+	}
+	insertMoreProductsForThrottler(t)
+	time.Sleep(1 * time.Second)
+	for _, tab := range customerTablets {
+		validateCountInTablet(t, tab, keyspace, workflow, 5)
+	}
+	for _, tab := range customerTablets {
+		_, err := unthrottleStreamer(tab)
+		assert.NoError(t, err)
+	}
+	for _, tab := range customerTablets {
+		validateCountInTablet(t, tab, keyspace, workflow, 8)
+	}
+
 }
 
 func materializeRollup(t *testing.T) {
