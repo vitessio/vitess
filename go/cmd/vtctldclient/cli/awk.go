@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cli
 
 import (
 	"fmt"
@@ -22,7 +22,9 @@ import (
 	"strings"
 )
 
-func fmtMapAwkable(m map[string]string) string {
+// MarshalMapAWK returns a string representation of a string->string map in an
+// AWK-friendly format.
+func MarshalMapAWK(m map[string]string) string {
 	pairs := make([]string, len(m))
 	i := 0
 
