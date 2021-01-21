@@ -155,7 +155,14 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (*vtctldatapb.GetSrvVSchemaResponse, error) {
-	panic("unimplemented!")
+	vschema, err := s.ts.GetSrvVSchema(ctx, req.Cell)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetSrvVSchemaResponse{
+		SrvVSchema: vschema,
+	}, nil
 }
 
 // GetTablet is part of the vtctlservicepb.VtctldServer interface.

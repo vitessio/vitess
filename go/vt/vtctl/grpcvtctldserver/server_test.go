@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -255,6 +256,88 @@ func TestGetTablet(t *testing.T) {
 			Uid:  101,
 		},
 	})
+	assert.Error(t, err)
+}
+
+func TestGetSrvVSchema(t *testing.T) {
+	ctx := context.Background()
+	ts, topofactory := memorytopo.NewServerAndFactory("zone1", "zone2")
+	vtctld := NewVtctldServer(ts)
+
+	zone1SrvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"testkeyspace": {
+				Sharded:                true,
+				RequireExplicitRouting: false,
+			},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{},
+		},
+	}
+	zone2SrvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"testkeyspace": {
+				Sharded:                true,
+				RequireExplicitRouting: false,
+			},
+			"unsharded": {
+				Sharded:                false,
+				RequireExplicitRouting: false,
+			},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{},
+		},
+	}
+
+	err := ts.UpdateSrvVSchema(ctx, "zone1", zone1SrvVSchema)
+	require.NoError(t, err, "cannot add zone1 srv vschema")
+	err = ts.UpdateSrvVSchema(ctx, "zone2", zone2SrvVSchema)
+	require.NoError(t, err, "cannot add zone2 srv vschema")
+
+	expected := &vschemapb.SrvVSchema{ // have to copy our structs because of proto marshal artifacts
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"testkeyspace": {
+				Sharded:                true,
+				RequireExplicitRouting: false,
+			},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{},
+		},
+	}
+	resp, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+	assert.NoError(t, err)
+	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
+	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone1) rules mismatch")
+
+	expected = &vschemapb.SrvVSchema{ // have to copy our structs because of proto marshal artifacts
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"testkeyspace": {
+				Sharded:                true,
+				RequireExplicitRouting: false,
+			},
+			"unsharded": {
+				Sharded:                false,
+				RequireExplicitRouting: false,
+			},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{},
+		},
+	}
+	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone2"})
+	assert.NoError(t, err)
+	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch %+v %+v", zone2SrvVSchema.Keyspaces["testkeyspace"], resp.SrvVSchema.Keyspaces["testkeyspace"])
+	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone2) rules mismatch")
+
+	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "dne"})
+	assert.Error(t, err, "GetSrvVSchema(dne)")
+	assert.Nil(t, resp, "GetSrvVSchema(dne)")
+
+	topofactory.SetError(assert.AnError)
+	_, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
 	assert.Error(t, err)
 }
 
