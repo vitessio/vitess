@@ -38,7 +38,7 @@ func (n *nullCache) Clear() {}
 
 // Stats returns a nil stats object for the nullCache
 func (n *nullCache) Stats() *Stats {
-	return nil
+	return &Stats{}
 }
 
 // Capacity returns the capacity of the nullCache, which is always 0
