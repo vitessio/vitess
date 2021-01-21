@@ -227,7 +227,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanLoad:
 		return qre.execLoad(conn)
 	case p.PlanCallProc:
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Call Procedure not supported inside a transaction")
+		return qre.execProc(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -679,6 +679,56 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	return fullSQL, withoutComments, nil
 }
 
+func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
+	conn, err := qre.getConn()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	qr, err := qre.execDBConn(conn, qre.query, true)
+	if err != nil {
+		return nil, err
+	}
+	if !qr.More {
+		return qr, nil
+	}
+	err = qre.drainResultSetOnConn(conn)
+	if err != nil {
+		return nil, err
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
+	if conn.IsInTransaction() {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Call Procedure not supported inside a transaction")
+	}
+	qr, err := qre.execStatefulConn(conn, qre.query, true)
+	if err != nil {
+		return nil, err
+	}
+	if !qr.More {
+		return qr, nil
+	}
+	err = qre.drainResultSetOnConn(conn.UnderlyingDBConn())
+	if err != nil {
+		return nil, err
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
+	more := true
+	for more {
+		qr, err := conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
+		if err != nil {
+			return err
+		}
+		more = qr.More
+	}
+	return nil
+}
+
 func (qre *QueryExecutor) getSelectLimit() int64 {
 	maxRows := qre.tsv.qe.maxResultSize.Get()
 	sqlLimit := qre.options.GetSqlSelectLimit()
@@ -744,30 +794,6 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
-}
-
-func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
-	conn, err := qre.getConn()
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
-	qr, err := qre.execDBConn(conn, qre.query, true)
-	if err != nil {
-		return nil, err
-	}
-	moreResultSet := false
-	for qr.More {
-		moreResultSet = true
-		qr, err = conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if moreResultSet {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
-	}
-	return qr, nil
 }
 
 // resolveNumber extracts a number from a bind variable or sql value.
