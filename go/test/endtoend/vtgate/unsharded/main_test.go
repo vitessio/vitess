@@ -267,9 +267,10 @@ func TestCallProcedure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:  "localhost",
-		Port:  clusterInstance.VtgateMySQLPort,
-		Flags: mysql.CapabilityClientMultiResults,
+		Host:   "localhost",
+		Port:   clusterInstance.VtgateMySQLPort,
+		Flags:  mysql.CapabilityClientMultiResults,
+		DbName: "@master",
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -277,13 +278,13 @@ func TestCallProcedure(t *testing.T) {
 	qr := exec(t, conn, `CALL sp_insert()`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
-	//_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
-	//require.Error(t, err)
-	//require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
-	//
-	//_, err = conn.ExecuteFetch(`CALL sp_all()`, 1000, true)
-	//require.Error(t, err)
-	//require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+	_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+
+	_, err = conn.ExecuteFetch(`CALL sp_all()`, 1000, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
 
 	qr = exec(t, conn, `CALL sp_delete()`)
 	require.GreaterOrEqual(t, 1, int(qr.RowsAffected))
