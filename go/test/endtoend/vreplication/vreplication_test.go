@@ -540,19 +540,23 @@ func materializeProduct(t *testing.T) {
 		validateCountInTablet(t, tab, keyspace, workflow, 5)
 	}
 
+	// Now, throttle the streamer, insert some rows
 	for _, tab := range customerTablets {
 		_, err := throttleStreamer(tab)
 		assert.NoError(t, err)
 	}
 	insertMoreProductsForThrottler(t)
 	time.Sleep(1 * time.Second)
+	// we expect the additional rows to **not appear** in the materialized view
 	for _, tab := range customerTablets {
 		validateCountInTablet(t, tab, keyspace, workflow, 5)
 	}
+	// unthrottle, and expect the rows to show up
 	for _, tab := range customerTablets {
 		_, err := unthrottleStreamer(tab)
 		assert.NoError(t, err)
 	}
+	time.Sleep(1 * time.Second)
 	for _, tab := range customerTablets {
 		validateCountInTablet(t, tab, keyspace, workflow, 8)
 	}
