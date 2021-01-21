@@ -82,6 +82,24 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
+// GetTablet is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetTablet(ctx context.Context, in *vtctldatapb.GetTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetTablet(ctx, in, opts...)
+}
+
+// GetTablets is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetTablets(ctx, in, opts...)
+}
+
 // InitShardPrimary is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctldatapb.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldatapb.InitShardPrimaryResponse, error) {
 	if client.c == nil {

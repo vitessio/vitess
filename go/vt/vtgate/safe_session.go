@@ -478,6 +478,20 @@ func (session *SafeSession) GetSessionUUID() string {
 	return session.SessionUUID
 }
 
+// SetSessionEnableSystemSettings set the SessionEnableSystemSettings setting.
+func (session *SafeSession) SetSessionEnableSystemSettings(allow bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.EnableSystemSettings = allow
+}
+
+// GetSessionEnableSystemSettings returns the SessionEnableSystemSettings value.
+func (session *SafeSession) GetSessionEnableSystemSettings() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.EnableSystemSettings
+}
+
 // SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
 func (session *SafeSession) SetReadAfterWriteGTID(vtgtid string) {
 	session.mu.Lock()

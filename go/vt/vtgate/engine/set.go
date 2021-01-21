@@ -408,6 +408,8 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid DDL strategy: %s", str)
 		}
 		vcursor.Session().SetDDLStrategy(str)
+	case sysvars.SessionEnableSystemSettings.Name:
+		err = svss.setBoolSysVar(env, vcursor.Session().SetSessionEnableSystemSettings)
 	case sysvars.Charset.Name, sysvars.Names.Name:
 		str, err := svss.evalAsString(env)
 		if err != nil {
