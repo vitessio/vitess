@@ -564,6 +564,7 @@ func materialize(t *testing.T, spec string) {
 
 func materializeProduct(t *testing.T) {
 	t.Run("materializeProduct", func(t *testing.T) {
+		// materializing from "product" keyspace to "customer" keyspace
 		workflow := "cproduct"
 		keyspace := "customer"
 		applyVSchema(t, materializeProductVSchema, keyspace)
@@ -580,7 +581,7 @@ func materializeProduct(t *testing.T) {
 
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "master")
 		t.Run("throttle-app", func(t *testing.T) {
-			// Now, throttle the streamer, insert some rows
+			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
 				_, body, err := throttleStreamer(tab)
 				assert.NoError(t, err)
@@ -594,7 +595,7 @@ func materializeProduct(t *testing.T) {
 			}
 		})
 		t.Run("unthrottle-app", func(t *testing.T) {
-			// unthrottle, and expect the rows to show up
+			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range productTablets {
 				_, body, err := unthrottleStreamer(tab)
 				assert.NoError(t, err)
