@@ -568,35 +568,38 @@ func materializeProduct(t *testing.T) {
 		keyspace := "customer"
 		applyVSchema(t, materializeProductVSchema, keyspace)
 		materialize(t, materializeProductSpec)
-		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "master")
-		for _, tab := range customerTablets {
-			catchup(t, tab, workflow, "Materialize")
+		{
+			customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "master")
+			for _, tab := range customerTablets {
+				catchup(t, tab, workflow, "Materialize")
+			}
+			for _, tab := range customerTablets {
+				validateCountInTablet(t, tab, keyspace, workflow, 5)
+			}
 		}
-		for _, tab := range customerTablets {
-			validateCountInTablet(t, tab, keyspace, workflow, 5)
-		}
-
-		// Now, throttle the streamer, insert some rows
-		for _, tab := range customerTablets {
-			_, body, err := throttleStreamer(tab)
-			assert.NoError(t, err)
-			assert.Contains(t, body, throttlerAppName)
-		}
-		insertMoreProductsForThrottler(t)
-		time.Sleep(1 * time.Second)
-		// we expect the additional rows to **not appear** in the materialized view
-		for _, tab := range customerTablets {
-			validateCountInTablet(t, tab, keyspace, workflow, 5)
-		}
-		// unthrottle, and expect the rows to show up
-		for _, tab := range customerTablets {
-			_, body, err := unthrottleStreamer(tab)
-			assert.NoError(t, err)
-			assert.Contains(t, body, throttlerAppName)
-		}
-		time.Sleep(1 * time.Second)
-		for _, tab := range customerTablets {
-			validateCountInTablet(t, tab, keyspace, workflow, 8)
+		{ // Now, throttle the streamer, insert some rows
+			productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "master")
+			for _, tab := range productTablets {
+				_, body, err := throttleStreamer(tab)
+				assert.NoError(t, err)
+				assert.Contains(t, body, throttlerAppName)
+			}
+			insertMoreProductsForThrottler(t)
+			time.Sleep(1 * time.Second)
+			// we expect the additional rows to **not appear** in the materialized view
+			for _, tab := range productTablets {
+				validateCountInTablet(t, tab, keyspace, workflow, 5)
+			}
+			// unthrottle, and expect the rows to show up
+			for _, tab := range productTablets {
+				_, body, err := unthrottleStreamer(tab)
+				assert.NoError(t, err)
+				assert.Contains(t, body, throttlerAppName)
+			}
+			time.Sleep(1 * time.Second)
+			for _, tab := range productTablets {
+				validateCountInTablet(t, tab, keyspace, workflow, 8)
+			}
 		}
 	})
 }
