@@ -672,7 +672,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 // UnthrottleApp cancels any throttling, if any, for a given app
 func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.AppThrottle) {
 	throttler.throttledApps.Delete(appName)
-	return &base.AppThrottle{AppName: appName}
+	return base.NewAppThrottle(appName, time.Now(), 0)
 }
 
 // IsAppThrottled tells whether some app should be throttled.
