@@ -57,7 +57,7 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	require.True(t, mtwf.Exists())
 	require.Errorf(t, mtwf.Complete(), ErrWorkflowNotFullySwitched)
 	mtwf.ws.WritesSwitched = true
-	require.Errorf(t, mtwf.Abort(), ErrWorkflowPartiallySwitched)
+	require.Errorf(t, mtwf.Cancel(), ErrWorkflowPartiallySwitched)
 
 	require.ElementsMatch(t, mtwf.getCellsAsArray(), []string{"cell1", "cell2"})
 	require.ElementsMatch(t, mtwf.getTabletTypes(), []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
@@ -286,7 +286,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 
 }
 
-func TestMoveTablesV2Abort(t *testing.T) {
+func TestMoveTablesV2Cancel(t *testing.T) {
 	ctx := context.Background()
 	p := &VReplicationWorkflowParams{
 		Workflow:       "test",
@@ -312,7 +312,7 @@ func TestMoveTablesV2Abort(t *testing.T) {
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 
-	require.NoError(t, wf.Abort())
+	require.NoError(t, wf.Cancel())
 
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
 
@@ -356,7 +356,7 @@ func TestReshardV2(t *testing.T) {
 	require.NotNil(t, si)
 }
 
-func TestReshardV2Abort(t *testing.T) {
+func TestReshardV2Cancel(t *testing.T) {
 	ctx := context.Background()
 	sourceShards := []string{"-40", "40-"}
 	targetShards := []string{"-80", "80-"}
@@ -378,7 +378,7 @@ func TestReshardV2Abort(t *testing.T) {
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	tme.expectNoPreviousJournals()
 	expectReshardQueries(t, tme)
-	require.NoError(t, wf.Abort())
+	require.NoError(t, wf.Cancel())
 }
 
 func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
