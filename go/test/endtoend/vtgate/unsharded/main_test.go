@@ -23,8 +23,6 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/google/go-cmp/cmp"
@@ -98,20 +96,35 @@ CREATE TABLE allDefaults (
 `
 
 	createProcSQL = `use vt_customer;
-CREATE PROCEDURE GetAllT1Twice()
-BEGIN
-	SELECT * FROM t1;
-	SELECT * FROM t1;
-END;
 CREATE PROCEDURE sp_insert()
 BEGIN
 	insert into allDefaults () values ();
 END;
+
 CREATE PROCEDURE sp_delete()
 BEGIN
-	delete from t1;
+	delete from allDefaults;
 END;
-CREATE PROCEDURE sp_random()
+
+CREATE PROCEDURE sp_multi_dml()
+BEGIN
+	insert into allDefaults () values ();
+	delete from allDefaults;
+END;
+
+CREATE PROCEDURE sp_variable()
+BEGIN
+	insert into allDefaults () values ();
+	SELECT min(id) INTO @myvar FROM allDefaults;
+	DELETE FROM allDefaults WHERE id = @myvar;
+END;
+
+CREATE PROCEDURE sp_select()
+BEGIN
+	SELECT * FROM allDefaults;
+END;
+
+CREATE PROCEDURE sp_all()
 BEGIN
 	insert into allDefaults () values ();
     select * from allDefaults;
@@ -198,25 +211,6 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
 }
 
-func TestCallProcedure(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host:  "localhost",
-		Port:  clusterInstance.VtgateMySQLPort,
-		Flags: mysql.CapabilityClientMultiResults,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-	defer exec(t, conn, `delete from t1`)
-	exec(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'foo'),(301,101,301,'bar')`)
-	results := execMulti(t, conn, `CALL GetAllT1Twice()`)
-	require.Equal(t, 2, len(results), "didn't get the two expected result sets")
-	utils.MustMatch(t, `[[INT64(300) INT64(100) INT64(300) VARCHAR("foo")] [INT64(301) INT64(101) INT64(301) VARCHAR("bar")]]`, fmt.Sprintf("%v", results[0].Rows))
-	utils.MustMatch(t, `[[INT64(300) INT64(100) INT64(300) VARCHAR("foo")] [INT64(301) INT64(101) INT64(301) VARCHAR("bar")]]`, fmt.Sprintf("%v", results[1].Rows))
-}
-
 func TestEmptyStatement(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -267,6 +261,38 @@ func TestDDLUnsharded(t *testing.T) {
 	exec(t, conn, `drop view v1`)
 	exec(t, conn, `drop table tempt1`)
 	assertMatches(t, conn, "show tables", `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+}
+
+func TestCallProcedure(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host:  "localhost",
+		Port:  clusterInstance.VtgateMySQLPort,
+		Flags: mysql.CapabilityClientMultiResults,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	qr := exec(t, conn, `CALL sp_insert()`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	//_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
+	//require.Error(t, err)
+	//require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+	//
+	//_, err = conn.ExecuteFetch(`CALL sp_all()`, 1000, true)
+	//require.Error(t, err)
+	//require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+
+	qr = exec(t, conn, `CALL sp_delete()`)
+	require.GreaterOrEqual(t, 1, int(qr.RowsAffected))
+
+	qr = exec(t, conn, `CALL sp_multi_dml()`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	qr = exec(t, conn, `CALL sp_variable()`)
+	require.EqualValues(t, 1, qr.RowsAffected)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
