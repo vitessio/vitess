@@ -82,3 +82,18 @@ func TestCallProcedureInsideTx(t *testing.T) {
 
 	client.Release()
 }
+
+func TestCallProcedureInsideReservedConn(t *testing.T) {
+	client := framework.NewClient()
+	_, err := client.ReserveBeginExecute(`call proc_dml()`, nil, nil)
+	require.EqualError(t, err, "Call Procedure not supported inside a transaction (CallerID: dev)")
+	client.Release()
+
+	_, err = client.ReserveExecute(`call proc_dml()`, nil, nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute(`call proc_dml()`, nil)
+	require.NoError(t, err)
+
+	client.Release()
+}
