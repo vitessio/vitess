@@ -194,7 +194,7 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 	return vse.lvschema.vschema
 }
 
-func (vse *Engine) throttleStatusOK(ctx context.Context) bool {
+func (vse *Engine) throttleStatusOK(ctx context.Context, sleep bool) bool {
 	if vse.lagThrottler == nil {
 		// no throttler
 		return true
@@ -207,6 +207,9 @@ func (vse *Engine) throttleStatusOK(ctx context.Context) bool {
 	checkResult := vse.lagThrottler.CheckSelf(ctx, throttlerAppName, "", throttleFlags)
 	if checkResult.StatusCode != http.StatusOK {
 		// sorry, we got throttled.
+		if sleep {
+			time.Sleep(throttleCheckDuration)
+		}
 		return false
 	}
 	vse.lastSuccessfulThrottleCheck = time.Now()
@@ -217,9 +220,8 @@ func (vse *Engine) throttleStatusOK(ctx context.Context) bool {
 func (vse *Engine) throttle(ctx context.Context) {
 	// We introduce throttling based on the tablet's "self" check, which means if the tablet itself is lagging,
 	// we hold off reads so as to ease the load and let it regain its health
-	for !vse.throttleStatusOK(ctx) {
+	for !vse.throttleStatusOK(ctx, true) {
 		// Sorry, got throttled. Sleep some time, then check again
-		time.Sleep(throttleCheckDuration)
 	}
 }
 

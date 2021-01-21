@@ -88,10 +88,6 @@ func (rs *rowStreamer) Cancel() {
 }
 
 func (rs *rowStreamer) Stream() error {
-
-	// throttle for as long as needed
-	rs.vse.throttle(rs.ctx)
-
 	// Ensure sh is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := rs.se.Open(); err != nil {
@@ -246,6 +242,11 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
 		default:
+		}
+
+		// check throttler. If required throttling, sleep ("true" argument) and retry loop
+		if !rs.vse.throttleStatusOK(rs.ctx, true) {
+			continue
 		}
 
 		row, err := conn.FetchNext()
