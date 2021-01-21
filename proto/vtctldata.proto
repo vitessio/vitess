@@ -22,9 +22,11 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 
 package vtctldata;
 
+import "google/protobuf/duration.proto";
+
 import "logutil.proto";
 import "topodata.proto";
-import "google/protobuf/duration.proto";
+import "vschema.proto";
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -73,6 +75,14 @@ message GetKeyspaceRequest {
 
 message GetKeyspaceResponse {
   Keyspace keyspace = 1;
+}
+
+message GetSrvVSchemaRequest {
+  string cell = 1;
+}
+
+message GetSrvVSchemaResponse {
+  vschema.SrvVSchema srv_v_schema = 1;
 }
 
 message GetTabletRequest {
