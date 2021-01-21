@@ -58,10 +58,6 @@ func (rs *resultStreamer) Cancel() {
 }
 
 func (rs *resultStreamer) Stream() error {
-
-	// throttle for as long as needed
-	rs.vse.throttle(rs.ctx)
-
 	_, fromTable, err := analyzeSelect(rs.query)
 	if err != nil {
 		return err
@@ -99,6 +95,11 @@ func (rs *resultStreamer) Stream() error {
 		case <-rs.ctx.Done():
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
 		default:
+		}
+
+		// check throttler. If required throttling, sleep ("true" argument) and retry loop
+		if !rs.vse.throttleStatusOK(rs.ctx, true) {
+			continue
 		}
 
 		row, err := conn.FetchNext()

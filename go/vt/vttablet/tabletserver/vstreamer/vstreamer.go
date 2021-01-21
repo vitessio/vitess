@@ -276,8 +276,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	throttledEvents := make(chan mysql.BinlogEvent)
 	go func() {
 		for {
-			// throttle for as long as needed
-			vs.vse.throttle(ctx)
+			// check throttler. If required throttling, sleep ("true" argument) and retry loop
+			if !vs.vse.throttleStatusOK(ctx, true) {
+				continue
+			}
+
 			ev, ok := <-events
 			if ok {
 				throttledEvents <- ev
