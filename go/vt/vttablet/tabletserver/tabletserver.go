@@ -1663,6 +1663,13 @@ func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
 	tsv.rt.EnableHeartbeat(enabled)
 }
 
+// EnableThrottler forces throttler to be on or off.
+// When throttler is off, it responds to all check requests with HTTP 200 OK
+// Only to be used for testing.
+func (tsv *TabletServer) EnableThrottler(enabled bool) {
+	tsv.Config().EnableLagThrottler = enabled
+}
+
 // SetTracking forces tracking to be on or off.
 // Only to be used for testing.
 func (tsv *TabletServer) SetTracking(enabled bool) {
