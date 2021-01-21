@@ -283,6 +283,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				throttledEvents <- ev
 			} else {
 				close(throttledEvents)
+				return
 			}
 		}
 	}()
