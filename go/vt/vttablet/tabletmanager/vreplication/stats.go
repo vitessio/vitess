@@ -62,6 +62,15 @@ type vrStats struct {
 func (st *vrStats) register() {
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationSecondsBehindMasterMax", "Max vreplication seconds behind master", st.maxSecondsBehindMaster)
+	stats.Publish("VReplicationStreamState", stats.StringMapFunc(func() map[string]string {
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		result := make(map[string]string, len(st.controllers))
+		for _, ct := range st.controllers {
+			result[ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.State.Get()
+		}
+		return result
+	}))
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationSecondsBehindMaster",
 		"vreplication seconds behind master per stream",
