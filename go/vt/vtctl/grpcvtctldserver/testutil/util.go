@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
@@ -66,4 +67,34 @@ func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctlda
 
 	err := ts.CreateKeyspace(ctx, ks.Name, &in)
 	require.NoError(t, err)
+}
+
+// AddTablet adds a tablet to the topology, failing a test if that tablet record
+// could not be created. It shallow copies to prevent XXX_ fields from changing,
+// including nested proto message fields.
+//
+// AddTablet also optionally adds empty keyspace and shard records to the
+// topology, if they are set on the tablet record and they cannot be retrieved
+// from the topo server without error.
+func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet) {
+	in := *tablet
+	alias := *tablet.Alias
+	in.Alias = &alias
+
+	err := ts.CreateTablet(ctx, &in)
+	require.NoError(t, err, "CreateTablet(%+v)", &in)
+
+	if tablet.Keyspace != "" {
+		if _, err := ts.GetKeyspace(ctx, tablet.Keyspace); err != nil {
+			err := ts.CreateKeyspace(ctx, tablet.Keyspace, &topodatapb.Keyspace{})
+			require.NoError(t, err, "CreateKeyspace(%s)", tablet.Keyspace)
+		}
+
+		if tablet.Shard != "" {
+			if _, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard); err != nil {
+				err := ts.CreateShard(ctx, tablet.Keyspace, tablet.Shard)
+				require.NoError(t, err, "CreateShard(%s, %s)", tablet.Keyspace, tablet.Shard)
+			}
+		}
+	}
 }

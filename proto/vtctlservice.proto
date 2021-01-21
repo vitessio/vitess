@@ -46,6 +46,10 @@ service Vtctld {
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetTablet returns information about a tablet.
+  rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
+  // GetTablets returns tablets, optionally filtered by keyspace and shard.
+  rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
   // InitShardPrimary sets the initial primary for a shard. Will make all other
   // tablets in the shard replicas of the provided primary.
   //

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -764,8 +765,21 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			}
 		}
 
-		return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-			txt.Bytes()), l, nil
+		// remove preceding 0s from the integral part, otherwise we get "000000000001.23" instead of "1.23"
+		trimPrecedingZeroes := func(b []byte) []byte {
+			s := string(b)
+			isNegative := false
+			if s[0] == '-' {
+				isNegative = true
+				s = s[1:]
+			}
+			s = strings.TrimLeft(s, "0")
+			if isNegative {
+				s = fmt.Sprintf("-%s", s)
+			}
+			return []byte(s)
+		}
+		return sqltypes.MakeTrusted(querypb.Type_DECIMAL, trimPrecedingZeroes(txt.Bytes())), l, nil
 
 	case TypeEnum:
 		switch metadata & 0xff {

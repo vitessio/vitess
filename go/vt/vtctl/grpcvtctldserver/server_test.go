@@ -21,10 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 
@@ -217,4 +219,393 @@ func TestGetKeyspaces(t *testing.T) {
 
 	_, err = vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	assert.Error(t, err)
+}
+
+func TestGetTablet(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	vtctld := NewVtctldServer(ts)
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Hostname: "localhost",
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+
+	testutil.AddTablet(ctx, t, ts, tablet)
+
+	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, resp.Tablet, tablet)
+
+	// not found
+	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestGetTablets(t *testing.T) {
+	tests := []struct {
+		name      string
+		cells     []string
+		tablets   []*topodatapb.Tablet
+		req       *vtctldatapb.GetTabletsRequest
+		expected  []*topodatapb.Tablet
+		shouldErr bool
+	}{
+		{
+			name:      "no tablets",
+			cells:     []string{"cell1"},
+			tablets:   []*topodatapb.Tablet{},
+			req:       &vtctldatapb.GetTabletsRequest{},
+			expected:  []*topodatapb.Tablet{},
+			shouldErr: false,
+		},
+		{
+			name:  "keyspace and shard filter",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  102,
+					},
+					Keyspace: "ks2",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Keyspace: "ks1",
+				Shard:    "80-",
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "keyspace filter",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Keyspace: "ks1",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  102,
+					},
+					Keyspace: "otherkeyspace",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Keyspace: "ks1",
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Keyspace: "ks1",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "keyspace and shard filter - stale primary",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-80",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Keyspace: "ks1",
+					Shard:    "80-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  102,
+					},
+					Keyspace:            "ks2",
+					Shard:               "-",
+					Type:                topodatapb.TabletType_MASTER,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  103,
+					},
+					Keyspace:            "ks2",
+					Shard:               "-",
+					Hostname:            "stale.primary",
+					Type:                topodatapb.TabletType_MASTER,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Keyspace: "ks2",
+				Shard:    "-",
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  102,
+					},
+					Keyspace:            "ks2",
+					Shard:               "-",
+					Type:                topodatapb.TabletType_MASTER,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  103,
+					},
+					Keyspace:            "ks2",
+					Shard:               "-",
+					Hostname:            "stale.primary",
+					Type:                topodatapb.TabletType_UNKNOWN,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "stale primary",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace:            "ks1",
+					Shard:               "-",
+					Hostname:            "slightly less stale",
+					Type:                topodatapb.TabletType_MASTER,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Hostname:            "stale primary",
+					Keyspace:            "ks1",
+					Shard:               "-",
+					Type:                topodatapb.TabletType_MASTER,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  103,
+					},
+					Hostname:            "true primary",
+					Keyspace:            "ks1",
+					Shard:               "-",
+					Type:                topodatapb.TabletType_MASTER,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace:            "ks1",
+					Shard:               "-",
+					Hostname:            "slightly less stale",
+					Type:                topodatapb.TabletType_UNKNOWN,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  101,
+					},
+					Hostname:            "stale primary",
+					Keyspace:            "ks1",
+					Shard:               "-",
+					Type:                topodatapb.TabletType_UNKNOWN,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  103,
+					},
+					Hostname:            "true primary",
+					Keyspace:            "ks1",
+					Shard:               "-",
+					Type:                topodatapb.TabletType_MASTER,
+					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:    "keyspace and shard filter - error",
+			cells:   []string{"cell1"},
+			tablets: []*topodatapb.Tablet{},
+			req: &vtctldatapb.GetTabletsRequest{
+				Keyspace: "ks1",
+				Shard:    "-",
+			},
+			expected:  []*topodatapb.Tablet{},
+			shouldErr: true,
+		},
+		{
+			name:  "cells filter",
+			cells: []string{"cell1", "cell2", "cell3"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell2",
+						Uid:  200,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell3",
+						Uid:  300,
+					},
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells: []string{"cell1", "cell3"},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell3",
+						Uid:  300,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "cells filter - error",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells: []string{"cell1", "doesnotexist"},
+			},
+			expected:  []*topodatapb.Tablet{},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			ts := memorytopo.NewServer(tt.cells...)
+			vtctld := NewVtctldServer(ts)
+
+			for _, tablet := range tt.tablets {
+				testutil.AddTablet(ctx, t, ts, tablet)
+			}
+
+			resp, err := vtctld.GetTablets(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.expected, resp.Tablets)
+		})
+	}
 }

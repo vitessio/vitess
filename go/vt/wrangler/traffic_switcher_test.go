@@ -177,12 +177,12 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t1":         {"ks1.t1"},
 		"t2":             {"ks1.t2"},
 		"ks2.t2":         {"ks1.t2"},
-		"t1@rdonly":      {"ks2.t1"},
-		"ks2.t1@rdonly":  {"ks2.t1"},
-		"ks1.t1@rdonly":  {"ks2.t1"},
-		"t2@rdonly":      {"ks2.t2"},
-		"ks2.t2@rdonly":  {"ks2.t2"},
-		"ks1.t2@rdonly":  {"ks2.t2"},
+		"t1@rdonly":      {"ks1.t1"},
+		"ks2.t1@rdonly":  {"ks1.t1"},
+		"ks1.t1@rdonly":  {"ks1.t1"},
+		"t2@rdonly":      {"ks1.t2"},
+		"ks2.t2@rdonly":  {"ks1.t2"},
+		"ks1.t2@rdonly":  {"ks1.t2"},
 		"t1@replica":     {"ks1.t1"},
 		"ks2.t1@replica": {"ks1.t1"},
 		"ks1.t1@replica": {"ks1.t1"},
@@ -526,10 +526,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
 	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
 	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
-	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 2)
-	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 2)
-	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 1)
-	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 2)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 2)
 	verifyQueries(t, tme.allDBClients)
 
 	tme.expectNoPreviousJournals()
@@ -861,7 +861,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Dropping these tables from the database and removing them from the vschema for keyspace ks1:",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables t1,t2 will be removed from:",
+		"Blacklisted tables [t1,t2] will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
@@ -888,7 +888,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"Renaming these tables from the database and removing them from the vschema for keyspace ks1:", "	" +
 			"Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
 		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables t1,t2 will be removed from:",
+		"Blacklisted tables [t1,t2] will be removed from:",
 		"	Keyspace ks1 Shard 0 Tablet 10",
 		"Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
@@ -930,37 +930,21 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 
 	wantdryRunReads := []string{
 		"Lock keyspace ks1",
-		"Switch reads for tables t1,t2 to keyspace ks2",
+		"Switch reads for tables [t1,t2] to keyspace ks2 for tablet types [RDONLY]",
+		"Routing rules for tables [t1,t2] will be updated",
 		"Unlock keyspace ks1",
 	}
 	wantdryRunWrites := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Stop writes on keyspace ks1, tables t1,t2:",
+		"Stop writes on keyspace ks1, tables [t1,t2]:",
 		"\tKeyspace ks1, Shard 0 at Position MariaDB/5-456-892",
 		"Wait for VReplication on stopped streams to catchup for upto 1s",
 		"Create reverse replication workflow test_reverse",
 		"Create journal entries on source databases",
-		"Enable writes on keyspace ks2 tables t1,t2",
+		"Enable writes on keyspace ks2 tables [t1,t2]",
 		"Switch routing from keyspace ks1 to keyspace ks2",
-		"Following rules will be deleted:",
-		"	ks1.t1@rdonly => ks2.t1",
-		"	ks1.t1@replica => ks2.t1",
-		"	ks1.t2@rdonly => ks2.t2",
-		"	ks1.t2@replica => ks2.t2",
-		"	ks2.t1@rdonly => ks2.t1",
-		"	ks2.t1@replica => ks2.t1",
-		"	ks2.t2@rdonly => ks2.t2",
-		"	ks2.t2@replica => ks2.t2",
-		"	t1@rdonly => ks2.t1",
-		"	t1@replica => ks2.t1",
-		"	t2@rdonly => ks2.t2",
-		"	t2@replica => ks2.t2",
-		"Following rules will be added:",
-		"	ks1.t1 => ks2.t1",
-		"	ks1.t2 => ks2.t2",
-		"	t1 => ks2.t1",
-		"	t2 => ks2.t2",
+		"Routing rules for tables [t1,t2] will be updated",
 		"SwitchWrites completed, freeze and delete vreplication streams on:",
 		"	tablet 20",
 		"	tablet 30",
@@ -1780,7 +1764,7 @@ func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][
 		got[rr.FromTable] = append(got[rr.FromTable], rr.ToTables...)
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("srv rules for cell %s:\n%v, want\n%v", cell, got, want)
+		t.Fatalf("ERROR: routing rules don't match for cell %s:got\n%v, want\n%v", cell, got, want)
 	}
 }
 
@@ -1815,10 +1799,8 @@ func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want 
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if len(servedTypes) != want {
-		t.Errorf("shard %v has wrong served types: got: %v, want: %v", keyspaceShard, len(servedTypes), want)
-	}
+	require.Equal(t, want, len(servedTypes), fmt.Sprintf("shard %v has wrong served types: got: %v, want: %v",
+		keyspaceShard, len(servedTypes), want))
 }
 
 func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspaceShard, cell string, want int) {
@@ -1839,9 +1821,8 @@ outer:
 			}
 		}
 	}
-	if count != want {
-		t.Errorf("serving types for keyspaceShard %s, cell %s: %d, want %d", keyspaceShard, cell, count, want)
-	}
+	require.Equal(t, want, count, fmt.Sprintf("serving types for keyspaceShard %s, cell %s: %d, want %d",
+		keyspaceShard, cell, count, want))
 }
 
 func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {

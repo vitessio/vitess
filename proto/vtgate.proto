@@ -143,6 +143,9 @@ message Session {
 
   // Session UUID
   string SessionUUID = 22;
+
+  // enable_system_settings defines if we can use reserved connections.
+  bool enable_system_settings = 23;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout
