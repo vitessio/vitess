@@ -1026,3 +1026,5 @@
 2021-01-21T14:18:24Z,endtoend,https://github.com/vitessio/vitess/actions/runs/501313515
 2021-01-21T16:14:59Z,unit_race,https://github.com/vitessio/vitess/actions/runs/501579776
 2021-01-21T21:04:23Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/502162163
+2021-01-21T22:15:25Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/502289553
+2021-01-21T22:37:58Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/502329072
