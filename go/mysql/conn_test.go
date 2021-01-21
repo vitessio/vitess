@@ -514,30 +514,6 @@ func TestMultiStatement(t *testing.T) {
 	require.Nil(t, data)
 }
 
-func TestCallProc(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	sConn.Capabilities |= CapabilityClientMultiResults
-	defer func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
-	}()
-
-	err := cConn.WriteComQuery("twice")
-	require.NoError(t, err)
-
-	handler := &testRun{t: t, err: NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")}
-	res := sConn.handleNextCommand(handler)
-	// now we run a single command that returns two results sets
-	require.True(t, res, "we should not break the connection in case of no errors")
-	// Read the result of the query and assert that it is indeed what we want. This will contain the first result set.
-	data, more, _, err := cConn.ReadQueryResult(100, true)
-	require.NoError(t, err)
-	// there should be more results to be read
-	require.True(t, more)
-	require.True(t, data.Equal(selectRowsResult))
-}
-
 func TestMultiStatementOnSplitError(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	// Set the splitStatementFunction to return an error.
