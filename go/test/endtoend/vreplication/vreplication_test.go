@@ -36,14 +36,15 @@ import (
 )
 
 var (
-	vc              *VitessCluster
-	vtgate          *cluster.VtgateProcess
-	defaultCell     *Cell
-	vtgateConn      *mysql.Conn
-	defaultRdonly   int
-	defaultReplicas int
-	allCellNames    string
-	httpClient      = throttlebase.SetupHTTPClient(time.Second)
+	vc               *VitessCluster
+	vtgate           *cluster.VtgateProcess
+	defaultCell      *Cell
+	vtgateConn       *mysql.Conn
+	defaultRdonly    int
+	defaultReplicas  int
+	allCellNames     string
+	httpClient       = throttlebase.SetupHTTPClient(time.Second)
+	throttlerAppName = "vstreamer"
 )
 
 func init() {
@@ -51,12 +52,21 @@ func init() {
 	defaultReplicas = 1
 }
 
-func throttleStreamer(tablet *cluster.VttabletProcess) (*http.Response, error) {
-	return httpClient.Head(fmt.Sprintf("http://localhost:%d/throttle-app/?app=streamer&duration=1h", tablet.Port))
+func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.Response, respBody string, err error) {
+	resp, err = httpClient.Get(fmt.Sprintf("http://localhost:%d/%s", tablet.Port, path))
+	if err != nil {
+		return resp, respBody, err
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	respBody = string(b)
+	return resp, respBody, err
 }
 
-func unthrottleStreamer(tablet *cluster.VttabletProcess) (*http.Response, error) {
-	return httpClient.Head(fmt.Sprintf("http://localhost:%d/unthrottle-app/?app=streamer", tablet.Port))
+func throttleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttle-app/?app=%s&duration=1h", throttlerAppName))
+}
+func unthrottleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("unthrottle-app/?app=%s", throttlerAppName))
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
@@ -568,8 +578,9 @@ func materializeProduct(t *testing.T) {
 
 		// Now, throttle the streamer, insert some rows
 		for _, tab := range customerTablets {
-			_, err := throttleStreamer(tab)
+			_, body, err := throttleStreamer(tab)
 			assert.NoError(t, err)
+			assert.Contains(t, body, throttlerAppName)
 		}
 		insertMoreProductsForThrottler(t)
 		time.Sleep(1 * time.Second)
@@ -579,8 +590,9 @@ func materializeProduct(t *testing.T) {
 		}
 		// unthrottle, and expect the rows to show up
 		for _, tab := range customerTablets {
-			_, err := unthrottleStreamer(tab)
+			_, body, err := unthrottleStreamer(tab)
 			assert.NoError(t, err)
+			assert.Contains(t, body, throttlerAppName)
 		}
 		time.Sleep(1 * time.Second)
 		for _, tab := range customerTablets {
