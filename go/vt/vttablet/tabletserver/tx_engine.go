@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -575,14 +573,4 @@ func (te *TxEngine) Release(connID int64) error {
 	conn.Release(tx.ConnRelease)
 
 	return nil
-}
-
-// FetchNext returns the next result set on the connection.
-func (te *TxEngine) FetchNext(ctx context.Context, connID int64, maxrows int) (*sqltypes.Result, error) {
-	conn, err := te.txPool.GetAndLock(connID, "for next result set")
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Unlock()
-	return conn.FetchNext(ctx, maxrows, true)
 }

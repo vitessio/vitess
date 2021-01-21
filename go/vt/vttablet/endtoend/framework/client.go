@@ -327,15 +327,6 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	return qr, nil
 }
 
-// FetchNext performs a FetchNext.
-func (client *QueryClient) FetchNext() (*sqltypes.Result, error) {
-	qr, err := client.server.FetchNext(client.ctx, &client.target, client.reservedID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-	if err != nil {
-		return nil, err
-	}
-	return qr, nil
-}
-
 // Release performs a Release.
 func (client *QueryClient) Release() error {
 	err := client.server.Release(client.ctx, &client.target, client.transactionID, client.reservedID)

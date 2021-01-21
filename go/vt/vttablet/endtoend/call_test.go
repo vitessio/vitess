@@ -19,53 +19,54 @@ package endtoend
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
-var procSQL = []string{`create procedure proc1()
+var procSQL = []string{`create procedure proc_select1()
 BEGIN
 	select intval from vitess_test;
-END;`, `create procedure proc4()
+END;`, `create procedure proc_select4()
 BEGIN
 	select intval from vitess_test;
 	select intval from vitess_test;
 	select intval from vitess_test;
 	select intval from vitess_test;
+END;`, `create procedure proc_dml()
+BEGIN
+    start transaction;
+	insert into vitess_test(intval) values(1432);
+	update vitess_test set intval = 2341 where intval = 1432;
+	delete from vitess_test where intval = 2341;
+    commit;
 END;`}
 
 func TestCallProcedure(t *testing.T) {
 	client := framework.NewClient()
-	_, err := client.ReserveExecute("select 1", nil, nil)
-	require.NoError(t, err)
-	defer client.Release()
-
 	type testcases struct {
-		query string
-		rc    int
+		query   string
+		wantErr bool
 	}
 	tcases := []testcases{{
-		query: "call proc1()",
-		rc:    1 + 1,
+		query:   "call proc_select1()",
+		wantErr: true,
 	}, {
-		query: "call proc4()",
-		rc:    4 + 1,
+		query:   "call proc_select4()",
+		wantErr: true,
+	}, {
+		query: "call proc_dml()",
 	}}
 
 	for _, tc := range tcases {
 		t.Run(tc.query, func(t *testing.T) {
-			qr, err := client.Execute(tc.query, nil)
-			require.NoError(t, err)
-			localCnt := 1
-			for qr.More {
-				qr, err = client.FetchNext()
-				require.NoError(t, err)
-				localCnt++
+			_, err := client.Execute(tc.query, nil)
+			if tc.wantErr {
+				require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+				return
 			}
-			assert.Equal(t, tc.rc, localCnt)
+			require.NoError(t, err)
+
 		})
 	}
 }
