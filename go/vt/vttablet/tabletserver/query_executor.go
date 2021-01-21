@@ -204,7 +204,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.txFetch(conn, true)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
-	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanCallProc:
+	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
@@ -226,6 +226,8 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execDDL(conn)
 	case p.PlanLoad:
 		return qre.execLoad(conn)
+	case p.PlanCallProc:
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Call Procedure not supported inside a transaction")
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
