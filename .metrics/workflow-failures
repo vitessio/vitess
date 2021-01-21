@@ -914,4 +914,6 @@
 2021-01-21T12:33:18Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/501103010
 2021-01-21T12:33:18Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/501103007
 2021-01-21T12:33:18Z,unit_race,https://github.com/vitessio/vitess/actions/runs/501103015
+2021-01-21T12:53:54Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/501143282
+2021-01-21T12:53:54Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/501143293
 2021-01-21T12:53:54Z,endtoend,https://github.com/vitessio/vitess/actions/runs/501143309
