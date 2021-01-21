@@ -1,6 +1,7 @@
 <!--
   How to contribute: https://vitess.io/docs/contributing/
-  We’re looking forward to any contribution! Before you start larger contributions, make sure to reach out first and discuss your plans with us.
+  Please first make sure there is an open Issue to discuss the feature/fix suggested in this PR.
+  If this is a new feature, please mark the Issue as "RFC".
  -->
 
 <!-- if this PR is Work in Progress please create it as a Draft Pull Request -->
