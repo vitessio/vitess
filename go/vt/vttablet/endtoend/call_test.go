@@ -70,3 +70,15 @@ func TestCallProcedure(t *testing.T) {
 		})
 	}
 }
+
+func TestCallProcedureInsideTx(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.BeginExecute(`call proc_dml()`, nil, nil)
+	require.EqualError(t, err, "Call Procedure not supported inside a transaction (CallerID: dev)")
+
+	_, err = client.Execute(`call proc_dml()`, nil)
+	require.EqualError(t, err, "Call Procedure not supported inside a transaction (CallerID: dev)")
+
+	client.Release()
+}
