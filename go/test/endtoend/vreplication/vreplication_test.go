@@ -63,10 +63,10 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.
 }
 
 func throttleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app/?app=%s&duration=1h", throttlerAppName))
+	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerAppName))
 }
 func unthrottleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app/?app=%s", throttlerAppName))
+	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerAppName))
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
