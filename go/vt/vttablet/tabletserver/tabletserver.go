@@ -1630,15 +1630,17 @@ func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), 1)
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), 1)
 
-		w.Write([]byte("ok"))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(appThrottle)
 	})
 	tsv.exporter.HandleFunc("/throttler/unthrottle-app/", func(w http.ResponseWriter, r *http.Request) {
 		appName := r.URL.Query().Get("app")
-		tsv.lagThrottler.UnthrottleApp(appName)
+		appThrottle := tsv.lagThrottler.UnthrottleApp(appName)
 
-		w.Write([]byte("ok"))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(appThrottle)
 	})
 }
 
