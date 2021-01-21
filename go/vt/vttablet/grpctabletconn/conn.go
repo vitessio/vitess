@@ -17,18 +17,22 @@ limitations under the License.
 package grpctabletconn
 
 import (
+	"context"
 	"flag"
 	"io"
+	"strings"
 	"sync"
-
-	"context"
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -93,13 +97,15 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 }
 
 // Execute sends the query to VTTablet.
-func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
+	var er *querypb.ExecuteResponse
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
+	defer conn.HandlePanic(&err)
+
 	if conn.cc == nil {
 		return nil, tabletconn.ConnClosed
 	}
-
 	req := &querypb.ExecuteRequest{
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -112,7 +118,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 		Options:       options,
 		ReservedId:    reservedID,
 	}
-	er, err := conn.c.Execute(ctx, req)
+	er, err = conn.c.Execute(ctx, req)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}
@@ -732,6 +738,13 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 
 // HandlePanic is a no-op.
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
+	if x := recover(); x != nil {
+		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		errInner := x.(error)
+		if strings.Contains(errInner.Error(), "index out of range") {
+			*err = mysql.NewSQLError(mysql.ERBadFieldError, mysql.SSBadFieldError, "query like 'select *' may encounter this problem, cause fields length cached in tablet & row length are not compatible, it may work again when tablet reload schema timely, try to ReloadSchema manually")
+		}
+	}
 }
 
 //ReserveBeginExecute implements the queryservice interface
