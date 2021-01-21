@@ -49,16 +49,20 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 
 // ApplySchemaWithOutput applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, ddlStrategy string) (result string, err error) {
-	return vtctlclient.ExecuteCommandWithOutput(
+	args := []string{
 		"ApplySchema",
 		"-sql", SQL,
-		"-ddl_strategy", ddlStrategy,
-		Keyspace)
+	}
+	if ddlStrategy != "" {
+		args = append(args, "-ddl_strategy", ddlStrategy)
+	}
+	args = append(args, Keyspace)
+	return vtctlclient.ExecuteCommandWithOutput(args...)
 }
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "")
+	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "direct")
 	return err
 }
 
@@ -96,7 +100,7 @@ func (vtctlclient *VtctlClientProcess) OnlineDDLCancelMigration(Keyspace, uuid s
 	)
 }
 
-// OnlineDDLCancelMigration cancels a given migration uuid
+// OnlineDDLCancelAllMigrations cancels all migrations for a keyspace
 func (vtctlclient *VtctlClientProcess) OnlineDDLCancelAllMigrations(Keyspace string) (result string, err error) {
 	return vtctlclient.ExecuteCommandWithOutput(
 		"OnlineDDL",
