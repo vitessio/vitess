@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -150,6 +151,110 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	}
 
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
+}
+
+// GetTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetTablet(ctx context.Context, req *vtctldatapb.GetTabletRequest) (*vtctldatapb.GetTabletResponse, error) {
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetTabletResponse{
+		Tablet: ti.Tablet,
+	}, nil
+}
+
+// GetTablets is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTabletsRequest) (*vtctldatapb.GetTabletsResponse, error) {
+	// It is possible that an old primary has not yet updated its type in the
+	// topo. In that case, report its type as UNKNOWN. It used to be MASTER but
+	// is no longer the serving primary.
+	adjustTypeForStalePrimary := func(ti *topo.TabletInfo, mtst time.Time) {
+		if ti.Type == topodatapb.TabletType_MASTER && ti.GetMasterTermStartTime().Before(mtst) {
+			ti.Tablet.Type = topodatapb.TabletType_UNKNOWN
+		}
+	}
+
+	if req.Keyspace != "" && req.Shard != "" {
+		tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+		if err != nil {
+			return nil, err
+		}
+
+		var trueMasterTimestamp time.Time
+		for _, ti := range tabletMap {
+			if ti.Type == topodatapb.TabletType_MASTER {
+				masterTimestamp := ti.GetMasterTermStartTime()
+				if masterTimestamp.After(trueMasterTimestamp) {
+					trueMasterTimestamp = masterTimestamp
+				}
+			}
+		}
+
+		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
+		for _, ti := range tabletMap {
+			adjustTypeForStalePrimary(ti, trueMasterTimestamp)
+			tablets = append(tablets, ti.Tablet)
+		}
+
+		return &vtctldatapb.GetTabletsResponse{Tablets: tablets}, nil
+	}
+
+	cells := req.Cells
+	if len(cells) == 0 {
+		c, err := s.ts.GetKnownCells(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		cells = c
+	}
+
+	var allTablets []*topodatapb.Tablet
+
+	for _, cell := range cells {
+		tablets, err := topotools.GetAllTablets(ctx, s.ts, cell)
+		if err != nil {
+			return nil, err
+		}
+
+		// Collect true master term start times, and optionally filter out any
+		// tablets by keyspace according to the request.
+		masterTermStartTimes := map[string]time.Time{}
+		filteredTablets := make([]*topo.TabletInfo, 0, len(tablets))
+
+		for _, tablet := range tablets {
+			if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
+				continue
+			}
+
+			key := tablet.Keyspace + "." + tablet.Shard
+			if v, ok := masterTermStartTimes[key]; ok {
+				if tablet.GetMasterTermStartTime().After(v) {
+					masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+				}
+			} else {
+				masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+			}
+
+			filteredTablets = append(filteredTablets, tablet)
+		}
+
+		// collect the tablets with adjusted master term start times. they've
+		// already been filtered by the above loop, so no keyspace filtering
+		// here.
+		for _, ti := range filteredTablets {
+			key := ti.Keyspace + "." + ti.Shard
+			adjustTypeForStalePrimary(ti, masterTermStartTimes[key])
+
+			allTablets = append(allTablets, ti.Tablet)
+		}
+	}
+
+	return &vtctldatapb.GetTabletsResponse{
+		Tablets: allTablets,
+	}, nil
 }
 
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.

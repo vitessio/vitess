@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	workflowActionStart          = "Start"
+	workflowActionCreate         = "Create"
 	workflowActionSwitchTraffic  = "SwitchTraffic"
 	workflowActionReverseTraffic = "ReverseTraffic"
 	workflowActionComplete       = "Complete"
@@ -58,9 +58,9 @@ var (
 	currentWorkflowType wrangler.VReplicationWorkflowType
 )
 
-func reshard2Start(t *testing.T, sourceShards, targetShards string) error {
+func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) error {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
-		"", workflowActionStart, "", sourceShards, targetShards)
+		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 	catchup(t, targetTab1, workflowName, "Reshard")
@@ -69,12 +69,12 @@ func reshard2Start(t *testing.T, sourceShards, targetShards string) error {
 	return nil
 }
 
-func moveTables2Start(t *testing.T, tables string) error {
+func createMoveTablesWorkflow(t *testing.T, tables string) error {
 	if tables == "" {
 		tables = tablesToMove
 	}
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
-		tables, workflowActionStart, "", "", "")
+		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
@@ -96,7 +96,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	}
 	args = append(args, "-v2")
 	switch action {
-	case workflowActionStart:
+	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
 			args = append(args, "-source", sourceKs, "-tables", tables)
 		} else {
@@ -244,7 +244,7 @@ func testReshardV2Workflow(t *testing.T) {
 	currentWorkflowType = wrangler.ReshardWorkflow
 
 	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
-	reshard2Start(t, "-80,80-", "-40,40-80,80-c0,c0-")
+	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
 	if !strings.Contains(lastOutput, "Workflow started successfully") {
 		t.Fail()
 	}
@@ -259,7 +259,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	// test basic forward and reverse flows
 	setupCustomerKeyspace(t)
-	moveTables2Start(t, "customer")
+	createMoveTablesWorkflow(t, "customer")
 	if !strings.Contains(lastOutput, "Workflow started successfully") {
 		t.Fail()
 	}
@@ -272,7 +272,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	output, _ := vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "No workflows found in keyspace customer")
 
-	moveTables2Start(t, "customer2")
+	createMoveTablesWorkflow(t, "customer2")
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "Following workflow(s) found in keyspace customer: wf1")
 
@@ -523,7 +523,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		switchWrites(t, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		switchWrites(t, ksWorkflow, true)
+		switchWrites(t, reverseKsWorkflow, true)
 		validateWritesRouteToSource(t)
 
 		validateReadsRouteToSource(t, "replica")

@@ -242,10 +242,11 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
+	tme.tmeDB = fakesqldb.New(t)
 
 	tabletID := 10
 	for _, shard := range sourceShards {
-		tme.sourceMasters = append(tme.sourceMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks", shard)))
+		tme.sourceMasters = append(tme.sourceMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, tme.tmeDB, TabletKeyspaceShard(t, "ks", shard)))
 		tabletID += 10
 
 		_, sourceKeyRange, err := topo.ValidateShardName(shard)
@@ -261,7 +262,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	}
 
 	for _, shard := range targetShards {
-		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks", shard)))
+		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, tme.tmeDB, TabletKeyspaceShard(t, "ks", shard)))
 		tabletID += 10
 
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
