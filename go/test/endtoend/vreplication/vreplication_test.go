@@ -64,6 +64,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
 	vc = InitCluster(t, allCells)
+
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
 	defer func() { defaultReplicas = 1 }()
@@ -524,7 +525,7 @@ func shardMerchant(t *testing.T) {
 }
 
 func vdiff(t *testing.T, workflow string) {
-	t.Run("vduff", func(t *testing.T) {
+	t.Run("vdiff", func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-format", "json", workflow)
 		fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
 		require.Nil(t, err)
