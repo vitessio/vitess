@@ -72,8 +72,7 @@ var (
 	sqlGrantThrottlerUser = []string{
 		`GRANT SELECT ON _vt.heartbeat TO %s`,
 	}
-	replicationLagQueryColumn = "lag"
-	replicationLagQuery       = fmt.Sprintf(`select unix_timestamp(now(6))-max(ts/1000000000) as %s from _vt.heartbeat`, replicationLagQueryColumn)
+	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 )
 
 func init() {
@@ -347,8 +346,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 		metric.Err = fmt.Errorf("no results for ReadSelfMySQLThrottleMetric")
 		return metric
 	}
-	metric.Value, metric.Err = row.ToFloat64(replicationLagQueryColumn)
-
+	metric.Value, metric.Err = row.ToFloat64("replication_lag")
 	return metric
 }
 
