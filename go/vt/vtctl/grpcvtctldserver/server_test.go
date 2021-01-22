@@ -39,6 +39,10 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+func init() {
+	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
+}
+
 func TestFindAllShardsInKeyspace(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
@@ -264,7 +268,6 @@ func TestGetTablet(t *testing.T) {
 }
 
 func TestGetSchema(t *testing.T) {
-	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
 	ctx := context.Background()
 	ts := memorytopo.NewServer("zone1")
 	vtctld := NewVtctldServer(ts)
