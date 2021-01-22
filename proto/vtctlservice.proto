@@ -34,6 +34,8 @@ service Vtctld {
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
+  // GetBackups returns all the backups for a shard.
+  rpc GetBackups(vtctldata.GetBackupsRequest) returns (vtctldata.GetBackupsResponse) {};
   // GetCellInfoNames returns all the cells for which we have a CellInfo object,
   // meaning we have a topology service registered.
   rpc GetCellInfoNames(vtctldata.GetCellInfoNamesRequest) returns (vtctldata.GetCellInfoNamesResponse) {};
