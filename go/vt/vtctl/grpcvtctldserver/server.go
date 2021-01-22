@@ -81,6 +81,11 @@ func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctlda
 	}, nil
 }
 
+// GetBackups is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBackupsRequest) (*vtctldatapb.GetBackupsResponse, error) {
+	panic("unimplemented!")
+}
+
 // GetCellInfoNames is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetCellInfoNames(ctx context.Context, req *vtctldatapb.GetCellInfoNamesRequest) (*vtctldatapb.GetCellInfoNamesResponse, error) {
 	names, err := s.ts.GetCellInfoNames(ctx)

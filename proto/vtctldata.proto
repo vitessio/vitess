@@ -25,6 +25,7 @@ package vtctldata;
 import "google/protobuf/duration.proto";
 
 import "logutil.proto";
+import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
@@ -39,6 +40,15 @@ message ExecuteVtctlCommandRequest {
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
+}
+
+message GetBackupsRequest {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message GetBackupsResponse {
+  repeated mysqlctl.BackupInfo backups = 1;
 }
 
 message GetCellInfoNamesRequest {
