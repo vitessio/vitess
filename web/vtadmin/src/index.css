@@ -52,9 +52,9 @@
   --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
 
   /* Body text */
-  --fontSizeDefault: 1.5rem;
-  --fontSizeLarge: 1.7rem;
-  --fontSizeSmall: 1.3rem;
+  --fontSizeDefault: 1.4rem;
+  --fontSizeLarge: 1.6rem;
+  --fontSizeSmall: 1.2rem;
   --lineHeightBody: 1.36;
 
   /* Headings */

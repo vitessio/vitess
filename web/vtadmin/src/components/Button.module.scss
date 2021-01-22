@@ -9,7 +9,7 @@
   font-weight: 500;
   line-height: var(--lineHeightBody);
   outline: none;
-  padding: 8px 11px 9px;
+  padding: 8px 11px;
   user-select: none;
   transition: all 0.1s ease-in-out;
   white-space: nowrap;
@@ -18,10 +18,10 @@
   .icon {
     display: inline-block;
     fill: var(--textColorInverted);
-    height: 1.2em;
+    height: 1.4em;
     margin-right: 0.4em;
-    vertical-align: text-bottom;
-    width: 1.2em;
+    vertical-align: middle;
+    width: 1.4em;
   }
 }
 
@@ -72,6 +72,7 @@
 }
 
 .button.sizeSmall {
+  border-width: 1px;
   font-size: var(--fontSizeSmall);
   padding: 4px 6px;
 }

@@ -6,15 +6,15 @@
 }
 
 .iconContainer {
-  column-gap: 12px;
+  column-gap: 0;
   display: grid;
   grid-template-columns: repeat(12, min-content);
-  row-gap: 12px;
+  row-gap: 0;
 }
 
 .icon {
   fill: var(--colorPrimary);
-  padding: 10px;
+  padding: 16px;
   transition: fill 0.1s ease-in-out;
 
   &:hover {
