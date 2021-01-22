@@ -25,6 +25,7 @@ package vtctldata;
 import "google/protobuf/duration.proto";
 
 import "logutil.proto";
+import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
 
@@ -75,6 +76,29 @@ message GetKeyspaceRequest {
 
 message GetKeyspaceResponse {
   Keyspace keyspace = 1;
+}
+
+message GetSchemaRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // Tables is a list of tables for which we should gather information. Each is
+  // either an exact match, or a regular expression of the form /regexp/.
+  repeated string tables = 2;
+  // ExcludeTables is a list of tables to exclude from the result. Each is
+  // either an exact match, or a regular expression of the form /regexp/.
+  repeated string exclude_tables = 3;
+  // IncludeViews specifies whether to include views in the result.
+  bool include_views = 4;
+  // TableNamesOnly specifies whether to limit the results to just table names,
+  // rather than full schema information for each table.
+  bool table_names_only = 5;
+  // TableSizesOnly specifies whether to limit the results to just table sizes,
+  // rather than full schema information for each table. It is ignored if
+  // TableNamesOnly is set to true.
+  bool table_sizes_only = 6;
+}
+
+message GetSchemaResponse {
+  tabletmanagerdata.SchemaDefinition schema = 1;
 }
 
 message GetSrvVSchemaRequest {

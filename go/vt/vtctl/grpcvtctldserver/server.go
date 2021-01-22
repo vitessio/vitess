@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -50,12 +51,13 @@ const (
 
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
-	ts *topo.Server
+	ts  *topo.Server
+	tmc tmclient.TabletManagerClient
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
 func NewVtctldServer(ts *topo.Server) *VtctldServer {
-	return &VtctldServer{ts: ts}
+	return &VtctldServer{ts: ts, tmc: tmclient.NewTabletManagerClient()}
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -151,6 +153,48 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	}
 
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
+}
+
+// GetSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest) (*vtctldatapb.GetSchemaResponse, error) {
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, fmt.Errorf("GetTablet(%v) failed: %w", req.TabletAlias, err)
+	}
+
+	sd, err := s.tmc.GetSchema(ctx, tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews)
+	if err != nil {
+		return nil, fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %w", tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews, err)
+	}
+
+	if req.TableNamesOnly {
+		nameTds := make([]*tabletmanagerdatapb.TableDefinition, len(sd.TableDefinitions))
+
+		for i, td := range sd.TableDefinitions {
+			nameTds[i] = &tabletmanagerdatapb.TableDefinition{
+				Name: td.Name,
+			}
+		}
+
+		sd.TableDefinitions = nameTds
+	} else if req.TableSizesOnly {
+		sizeTds := make([]*tabletmanagerdatapb.TableDefinition, len(sd.TableDefinitions))
+
+		for i, td := range sd.TableDefinitions {
+			sizeTds[i] = &tabletmanagerdatapb.TableDefinition{
+				Name:       td.Name,
+				Type:       td.Type,
+				RowCount:   td.RowCount,
+				DataLength: td.DataLength,
+			}
+		}
+
+		sd.TableDefinitions = sizeTds
+	}
+
+	return &vtctldatapb.GetSchemaResponse{
+		Schema: sd,
+	}, nil
 }
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.

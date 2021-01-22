@@ -82,6 +82,15 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
+// GetSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSchema(ctx, in, opts...)
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetSrvVSchema(ctx context.Context, in *vtctldatapb.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvVSchemaResponse, error) {
 	if client.c == nil {
