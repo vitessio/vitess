@@ -26,9 +26,9 @@ import (
 // replace objects in fields or in slices.
 func EmitReplacementMethods(vd *VisitorPlan) string {
 	var sb builder
-	for _, s := range vd.Switches {
+	for _, s := range vd.ASTTypes {
 		for _, k := range s.Fields {
-			sb.appendF(k.asReplMethod())
+			sb.appendF(k.asReplMethod(s.Type))
 			sb.newLine()
 		}
 	}
@@ -40,11 +40,11 @@ func EmitReplacementMethods(vd *VisitorPlan) string {
 // and produces a string from it. This method will produce the switch cases needed to cover the Vitess AST.
 func EmitTypeSwitches(vd *VisitorPlan) string {
 	var sb builder
-	for _, s := range vd.Switches {
+	for _, s := range vd.ASTTypes {
 		sb.newLine()
-		sb.appendF("	case %s:", s.Type.toTypString())
+		sb.appendF("	case %s:", s.Type.toTypeString())
 		for _, k := range s.Fields {
-			sb.appendF(k.asSwitchCase())
+			sb.appendF(k.asSwitchCase(s.Type))
 		}
 	}
 

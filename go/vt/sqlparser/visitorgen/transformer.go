@@ -28,7 +28,7 @@ func Transform(input *SourceFile) *SourceInformation {
 	for _, l := range input.lines {
 		switch line := l.(type) {
 		case *FuncDeclaration:
-			interestingTypes[line.receiver.typ.toTypString()] = line.receiver.typ
+			interestingTypes[line.receiver.typ.toTypeString()] = line.receiver.typ
 		case *StructDeclaration:
 			structs[line.name] = line
 		case *TypeAlias:
@@ -57,7 +57,7 @@ type SourceInformation struct {
 func (v *SourceInformation) String() string {
 	var types string
 	for _, k := range v.interestingTypes {
-		types += k.toTypString() + "\n"
+		types += k.toTypeString() + "\n"
 	}
 	var structs string
 	for _, k := range v.structs {
@@ -86,10 +86,10 @@ func (v *SourceInformation) getItemTypeOfArray(typ Type) Type {
 }
 
 func (v *SourceInformation) isSQLNode(typ Type) bool {
-	_, isInteresting := v.interestingTypes[typ.toTypString()]
+	_, isInteresting := v.interestingTypes[typ.toTypeString()]
 	if isInteresting {
 		return true
 	}
-	_, isInterface := v.interfaces[typ.toTypString()]
+	_, isInterface := v.interfaces[typ.toTypeString()]
 	return isInterface
 }

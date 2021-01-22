@@ -23,10 +23,10 @@ import (
 )
 
 func TestSingleItem(t *testing.T) {
+	container := &Ref{&TypeString{"Struct"}}
 	sfi := SingleFieldItem{
-		StructType: &Ref{&TypeString{"Struct"}},
-		FieldType:  &TypeString{"string"},
-		FieldName:  "Field",
+		FieldType: &TypeString{"string"},
+		FieldName: "Field",
 	}
 
 	expectedReplacer := `func replaceStructField(newNode, parent SQLNode) {
@@ -34,15 +34,15 @@ func TestSingleItem(t *testing.T) {
 }`
 
 	expectedSwitch := `		a.apply(node, n.Field, replaceStructField)`
-	require.Equal(t, expectedReplacer, sfi.asReplMethod())
-	require.Equal(t, expectedSwitch, sfi.asSwitchCase())
+	require.Equal(t, expectedReplacer, sfi.asReplMethod(container))
+	require.Equal(t, expectedSwitch, sfi.asSwitchCase(container))
 }
 
 func TestArrayFieldItem(t *testing.T) {
+	container := &Ref{&TypeString{"Struct"}}
 	sfi := ArrayFieldItem{
-		StructType: &Ref{&TypeString{"Struct"}},
-		ItemType:   &TypeString{"string"},
-		FieldName:  "Field",
+		ItemType:  &TypeString{"string"},
+		FieldName: "Field",
 	}
 
 	expectedReplacer := `type replaceStructField int
@@ -61,14 +61,14 @@ func (r *replaceStructField) inc() {
 			a.apply(node, item, replacerFieldB.replace)
 			replacerFieldB.inc()
 		}`
-	require.Equal(t, expectedReplacer, sfi.asReplMethod())
-	require.Equal(t, expectedSwitch, sfi.asSwitchCase())
+	require.Equal(t, expectedReplacer, sfi.asReplMethod(container))
+	require.Equal(t, expectedSwitch, sfi.asSwitchCase(container))
 }
 
 func TestArrayItem(t *testing.T) {
+	container := &Ref{&TypeString{"Struct"}}
 	sfi := ArrayItem{
-		StructType: &Ref{&TypeString{"Struct"}},
-		ItemType:   &TypeString{"string"},
+		ItemType: &TypeString{"string"},
 	}
 
 	expectedReplacer := `type replaceStructItems int
@@ -87,6 +87,24 @@ func (r *replaceStructItems) inc() {
 			a.apply(node, item, replacerRef.replace)
 			replacerRef.inc()
 		}`
-	require.Equal(t, expectedReplacer, sfi.asReplMethod())
-	require.Equal(t, expectedSwitch, sfi.asSwitchCase())
+	require.Equal(t, expectedReplacer, sfi.asReplMethod(container))
+	require.Equal(t, expectedSwitch, sfi.asSwitchCase(container))
 }
+
+//func TestSmallStruct(t *testing.T) {
+//	sfi := &ASTType{
+//		Type: &Ref{&TypeString{"ByRef"}},
+//		Fields: []VisitorItem{&SingleFieldItem{
+//			StructType: &Ref{&TypeString{"Struct"}},
+//			FieldType:  &TypeString{"Node"},
+//			FieldName:  "Field",
+//		}},
+//	}
+//
+//	assert.Equal(t,
+//		`func (n *ByRef) clone() SQLNode {
+//	if in == nil {
+//		return nil
+//	}
+//}`, sfi.toCloneString())
+//}

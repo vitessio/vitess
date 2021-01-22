@@ -45,7 +45,7 @@ func TestEmptyStructVisitor(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type:   &Ref{&TypeString{"Struct"}},
 			Fields: []VisitorItem{},
 		}},
@@ -80,12 +80,11 @@ func TestStructWithSqlNodeField(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type: &Ref{&TypeString{"Struct"}},
 			Fields: []VisitorItem{&SingleFieldItem{
-				StructType: &Ref{&TypeString{"Struct"}},
-				FieldType:  &TypeString{"Node"},
-				FieldName:  "Field",
+				FieldType: &TypeString{"Node"},
+				FieldName: "Field",
 			}},
 		}},
 	}
@@ -120,7 +119,7 @@ func TestStructWithStringField2(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type:   &Ref{&TypeString{"Struct"}},
 			Fields: []VisitorItem{},
 		}},
@@ -156,11 +155,10 @@ func TestArrayAsSqlNode(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type: &Ref{&TypeString{"NodeArray"}},
 			Fields: []VisitorItem{&ArrayItem{
-				StructType: &Ref{&TypeString{"NodeArray"}},
-				ItemType:   &TypeString{"NodeInterface"},
+				ItemType: &TypeString{"NodeInterface"},
 			}},
 		}},
 	}
@@ -191,12 +189,11 @@ func TestStructWithStructField(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type: &Ref{&TypeString{"Struct"}},
 			Fields: []VisitorItem{&SingleFieldItem{
-				StructType: &Ref{&TypeString{"Struct"}},
-				FieldType:  &Ref{&TypeString{"Struct"}},
-				FieldName:  "Field",
+				FieldType: &Ref{&TypeString{"Struct"}},
+				FieldName: "Field",
 			}},
 		}},
 	}
@@ -231,12 +228,11 @@ func TestStructWithArrayOfNodes(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type: &Ref{&TypeString{"Struct"}},
 			Fields: []VisitorItem{&ArrayFieldItem{
-				StructType: &Ref{&TypeString{"Struct"}},
-				ItemType:   &TypeString{"NodeInterface"},
-				FieldName:  "Items",
+				ItemType:  &TypeString{"NodeInterface"},
+				FieldName: "Items",
 			}},
 		}},
 	}
@@ -271,7 +267,7 @@ func TestStructWithArrayOfStrings(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type:   &Ref{&TypeString{"Struct"}},
 			Fields: []VisitorItem{},
 		}},
@@ -302,7 +298,7 @@ func TestArrayOfStringsThatImplementSQLNode(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{{
+		ASTTypes: []*ASTType{{
 			Type:   &Ref{&TypeString{"Struct"}},
 			Fields: []VisitorItem{},
 		}},
@@ -346,25 +342,22 @@ func TestSortingOfOutputs(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{
+		ASTTypes: []*ASTType{
 			{Type: &Ref{&TypeString{"AStruct"}},
 				Fields: []VisitorItem{
 					&SingleFieldItem{
-						StructType: &Ref{&TypeString{"AStruct"}},
-						FieldType:  &TypeString{"NodeInterface"},
-						FieldName:  "AField",
+						FieldType: &TypeString{"NodeInterface"},
+						FieldName: "AField",
 					},
 					&SingleFieldItem{
-						StructType: &Ref{&TypeString{"AStruct"}},
-						FieldType:  &TypeString{"NodeInterface"},
-						FieldName:  "BField",
+						FieldType: &TypeString{"NodeInterface"},
+						FieldName: "BField",
 					}}},
 			{Type: &Ref{&TypeString{"BStruct"}},
 				Fields: []VisitorItem{
 					&SingleFieldItem{
-						StructType: &Ref{&TypeString{"BStruct"}},
-						FieldType:  &TypeString{"NodeInterface"},
-						FieldName:  "CField",
+						FieldType: &TypeString{"NodeInterface"},
+						FieldName: "CField",
 					}}}},
 	}
 	assert.Equal(t, expected.String(), result.String())
@@ -405,17 +398,15 @@ func TestAliasOfAlias(t *testing.T) {
 	result := ToVisitorPlan(input)
 
 	expected := &VisitorPlan{
-		Switches: []*SwitchCase{
+		ASTTypes: []*ASTType{
 			{Type: &TypeString{"AliasOfAlias"},
 				Fields: []VisitorItem{&ArrayItem{
-					StructType: &TypeString{"AliasOfAlias"},
-					ItemType:   &TypeString{"NodeInterface"},
+					ItemType: &TypeString{"NodeInterface"},
 				}},
 			},
 			{Type: &TypeString{"NodeArray"},
 				Fields: []VisitorItem{&ArrayItem{
-					StructType: &TypeString{"NodeArray"},
-					ItemType:   &TypeString{"NodeInterface"},
+					ItemType: &TypeString{"NodeInterface"},
 				}},
 			}},
 	}

@@ -64,7 +64,10 @@ type (
 	// Type represents a type in the golang type system. Used to keep track of type we need to handle,
 	// and the types of fields.
 	Type interface {
-		toTypString() string
+		// toTypeString returns the type name without the modifiers for it, such as * and []
+		toTypeString() string
+
+		// the full type name as seen in a go file
 		rawTypeName() string
 	}
 
@@ -104,15 +107,15 @@ func (t *SourceFile) String() string {
 	return result
 }
 
-func (t *Ref) toTypString() string {
-	return "*" + t.inner.toTypString()
+func (t *Ref) toTypeString() string {
+	return "*" + t.inner.toTypeString()
 }
 
-func (t *Array) toTypString() string {
-	return "[]" + t.inner.toTypString()
+func (t *Array) toTypeString() string {
+	return "[]" + t.inner.toTypeString()
 }
 
-func (t *TypeString) toTypString() string {
+func (t *TypeString) toTypeString() string {
 	return t.typName
 }
 
@@ -137,7 +140,7 @@ func (i *InterfaceDeclaration) toSastString() string {
 }
 
 func (a *TypeAlias) toSastString() string {
-	return "type " + a.name + " " + a.typ.toTypString()
+	return "type " + a.name + " " + a.typ.toTypeString()
 }
 
 func (s *StructDeclaration) toSastString() string {
@@ -159,10 +162,10 @@ func blockInNewLines(block string) string {
 // String returns a string representation of a field
 func (f *Field) String() string {
 	if f.name != "" {
-		return f.name + " " + f.typ.toTypString()
+		return f.name + " " + f.typ.toTypeString()
 	}
 
-	return f.typ.toTypString()
+	return f.typ.toTypeString()
 }
 
 func (t *TypeString) rawTypeName() string {
