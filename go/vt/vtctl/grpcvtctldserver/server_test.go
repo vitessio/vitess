@@ -28,8 +28,12 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -257,6 +261,186 @@ func TestGetTablet(t *testing.T) {
 		},
 	})
 	assert.Error(t, err)
+}
+
+func TestGetSchema(t *testing.T) {
+	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	vtctld := NewVtctldServer(ts)
+
+	validAlias := &topodatapb.TabletAlias{
+		Cell: "zone1",
+		Uid:  100,
+	}
+	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+		Alias: validAlias,
+	})
+	otherAlias := &topodatapb.TabletAlias{
+		Cell: "zone1",
+		Uid:  101,
+	}
+	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+		Alias: otherAlias,
+	})
+
+	// we need to run this on each test case or they will pollute each other
+	setupSchema := func() {
+		testutil.TabletManagerClient.Schemas[topoproto.TabletAliasString(validAlias)] = &tabletmanagerdatapb.SchemaDefinition{
+			DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name: "t1",
+					Schema: `CREATE TABLE t1 (
+	id int(11) not null,
+	PRIMARY KEY (id)
+);`,
+					Type:       "BASE",
+					Columns:    []string{"id"},
+					DataLength: 100,
+					RowCount:   50,
+					Fields: []*querypb.Field{
+						{
+							Name: "id",
+							Type: querypb.Type_INT32,
+						},
+					},
+				},
+			},
+		}
+	}
+
+	tests := []*struct {
+		name      string
+		req       *vtctldatapb.GetSchemaRequest
+		expected  *vtctldatapb.GetSchemaResponse
+		shouldErr bool
+	}{
+		{
+			name: "normal path",
+			req: &vtctldatapb.GetSchemaRequest{
+				TabletAlias: validAlias,
+			},
+			expected: &vtctldatapb.GetSchemaResponse{
+				Schema: &tabletmanagerdatapb.SchemaDefinition{
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name: "t1",
+							Schema: `CREATE TABLE t1 (
+	id int(11) not null,
+	PRIMARY KEY (id)
+);`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "table names only",
+			req: &vtctldatapb.GetSchemaRequest{
+				TabletAlias:    validAlias,
+				TableNamesOnly: true,
+			},
+			expected: &vtctldatapb.GetSchemaResponse{
+				Schema: &tabletmanagerdatapb.SchemaDefinition{
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name: "t1",
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "table sizes only",
+			req: &vtctldatapb.GetSchemaRequest{
+				TabletAlias:    validAlias,
+				TableSizesOnly: true,
+			},
+			expected: &vtctldatapb.GetSchemaResponse{
+				Schema: &tabletmanagerdatapb.SchemaDefinition{
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Type:       "BASE",
+							DataLength: 100,
+							RowCount:   50,
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "table names take precedence over table sizes",
+			req: &vtctldatapb.GetSchemaRequest{
+				TabletAlias:    validAlias,
+				TableNamesOnly: true,
+				TableSizesOnly: true,
+			},
+			expected: &vtctldatapb.GetSchemaResponse{
+				Schema: &tabletmanagerdatapb.SchemaDefinition{
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name: "t1",
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		// error cases
+		{
+			name: "no tablet",
+			req: &vtctldatapb.GetSchemaRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "notfound",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "no schema",
+			req: &vtctldatapb.GetSchemaRequest{
+				TabletAlias: otherAlias,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupSchema()
+
+			resp, err := vtctld.GetSchema(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
 }
 
 func TestGetSrvVSchema(t *testing.T) {
