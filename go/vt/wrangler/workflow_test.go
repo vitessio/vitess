@@ -50,12 +50,16 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicatio
 	return mtwf
 }
 
+func testComplete(t *testing.T, vrwf *VReplicationWorkflow) error {
+	_, err := vrwf.Complete()
+	return err
+}
 func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf := getMoveTablesWorkflow(t, "cell1,cell2", "replica,rdonly")
 	require.False(t, mtwf.Exists())
 	mtwf.ws = &workflowState{}
 	require.True(t, mtwf.Exists())
-	require.Errorf(t, mtwf.Complete(), ErrWorkflowNotFullySwitched)
+	require.Errorf(t, testComplete(t, mtwf), ErrWorkflowNotFullySwitched)
 	mtwf.ws.WritesSwitched = true
 	require.Errorf(t, mtwf.Cancel(), ErrWorkflowPartiallySwitched)
 
@@ -165,12 +169,12 @@ func TestMoveTablesV2(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme)
 	tme.expectNoPreviousJournals()
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	tme.expectNoPreviousReverseJournals()
-	require.NoError(t, wf.ReverseTraffic())
+	require.NoError(t, testReverse(t, wf))
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 }
 
@@ -211,7 +215,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme)
 	tme.expectNoPreviousJournals()
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 
 	//16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
@@ -220,13 +224,23 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
-	require.NoError(t, wf.Complete())
+	require.NoError(t, testComplete(t, wf))
 	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
 	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
+}
+
+func testSwitchForward(t *testing.T, wf *VReplicationWorkflow) error {
+	_, err := wf.SwitchTraffic(DirectionForward)
+	return err
+}
+
+func testReverse(t *testing.T, wf *VReplicationWorkflow) error {
+	_, err := wf.ReverseTraffic()
+	return err
 }
 
 func TestMoveTablesV2Partial(t *testing.T) {
@@ -252,36 +266,36 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "replica"
 	wf.params.Cells = "cell1"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. Replica switched in cells: cell1. Rdonly not switched. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "replica"
 	wf.params.Cells = "cell2"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. All Replica Reads Switched. Rdonly not switched. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "rdonly"
 	wf.params.Cells = "cell1,cell2"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateReadsSwitched, wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "replica,rdonly"
-	require.NoError(t, wf.SwitchTraffic(DirectionBackward))
+	require.NoError(t, testReverse(t, wf))
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "rdonly"
 	wf.params.Cells = "cell1"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. Replica not switched. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "rdonly"
 	wf.params.Cells = "cell2"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched", wf.CurrentState())
 
 }
@@ -345,9 +359,9 @@ func TestReshardV2(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	expectReshardQueries(t, tme)
 	tme.expectNoPreviousJournals()
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
-	require.NoError(t, wf.Complete())
+	require.NoError(t, testComplete(t, wf))
 	si, err := wf.wr.ts.GetShard(ctx, "ks", "-40")
 	require.Contains(t, err.Error(), "node doesn't exist")
 	require.Nil(t, si)
