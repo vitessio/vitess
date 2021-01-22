@@ -77,7 +77,6 @@ sleep 3 # TODO: Required for now!
 
 ./304_switch_reads.sh
 ./305_switch_writes.sh
-exit
 
 mysql --table < ../common/select_customer-80_data.sql
 mysql --table < ../common/select_customer80-_data.sql
