@@ -367,6 +367,29 @@ func TestSelectSystemVariables(t *testing.T) {
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
+// Must fail until https://github.com/vitessio/vitess/issues/7301 is not fixed.
+func TestSelectSingleVitessAwareVariable(t *testing.T) {
+	executor, _, _, _ := createLegacyExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select @@autocommit"
+
+	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@@autocommit", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+		}},
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, wantResult, result, "Mismatch")
+}
+
 func TestSelectUserDefindVariable(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
