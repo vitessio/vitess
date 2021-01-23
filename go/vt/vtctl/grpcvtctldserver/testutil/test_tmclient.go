@@ -27,15 +27,15 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TestTabletManagerClient implements the tmclient.TabletManagerClient for
+// tabletManagerClient implements the tmclient.TabletManagerClient for
 // testing. It allows users to mock various tmclient methods.
-type TestTabletManagerClient struct {
+type tabletManagerClient struct {
 	tmclient.TabletManagerClient
 	Schemas map[string]*tabletmanagerdatapb.SchemaDefinition
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (c *TestTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (c *tabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	key := topoproto.TabletAliasString(tablet.Alias)
 
 	schema, ok := c.Schemas[key]
@@ -53,7 +53,7 @@ const TabletManagerClientProtocol = "grpcvtctldserver.testutil"
 
 // TabletManagerClient is the singleton test client instance. It is public and
 // singleton to allow tests to mutate and verify its state.
-var TabletManagerClient = &TestTabletManagerClient{
+var TabletManagerClient = &tabletManagerClient{
 	Schemas: map[string]*tabletmanagerdatapb.SchemaDefinition{},
 }
 
