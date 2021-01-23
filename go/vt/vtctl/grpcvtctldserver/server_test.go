@@ -27,11 +27,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -41,6 +43,7 @@ import (
 
 func init() {
 	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
+	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
 }
 
 func TestFindAllShardsInKeyspace(t *testing.T) {
@@ -80,6 +83,58 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 
 	_, err = vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: "nothing"})
 	assert.Error(t, err)
+}
+
+func TestGetBackups(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer()
+	vtctld := NewVtctldServer(ts)
+
+	testutil.BackupStorage.Backups = map[string][]string{
+		"testkeyspace/-": {"backup1", "backup2"},
+	}
+
+	expected := &vtctldatapb.GetBackupsResponse{
+		Backups: []*mysqlctlpb.BackupInfo{
+			{
+				Directory: "testkeyspace/-",
+				Name:      "backup1",
+			},
+			{
+				Directory: "testkeyspace/-",
+				Name:      "backup2",
+			},
+		},
+	}
+
+	resp, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, expected, resp)
+
+	t.Run("no backupstorage", func(t *testing.T) {
+		*backupstorage.BackupStorageImplementation = "doesnotexist"
+		defer func() { *backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation }()
+
+		_, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("listbackups error", func(t *testing.T) {
+		testutil.BackupStorage.ListBackupsError = assert.AnError
+		defer func() { testutil.BackupStorage.ListBackupsError = nil }()
+
+		_, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		})
+		assert.Error(t, err)
+	})
 }
 
 func TestGetKeyspace(t *testing.T) {
