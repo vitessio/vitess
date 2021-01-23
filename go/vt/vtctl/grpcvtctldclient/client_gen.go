@@ -37,6 +37,15 @@ func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in 
 	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
 }
 
+// GetBackups is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetBackups(ctx context.Context, in *vtctldatapb.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetBackupsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetBackups(ctx, in, opts...)
+}
+
 // GetCellInfo is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetCellInfo(ctx context.Context, in *vtctldatapb.GetCellInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoResponse, error) {
 	if client.c == nil {
