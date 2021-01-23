@@ -57,6 +57,8 @@ service Vtctld {
   rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
   // GetTablets returns tablets, optionally filtered by keyspace and shard.
   rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetVSchema returns the vschema for a keyspace.
+  rpc GetVSchema(vtctldata.GetVSchemaRequest) returns (vtctldata.GetVSchemaResponse) {};
   // InitShardPrimary sets the initial primary for a shard. Will make all other
   // tablets in the shard replicas of the provided primary.
   //

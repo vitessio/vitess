@@ -343,6 +343,11 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}, nil
 }
 
+// GetVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSchemaRequest) (*vtctldatapb.GetVSchemaResponse, error) {
+	panic("unimplemented!")
+}
+
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.InitShardPrimaryRequest) (*vtctldatapb.InitShardPrimaryResponse, error) {
 	if req.Keyspace == "" {
