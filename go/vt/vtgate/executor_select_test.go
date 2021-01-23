@@ -349,10 +349,10 @@ func TestSelectSystemVariables(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
-			sqltypes.NULL,
-			sqltypes.NULL,
-			sqltypes.NULL,
-			sqltypes.NULL,
+			sqltypes.NewInt32(0),
+			sqltypes.NewInt32(0),
+			sqltypes.NewInt32(0),
+			sqltypes.NewInt32(0),
 			sqltypes.NewInt64(0),
 			sqltypes.NewVarBinary("UNSPECIFIED"),
 			sqltypes.NewVarBinary(""),
@@ -383,7 +383,7 @@ func TestSelectSingleVitessAwareVariable(t *testing.T) {
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(0), // autocommit is by default false in the masterSession, thus 0
 		}},
 	}
 	require.NoError(t, err)
