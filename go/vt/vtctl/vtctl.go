@@ -1954,7 +1954,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 type VReplicationWorkflowAction string
 
 const (
-	vReplicationWorkflowActionStart          = "start"
+	vReplicationWorkflowActionCreate         = "create"
 	vReplicationWorkflowActionSwitchTraffic  = "switchtraffic"
 	vReplicationWorkflowActionReverseTraffic = "reversetraffic"
 	vReplicationWorkflowActionComplete       = "complete"
@@ -2052,7 +2052,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
-	case vReplicationWorkflowActionStart:
+	case vReplicationWorkflowActionCreate:
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
@@ -2085,6 +2085,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
+		if vrwp.TabletTypes == "" {
+			vrwp.TabletTypes = "master,replica,rdonly"
+		}
 		vrwp.Timeout = *timeout
 		vrwp.EnableReverseReplication = *reverseReplication
 	case vReplicationWorkflowActionCancel:
@@ -2105,7 +2108,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
 		return err
 	}
-	if !wf.Exists() && action != vReplicationWorkflowActionStart {
+	if !wf.Exists() && action != vReplicationWorkflowActionCreate {
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
@@ -2117,7 +2120,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		if copyProgress == nil {
 			wr.Logger().Printf("\nCopy Completed.\n")
 		} else {
-			wr.Logger().Printf("\nCopy Progress (approx.):\n")
+			wr.Logger().Printf("\nCopy Progress (approx):\n")
 			var tables []string
 			for table := range *copyProgress {
 				tables = append(tables, table)
@@ -2154,8 +2157,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return printDetails()
 	case vReplicationWorkflowActionProgress:
 		return printCopyProgress()
-	case vReplicationWorkflowActionStart:
-		err = wf.Start()
+	case vReplicationWorkflowActionCreate:
+		err = wf.Create()
 		if err != nil {
 			return err
 		}
@@ -2200,6 +2203,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			case progress := <-progressCh:
 				if progress.running == progress.total {
 					wr.Logger().Printf("\nWorkflow started successfully with %d stream(s)\n", progress.total)
+					printDetails()
 					return nil
 				}
 				wr.Logger().Printf("%d%% ... ", 100*progress.running/progress.total)
