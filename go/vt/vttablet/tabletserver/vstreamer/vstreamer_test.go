@@ -1512,6 +1512,7 @@ func TestTypes(t *testing.T) {
 		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
 		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
 		"create table vitess_null(id int, val varbinary(128), primary key(id))",
+		"create table vitess_decimal(id int, dec1 decimal(12,4), dec2 decimal(13,4), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1519,6 +1520,7 @@ func TestTypes(t *testing.T) {
 		"drop table vitess_strings",
 		"drop table vitess_misc",
 		"drop table vitess_null",
+		"drop table vitess_decimal",
 	})
 	engine.se.Reload(context.Background())
 
@@ -1589,6 +1591,35 @@ func TestTypes(t *testing.T) {
 			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"id" type:INT32 table:"vitess_null" org_table:"vitess_null" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"vitess_null" org_table:"vitess_null" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
 			`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:-1 values:"1" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}, {
+		input: []string{
+			"insert into vitess_decimal values(1, 1.23, 1.23)",
+			"insert into vitess_decimal values(2, -1.23, -1.23)",
+			"insert into vitess_decimal values(3, 0000000001.23, 0000000001.23)",
+			"insert into vitess_decimal values(4, -0000000001.23, -0000000001.23)",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"vitess_decimal" fields:<name:"id" type:INT32 table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"dec1" type:DECIMAL table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"dec1" column_length:14 charset:63 decimals:4 > fields:<name:"dec2" type:DECIMAL table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"dec2" column_length:15 charset:63 decimals:4 > > `,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:6 lengths:6 values:"11.23001.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:7 lengths:7 values:"2-1.2300-1.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:6 lengths:6 values:"31.23001.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:7 lengths:7 values:"4-1.2300-1.2300" > > > `,
 			`gtid`,
 			`commit`,
 		}},
