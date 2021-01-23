@@ -367,23 +367,32 @@ func TestSelectSystemVariables(t *testing.T) {
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
-// Must fail until https://github.com/vitessio/vitess/issues/7301 is not fixed.
-func TestSelectSingleVitessAwareVariable(t *testing.T) {
+func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "select @@autocommit"
+	masterSession.Autocommit = true
+	masterSession.EnableSystemSettings = true
 
-	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	defer func() {
+		masterSession.Autocommit = false
+		masterSession.EnableSystemSettings = false
+	}()
+
+	sql := "select @@autocommit, @@enable_system_settings"
+
+	result, err := executorExec(executor, sql, nil)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "@@autocommit", Type: sqltypes.Int32},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(0), // autocommit is by default false in the masterSession, thus 0
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(1),
 		}},
 	}
 	require.NoError(t, err)
