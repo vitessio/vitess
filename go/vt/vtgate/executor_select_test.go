@@ -313,7 +313,7 @@ func TestSelectLastInsertId(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectSystemVariables(t *testing.T) {
@@ -364,7 +364,7 @@ func TestSelectSystemVariables(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectUserDefindVariable(t *testing.T) {
@@ -385,7 +385,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 			sqltypes.NULL,
 		}},
 	}
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 
 	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
 	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
@@ -399,7 +399,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 			sqltypes.NewVarBinary("bar"),
 		}},
 	}
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestFoundRows(t *testing.T) {
@@ -424,7 +424,7 @@ func TestFoundRows(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestRowCount(t *testing.T) {
@@ -454,7 +454,7 @@ func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
@@ -558,7 +558,7 @@ func TestSelectDatabase(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 
 }
 
