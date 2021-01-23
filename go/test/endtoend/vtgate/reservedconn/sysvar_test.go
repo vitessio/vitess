@@ -329,16 +329,11 @@ func TestEnableSystemSettings(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Insert a single row to correctly select @@enable_system_settings.
-	// See: https://github.com/vitessio/vitess/issues/7301
-	checkedExec(t, conn, "delete from test")
-	checkedExec(t, conn, "insert into test (id, val1, val2, val3) values (1, null, 0, 0)")
-
 	// test set @@enable_system_settings to false and true
 	checkedExec(t, conn, "set enable_system_settings = false")
-	assertMatches(t, conn, `select @@enable_system_settings from test`, `[[INT64(0)]]`)
+	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT32(0)]]`)
 	checkedExec(t, conn, "set enable_system_settings = true")
-	assertMatches(t, conn, `select @@enable_system_settings from test`, `[[INT64(1)]]`)
+	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT32(1)]]`)
 
 	// prepare the @@sql_mode variable
 	checkedExec(t, conn, "set sql_mode = 'NO_ZERO_DATE'")
