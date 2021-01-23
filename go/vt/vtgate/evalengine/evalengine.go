@@ -200,34 +200,34 @@ func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 	switch {
 	case sqltypes.IsSigned(resultType):
 		switch v.typ {
-		case sqltypes.Int64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10))
-		case sqltypes.Uint64:
+		case sqltypes.Int64, sqltypes.Int32:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.ival), 10))
+		case sqltypes.Uint64, sqltypes.Uint32:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.uval), 10))
-		case sqltypes.Float64:
+		case sqltypes.Float64, sqltypes.Float32:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.fval), 10))
 		}
 	case sqltypes.IsUnsigned(resultType):
 		switch v.typ {
-		case sqltypes.Uint64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10))
-		case sqltypes.Int64:
+		case sqltypes.Uint64, sqltypes.Uint32:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.uval), 10))
+		case sqltypes.Int64, sqltypes.Int32:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.ival), 10))
-		case sqltypes.Float64:
+		case sqltypes.Float64, sqltypes.Float32:
 			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.fval), 10))
 		}
 	case sqltypes.IsFloat(resultType) || resultType == sqltypes.Decimal:
 		switch v.typ {
-		case sqltypes.Int64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10))
-		case sqltypes.Uint64:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10))
-		case sqltypes.Float64:
+		case sqltypes.Int64, sqltypes.Int32:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.ival), 10))
+		case sqltypes.Uint64, sqltypes.Uint32:
+			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.uval), 10))
+		case sqltypes.Float64, sqltypes.Float32:
 			format := byte('g')
 			if resultType == sqltypes.Decimal {
 				format = 'f'
 			}
-			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64))
+			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, float64(v.fval), format, -1, 64))
 		}
 	default:
 		return sqltypes.MakeTrusted(resultType, v.bytes)
