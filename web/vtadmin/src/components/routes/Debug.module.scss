@@ -1,0 +1,24 @@
+.buttonContainer {
+  column-gap: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, min-content);
+  row-gap: 24px;
+}
+
+.iconContainer {
+  column-gap: 0;
+  display: grid;
+  grid-template-columns: repeat(12, min-content);
+  row-gap: 0;
+}
+
+.icon {
+  fill: var(--colorPrimary);
+  padding: 16px;
+  transition: fill 0.1s ease-in-out;
+
+  &:hover {
+    background: var(--backgroundSecondaryHighlight);
+    fill: var(--colorPrimary200);
+  }
+}
