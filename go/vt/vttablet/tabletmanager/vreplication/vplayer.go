@@ -318,6 +318,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
 	var sbm int64 = -1
 	for {
+		// TODO(shlomi): throttle here
+
 		items, err := relay.Fetch()
 		if err != nil {
 			return err
