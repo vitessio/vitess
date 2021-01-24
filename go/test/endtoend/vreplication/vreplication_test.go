@@ -53,7 +53,8 @@ func init() {
 }
 
 func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.Response, respBody string, err error) {
-	resp, err = httpClient.Get(fmt.Sprintf("http://%s:%d/%s", tablet.TabletHostname, tablet.Port, path))
+	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.TabletHostname, tablet.Port, path)
+	resp, err = httpClient.Get(apiURL)
 	if err != nil {
 		return resp, respBody, err
 	}
@@ -65,8 +66,20 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.
 func throttleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerAppName))
 }
+
 func unthrottleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerAppName))
+}
+
+func throttlerCheckSelf(tablet *cluster.VttabletProcess) (resp *http.Response, respBody string, err error) {
+	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, throttlerAppName)
+	resp, err = httpClient.Get(apiURL)
+	if err != nil {
+		return resp, respBody, err
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	respBody = string(b)
+	return resp, respBody, err
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
@@ -587,7 +600,15 @@ func materializeProduct(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, body, throttlerAppName)
 			}
+			// Wait for throttling to take effect:
+			time.Sleep(1 * time.Second)
+			for _, tab := range productTablets {
+				_, body, err := throttlerCheckSelf(tab)
+				assert.NoError(t, err)
+				assert.Contains(t, body, "417")
+			}
 			insertMoreProductsForThrottler(t)
+			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
 			time.Sleep(1 * time.Second)
 			// we expect the additional rows to **not appear** in the materialized view
 			for _, tab := range customerTablets {
@@ -601,7 +622,8 @@ func materializeProduct(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, body, throttlerAppName)
 			}
-			time.Sleep(1 * time.Second)
+			// give time for unthrottling to take effect and for target to fetch data
+			time.Sleep(3 * time.Second)
 			for _, tab := range customerTablets {
 				validateCountInTablet(t, tab, keyspace, workflow, 8)
 			}
