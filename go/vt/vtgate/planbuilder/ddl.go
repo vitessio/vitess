@@ -142,7 +142,7 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	}
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema, buildSelectPlan)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,7 +178,7 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Des
 	ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema, buildSelectPlan)
 	if err != nil {
 		return nil, nil, err
 	}

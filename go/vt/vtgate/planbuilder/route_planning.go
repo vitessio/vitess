@@ -32,6 +32,18 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+var _ selectPlanner = gen4Planner
+
+func gen4Planner(_ string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+		sel, ok := stmt.(*sqlparser.Select)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T not yet supported", stmt)
+		}
+		return newBuildSelectPlan(sel, vschema)
+	}
+}
+
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
 	semTable, err := semantics.Analyse(sel) // TODO no nil no
 	if err != nil {
