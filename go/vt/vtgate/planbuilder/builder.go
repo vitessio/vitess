@@ -92,7 +92,12 @@ var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
-	instruction, err := createInstructionFor(query, stmt, vschema)
+	planner := buildSelectPlan
+	if vschema.Planner() != V3 {
+		planner = gen4Planner
+	}
+
+	instruction, err := createInstructionFor(query, stmt, vschema, planner)
 	if err != nil {
 		return nil, err
 	}
@@ -112,10 +117,12 @@ func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(sta
 	return f(stmt, vschema)
 }
 
-func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+type selectPlanner func(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error)
+
+func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema, sel selectPlanner) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		return buildRoutePlan(stmt, vschema, buildSelectPlan(query))
+		return buildRoutePlan(stmt, vschema, sel(query))
 	case *sqlparser.Insert:
 		return buildRoutePlan(stmt, vschema, buildInsertPlan)
 	case *sqlparser.Update:
@@ -132,7 +139,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:
 		if stmt.Type == sqlparser.VitessType {
-			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema)
+			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema, sel)
 			if err != nil {
 				return nil, err
 			}
