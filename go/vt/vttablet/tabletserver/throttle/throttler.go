@@ -167,6 +167,7 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 	throttler.check = NewThrottlerCheck(throttler)
 	throttler.initConfig("")
+	throttler.check.SelfChecks(context.Background())
 
 	return throttler
 }
