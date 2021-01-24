@@ -221,11 +221,15 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
-		select {
-		case <-ctx.Done():
-			return io.EOF
-		default:
+		// check throttler. If required throttling, sleep ("true" argument) and retry loop
+		for !vc.vr.vre.throttleStatusOK(ctx, true) {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			default:
+			}
 		}
+
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
@@ -249,8 +253,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if len(rows.Rows) == 0 {
 			return nil
 		}
-
-		// TODO(shlomi): throttle here
 
 		// The number of rows we receive depends on the packet size set
 		// for the row streamer. Since the packet size is roughly equivalent

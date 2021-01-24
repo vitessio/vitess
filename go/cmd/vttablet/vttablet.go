@@ -103,7 +103,7 @@ func main() {
 		DBConfigs:           config.DB.Clone(),
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
-		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld),
+		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
 		log.Exitf("failed to parse -tablet-path or initialize DB credentials: %v", err)
