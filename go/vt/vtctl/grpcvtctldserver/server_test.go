@@ -934,3 +934,43 @@ func TestGetTablets(t *testing.T) {
 		})
 	}
 }
+
+func TestGetVSchema(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	vtctld := NewVtctldServer(ts)
+
+	err := ts.SaveVSchema(ctx, "testkeyspace", &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"v1": {
+				Type: "hash",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	expected := &vtctldatapb.GetVSchemaResponse{
+		VSchema: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v1": {
+					Type: "hash",
+				},
+			},
+		},
+	}
+
+	resp, err := vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
+		Keyspace: "testkeyspace",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, expected, resp)
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
+			Keyspace: "doesnotexist",
+		})
+		assert.Error(t, err)
+	})
+}
