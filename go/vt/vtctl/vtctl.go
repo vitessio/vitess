@@ -2001,6 +2001,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	_, err = wr.TopoServer().GetKeyspace(ctx, target)
 	if err != nil {
 		wr.Logger().Errorf("keyspace %s not found", target)
+		return err
 	}
 
 	vrwp := &wrangler.VReplicationWorkflowParams{
@@ -2056,6 +2057,11 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
 				return fmt.Errorf("source keyspace is not specified")
+			}
+			_, err := wr.TopoServer().GetKeyspace(ctx, *sourceKeyspace)
+			if err != nil {
+				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)
+				return err
 			}
 			if !*allTables && *tables == "" {
 				return fmt.Errorf("no tables specified to move")
