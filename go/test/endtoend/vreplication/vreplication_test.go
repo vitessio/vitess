@@ -600,7 +600,7 @@ func materializeProduct(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, body, throttlerAppName)
 			}
-			// Wait for throttling to take effect:
+			// Wait for throttling to take effect (caching will expire by this time):
 			time.Sleep(1 * time.Second)
 			for _, tab := range productTablets {
 				_, body, err := throttlerCheckSelf(tab)
