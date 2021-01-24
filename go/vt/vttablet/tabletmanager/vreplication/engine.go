@@ -17,31 +17,31 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/withddl"
-
-	"context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/withddl"
 )
 
 const (
@@ -64,6 +64,17 @@ const (
 )
 
 var withDDL *withddl.WithDDL
+
+const (
+	throttleCheckDuration = 250 * time.Millisecond
+	throttlerAppName      = "vreplication"
+)
+
+var (
+	throttleFlags = &throttle.CheckFlags{
+		LowPriority: true,
+	}
+)
 
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
@@ -111,6 +122,9 @@ type Engine struct {
 
 	journaler map[string]*journalEvent
 	ec        *externalConnector
+
+	lagThrottler                *throttle.Throttler
+	lastSuccessfulThrottleCheck time.Time
 }
 
 type journalEvent struct {
@@ -121,14 +135,15 @@ type journalEvent struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
 	vre := &Engine{
-		controllers: make(map[int]*controller),
-		ts:          ts,
-		cell:        cell,
-		mysqld:      mysqld,
-		journaler:   make(map[string]*journalEvent),
-		ec:          newExternalConnector(config.ExternalConnections),
+		controllers:  make(map[int]*controller),
+		ts:           ts,
+		cell:         cell,
+		mysqld:       mysqld,
+		journaler:    make(map[string]*journalEvent),
+		ec:           newExternalConnector(config.ExternalConnections),
+		lagThrottler: lagThrottler,
 	}
 	return vre
 }
@@ -286,6 +301,37 @@ func (vre *Engine) Close() {
 
 	vre.updateStats()
 	log.Infof("VReplication Engine: closed")
+}
+
+func (vre *Engine) throttleStatusOK(ctx context.Context, sleep bool) bool {
+	if vre.lagThrottler == nil {
+		// no throttler
+		return true
+	}
+	if time.Since(vre.lastSuccessfulThrottleCheck) <= throttleCheckDuration {
+		// if last check was OK just very recently there is no need to check again
+		return true
+	}
+	// It's time to run a throttler check
+	checkResult := vre.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
+	if checkResult.StatusCode != http.StatusOK {
+		// sorry, we got throttled.
+		if sleep {
+			time.Sleep(throttleCheckDuration)
+		}
+		return false
+	}
+	vre.lastSuccessfulThrottleCheck = time.Now()
+	return true
+}
+
+// throttle will wait until the throttler's "check-self" check is satisfied
+func (vre *Engine) throttle(ctx context.Context) {
+	// We introduce throttling based on the tablet's "self" check, which means if the tablet itself is lagging,
+	// we hold off reads so as to ease the load and let it regain its health
+	for !vre.throttleStatusOK(ctx, true) {
+		// Sorry, got throttled. Sleep some time, then check again
+	}
 }
 
 // Exec executes the query and the related actions.
