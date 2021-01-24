@@ -64,6 +64,36 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	return &VtctldServer{ts: ts, tmc: tmclient.NewTabletManagerClient()}
 }
 
+// ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
+	panic("unimplemented!")
+}
+
+// CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (*vtctldatapb.CreateKeyspaceResponse, error) {
+	panic("unimplemented!")
+}
+
+// CreateShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
+	panic("unimplemented!")
+}
+
+// DeleteKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	panic("unimplemented!")
+}
+
+// DeleteShards is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
+	panic("unimplemented!")
+}
+
+// DeleteTablets is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest) (*vtctldatapb.DeleteTabletsResponse, error) {
+	panic("unimplemented!")
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	result, err := s.ts.FindAllShardsInKeyspace(ctx, req.Keyspace)
@@ -225,6 +255,11 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 	return &vtctldatapb.GetSchemaResponse{
 		Schema: sd,
 	}, nil
+}
+
+// GetShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRequest) (*vtctldatapb.GetShardResponse, error) {
+	panic("unimplemented!")
 }
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
@@ -599,6 +634,16 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 
 	return nil
+}
+
+// RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
+	panic("unimplemented!")
+}
+
+// RemoveShardCell is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RemoveShardCell(ctx context.Context, req *vtctldatapb.RemoveShardCellRequest) (*vtctldatapb.RemoveShardCellResponse, error) {
+	panic("unimplemented!")
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
