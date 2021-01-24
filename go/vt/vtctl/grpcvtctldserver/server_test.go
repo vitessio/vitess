@@ -47,7 +47,225 @@ func init() {
 }
 
 func TestChangeTabletType(t *testing.T) {
-	t.Skip("unimplemented")
+	tests := []struct {
+		name      string
+		cells     []string
+		tablets   []*topodatapb.Tablet
+		req       *vtctldatapb.ChangeTabletTypeRequest
+		expected  *vtctldatapb.ChangeTabletTypeResponse
+		shouldErr bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.ChangeTabletTypeRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				DbType: topodatapb.TabletType_RDONLY,
+			},
+			expected: &vtctldatapb.ChangeTabletTypeResponse{
+				BeforeTablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+				AfterTablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				},
+				WasDryRun: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "dry run",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.ChangeTabletTypeRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				DbType: topodatapb.TabletType_RDONLY,
+				DryRun: true,
+			},
+			expected: &vtctldatapb.ChangeTabletTypeResponse{
+				BeforeTablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+				AfterTablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				},
+				WasDryRun: true,
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "tablet not found",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.ChangeTabletTypeRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				DbType: topodatapb.TabletType_RDONLY,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name:  "master promotions not allowed",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.ChangeTabletTypeRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				DbType: topodatapb.TabletType_MASTER,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name:  "master demotions not allowed",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_MASTER,
+				},
+			},
+			req: &vtctldatapb.ChangeTabletTypeRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				DbType: topodatapb.TabletType_REPLICA,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			ts := memorytopo.NewServer(tt.cells...)
+			vtctld := NewVtctldServer(ts)
+			testutil.TabletManagerClient.Topo = ts
+
+			for _, tablet := range tt.tablets {
+				testutil.AddTablet(ctx, t, ts, tablet)
+			}
+
+			resp, err := vtctld.ChangeTabletType(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+
+			// If we are testing a dry-run, then the tablet in the actual
+			// topo should match the BeforeTablet in the response. Otherwise,
+			// the tablet in the actual topo should match the AfterTablet in
+			// the response.
+			expectedRealType := resp.AfterTablet.Type
+			msg := "ChangeTabletType did not cause topo update"
+			if tt.req.DryRun {
+				expectedRealType = resp.BeforeTablet.Type
+				msg = "dryrun type change resulted in real type change"
+			}
+
+			tablet, err := ts.GetTablet(ctx, tt.req.TabletAlias)
+			assert.NoError(t, err,
+				"could not load tablet %s from topo after type change %v -> %v [dryrun=%t]",
+				topoproto.TabletAliasString(tt.req.TabletAlias),
+				resp.BeforeTablet.Type,
+				resp.AfterTablet.Type,
+				resp.WasDryRun,
+			)
+			assert.Equal(t, expectedRealType, tablet.Type, msg)
+		})
+	}
+
+	t.Run("tabletmanager failure", func(t *testing.T) {
+		ctx := context.Background()
+		ts := memorytopo.NewServer("zone1")
+		vtctld := NewVtctldServer(ts)
+		testutil.TabletManagerClient.Topo = nil
+
+		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			Type: topodatapb.TabletType_REPLICA,
+		})
+
+		_, err := vtctld.ChangeTabletType(ctx, &vtctldatapb.ChangeTabletTypeRequest{
+			TabletAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+			DbType: topodatapb.TabletType_RDONLY,
+		})
+		assert.Error(t, err)
+	})
 }
 func TestCreateKeyspace(t *testing.T) {
 	t.Skip("unimplemented")

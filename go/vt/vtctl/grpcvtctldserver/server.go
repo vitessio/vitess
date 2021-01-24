@@ -66,7 +66,38 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
-	panic("unimplemented!")
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	if !topo.IsTrivialTypeChange(tablet.Type, req.DbType) {
+		return nil, fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", req.TabletAlias, tablet.Type, req.DbType)
+	}
+
+	if req.DryRun {
+		afterTablet := *tablet.Tablet
+		afterTablet.Type = req.DbType
+
+		return &vtctldatapb.ChangeTabletTypeResponse{
+			BeforeTablet: tablet.Tablet,
+			AfterTablet:  &afterTablet,
+			WasDryRun:    true,
+		}, nil
+	}
+
+	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType)
+	if err != nil {
+		return nil, err
+	}
+
+	changedTablet, _ := s.ts.GetTablet(ctx, req.TabletAlias)
+
+	return &vtctldatapb.ChangeTabletTypeResponse{
+		BeforeTablet: tablet.Tablet,
+		AfterTablet:  changedTablet.Tablet,
+		WasDryRun:    false,
+	}, nil
 }
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
