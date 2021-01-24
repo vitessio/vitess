@@ -118,7 +118,6 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -2002,6 +2001,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	_, err = wr.TopoServer().GetKeyspace(ctx, target)
 	if err != nil {
 		wr.Logger().Errorf("keyspace %s not found", target)
+		return err
 	}
 
 	vrwp := &wrangler.VReplicationWorkflowParams{
@@ -2057,6 +2057,11 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
 				return fmt.Errorf("source keyspace is not specified")
+			}
+			_, err := wr.TopoServer().GetKeyspace(ctx, *sourceKeyspace)
+			if err != nil {
+				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)
+				return err
 			}
 			if !*allTables && *tables == "" {
 				return fmt.Errorf("no tables specified to move")
@@ -2673,32 +2678,26 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
 
-	sd, err := wr.GetSchema(ctx, tabletAlias, tableArray, excludeTableArray, *includeViews)
+	resp, err := wr.VtctldServer().GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+		TabletAlias:    tabletAlias,
+		Tables:         tableArray,
+		ExcludeTables:  excludeTableArray,
+		IncludeViews:   *includeViews,
+		TableNamesOnly: *tableNamesOnly,
+		TableSizesOnly: *tableSizesOnly,
+	})
 	if err != nil {
 		return err
 	}
+
 	if *tableNamesOnly {
-		for _, td := range sd.TableDefinitions {
+		for _, td := range resp.Schema.TableDefinitions {
 			wr.Logger().Printf("%v\n", td.Name)
 		}
 		return nil
 	}
 
-	if *tableSizesOnly {
-		sizeTds := make([]*tabletmanagerdatapb.TableDefinition, len(sd.TableDefinitions))
-		for i, td := range sd.TableDefinitions {
-			sizeTds[i] = &tabletmanagerdatapb.TableDefinition{
-				Name:       td.Name,
-				Type:       td.Type,
-				RowCount:   td.RowCount,
-				DataLength: td.DataLength,
-			}
-		}
-
-		sd.TableDefinitions = sizeTds
-	}
-
-	return printJSON(wr.Logger(), sd)
+	return printJSON(wr.Logger(), resp.Schema)
 }
 
 func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
