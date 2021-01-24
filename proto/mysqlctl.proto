@@ -54,3 +54,9 @@ service MysqlCtl {
   rpc ReinitConfig(ReinitConfigRequest) returns (ReinitConfigResponse) {};
   rpc RefreshConfig(RefreshConfigRequest) returns (RefreshConfigResponse) {};
 }
+
+// BackupInfo is the read-only attributes of a mysqlctl/backupstorage.BackupHandle.
+message BackupInfo {
+  string name = 1;
+  string directory = 2;
+}
