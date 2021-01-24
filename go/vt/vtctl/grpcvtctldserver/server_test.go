@@ -46,6 +46,29 @@ func init() {
 	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
 }
 
+func TestChangeTabletType(t *testing.T) {
+	t.Skip("unimplemented")
+}
+func TestCreateKeyspace(t *testing.T) {
+	t.Skip("unimplemented")
+}
+
+func TestCreateShard(t *testing.T) {
+	t.Skip("unimplemented")
+}
+
+func TestDeleteKeyspace(t *testing.T) {
+	t.Skip("unimplemented")
+}
+
+func TestDeleteShards(t *testing.T) {
+	t.Skip("unimplemented")
+}
+
+func TestDeleteTablets(t *testing.T) {
+	t.Skip("unimplemented")
+}
+
 func TestFindAllShardsInKeyspace(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
@@ -499,6 +522,10 @@ func TestGetSchema(t *testing.T) {
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
+}
+
+func TestGetShard(t *testing.T) {
+	t.Skip("unimplemented")
 }
 
 func TestGetSrvVSchema(t *testing.T) {
@@ -973,4 +1000,12 @@ func TestGetVSchema(t *testing.T) {
 		})
 		assert.Error(t, err)
 	})
+}
+
+func TestRemoveKeyspaceCell(t *testing.T) {
+	t.Skip("unimplemented")
+}
+
+func TestRemoveShardCell(t *testing.T) {
+	t.Skip("unimplemented")
 }
