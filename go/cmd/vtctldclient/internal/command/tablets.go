@@ -19,16 +19,12 @@ package command
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -101,33 +97,8 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 
 	switch format {
 	case "awk":
-		lineFn := func(t *topodatapb.Tablet) string {
-			ti := topo.TabletInfo{
-				Tablet: t,
-			}
-
-			keyspace := t.Keyspace
-			if keyspace == "" {
-				keyspace = "<null>"
-			}
-
-			shard := t.Shard
-			if shard == "" {
-				shard = "<null>"
-			}
-
-			mtst := "<null>"
-			// special case for old primary that hasn't been updated in the topo
-			// yet.
-			if t.MasterTermStartTime != nil && t.MasterTermStartTime.Seconds > 0 {
-				mtst = logutil.ProtoToTime(t.MasterTermStartTime).Format(time.RFC3339)
-			}
-
-			return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(t.Alias), keyspace, shard, topoproto.TabletTypeLString(t.Type), ti.Addr(), ti.MysqlAddr(), cli.MarshalMapAWK(t.Tags), mtst)
-		}
-
 		for _, t := range resp.Tablets {
-			fmt.Println(lineFn(t))
+			fmt.Println(cli.MarshalTabletAWK(t))
 		}
 	case "json":
 		data, err := cli.MarshalJSON(resp.Tablets)
