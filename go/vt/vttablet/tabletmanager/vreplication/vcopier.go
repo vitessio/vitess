@@ -249,6 +249,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if len(rows.Rows) == 0 {
 			return nil
 		}
+
+		// TODO(shlomi): throttle here
+
 		// The number of rows we receive depends on the packet size set
 		// for the row streamer. Since the packet size is roughly equivalent
 		// to data size, this should map to a uniform amount of pages affected
