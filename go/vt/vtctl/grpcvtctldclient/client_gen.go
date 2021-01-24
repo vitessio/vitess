@@ -127,6 +127,15 @@ func (client *gRPCVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.
 	return client.c.GetTablets(ctx, in, opts...)
 }
 
+// GetVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetVSchema(ctx, in, opts...)
+}
+
 // InitShardPrimary is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctldatapb.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldatapb.InitShardPrimaryResponse, error) {
 	if client.c == nil {
