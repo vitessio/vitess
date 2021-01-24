@@ -29,6 +29,12 @@ import (
 )
 
 var (
+	// ChangeTabletType makes a ChangeTabletType gRPC call to a vtctld.
+	ChangeTabletType = &cobra.Command{
+		Use:  "ChangeTabletType [--dry-run] TABLET_ALIAS TABLET_TYPE",
+		Args: cobra.ExactArgs(2),
+		RunE: commandChangeTabletType,
+	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
 		Use:  "GetTablet alias",
@@ -42,6 +48,43 @@ var (
 		RunE: commandGetTablets,
 	}
 )
+
+var changeTabletTypeOptions = struct {
+	DryRun bool
+}{}
+
+func commandChangeTabletType(cmd *cobra.Command, args []string) error {
+	aliasStr := cmd.Flags().Arg(0)
+	typeStr := cmd.Flags().Arg(1)
+
+	alias, err := topoproto.ParseTabletAlias(aliasStr)
+	if err != nil {
+		return err
+	}
+
+	newType, err := topoproto.ParseTabletType(typeStr)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.ChangeTabletType(commandCtx, &vtctldatapb.ChangeTabletTypeRequest{
+		TabletAlias: alias,
+		DbType:      newType,
+		DryRun:      changeTabletTypeOptions.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.WasDryRun {
+		fmt.Println("--- DRY RUN ---")
+	}
+
+	fmt.Printf("- %v\n", cli.MarshalTabletAWK(resp.BeforeTablet))
+	fmt.Printf("+ %v\n", cli.MarshalTabletAWK(resp.AfterTablet))
+
+	return nil
+}
 
 func commandGetTablet(cmd *cobra.Command, args []string) error {
 	aliasStr := cmd.Flags().Arg(0)
@@ -113,6 +156,9 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
+	Root.AddCommand(ChangeTabletType)
+
 	Root.AddCommand(GetTablet)
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "list of cells to filter tablets by")
