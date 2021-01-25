@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -39,6 +40,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func init() {
@@ -267,8 +269,275 @@ func TestChangeTabletType(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
 func TestCreateKeyspace(t *testing.T) {
-	t.Skip("unimplemented")
+	cells := []string{"zone1", "zone2", "zone3"}
+	tests := []struct {
+		name               string
+		topo               map[string]*topodatapb.Keyspace
+		vschemas           map[string]*vschemapb.Keyspace
+		req                *vtctldatapb.CreateKeyspaceRequest
+		expected           *vtctldatapb.CreateKeyspaceResponse
+		shouldErr          bool
+		vschemaShouldExist bool
+		expectedVSchema    *vschemapb.Keyspace
+	}{
+		{
+			name: "normal keyspace",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name: "testkeyspace",
+				Type: topodatapb.KeyspaceType_NORMAL,
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+					},
+				},
+			},
+			vschemaShouldExist: true,
+			expectedVSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "snapshot keyspace",
+			topo: map[string]*topodatapb.Keyspace{
+				"testkeyspace": {
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				},
+			},
+			vschemas: map[string]*vschemapb.Keyspace{
+				"testkeyspace": {
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"h1": {
+							Type: "hash",
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:         "testsnapshot",
+				Type:         topodatapb.KeyspaceType_SNAPSHOT,
+				BaseKeyspace: "testkeyspace",
+				SnapshotTime: &vttime.Time{
+					Seconds: 1,
+				},
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testsnapshot",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+						BaseKeyspace: "testkeyspace",
+						SnapshotTime: &vttime.Time{
+							Seconds: 1,
+						},
+					},
+				},
+			},
+			vschemaShouldExist: true,
+			expectedVSchema: &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"h1": {
+						Type: "hash",
+					},
+				},
+				RequireExplicitRouting: true,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "snapshot keyspace with no base keyspace specified",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:         "testsnapshot",
+				Type:         topodatapb.KeyspaceType_SNAPSHOT,
+				SnapshotTime: &vttime.Time{},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "snapshot keyspace with no snapshot time",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:         "testsnapshot",
+				Type:         topodatapb.KeyspaceType_SNAPSHOT,
+				BaseKeyspace: "testkeyspace",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "snapshot keyspace with nonexistent base keyspace",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:         "testsnapshot",
+				Type:         topodatapb.KeyspaceType_SNAPSHOT,
+				BaseKeyspace: "testkeyspace",
+				SnapshotTime: &vttime.Time{Seconds: 100},
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testsnapshot",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+						BaseKeyspace: "testkeyspace",
+						SnapshotTime: &vttime.Time{Seconds: 100},
+					},
+				},
+			},
+			vschemaShouldExist: true,
+			expectedVSchema: &vschemapb.Keyspace{
+				Sharded:                false,
+				RequireExplicitRouting: true,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid keyspace type",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name: "badkeyspacetype",
+				Type: 10000000,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "keyspace exists/no force",
+			topo: map[string]*topodatapb.Keyspace{
+				"testkeyspace": {
+					KeyspaceType:       topodatapb.KeyspaceType_NORMAL,
+					ShardingColumnName: "col1",
+					ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+				},
+			},
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:  "testkeyspace",
+				Type:  topodatapb.KeyspaceType_NORMAL,
+				Force: false,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "keyspace exists/force",
+			topo: map[string]*topodatapb.Keyspace{
+				"testkeyspace": {
+					KeyspaceType:       topodatapb.KeyspaceType_NORMAL,
+					ShardingColumnName: "col1",
+					ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+				},
+			},
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:  "testkeyspace",
+				Type:  topodatapb.KeyspaceType_NORMAL,
+				Force: true,
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType:       topodatapb.KeyspaceType_NORMAL,
+						ShardingColumnName: "col1",
+						ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+					},
+				},
+			},
+			vschemaShouldExist: true,
+			expectedVSchema: &vschemapb.Keyspace{
+				Sharded: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "allow empty vschema",
+			topo: nil,
+			req: &vtctldatapb.CreateKeyspaceRequest{
+				Name:              "testkeyspace",
+				Type:              topodatapb.KeyspaceType_NORMAL,
+				AllowEmptyVSchema: true,
+			},
+			expected: &vtctldatapb.CreateKeyspaceResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name: "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{
+						KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+					},
+				},
+			},
+			vschemaShouldExist: false,
+			expectedVSchema:    nil,
+			shouldErr:          false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.req == nil {
+				t.Skip("test not yet implemented")
+			}
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer(cells...)
+			vtctld := NewVtctldServer(ts)
+
+			for name, ks := range tt.topo {
+				testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+					Name:     name,
+					Keyspace: ks,
+				})
+			}
+
+			for name, vs := range tt.vschemas {
+				require.NoError(t, ts.SaveVSchema(ctx, name, vs), "error in SaveVSchema(%v, %+v)", name, vs)
+			}
+
+			// Create the keyspace and make some assertions
+			resp, err := vtctld.CreateKeyspace(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			testutil.AssertKeyspacesEqual(t, tt.expected.Keyspace, resp.Keyspace, "%+v\n%+v\n", tt.expected.Keyspace, resp.Keyspace)
+
+			// Fetch the newly-created keyspace out of the topo and assert on it
+			ks, err := ts.GetKeyspace(ctx, tt.req.Name)
+			assert.NoError(t, err, "cannot get keyspace %v after creating", tt.req.Name)
+			require.NotNil(t, ks.Keyspace)
+
+			actualKs := &vtctldatapb.Keyspace{
+				Name:     tt.req.Name,
+				Keyspace: ks.Keyspace,
+			}
+			testutil.AssertKeyspacesEqual(
+				t,
+				tt.expected.Keyspace,
+				actualKs,
+				"created keyspace %v does not match requested keyspace (name = %v) %v",
+				actualKs,
+				tt.expected.Keyspace,
+			)
+
+			// Finally, check the VSchema
+			vs, err := ts.GetVSchema(ctx, tt.req.Name)
+			if !tt.vschemaShouldExist {
+				assert.True(t, topo.IsErrType(err, topo.NoNode), "vschema should not exist, but got other error = %v", err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedVSchema, vs)
+		})
+	}
 }
 
 func TestCreateShard(t *testing.T) {

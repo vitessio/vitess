@@ -18,6 +18,7 @@ package grpcvtctldserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -44,6 +45,7 @@ import (
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -102,7 +104,90 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 // CreateKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (*vtctldatapb.CreateKeyspaceResponse, error) {
-	panic("unimplemented!")
+	switch req.Type {
+	case topodatapb.KeyspaceType_NORMAL:
+	case topodatapb.KeyspaceType_SNAPSHOT:
+		if req.BaseKeyspace == "" {
+			return nil, errors.New("BaseKeyspace is required for SNAPSHOT keyspaces")
+		}
+
+		if req.SnapshotTime == nil {
+			return nil, errors.New("SnapshotTime is required for SNAPSHOT keyspaces")
+		}
+	default:
+		return nil, fmt.Errorf("unknown keyspace type %v", req.Type)
+	}
+
+	ki := &topodatapb.Keyspace{
+		KeyspaceType:       req.Type,
+		ShardingColumnName: req.ShardingColumnName,
+		ShardingColumnType: req.ShardingColumnType,
+
+		ServedFroms: req.ServedFroms,
+
+		BaseKeyspace: req.BaseKeyspace,
+		SnapshotTime: req.SnapshotTime,
+	}
+
+	err := s.ts.CreateKeyspace(ctx, req.Name, ki)
+	if req.Force && topo.IsErrType(err, topo.NodeExists) {
+		log.Infof("keyspace %v already exists (ignoring error with Force=true)", req.Name)
+		err = nil
+
+		// Get the actual keyspace out of the topo; it may differ in structure,
+		// and we want to return the authoritative version as the "created" one
+		// to the client.
+		var ks *topo.KeyspaceInfo
+		ks, _ = s.ts.GetKeyspace(ctx, req.Name)
+		ki = ks.Keyspace
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !req.AllowEmptyVSchema {
+		if err := s.ts.EnsureVSchema(ctx, req.Name); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.Type == topodatapb.KeyspaceType_SNAPSHOT {
+		vs, err := s.ts.GetVSchema(ctx, req.BaseKeyspace)
+		if err != nil {
+			log.Infof("error from GetVSchema(%v) = %v", req.BaseKeyspace, err)
+			if topo.IsErrType(err, topo.NoNode) {
+				log.Infof("base keyspace %v does not exist; continuing with bare, unsharded vschema", req.BaseKeyspace)
+				vs = &vschemapb.Keyspace{
+					Sharded:  false,
+					Tables:   map[string]*vschemapb.Table{},
+					Vindexes: map[string]*vschemapb.Vindex{},
+				}
+			} else {
+				return nil, err
+			}
+		}
+
+		// SNAPSHOT keyspaces are excluded from global routing.
+		vs.RequireExplicitRouting = true
+
+		if err := s.ts.SaveVSchema(ctx, req.Name, vs); err != nil {
+			return nil, fmt.Errorf("SaveVSchema(%v) = %w", vs, err)
+		}
+	}
+
+	cells := []string{}
+	err = s.ts.RebuildSrvVSchema(ctx, cells)
+	if err != nil {
+		return nil, fmt.Errorf("RebuildSrvVSchema(%v) = %w", cells, err)
+	}
+
+	return &vtctldatapb.CreateKeyspaceResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Name,
+			Keyspace: ki,
+		},
+	}, nil
 }
 
 // CreateShard is part of the vtctlservicepb.VtctldServer interface.
