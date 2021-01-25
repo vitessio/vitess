@@ -240,6 +240,8 @@ func (throttler *Throttler) Open() error {
 
 	for _, t := range throttler.tickers {
 		t.Resume()
+		// since we just resume now, speed up the tickers by forcng an immediate tick
+		go t.TickNow()
 	}
 
 	return nil
@@ -382,10 +384,6 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 
-	// haste initial operations
-	go leaderCheckTicker.TickNow()
-	time.AfterFunc(2*time.Second, func() { mysqlRefreshTicker.TickNow() })
-
 	shouldCreateThrottlerUser := false
 	for {
 		select {
@@ -418,6 +416,8 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 						if err == nil {
 							throttler.initConfig(password)
 							shouldCreateThrottlerUser = false
+							// transitioned into leadership, let's speed up the next refresh and collec ticks
+							go mysqlRefreshTicker.TickNow()
 						} else {
 							log.Errorf("Error creating throttler account: %+v", err)
 						}
