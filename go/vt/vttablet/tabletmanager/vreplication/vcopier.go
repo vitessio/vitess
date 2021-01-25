@@ -221,12 +221,15 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
-		// check throttler. If required throttling, sleep ("true" argument) and retry loop
-		for !vc.vr.vre.throttleStatusOK(ctx, true) {
+		for {
 			select {
 			case <-ctx.Done():
 				return io.EOF
 			default:
+			}
+			// verify throttler is happy, otherwise keep looping
+			if vc.vr.vre.throttleStatusOK(ctx, true) {
+				break
 			}
 		}
 
