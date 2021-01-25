@@ -421,7 +421,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				empty = true
 			}
 
-			vschema.version = V4
+			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
 
 			// our expectation for the new planner on this query is one of three
@@ -595,7 +595,7 @@ func locateFile(name string) string {
 }
 
 func BenchmarkPlanner(b *testing.B) {
-	filenames := []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "memory_sort_cases.txt", "select_cases.txt", "union_cases.txt", "wireup_cases.txt"}
+	filenames := []string{"large_cases.txt"}
 	vschema := &vschemaWrapper{
 		v:             loadSchema(b, "schema_test.json"),
 		sysVarEnabled: true,
@@ -609,10 +609,10 @@ func BenchmarkPlanner(b *testing.B) {
 			benchmarkPlanner(b, V3, testCases, vschema)
 		})
 		b.Run(filename+"-v4", func(b *testing.B) {
-			benchmarkPlanner(b, V4, testCases, vschema)
+			benchmarkPlanner(b, Gen4, testCases, vschema)
 		})
 		b.Run(filename+"-v4left2right", func(b *testing.B) {
-			benchmarkPlanner(b, V4Left2Right, testCases, vschema)
+			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}
 }

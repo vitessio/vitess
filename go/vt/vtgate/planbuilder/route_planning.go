@@ -58,7 +58,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	var tree joinTree
 
 	switch {
-	case vschema.Planner() == V4Left2Right:
+	case vschema.Planner() == Gen4Left2Right:
 		tree, err = leftToRightSolve(qgraph, semTable, vschema)
 	default:
 		tree, err = greedySolve(qgraph, semTable, vschema)
