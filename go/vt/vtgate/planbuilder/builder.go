@@ -60,14 +60,14 @@ type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
 const (
 	// V3 is also the default planner
 	V3 = querypb.ExecuteOptions_V3
-	// V4 uses the default V4 planner, which is the greedy planner
-	V4 = querypb.ExecuteOptions_V4
-	// V4GreedyOnly uses only the faster greedy planner
-	V4GreedyOnly = querypb.ExecuteOptions_V4Greedy
-	// V4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
-	V4Left2Right = querypb.ExecuteOptions_V4Left2Right
-	// V4WithFallback first attempts to use the V4 planner, and if that fails, uses the V3 planner instead
-	V4WithFallback = querypb.ExecuteOptions_V4WithFallback
+	// Gen4 uses the default Gen4 planner, which is the greedy planner
+	Gen4 = querypb.ExecuteOptions_Gen4
+	// Gen4GreedyOnly uses only the faster greedy planner
+	Gen4GreedyOnly = querypb.ExecuteOptions_Gen4Greedy
+	// Gen4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
+	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
+	// Gen4WithFallback first attempts to use the Gen4 planner, and if that fails, uses the V3 planner instead
+	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
 )
 
 type truncater interface {
@@ -111,9 +111,9 @@ func getConfiguredPlanner(vschema ContextVSchema) selectPlanner {
 	switch vschema.Planner() {
 	case V3:
 		return buildSelectPlan
-	case V4, V4Left2Right, V4GreedyOnly:
+	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner
-	case V4WithFallback:
+	case Gen4WithFallback:
 		fp := &fallbackPlanner{
 			primary:  buildSelectPlan,
 			fallback: gen4Planner,
