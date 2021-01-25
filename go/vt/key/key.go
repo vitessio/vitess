@@ -62,6 +62,16 @@ func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
 	return topodatapb.KeyspaceIdType(value), nil
 }
 
+// KeyspaceIDTypeString returns the string representation of a keyspace id type.
+func KeyspaceIDTypeString(id topodatapb.KeyspaceIdType) string {
+	s, ok := topodatapb.KeyspaceIdType_name[int32(id)]
+	if !ok {
+		return KeyspaceIDTypeString(topodatapb.KeyspaceIdType_UNSET)
+	}
+
+	return s
+}
+
 //
 // KeyRange helper methods
 //
@@ -185,7 +195,7 @@ func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 		bytes.Equal(left.End, right.End)
 }
 
-// KeyRangeStartEqual returns true if right's keyrange start is _after_ left's start
+// KeyRangeStartSmaller returns true if right's keyrange start is _after_ left's start
 func KeyRangeStartSmaller(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right != nil
