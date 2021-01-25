@@ -722,19 +722,6 @@ func parseTabletType(param string, types []topodatapb.TabletType) (topodatapb.Ta
 	return tabletType, nil
 }
 
-// parseServingTabletType3 parses the tablet type into the enum,
-// and makes sure the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH)
-func parseServingTabletType3(param string) (topodatapb.TabletType, error) {
-	servedType, err := topoproto.ParseTabletType(param)
-	if err != nil {
-		return topodatapb.TabletType_UNKNOWN, err
-	}
-	if !topo.IsInServingGraph(servedType) {
-		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("served_type has to be in the serving graph, not %v", param)
-	}
-	return servedType, nil
-}
-
 func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dbNameOverride := subFlags.String("db_name_override", "", "Overrides the name of the database that the vttablet uses")
 	allowUpdate := subFlags.Bool("allow_update", false, "Use this flag to force initialization if a tablet with the same name already exists. Use with caution.")
@@ -1108,7 +1095,7 @@ func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	servedType, err := parseServingTabletType3(subFlags.Arg(1))
+	servedType, err := topo.ParseServingTabletType(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1389,7 +1376,7 @@ func commandUpdateSrvKeyspacePartition(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	tabletType, err := parseServingTabletType3(subFlags.Arg(1))
+	tabletType, err := topo.ParseServingTabletType(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1421,7 +1408,7 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	if err != nil {
 		return err
 	}
-	tabletType, err := parseServingTabletType3(subFlags.Arg(1))
+	tabletType, err := topo.ParseServingTabletType(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
@@ -1678,7 +1665,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	if len(servedFrom) > 0 {
 		for name, value := range servedFrom {
-			tt, err := parseServingTabletType3(name)
+			tt, err := topo.ParseServingTabletType(name)
 			if err != nil {
 				return err
 			}
@@ -2373,7 +2360,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 	if err != nil {
 		return err
 	}
-	servedType, err := parseServingTabletType3(subFlags.Arg(1))
+	servedType, err := topo.ParseServingTabletType(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
