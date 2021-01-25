@@ -375,7 +375,18 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 
 // GetShard is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRequest) (*vtctldatapb.GetShardResponse, error) {
-	panic("unimplemented!")
+	shard, err := s.ts.GetShard(ctx, req.Keyspace, req.ShardName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetShardResponse{
+		Shard: &vtctldatapb.Shard{
+			Keyspace: req.Keyspace,
+			Name:     req.ShardName,
+			Shard:    shard.Shard,
+		},
+	}, nil
 }
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
