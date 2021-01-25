@@ -689,7 +689,7 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !qr.More {
+	if !qr.IsMoreResultsExists() {
 		return qr, nil
 	}
 	err = qre.drainResultSetOnConn(conn)
@@ -707,7 +707,7 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	if err != nil {
 		return nil, err
 	}
-	if !qr.More {
+	if !qr.IsMoreResultsExists() {
 		return qr, nil
 	}
 	err = qre.drainResultSetOnConn(conn.UnderlyingDBConn())
@@ -724,7 +724,7 @@ func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
 		if err != nil {
 			return err
 		}
-		more = qr.More
+		more = qr.IsMoreResultsExists()
 	}
 	return nil
 }

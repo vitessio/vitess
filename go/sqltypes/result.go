@@ -31,7 +31,7 @@ type Result struct {
 	InsertID            uint64           `json:"insert_id"`
 	Rows                [][]Value        `json:"rows"`
 	SessionStateChanges string           `json:"session_state_changes"`
-	More                bool             `json:"more"`
+	StatusFlags         uint16           `json:"status_flags"`
 }
 
 // ResultStream is an interface for receiving Result. It is used for
@@ -225,4 +225,9 @@ func (result *Result) AppendResult(src *Result) {
 // Named returns a NamedResult based on this struct
 func (result *Result) Named() *NamedResult {
 	return ToNamedResult(result)
+}
+
+// IsMoreResultsExists returns true if the status flag has SERVER_MORE_RESULTS_EXISTS set
+func (result *Result) IsMoreResultsExists() bool {
+	return result.StatusFlags&0x0008 == 0x0008
 }

@@ -181,11 +181,10 @@ func (dbc *DBConn) FetchNext(ctx context.Context, maxrows int, wantfields bool) 
 		return nil, fmt.Errorf("%v before reading next result set", ctx.Err())
 	default:
 	}
-	res, more, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
+	res, _, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
 	if err != nil {
 		return nil, err
 	}
-	res.More = more
 	return res, err
 
 }

@@ -54,6 +54,7 @@ func TestStartSnapshot(t *testing.T) {
 			{sqltypes.NewInt32(1), sqltypes.NewVarBinary("aaa")},
 		},
 		RowsAffected: 1,
+		StatusFlags:  0x23,
 	}
 	qr, err := conn.ExecuteFetch("select * from t1", 10, false)
 	require.NoError(t, err)
