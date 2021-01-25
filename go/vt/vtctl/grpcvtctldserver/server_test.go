@@ -1575,5 +1575,300 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 }
 
 func TestRemoveShardCell(t *testing.T) {
-	t.Skip("unimplemented")
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		servingCells      []string
+		shards            []*vtctldatapb.Shard
+		replicationGraphs []*topo.ShardReplicationInfo
+		topoError         error
+		topoIsLocked      bool
+		req               *vtctldatapb.RemoveShardCellRequest
+		expected          *vtctldatapb.RemoveShardCellResponse
+		shouldErr         bool
+	}{
+		{
+			name: "success",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			replicationGraphs: []*topo.ShardReplicationInfo{
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone1",
+								Uid:  100,
+							},
+						},
+					},
+				}, "zone1", "testkeyspace", "-"),
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone2",
+								Uid:  200,
+							},
+						},
+					},
+				}, "zone2", "testkeyspace", "-"),
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone3",
+								Uid:  300,
+							},
+						},
+					},
+				}, "zone3", "testkeyspace", "-"),
+			},
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "zone2",
+				Recursive: true,
+			},
+			expected:  &vtctldatapb.RemoveShardCellResponse{},
+			shouldErr: false,
+		},
+		{
+			name: "sucess/no tablets",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "zone2",
+			},
+			expected:  &vtctldatapb.RemoveShardCellResponse{},
+			shouldErr: false,
+		},
+		{
+			name:              "nonexistent shard",
+			shards:            nil,
+			replicationGraphs: nil,
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "zone2",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "cell does not exist",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "fourthzone",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "cell not in serving list",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			servingCells:      []string{"zone1"},
+			replicationGraphs: nil,
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "zone2",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "tablets/non-recursive",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			replicationGraphs: []*topo.ShardReplicationInfo{
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone1",
+								Uid:  100,
+							},
+						},
+					},
+				}, "zone1", "testkeyspace", "-"),
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone2",
+								Uid:  200,
+							},
+						},
+					},
+				}, "zone2", "testkeyspace", "-"),
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone3",
+								Uid:  300,
+							},
+						},
+					},
+				}, "zone3", "testkeyspace", "-"),
+			},
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "zone2",
+				Recursive: false, // non-recursive + replication graph = failure
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "topo server down",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			replicationGraphs: nil,
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "zone2",
+			},
+			topoError:    assert.AnError,
+			topoIsLocked: false,
+			expected:     nil,
+			shouldErr:    true,
+		},
+		// Not sure how to set up this test case.
+		// {
+		// 	name: "topo server down for replication check/no force",
+		// },
+		// Not sure how to set up this test case.
+		// {
+		// 	name: "topo server down for replication check/force",
+		// },
+		{
+			name: "cannot lock keyspace",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			replicationGraphs: nil,
+			req: &vtctldatapb.RemoveShardCellRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Cell:      "zone2",
+			},
+			topoError:    nil,
+			topoIsLocked: true,
+			expected:     nil,
+			shouldErr:    true,
+		},
+		// Not sure how to set up this test case.
+		// {
+		// 	name: "cannot delete srvkeyspace partition",
+		// },
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt := tt
+
+			cells := []string{"zone1", "zone2", "zone3"}
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory(cells...)
+			vtctld := NewVtctldServer(ts)
+
+			// Setup shard topos and replication graphs.
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			testutil.SetupReplicationGraphs(ctx, t, ts, tt.replicationGraphs...)
+
+			// Set up srvkeyspace partitions; a little gross.
+			servingCells := tt.servingCells
+			if servingCells == nil { // we expect an explicit empty list to have a shard with no serving cells
+				servingCells = cells
+			}
+
+			for _, shard := range tt.shards {
+				lctx, unlock, lerr := ts.LockKeyspace(ctx, shard.Keyspace, "initializing serving graph for test")
+				require.NoError(t, lerr, "cannot lock keyspace %s to initialize serving graph", shard.Keyspace)
+
+				for _, cell := range servingCells {
+
+					err := ts.UpdateSrvKeyspace(lctx, cell, shard.Keyspace, &topodatapb.SrvKeyspace{
+						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+							{
+								ServedType: topodatapb.TabletType_REPLICA,
+								ShardReferences: []*topodatapb.ShardReference{
+									{
+										Name: shard.Name,
+									},
+								},
+							},
+						},
+					})
+					require.NoError(t, err, "cannot update srvkeyspace for %s/%s in cell %v", shard.Keyspace, shard.Name, cell)
+				}
+
+				unlock(&lerr)
+			}
+
+			// Set errors and locks.
+			if tt.topoError != nil {
+				topofactory.SetError(tt.topoError)
+			}
+
+			if tt.topoIsLocked {
+				lctx, unlock, err := ts.LockKeyspace(ctx, tt.req.Keyspace, "testing locked keyspace")
+				require.NoError(t, err, "cannot lock keyspace %s", tt.req.Keyspace)
+				defer unlock(&err)
+
+				// Need to use the lock ctx in the RPC call so we fail when
+				// attempting to lock the keyspace rather than waiting forever
+				// for the lock. Explicitly setting a deadline would be another
+				// way to achieve this.
+				ctx = lctx
+			}
+
+			// Make the RPC and assert things about it.
+			resp, err := vtctld.RemoveShardCell(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
 }
