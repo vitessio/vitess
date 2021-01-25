@@ -2,14 +2,16 @@
   background: var(--colorPrimary);
   border: solid 2px var(--colorPrimary);
   border-radius: 6px;
+  box-sizing: border-box;
   color: var(--textColorInverted);
   cursor: pointer;
   font-family: var(--fontFamilyPrimary);
   font-size: var(--fontSizeDefault);
   font-weight: 500;
-  line-height: var(--lineHeightBody);
+  height: var(--inputHeightMedium);
+  line-height: 1;
   outline: none;
-  padding: 8px 11px;
+  padding: 0 12px;
   user-select: none;
   transition: all 0.1s ease-in-out;
   white-space: nowrap;
@@ -68,11 +70,13 @@
 
 .button.sizeLarge {
   font-size: var(--fontSizeLarge);
-  padding: 13px 15px;
+  height: var(--inputHeightLarge);
+  padding: 0 16px;
 }
 
 .button.sizeSmall {
   border-width: 1px;
   font-size: var(--fontSizeSmall);
-  padding: 4px 6px;
+  height: var(--inputHeightSmall);
+  padding: 0 6px;
 }
