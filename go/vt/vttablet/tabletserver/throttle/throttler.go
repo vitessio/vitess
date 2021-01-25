@@ -382,6 +382,10 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 	mysqlAggregateTicker := addTicker(mysqlAggregateInterval)
 	throttledAppsTicker := addTicker(throttledAppsSnapshotInterval)
 
+	// haste initial operations
+	go leaderCheckTicker.TickNow()
+	time.AfterFunc(2*time.Second, func() { mysqlRefreshTicker.TickNow() })
+
 	shouldCreateThrottlerUser := false
 	for {
 		select {
