@@ -98,3 +98,21 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 		}
 	}
 }
+
+// AddShards adds a list of shards to the topology, failing a test if any of the
+// shard records could not be created. It also ensures that every shard's
+// keyspace exists, or creates an empty keyspace if that shard's keyspace does
+// not exist.
+func AddShards(ctx context.Context, t *testing.T, ts *topo.Server, shards ...*vtctldatapb.Shard) {
+	for _, shard := range shards {
+		if shard.Keyspace != "" {
+			if _, err := ts.GetKeyspace(ctx, shard.Keyspace); err != nil {
+				err := ts.CreateKeyspace(ctx, shard.Keyspace, &topodatapb.Keyspace{})
+				require.NoError(t, err, "CreateKeyspace(%s)", shard.Keyspace)
+			}
+		}
+
+		err := ts.CreateShard(ctx, shard.Keyspace, shard.Name)
+		require.NoError(t, err, "CreateShard(%s/%s)", shard.Keyspace, shard.Name)
+	}
+}

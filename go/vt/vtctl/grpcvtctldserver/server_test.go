@@ -1080,18 +1080,7 @@ func TestGetShard(t *testing.T) {
 		ts, topofactory := memorytopo.NewServerAndFactory(cells...)
 		vtctld := NewVtctldServer(ts)
 
-		keyspaces := map[string]bool{}
-
-		for _, shard := range tt.topo {
-			if _, ok := keyspaces[shard.Keyspace]; !ok {
-				err := ts.CreateKeyspace(ctx, shard.Keyspace, &topodatapb.Keyspace{})
-				require.NoError(t, err, "CreateKeyspace(%v)", shard.Keyspace)
-				keyspaces[shard.Keyspace] = true
-			}
-
-			err := ts.CreateShard(ctx, shard.Keyspace, shard.Name)
-			require.NoError(t, err, "CreateShard(%v, %v)", shard.Keyspace, shard.Name)
-		}
+		testutil.AddShards(ctx, t, ts, tt.topo...)
 
 		if tt.topoError != nil {
 			topofactory.SetError(tt.topoError)
