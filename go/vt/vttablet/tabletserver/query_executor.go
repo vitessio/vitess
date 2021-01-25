@@ -692,7 +692,7 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	if !qr.IsMoreResultsExists() {
 		if qr.IsInTranscation() {
 			conn.Close()
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not supported")
+			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return qr, nil
 	}
@@ -713,7 +713,7 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		afterInTx := qr.IsInTranscation()
 		if beforeInTx != afterInTx {
 			conn.Close()
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Transaction state change inside the stored procedure is not supported")
+			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
 		}
 		return qr, nil
 	}
