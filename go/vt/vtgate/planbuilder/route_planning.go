@@ -203,13 +203,15 @@ func (rp *routePlan) tables() semantics.TableSet {
 // cost implements the joinTree interface
 func (rp *routePlan) cost() int {
 	switch rp.routeOpCode {
-	case
+	case // these op codes will never be compared with each other - they are assigned by a rule and not a comparison
 		engine.SelectDBA,
-		engine.SelectEqualUnique,
 		engine.SelectNext,
 		engine.SelectNone,
 		engine.SelectReference,
 		engine.SelectUnsharded:
+		return 0
+	// TODO revisit these costs when more of the gen4 planner is done
+	case engine.SelectEqualUnique:
 		return 1
 	case engine.SelectEqual:
 		return 5
@@ -298,7 +300,6 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
 func (rp *routePlan) pickBestAvailableVindex() {
-	//TODO (Manan,Andres): Improve cost metric for vindexes
 	for _, v := range rp.vindexPreds {
 		if !v.covered {
 			continue
