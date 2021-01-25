@@ -236,6 +236,23 @@ type vindexPlusPredicates struct {
 // addPredicate clones this routePlan and returns a new one with these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
 func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
+	newVindexFound, err := rp.searchForNewVindexes(predicates)
+	if err != nil {
+		return err
+	}
+
+	// if we didn't open up any new vindex options, no need to enter here
+	if newVindexFound {
+		rp.pickBestAvailableVindex()
+	}
+
+	// any predicates that cover more than a single table need to be added here
+	rp.predicates = append(rp.predicates, predicates...)
+
+	return nil
+}
+
+func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, error) {
 	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
@@ -248,7 +265,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 					// since we know that nothing returns true when compared to NULL,
 					// so we can safely bail out here
 					rp.routeOpCode = engine.SelectNone
-					return nil
+					return false, nil
 				}
 				// TODO(Manan,Andres): Remove the predicates that are repeated eg. Id=1 AND Id=1
 				for _, v := range rp.vindexPreds {
@@ -269,7 +286,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 							continue
 						}
 						// something else went wrong, return the error
-						return err
+						return false, err
 					}
 					if ok {
 						for _, col := range v.vindex.Columns {
@@ -286,16 +303,7 @@ func (rp *routePlan) addPredicate(predicates ...sqlparser.Expr) error {
 			}
 		}
 	}
-
-	// if we didn't open up any new vindex options, no need to enter here
-	if newVindexFound {
-		rp.pickBestAvailableVindex()
-	}
-
-	// any predicates that cover more than a single table need to be added here
-	rp.predicates = append(rp.predicates, predicates...)
-
-	return nil
+	return newVindexFound, nil
 }
 
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.

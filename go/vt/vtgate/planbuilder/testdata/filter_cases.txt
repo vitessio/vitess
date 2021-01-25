@@ -45,7 +45,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user",
+    "Query": "select id from user where someColumn = null",
     "Table": "user"
   }
 }
@@ -1664,7 +1664,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music",
+    "Query": "select id from music where id = null",
     "Table": "music"
   }
 }
@@ -1738,7 +1738,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music",
+    "Query": "select id from music where user_id = 4 and id = null",
     "Table": "music"
   }
 }
