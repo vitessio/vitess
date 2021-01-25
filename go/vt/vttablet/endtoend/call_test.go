@@ -19,6 +19,8 @@ package endtoend
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -40,6 +42,15 @@ BEGIN
 	update vitess_test set intval = 2341 where intval = 1432;
 	delete from vitess_test where intval = 2341;
     commit;
+END;`, `create procedure proc_tx_begin()
+BEGIN
+    start transaction;
+END;`, `create procedure proc_tx_commit()
+BEGIN
+    commit;
+END;`, `create procedure proc_tx_rollback()
+BEGIN
+    rollback;
 END;`}
 
 func TestCallProcedure(t *testing.T) {
@@ -73,20 +84,20 @@ func TestCallProcedure(t *testing.T) {
 
 func TestCallProcedureInsideTx(t *testing.T) {
 	client := framework.NewClient()
+	defer client.Release()
 
 	_, err := client.BeginExecute(`call proc_dml()`, nil, nil)
-	require.EqualError(t, err, "Call Procedure not supported inside a transaction (CallerID: dev)")
+	require.EqualError(t, err, "Transaction state change inside the stored procedure is not supported (CallerID: dev)")
 
-	_, err = client.Execute(`call proc_dml()`, nil)
-	require.EqualError(t, err, "Call Procedure not supported inside a transaction (CallerID: dev)")
+	_, err = client.Execute(`select 1`, nil)
+	require.Contains(t, err.Error(), "ended")
 
-	client.Release()
 }
 
 func TestCallProcedureInsideReservedConn(t *testing.T) {
 	client := framework.NewClient()
 	_, err := client.ReserveBeginExecute(`call proc_dml()`, nil, nil)
-	require.EqualError(t, err, "Call Procedure not supported inside a transaction (CallerID: dev)")
+	require.EqualError(t, err, "Transaction state change inside the stored procedure is not supported (CallerID: dev)")
 	client.Release()
 
 	_, err = client.ReserveExecute(`call proc_dml()`, nil, nil)
@@ -96,4 +107,34 @@ func TestCallProcedureInsideReservedConn(t *testing.T) {
 	require.NoError(t, err)
 
 	client.Release()
+}
+
+func TestCallProcedureLeakTx(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.Execute(`call proc_tx_begin()`, nil)
+	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not supported (CallerID: dev)")
+}
+
+func TestCallProcedureChangedTx(t *testing.T) {
+	client := framework.NewClient()
+
+	_, err := client.Execute(`call proc_tx_begin()`, nil)
+	require.EqualError(t, err, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not supported (CallerID: dev)")
+
+	queries := []string{
+		`call proc_tx_commit()`,
+		`call proc_tx_rollback()`,
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, err := client.BeginExecute(query, nil, nil)
+			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not supported (CallerID: dev)")
+			client.Release()
+		})
+	}
+
+	// This passes as this starts a new transaction by commiting the old transaction implicitly.
+	_, err = client.BeginExecute(`call proc_tx_begin()`, nil, nil)
+	require.NoError(t, err)
 }
