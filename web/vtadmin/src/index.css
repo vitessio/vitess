@@ -63,6 +63,11 @@
   --fontSizeHeading3: 2rem;
   --lineHeightHeading: 1.36;
 
+  /* Inputs + other form controls */
+  --inputHeightSmall: 2.4rem;
+  --inputHeightMedium: 3.6rem;
+  --inputHeightLarge: 4.8rem;
+
   /* Layout variables, set to light theme by default */
   --backgroundPrimary: #fff;
   --backgroundPrimaryHighlight: rgba(61, 90, 254, 0.1);
