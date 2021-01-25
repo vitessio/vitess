@@ -364,6 +364,8 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 		return planbuilder.V4GreedyOnly
 	case "left2right":
 		return planbuilder.V4Left2Right
+	case "v4fallback":
+		return planbuilder.V4WithFallback
 	}
 
 	log.Warn("unknown planner version configured. using the default")
