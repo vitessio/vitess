@@ -1312,7 +1312,7 @@ func (node *Subquery) Clone() Expr {
 	if node == nil {
 		return nil
 	}
-	panic(1)
+	panic("Subquery cloning not supported")
 }
 
 // Clone implements the Expr interface
@@ -1511,7 +1511,7 @@ func (node *FuncExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
-	panic(1)
+	panic("FuncExpr cloning not supported")
 }
 
 // Clone implements the Expr interface
@@ -1543,7 +1543,7 @@ func (node *CaseExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
-	panic(1)
+	panic("CaseExpr cloning not supported")
 }
 
 // Clone implements the Expr interface
@@ -1561,7 +1561,7 @@ func (node *ConvertExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
-	panic(1)
+	panic("ConvertExpr cloning not supported")
 }
 
 // Clone implements the Expr interface
@@ -1593,7 +1593,7 @@ func (node *MatchExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
-	panic(1)
+	panic("MatchExpr cloning not supported")
 }
 
 // Clone implements the Expr interface
@@ -1601,8 +1601,7 @@ func (node *GroupConcatExpr) Clone() Expr {
 	if node == nil {
 		return nil
 	}
-
-	panic(1)
+	panic("GroupConcatExpr cloning not supported")
 }
 
 // Clone implements the Expr interface
