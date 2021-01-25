@@ -1012,7 +1012,99 @@ func TestGetSchema(t *testing.T) {
 }
 
 func TestGetShard(t *testing.T) {
-	t.Skip("unimplemented")
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		topo      []*vtctldatapb.Shard
+		topoError error
+		req       *vtctldatapb.GetShardRequest
+		expected  *vtctldatapb.GetShardResponse
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			topo: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoError: nil,
+			req: &vtctldatapb.GetShardRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+			},
+			expected: &vtctldatapb.GetShardResponse{
+				Shard: &vtctldatapb.Shard{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						KeyRange:        &topodatapb.KeyRange{},
+						IsMasterServing: true,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "shard not found",
+			topo:      nil,
+			topoError: nil,
+			req: &vtctldatapb.GetShardRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "unavailable topo server",
+			topo: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoError: assert.AnError,
+			req:       nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		cells := []string{"zone1", "zone2", "zone3"}
+
+		ctx := context.Background()
+		ts, topofactory := memorytopo.NewServerAndFactory(cells...)
+		vtctld := NewVtctldServer(ts)
+
+		keyspaces := map[string]bool{}
+
+		for _, shard := range tt.topo {
+			if _, ok := keyspaces[shard.Keyspace]; !ok {
+				err := ts.CreateKeyspace(ctx, shard.Keyspace, &topodatapb.Keyspace{})
+				require.NoError(t, err, "CreateKeyspace(%v)", shard.Keyspace)
+				keyspaces[shard.Keyspace] = true
+			}
+
+			err := ts.CreateShard(ctx, shard.Keyspace, shard.Name)
+			require.NoError(t, err, "CreateShard(%v, %v)", shard.Keyspace, shard.Name)
+		}
+
+		if tt.topoError != nil {
+			topofactory.SetError(tt.topoError)
+		}
+
+		resp, err := vtctld.GetShard(ctx, tt.req)
+		if tt.shouldErr {
+			assert.Error(t, err)
+			return
+		}
+
+		assert.Equal(t, tt.expected, resp)
+	}
 }
 
 func TestGetSrvVSchema(t *testing.T) {
