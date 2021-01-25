@@ -66,6 +66,8 @@ const (
 	V4GreedyOnly = querypb.ExecuteOptions_V4Greedy
 	// V4Left2Right tries to emulate the V3 planner by only joining plans in the order they are listed in the FROM-clause
 	V4Left2Right = querypb.ExecuteOptions_V4Left2Right
+	// V4WithFallback first attempts to use the V4 planner, and if that fails, uses the V3 planner instead
+	V4WithFallback = querypb.ExecuteOptions_V4WithFallback
 )
 
 type truncater interface {
@@ -92,12 +94,7 @@ var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
-	planner := buildSelectPlan
-	if vschema.Planner() != V3 {
-		planner = gen4Planner
-	}
-
-	instruction, err := createInstructionFor(query, stmt, vschema, planner)
+	instruction, err := createInstructionFor(query, stmt, vschema, getConfiguredPlanner(vschema))
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +105,28 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		BindVarNeeds: bindVarNeeds,
 	}
 	return plan, nil
+}
+
+func getConfiguredPlanner(vschema ContextVSchema) selectPlanner {
+	switch vschema.Planner() {
+	case V3:
+		return buildSelectPlan
+	case V4, V4Left2Right, V4GreedyOnly:
+		return gen4Planner
+	case V4WithFallback:
+		fp := &fallbackPlanner{
+			primary:  buildSelectPlan,
+			fallback: gen4Planner,
+		}
+		return fp.plan
+	default:
+		// fail - unknown planner
+		return func(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
+			return func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown planner selected %d", vschema.Planner())
+			}
+		}
+	}
 }
 
 func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(statement sqlparser.Statement, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
