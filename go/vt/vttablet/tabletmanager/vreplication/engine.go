@@ -303,6 +303,8 @@ func (vre *Engine) Close() {
 	log.Infof("VReplication Engine: closed")
 }
 
+// throttleStatusOK checks if the throttler is happy with a Check (a shard-scope check).
+// If not, and `sleep == true`, impose some sleep.
 func (vre *Engine) throttleStatusOK(ctx context.Context, sleep bool) bool {
 	if vre.lagThrottler == nil {
 		// no throttler
