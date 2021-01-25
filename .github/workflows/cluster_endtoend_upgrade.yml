@@ -48,6 +48,16 @@ jobs:
     - name: Check out HEAD
       uses: actions/checkout@v2
 
+    - name: Building HEAD binaries
+      timeout-minutes: 10
+      run: |
+        go mod download
+
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-head/
+        cp -R bin /tmp/vitess-build-head/
+
     # Test 1: ful upgrade
     # - create a cluster with v8.0.0 binaries,
     # - then try to reuse the data with HEAD binaries
@@ -63,23 +73,11 @@ jobs:
         # We pass -skip-build so that we use the v8.0.0 binaries, not HEAD binaries
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
 
-    - name: Check out HEAD
-      uses: actions/checkout@v2
-
-    - name: Building HEAD binaries
-      timeout-minutes: 10
-      run: |
-        go mod download
-
-        source build.env
-        make build
-        mkdir -p /tmp/vitess-build-head/
-        cp -R bin /tmp/vitess-build-head/
-
     - name: Run cluster endtoend test HEAD based on v8.0.0 data (upgrade path)
       timeout-minutes: 5
       run: |
         # /tmp/vtdataroot exists from previous test
+        cp -R /tmp/vitess-build-head/bin .
 
         source build.env
         # We built HEAD binaries manually in previous step and there's no need for the test to build.
@@ -94,6 +92,7 @@ jobs:
         # create the directory where we store test data; ensure it is empty:
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        cp -R /tmp/vitess-build-head/bin .
 
         source build.env
         # We still have the binaries from previous step. No need to build
