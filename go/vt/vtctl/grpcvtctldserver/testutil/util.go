@@ -116,3 +116,15 @@ func AddShards(ctx context.Context, t *testing.T, ts *topo.Server, shards ...*vt
 		require.NoError(t, err, "CreateShard(%s/%s)", shard.Keyspace, shard.Name)
 	}
 }
+
+// SetupReplicationGraphs creates a set of ShardReplication objects in the topo,
+// failing the test if any of the records could not be created.
+func SetupReplicationGraphs(ctx context.Context, t *testing.T, ts *topo.Server, replicationGraphs ...*topo.ShardReplicationInfo) {
+	for _, graph := range replicationGraphs {
+		err := ts.UpdateShardReplicationFields(ctx, graph.Cell(), graph.Keyspace(), graph.Shard(), func(sr *topodatapb.ShardReplication) error {
+			sr.Nodes = graph.Nodes
+			return nil
+		})
+		require.NoError(t, err, "could not save replication graph for %s/%s in cell %v", graph.Keyspace(), graph.Shard(), graph.Cell())
+	}
+}
