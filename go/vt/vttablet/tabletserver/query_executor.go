@@ -690,6 +690,9 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	if !qr.IsMoreResultsExists() {
+		if qr.IsInTranscation() {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not supported")
+		}
 		return qr, nil
 	}
 	err = qre.drainResultSetOnConn(conn)

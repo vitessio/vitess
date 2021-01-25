@@ -231,3 +231,8 @@ func (result *Result) Named() *NamedResult {
 func (result *Result) IsMoreResultsExists() bool {
 	return result.StatusFlags&0x0008 == 0x0008
 }
+
+// IsInTranscation returns true if the status flag has SERVER_STATUS_IN_TRANS set
+func (result *Result) IsInTranscation() bool {
+	return result.StatusFlags&0x0001 == 0x0001
+}
