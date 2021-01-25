@@ -800,7 +800,7 @@ func verifyClusterHealth(t *testing.T) {
 }
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
-	const MaxWait = 15 * time.Second // upped from 10sec to allow throttler to kick in
+	const MaxWait = 10 * time.Second
 	err := vc.WaitForVReplicationToCatchup(vttablet, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
 	require.NoError(t, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
 }
