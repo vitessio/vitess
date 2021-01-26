@@ -645,11 +645,10 @@ func (throttler *Throttler) expireThrottledApps() {
 }
 
 // ThrottleApp instructs the throttler to begin throttling an app, to som eperiod and with some ratio.
-func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64) {
+func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64) (appThrottle *base.AppThrottle) {
 	throttler.throttledAppsMutex.Lock()
 	defer throttler.throttledAppsMutex.Unlock()
 
-	var appThrottle *base.AppThrottle
 	now := time.Now()
 	if object, found := throttler.throttledApps.Get(appName); found {
 		appThrottle = object.(*base.AppThrottle)
@@ -666,18 +665,20 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		if ratio < 0 {
 			ratio = defaultThrottleRatio
 		}
-		appThrottle = base.NewAppThrottle(expireAt, ratio)
+		appThrottle = base.NewAppThrottle(appName, expireAt, ratio)
 	}
 	if now.Before(appThrottle.ExpireAt) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 	} else {
 		throttler.UnthrottleApp(appName)
 	}
+	return appThrottle
 }
 
 // UnthrottleApp cancels any throttling, if any, for a given app
-func (throttler *Throttler) UnthrottleApp(appName string) {
+func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.AppThrottle) {
 	throttler.throttledApps.Delete(appName)
+	return base.NewAppThrottle(appName, time.Now(), 0)
 }
 
 // IsAppThrottled tells whether some app should be throttled.
