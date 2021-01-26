@@ -97,8 +97,8 @@ func (rs *resultStreamer) Stream() error {
 		default:
 		}
 
-		// check throttler. If required throttling, sleep ("true" argument) and retry loop
-		if !rs.vse.throttleStatusOK(rs.ctx, true) {
+		// check throttler.
+		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
 			continue
 		}
 
