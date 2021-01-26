@@ -247,6 +247,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "flush_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "show_cases.txt", testOutputTempDir, vschema, false)
+	testFile(t, "call_cases.txt", testOutputTempDir, vschema, false)
 }
 
 func TestOtherPlanningFromFile(t *testing.T) {
