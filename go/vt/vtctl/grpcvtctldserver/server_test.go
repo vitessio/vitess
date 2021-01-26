@@ -1571,7 +1571,190 @@ func TestGetVSchema(t *testing.T) {
 }
 
 func TestRemoveKeyspaceCell(t *testing.T) {
-	t.Skip("unimplemented")
+	t.Parallel()
+
+	tests := []struct {
+		name                    string
+		keyspace                *vtctldatapb.Keyspace
+		shards                  []*vtctldatapb.Shard
+		topoError               error
+		topoIsLocked            bool
+		srvKeyspaceDoesNotExist bool
+		req                     *vtctldatapb.RemoveKeyspaceCellRequest
+		expected                *vtctldatapb.RemoveKeyspaceCellResponse
+		shouldErr               bool
+	}{
+		{
+			name:     "success",
+			keyspace: nil,
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoError:               nil,
+			topoIsLocked:            false,
+			srvKeyspaceDoesNotExist: false,
+			req: &vtctldatapb.RemoveKeyspaceCellRequest{
+				Keyspace: "testkeyspace",
+				Cell:     "zone1",
+			},
+			expected:  &vtctldatapb.RemoveKeyspaceCellResponse{},
+			shouldErr: false,
+		},
+		{
+			name: "success/empty keyspace",
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			shards:                  nil,
+			topoError:               nil,
+			topoIsLocked:            false,
+			srvKeyspaceDoesNotExist: false,
+			req: &vtctldatapb.RemoveKeyspaceCellRequest{
+				Keyspace: "testkeyspace",
+				Cell:     "zone1",
+			},
+			expected:  &vtctldatapb.RemoveKeyspaceCellResponse{},
+			shouldErr: false,
+		},
+		{
+			name: "keyspace not found",
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "otherkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			shards:                  nil,
+			topoError:               nil,
+			topoIsLocked:            false,
+			srvKeyspaceDoesNotExist: false,
+			req: &vtctldatapb.RemoveKeyspaceCellRequest{
+				Keyspace: "testkeyspace",
+				Cell:     "zone1",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name:     "topo is down",
+			keyspace: nil,
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoError:               assert.AnError,
+			topoIsLocked:            false,
+			srvKeyspaceDoesNotExist: false,
+			req: &vtctldatapb.RemoveKeyspaceCellRequest{
+				Keyspace: "testkeyspace",
+				Cell:     "zone1",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name:     "topo is locked",
+			keyspace: nil,
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoError:               nil,
+			topoIsLocked:            true,
+			srvKeyspaceDoesNotExist: false,
+			req: &vtctldatapb.RemoveKeyspaceCellRequest{
+				Keyspace: "testkeyspace",
+				Cell:     "zone1",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name:     "srvkeyspace already deleted",
+			keyspace: nil,
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoError:               nil,
+			topoIsLocked:            false,
+			srvKeyspaceDoesNotExist: true,
+			req: &vtctldatapb.RemoveKeyspaceCellRequest{
+				Keyspace: "testkeyspace",
+				Cell:     "zone1",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.req == nil {
+				t.Skip("focused on other tests")
+			}
+			cells := []string{"zone1", "zone2", "zone3"}
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory(cells...)
+			vtctld := NewVtctldServer(ts)
+
+			// Setup topo
+			if tt.keyspace != nil {
+				testutil.AddKeyspace(ctx, t, ts, tt.keyspace)
+			}
+
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+
+			// For certain tests, we don't actually create the SrvKeyspace
+			// object.
+			if !tt.srvKeyspaceDoesNotExist {
+				updateSrvKeyspace := func(keyspace string) {
+					for _, cell := range cells {
+						err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, &topodatapb.SrvKeyspace{})
+						require.NoError(t, err, "could not create empty SrvKeyspace for keyspace %s in cell %s", tt.req.Keyspace, cell)
+					}
+				}
+
+				updateSrvKeyspace(tt.req.Keyspace)
+				if tt.keyspace != nil {
+					updateSrvKeyspace(tt.keyspace.Name)
+				}
+			}
+
+			// Set errors and locks
+			if tt.topoError != nil {
+				topofactory.SetError(tt.topoError)
+			}
+
+			if tt.topoIsLocked {
+				lctx, unlock, err := ts.LockKeyspace(ctx, tt.req.Keyspace, "testing locked keyspace")
+				require.NoError(t, err, "cannot lock keyspace %s", tt.req.Keyspace)
+				defer unlock(&err)
+
+				ctx = lctx
+			}
+
+			resp, err := vtctld.RemoveKeyspaceCell(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
 }
 
 func TestRemoveShardCell(t *testing.T) {
@@ -1801,9 +1984,9 @@ func TestRemoveShardCell(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt := tt
+		tt := tt
 
+		t.Run(tt.name, func(t *testing.T) {
 			cells := []string{"zone1", "zone2", "zone3"}
 
 			ctx := context.Background()
@@ -1868,6 +2051,7 @@ func TestRemoveShardCell(t *testing.T) {
 				return
 			}
 
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
