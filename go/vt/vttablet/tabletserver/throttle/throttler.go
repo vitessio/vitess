@@ -75,6 +75,13 @@ var (
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 )
 
+type ThrottleCheckType int
+
+const (
+	ThrottleCheckPrimaryWrite ThrottleCheckType = iota
+	ThrottleCheckSelf
+)
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -790,6 +797,16 @@ func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAdd
 // CheckSelf is checks the mysql/self metric, and is available on each tablet
 func (throttler *Throttler) CheckSelf(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.checkStore(ctx, appName, selfStoreName, remoteAddr, flags)
+}
+
+// CheckSelf is checks the mysql/self metric, and is available on each tablet
+func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
+	switch checkType {
+	case ThrottleCheckSelf:
+		return throttler.CheckSelf(ctx, appName, remoteAddr, flags)
+	default:
+		return throttler.Check(ctx, appName, remoteAddr, flags)
+	}
 }
 
 // Status exports a status breakdown
