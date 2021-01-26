@@ -111,3 +111,40 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 
 	return err
 }
+
+// IsMasterTablet is a helper function to determine whether the current tablet
+// is a master before we allow its tablet record to be deleted. The canonical
+// way to determine the only true master in a shard is to list all the tablets
+// and find the one with the highest MasterTermStartTime among the ones that
+// claim to be master.
+//
+// We err on the side of caution here, i.e. we should never return false for
+// a true master tablet, but it is okay to return true for a tablet that isn't
+// the true master. This can occur if someone issues a DeleteTablet while
+// the system is in transition (a reparenting event is in progress and parts of
+// the topo have not yet been updated).
+func IsMasterTablet(ctx context.Context, ts *topo.Server, ti *topo.TabletInfo) (bool, error) {
+	// Tablet record claims to be non-master, we believe it
+	if ti.Type != topodatapb.TabletType_MASTER {
+		return false, nil
+	}
+
+	si, err := ts.GetShard(ctx, ti.Keyspace, ti.Shard)
+	if err != nil {
+		// strictly speaking it isn't correct to return false here, the tablet status is unknown
+		return false, err
+	}
+
+	// Tablet record claims to be master, and shard record matches
+	if topoproto.TabletAliasEqual(si.MasterAlias, ti.Tablet.Alias) {
+		return true, nil
+	}
+
+	// Shard record has another tablet as master, so check MasterTermStartTime
+	// If tablet record's MasterTermStartTime is later than the one in the shard
+	// record, then the tablet is master
+	tabletMTST := ti.GetMasterTermStartTime()
+	shardMTST := si.GetMasterTermStartTime()
+
+	return tabletMTST.After(shardMTST), nil
+}

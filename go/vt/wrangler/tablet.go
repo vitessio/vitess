@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -210,7 +211,7 @@ func (wr *Wrangler) VReplicationExec(ctx context.Context, tabletAlias *topodatap
 	return wr.tmc.VReplicationExec(ctx, ti.Tablet, query)
 }
 
-// VReplicationExec executes a query remotely using the DBA pool
+// GenericVExec executes a query remotely using the DBA pool
 func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query, workflow, keyspace string) (*querypb.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
@@ -230,22 +231,5 @@ func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.Ta
 // the system is in transition (a reparenting event is in progress and parts of
 // the topo have not yet been updated).
 func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
-	// Tablet record claims to be non-master, we believe it
-	if ti.Type != topodatapb.TabletType_MASTER {
-		return false, nil
-	}
-	si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
-	if err != nil {
-		// strictly speaking it isn't correct to return false here, the tablet status is unknown
-		return false, err
-	}
-	// Tablet record claims to be master, and shard record matches
-	if topoproto.TabletAliasEqual(si.MasterAlias, ti.Tablet.Alias) {
-		return true, nil
-	}
-	// Shard record has another tablet as master, so check MasterTermStartTime
-	// If tablet record's MasterTermStartTime is later than the one in the shard record, then tablet is master
-	tabletMTST := ti.GetMasterTermStartTime()
-	shardMTST := si.GetMasterTermStartTime()
-	return tabletMTST.After(shardMTST), nil
+	return grpcvtctldserver.IsMasterTablet(ctx, wr.TopoServer(), ti)
 }
