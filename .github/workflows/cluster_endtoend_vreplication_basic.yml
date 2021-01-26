@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (29)
+    name: Run endtoend tests on Cluster (vreplication_basic)
     runs-on: ubuntu-latest
 
     steps:
@@ -31,12 +31,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    - name: Installing zookeeper and consul
-      run: |
-          make tools
-
     - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 29
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard vreplication_basic

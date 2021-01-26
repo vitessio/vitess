@@ -70,6 +70,13 @@ var (
 	checkSelfAPIPath = "throttler/check-self"
 )
 
+const (
+	throttlerInitWait            = 10 * time.Second
+	accumulateLagWait            = 2 * time.Second
+	throttlerRefreshIntervalWait = 12 * time.Second
+	replicationCatchUpWait       = 5 * time.Second
+)
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -90,6 +97,7 @@ func TestMain(m *testing.M) {
 			"-watch_replication_stream",
 			"-enable_replication_reporter",
 			"-enable-lag-throttler",
+			"-throttle_threshold", "1s",
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
 		}
@@ -145,7 +153,7 @@ func TestThrottlerBeforeMetricsCollected(t *testing.T) {
 func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(throttlerInitWait)
 	// By this time metrics will have been collected. We expect no lag, and something like:
 	// {"StatusCode":200,"Value":0.282278,"Threshold":1,"Message":""}
 	{
@@ -172,7 +180,7 @@ func TestLag(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(accumulateLagWait)
 		// Lag will have accumulated
 		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
 		{
@@ -196,7 +204,7 @@ func TestLag(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(replicationCatchUpWait)
 		// Restore
 		{
 			resp, err := throttleCheck(primaryTablet)
@@ -222,7 +230,7 @@ func TestNoReplicas(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		assert.NoError(t, err)
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(throttlerRefreshIntervalWait)
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		resp, err := throttleCheck(primaryTablet)
@@ -233,7 +241,7 @@ func TestNoReplicas(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		assert.NoError(t, err)
 
-		time.Sleep(10 * time.Second)
+		time.Sleep(throttlerRefreshIntervalWait)
 		// Restore valid replica
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)

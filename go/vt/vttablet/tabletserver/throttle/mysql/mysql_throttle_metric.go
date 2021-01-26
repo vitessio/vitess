@@ -67,7 +67,7 @@ func (metric *MySQLThrottleMetric) Get() (float64, error) {
 	return metric.Value, metric.Err
 }
 
-// ReadThrottleMetric returns a metrics for the given probe. Either by explicit query
+// ReadThrottleMetric returns a metric for the given probe. Either by explicit query
 // or via SHOW SLAVE STATUS
 func ReadThrottleMetric(probe *Probe, clusterName string, overrideGetMetricFunc func() *MySQLThrottleMetric) (mySQLThrottleMetric *MySQLThrottleMetric) {
 	if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
