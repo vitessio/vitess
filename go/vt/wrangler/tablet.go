@@ -231,5 +231,5 @@ func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.Ta
 // the system is in transition (a reparenting event is in progress and parts of
 // the topo have not yet been updated).
 func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
-	return grpcvtctldserver.IsMasterTablet(ctx, wr.TopoServer(), ti)
+	return grpcvtctldserver.IsPrimaryTablet(ctx, wr.TopoServer(), ti)
 }
