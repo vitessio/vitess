@@ -27,6 +27,11 @@ import (
 )
 
 var (
+	// MySQLServerVersion is what Vitess will present as it's version during the connection handshake,
+	// and as the value to the @@version system variable. If nothing is provided, Vitess will report itself as
+	// a specific MySQL version with the vitess version appended to it
+	MySQLServerVersion = flag.String("mysql_server_version", "", "MySQL server version to advertise.")
+
 	buildHost             = ""
 	buildUser             = ""
 	buildTime             = ""
@@ -52,6 +57,7 @@ type versionInfo struct {
 	goVersion          string
 	goOS               string
 	goArch             string
+	version            string
 }
 
 func (v *versionInfo) Print() {
@@ -59,11 +65,19 @@ func (v *versionInfo) Print() {
 }
 
 func (v *versionInfo) String() string {
-	version := fmt.Sprintf("Version: %s", v.buildGitRev)
+	jenkins := ""
 	if v.jenkinsBuildNumber != 0 {
-		version = fmt.Sprintf("Version: %s (Jenkins build %d)", v.buildGitRev, v.jenkinsBuildNumber)
+		jenkins = fmt.Sprintf(" (Jenkins build %d)", v.jenkinsBuildNumber)
 	}
-	return fmt.Sprintf("%s (Git branch '%s') built on %s by %s@%s using %s %s/%s\n", version, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+	return fmt.Sprintf("Version: %s%s (Git revision %s branch '%s') built on %s by %s@%s using %s %s/%s",
+		v.version, jenkins, v.buildGitRev, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+}
+
+func (v *versionInfo) MySQLVersion() string {
+	if *MySQLServerVersion != "" {
+		return *MySQLServerVersion
+	}
+	return "5.7.9-vitess-" + v.version
 }
 
 func init() {
@@ -88,6 +102,7 @@ func init() {
 		goVersion:          runtime.Version(),
 		goOS:               runtime.GOOS,
 		goArch:             runtime.GOARCH,
+		version:            versionName,
 	}
 
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
