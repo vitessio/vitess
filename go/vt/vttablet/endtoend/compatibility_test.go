@@ -696,7 +696,7 @@ func TestJSONType(t *testing.T) {
 				sqltypes.TestValue(sqltypes.TypeJSON, "{\"foo\": \"bar\"}"),
 			},
 		},
-		StatusFlags: 0x22,
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
 	if !reflect.DeepEqual(qr, want) {
 		// MariaDB 10.3 has different behavior.
