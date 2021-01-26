@@ -192,7 +192,53 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 // CreateShard is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
-	panic("unimplemented!")
+	if req.IncludeParent {
+		log.Infof("Creating empty keyspace for %s", req.Keyspace)
+		if err := s.ts.CreateKeyspace(ctx, req.Keyspace, &topodatapb.Keyspace{}); err != nil {
+			if req.Force && topo.IsErrType(err, topo.NodeExists) {
+				log.Infof("keyspace %v already exists; ignoring error because Force = true", req.Keyspace)
+			} else {
+				return nil, err
+			}
+		}
+	}
+
+	shardExists := false
+
+	if err := s.ts.CreateShard(ctx, req.Keyspace, req.ShardName); err != nil {
+		if req.Force && topo.IsErrType(err, topo.NodeExists) {
+			log.Infof("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName)
+			shardExists = true
+		} else {
+			return nil, err
+		}
+	}
+
+	// Fetch what we just created out of the topo. Errors should never happen
+	// here, but we'll check them anyway.
+
+	ks, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	shard, err := s.ts.GetShard(ctx, req.Keyspace, req.ShardName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.CreateShardResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Keyspace,
+			Keyspace: ks.Keyspace,
+		},
+		Shard: &vtctldatapb.Shard{
+			Keyspace: req.Keyspace,
+			Name:     req.ShardName,
+			Shard:    shard.Shard,
+		},
+		ShardAlreadyExists: shardExists,
+	}, nil
 }
 
 // DeleteKeyspace is part of the vtctlservicepb.VtctldServer interface.
