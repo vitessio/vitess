@@ -26,32 +26,47 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
-var procSQL = []string{`create procedure proc_select1()
-BEGIN
-	select intval from vitess_test;
-END;`, `create procedure proc_select4()
-BEGIN
-	select intval from vitess_test;
-	select intval from vitess_test;
-	select intval from vitess_test;
-	select intval from vitess_test;
-END;`, `create procedure proc_dml()
-BEGIN
-    start transaction;
-	insert into vitess_test(intval) values(1432);
-	update vitess_test set intval = 2341 where intval = 1432;
-	delete from vitess_test where intval = 2341;
-    commit;
-END;`, `create procedure proc_tx_begin()
-BEGIN
-    start transaction;
-END;`, `create procedure proc_tx_commit()
-BEGIN
-    commit;
-END;`, `create procedure proc_tx_rollback()
-BEGIN
-    rollback;
-END;`}
+var procSQL = []string{
+	`create procedure proc_select1()
+	BEGIN
+		select intval from vitess_test;
+	END;`,
+	`create procedure proc_select4()
+	BEGIN
+		select intval from vitess_test;
+		select intval from vitess_test;
+		select intval from vitess_test;
+		select intval from vitess_test;
+	END;`,
+	`create procedure proc_dml()
+	BEGIN
+	    start transaction;
+		insert into vitess_test(intval) values(1432);
+		update vitess_test set intval = 2341 where intval = 1432;
+		delete from vitess_test where intval = 2341;
+	    commit;
+	END;`,
+	`create procedure proc_tx_begin()
+	BEGIN
+	    start transaction;
+	END;`,
+	`create procedure proc_tx_commit()
+	BEGIN
+	    commit;
+	END;`,
+	`create procedure proc_tx_rollback()
+	BEGIN
+	    rollback;
+	END;`,
+	`create procedure in_parameter(IN name varchar(255))
+	BEGIN
+	    select name as theName;
+	END;`,
+	`create procedure out_parameter(OUT name varchar(255))
+	BEGIN
+	    select 42 into name from dual;
+	END;`,
+}
 
 func TestCallProcedure(t *testing.T) {
 	client := framework.NewClient()
@@ -64,6 +79,35 @@ func TestCallProcedure(t *testing.T) {
 		wantErr: true,
 	}, {
 		query:   "call proc_select4()",
+		wantErr: true,
+	}, {
+		query: "call proc_dml()",
+	}}
+
+	for _, tc := range tcases {
+		t.Run(tc.query, func(t *testing.T) {
+			_, err := client.Execute(tc.query, nil)
+			if tc.wantErr {
+				require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+				return
+			}
+			require.NoError(t, err)
+
+		})
+	}
+}
+
+func TestCallProcedureWithParams(t *testing.T) {
+	client := framework.NewClient()
+	type testcases struct {
+		query   string
+		wantErr bool
+	}
+	tcases := []testcases{{
+		query:   "call in_parameter('the name')",
+		wantErr: false,
+	}, {
+		query:   "call out_parameter('the name')",
 		wantErr: true,
 	}, {
 		query: "call proc_dml()",
