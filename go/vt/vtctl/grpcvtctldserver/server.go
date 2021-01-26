@@ -770,85 +770,11 @@ func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.
 
 // RemoveShardCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveShardCell(ctx context.Context, req *vtctldatapb.RemoveShardCellRequest) (*vtctldatapb.RemoveShardCellResponse, error) {
-	shard, err := s.ts.GetShard(ctx, req.Keyspace, req.ShardName)
-	if err != nil {
+	if err := removeShardCell(ctx, s.ts, req.Cell, req.Keyspace, req.ShardName, req.Recursive, req.Force); err != nil {
 		return nil, err
 	}
 
-	servingCells, err := s.ts.GetShardServingCells(ctx, shard)
-	if err != nil {
-		return nil, err
-	}
-
-	if !topo.InCellList(req.Cell, servingCells) {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v does not have serving cell %v", req.Keyspace, req.ShardName, req.Cell)
-	}
-
-	if shard.MasterAlias != nil && shard.MasterAlias.Cell == req.Cell {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot remove cell %v; shard master %v is in cell", req.Cell, topoproto.TabletAliasString(shard.MasterAlias))
-	}
-
-	replication, err := s.ts.GetShardReplication(ctx, req.Cell, req.Keyspace, req.ShardName)
-	switch {
-	case err == nil:
-		// We have tablets in the shard in this cell.
-		if req.Recursive {
-			log.Infof("Deleting all tablets in cell %v in shard %v/%v", req.Cell, req.Keyspace, req.ShardName)
-			for _, node := range replication.Nodes {
-				// We don't care about scraping our updating the replication
-				// graph, because we're about to delete the entire replication
-				// graph.
-				log.Infof("Deleting tablet %v", topoproto.TabletAliasString(node.TabletAlias))
-				if err := s.ts.DeleteTablet(ctx, node.TabletAlias); err != nil && !topo.IsErrType(err, topo.NoNode) {
-					return nil, fmt.Errorf("cannot delete tablet %v: %w", topoproto.TabletAliasString(node.TabletAlias), err)
-				}
-			}
-		} else if len(replication.Nodes) > 0 {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cell %v has %v possible tablets in replication graph", req.Cell, len(replication.Nodes))
-		}
-
-		// Remove the empty replication graph.
-		if err := s.ts.DeleteShardReplication(ctx, req.Cell, req.Keyspace, req.ShardName); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			return nil, fmt.Errorf("error deleting ShardReplication object in cell %v: %w", req.Cell, err)
-		}
-	case topo.IsErrType(err, topo.NoNode):
-		// No ShardReplication object. This is the expected path when there are
-		// no tablets in the shard in that cell.
-	default:
-		// If we can't get the replication object out of the local topo, we
-		// assume the topo server is down in that cell, so we'll only continue
-		// if Force was specified.
-		if !req.Force {
-			return nil, err
-		}
-
-		log.Warningf("Cannot get ShardReplication from cell %v; assuming cell topo server is down and forcing removal", req.Cell)
-	}
-
-	// Finally, update the shard.
-
-	log.Infof("Removing cell %v from SrvKeyspace %v/%v", req.Cell, req.Keyspace, req.ShardName)
-
-	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "Locking keyspace to remove shard from SrvKeyspace")
-	if lockErr != nil {
-		return nil, lockErr
-	}
-
-	defer unlock(&err)
-
-	if err := s.ts.DeleteSrvKeyspacePartitions(ctx, req.Keyspace, []*topo.ShardInfo{shard}, topodatapb.TabletType_RDONLY, []string{req.Cell}); err != nil {
-		return nil, err
-	}
-
-	if err := s.ts.DeleteSrvKeyspacePartitions(ctx, req.Keyspace, []*topo.ShardInfo{shard}, topodatapb.TabletType_REPLICA, []string{req.Cell}); err != nil {
-		return nil, err
-	}
-
-	if err := s.ts.DeleteSrvKeyspacePartitions(ctx, req.Keyspace, []*topo.ShardInfo{shard}, topodatapb.TabletType_MASTER, []string{req.Cell}); err != nil {
-		return nil, err
-	}
-
-	return &vtctldatapb.RemoveShardCellResponse{}, err
+	return &vtctldatapb.RemoveShardCellResponse{}, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
