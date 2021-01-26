@@ -601,7 +601,7 @@ func materializeProduct(t *testing.T) {
 		}
 
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "master")
-		t.Run("throttle-app: product (source)", func(t *testing.T) {
+		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
 				_, body, err := throttleStreamer(tab, sourceThrottlerAppName)
@@ -630,7 +630,7 @@ func materializeProduct(t *testing.T) {
 				validateCountInTablet(t, tab, keyspace, workflow, 5)
 			}
 		})
-		t.Run("unthrottle-app: product (source)", func(t *testing.T) {
+		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range productTablets {
 				_, body, err := unthrottleStreamer(tab, sourceThrottlerAppName)
@@ -651,7 +651,7 @@ func materializeProduct(t *testing.T) {
 			}
 		})
 
-		t.Run("throttle-app: customer (target)", func(t *testing.T) {
+		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range customerTablets {
 				_, body, err := throttleStreamer(tab, targetThrottlerAppName)
@@ -680,7 +680,7 @@ func materializeProduct(t *testing.T) {
 				validateCountInTablet(t, tab, keyspace, workflow, 8)
 			}
 		})
-		t.Run("unthrottle-app: customer (target)", func(t *testing.T) {
+		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range customerTablets {
 				_, body, err := unthrottleStreamer(tab, targetThrottlerAppName)
