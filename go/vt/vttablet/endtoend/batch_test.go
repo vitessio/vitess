@@ -95,7 +95,7 @@ func TestBatchRead(t *testing.T) {
 				sqltypes.NewVarBinary("fghi"),
 			},
 		},
-		StatusFlags: 0x22,
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
 	qr2 := sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -126,7 +126,7 @@ func TestBatchRead(t *testing.T) {
 				sqltypes.NewInt32(2),
 			},
 		},
-		StatusFlags: 0x02,
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	want := []sqltypes.Result{qr1, qr2}
 

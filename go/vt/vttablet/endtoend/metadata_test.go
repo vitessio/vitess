@@ -97,7 +97,7 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 				sqltypes.NewInt32(-2147483648),
 			},
 		},
-		StatusFlags: 0x02,
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	mustMatch(t, want, qr)
 	mustMatch(t, want, streamQr)
@@ -135,7 +135,7 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 				sqltypes.NewInt32(-2147483648),
 			},
 		},
-		StatusFlags: 0x02,
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	mustMatch(t, want, qr)
 	mustMatch(t, want, streamQr)
@@ -173,7 +173,7 @@ func TestMetadataNoExecOptions(t *testing.T) {
 				sqltypes.NewInt32(-2147483648),
 			},
 		},
-		StatusFlags: 0x02,
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	mustMatch(t, want, qr)
 	mustMatch(t, want, streamQr)
