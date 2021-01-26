@@ -67,6 +67,10 @@ func NewBackgroundClient(throttler *Throttler, appName string, checkType Throttl
 // be called very frequenty.
 // The function is not thread safe.
 func (c *Client) ThrottleCheckOK(ctx context.Context) (throttleCheckOK bool) {
+	if c == nil {
+		// no client
+		return true
+	}
 	if c.throttler == nil {
 		// no throttler
 		return true
