@@ -35,6 +35,12 @@ var (
 		Args: cobra.ExactArgs(2),
 		RunE: commandChangeTabletType,
 	}
+	// DeleteTablets makes a DeleteTablets gRPC call to a vtctld.
+	DeleteTablets = &cobra.Command{
+		Use:  "DeleteTablets TABLET_ALIAS [ TABLET_ALIAS ... ]",
+		Args: cobra.MinimumNArgs(1),
+		RunE: commandDeleteTablets,
+	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
 		Use:  "GetTablet alias",
@@ -82,6 +88,30 @@ func commandChangeTabletType(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("- %v\n", cli.MarshalTabletAWK(resp.BeforeTablet))
 	fmt.Printf("+ %v\n", cli.MarshalTabletAWK(resp.AfterTablet))
+
+	return nil
+}
+
+var deleteTabletsOptions = struct {
+	AllowPrimary bool
+}{}
+
+func commandDeleteTablets(cmd *cobra.Command, args []string) error {
+	aliases, err := cli.TabletAliasesFromPosArgs(cmd.Flags().Args())
+	if err != nil {
+		return err
+	}
+
+	_, err = client.DeleteTablets(commandCtx, &vtctldatapb.DeleteTabletsRequest{
+		TabletAliases: aliases,
+		AllowPrimary:  deleteTabletsOptions.AllowPrimary,
+	})
+
+	if err != nil {
+		return fmt.Errorf("%w: while deleting %d tablets; please inspect the topo", err, len(aliases))
+	}
+
+	fmt.Printf("Successfully deleted %d tablets\n", len(aliases))
 
 	return nil
 }
@@ -158,6 +188,9 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 func init() {
 	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
 	Root.AddCommand(ChangeTabletType)
+
+	DeleteTablets.Flags().BoolVarP(&deleteTabletsOptions.AllowPrimary, "allow-primary", "p", false, "Allow the primary tablet of a shard to be deleted. Use with caution.")
+	Root.AddCommand(DeleteTablets)
 
 	Root.AddCommand(GetTablet)
 
