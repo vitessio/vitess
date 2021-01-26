@@ -71,10 +71,10 @@ var (
 )
 
 const (
-	throttlerInitWait        = 10 * time.Second
-	accumulateLagWait        = 2 * time.Second
-	mysqlRefreshIntervalWait = 12 * time.Second
-	replicationCatchUpWait   = 5 * time.Second
+	throttlerInitWait            = 10 * time.Second
+	accumulateLagWait            = 2 * time.Second
+	throttlerRefreshIntervalWait = 12 * time.Second
+	replicationCatchUpWait       = 5 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -230,7 +230,7 @@ func TestNoReplicas(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
 		assert.NoError(t, err)
 
-		time.Sleep(mysqlRefreshIntervalWait)
+		time.Sleep(throttlerRefreshIntervalWait)
 		// This makes no REPLICA servers available. We expect something like:
 		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
 		resp, err := throttleCheck(primaryTablet)
@@ -241,7 +241,7 @@ func TestNoReplicas(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
 		assert.NoError(t, err)
 
-		time.Sleep(mysqlRefreshIntervalWait)
+		time.Sleep(throttlerRefreshIntervalWait)
 		// Restore valid replica
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
