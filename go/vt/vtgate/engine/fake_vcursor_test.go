@@ -73,6 +73,14 @@ func (t noopVCursor) SetReadAfterWriteGTID(s string) {
 	panic("implement me")
 }
 
+func (t noopVCursor) SetSessionEnableSystemSettings(allow bool) error {
+	panic("implement me")
+}
+
+func (t noopVCursor) GetSessionEnableSystemSettings() bool {
+	panic("implement me")
+}
+
 func (t noopVCursor) SetReadAfterWriteTimeout(f float64) {
 	panic("implement me")
 }

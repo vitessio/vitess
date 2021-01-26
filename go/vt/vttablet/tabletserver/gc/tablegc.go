@@ -408,6 +408,21 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	return nil
 }
 
+func (collector *TableGC) throttleStatusOK(ctx context.Context) bool {
+	if time.Since(collector.lastSuccessfulThrottleCheck) <= throttleCheckDuration {
+		// if last check was OK just very recently there is no need to check again
+		return true
+	}
+	// It's time to run a throttler check
+	checkResult := collector.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
+	if checkResult.StatusCode != http.StatusOK {
+		// sorry, we got throttled.
+		return false
+	}
+	collector.lastSuccessfulThrottleCheck = time.Now()
+	return true
+}
+
 // purge continuously purges rows from a table.
 // This function is non-reentrant: there's only one instance of this function running at any given time.
 // A timer keeps calling this function, so if it bails out (e.g. on error) it will later resume work
@@ -451,15 +466,9 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 
 	log.Infof("TableGC: purge begin for %s", tableName)
 	for {
-		if time.Since(collector.lastSuccessfulThrottleCheck) > throttleCheckDuration {
-			// It's time to run a throttler check
-			checkResult := collector.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
-			if checkResult.StatusCode != http.StatusOK {
-				// sorry, we got throttled. Back off, sleep, try again
-				time.Sleep(throttleCheckDuration)
-				continue
-			}
-			collector.lastSuccessfulThrottleCheck = time.Now()
+		for !collector.throttleStatusOK(ctx) {
+			// Sorry, got throttled. Sleep some time, then check again
+			time.Sleep(throttleCheckDuration)
 		}
 		// OK, we're clear to go!
 
