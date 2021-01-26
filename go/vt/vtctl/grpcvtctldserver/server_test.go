@@ -1638,7 +1638,7 @@ func TestRemoveShardCell(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "sucess/no tablets",
+			name: "success/no tablets",
 			shards: []*vtctldatapb.Shard{
 				{
 					Keyspace: "testkeyspace",
