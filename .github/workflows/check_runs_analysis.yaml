@@ -46,6 +46,8 @@ jobs:
             \"content\": \"$(cat $tmpfile)\"
           }
         "
+        json_tmpfile="$(mktemp)"
+        echo "$json" > $json_tmpfile
 
         curl \
           -X PUT \
@@ -53,4 +55,4 @@ jobs:
           -H "Accept: application/vnd.github.v3+json" \
           -H "Content-type: application/json" \
           "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${WORKFLOW_FAILURES_FILE}" \
-          -d "$json"
+          -d "@${json_tmpfile}"
