@@ -66,8 +66,9 @@ type VReplicationWorkflowParams struct {
 	AllTables, RenameTables bool
 
 	// Reshard specific
-	SourceShards, TargetShards []string
-	SkipSchemaCopy             bool
+	SourceShards, TargetShards  []string
+	SkipSchemaCopy              bool
+	StartStopped, StopAfterCopy bool
 }
 
 // NewVReplicationWorkflow sets up a MoveTables or Reshard workflow based on options provided, deduces the state of the
@@ -361,13 +362,13 @@ func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasM
 func (vrw *VReplicationWorkflow) initMoveTables() error {
 	log.Infof("In VReplicationWorkflow.initMoveTables() for %+v", vrw)
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
-		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables)
+		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables, vrw.params.StartStopped, vrw.params.StopAfterCopy)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
 	log.Infof("In VReplicationWorkflow.initReshard() for %+v", vrw)
 	return vrw.wr.Reshard(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.SourceShards,
-		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes)
+		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.StartStopped, vrw.params.StopAfterCopy)
 }
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {

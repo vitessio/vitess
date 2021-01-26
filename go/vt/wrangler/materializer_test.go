@@ -17,12 +17,11 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"testing"
-
-	"context"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -63,7 +62,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", false, false)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -104,11 +103,11 @@ func TestMissingTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", false, false)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", false, false)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", false, false)
 	require.NoError(t, err)
 }
 
@@ -164,13 +163,42 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables)
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, false, false)
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(env))
 		})
 
 	}
 
+}
+
+func TestMoveTablesStopFlags(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx := context.Background()
+	var err error
+	t.Run("StopStartedAndStopAfterCopyFlags", func(t *testing.T) {
+		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+		defer env.close()
+		env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+		env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+		insert := `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values .*stop_after_copy:true.*`
+
+		env.tmc.expectVRQuery(200, insert, &sqltypes.Result{})
+		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
+			"", false, "", true, true)
+		require.NoError(t, err)
+		env.tmc.verifyQueries(t)
+	})
 }
 
 func TestMigrateVSchema(t *testing.T) {
@@ -193,7 +221,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", false, false)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
