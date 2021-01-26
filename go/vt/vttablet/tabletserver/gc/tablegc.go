@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"net/http"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -43,9 +42,6 @@ import (
 const (
 	leaderCheckInterval     = 5 * time.Second
 	purgeReentranceInterval = 1 * time.Minute
-	// throttleCheckDuration controls both how frequently the throttler is checked. as well as
-	// how long to sleep if throttler blocks us
-	throttleCheckDuration = 250 * time.Millisecond
 	// evacHours is a hard coded, reasonable time for a table to spend in EVAC state
 	evacHours        = 72
 	throttlerAppName = "tablegc"
@@ -58,12 +54,9 @@ var checkInterval = flag.Duration("gc_check_interval", 1*time.Hour, "Interval be
 var gcLifecycle = flag.String("table_gc_lifecycle", "hold,purge,evac,drop", "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
 
 var (
-	sqlPurgeTable   = `delete from %a limit 50`
-	sqlShowVtTables = `show tables like '\_vt\_%'`
-	sqlDropTable    = "drop table if exists `%a`"
-	throttleFlags   = &throttle.CheckFlags{
-		LowPriority: true,
-	}
+	sqlPurgeTable       = `delete from %a limit 50`
+	sqlShowVtTables     = `show tables like '\_vt\_%'`
+	sqlDropTable        = "drop table if exists `%a`"
 	purgeReentranceFlag int64
 )
 
@@ -91,16 +84,15 @@ type TableGC struct {
 	shard    string
 	dbName   string
 
-	lagThrottler *throttle.Throttler
-	isPrimary    int64
-	isOpen       int64
+	isPrimary int64
+	isOpen    int64
+
+	throttlerClient *throttle.Client
 
 	env            tabletenv.Env
 	pool           *connpool.Pool
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
-
-	lastSuccessfulThrottleCheck time.Time
 
 	initMutex  sync.Mutex
 	purgeMutex sync.Mutex
@@ -130,9 +122,9 @@ type GCStatus struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		lagThrottler: lagThrottler,
-		isPrimary:    0,
-		isOpen:       0,
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
+		isPrimary:       0,
+		isOpen:          0,
 
 		env:            env,
 		tabletTypeFunc: tabletTypeFunc,
@@ -408,21 +400,6 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	return nil
 }
 
-func (collector *TableGC) throttleStatusOK(ctx context.Context) bool {
-	if time.Since(collector.lastSuccessfulThrottleCheck) <= throttleCheckDuration {
-		// if last check was OK just very recently there is no need to check again
-		return true
-	}
-	// It's time to run a throttler check
-	checkResult := collector.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
-	if checkResult.StatusCode != http.StatusOK {
-		// sorry, we got throttled.
-		return false
-	}
-	collector.lastSuccessfulThrottleCheck = time.Now()
-	return true
-}
-
 // purge continuously purges rows from a table.
 // This function is non-reentrant: there's only one instance of this function running at any given time.
 // A timer keeps calling this function, so if it bails out (e.g. on error) it will later resume work
@@ -466,9 +443,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 
 	log.Infof("TableGC: purge begin for %s", tableName)
 	for {
-		for !collector.throttleStatusOK(ctx) {
-			// Sorry, got throttled. Sleep some time, then check again
-			time.Sleep(throttleCheckDuration)
+		if !collector.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			continue
 		}
 		// OK, we're clear to go!
 
