@@ -7,9 +7,6 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 
 Vitess 9.0 is not compatible with the previous release of the Vitess Kubernetes Operator (2.2.0). A new version of the Operator (2.3.0) is available that is compatible.
 
-## Known Issue(s)
-* VReplication errors when a fixed-length binary column is used as the sharding key #8080
-
 ## Bugs Fixed
 
 ### VTGate / MySQL compatibility
