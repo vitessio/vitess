@@ -350,6 +350,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 		return metric
 	}
 	metric.Value, metric.Err = row.ToFloat64("replication_lag")
+
 	return metric
 }
 
@@ -416,7 +417,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 						if err == nil {
 							throttler.initConfig(password)
 							shouldCreateThrottlerUser = false
-							// transitioned into leadership, let's speed up the next refresh and collec ticks
+							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
 							go mysqlRefreshTicker.TickNow()
 						} else {
 							log.Errorf("Error creating throttler account: %+v", err)
@@ -493,7 +494,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 					}
 					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
-					// Apply an override to metrcis read, if this is the special "self" cluster
+					// Apply an override to metrics read, if this is the special "self" cluster
 					// (where we incidentally know there's a single probe)
 					overrideGetMySQLThrottleMetricFunc := throttler.readSelfMySQLThrottleMetric
 					if clusterName != selfStoreName {
