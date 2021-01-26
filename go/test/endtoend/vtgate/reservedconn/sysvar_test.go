@@ -367,7 +367,7 @@ func TestSystemVariableType(t *testing.T) {
 
 	checkedExec(t, conn, "set autocommit = false")
 	assertMatches(t, conn, `select @@autocommit`, `[[INT32(0)]]`)
-	assertMatches(t, conn, `select @@autocommit test`, `[[INT32(0)]]`)
+	assertMatches(t, conn, `select @@autocommit from test`, `[[INT32(0)]]`)
 
 	checkedExec(t, conn, "set autocommit = true")
 	assertMatches(t, conn, `select @@autocommit`, `[[INT32(1)]]`)
