@@ -612,7 +612,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 29,
+			"Shard": "vreplication_basic",
 			"RetryMax": 3,
 			"Tags": []
 		},
