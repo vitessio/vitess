@@ -31,7 +31,7 @@
 				"e2e_test_race"
 			],
 			"Manual": false,
-			"Shard": -1,
+			"Shard": "",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -42,7 +42,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": -1,
+			"Shard": "",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -207,7 +207,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/multi"],
 			"Command": [],
 			"Manual": false,
-			"Shard": -1,
+			"Shard": "",
 			"RetryMax": 0,
 			"Tags": []
 		},
