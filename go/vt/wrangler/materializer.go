@@ -64,7 +64,7 @@ const (
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
-	cell, tabletTypes string, allTables bool, excludeTables string) error {
+	cell, tabletTypes string, allTables bool, excludeTables string, startStopped, stopAfterCopy bool) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var err error
@@ -186,6 +186,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		TargetKeyspace: targetKeyspace,
 		Cell:           cell,
 		TabletTypes:    tabletTypes,
+		StopAfterCopy:  stopAfterCopy,
 	}
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -222,7 +223,12 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			workflow, targetKeyspace)
 		return fmt.Errorf(msg)
 	}
-	return mz.startStreams(ctx)
+	if !startStopped {
+		return mz.startStreams(ctx)
+	}
+	wr.Logger().Infof("Streams will not be started since -start_stopped is specified")
+
+	return nil
 }
 
 func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
