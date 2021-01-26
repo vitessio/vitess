@@ -37,6 +37,42 @@ func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in 
 	return client.c.FindAllShardsInKeyspace(ctx, in, opts...)
 }
 
+// GetBackups is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetBackups(ctx context.Context, in *vtctldatapb.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetBackupsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetBackups(ctx, in, opts...)
+}
+
+// GetCellInfo is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetCellInfo(ctx context.Context, in *vtctldatapb.GetCellInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetCellInfo(ctx, in, opts...)
+}
+
+// GetCellInfoNames is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetCellInfoNames(ctx context.Context, in *vtctldatapb.GetCellInfoNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoNamesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetCellInfoNames(ctx, in, opts...)
+}
+
+// GetCellsAliases is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetCellsAliases(ctx context.Context, in *vtctldatapb.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellsAliasesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetCellsAliases(ctx, in, opts...)
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
 	if client.c == nil {
@@ -53,6 +89,51 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	}
 
 	return client.c.GetKeyspaces(ctx, in, opts...)
+}
+
+// GetSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSchema(ctx, in, opts...)
+}
+
+// GetSrvVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSrvVSchema(ctx context.Context, in *vtctldatapb.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSrvVSchema(ctx, in, opts...)
+}
+
+// GetTablet is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetTablet(ctx context.Context, in *vtctldatapb.GetTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetTablet(ctx, in, opts...)
+}
+
+// GetTablets is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetTablets(ctx context.Context, in *vtctldatapb.GetTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetTabletsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetTablets(ctx, in, opts...)
+}
+
+// GetVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetVSchema(ctx, in, opts...)
 }
 
 // InitShardPrimary is part of the vtctlservicepb.VtctldClient interface.

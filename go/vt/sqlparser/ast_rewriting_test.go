@@ -27,12 +27,12 @@ import (
 )
 
 type myTestCase struct {
-	in, expected                                                      string
-	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID bool
-	ddlStrategy, sessionUUID                                          bool
-	udv                                                               int
-	autocommit, clientFoundRows, skipQueryPlanCache                   bool
-	sqlSelectLimit, transactionMode, workload, vitessVersion          bool
+	in, expected                                                       string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
+	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
+	udv                                                                int
+	autocommit, clientFoundRows, skipQueryPlanCache                    bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -41,9 +41,17 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT 42",
 		// no bindvar needs
 	}, {
-		in:            "SELECT @@vitess_version",
-		expected:      "SELECT :__vtvitess_version as `@@vitess_version`",
-		vitessVersion: true,
+		in:       "SELECT @@version",
+		expected: "SELECT :__vtversion as `@@version`",
+		version:  true,
+	}, {
+		in:             "SELECT @@version_comment",
+		expected:       "SELECT :__vtversion_comment as `@@version_comment`",
+		versionComment: true,
+	}, {
+		in:                          "SELECT @@enable_system_settings",
+		expected:                    "SELECT :__vtenable_system_settings as `@@enable_system_settings`",
+		sessionEnableSystemSettings: true,
 	}, {
 		in:       "SELECT last_insert_id()",
 		expected: "SELECT :__lastInsertId as `last_insert_id()`",
@@ -199,10 +207,12 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
 			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
 			assert.Equal(tc.sessionUUID, result.NeedsSysVar(sysvars.SessionUUID.Name), "should need sessionUUID")
+			assert.Equal(tc.sessionEnableSystemSettings, result.NeedsSysVar(sysvars.SessionEnableSystemSettings.Name), "should need sessionEnableSystemSettings")
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
-			assert.Equal(tc.vitessVersion, result.NeedsSysVar(sysvars.VitessVersion.Name), "should need Vitess version")
+			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
+			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
 		})
 	}
 }

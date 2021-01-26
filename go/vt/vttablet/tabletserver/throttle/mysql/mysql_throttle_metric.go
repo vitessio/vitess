@@ -67,9 +67,9 @@ func (metric *MySQLThrottleMetric) Get() (float64, error) {
 	return metric.Value, metric.Err
 }
 
-// ReadThrottleMetric returns replication lag for a given connection config; either by explicit query
+// ReadThrottleMetric returns a metric for the given probe. Either by explicit query
 // or via SHOW SLAVE STATUS
-func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *MySQLThrottleMetric) {
+func ReadThrottleMetric(probe *Probe, clusterName string, overrideGetMetricFunc func() *MySQLThrottleMetric) (mySQLThrottleMetric *MySQLThrottleMetric) {
 	if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
 		return mySQLThrottleMetric
 		// On cached results we avoid taking latency metrics
@@ -89,6 +89,11 @@ func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *
 			}
 		}()
 	}(mySQLThrottleMetric, started)
+
+	if overrideGetMetricFunc != nil {
+		mySQLThrottleMetric = overrideGetMetricFunc()
+		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
+	}
 
 	dbURI := probe.GetDBUri("information_schema")
 	db, fromCache, err := sqlutils.GetDB(dbURI)

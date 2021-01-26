@@ -19,6 +19,7 @@ package grpcvtctldserver
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -30,6 +31,8 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -38,6 +41,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -49,12 +55,13 @@ const (
 
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
-	ts *topo.Server
+	ts  *topo.Server
+	tmc tmclient.TabletManagerClient
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
 func NewVtctldServer(ts *topo.Server) *VtctldServer {
-	return &VtctldServer{ts: ts}
+	return &VtctldServer{ts: ts, tmc: tmclient.NewTabletManagerClient()}
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -76,6 +83,70 @@ func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctlda
 	return &vtctldatapb.FindAllShardsInKeyspaceResponse{
 		Shards: shards,
 	}, nil
+}
+
+// GetBackups is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBackupsRequest) (*vtctldatapb.GetBackupsResponse, error) {
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return nil, err
+	}
+
+	defer bs.Close()
+
+	bucket := filepath.Join(req.Keyspace, req.Shard)
+	bhs, err := bs.ListBackups(ctx, bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.GetBackupsResponse{
+		Backups: make([]*mysqlctlpb.BackupInfo, len(bhs)),
+	}
+
+	for i, bh := range bhs {
+		resp.Backups[i] = mysqlctlproto.BackupHandleToProto(bh)
+	}
+
+	return resp, nil
+}
+
+// GetCellInfoNames is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetCellInfoNames(ctx context.Context, req *vtctldatapb.GetCellInfoNamesRequest) (*vtctldatapb.GetCellInfoNamesResponse, error) {
+	names, err := s.ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetCellInfoNamesResponse{Names: names}, nil
+}
+
+// GetCellInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetCellInfo(ctx context.Context, req *vtctldatapb.GetCellInfoRequest) (*vtctldatapb.GetCellInfoResponse, error) {
+	if req.Cell == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell field is required")
+	}
+
+	// We use a strong read, because users using this command want the latest
+	// data, and this is user-generated, not used in any automated process.
+	strongRead := true
+	ci, err := s.ts.GetCellInfo(ctx, req.Cell, strongRead)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetCellInfoResponse{CellInfo: ci}, nil
+}
+
+// GetCellsAliases is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.GetCellsAliasesRequest) (*vtctldatapb.GetCellsAliasesResponse, error) {
+	strongRead := true
+	aliases, err := s.ts.GetCellsAliases(ctx, strongRead)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetCellsAliasesResponse{Aliases: aliases}, nil
 }
 
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -112,6 +183,176 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	}
 
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
+}
+
+// GetSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest) (*vtctldatapb.GetSchemaResponse, error) {
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, fmt.Errorf("GetTablet(%v) failed: %w", req.TabletAlias, err)
+	}
+
+	sd, err := s.tmc.GetSchema(ctx, tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews)
+	if err != nil {
+		return nil, fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %w", tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews, err)
+	}
+
+	if req.TableNamesOnly {
+		nameTds := make([]*tabletmanagerdatapb.TableDefinition, len(sd.TableDefinitions))
+
+		for i, td := range sd.TableDefinitions {
+			nameTds[i] = &tabletmanagerdatapb.TableDefinition{
+				Name: td.Name,
+			}
+		}
+
+		sd.TableDefinitions = nameTds
+	} else if req.TableSizesOnly {
+		sizeTds := make([]*tabletmanagerdatapb.TableDefinition, len(sd.TableDefinitions))
+
+		for i, td := range sd.TableDefinitions {
+			sizeTds[i] = &tabletmanagerdatapb.TableDefinition{
+				Name:       td.Name,
+				Type:       td.Type,
+				RowCount:   td.RowCount,
+				DataLength: td.DataLength,
+			}
+		}
+
+		sd.TableDefinitions = sizeTds
+	}
+
+	return &vtctldatapb.GetSchemaResponse{
+		Schema: sd,
+	}, nil
+}
+
+// GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (*vtctldatapb.GetSrvVSchemaResponse, error) {
+	vschema, err := s.ts.GetSrvVSchema(ctx, req.Cell)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetSrvVSchemaResponse{
+		SrvVSchema: vschema,
+	}, nil
+}
+
+// GetTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetTablet(ctx context.Context, req *vtctldatapb.GetTabletRequest) (*vtctldatapb.GetTabletResponse, error) {
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetTabletResponse{
+		Tablet: ti.Tablet,
+	}, nil
+}
+
+// GetTablets is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTabletsRequest) (*vtctldatapb.GetTabletsResponse, error) {
+	// It is possible that an old primary has not yet updated its type in the
+	// topo. In that case, report its type as UNKNOWN. It used to be MASTER but
+	// is no longer the serving primary.
+	adjustTypeForStalePrimary := func(ti *topo.TabletInfo, mtst time.Time) {
+		if ti.Type == topodatapb.TabletType_MASTER && ti.GetMasterTermStartTime().Before(mtst) {
+			ti.Tablet.Type = topodatapb.TabletType_UNKNOWN
+		}
+	}
+
+	if req.Keyspace != "" && req.Shard != "" {
+		tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+		if err != nil {
+			return nil, err
+		}
+
+		var trueMasterTimestamp time.Time
+		for _, ti := range tabletMap {
+			if ti.Type == topodatapb.TabletType_MASTER {
+				masterTimestamp := ti.GetMasterTermStartTime()
+				if masterTimestamp.After(trueMasterTimestamp) {
+					trueMasterTimestamp = masterTimestamp
+				}
+			}
+		}
+
+		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
+		for _, ti := range tabletMap {
+			adjustTypeForStalePrimary(ti, trueMasterTimestamp)
+			tablets = append(tablets, ti.Tablet)
+		}
+
+		return &vtctldatapb.GetTabletsResponse{Tablets: tablets}, nil
+	}
+
+	cells := req.Cells
+	if len(cells) == 0 {
+		c, err := s.ts.GetKnownCells(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		cells = c
+	}
+
+	var allTablets []*topodatapb.Tablet
+
+	for _, cell := range cells {
+		tablets, err := topotools.GetAllTablets(ctx, s.ts, cell)
+		if err != nil {
+			return nil, err
+		}
+
+		// Collect true master term start times, and optionally filter out any
+		// tablets by keyspace according to the request.
+		masterTermStartTimes := map[string]time.Time{}
+		filteredTablets := make([]*topo.TabletInfo, 0, len(tablets))
+
+		for _, tablet := range tablets {
+			if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
+				continue
+			}
+
+			key := tablet.Keyspace + "." + tablet.Shard
+			if v, ok := masterTermStartTimes[key]; ok {
+				if tablet.GetMasterTermStartTime().After(v) {
+					masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+				}
+			} else {
+				masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+			}
+
+			filteredTablets = append(filteredTablets, tablet)
+		}
+
+		// collect the tablets with adjusted master term start times. they've
+		// already been filtered by the above loop, so no keyspace filtering
+		// here.
+		for _, ti := range filteredTablets {
+			key := ti.Keyspace + "." + ti.Shard
+			adjustTypeForStalePrimary(ti, masterTermStartTimes[key])
+
+			allTablets = append(allTablets, ti.Tablet)
+		}
+	}
+
+	return &vtctldatapb.GetTabletsResponse{
+		Tablets: allTablets,
+	}, nil
+}
+
+// GetVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSchemaRequest) (*vtctldatapb.GetVSchemaResponse, error) {
+	vschema, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetVSchemaResponse{
+		VSchema: vschema,
+	}, nil
 }
 
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.

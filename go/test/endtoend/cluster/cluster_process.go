@@ -42,9 +42,12 @@ const (
 )
 
 var (
-	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
-	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
-	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
+	keepData           = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	topoFlavor         = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
+	isCoverage         = flag.Bool("is-coverage", false, "whether coverage is required")
+	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
+	forcePortStart     = flag.Int("force-port-start", 0, "force assigning ports based on this seed")
+	forceBaseTabletUID = flag.Int("force-base-tablet-uid", 0, "force assigning tablet ports based on this seed")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -57,6 +60,7 @@ type LocalProcessCluster struct {
 	TmpDirectory       string
 	OriginalVTDATAROOT string
 	CurrentVTDATAROOT  string
+	ReusingVTDATAROOT  bool
 
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
@@ -192,10 +196,12 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		}
 	}
 
-	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
-	if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
-		log.Error(err)
-		return
+	if !cluster.ReusingVTDATAROOT {
+		cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
+		if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
+			log.Error(err)
+			return
+		}
 	}
 
 	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
@@ -230,7 +236,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
-	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	if !cluster.ReusingVTDATAROOT {
+		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	}
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -256,7 +264,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 			// Start Mysqlctl process
 			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
+			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
@@ -279,6 +287,9 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
+			if cluster.ReusingVTDATAROOT {
+				tablet.VttabletProcess.ServingStatus = "SERVING"
+			}
 			shard.Vttablets = append(shard.Vttablets, tablet)
 			// Apply customizations
 			for _, customizer := range customizers {
@@ -298,9 +309,11 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 		for _, tablet := range shard.Vttablets {
-			if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
-				log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
-				return
+			if !cluster.ReusingVTDATAROOT {
+				if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
+					log.Errorf("error creating database for keyspace %v: %v", keyspace.Name, err)
+					return
+				}
 			}
 
 			log.Infof("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort)
@@ -358,11 +371,13 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
-	// Create Keyspace
-	err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
-	if err != nil {
-		log.Error(err)
-		return
+	if !cluster.ReusingVTDATAROOT {
+		// Create Keyspace
+		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 	}
 
 	// Create shard
@@ -441,8 +456,18 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
-	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+	if *forceVTDATAROOT != "" {
+		cluster.CurrentVTDATAROOT = *forceVTDATAROOT
+	}
+	if _, err := os.Stat(cluster.CurrentVTDATAROOT); err == nil {
+		// path/to/whatever exists
+		cluster.ReusingVTDATAROOT = true
+	} else {
+		_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+	}
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
+	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
+
 	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
 }
@@ -591,7 +616,11 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBa
 // GetAndReservePort gives port for required process
 func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	if cluster.nextPortForProcess == 0 {
-		cluster.nextPortForProcess = getPort()
+		if *forcePortStart > 0 {
+			cluster.nextPortForProcess = *forcePortStart
+		} else {
+			cluster.nextPortForProcess = getPort()
+		}
 	}
 	for {
 		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
@@ -634,7 +663,11 @@ func getPort() int {
 // GetAndReserveTabletUID gives tablet uid
 func (cluster *LocalProcessCluster) GetAndReserveTabletUID() int {
 	if cluster.BaseTabletUID == 0 {
-		cluster.BaseTabletUID = getRandomNumber(10000, 0)
+		if *forceBaseTabletUID > 0 {
+			cluster.BaseTabletUID = *forceBaseTabletUID
+		} else {
+			cluster.BaseTabletUID = getRandomNumber(10000, 0)
+		}
 	}
 	cluster.BaseTabletUID = cluster.BaseTabletUID + 1
 	return cluster.BaseTabletUID

@@ -503,6 +503,20 @@ func TestCreateView(t *testing.T) {
 	assertMatches(t, conn, "select * from v1", `[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)] [INT64(5) INT64(5)]]`)
 }
 
+func TestVersions(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	qr := exec(t, conn, `select @@version`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "vitess")
+
+	qr = exec(t, conn, `select @@version_comment`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "Git revision")
+}
+
 func TestFlush(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()

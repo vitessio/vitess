@@ -188,6 +188,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}
 }
 
+// applyStmtEvent applies an actual DML statement received from the source, directly onto the backend database
 func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
 	sql := event.Statement
 	if sql == "" {

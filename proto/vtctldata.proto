@@ -22,9 +22,13 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 
 package vtctldata;
 
-import "logutil.proto";
-import "topodata.proto";
 import "google/protobuf/duration.proto";
+
+import "logutil.proto";
+import "mysqlctl.proto";
+import "tabletmanagerdata.proto";
+import "topodata.proto";
+import "vschema.proto";
 
 // ExecuteVtctlCommandRequest is the payload for ExecuteVtctlCommand.
 // timeouts are in nanoseconds.
@@ -36,6 +40,37 @@ message ExecuteVtctlCommandRequest {
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
+}
+
+message GetBackupsRequest {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message GetBackupsResponse {
+  repeated mysqlctl.BackupInfo backups = 1;
+}
+
+message GetCellInfoNamesRequest {
+}
+
+message GetCellInfoNamesResponse {
+  repeated string names = 1;
+}
+
+message GetCellInfoRequest {
+  string cell = 1;
+}
+
+message GetCellInfoResponse {
+  topodata.CellInfo cell_info = 1;
+}
+
+message GetCellsAliasesRequest {
+}
+
+message GetCellsAliasesResponse {
+  map<string,topodata.CellsAlias> aliases = 1;
 }
 
 message GetKeyspacesRequest {
@@ -51,6 +86,68 @@ message GetKeyspaceRequest {
 
 message GetKeyspaceResponse {
   Keyspace keyspace = 1;
+}
+
+message GetSchemaRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // Tables is a list of tables for which we should gather information. Each is
+  // either an exact match, or a regular expression of the form /regexp/.
+  repeated string tables = 2;
+  // ExcludeTables is a list of tables to exclude from the result. Each is
+  // either an exact match, or a regular expression of the form /regexp/.
+  repeated string exclude_tables = 3;
+  // IncludeViews specifies whether to include views in the result.
+  bool include_views = 4;
+  // TableNamesOnly specifies whether to limit the results to just table names,
+  // rather than full schema information for each table.
+  bool table_names_only = 5;
+  // TableSizesOnly specifies whether to limit the results to just table sizes,
+  // rather than full schema information for each table. It is ignored if
+  // TableNamesOnly is set to true.
+  bool table_sizes_only = 6;
+}
+
+message GetSchemaResponse {
+  tabletmanagerdata.SchemaDefinition schema = 1;
+}
+
+message GetSrvVSchemaRequest {
+  string cell = 1;
+}
+
+message GetSrvVSchemaResponse {
+  vschema.SrvVSchema srv_v_schema = 1;
+}
+
+message GetTabletRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetTabletResponse {
+  topodata.Tablet tablet = 1;
+}
+
+message GetTabletsRequest {
+  // Keyspace is the name of the keyspace to return tablets for. Omit to return
+  // all tablets.
+  string keyspace = 1;
+  // Shard is the name of the shard to return tablets for. This field is ignored
+  // if Keyspace is not set.
+  string shard = 2;
+  // Cells is an optional set of cells to return tablets for.
+  repeated string cells = 3;
+}
+
+message GetTabletsResponse {
+  repeated topodata.Tablet tablets = 1;
+}
+
+message GetVSchemaRequest {
+  string keyspace = 1;
+}
+
+message GetVSchemaResponse {
+  vschema.Keyspace v_schema = 1;
 }
 
 message InitShardPrimaryRequest {
