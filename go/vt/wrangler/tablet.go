@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -231,5 +230,5 @@ func (wr *Wrangler) GenericVExec(ctx context.Context, tabletAlias *topodatapb.Ta
 // the system is in transition (a reparenting event is in progress and parts of
 // the topo have not yet been updated).
 func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
-	return grpcvtctldserver.IsPrimaryTablet(ctx, wr.TopoServer(), ti)
+	return topotools.IsPrimaryTablet(ctx, wr.TopoServer(), ti)
 }
