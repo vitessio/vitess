@@ -1,10 +1,9 @@
-# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
-
 name: Cluster (vreplication_basic)
 on: [push, pull_request]
 jobs:
 
   build:
+    name: Run endtoend tests on Cluster (vreplication_basic)
     runs-on: ubuntu-latest
 
     steps:

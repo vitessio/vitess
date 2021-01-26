@@ -585,8 +585,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "Basic"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "24",
-			"RetryMax": 0,
+			"Shard": "vreplication_basic",
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"orchestrator": {
