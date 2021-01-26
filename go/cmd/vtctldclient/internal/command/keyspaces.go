@@ -60,6 +60,12 @@ var (
 		Args:    cobra.NoArgs,
 		RunE:    commandGetKeyspaces,
 	}
+	// RemoveKeyspaceCell makes a RemoveKeyspaceCell gRPC call to a vtctld.
+	RemoveKeyspaceCell = &cobra.Command{
+		Use:  "RemoveKeyspaceCell <keyspace> <cell>",
+		Args: cobra.ExactArgs(2),
+		RunE: commandRemoveKeyspaceCell,
+	}
 )
 
 var createKeyspaceOptions = struct {
@@ -197,6 +203,31 @@ func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var removeKeyspaceCellOptions = struct {
+	Force     bool
+	Recursive bool
+}{}
+
+func commandRemoveKeyspaceCell(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	cell := cmd.Flags().Arg(1)
+
+	_, err := client.RemoveKeyspaceCell(commandCtx, &vtctldatapb.RemoveKeyspaceCellRequest{
+		Keyspace:  keyspace,
+		Cell:      cell,
+		Force:     removeKeyspaceCellOptions.Force,
+		Recursive: removeKeyspaceCellOptions.Recursive,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully removed keyspace %s from cell %s\n", keyspace, cell)
+
+	return nil
+}
+
 func init() {
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.Force, "force", "f", false, "Proceeds even if the keyspace already exists. Does not overwrite the existing keyspace record")
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.AllowEmptyVSchema, "allow-empty-vschema", "e", false, "Allows a new keyspace to have no vschema")
@@ -211,4 +242,8 @@ func init() {
 	Root.AddCommand(FindAllShardsInKeyspace)
 	Root.AddCommand(GetKeyspace)
 	Root.AddCommand(GetKeyspaces)
+
+	RemoveKeyspaceCell.Flags().BoolVarP(&removeKeyspaceCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
+	RemoveKeyspaceCell.Flags().BoolVarP(&removeKeyspaceCellOptions.Recursive, "recursive", "r", false, "Also delete all tablets in that cell beloning to the specified keyspace.")
+	Root.AddCommand(RemoveKeyspaceCell)
 }
