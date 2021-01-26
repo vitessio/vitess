@@ -47,7 +47,7 @@ $navRailHoverTransition: background-color 0.1s ease-in-out;
 
   &::after {
     content: '';
-    background-color: var(--colorScaffolding);
+    background-color: var(--colorScaffoldingHighlight);
     display: block;
     height: 1px;
     margin: 20px 24px;
@@ -65,8 +65,10 @@ a.navLink {
   color: var(--textColorPrimary);
   display: flex;
   flex-wrap: nowrap;
+  font-size: 1.6rem;
   font-weight: 500;
-  padding: 12px 24px 12px 20px;
+  outline: none;
+  padding: 13px 24px;
   text-decoration: none;
   transition: $navRailHoverTransition;
 
@@ -75,6 +77,7 @@ a.navLink {
     color: var(--colorPrimary);
   }
 
+  &:focus,
   &:hover {
     background: var(--backgroundSecondaryHighlight);
     color: var(--colorPrimary);
@@ -86,14 +89,29 @@ a.navLink {
   border-radius: 20px;
   color: var(--textColorSecondary);
   display: inline-block;
-  font-size: 1.2rem;
+  font-size: 1.4rem;
+  line-height: 1.9rem;
   margin-left: auto;
   padding: 2px 8px;
   transition: $navRailHoverTransition;
 }
 
 a.navLinkActive .badge,
+a.navLink:focus .badge,
 a.navLink:hover .badge {
   background-color: var(--backgroundPrimaryHighlight);
   color: var(--colorPrimary);
+}
+
+.icon {
+  fill: var(--colorScaffoldingForeground);
+  height: 2rem;
+  margin-right: 1.2rem;
+  transition: $navRailHoverTransition;
+}
+
+a.navLinkActive .icon,
+a.navLink:focus .icon,
+a.navLink:hover .icon {
+  fill: var(--colorPrimary);
 }
