@@ -765,7 +765,26 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
-	panic("unimplemented!")
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove all the shards, serially. Stop immediately if any fail.
+	for _, shard := range shards {
+		log.Infof("Removing cell %v from shard %v/%v", req.Cell, req.Keyspace, shard)
+		if err := removeShardCell(ctx, s.ts, req.Cell, req.Keyspace, shard, req.Recursive, req.Force); err != nil {
+			return nil, fmt.Errorf("cannot remove cell %v from shard %v/%v: %w", req.Cell, req.Keyspace, shard, err)
+		}
+	}
+
+	// Last, remove the SrvKeyspace object.
+	log.Infof("Removing cell %v keyspace %v SrvKeyspace object", req.Cell, req.Keyspace)
+	if err := s.ts.DeleteSrvKeyspace(ctx, req.Cell, req.Keyspace); err != nil {
+		return nil, fmt.Errorf("cannot delete SrvKeyspace from cell %v for keyspace %v: %w", req.Cell, req.Keyspace, err)
+	}
+
+	return &vtctldatapb.RemoveKeyspaceCellResponse{}, nil
 }
 
 // RemoveShardCell is part of the vtctlservicepb.VtctldServer interface.
