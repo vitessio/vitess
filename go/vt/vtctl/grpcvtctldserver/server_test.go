@@ -541,7 +541,247 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestCreateShard(t *testing.T) {
-	t.Skip("unimplemented")
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		keyspaces []*vtctldatapb.Keyspace
+		shards    []*vtctldatapb.Shard
+		topoErr   error
+		req       *vtctldatapb.CreateShardRequest
+		expected  *vtctldatapb.CreateShardResponse
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:  nil,
+			topoErr: nil,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+			},
+			expected: &vtctldatapb.CreateShardResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				Shard: &vtctldatapb.Shard{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						KeyRange:        &topodatapb.KeyRange{},
+						IsMasterServing: true,
+					},
+				},
+				ShardAlreadyExists: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "include parent",
+			keyspaces: nil,
+			shards:    nil,
+			topoErr:   nil,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:      "testkeyspace",
+				ShardName:     "-",
+				IncludeParent: true,
+			},
+			expected: &vtctldatapb.CreateShardResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				Shard: &vtctldatapb.Shard{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						KeyRange:        &topodatapb.KeyRange{},
+						IsMasterServing: true,
+					},
+				},
+				ShardAlreadyExists: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "keyspace does not exist",
+			keyspaces: nil,
+			shards:    nil,
+			topoErr:   nil,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "include parent/keyspace exists/no force",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:  nil,
+			topoErr: nil,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:      "testkeyspace",
+				ShardName:     "-",
+				IncludeParent: true,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "include parent/keyspace exists/force",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:  nil,
+			topoErr: nil,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:      "testkeyspace",
+				ShardName:     "-",
+				IncludeParent: true,
+				Force:         true,
+			},
+			expected: &vtctldatapb.CreateShardResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				Shard: &vtctldatapb.Shard{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						KeyRange:        &topodatapb.KeyRange{},
+						IsMasterServing: true,
+					},
+				},
+				ShardAlreadyExists: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "shard exists/no force",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoErr: nil,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "shard exists/force",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoErr: nil,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+				Force:     true,
+			},
+			expected: &vtctldatapb.CreateShardResponse{
+				Keyspace: &vtctldatapb.Keyspace{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+				Shard: &vtctldatapb.Shard{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						KeyRange:        &topodatapb.KeyRange{},
+						IsMasterServing: true,
+					},
+				},
+				ShardAlreadyExists: true,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "topo is down",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:  nil,
+			topoErr: assert.AnError,
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "testkeyspace",
+				ShardName: "-",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.req == nil {
+				t.Skip("focusing on other tests")
+			}
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory("zone1")
+			vtctld := NewVtctldServer(ts)
+
+			for _, ks := range tt.keyspaces {
+				testutil.AddKeyspace(ctx, t, ts, ks)
+			}
+
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			resp, err := vtctld.CreateShard(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
 }
 
 func TestDeleteKeyspace(t *testing.T) {
