@@ -98,7 +98,17 @@
 
 # create db foo
 "create database foo"
-"create database not allowed"
+{
+  "QueryType": "DDL",
+  "Original": "create database foo",
+  "Instructions": {
+    "OperatorType": "CREATE DATABASE",
+    "Keyspace": {
+      "Name": "foo",
+      "Sharded": false
+    }
+  }
+}
 
 # create db main
 "create database main"
