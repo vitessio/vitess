@@ -49,7 +49,7 @@ func TestCreateDB(t *testing.T) {
 
 	// setting custom behaviour for CREATE DATABASE
 	s := &engine.SingleRow{}
-	databaseCreator = func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+	databaseCreator = func(stmt *sqlparser.CreateDatabase, vschema ContextVSchema) (engine.Primitive, error) {
 		return s, nil
 	}
 

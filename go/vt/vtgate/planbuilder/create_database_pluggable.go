@@ -24,13 +24,13 @@ import (
 )
 
 // PlanFunc is the function signature that you need to implement to add a custom CREATE DATABASE handler
-type PlanFunc = func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error)
+type PlanFunc = func(stmt *sqlparser.CreateDatabase, vschema ContextVSchema) (engine.Primitive, error)
 
 var databaseCreator = defaultCreateDatabase
 
 //goland:noinspection GoVarAndConstTypeMayBeOmitted
 var _ PlanFunc = databaseCreator
 
-func defaultCreateDatabase(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func defaultCreateDatabase(_ *sqlparser.CreateDatabase, _ ContextVSchema) (engine.Primitive, error) {
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
 }
