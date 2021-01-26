@@ -19,6 +19,7 @@ import { Link, NavLink } from 'react-router-dom';
 import style from './NavRail.module.scss';
 import logo from '../img/vitess-icon-color.svg';
 import { useTablets } from '../hooks/api';
+import { Icon, Icons } from './Icon';
 
 export const NavRail = () => {
     const { data: tabletData } = useTablets();
@@ -32,37 +33,38 @@ export const NavRail = () => {
             <div className={style.navLinks}>
                 <ul className={style.navList}>
                     <li>
-                        <NavRailLink text="Dashboard" to="/dashboard" count={0} />
+                        <NavRailLink icon={Icons.chart} text="Dashboard" to="/dashboard" count={0} />
                     </li>
                     <li>
-                        <NavRailLink text="Workflows" to="/workflows" count={0} />
-                    </li>
-                </ul>
-
-                <ul className={style.navList}>
-                    <li>
-                        <NavRailLink text="Clusters" to="/clusters" count={0} />
-                    </li>
-                    <li>
-                        <NavRailLink text="Gates" to="/gates" count={0} />
-                    </li>
-                    <li>
-                        <NavRailLink text="Keyspaces" to="/keyspaces" count={0} />
-                    </li>
-                    <li>
-                        <NavRailLink text="Schemas" to="/schemas" count={0} />
-                    </li>
-                    <li>
-                        <NavRailLink text="Tablets" to="/tablets" count={(tabletData || []).length} />
+                        <NavRailLink icon={Icons.wrench} text="Workflows" to="/workflows" count={0} />
                     </li>
                 </ul>
 
                 <ul className={style.navList}>
                     <li>
-                        <NavRailLink text="VTExplain" to="/vtexplain" />
+                        {/* FIXME replace this with a C when we have one */}
+                        <NavRailLink icon={Icons.keyR} text="Clusters" to="/clusters" count={0} />
                     </li>
                     <li>
-                        <NavRailLink text="Settings" to="/settings" />
+                        <NavRailLink icon={Icons.keyG} text="Gates" to="/gates" count={0} />
+                    </li>
+                    <li>
+                        <NavRailLink icon={Icons.keyK} text="Keyspaces" to="/keyspaces" count={0} />
+                    </li>
+                    <li>
+                        <NavRailLink icon={Icons.keyS} text="Schemas" to="/schemas" count={0} />
+                    </li>
+                    <li>
+                        <NavRailLink icon={Icons.keyT} text="Tablets" to="/tablets" count={(tabletData || []).length} />
+                    </li>
+                </ul>
+
+                <ul className={style.navList}>
+                    <li>
+                        <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
+                    </li>
+                    <li>
+                        <NavRailLink icon={Icons.gear} text="Settings" to="/settings" />
                     </li>
                 </ul>
             </div>
@@ -70,10 +72,10 @@ export const NavRail = () => {
             <div className={style.footerContainer}>
                 <ul className={style.navList}>
                     <li>
-                        <NavRailLink text="Debug" to="/debug" />
+                        <NavRailLink icon={Icons.bug} text="Debug" to="/debug" />
                     </li>
                     <li>
-                        <NavRailLink text="Shortcuts" to="/shortcuts" />
+                        <NavRailLink icon={Icons.keyboard} text="Shortcuts" to="/shortcuts" />
                     </li>
                 </ul>
             </div>
@@ -81,9 +83,10 @@ export const NavRail = () => {
     );
 };
 
-const NavRailLink = ({ count, text, to }: { count?: number; text: string; to: string }) => {
+const NavRailLink = ({ count, icon, text, to }: { count?: number; icon: Icons; text: string; to: string }) => {
     return (
         <NavLink activeClassName={style.navLinkActive} className={style.navLink} to={to}>
+            <Icon className={style.icon} icon={icon} />
             <span>{text}</span>
             {typeof count === 'number' && <div className={style.badge}>{count}</div>}
         </NavLink>
