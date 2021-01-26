@@ -253,7 +253,13 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 
 // DeleteTablets is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest) (*vtctldatapb.DeleteTabletsResponse, error) {
-	panic("unimplemented!")
+	for _, alias := range req.TabletAliases {
+		if err := deleteTablet(ctx, s.ts, alias, req.AllowPrimary); err != nil {
+			return nil, err
+		}
+	}
+
+	return &vtctldatapb.DeleteTabletsResponse{}, nil
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.

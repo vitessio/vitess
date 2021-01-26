@@ -23,11 +23,65 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.TabletAlias, allowPrimary bool) (err error) {
+	tablet, err := ts.GetTablet(ctx, alias)
+	if err != nil {
+		return err
+	}
+
+	isPrimary, err := topotools.IsPrimaryTablet(ctx, ts, tablet)
+	if err != nil {
+		return err
+	}
+
+	if isPrimary && !allowPrimary {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot delete tablet %v as it is a master, pass AllowPrimary = true", topoproto.TabletAliasString(alias))
+	}
+
+	// Update the Shard object if the master was scrapped. We do this before
+	// calling DeleteTablet so that the operation can be retried in case of
+	// failure.
+	if isPrimary {
+		lockCtx, unlock, lockErr := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, fmt.Sprintf("DeleteTablet(%v)", topoproto.TabletAliasString(alias)))
+		if lockErr != nil {
+			return lockErr
+		}
+
+		defer unlock(&err)
+
+		if _, err := ts.UpdateShardFields(lockCtx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
+			if !topoproto.TabletAliasEqual(si.MasterAlias, alias) {
+				log.Warningf(
+					"Deleting master %v from shard %v/%v but master in Shard object was %v",
+					topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.MasterAlias),
+				)
+
+				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
+			}
+
+			si.MasterAlias = nil
+
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	// Remove the tablet record and its replication graph entry.
+	if err := topotools.DeleteTablet(ctx, ts, tablet.Tablet); err != nil {
+		return err
+	}
+
+	// Return any error from unlocking the keyspace.
+	return err
+}
 
 func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace string, shardName string, recursive bool, force bool) error {
 	shard, err := ts.GetShard(ctx, keyspace, shardName)

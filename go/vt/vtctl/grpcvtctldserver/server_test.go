@@ -793,7 +793,504 @@ func TestDeleteShards(t *testing.T) {
 }
 
 func TestDeleteTablets(t *testing.T) {
-	t.Skip("unimplemented")
+	t.Parallel()
+
+	tests := []struct {
+		name                     string
+		tablets                  []*topodatapb.Tablet
+		shardFieldUpdates        map[string]func(*topo.ShardInfo) error
+		lockedShards             []*vtctldatapb.Shard
+		topoError                error
+		req                      *vtctldatapb.DeleteTabletsRequest
+		expected                 *vtctldatapb.DeleteTabletsResponse
+		expectedRemainingTablets []*topodatapb.Tablet
+		shouldErr                bool
+	}{
+		{
+			name: "single replica",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			lockedShards: nil,
+			topoError:    nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			expected:                 &vtctldatapb.DeleteTabletsResponse{},
+			expectedRemainingTablets: []*topodatapb.Tablet{},
+			shouldErr:                false,
+		},
+		{
+			name: "single primary/no AllowPrimary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     100,
+						Nanoseconds: 10,
+					},
+				},
+			},
+			lockedShards: nil,
+			topoError:    nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "single primary/with AllowPrimary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     100,
+						Nanoseconds: 10,
+					},
+				},
+			},
+			lockedShards: nil,
+			topoError:    nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+				AllowPrimary: true,
+			},
+			expected:                 &vtctldatapb.DeleteTabletsResponse{},
+			expectedRemainingTablets: []*topodatapb.Tablet{},
+			shouldErr:                false,
+		},
+		{
+			name: "multiple tablets",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			lockedShards: nil,
+			topoError:    nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  102,
+					},
+				},
+			},
+			expected: &vtctldatapb.DeleteTabletsResponse{},
+			expectedRemainingTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "stale primary record",
+			tablets: []*topodatapb.Tablet{
+				{
+					// The stale primary we're going to delete.
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     100,
+						Nanoseconds: 10,
+					},
+				},
+				{
+					// The real shard primary, which we'll update in the shard
+					// record below.
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     1001,
+						Nanoseconds: 101,
+					},
+				},
+			},
+			shardFieldUpdates: map[string]func(*topo.ShardInfo) error{
+				"testkeyspace/-": func(si *topo.ShardInfo) error {
+					si.MasterAlias = &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					}
+					si.MasterTermStartTime = &vttime.Time{
+						Seconds:     1001,
+						Nanoseconds: 101,
+					}
+
+					return nil
+				},
+			},
+			lockedShards: nil,
+			topoError:    nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			expected: &vtctldatapb.DeleteTabletsResponse{},
+			expectedRemainingTablets: []*topodatapb.Tablet{
+				{
+					// The true shard primary still exists (phew!)
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     1001,
+						Nanoseconds: 101,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "tablet not found",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			lockedShards: nil,
+			topoError:    nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  200,
+					},
+				},
+			},
+			expected: nil,
+			expectedRemainingTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard is locked",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     100,
+						Nanoseconds: 10,
+					},
+				},
+			},
+			lockedShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			topoError: nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+				AllowPrimary: true,
+			},
+			expected: nil,
+			expectedRemainingTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     100,
+						Nanoseconds: 10,
+					},
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "another shard is locked",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-80",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     100,
+						Nanoseconds: 10,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "80-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     200,
+						Nanoseconds: 20,
+					},
+				},
+			},
+			lockedShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "80-",
+				},
+			},
+			topoError: nil,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						// testkeyspace/-80
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+				AllowPrimary: true,
+			},
+			expected: &vtctldatapb.DeleteTabletsResponse{},
+			expectedRemainingTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "80-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds:     200,
+						Nanoseconds: 20,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "topo server is down",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			lockedShards: nil,
+			topoError:    assert.AnError,
+			req: &vtctldatapb.DeleteTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  200,
+					},
+				},
+			},
+			expected: nil,
+			expectedRemainingTablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.req == nil {
+				t.Skip("focusing on other tests")
+			}
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory("zone1")
+			vtctld := NewVtctldServer(ts)
+
+			// Setup tablets and shards
+			for _, tablet := range tt.tablets {
+				testutil.AddTablet(ctx, t, ts, tablet)
+			}
+
+			for key, updateFn := range tt.shardFieldUpdates {
+				ks, shard, err := topoproto.ParseKeyspaceShard(key)
+				require.NoError(t, err, "bad keyspace/shard provided in shardFieldUpdates: %s", key)
+
+				_, err = ts.UpdateShardFields(ctx, ks, shard, updateFn)
+				require.NoError(t, err, "failed to update shard fields for %s", key)
+			}
+
+			// Set locks
+			for _, shard := range tt.lockedShards {
+				lctx, unlock, lerr := ts.LockShard(ctx, shard.Keyspace, shard.Name, "testing locked shard")
+				require.NoError(t, lerr, "cannot lock shard %s/%s", shard.Keyspace, shard.Name)
+				// unlock at the end of the test, we don't care about this error
+				// value anymore
+				defer unlock(&lerr)
+
+				// we do, however, care that the lock context gets propogated
+				// both to additional calls to lock, and to the actual RPC call.
+				ctx = lctx
+			}
+
+			// Set errors
+			if tt.topoError != nil {
+				topofactory.SetError(tt.topoError)
+			}
+
+			checkRemainingTablets := func() {
+				topofactory.SetError(nil)
+
+				resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
+				assert.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
+
+				assert.ElementsMatch(t, tt.expectedRemainingTablets, resp.Tablets)
+			}
+
+			// Run the test
+			resp, err := vtctld.DeleteTablets(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				if tt.expectedRemainingTablets != nil {
+					checkRemainingTablets()
+				}
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+			checkRemainingTablets()
+		})
+	}
 }
 
 func TestFindAllShardsInKeyspace(t *testing.T) {
@@ -1940,9 +2437,6 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.req == nil {
-				t.Skip("focused on other tests")
-			}
 			cells := []string{"zone1", "zone2", "zone3"}
 
 			ctx := context.Background()
