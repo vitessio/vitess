@@ -327,7 +327,7 @@ func TestSelectSystemVariables(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, " +
+	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable_system_settings, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
 		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy"
 
@@ -337,6 +337,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@autocommit", Type: sqltypes.Int32},
 			{Name: "@@client_found_rows", Type: sqltypes.Int32},
 			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int32},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int32},
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64},
 			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
 			{Name: "@@workload", Type: sqltypes.VarBinary},
@@ -348,6 +349,7 @@ func TestSelectSystemVariables(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
+			sqltypes.NULL,
 			sqltypes.NULL,
 			sqltypes.NULL,
 			sqltypes.NULL,

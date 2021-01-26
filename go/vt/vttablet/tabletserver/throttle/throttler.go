@@ -54,7 +54,8 @@ const (
 
 	maxPasswordLength = 32
 
-	localStoreName = "local"
+	shardStoreName = "shard"
+	selfStoreName  = "self"
 )
 
 var throttleThreshold = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for throttling")
@@ -71,7 +72,7 @@ var (
 	sqlGrantThrottlerUser = []string{
 		`GRANT SELECT ON _vt.heartbeat TO %s`,
 	}
-	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) from _vt.heartbeat`
+	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 )
 
 func init() {
@@ -165,10 +166,14 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 	throttler.initThrottleTabletTypes()
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
 	throttler.check = NewThrottlerCheck(throttler)
+	throttler.initConfig("")
+	throttler.check.SelfChecks(context.Background())
 
 	return throttler
 }
 
+// initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
+// for the duration of this tablet's lifetime
 func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)
 
@@ -199,17 +204,25 @@ func (throttler *Throttler) initConfig(password string) {
 		Stores: config.StoresSettings{
 			MySQL: config.MySQLConfigurationSettings{
 				IgnoreDialTCPErrors: true,
-				Clusters: map[string](*config.MySQLClusterConfigurationSettings){
-					localStoreName: &config.MySQLClusterConfigurationSettings{
-						User:              throttlerUser,
-						Password:          password,
-						ThrottleThreshold: throttleThreshold.Seconds(),
-						MetricQuery:       replicationLagQuery,
-						IgnoreHostsCount:  0,
-					},
-				},
+				Clusters:            map[string](*config.MySQLClusterConfigurationSettings){},
 			},
 		},
+	}
+	config.Instance.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
+		User:              "", // running on local tablet server, will use vttablet DBA user
+		Password:          "", // running on local tablet server, will use vttablet DBA user
+		ThrottleThreshold: throttleThreshold.Seconds(),
+		MetricQuery:       replicationLagQuery,
+		IgnoreHostsCount:  0,
+	}
+	if password != "" {
+		config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
+			User:              throttlerUser,
+			Password:          password,
+			ThrottleThreshold: throttleThreshold.Seconds(),
+			MetricQuery:       replicationLagQuery,
+			IgnoreHostsCount:  0,
+		}
 	}
 }
 
@@ -227,6 +240,8 @@ func (throttler *Throttler) Open() error {
 
 	for _, t := range throttler.tickers {
 		t.Resume()
+		// since we just resume now, speed up the tickers by forcng an immediate tick
+		go t.TickNow()
 	}
 
 	return nil
@@ -308,6 +323,37 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 	return password, nil
 }
 
+// readSelfMySQLThrottleMetric reads the mysql metric from thi very tablet's backend mysql.
+func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMetric {
+	metric := &mysql.MySQLThrottleMetric{
+		ClusterName: selfStoreName,
+		Key:         *mysql.SelfInstanceKey,
+		Value:       3.14,
+		Err:         nil,
+	}
+	ctx := context.Background()
+	conn, err := throttler.pool.Get(ctx)
+	if err != nil {
+		metric.Err = err
+		return metric
+	}
+	defer conn.Recycle()
+
+	tm, err := conn.Exec(ctx, replicationLagQuery, 1, true)
+	if err != nil {
+		metric.Err = err
+		return metric
+	}
+	row := tm.Named().Row()
+	if row == nil {
+		metric.Err = fmt.Errorf("no results for ReadSelfMySQLThrottleMetric")
+		return metric
+	}
+	metric.Value, metric.Err = row.ToFloat64("replication_lag")
+
+	return metric
+}
+
 // ThrottledAppsSnapshot returns a snapshot (a copy) of current throttled apps
 func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
 	return throttler.throttledApps.Items()
@@ -371,6 +417,8 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 						if err == nil {
 							throttler.initConfig(password)
 							shouldCreateThrottlerUser = false
+							// transitioned into leadership, let's speed up the next 'refresh' and 'collect' ticks
+							go mysqlRefreshTicker.TickNow()
 						} else {
 							log.Errorf("Error creating throttler account: %+v", err)
 						}
@@ -379,7 +427,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			}
 		case <-mysqlCollectTicker.C:
 			{
-				if atomic.LoadInt64(&throttler.isLeader) > 0 {
+				if atomic.LoadInt64(&throttler.isOpen) > 0 {
 					// frequent
 					if !throttler.isDormant() {
 						throttler.collectMySQLMetrics(ctx)
@@ -388,7 +436,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			}
 		case <-mysqlDormantCollectTicker.C:
 			{
-				if atomic.LoadInt64(&throttler.isLeader) > 0 {
+				if atomic.LoadInt64(&throttler.isOpen) > 0 {
 					// infrequent
 					if throttler.isDormant() {
 						throttler.collectMySQLMetrics(ctx)
@@ -403,7 +451,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		case <-mysqlRefreshTicker.C:
 			{
 				// sparse
-				if atomic.LoadInt64(&throttler.isLeader) > 0 {
+				if atomic.LoadInt64(&throttler.isOpen) > 0 {
 					go throttler.refreshMySQLInventory(ctx)
 				}
 			}
@@ -414,13 +462,13 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 			}
 		case <-mysqlAggregateTicker.C:
 			{
-				if atomic.LoadInt64(&throttler.isLeader) > 0 {
+				if atomic.LoadInt64(&throttler.isOpen) > 0 {
 					throttler.aggregateMySQLMetrics(ctx)
 				}
 			}
 		case <-throttledAppsTicker.C:
 			{
-				if atomic.LoadInt64(&throttler.isLeader) > 0 {
+				if atomic.LoadInt64(&throttler.isOpen) > 0 {
 					go throttler.expireThrottledApps()
 				}
 			}
@@ -445,7 +493,14 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 						return
 					}
 					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
-					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName)
+
+					// Apply an override to metrics read, if this is the special "self" cluster
+					// (where we incidentally know there's a single probe)
+					overrideGetMySQLThrottleMetricFunc := throttler.readSelfMySQLThrottleMetric
+					if clusterName != selfStoreName {
+						overrideGetMySQLThrottleMetricFunc = nil
+					}
+					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName, overrideGetMySQLThrottleMetricFunc)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
 				}()
 			}
@@ -454,8 +509,7 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 	return nil
 }
 
-// refreshMySQLInventory will re-structure the inventory based on reading config settings, and potentially
-// re-querying dynamic data such as HAProxy list of hosts
+// refreshMySQLInventory will re-structure the inventory based on reading config settings
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 	log.Infof("refreshing MySQL inventory")
 
@@ -466,7 +520,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 				return
 			}
 		}
-		if !key.IsValid() {
+		if !key.IsValid() && !key.IsSelf() {
 			log.Infof("Throttler: read invalid instance key: [%+v] for cluster %+v", key, clusterName)
 			return
 		}
@@ -488,17 +542,29 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() {
-			err := func() error {
-				throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
+			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
+			clusterProbes := &mysql.ClusterProbes{
+				ClusterName:      clusterName,
+				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
+				InstanceProbes:   mysql.NewProbes(),
+			}
 
+			if clusterName == selfStoreName {
+				// special case: just looking at this tablet's MySQL server
+				// We will probe this "cluster" (of one server) is a special way.
+				addInstanceKey(mysql.SelfInstanceKey, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+				throttler.mysqlClusterProbesChan <- clusterProbes
+				return
+			}
+			if atomic.LoadInt64(&throttler.isLeader) == 0 {
+				// not the leader (primary tablet)? Then no more work for us.
+				return
+			}
+			// The primary tablet is also in charge of collecting the shard's metrics
+			err := func() error {
 				tabletAliases, err := throttler.ts.FindAllTabletAliasesInShard(ctx, throttler.keyspace, throttler.shard)
 				if err != nil {
 					return err
-				}
-				clusterProbes := &mysql.ClusterProbes{
-					ClusterName:      clusterName,
-					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-					InstanceProbes:   mysql.NewProbes(),
 				}
 				for _, tabletAlias := range tabletAliases {
 					tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
@@ -579,11 +645,10 @@ func (throttler *Throttler) expireThrottledApps() {
 }
 
 // ThrottleApp instructs the throttler to begin throttling an app, to som eperiod and with some ratio.
-func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64) {
+func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, ratio float64) (appThrottle *base.AppThrottle) {
 	throttler.throttledAppsMutex.Lock()
 	defer throttler.throttledAppsMutex.Unlock()
 
-	var appThrottle *base.AppThrottle
 	now := time.Now()
 	if object, found := throttler.throttledApps.Get(appName); found {
 		appThrottle = object.(*base.AppThrottle)
@@ -600,18 +665,20 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		if ratio < 0 {
 			ratio = defaultThrottleRatio
 		}
-		appThrottle = base.NewAppThrottle(expireAt, ratio)
+		appThrottle = base.NewAppThrottle(appName, expireAt, ratio)
 	}
 	if now.Before(appThrottle.ExpireAt) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 	} else {
 		throttler.UnthrottleApp(appName)
 	}
+	return appThrottle
 }
 
 // UnthrottleApp cancels any throttling, if any, for a given app
-func (throttler *Throttler) UnthrottleApp(appName string) {
+func (throttler *Throttler) UnthrottleApp(appName string) (appThrottle *base.AppThrottle) {
 	throttler.throttledApps.Delete(appName)
+	return base.NewAppThrottle(appName, time.Now(), 0)
 }
 
 // IsAppThrottled tells whether some app should be throttled.
@@ -707,12 +774,22 @@ func (throttler *Throttler) AppRequestMetricResult(ctx context.Context, appName 
 	return metricResultFunc()
 }
 
-// Check is the main serving function of the throttler, and returns a check result for this cluster's lag
-func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+// checkStore checks the aggregated value of given MySQL store
+func (throttler *Throttler) checkStore(ctx context.Context, appName string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	if !throttler.env.Config().EnableLagThrottler {
 		return okMetricCheckResult
 	}
-	return throttler.check.Check(ctx, appName, "mysql", localStoreName, remoteAddr, flags)
+	return throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
+}
+
+// Check is the main serving function of the throttler, and returns a check result for this cluster's lag; it is only applicable on a Primary tablet.
+func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, shardStoreName, remoteAddr, flags)
+}
+
+// CheckSelf is checks the mysql/self metric, and is available on each tablet
+func (throttler *Throttler) CheckSelf(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	return throttler.checkStore(ctx, appName, selfStoreName, remoteAddr, flags)
 }
 
 // Status exports a status breakdown

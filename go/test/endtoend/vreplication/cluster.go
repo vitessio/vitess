@@ -205,8 +205,14 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 		vc.Topo.Port,
 		globalConfig.hostname,
 		globalConfig.tmpDir,
-		[]string{"-queryserver-config-schema-reload-time", "5"}, //FIXME: for multi-cell initial schema doesn't seem to load without this
+		[]string{
+			"-queryserver-config-schema-reload-time", "5",
+			"-enable-lag-throttler",
+			"-heartbeat_enable",
+			"-heartbeat_interval", "250ms",
+		}, //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
 		false)
+
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
 

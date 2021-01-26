@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/sqlescape"
 
 	proxyproto "github.com/pires/go-proxyproto"
@@ -42,7 +44,6 @@ import (
 const (
 	// DefaultServerVersion is the default server version we're sending to the client.
 	// Can be changed.
-	DefaultServerVersion = "5.7.9-Vitess"
 
 	// timing metric keys
 	connectTimingKey  = "Connect"
@@ -232,7 +233,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		authServer:         cfg.AuthServer,
 		handler:            cfg.Handler,
 		listener:           l,
-		ServerVersion:      DefaultServerVersion,
+		ServerVersion:      servenv.AppVersion.MySQLVersion(),
 		connectionID:       1,
 		connReadTimeout:    cfg.ConnReadTimeout,
 		connWriteTimeout:   cfg.ConnWriteTimeout,

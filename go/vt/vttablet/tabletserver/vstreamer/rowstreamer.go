@@ -244,6 +244,11 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		default:
 		}
 
+		// check throttler. If required throttling, sleep ("true" argument) and retry loop
+		if !rs.vse.throttleStatusOK(rs.ctx, true) {
+			continue
+		}
+
 		row, err := conn.FetchNext()
 		if err != nil {
 			return err
