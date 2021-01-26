@@ -1576,35 +1576,39 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 	})
 }
 
-// registerThrottlerCheckHandler registers a throttler "check" request
-func (tsv *TabletServer) registerThrottlerCheckHandler() {
-	tsv.exporter.HandleFunc("/throttler/check", func(w http.ResponseWriter, r *http.Request) {
-		ctx := tabletenv.LocalContext()
-		remoteAddr := r.Header.Get("X-Forwarded-For")
-		if remoteAddr == "" {
-			remoteAddr = r.RemoteAddr
-			remoteAddr = strings.Split(remoteAddr, ":")[0]
-		}
-		appName := r.URL.Query().Get("app")
-		if appName == "" {
-			appName = throttle.DefaultAppName
-		}
-		flags := &throttle.CheckFlags{
-			LowPriority: (r.URL.Query().Get("p") == "low"),
-		}
-		checkResult := tsv.lagThrottler.Check(ctx, appName, remoteAddr, flags)
-		if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
-			checkResult.StatusCode = http.StatusOK // 200
-		}
+// registerThrottlerCheckHandlers registers throttler "check" requests
+func (tsv *TabletServer) registerThrottlerCheckHandlers() {
+	handle := func(path string, checkResultFunc func(ctx context.Context, appName string, remoteAddr string, flags *throttle.CheckFlags) *throttle.CheckResult) {
+		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			ctx := tabletenv.LocalContext()
+			remoteAddr := r.Header.Get("X-Forwarded-For")
+			if remoteAddr == "" {
+				remoteAddr = r.RemoteAddr
+				remoteAddr = strings.Split(remoteAddr, ":")[0]
+			}
+			appName := r.URL.Query().Get("app")
+			if appName == "" {
+				appName = throttle.DefaultAppName
+			}
+			flags := &throttle.CheckFlags{
+				LowPriority: (r.URL.Query().Get("p") == "low"),
+			}
+			checkResult := checkResultFunc(ctx, appName, remoteAddr, flags)
+			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
+				checkResult.StatusCode = http.StatusOK // 200
+			}
 
-		if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-		}
-		w.WriteHeader(checkResult.StatusCode)
-		if r.Method == http.MethodGet {
-			json.NewEncoder(w).Encode(checkResult)
-		}
-	})
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+			}
+			w.WriteHeader(checkResult.StatusCode)
+			if r.Method == http.MethodGet {
+				json.NewEncoder(w).Encode(checkResult)
+			}
+		})
+	}
+	handle("/throttler/check", tsv.lagThrottler.Check)
+	handle("/throttler/check-self", tsv.lagThrottler.CheckSelf)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request
@@ -1619,7 +1623,7 @@ func (tsv *TabletServer) registerThrottlerStatusHandler() {
 
 // registerThrottlerHandlers registers all throttler handlers
 func (tsv *TabletServer) registerThrottlerHandlers() {
-	tsv.registerThrottlerCheckHandler()
+	tsv.registerThrottlerCheckHandlers()
 	tsv.registerThrottlerStatusHandler()
 }
 
