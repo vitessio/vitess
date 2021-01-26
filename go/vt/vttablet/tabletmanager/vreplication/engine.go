@@ -21,7 +21,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -66,14 +65,7 @@ const (
 var withDDL *withddl.WithDDL
 
 const (
-	throttleCheckDuration = 250 * time.Millisecond
-	throttlerAppName      = "vreplication"
-)
-
-var (
-	throttleFlags = &throttle.CheckFlags{
-		LowPriority: true,
-	}
+	throttlerAppName = "vreplication"
 )
 
 func init() {
@@ -123,8 +115,7 @@ type Engine struct {
 	journaler map[string]*journalEvent
 	ec        *externalConnector
 
-	lagThrottler                *throttle.Throttler
-	lastSuccessfulThrottleCheck time.Time
+	throttlerClient *throttle.Client
 }
 
 type journalEvent struct {
@@ -137,13 +128,13 @@ type journalEvent struct {
 // A nil ts means that the Engine is disabled.
 func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
 	vre := &Engine{
-		controllers:  make(map[int]*controller),
-		ts:           ts,
-		cell:         cell,
-		mysqld:       mysqld,
-		journaler:    make(map[string]*journalEvent),
-		ec:           newExternalConnector(config.ExternalConnections),
-		lagThrottler: lagThrottler,
+		controllers:     make(map[int]*controller),
+		ts:              ts,
+		cell:            cell,
+		mysqld:          mysqld,
+		journaler:       make(map[string]*journalEvent),
+		ec:              newExternalConnector(config.ExternalConnections),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
 	}
 	return vre
 }
@@ -301,39 +292,6 @@ func (vre *Engine) Close() {
 
 	vre.updateStats()
 	log.Infof("VReplication Engine: closed")
-}
-
-// throttleStatusOK checks if the throttler is happy with a Check (a shard-scope check).
-// If not, and `sleep == true`, impose some sleep.
-func (vre *Engine) throttleStatusOK(ctx context.Context, sleep bool) bool {
-	if vre.lagThrottler == nil {
-		// no throttler
-		return true
-	}
-	if time.Since(vre.lastSuccessfulThrottleCheck) <= throttleCheckDuration {
-		// if last check was OK just very recently there is no need to check again
-		return true
-	}
-	// It's time to run a throttler check
-	checkResult := vre.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
-	if checkResult.StatusCode != http.StatusOK {
-		// sorry, we got throttled.
-		if sleep {
-			time.Sleep(throttleCheckDuration)
-		}
-		return false
-	}
-	vre.lastSuccessfulThrottleCheck = time.Now()
-	return true
-}
-
-// throttle will wait until the throttler's "check-self" check is satisfied
-func (vre *Engine) throttle(ctx context.Context) {
-	// We introduce throttling based on the tablet's "self" check, which means if the tablet itself is lagging,
-	// we hold off reads so as to ease the load and let it regain its health
-	for !vre.throttleStatusOK(ctx, true) {
-		// Sorry, got throttled. Sleep some time, then check again
-	}
 }
 
 // Exec executes the query and the related actions.
