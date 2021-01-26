@@ -198,7 +198,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !dbDDL.IfNotExists && ksExists {
 			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "cannot create database '%s'; database exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
+		return databaseCreator(dbDDL, vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDLstmt))
 }
