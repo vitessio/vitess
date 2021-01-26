@@ -17,11 +17,11 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -75,7 +75,7 @@ func init() {
 //----------------------------------------------
 // testWranglerEnv
 
-func newWranglerTestEnv(sourceShards, targetShards []string, query string, positions map[string]string) *testWranglerEnv {
+func newWranglerTestEnv(sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
 	flag.Set("tablet_protocol", "WranglerTest")
 	env := &testWranglerEnv{
 		workflow:   "wrWorkflow",
@@ -146,7 +146,7 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|message",
 			"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|varchar"),
-			fmt.Sprintf("1|%v|pos||0|Running|vt_target|1234|0|", bls),
+			fmt.Sprintf("1|%v|pos||0|Running|vt_target|%d|0|", bls, timeUpdated),
 		)
 		env.tmc.setVRResults(master.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'", result)
 		env.tmc.setVRResults(

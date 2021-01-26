@@ -533,7 +533,16 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topo
 	if v != nil {
 		return nil, v, nil
 	}
-	return nil, nil, fmt.Errorf("table %s not found", name)
+	return nil, nil, NotFoundError{TableName: name}
+}
+
+// NotFoundError represents the error where the table name was not found
+type NotFoundError struct {
+	TableName string
+}
+
+func (n NotFoundError) Error() string {
+	return fmt.Sprintf("table %s not found", n.TableName)
 }
 
 // FindVindex finds a vindex by name. If a keyspace is specified, only vindexes

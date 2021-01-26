@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )

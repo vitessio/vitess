@@ -22,9 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -99,18 +101,18 @@ func TestStateManagerServeNonMaster(t *testing.T) {
 
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
-	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.messager, testStateClosed)
-	verifySubcomponent(t, 5, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 3, sm.messager, testStateClosed)
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 6, sm.se, testStateOpen)
-	verifySubcomponent(t, 7, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 8, sm.qe, testStateOpen)
-	verifySubcomponent(t, 9, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 10, sm.te, testStateNonMaster)
-	verifySubcomponent(t, 11, sm.rt, testStateNonMaster)
-	verifySubcomponent(t, 12, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 5, sm.se, testStateOpen)
+	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 7, sm.qe, testStateOpen)
+	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 9, sm.te, testStateNonMaster)
+	verifySubcomponent(t, 10, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -290,18 +292,18 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 
 	verifySubcomponent(t, 1, sm.ddle, testStateClosed)
 	verifySubcomponent(t, 2, sm.tableGC, testStateClosed)
-	verifySubcomponent(t, 3, sm.throttler, testStateClosed)
-	verifySubcomponent(t, 4, sm.messager, testStateClosed)
-	verifySubcomponent(t, 5, sm.tracker, testStateClosed)
+	verifySubcomponent(t, 3, sm.messager, testStateClosed)
+	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonMaster)
 
-	verifySubcomponent(t, 6, sm.se, testStateOpen)
-	verifySubcomponent(t, 7, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 8, sm.qe, testStateOpen)
-	verifySubcomponent(t, 9, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 10, sm.te, testStateNonMaster)
-	verifySubcomponent(t, 11, sm.rt, testStateNonMaster)
-	verifySubcomponent(t, 12, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 5, sm.se, testStateOpen)
+	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
+	verifySubcomponent(t, 7, sm.qe, testStateOpen)
+	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 9, sm.te, testStateNonMaster)
+	verifySubcomponent(t, 10, sm.rt, testStateNonMaster)
+	verifySubcomponent(t, 11, sm.watcher, testStateOpen)
+	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)

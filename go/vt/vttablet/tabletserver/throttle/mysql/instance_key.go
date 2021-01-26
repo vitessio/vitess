@@ -17,6 +17,10 @@ type InstanceKey struct {
 	Port     int
 }
 
+// SelfInstanceKey is a special indicator for "this instance", e.g. denoting the MySQL server associated with local tablet
+// The values of this key are immaterial and are intentionally descriptive
+var SelfInstanceKey = &InstanceKey{Hostname: "(self)", Port: 1}
+
 // newRawInstanceKey will parse an InstanceKey from a string representation such as 127.0.0.1:3306
 // It expects such format and returns with error if input differs in format
 func newRawInstanceKey(hostPort string) (*InstanceKey, error) {
@@ -68,6 +72,14 @@ func (i *InstanceKey) IsValid() bool {
 		return false
 	}
 	return len(i.Hostname) > 0 && i.Port > 0
+}
+
+// IsSelf checks if this is the special "self" instance key
+func (i *InstanceKey) IsSelf() bool {
+	if SelfInstanceKey == i {
+		return true
+	}
+	return SelfInstanceKey.Equals(i)
 }
 
 // StringCode returns an official string representation of this key

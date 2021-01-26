@@ -22,9 +22,11 @@ import (
 	"strings"
 	"testing"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
@@ -2356,7 +2358,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tPRIMARY KEY (id),\n" +
 				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tKEY fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
 
 			hasErr: false,
 		},
@@ -2378,7 +2381,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tPRIMARY KEY (id),\n" +
 				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tKEY fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
 		},
 		{
 			desc: "bad ddl has error",

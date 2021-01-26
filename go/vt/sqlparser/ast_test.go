@@ -105,6 +105,28 @@ func TestSelect(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	tree, err := Parse("update t set a = 1")
+	require.NoError(t, err)
+
+	upd, ok := tree.(*Update)
+	require.True(t, ok)
+
+	upd.AddWhere(&ComparisonExpr{
+		Left:     &ColName{Name: NewColIdent("b")},
+		Operator: EqualOp,
+		Right:    NewIntLiteral([]byte("2")),
+	})
+	assert.Equal(t, "update t set a = 1 where b = 2", String(upd))
+
+	upd.AddWhere(&ComparisonExpr{
+		Left:     &ColName{Name: NewColIdent("c")},
+		Operator: EqualOp,
+		Right:    NewIntLiteral([]byte("3")),
+	})
+	assert.Equal(t, "update t set a = 1 where b = 2 and c = 3", String(upd))
+}
+
 func TestRemoveHints(t *testing.T) {
 	for _, query := range []string{
 		"select * from t use index (i)",
@@ -187,34 +209,32 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a"},
 	}, {
 		query: "rename table a to b",
-		output: &DDL{
-			Action: RenameDDLAction,
-			FromTables: TableNames{
-				TableName{Name: NewTableIdent("a")},
-			},
-			ToTables: TableNames{
-				TableName{Name: NewTableIdent("b")},
+		output: &RenameTable{
+			TablePairs: []*RenameTablePair{
+				{
+					FromTable: TableName{Name: NewTableIdent("a")},
+					ToTable:   TableName{Name: NewTableIdent("b")},
+				},
 			},
 		},
 		affected: []string{"a", "b"},
 	}, {
 		query: "rename table a to b, c to d",
-		output: &DDL{
-			Action: RenameDDLAction,
-			FromTables: TableNames{
-				TableName{Name: NewTableIdent("a")},
-				TableName{Name: NewTableIdent("c")},
-			},
-			ToTables: TableNames{
-				TableName{Name: NewTableIdent("b")},
-				TableName{Name: NewTableIdent("d")},
+		output: &RenameTable{
+			TablePairs: []*RenameTablePair{
+				{
+					FromTable: TableName{Name: NewTableIdent("a")},
+					ToTable:   TableName{Name: NewTableIdent("b")},
+				}, {
+					FromTable: TableName{Name: NewTableIdent("c")},
+					ToTable:   TableName{Name: NewTableIdent("d")},
+				},
 			},
 		},
-		affected: []string{"a", "c", "b", "d"},
+		affected: []string{"a", "b", "c", "d"},
 	}, {
 		query: "drop table a",
-		output: &DDL{
-			Action: DropDDLAction,
+		output: &DropTable{
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 			},
@@ -222,8 +242,7 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a"},
 	}, {
 		query: "drop table a, b",
-		output: &DDL{
-			Action: DropDDLAction,
+		output: &DropTable{
 			FromTables: TableNames{
 				TableName{Name: NewTableIdent("a")},
 				TableName{Name: NewTableIdent("b")},

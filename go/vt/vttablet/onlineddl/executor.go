@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Functionality of this Executor is tested in go/test/endtoend/onlineddl/onlineddl_test.go
+*/
+
 package onlineddl
 
 import (
@@ -101,7 +105,10 @@ var migrationNextCheckInterval = 5 * time.Second
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationMinutes         = 10
+	progressPctStarted    float64 = 0
 	progressPctFull       float64 = 100.0
+	gcHoldHours                   = 72
+	databasePoolSize              = 3
 )
 
 var (
@@ -156,8 +163,8 @@ func NewExecutor(env tabletenv.Env, tabletAlias topodatapb.TabletAlias, ts *topo
 		env:         env,
 		tabletAlias: &tabletAlias,
 
-		pool: connpool.NewPool(env, "ExecutorPool", tabletenv.ConnPoolConfig{
-			Size:               1,
+		pool: connpool.NewPool(env, "OnlineDDLExecutorPool", tabletenv.ConnPoolConfig{
+			Size:               databasePoolSize,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
 		tabletTypeFunc: tabletTypeFunc,
@@ -362,7 +369,7 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 }
 
 // executeDirectly runs a DDL query directly on the backend MySQL server
-func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...int) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -372,7 +379,22 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetch(onlineDDL.SQL, 0, false); err != nil {
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted)
+	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
+
+	if err != nil {
+		// let's see if this error is actually acceptable
+		if merr, ok := err.(*mysql.SQLError); ok {
+			for _, acceptableCode := range acceptableMySQLErrorCodes {
+				if merr.Num == acceptableCode {
+					// we don't consider this to be an error.
+					err = nil
+					break
+				}
+			}
+		}
+	}
+	if err != nil {
 		return err
 	}
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
@@ -990,6 +1012,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+		e.triggerNextCheckInterval()
 		return err
 	}
 
@@ -998,7 +1021,43 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return failMigration(err)
 	}
 	switch ddlAction {
-	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
+	case sqlparser.DropDDLAction:
+		go func() error {
+			// Drop statement.
+			// Normally, we're going to modify DROP to RENAME (see later on). But if table name is
+			// already a GC-lifecycle table, then we don't put it through yet another GC lifecycle,
+			// we just drop it.
+			if schema.IsGCTableName(onlineDDL.Table) {
+				if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+					return failMigration(err)
+				}
+				return nil
+			}
+
+			// We transform a DROP TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
+
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+			if err != nil {
+				return failMigration(err)
+			}
+
+			onlineDDL.SQL, _, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(gcHoldHours*time.Hour))
+			if err != nil {
+				return failMigration(err)
+			}
+
+			if ddlStmt.GetIfExists() {
+				err = e.executeDirectly(ctx, onlineDDL, mysql.ERCantFindFile, mysql.ERNoSuchTable)
+			} else {
+				err = e.executeDirectly(ctx, onlineDDL)
+			}
+
+			if err != nil {
+				return failMigration(err)
+			}
+			return nil
+		}()
+	case sqlparser.CreateDDLAction:
 		go func() {
 			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
 				failMigration(err)
@@ -1220,7 +1279,7 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 }
 
 // gcArtifacts garbage-collects migration artifacts from completed/failed migrations
-func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable string) error {
+func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string) error {
 	tableExists, err := e.tableExists(ctx, artifactTable)
 	if err != nil {
 		return err
@@ -1228,7 +1287,7 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable string) er
 	if !tableExists {
 		return nil
 	}
-	renameStatement, _, err := schema.GenerateRenameStatement(artifactTable, schema.PurgeTableGCState, time.Now().UTC())
+	renameStatement, _, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), time.Now().UTC())
 	if err != nil {
 		return err
 	}
@@ -1258,7 +1317,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 
 		artifactTables := textutil.SplitDelimitedList(artifacts)
 		for _, artifactTable := range artifactTables {
-			if err := e.gcArtifactTable(ctx, artifactTable); err != nil {
+			if err := e.gcArtifactTable(ctx, artifactTable, uuid); err != nil {
 				return err
 			}
 			log.Infof("Executor.gcArtifacts: renamed away artifact %s", artifactTable)
@@ -1523,6 +1582,11 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			return nil, err
 		}
 		return sqltypes.ResultToProto3(result), nil
+	}
+
+	if err := e.initSchema(ctx); err != nil {
+		log.Error(err)
+		return nil, err
 	}
 
 	switch stmt := vx.Stmt.(type) {

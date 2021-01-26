@@ -902,149 +902,155 @@ var (
 	}, {
 		input: "set @period.variable = 42",
 	}, {
-		input:  "alter table a add foo",
-		output: "alter table a",
+		input:  "alter table a add foo int first v",
+		output: "alter table a add column foo int first v",
 	}, {
-		input:  "alter table a add spatial key foo (column1)",
-		output: "alter table a",
+		input:  "alter table a lock default, lock = none, lock shared, lock exclusive",
+		output: "alter table a lock default, lock none, lock shared, lock exclusive",
 	}, {
-		input:  "alter table a add fulltext key foo (column1)",
-		output: "alter table a",
+		input:  "alter table a alter x set default NULL, alter column x2 set default 's', alter x3 drop default",
+		output: "alter table a alter column x set default null, alter column x2 set default 's', alter column x3 drop default",
 	}, {
-		input:  "alter table a add unique key foo (column1)",
-		output: "alter table a",
+		input: "alter table a add spatial key foo (column1)",
 	}, {
-		input:  "alter table `By` add foo",
-		output: "alter table `By`",
+		input: "alter table a add fulltext key foo (column1), order by a, b, c",
 	}, {
-		input:  "alter table a alter foo",
-		output: "alter table a",
+		input: "alter table a add unique key foo (column1)",
 	}, {
-		input:  "alter table a change foo",
-		output: "alter table a",
+		input: "alter table a change column s foo int default 1 after x",
 	}, {
-		input:  "alter table a modify foo",
-		output: "alter table a",
+		input: "alter table a modify column foo int default 1 first x",
 	}, {
-		input:  "alter table a drop foo",
-		output: "alter table a",
+		input:  "alter table a character set utf32 collate = 'utf'",
+		output: "alter table a charset utf32 collate utf",
 	}, {
-		input:  "alter table a disable foo",
-		output: "alter table a",
+		input: "alter table a convert to character set utf32",
 	}, {
-		input:  "alter table a enable foo",
-		output: "alter table a",
+		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
-		input:  "alter table a order foo",
-		output: "alter table a",
+		input: "alter table a rename b",
 	}, {
-		input:  "alter table a default foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a discard foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a import foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a rename b",
-		output: "rename table a to b",
-	}, {
-		input:  "alter table `By` rename `bY`",
-		output: "rename table `By` to `bY`",
+		input: "alter table `By` rename `bY`",
 	}, {
 		input:  "alter table a rename to b",
-		output: "rename table a to b",
+		output: "alter table a rename b",
 	}, {
 		input:  "alter table a rename as b",
-		output: "rename table a to b",
+		output: "alter table a rename b",
 	}, {
-		input:  "alter table a rename index foo to bar",
-		output: "alter table a",
+		input: "alter table a rename index foo to bar, with validation",
 	}, {
 		input:  "alter table a rename key foo to bar",
-		output: "alter table a",
+		output: "alter table a rename index foo to bar",
 	}, {
-		input:  "alter table e auto_increment = 20",
-		output: "alter table e",
+		input: "alter table e auto_increment 20",
 	}, {
 		input:  "alter table e character set = 'ascii'",
-		output: "alter table e",
+		output: "alter table e charset ascii",
+	}, {
+		input: "alter table e enable keys, discard tablespace, force",
 	}, {
 		input:  "alter table e default character set = 'ascii'",
-		output: "alter table e",
+		output: "alter table e charset ascii",
 	}, {
-		input:  "alter table e comment = 'hello'",
-		output: "alter table e",
+		input: "alter table e comment 'hello' remove partitioning",
 	}, {
 		input:  "alter table a reorganize partition b into (partition c values less than (?), partition d values less than (maxvalue))",
 		output: "alter table a reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))",
 	}, {
+		input: "alter table a algorithm = default, lock none, add partition (partition d values less than (maxvalue))",
+	}, {
+		input: "alter table a discard partition all tablespace",
+	}, {
+		input: "alter table a import partition a, b, v tablespace",
+	}, {
+		input: "alter table a truncate partition a, b, v",
+	}, {
+		input: "alter table a coalesce partition 7",
+	}, {
+		input: "alter table a exchange partition a with table t without validation",
+	}, {
+		input: "alter table a analyze partition all",
+	}, {
+		input: "alter table a analyze partition a, v",
+	}, {
+		input: "alter table a check partition all",
+	}, {
+		input: "alter table a check partition a, v",
+	}, {
+		input: "alter table a optimize partition all",
+	}, {
+		input: "alter table a optimize partition a, v",
+	}, {
+		input: "alter table a rebuild partition all",
+	}, {
+		input: "alter table a rebuild partition a, v",
+	}, {
+		input: "alter table a repair partition all",
+	}, {
+		input: "alter table a repair partition a, v",
+	}, {
+		input: "alter table a remove partitioning",
+	}, {
+		input: "alter table a upgrade partitioning",
+	}, {
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
 	}, {
-		input:  "alter table a add column id int",
-		output: "alter table a",
+		input: "alter table a add column (id int, id2 char(23))",
 	}, {
-		input:  "alter table a add index idx (id)",
-		output: "alter table a",
+		input: "alter table a add index idx (id)",
 	}, {
-		input:  "alter table a add fulltext index idx (id)",
-		output: "alter table a",
+		input: "alter table a add fulltext index idx (id)",
 	}, {
-		input:  "alter table a add spatial index idx (id)",
-		output: "alter table a",
+		input: "alter table a add spatial index idx (id)",
 	}, {
-		input:  "alter table a add fulltext index idx (id)",
-		output: "alter table a",
+		input: "alter table a add fulltext index idx (id)",
 	}, {
-		input:  "alter table a add foreign key",
-		output: "alter table a",
+		input: "alter table a add foreign key (id) references f (id)",
 	}, {
-		input:  "alter table a add primary key",
-		output: "alter table a",
+		input: "alter table a add primary key (id)",
 	}, {
-		input:  "alter table a add constraint",
-		output: "alter table a",
+		input: "alter table a add constraint b primary key (id)",
 	}, {
-		input:  "alter table a add id",
-		output: "alter table a",
+		input: "alter table a add constraint b primary key (id)",
 	}, {
-		input:  "alter table a drop column id int",
-		output: "alter table a",
+		input: "alter table a add constraint b unique key (id)",
 	}, {
-		input:  "alter table a drop partition p2712",
-		output: "alter table a",
+		input:  "alter table a add constraint b unique c (id)",
+		output: "alter table a add constraint b unique key c (id)",
 	}, {
-		input:  "alter table a drop index idx (id)",
-		output: "alter table a",
+		input:  "alter table a add constraint check (id)",
+		output: "alter table a add check (id) enforced",
 	}, {
-		input:  "alter table a drop fulltext index idx (id)",
-		output: "alter table a",
+		input:  "alter table a add id int",
+		output: "alter table a add column id int",
 	}, {
-		input:  "alter table a drop spatial index idx (id)",
-		output: "alter table a",
+		input: "alter table a add column id int first id2",
 	}, {
-		input:  "alter table a drop fulltext index idx (id)",
-		output: "alter table a",
+		input: "alter table a add column id int after id2",
 	}, {
-		input:  "alter table a add check ch_1",
-		output: "alter table a",
+		input: "alter table a drop column id",
+	}, {
+		input: "alter table a drop partition p2712, p123",
+	}, {
+		input:  "alter table a drop index idx",
+		output: "alter table a drop key idx",
+	}, {
+		input: "alter table a add check (ch_1) not enforced",
 	}, {
 		input:  "alter table a drop check ch_1",
 		output: "alter table a",
 	}, {
-		input:  "alter table a drop foreign key",
-		output: "alter table a",
+		input: "alter table a drop foreign key kx",
 	}, {
-		input:  "alter table a drop primary key",
-		output: "alter table a",
+		input: "alter table a drop primary key",
 	}, {
 		input:  "alter table a drop constraint",
 		output: "alter table a",
 	}, {
 		input:  "alter table a drop id",
-		output: "alter table a",
+		output: "alter table a drop column id",
 	}, {
 		input: "alter database character set geostd8",
 	}, {
@@ -1073,6 +1079,12 @@ var (
 	}, {
 		input: "create table a",
 	}, {
+		input:  "CREATE TABLE a",
+		output: "create table a",
+	}, {
+		input:  "create table `a`",
+		output: "create table a",
+	}, {
 		input:  "create table a (\n\t`a` int\n)",
 		output: "create table a (\n\ta int\n)",
 	}, {
@@ -1080,8 +1092,20 @@ var (
 	}, {
 		input: "create table test (\n\t__year year(4)\n)",
 	}, {
+		input: "create table a (\n\ta int not null\n)",
+	}, {
+		input: "create table a (\n\ta int not null default 0\n)",
+	}, {
+		input:  "create table a (a int not null default 0, primary key(a))",
+		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
+	}, {
+		input:  "create table a (`a column` int)",
+		output: "create table a (\n\t`a column` int\n)",
+	}, {
+		input: "create table a (\n\ta varchar(32) not null default ''\n)",
+	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
-		output: "create table a (\n\ta int\n)",
+		output: "create table if not exists a (\n\ta int\n)",
 	}, {
 		input:  "create table a ignore me this is garbage",
 		output: "create table a",
@@ -1091,6 +1115,9 @@ var (
 	}, {
 		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
+	}, {
+		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null, KEY b2_idx(b))",
+		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null,\n\tKEY b2_idx (b)\n)",
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
@@ -1175,11 +1202,14 @@ var (
 		output: "alter table b add spatial index a (col1)",
 	}, {
 		input:  "create fulltext index a on b (col1) key_block_size=12 with parser a comment 'string' algorithm inplace lock none",
-		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string' algorithm inplace lock none",
+		output: "alter table b add fulltext index a (col1) key_block_size 12 with parser a comment 'string', algorithm = inplace, lock none",
 	}, {
 		input:      "create index a on b ((col1 + col2), (col1*col2))",
 		output:     "alter table b add index a ()",
 		partialDDL: true,
+	}, {
+		input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
+		output: "alter table A add fulltext index b (col1 desc, col2) using btree, algorithm = inplace, lock none",
 	}, {
 		input: "create algorithm = merge sql security definer view a as select * from e",
 	}, {
@@ -1200,17 +1230,18 @@ var (
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 		output: "create definer = 'sa'@b.c.d view a(b, c, d) as select * from e",
 	}, {
-		input:  "alter view a",
-		output: "alter table a",
+		input: "alter view a as select * from t",
+	}, {
+		input: "alter algorithm = merge definer = m@172.0.1.01 sql security definer view a as select * from t with local check option",
 	}, {
 		input:  "rename table a to b",
 		output: "rename table a to b",
 	}, {
-		input:  "rename table a to b, b to c",
-		output: "rename table a to b, b to c",
+		input:  "rename table x.a to b, b to c",
+		output: "rename table x.a to b, b to c",
 	}, {
-		input:  "drop view a",
-		output: "drop table a",
+		input:  "drop view a,B,c",
+		output: "drop view a, b, c",
 	}, {
 		input:  "drop table a",
 		output: "drop table a",
@@ -1218,23 +1249,35 @@ var (
 		input:  "drop table a, b",
 		output: "drop table a, b",
 	}, {
-		input:  "drop table if exists a",
-		output: "drop table if exists a",
+		input:  "drop table if exists a,b restrict",
+		output: "drop table if exists a, b",
 	}, {
-		input:  "drop view if exists a",
-		output: "drop table if exists a",
+		input:  "drop view if exists a cascade",
+		output: "drop view if exists a",
 	}, {
-		input:  "drop index b on a",
-		output: "alter table a",
+		input:  "drop index b on a lock = none algorithm default",
+		output: "alter table a drop key b, lock none, algorithm = default",
+	}, {
+		input:  "drop index `PRIMARY` on a lock none",
+		output: "alter table a drop primary key, lock none",
 	}, {
 		input:  "analyze table a",
 		output: "otherread",
 	}, {
-		input:  "flush tables",
-		output: "flush",
+		input: "flush tables",
 	}, {
-		input:  "flush tables with read lock",
-		output: "flush",
+		input: "flush tables with read lock",
+	}, {
+		input: "flush tables a, c.v, b",
+	}, {
+		input: "flush local tables a, c.v, b with read lock",
+	}, {
+		input: "flush tables a, c.v, b for export",
+	}, {
+		input: "flush local binary logs, engine logs, error logs, general logs, hosts, logs, privileges, optimizer_costs",
+	}, {
+		input:  "flush no_write_to_binlog slow logs, status, user_resources, relay logs, relay logs for channel s",
+		output: "flush local slow logs, status, user_resources, relay logs, relay logs for channel s",
 	}, {
 		input:  "show binary logs",
 		output: "show binary logs",
@@ -1272,8 +1315,7 @@ var (
 		input:  "show create event e",
 		output: "show create event",
 	}, {
-		input:  "show create function f",
-		output: "show create function",
+		input: "show create function f",
 	}, {
 		input:  "show create procedure p",
 		output: "show create procedure",
@@ -1305,23 +1347,18 @@ var (
 		input:  "show engine INNODB",
 		output: "show engine",
 	}, {
-		input:  "show engines",
-		output: "show engines",
+		input: "show engines",
 	}, {
 		input:  "show storage engines",
 		output: "show storage",
 	}, {
-		input:  "show errors",
-		output: "show errors",
+		input: "show errors",
 	}, {
-		input:  "show events",
-		output: "show events",
+		input: "show events",
 	}, {
-		input:  "show function code func",
-		output: "show function",
+		input: "show function code func",
 	}, {
-		input:  "show function status",
-		output: "show function",
+		input: "show function status",
 	}, {
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
@@ -1442,10 +1479,10 @@ var (
 		output: "show variables",
 	}, {
 		input:  "show vitess_keyspaces",
-		output: "show databases",
+		output: "show keyspaces",
 	}, {
 		input:  "show vitess_keyspaces like '%'",
-		output: "show databases like '%'",
+		output: "show keyspaces like '%'",
 	}, {
 		input: "show vitess_shards",
 	}, {
@@ -1761,12 +1798,12 @@ var (
 			"\tc1 int,\n" +
 			"\tc2 int,\n" +
 			"\tc3 int,\n" +
-			"\tcheck constraint on expression c1 != c2 enforced,\n" +
-			"\tcheck constraint on expression c1 > 10 enforced,\n" +
-			"\tconstraint c2_positive check constraint on expression c2 > 0 enforced,\n" +
-			"\tcheck constraint on expression c3 < 100 enforced,\n" +
-			"\tconstraint c1_nonzero check constraint on expression c1 != 0 enforced,\n" +
-			"\tcheck constraint on expression c1 > c3 enforced\n)",
+			"\tcheck (c1 != c2) enforced,\n" +
+			"\tcheck (c1 > 10) enforced,\n" +
+			"\tconstraint c2_positive check (c2 > 0) enforced,\n" +
+			"\tcheck (c3 < 100) enforced,\n" +
+			"\tconstraint c1_nonzero check (c1 != 0) enforced,\n" +
+			"\tcheck (c1 > c3) enforced\n)",
 	}, {
 		input:  "SHOW INDEXES FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
 		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
@@ -1822,12 +1859,10 @@ func TestValid(t *testing.T) {
 				t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 			}
 
-			// CREATE INDEX currently only has 5.7 specifications.
+			// Some statements currently only have 5.7 specifications.
 			// For mysql 8.0 syntax, the query is not entirely parsed.
 			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
 			switch x := tree.(type) {
-			case *CreateIndex:
-				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			case *CreateDatabase:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			case *AlterDatabase:
@@ -1911,15 +1946,15 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A foo",
 		output: "alter table A",
 	}, {
-		input:  "alter table A convert",
+		input:  "alter table A convert unparsable",
 		output: "alter table A",
 	}, {
 		// View names get lower-cased.
-		input:  "alter view A foo",
-		output: "alter table a",
+		input:  "alter view A as select * from t",
+		output: "alter view a as select * from t",
 	}, {
 		input:  "alter table A rename to B",
-		output: "rename table A to B",
+		output: "alter table A rename B",
 	}, {
 		input: "rename table A to B",
 	}, {
@@ -1930,7 +1965,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "drop table if exists B",
 	}, {
 		input:  "drop index b on A",
-		output: "alter table A",
+		output: "alter table A drop key b",
 	}, {
 		input: "select a from B",
 	}, {
@@ -1968,14 +2003,11 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create view A as select * from b",
 		output: "create view a as select * from b",
 	}, {
-		input:  "alter view A",
-		output: "alter table a",
-	}, {
 		input:  "drop view A",
-		output: "drop table a",
+		output: "drop view a",
 	}, {
 		input:  "drop view if exists A",
-		output: "drop table if exists a",
+		output: "drop view if exists a",
 	}, {
 		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
@@ -2461,7 +2493,7 @@ func TestCreateTable(t *testing.T) {
 			"	spatial key geom (geom),\n" +
 			"	fulltext key fts (full_name),\n" +
 			"	unique key by_username (username),\n" +
-			"	unique by_username2 (username),\n" +
+			"	unique key by_username2 (username),\n" +
 			"	unique index by_username3 (username),\n" +
 			"	index by_status (status_nonkeyword),\n" +
 			"	key by_full_name (full_name)\n" +
@@ -2476,7 +2508,7 @@ func TestCreateTable(t *testing.T) {
 			"	status_nonkeyword varchar,\n" +
 			"	primary key (id) using BTREE,\n" +
 			"	unique key by_username (username) using HASH,\n" +
-			"	unique by_username2 (username) using OTHER,\n" +
+			"	unique key by_username2 (username) using OTHER,\n" +
 			"	unique index by_username3 (username) using XYZ,\n" +
 			"	index by_status (status_nonkeyword) using PDQ,\n" +
 			"	key by_full_name (full_name) using OTHER\n" +
@@ -2531,10 +2563,10 @@ func TestCreateTable(t *testing.T) {
 			") engine InnoDB,\n" +
 			"  auto_increment 123,\n" +
 			"  avg_row_length 1,\n" +
-			"  default character set utf8mb4,\n" +
-			"  character set latin1,\n" +
+			"  charset utf8mb4,\n" +
+			"  charset latin1,\n" +
 			"  checksum 0,\n" +
-			"  default collate binary,\n" +
+			"  collate binary,\n" +
 			"  collate ascii_bin,\n" +
 			"  comment 'this is a comment',\n" +
 			"  compression 'zlib',\n" +
@@ -2554,6 +2586,7 @@ func TestCreateTable(t *testing.T) {
 			"  stats_persistent 0,\n" +
 			"  stats_sample_pages 1,\n" +
 			"  tablespace tablespace_name storage disk,\n" +
+			"  union (a, b, c),\n" +
 			"  tablespace tablespace_name\n",
 
 		// boolean columns
@@ -2572,9 +2605,7 @@ func TestCreateTable(t *testing.T) {
 		}
 		got := String(tree.(*CreateTable))
 		assert.True(t, tree.(*CreateTable).FullyParsed)
-		if sql != got {
-			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
-		}
+		require.Equal(t, sql, got)
 	}
 
 	sql := "create table t garbage"
@@ -2606,7 +2637,7 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar,\n" +
 			"	unique key by_username (username) key_block_size 8,\n" +
 			"	unique key by_username2 (username) key_block_size 8,\n" +
-			"	unique by_username3 (username) key_block_size 4\n" +
+			"	unique key by_username3 (username) key_block_size 4\n" +
 			")",
 	}, {
 		// test defaults

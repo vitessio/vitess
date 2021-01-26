@@ -10,13 +10,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/buger/jsonparser"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/PuerkitoBio/goquery"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -145,13 +145,16 @@ func getQueryCount(url string, query string) int {
 		if len(row) != len(headings) {
 			continue
 		}
+		filterChars := []string{"_", "`"}
 		//Queries seem to include non-printable characters at times and hence equality fails unless these are removed
 		re := regexp.MustCompile("[[:^ascii:]]")
 		foundQuery := re.ReplaceAllLiteralString(row[queryIndex], "")
-		foundQuery = strings.ReplaceAll(foundQuery, "_", "")
 		cleanQuery := re.ReplaceAllLiteralString(query, "")
-		cleanQuery = strings.ReplaceAll(cleanQuery, "_", "")
-		if foundQuery == cleanQuery {
+		for _, filterChar := range filterChars {
+			foundQuery = strings.ReplaceAll(foundQuery, filterChar, "")
+			cleanQuery = strings.ReplaceAll(cleanQuery, filterChar, "")
+		}
+		if foundQuery == cleanQuery || strings.Contains(foundQuery, cleanQuery) {
 			count, _ = strconv.Atoi(row[countIndex])
 		}
 	}
@@ -238,4 +241,21 @@ func printShardPositions(vc *VitessCluster, ksShards []string) {
 			fmt.Printf("Position of %s: %s", ksShard, output)
 		}
 	}
+}
+
+func clearRoutingRules(t *testing.T, vc *VitessCluster) error {
+	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "-rules={}"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
+	var output string
+	var err error
+	if output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules"); err != nil {
+		return err
+	}
+	fmt.Printf("Routing Rules::%s:\n%s\n", msg, output)
+	return nil
 }

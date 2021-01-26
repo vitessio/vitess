@@ -25,12 +25,11 @@ gopackages=$(echo $gofiles | xargs -n1 dirname | sort -u)
 GOLANGCI_LINT=$(command -v golangci-lint >/dev/null 2>&1)
 if [ $? -eq 1 ]; then
   echo "Downloading golangci-lint..."
-  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.27.0
+  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.34.1
 fi
 
-#golangci-lint run --disable=ineffassign,unused,gosimple,staticcheck,errcheck,structcheck,varcheck,deadcode
 for gopackage in $gopackages
 do
  echo "Linting $gopackage"
- golangci-lint run --disable=errcheck --timeout=10m $gopackage
+ golangci-lint run --fast $gopackage
 done

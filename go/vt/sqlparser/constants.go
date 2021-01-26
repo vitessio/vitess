@@ -71,7 +71,21 @@ const (
 	VindexOwnerStr = "owner"
 
 	// Partition strings
-	ReorganizeStr = "reorganize partition"
+	ReorganizeStr        = "reorganize partition"
+	AddStr               = "add partition"
+	DiscardStr           = "discard partition"
+	DropPartitionStr     = "drop partition"
+	ImportStr            = "import partition"
+	TruncatePartitionStr = "truncate partition"
+	CoalesceStr          = "coalesce partition"
+	ExchangeStr          = "exchange partition"
+	AnalyzePartitionStr  = "analyze partition"
+	CheckStr             = "check partition"
+	OptimizeStr          = "optimize partition"
+	RebuildStr           = "rebuild partition"
+	RepairStr            = "repair partition"
+	RemoveStr            = "remove partitioning"
+	UpgradeStr           = "upgrade partitioning"
 
 	// JoinTableExpr.Join
 	JoinStr             = "join"
@@ -199,11 +213,24 @@ const (
 	CollationStr       = " collation"
 	DatabaseStr        = " databases"
 	FunctionStr        = " function status"
+	PrivilegeStr       = " privileges"
 	ProcedureStr       = " procedure status"
 	StatusGlobalStr    = " global status"
 	StatusSessionStr   = " status"
 	VariableGlobalStr  = " global variables"
 	VariableSessionStr = " variables"
+	KeyspaceStr        = " keyspaces"
+
+	// DropKeyType strings
+	PrimaryKeyTypeStr = "primary key"
+	ForeignKeyTypeStr = "foreign key"
+	NormalKeyTypeStr  = "key"
+
+	// LockOptionType strings
+	NoneTypeStr      = "none"
+	SharedTypeStr    = "shared"
+	DefaultTypeStr   = "default"
+	ExclusiveTypeStr = "exclusive"
 )
 
 // Constants for Enum type - AccessMode
@@ -233,7 +260,6 @@ const (
 	DropDDLAction
 	RenameDDLAction
 	TruncateDDLAction
-	FlushDDLAction
 	CreateVindexDDLAction
 	DropVindexDDLAction
 	AddVschemaTableDDLAction
@@ -372,6 +398,20 @@ const (
 // Constant for Enum Type - PartitionSpecAction
 const (
 	ReorganizeAction PartitionSpecAction = iota
+	AddAction
+	DiscardAction
+	DropAction
+	ImportAction
+	TruncateAction
+	CoalesceAction
+	ExchangeAction
+	AnalyzeAction
+	CheckAction
+	OptimizeAction
+	RebuildAction
+	RepairAction
+	RemoveAction
+	UpgradeAction
 )
 
 // Constant for Enum Type - ExplainType
@@ -413,9 +453,26 @@ const (
 	Collation
 	Database
 	Function
+	Privilege
 	Procedure
 	StatusGlobal
 	StatusSession
 	VariableGlobal
 	VariableSession
+	Keyspace
+)
+
+// DropKeyType constants
+const (
+	PrimaryKeyType DropKeyType = iota
+	ForeignKeyType
+	NormalKeyType
+)
+
+// LockOptionType constants
+const (
+	DefaultType LockOptionType = iota
+	NoneType
+	SharedType
+	ExclusiveType
 )

@@ -39,6 +39,7 @@
     "OperatorType": "Rows"
   }
 }
+Gen4 plan same as above
 
 # lock tables write
 "lock tables t low_priority write"
@@ -49,6 +50,7 @@
     "OperatorType": "Rows"
   }
 }
+Gen4 plan same as above
 
 # unlock tables
 "unlock tables"
@@ -59,3 +61,4 @@
     "OperatorType": "Rows"
   }
 }
+Gen4 plan same as above

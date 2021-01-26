@@ -24,7 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -121,8 +122,8 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %d", workflow, keyspace, master.Alias.Uid),
 			}, {
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN'", encodeString(master.DbName())),
-				fmt.Sprintf("workflow %s.%s is in a frozen state on tablet %d, please review and delete it before resharding",
-					keyspace, workflow, master.Alias.Uid),
+				fmt.Sprintf("found previous frozen workflow on tablet %d, please review and delete it first before creating a new workflow",
+					master.Alias.Uid),
 			}}
 			for _, validation := range validations {
 				p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, validation.query)

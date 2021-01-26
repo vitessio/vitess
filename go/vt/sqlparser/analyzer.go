@@ -59,6 +59,7 @@ const (
 	StmtVStream
 	StmtLockTables
 	StmtUnlockTables
+	StmtFlush
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -76,7 +77,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case DDLStatement, DBDDLStatement:
+	case DDLStatement, DBDDLStatement, *AlterVschema:
 		return StmtDDL
 	case *Use:
 		return StmtUse
@@ -100,6 +101,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtLockTables
 	case *UnlockTables:
 		return StmtUnlockTables
+	case *Flush:
+		return StmtFlush
 	default:
 		return StmtUnknown
 	}
@@ -109,6 +112,16 @@ func ASTToStatementType(stmt Statement) StatementType {
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+		return true
+	}
+	return false
+}
+
+// CachePlan takes Statement and returns true if the query plan should be cached
+func CachePlan(stmt Statement) bool {
+	switch stmt.(type) {
+	case *Select, *Union, *ParenSelect,
+		*Insert, *Update, *Delete:
 		return true
 	}
 	return false
@@ -177,8 +190,10 @@ func Preview(sql string) StatementType {
 		return StmtRollback
 	}
 	switch loweredFirstWord {
-	case "create", "alter", "rename", "drop", "truncate", "flush":
+	case "create", "alter", "rename", "drop", "truncate":
 		return StmtDDL
+	case "flush":
+		return StmtFlush
 	case "set":
 		return StmtSet
 	case "show":
@@ -245,6 +260,8 @@ func (s StatementType) String() string {
 		return "LOCK_TABLES"
 	case StmtUnlockTables:
 		return "UNLOCK_TABLES"
+	case StmtFlush:
+		return "FLUSH"
 	default:
 		return "UNKNOWN"
 	}
@@ -266,18 +283,6 @@ func IsDMLStatement(stmt Statement) bool {
 		return true
 	}
 
-	return false
-}
-
-//IsVschemaDDL returns true if the query is an Vschema alter ddl.
-func IsVschemaDDL(ddl DDLStatement) bool {
-	switch ddlStatement := ddl.(type) {
-	case *DDL:
-		switch ddlStatement.Action {
-		case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
-			return true
-		}
-	}
 	return false
 }
 

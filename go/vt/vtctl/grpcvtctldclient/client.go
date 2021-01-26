@@ -1,19 +1,31 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package grpcvtctldclient contains the gRPC version of the vtctld client
 // protocol.
 package grpcvtctldclient
 
 import (
-	"context"
 	"flag"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
@@ -40,6 +52,9 @@ type gRPCVtctldClient struct {
 	c  vtctlservicepb.VtctldClient
 }
 
+//go:generate -command grpcvtctldclient go run ./codegen
+//go:generate grpcvtctldclient -out client_gen.go
+
 func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
 	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
 	if err != nil {
@@ -57,6 +72,20 @@ func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
 	}, nil
 }
 
+// NewWithDialOpts returns a vtctldclient.VtctldClient configured with the given
+// DialOptions. It is exported for use in vtadmin.
+func NewWithDialOpts(addr string, failFast grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+	conn, err := grpcclient.Dial(addr, failFast, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gRPCVtctldClient{
+		cc: conn,
+		c:  vtctlservicepb.NewVtctldClient(conn),
+	}, nil
+}
+
 func (client *gRPCVtctldClient) Close() error {
 	err := client.cc.Close()
 	if err == nil {
@@ -64,25 +93,6 @@ func (client *gRPCVtctldClient) Close() error {
 	}
 
 	return err
-}
-
-// (TODO:@amason) - This boilerplate should end up the same for all ~70 commands
-// .... we should do this with code gen.
-
-func (client *gRPCVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.GetKeyspace(ctx, in, opts...)
-}
-
-func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
 func init() {

@@ -24,9 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"golang.org/x/sync/errgroup"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -84,7 +85,7 @@ type (
 		// Will replace all of the Topo functions.
 		ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 
-		ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error
+		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error
 
 		SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error
 
@@ -125,10 +126,16 @@ type (
 		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
+		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)
 		GetDDLStrategy() string
+
+		GetSessionUUID() string
+
+		SetSessionEnableSystemSettings(bool) error
+		GetSessionEnableSystemSettings() bool
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)

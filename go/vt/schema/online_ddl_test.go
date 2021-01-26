@@ -20,12 +20,23 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestCreateUUID(t *testing.T) {
 	_, err := createUUID("_")
 	assert.NoError(t, err)
+}
+
+func TestIsDirect(t *testing.T) {
+	assert.True(t, DDLStrategyDirect.IsDirect())
+	assert.False(t, DDLStrategyGhost.IsDirect())
+	assert.False(t, DDLStrategyPTOSC.IsDirect())
+	assert.True(t, DDLStrategy("").IsDirect())
+	assert.False(t, DDLStrategy("gh-ost").IsDirect())
+	assert.False(t, DDLStrategy("pt-osc").IsDirect())
+	assert.True(t, DDLStrategy("something").IsDirect())
 }
 
 func TestParseDDLStrategy(t *testing.T) {
@@ -36,6 +47,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		err              error
 	}{
 		{
+			strategyVariable: "direct",
+			strategy:         DDLStrategyDirect,
+		},
+		{
 			strategyVariable: "gh-ost",
 			strategy:         DDLStrategyGhost,
 		},
@@ -44,7 +59,7 @@ func TestParseDDLStrategy(t *testing.T) {
 			strategy:         DDLStrategyPTOSC,
 		},
 		{
-			strategy: DDLStrategyNormal,
+			strategy: DDLStrategyDirect,
 		},
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
@@ -80,6 +95,19 @@ func TestIsOnlineDDLUUID(t *testing.T) {
 	for _, tc := range tt {
 		assert.False(t, IsOnlineDDLUUID(tc))
 	}
+}
+
+func TestGetGCUUID(t *testing.T) {
+	uuids := map[string]bool{}
+	count := 20
+	for i := 0; i < count; i++ {
+		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", DDLStrategyDirect, "", "")
+		assert.NoError(t, err)
+		gcUUID := onlineDDL.GetGCUUID()
+		assert.True(t, IsGCUUID(gcUUID))
+		uuids[gcUUID] = true
+	}
+	assert.Equal(t, count, len(uuids))
 }
 
 func TestGetActionStr(t *testing.T) {

@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"gotest.tools/assert"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/require"

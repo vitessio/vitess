@@ -1,6 +1,7 @@
 # SHOW
 "show create database"
 "plan building not supported"
+Gen4 plan same as above
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
@@ -13,14 +14,17 @@
 # Unsupported INSERT statement with a target destination
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
 "unsupported: INSERT with a target destination"
+Gen4 plan same as above
 
 # Unsupported delete statement with a replica target destination
 "DELETE FROM `user[-]@replica`.user_metadata limit 1"
 "unsupported: delete statement with a replica target"
+Gen4 plan same as above
 
 # Unsupported update statement with a replica target destination
 "update `user[-]@replica`.user_metadata set id=2"
 "unsupported: update statement with a replica target"
+Gen4 plan same as above
 
 # scatter order by with * expression
 "select * from user order by id"
@@ -169,146 +173,182 @@
 # subqueries in update
 "update user set col = (select id from unsharded)"
 "unsupported: subqueries in sharded DML"
+Gen4 plan same as above
 
 # sharded subqueries in unsharded update
 "update unsharded set col = (select id from user)"
 "unsupported: sharded subqueries in DML"
+Gen4 plan same as above
 
 # sharded join unsharded subqueries in unsharded update
 "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)"
 "unsupported: sharded subqueries in DML"
+Gen4 plan same as above
 
 # subqueries in delete
 "delete from user where col = (select id from unsharded)"
 "unsupported: subqueries in sharded DML"
+Gen4 plan same as above
 
 # sharded subqueries in unsharded delete
 "delete from unsharded where col = (select id from user)"
 "unsupported: sharded subqueries in DML"
+Gen4 plan same as above
 
 # sharded delete with limit clasue
 "delete from user_extra limit 10"
 "unsupported: multi shard delete with limit"
+Gen4 plan same as above
 
 # sharded subquery in unsharded subquery in unsharded delete
 "delete from unsharded where col = (select id from unsharded where id = (select id from user))"
 "unsupported: sharded subqueries in DML"
+Gen4 plan same as above
 
 # sharded join unsharded subqueries in unsharded delete
 "delete from unsharded where col = (select id from unsharded join user on unsharded.id = user.id)"
 "unsupported: sharded subqueries in DML"
+Gen4 plan same as above
 
 # scatter update with limit clause
 "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
 "unsupported: multi shard update with limit"
+Gen4 plan same as above
 
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
 "unsupported: multi-shard or vindex write statement"
+Gen4 plan same as above
 
 # update changes primary vindex column
 "update user set id = 1 where id = 1"
 "unsupported: You can't update primary vindex columns. Invalid update on vindex: user_index"
+Gen4 plan same as above
 
 # update changes non owned vindex column
 "update music_extra set music_id = 1 where user_id = 1"
 "unsupported: You can only update owned vindexes. Invalid update on vindex: music_user_map"
+Gen4 plan same as above
 
 # update changes non lookup vindex column
 "update user_metadata set md5 = 1 where user_id = 1"
 "unsupported: You can only update lookup vindexes. Invalid update on vindex: user_md5_index"
+Gen4 plan same as above
 
 # update with complex set clause
 "update music set id = id + 1 where id = 1"
 "unsupported: Only values are supported. Invalid update on column: id"
+Gen4 plan same as above
 
 # update by primary keyspace id, changing one vindex column, limit without order clause
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10"
 "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
+Gen4 plan same as above
 
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
 "unsupported: subqueries in sharded DML"
+Gen4 plan same as above
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
 "unsupported: multi-shard or vindex write statement"
+Gen4 plan same as above
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
 "unsupported: multi-shard or vindex write statement"
+Gen4 plan same as above
 
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
 "unsupported: sharded subquery in insert values"
+Gen4 plan same as above
 
 # unsharded insert with mismatched keyspaces"
 "insert into unsharded select col from user where id=1"
 "unsupported: sharded subquery in insert values"
+Gen4 plan same as above
 
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
 "unsupported: auto-inc and select in insert"
+Gen4 plan same as above
 
 # unsharded insert, with sharded subquery in insert value
 "insert into unsharded values((select 1 from user), 1)"
 "unsupported: sharded subquery in insert values"
+Gen4 plan same as above
 
 # unsharded insert, no col list with auto-inc
 "insert into unsharded_auto values(1,1)"
 "column list required for tables with auto-inc columns"
+Gen4 plan same as above
 
 # unsharded insert, col list does not match values
 "insert into unsharded_auto(id, val) values(1)"
 "column list doesn't match values"
+Gen4 plan same as above
 
 # sharded upsert can't change vindex
 "insert into user(id) values(1) on duplicate key update id = 3"
 "unsupported: DML cannot change vindex column"
+Gen4 plan same as above
 
 # sharded upsert can't change vindex using values function
 "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(id)"
 "unsupported: DML cannot change vindex column"
+Gen4 plan same as above
 
 # sharded insert from select
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
+Gen4 plan same as above
 
 # sharded replace no vindex
 "replace into user(val) values(1, 'foo')"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # sharded replace with vindex
 "replace into user(id, name) values(1, 'foo')"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # replace no column list
 "replace into user values(1, 2, 3)"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # replace with mimatched column list
 "replace into user(id) values (1, 2)"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # replace with one vindex
 "replace into user(id) values (1)"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # replace with non vindex on vindex-enabled table
 "replace into user(nonid) values (2)"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # replace with all vindexes supplied
 "replace into user(nonid, name, id) values (2, 'foo', 1)"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # replace for non-vindex autoinc
 "replace into user_extra(nonid) values (2)"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 # replace with multiple rows
 "replace into user(id) values (1), (2)"
 "unsupported: REPLACE INTO with sharded schema"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where id = 1 and id = 2"
 "unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
@@ -337,18 +377,22 @@
 # delete with unknown reference
 "delete music from user where id = 1"
 "Unknown table 'music' in MULTI DELETE"
+Gen4 plan same as above
 
 # delete with multi-table targets
 "delete music,user from music inner join user where music.id = user.id"
 "unsupported: multi-shard or vindex write statement"
+Gen4 plan same as above
 
 # order by inside and outside parenthesis select
 "(select 1 from user order by 1 desc) order by 1 asc limit 2"
 "can't do ORDER BY on top of ORDER BY"
+Gen4 plan same as above
 
 # ambiguous ORDER BY
 "select id from user order by id union all select id from music order by id desc"
 "Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
+Gen4 plan same as above
 
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"
@@ -361,18 +405,22 @@
 # insert using select get_lock from table
 "insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
 "unsupported: insert into select"
+Gen4 plan same as above
 
 # union with SQL_CALC_FOUND_ROWS 
 "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
 "SQL_CALC_FOUND_ROWS not supported with union"
+Gen4 plan same as above
 
 # set with DEFAULT - vitess aware
 "set workload = default"
 "DEFAULT not supported for @@workload"
+Gen4 plan same as above
 
 # set with DEFAULT - reserved connection
 "set sql_mode = default"
 "DEFAULT not supported for @@sql_mode"
+Gen4 plan same as above
 
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
@@ -388,24 +436,29 @@
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"
-"Complex select queries are not supported in create view statements"
+"Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with sharded limit
 "create view user.view_a as select id from user order by id limit 10"
-"Complex select queries are not supported in create view statements"
+"Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with top level subquery in select
 "create view user.view_a as select a, (select col from user) from unsharded"
-"Complex select queries are not supported in create view statements"
+"Complex select queries are not supported in create or alter view statements"
 
 # create view with sql_calc_found_rows with limit
 "create view user.view_a as select sql_calc_found_rows * from music limit 100"
-"Complex select queries are not supported in create view statements"
+"Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with sql_calc_found_rows with group by and having
 "create view user.view_a as select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
-"Complex select queries are not supported in create view statements"
+"Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
+Gen4 plan same as above

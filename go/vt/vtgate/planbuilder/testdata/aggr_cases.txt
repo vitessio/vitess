@@ -17,6 +17,7 @@
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Aggregate on unique sharded
 "select count(*), col from user where id = 1"
@@ -39,6 +40,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Aggregate detection (non-aggregate function)
 "select fun(1), col from user"
@@ -57,6 +59,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # select distinct with unique vindex for scatter route.
 "select distinct col1, id from user"
@@ -75,6 +78,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # distinct and group by together for single route.
 "select distinct col1, id from user group by col1"
@@ -93,6 +97,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # scatter group by a text column
 "select count(*), a, textcol1, b from user group by a, textcol1, b"
@@ -342,6 +347,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex and other column should use a simple route
 "select id, col, count(*) from user group by id, col"
@@ -360,6 +366,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # group by a non-vindex column should use an OrderdAggregate primitive
 "select col, count(*) from user group by col"
@@ -438,6 +445,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where alias from select list is used
 "select id as val, 1+count(*) from user group by val"
@@ -456,6 +464,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where expression is qualified (alias should be ignored)
 "select val as id, 1+count(*) from user group by user.id"
@@ -474,6 +483,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"
@@ -492,6 +502,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having id=1 and c=10"
@@ -646,6 +657,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # count with distinct unique vindex
 "select col, count(distinct id) from user group by col"
@@ -1197,6 +1209,7 @@
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # routing rules for aggregates
 "select id, count(*) from route2 group by id"
@@ -1233,6 +1246,7 @@
     "Table": "ref"
   }
 }
+Gen4 plan same as above
 
 # distinct and aggregate functions missing group by
 "select distinct a, count(*) from user"

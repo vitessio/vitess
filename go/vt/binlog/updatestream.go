@@ -17,7 +17,7 @@ limitations under the License.
 package binlog
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

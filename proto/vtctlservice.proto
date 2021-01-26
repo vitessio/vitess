@@ -31,8 +31,39 @@ service Vtctl {
 
 // Service Vtctld exposes gRPC endpoints for each vt command.
 service Vtctld {
+  // FindAllShardsInKeyspace returns a map of shard names to shard references
+  // for a given keyspace.
+  rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
+  // GetBackups returns all the backups for a shard.
+  rpc GetBackups(vtctldata.GetBackupsRequest) returns (vtctldata.GetBackupsResponse) {};
+  // GetCellInfoNames returns all the cells for which we have a CellInfo object,
+  // meaning we have a topology service registered.
+  rpc GetCellInfoNames(vtctldata.GetCellInfoNamesRequest) returns (vtctldata.GetCellInfoNamesResponse) {};
+  // GetCellInfo returns the information for a cell.
+  rpc GetCellInfo(vtctldata.GetCellInfoRequest) returns (vtctldata.GetCellInfoResponse) {};
+  // GetCellsAliases returns a mapping of cell alias to cells identified by that
+  // alias.
+  rpc GetCellsAliases(vtctldata.GetCellsAliasesRequest) returns (vtctldata.GetCellsAliasesResponse) {};
   // GetKeyspace reads the given keyspace from the topo and returns it.
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetSchema returns the schema for a tablet, or just the schema for the
+  // specified tables in that tablet.
+  rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
+  // GetSrvVSchema returns a the SrvVSchema for a cell.
+  rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
+  // GetTablet returns information about a tablet.
+  rpc GetTablet(vtctldata.GetTabletRequest) returns (vtctldata.GetTabletResponse) {};
+  // GetTablets returns tablets, optionally filtered by keyspace and shard.
+  rpc GetTablets(vtctldata.GetTabletsRequest) returns (vtctldata.GetTabletsResponse) {};
+  // GetVSchema returns the vschema for a keyspace.
+  rpc GetVSchema(vtctldata.GetVSchemaRequest) returns (vtctldata.GetVSchemaResponse) {};
+  // InitShardPrimary sets the initial primary for a shard. Will make all other
+  // tablets in the shard replicas of the provided primary.
+  //
+  // WARNING: This could cause data loss on an already replicating shard.
+  // PlannedReparentShard or EmergencyReparentShard should be used in those
+  // cases instead.
+  rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
 }

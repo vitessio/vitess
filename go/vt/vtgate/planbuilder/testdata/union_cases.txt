@@ -15,6 +15,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # union distinct between two scatter selects
 "select id from user union select id from music"
@@ -54,6 +55,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union all between two SelectEqualUnique
 "select id from user where id = 1 union all select id from user where id = 5"
@@ -96,6 +98,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 #almost dereks query - two queries with order by and limit being scattered to two different sets of tablets
 "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)"
@@ -144,6 +147,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
@@ -162,6 +166,7 @@
     "Table": "user"
   }
 }
+Gen4 plan same as above
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
@@ -228,6 +233,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union all on scatter and single route
 "select id from user where id = 1 union select id from user where id = 1  union all select id from user"
@@ -266,6 +272,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
@@ -304,6 +311,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
@@ -342,6 +350,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"
@@ -402,6 +411,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
@@ -457,6 +467,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
@@ -517,6 +528,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union with the same target shard because of vindex
 "select * from music where id = 1 union select * from user where id = 1"
@@ -564,6 +576,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
@@ -611,6 +624,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT
 "(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)"
@@ -652,6 +666,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # multiple unions
 "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user"
@@ -691,6 +706,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union distinct between a scatter query and a join (other side)
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
@@ -749,6 +765,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # union distinct between a scatter query and a join (other side)
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
@@ -807,11 +824,14 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
 "Incorrect usage of UNION and LIMIT - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
+Gen4 plan same as above
 
 # different number of columns
 "select id, 42 from user where id = 1 union all select id from user where id = 5"
 "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000) during query: select id, 42 from user where id = 1 union all select id from user where id = 5"
+Gen4 plan same as above

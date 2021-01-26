@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/key"
@@ -36,6 +38,10 @@ import (
 func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
+
+		if vschema.Planner() != V3 {
+			return newBuildSelectPlan(sel, vschema)
+		}
 
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
@@ -54,6 +60,112 @@ func buildSelectPlan(query string) func(sqlparser.Statement, ContextVSchema) (en
 		}
 		return pb.plan.Primitive(), nil
 	}
+}
+
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {
+	switch node := plan.(type) {
+	case *route:
+		sel := node.Select.(*sqlparser.Select)
+		offset := len(sel.SelectExprs)
+		sel.SelectExprs = append(sel.SelectExprs, expr)
+		return offset, nil
+	case *joinV4:
+		lhsSolves := node.Left.ContainsTables()
+		rhsSolves := node.Right.ContainsTables()
+		deps := semTable.Dependencies(expr.Expr)
+		switch {
+		case deps.IsSolvedBy(lhsSolves):
+			offset, err := pushProjection(expr, node.Left, semTable)
+			if err != nil {
+				return 0, err
+			}
+			node.Cols = append(node.Cols, -(offset + 1))
+		case deps.IsSolvedBy(rhsSolves):
+			offset, err := pushProjection(expr, node.Right, semTable)
+			if err != nil {
+				return 0, err
+			}
+			node.Cols = append(node.Cols, offset+1)
+		default:
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
+		}
+		return len(node.Cols) - 1, nil
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
+	}
+}
+
+func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (err error) {
+	if len(exprs) == 0 {
+		return nil
+	}
+	switch node := plan.(type) {
+	case *route:
+		sel := node.Select.(*sqlparser.Select)
+		finalExpr := reorderExpression(exprs[0], node.tables, semTable)
+		for i, expr := range exprs {
+			if i == 0 {
+				continue
+			}
+			finalExpr = &sqlparser.AndExpr{
+				Left:  finalExpr,
+				Right: reorderExpression(expr, node.tables, semTable),
+			}
+		}
+		if sel.Where != nil {
+			finalExpr = &sqlparser.AndExpr{
+				Left:  sel.Where.Expr,
+				Right: finalExpr,
+			}
+		}
+		sel.Where = &sqlparser.Where{
+			Type: sqlparser.WhereClause,
+			Expr: finalExpr,
+		}
+		return nil
+	case *joinV4:
+		var lhs, rhs []sqlparser.Expr
+		lhsSolves := node.Left.ContainsTables()
+		rhsSolves := node.Right.ContainsTables()
+		for _, expr := range exprs {
+			deps := semTable.Dependencies(expr)
+			switch {
+			case deps.IsSolvedBy(lhsSolves):
+				lhs = append(lhs, expr)
+			case deps.IsSolvedBy(rhsSolves):
+				rhs = append(rhs, expr)
+			default:
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
+			}
+		}
+		err := pushPredicate(lhs, node.Left, semTable)
+		if err != nil {
+			return err
+		}
+		err = pushPredicate(rhs, node.Right, semTable)
+		return err
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
+	}
+}
+
+func reorderExpression(expr sqlparser.Expr, solves semantics.TableSet, semTable *semantics.SemTable) sqlparser.Expr {
+	switch compExpr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if compExpr.Operator == sqlparser.EqualOp {
+			if !dependsOnRoute(solves, compExpr.Left, semTable) && dependsOnRoute(solves, compExpr.Right, semTable) {
+				compExpr.Left, compExpr.Right = compExpr.Right, compExpr.Left
+			}
+		}
+	}
+	return expr
+}
+
+func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *semantics.SemTable) bool {
+	if node, ok := expr.(*sqlparser.ColName); ok {
+		return semTable.Dependencies(node).IsSolvedBy(solves)
+	}
+	return !sqlparser.IsValue(expr)
 }
 
 // processSelect builds a primitive tree for the given query or subquery.

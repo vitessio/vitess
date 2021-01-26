@@ -97,6 +97,14 @@ type IndexOption struct {
 	String string
 }
 
+// TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
+type TableOption struct {
+	Name   string
+	Value  *Literal
+	String string
+	Tables TableNames
+}
+
 // ColumnKeyOption indicates whether or not the given column is defined as an
 // index element and contains the type of the option
 type ColumnKeyOption int
@@ -808,6 +816,22 @@ func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
 }
 
+// AddWhere adds the boolean expression to the
+// WHERE clause as an AND condition.
+func (node *Update) AddWhere(expr Expr) {
+	if node.Where == nil {
+		node.Where = &Where{
+			Type: WhereClause,
+			Expr: expr,
+		}
+		return
+	}
+	node.Where.Expr = &AndExpr{
+		Left:  node.Where.Expr,
+		Right: expr,
+	}
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -855,8 +879,6 @@ func (action DDLAction) ToString() string {
 		return RenameStr
 	case TruncateDDLAction:
 		return TruncateStr
-	case FlushDDLAction:
-		return FlushStr
 	case CreateVindexDDLAction:
 		return CreateVindexStr
 	case DropVindexDDLAction:
@@ -1209,6 +1231,8 @@ func (ty ShowCommandType) ToString() string {
 		return DatabaseStr
 	case Function:
 		return FunctionStr
+	case Privilege:
+		return PrivilegeStr
 	case Procedure:
 		return ProcedureStr
 	case StatusGlobal:
@@ -1219,9 +1243,49 @@ func (ty ShowCommandType) ToString() string {
 		return VariableGlobalStr
 	case VariableSession:
 		return VariableSessionStr
+	case Keyspace:
+		return KeyspaceStr
 	default:
 		return "Unknown ShowCommandType"
 	}
+}
+
+// ToString returns the DropKeyType as a string
+func (key DropKeyType) ToString() string {
+	switch key {
+	case PrimaryKeyType:
+		return PrimaryKeyTypeStr
+	case ForeignKeyType:
+		return ForeignKeyTypeStr
+	case NormalKeyType:
+		return NormalKeyTypeStr
+	default:
+		return "Unknown DropKeyType"
+	}
+}
+
+// ToString returns the LockOptionType as a string
+func (lock LockOptionType) ToString() string {
+	switch lock {
+	case NoneType:
+		return NoneTypeStr
+	case DefaultType:
+		return DefaultTypeStr
+	case SharedType:
+		return SharedTypeStr
+	case ExclusiveType:
+		return ExclusiveTypeStr
+	default:
+		return "Unknown type LockOptionType"
+	}
+}
+
+// CompliantName is used to get the name of the bind variable to use for this column name
+func (node *ColName) CompliantName(suffix string) string {
+	if !node.Qualifier.IsEmpty() {
+		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName() + suffix
+	}
+	return node.Name.CompliantName() + suffix
 }
 
 // AtCount represents the '@' count in ColIdent

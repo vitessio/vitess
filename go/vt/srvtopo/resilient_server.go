@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -47,6 +47,7 @@ var (
 	// setting the watch fails, we will use the last known value until
 	// srv_topo_cache_ttl elapses and we only try to re-establish the watch
 	// once every srv_topo_cache_refresh interval.
+	srvTopoTimeout      = flag.Duration("srv_topo_timeout", 1*time.Second, "topo server timeout")
 	srvTopoCacheTTL     = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 	srvTopoCacheRefresh = flag.Duration("srv_topo_cache_refresh", 1*time.Second, "how frequently to refresh the topology for cached entries")
 )
@@ -288,9 +289,9 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 					log.Errorf("GetSrvKeyspaceNames uncaught panic, cell :%v, err :%v)", cell, err)
 				}
 			}()
-
-			result, err := server.topoServer.GetSrvKeyspaceNames(ctx, cell)
-
+			newCtx, cancel := context.WithTimeout(ctx, *srvTopoTimeout)
+			defer cancel()
+			result, err := server.topoServer.GetSrvKeyspaceNames(newCtx, cell)
 			entry.mutex.Lock()
 			defer func() {
 				close(entry.refreshingChan)
@@ -308,7 +309,8 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 				server.counts.Add(errorCategory, 1)
 				if entry.insertionTime.IsZero() {
 					log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, cell, err)
-
+				} else if newCtx.Err() == context.DeadlineExceeded {
+					log.Errorf("GetSrvKeyspaceNames(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, cell, err, entry.value)
 				} else if entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL {
 					server.counts.Add(cachedCategory, 1)
 					log.Warningf("GetSrvKeyspaceNames(%v, %v) failed: %v (keeping cached value: %v)", ctx, cell, err, entry.value)
@@ -320,7 +322,7 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 			}
 
 			entry.lastError = err
-			entry.lastErrorCtx = ctx
+			entry.lastErrorCtx = newCtx
 		}()
 	}
 

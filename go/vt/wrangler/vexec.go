@@ -378,8 +378,6 @@ type ReplicationStatus struct {
 	StopPos string
 	// State represents the state column from the _vt.vreplication table.
 	State string
-	// MaxReplicationLag represents the max_replication_lag column from the _vt.vreplication table.
-	MaxReplicationLag int64
 	// DbName represents the db_name column from the _vt.vreplication table.
 	DBName string
 	// TransactionTimestamp represents the transaction_timestamp column from the _vt.vreplication table.
@@ -395,7 +393,7 @@ type ReplicationStatus struct {
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, master *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, maxReplicationLag, timeUpdated, transactionTimestamp int64
+	var id, timeUpdated, transactionTimestamp int64
 	var state, dbName, pos, stopPos, message string
 	var bls binlogdatapb.BinlogSource
 	id, err = evalengine.ToInt64(row[0])
@@ -407,10 +405,6 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 	}
 	pos = row[2].ToString()
 	stopPos = row[3].ToString()
-	maxReplicationLag, err = evalengine.ToInt64(row[4])
-	if err != nil {
-		return nil, "", err
-	}
 	state = row[5].ToString()
 	dbName = row[6].ToString()
 	timeUpdated, err = evalengine.ToInt64(row[7])
@@ -431,7 +425,6 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		StopPos:              stopPos,
 		State:                state,
 		DBName:               dbName,
-		MaxReplicationLag:    maxReplicationLag,
 		TransactionTimestamp: transactionTimestamp,
 		TimeUpdated:          timeUpdated,
 		Message:              message,
@@ -477,8 +470,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			sourceShards.Insert(status.Bls.Shard)
 			rsrStatus = append(rsrStatus, status)
 
-			transactionTimestamp := time.Unix(status.TransactionTimestamp, 0)
-			replicationLag := time.Since(transactionTimestamp)
+			timeUpdated := time.Unix(status.TimeUpdated, 0)
+			replicationLag := time.Since(timeUpdated)
 			if replicationLag.Seconds() > float64(rsr.MaxVReplicationLag) {
 				rsr.MaxVReplicationLag = int64(replicationLag.Seconds())
 			}
@@ -575,7 +568,7 @@ func dumpStreamListAsJSON(replStatus *ReplicationStatusResult, wr *Wrangler) err
 func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	list := strings.Join(workflows, ", ")
 	if list == "" {
-		wr.Logger().Printf("No workflows found in keyspace %s", keyspace)
+		wr.Logger().Printf("No workflows found in keyspace %s\n", keyspace)
 		return
 	}
 	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)

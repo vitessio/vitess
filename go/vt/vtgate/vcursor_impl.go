@@ -23,6 +23,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/common/log"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
@@ -35,7 +39,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -97,13 +101,14 @@ type vcursorImpl struct {
 	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
+	semTable              *semantics.SemTable
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
 	return vc.keyspace
 }
 
-func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLStatement) error {
+func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error {
 	srvVschema := vc.vm.GetCurrentSrvVschema()
 	if srvVschema == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
@@ -117,8 +122,8 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL sqlparser.DDLS
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
 	var ksName string
-	if !vschemaDDL.GetTable().IsEmpty() {
-		ksName = vschemaDDL.GetTable().Qualifier.String()
+	if !vschemaDDL.Table.IsEmpty() {
+		ksName = vschemaDDL.Table.Qualifier.String()
 	}
 	if ksName == "" {
 		ksName = keyspace
@@ -324,7 +329,7 @@ func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *vcursorImpl) SysVarSetEnabled() bool {
-	return *sysVarSetEnabled
+	return vc.GetSessionEnableSystemSettings()
 }
 
 // KeyspaceExists provides whether the keyspace exists or not.
@@ -332,6 +337,7 @@ func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
 }
 
+// AllKeyspace implements the ContextVSchema interface
 func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
@@ -341,6 +347,32 @@ func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 		kss = append(kss, ks.Keyspace)
 	}
 	return kss, nil
+}
+
+// Planner implements the ContextVSchema interface
+func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
+	if vc.safeSession.Options != nil &&
+		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
+		return vc.safeSession.Options.PlannerVersion
+	}
+	switch strings.ToLower(*plannerVersion) {
+	case "v3":
+		return planbuilder.V3
+	case "v4":
+		return planbuilder.V4
+	case "v4greedy", "greedy":
+		return planbuilder.V4GreedyOnly
+	case "left2right":
+		return planbuilder.V4Left2Right
+	}
+
+	log.Warn("unknown planner version configured. using the default")
+	return planbuilder.V3
+}
+
+// GetSemTable implements the ContextVSchema interface
+func (vc *vcursorImpl) GetSemTable() *semantics.SemTable {
+	return vc.semTable
 }
 
 // TargetString returns the current TargetString of the session.
@@ -603,6 +635,11 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
+// SetPlannerVersion implements the SessionActions interface
+func (vc *vcursorImpl) SetPlannerVersion(v planbuilder.PlannerVersion) {
+	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
+}
+
 // SetFoundRows implements the SessionActions interface
 func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.FoundRows = foundRows
@@ -617,6 +654,22 @@ func (vc *vcursorImpl) SetDDLStrategy(strategy string) {
 // SetReadAfterWriteGTID implements the SessionActions interface
 func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
+}
+
+// GetSessionUUID implements the SessionActions interface
+func (vc *vcursorImpl) GetSessionUUID() string {
+	return vc.safeSession.GetSessionUUID()
+}
+
+// SetSessionEnableSystemSettings implements the SessionActions interface
+func (vc *vcursorImpl) SetSessionEnableSystemSettings(allow bool) error {
+	vc.safeSession.SetSessionEnableSystemSettings(allow)
+	return nil
+}
+
+// GetSessionEnableSystemSettings implements the SessionActions interface
+func (vc *vcursorImpl) GetSessionEnableSystemSettings() bool {
+	return vc.safeSession.GetSessionEnableSystemSettings()
 }
 
 // SetReadAfterWriteGTID implements the SessionActions interface

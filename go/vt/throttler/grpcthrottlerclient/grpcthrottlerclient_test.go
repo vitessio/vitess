@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/throttler/grpcthrottlerserver"
 	"vitess.io/vitess/go/vt/throttler/throttlerclienttest"

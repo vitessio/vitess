@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
