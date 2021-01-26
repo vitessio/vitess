@@ -19,11 +19,7 @@ package planbuilder
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -38,7 +34,10 @@ func TestCreateDB(t *testing.T) {
 	}
 
 	// default behaviour
-	_, err := TestBuilder("create database test", vschema)
+	plan, err := TestBuilder("create database test", vschema)
+	require.NoError(t, err)
+
+	_, err = plan.Instructions.Execute(nil, nil, true)
 	require.EqualError(t, err, "create database not allowed")
 
 	// we make sure to restore the state so we don't destabilize other tests
@@ -48,12 +47,12 @@ func TestCreateDB(t *testing.T) {
 	}()
 
 	// setting custom behaviour for CREATE DATABASE
-	s := &engine.SingleRow{}
-	databaseCreator = func(stmt *sqlparser.CreateDatabase, vschema ContextVSchema) (engine.Primitive, error) {
-		return s, nil
+	databaseCreator = func(name string) error {
+		return nil
 	}
 
-	output, err := TestBuilder("create database test", vschema)
+	plan, err = TestBuilder("create database test", vschema)
 	require.NoError(t, err)
-	assert.Same(t, s, output.Instructions)
+	_, err = plan.Instructions.Execute(nil, nil, true)
+	require.NoError(t, err)
 }

@@ -18,19 +18,15 @@ package planbuilder
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// PlanFunc is the function signature that you need to implement to add a custom CREATE DATABASE handler
-type PlanFunc = func(stmt *sqlparser.CreateDatabase, vschema ContextVSchema) (engine.Primitive, error)
-
-var databaseCreator = defaultCreateDatabase
+// CreateDatabasePlug is the function signature that you need to implement to add a custom CREATE DATABASE handler
+type CreateDatabasePlug = func(name string) error
 
 //goland:noinspection GoVarAndConstTypeMayBeOmitted
-var _ PlanFunc = databaseCreator
+var databaseCreator CreateDatabasePlug = defaultCreateDatabase
 
-func defaultCreateDatabase(_ *sqlparser.CreateDatabase, _ ContextVSchema) (engine.Primitive, error) {
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
+func defaultCreateDatabase(_ string) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
 }
