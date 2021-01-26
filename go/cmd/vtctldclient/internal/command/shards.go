@@ -28,6 +28,12 @@ import (
 )
 
 var (
+	// CreateShard makes a CreateShard gRPC request to a vtctld.
+	CreateShard = &cobra.Command{
+		Use:  "CreateShard <keyspace/shard>",
+		Args: cobra.ExactArgs(1),
+		RunE: commandCreateShard,
+	}
 	// GetShard makes a GetShard gRPC request to a vtctld.
 	GetShard = &cobra.Command{
 		Use:  "GetShard <keyspace/shard>",
@@ -41,6 +47,37 @@ var (
 		RunE: commandRemoveShardCell,
 	}
 )
+
+var createShardOptions = struct {
+	Force         bool
+	IncludeParent bool
+}{}
+
+func commandCreateShard(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.CreateShard(commandCtx, &vtctldatapb.CreateShardRequest{
+		Keyspace:      keyspace,
+		ShardName:     shard,
+		Force:         createShardOptions.Force,
+		IncludeParent: createShardOptions.IncludeParent,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
 
 func commandGetShard(cmd *cobra.Command, args []string) error {
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
@@ -97,6 +134,10 @@ func commandRemoveShardCell(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	CreateShard.Flags().BoolVarP(&createShardOptions.Force, "force", "f", false, "")
+	CreateShard.Flags().BoolVarP(&createShardOptions.IncludeParent, "include-parent", "p", false, "")
+	Root.AddCommand(CreateShard)
+
 	Root.AddCommand(GetShard)
 
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
