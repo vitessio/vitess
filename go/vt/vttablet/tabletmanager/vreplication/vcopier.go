@@ -228,7 +228,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			default:
 			}
 			// verify throttler is happy, otherwise keep looping
-			if !vc.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
 				break
 			}
 		}
