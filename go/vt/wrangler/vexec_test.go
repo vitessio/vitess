@@ -37,7 +37,7 @@ func TestVExec(t *testing.T) {
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
 	defer env.close()
 	var logger = logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -73,6 +73,10 @@ func TestVExec(t *testing.T) {
 
 	vx.plannedQuery = plan.parsedQuery.Query
 	vx.exec()
+
+	res, err := wr.getStreams(ctx, workflow, keyspace)
+	require.NoError(t, err)
+	require.Less(t, res.MaxVReplicationLag, int64(3 /*seconds*/)) // lag should be very small
 
 	type TestCase struct {
 		name        string
@@ -149,15 +153,15 @@ func TestVExec(t *testing.T) {
 	dryRunResults := []string{
 		"Query: delete from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'",
 		"will be run on the following streams in keyspace target for workflow wrWorkflow:\n\n",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
-		"|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID | MAXREPLICATIONLAG |",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
-		"| -80/zone1-0000000200 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |                 0 |",
-		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |                   |",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
-		"| 80-/zone1-0000000210 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |                 0 |",
-		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |                   |",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
+		"|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
+		"| -80/zone1-0000000200 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |",
+		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
+		"| 80-/zone1-0000000210 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |",
+		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
 }
@@ -174,7 +178,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	ctx := context.Background()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -227,7 +231,6 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Pos": "pos",
 					"StopPos": "",
 					"State": "Copying",
-					"MaxReplicationLag": 0,
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
@@ -263,7 +266,6 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Pos": "pos",
 					"StopPos": "",
 					"State": "Copying",
-					"MaxReplicationLag": 0,
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
@@ -310,15 +312,15 @@ func TestWorkflowListStreams(t *testing.T) {
 will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
-|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID | MAXREPLICATIONLAG |
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
-| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |                 0 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |                   |
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
-| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |                 0 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |                   |
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
++----------------------+----+--------------------------------+---------+-----------+--------------+
+|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID |
++----------------------+----+--------------------------------+---------+-----------+--------------+
+| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |
+|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |
++----------------------+----+--------------------------------+---------+-----------+--------------+
+| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |
+|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |
++----------------------+----+--------------------------------+---------+-----------+--------------+
 
 
 
@@ -331,7 +333,7 @@ func TestWorkflowListAll(t *testing.T) {
 	ctx := context.Background()
 	keyspace := "target"
 	workflow := "wrWorkflow"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -350,7 +352,7 @@ func TestVExecValidations(t *testing.T) {
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 
 	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)

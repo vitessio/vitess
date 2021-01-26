@@ -118,7 +118,6 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -1954,7 +1953,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 type VReplicationWorkflowAction string
 
 const (
-	vReplicationWorkflowActionStart          = "start"
+	vReplicationWorkflowActionCreate         = "create"
 	vReplicationWorkflowActionSwitchTraffic  = "switchtraffic"
 	vReplicationWorkflowActionReverseTraffic = "reversetraffic"
 	vReplicationWorkflowActionComplete       = "complete"
@@ -2002,6 +2001,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	_, err = wr.TopoServer().GetKeyspace(ctx, target)
 	if err != nil {
 		wr.Logger().Errorf("keyspace %s not found", target)
+		return err
 	}
 
 	vrwp := &wrangler.VReplicationWorkflowParams{
@@ -2052,11 +2052,16 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	switch action {
-	case vReplicationWorkflowActionStart:
+	case vReplicationWorkflowActionCreate:
 		switch workflowType {
 		case wrangler.MoveTablesWorkflow:
 			if *sourceKeyspace == "" {
 				return fmt.Errorf("source keyspace is not specified")
+			}
+			_, err := wr.TopoServer().GetKeyspace(ctx, *sourceKeyspace)
+			if err != nil {
+				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)
+				return err
 			}
 			if !*allTables && *tables == "" {
 				return fmt.Errorf("no tables specified to move")
@@ -2085,6 +2090,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	case vReplicationWorkflowActionSwitchTraffic, vReplicationWorkflowActionReverseTraffic:
 		vrwp.Cells = *cells
 		vrwp.TabletTypes = *tabletTypes
+		if vrwp.TabletTypes == "" {
+			vrwp.TabletTypes = "master,replica,rdonly"
+		}
 		vrwp.Timeout = *timeout
 		vrwp.EnableReverseReplication = *reverseReplication
 	case vReplicationWorkflowActionCancel:
@@ -2105,7 +2113,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
 		return err
 	}
-	if !wf.Exists() && action != vReplicationWorkflowActionStart {
+	if !wf.Exists() && action != vReplicationWorkflowActionCreate {
 		return fmt.Errorf("workflow %s does not exist", ksWorkflow)
 	}
 
@@ -2117,7 +2125,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		if copyProgress == nil {
 			wr.Logger().Printf("\nCopy Completed.\n")
 		} else {
-			wr.Logger().Printf("\nCopy Progress (approx.):\n")
+			wr.Logger().Printf("\nCopy Progress (approx):\n")
 			var tables []string
 			for table := range *copyProgress {
 				tables = append(tables, table)
@@ -2154,8 +2162,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return printDetails()
 	case vReplicationWorkflowActionProgress:
 		return printCopyProgress()
-	case vReplicationWorkflowActionStart:
-		err = wf.Start()
+	case vReplicationWorkflowActionCreate:
+		err = wf.Create()
 		if err != nil {
 			return err
 		}
@@ -2200,6 +2208,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			case progress := <-progressCh:
 				if progress.running == progress.total {
 					wr.Logger().Printf("\nWorkflow started successfully with %d stream(s)\n", progress.total)
+					printDetails()
 					return nil
 				}
 				wr.Logger().Printf("%d%% ... ", 100*progress.running/progress.total)
@@ -2669,32 +2678,26 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
 
-	sd, err := wr.GetSchema(ctx, tabletAlias, tableArray, excludeTableArray, *includeViews)
+	resp, err := wr.VtctldServer().GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+		TabletAlias:    tabletAlias,
+		Tables:         tableArray,
+		ExcludeTables:  excludeTableArray,
+		IncludeViews:   *includeViews,
+		TableNamesOnly: *tableNamesOnly,
+		TableSizesOnly: *tableSizesOnly,
+	})
 	if err != nil {
 		return err
 	}
+
 	if *tableNamesOnly {
-		for _, td := range sd.TableDefinitions {
+		for _, td := range resp.Schema.TableDefinitions {
 			wr.Logger().Printf("%v\n", td.Name)
 		}
 		return nil
 	}
 
-	if *tableSizesOnly {
-		sizeTds := make([]*tabletmanagerdatapb.TableDefinition, len(sd.TableDefinitions))
-		for i, td := range sd.TableDefinitions {
-			sizeTds[i] = &tabletmanagerdatapb.TableDefinition{
-				Name:       td.Name,
-				Type:       td.Type,
-				RowCount:   td.RowCount,
-				DataLength: td.DataLength,
-			}
-		}
-
-		sd.TableDefinitions = sizeTds
-	}
-
-	return printJSON(wr.Logger(), sd)
+	return printJSON(wr.Logger(), resp.Schema)
 }
 
 func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
