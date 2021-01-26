@@ -349,3 +349,27 @@ func TestEnableSystemSettings(t *testing.T) {
 	checkedExec(t, conn, "set sql_mode = ''")                       // changing @@sql_mode to empty string
 	assertMatches(t, conn, "select 	@@sql_mode", `[[VARCHAR("")]]`) // @@sql_mode did change
 }
+
+// Tests type consitency through multiple queries
+func TestSystemVariableType(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "delete from test")
+	checkedExec(t, conn, "insert into test (id, val1, val2, val3) values (1, null, 0, 0)")
+
+	// regardeless of the "from", the select @@autocommit should always return a INT32 type
+
+	checkedExec(t, conn, "set autocommit = false")
+	assertMatches(t, conn, `select @@autocommit`, `[[INT32(0)]]`)
+	assertMatches(t, conn, `select @@autocommit test`, `[[INT32(0)]]`)
+
+	checkedExec(t, conn, "set autocommit = true")
+	assertMatches(t, conn, `select @@autocommit`, `[[INT32(1)]]`)
+	assertMatches(t, conn, `select @@autocommit from test`, `[[INT32(1)]]`)
+}
