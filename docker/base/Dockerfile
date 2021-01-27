@@ -22,7 +22,8 @@
 # https://github.com/docker/hub-feedback/issues/292 is fixed.
 
 ARG bootstrap_version=1
-ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
+#ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
+ARG image="vitess/bootstrap:${bootstrap_version}-mariadb104"
 
 FROM "${image}"
 

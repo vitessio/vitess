@@ -16,10 +16,39 @@
 # They could potentially create errant transactions on replicas.
 SET sql_log_bin = 0;
 # Remove anonymous users.
-DELETE FROM mysql.user WHERE User = '';
+#DELETE FROM mysql.user WHERE User = '';
 
 # Disable remote root access (only allow UNIX socket).
-DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
+#DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
+# Remove anonymous users and non-localhost root users.
+
+# use standard DROP USER on anon users and the local root TCP based user
+# The default standard install uses @@hostname as the hostname, but only
+# MariaDB(10.2.3+) supports the EXECUTE IMMEDIATE.
+
+DROP USER /*M!100103 IF EXISTS */ ''@localhost;
+/*M!100203 EXECUTE IMMEDIATE CONCAT('DROP USER IF EXISTS ""@', @@hostname) */;
+
+DROP USER /*M!100103 IF EXISTS */ 'root'@'127.0.0.1';
+DROP USER /*M!100103 IF EXISTS */ 'root'@'::1';
+/*M!100203 EXECUTE IMMEDIATE CONCAT('DROP USER IF EXISTS root@', @@hostname) */;
+
+# MariaDB-10.3 can be a bit more thorough with this FOR synax.
+DELIMITER $$
+/*M!100301 CREATE OR REPLACE PROCEDURE mysql.secure_users()
+FOR insecuser IN ( SELECT user,host FROM mysql.user WHERE user='' OR (user='root' AND host!='localhost') )
+DO
+	EXECUTE IMMEDIATE CONCAT('DROP USER `', insecuser.user, '`@`', insecuser.host, '`');
+END FOR */
+$$
+DELIMITER ;
+/*M!100301 call mysql.secure_users() */;
+/*M!100301 DROP PROCEDURE mysql.secure_users */;
+
+# MySQL-5.7 (not MariaDB) can use direct table manipulation. MariaDB-10.4 has mysql.user as a VIEW
+# so the previous cases of MariaDB will work.
+/*!50701 DELETE FROM mysql.user WHERE User= '' OR (User = 'root' AND Host != 'localhost') */;
+/*!50701 FLUSH PRIVILEGES */;
 
 # Remove test database.
 DROP DATABASE IF EXISTS test;
@@ -98,7 +127,7 @@ GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
 GRANT SELECT
   ON _vt.* TO 'orc_client_user'@'%';
 
-FLUSH PRIVILEGES;
+#FLUSH PRIVILEGES;
 
 RESET SLAVE ALL;
 RESET MASTER;

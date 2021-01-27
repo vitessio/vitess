@@ -143,6 +143,11 @@ mariadb103)
         mariadb-server
     )
     ;;
+mariadb104)
+    PACKAGES=(
+        mariadb-server-10.4
+    )
+    ;;
 *)
     echo "Unknown flavor ${FLAVOR}"
     exit 1
@@ -155,7 +160,7 @@ mysql56|mysql57|mysql80)
     # repo.mysql.com
     add_apt_key 8C718D3B5072E1F5
     ;;
-mariadb|mariadb103)
+mariadb|mariadb103|mariadb104)
     # digitalocean.com
     add_apt_key F1656F24C74CD1D8
     ;;
@@ -180,6 +185,9 @@ mariadb)
     ;;
 mariadb103)
     echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.3/debian buster main' > /etc/apt/sources.list.d/mariadb.list
+    ;;
+mariadb104)
+    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.4/debian buster main' > /etc/apt/sources.list.d/mariadb.list
     ;;
 esac
 
