@@ -206,7 +206,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1)
+	qe.SetQueryPlanCacheCap(1024)
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false /* inReservedConn */)
 	if err != nil {
 		t.Fatal(err)
@@ -236,7 +236,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1)
+	qe.SetQueryPlanCacheCap(1024)
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false /* inReservedConn */)
 	if err != nil {
 		t.Fatal(err)
