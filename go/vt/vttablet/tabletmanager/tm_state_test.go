@@ -170,6 +170,7 @@ func TestStateNonServing(t *testing.T) {
 func TestStateChangeTabletType(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
+	statsTabletTypeCount.ResetAll()
 	tm := newTestTM(t, ts, 2, "ks", "0")
 	defer tm.Stop()
 
