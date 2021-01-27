@@ -766,25 +766,25 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 
 	type testCase struct {
 		Variable string
-		Value    int
+		Value    bool
 		Type     querypb.Type
 	}
 
-	newTestCase := func(varname string, vartype querypb.Type, value int) testCase {
+	newTestCase := func(varname string, vartype querypb.Type, value bool) testCase {
 		return testCase{Variable: varname, Value: value, Type: vartype}
 	}
 
 	tcs := []testCase{
-		newTestCase("autocommit", querypb.Type_INT32, 1),
-		newTestCase("autocommit", querypb.Type_INT32, 0),
-		newTestCase("enable_system_settings", querypb.Type_INT32, 1),
-		newTestCase("enable_system_settings", querypb.Type_INT32, 0),
+		newTestCase("autocommit", querypb.Type_INT64, true),
+		newTestCase("autocommit", querypb.Type_INT64, false),
+		newTestCase("enable_system_settings", querypb.Type_INT64, true),
+		newTestCase("enable_system_settings", querypb.Type_INT64, false),
 	}
 
 	for _, tc := range tcs {
 		qr, err := client.Execute(
-			"select @@autocommit",
-			map[string]*querypb.BindVariable{tc.Variable: sqltypes.Int32BindVariable(int32(tc.Value))},
+			fmt.Sprintf("select :%s", tc.Variable),
+			map[string]*querypb.BindVariable{tc.Variable: sqltypes.BoolBindVariable(tc.Value)},
 		)
 		if err != nil {
 			t.Error(err)
