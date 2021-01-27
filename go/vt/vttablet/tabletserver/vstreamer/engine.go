@@ -23,7 +23,6 @@ import (
 	"errors"
 	"net/http"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/vt/servenv"
 
@@ -43,14 +42,7 @@ import (
 )
 
 const (
-	throttleCheckDuration = 250 * time.Millisecond
-	throttlerAppName      = "vstreamer"
-)
-
-var (
-	throttleFlags = &throttle.CheckFlags{
-		LowPriority: true,
-	}
+	throttlerAppName = "vstreamer"
 )
 
 // Engine is the engine for handling vreplication streaming requests.
@@ -98,8 +90,7 @@ type Engine struct {
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
 
-	lagThrottler                *throttle.Throttler
-	lastSuccessfulThrottleCheck time.Time
+	throttlerClient *throttle.Client
 }
 
 // NewEngine creates a new Engine.
@@ -107,11 +98,11 @@ type Engine struct {
 // Open and Close can be called multiple times and are idempotent.
 func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrottler *throttle.Throttler, cell string) *Engine {
 	vse := &Engine{
-		env:          env,
-		ts:           ts,
-		se:           se,
-		cell:         cell,
-		lagThrottler: lagThrottler,
+		env:             env,
+		ts:              ts,
+		se:              se,
+		cell:            cell,
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
@@ -192,37 +183,6 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 	vse.mu.Lock()
 	defer vse.mu.Unlock()
 	return vse.lvschema.vschema
-}
-
-func (vse *Engine) throttleStatusOK(ctx context.Context, sleep bool) bool {
-	if vse.lagThrottler == nil {
-		// no throttler
-		return true
-	}
-	if time.Since(vse.lastSuccessfulThrottleCheck) <= throttleCheckDuration {
-		// if last check was OK just very recently there is no need to check again
-		return true
-	}
-	// It's time to run a throttler check
-	checkResult := vse.lagThrottler.CheckSelf(ctx, throttlerAppName, "", throttleFlags)
-	if checkResult.StatusCode != http.StatusOK {
-		// sorry, we got throttled.
-		if sleep {
-			time.Sleep(throttleCheckDuration)
-		}
-		return false
-	}
-	vse.lastSuccessfulThrottleCheck = time.Now()
-	return true
-}
-
-// throttle will wait until the throttler's "check-self" check is satisfied
-func (vse *Engine) throttle(ctx context.Context) {
-	// We introduce throttling based on the tablet's "self" check, which means if the tablet itself is lagging,
-	// we hold off reads so as to ease the load and let it regain its health
-	for !vse.throttleStatusOK(ctx, true) {
-		// Sorry, got throttled. Sleep some time, then check again
-	}
 }
 
 // Stream starts a new stream.
