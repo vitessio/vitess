@@ -39,6 +39,12 @@ var (
 		Args: cobra.ExactArgs(1),
 		RunE: commandCreateKeyspace,
 	}
+	// DeleteKeyspace makes a DeleteKeyspace gRPC call to a vtctld.
+	DeleteKeyspace = &cobra.Command{
+		Use:  "DeleteKeyspace KEYSPACE_NAME",
+		Args: cobra.ExactArgs(1),
+		RunE: commandDeleteKeyspace,
+	}
 	// FindAllShardsInKeyspace makes a FindAllShardsInKeyspace gRPC call to a vtctld.
 	FindAllShardsInKeyspace = &cobra.Command{
 		Use:     "FindAllShardsInKeyspace keyspace",
@@ -153,6 +159,26 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var deleteKeyspaceOptions = struct {
+	Recursive bool
+}{}
+
+func commandDeleteKeyspace(cmd *cobra.Command, args []string) error {
+	ks := cmd.Flags().Arg(0)
+
+	_, err := client.DeleteKeyspace(commandCtx, &vtctldatapb.DeleteKeyspaceRequest{
+		Keyspace:  ks,
+		Recursive: deleteKeyspaceOptions.Recursive,
+	})
+	if err != nil {
+		return fmt.Errorf("DeleteKeyspace(%v) error: %w; please check the topo", ks, err)
+	}
+
+	fmt.Printf("Successfully deleted keyspace %v.\n", ks)
+
+	return nil
+}
+
 func commandFindAllShardsInKeyspace(cmd *cobra.Command, args []string) error {
 	ks := cmd.Flags().Arg(0)
 	resp, err := client.FindAllShardsInKeyspace(commandCtx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
@@ -238,6 +264,9 @@ func init() {
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")
 	Root.AddCommand(CreateKeyspace)
+
+	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")
+	Root.AddCommand(DeleteKeyspace)
 
 	Root.AddCommand(FindAllShardsInKeyspace)
 	Root.AddCommand(GetKeyspace)
