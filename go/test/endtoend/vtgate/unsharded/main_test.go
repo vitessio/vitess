@@ -319,7 +319,7 @@ func TestCallProcedure(t *testing.T) {
 
 	_, err = conn.ExecuteFetch(`CALL out_parameter(@foo)`, 100, true)
 	require.Error(t, err)
-	require.Contains(t, "OUT and INOUT parameters are not supported", err.Error())
+	require.Contains(t, err.Error(), "OUT and INOUT parameters are not supported")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
