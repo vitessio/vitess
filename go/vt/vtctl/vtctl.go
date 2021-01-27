@@ -2170,7 +2170,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		if err != nil {
 			return err
 		}
+		if *startStopped {
+			wr.Logger().Printf("Workflow has been created in Stopped state\n")
+			break
+		}
 		wr.Logger().Printf("Waiting for workflow to start:\n")
+
 		type streamCount struct {
 			total, running int64
 		}
