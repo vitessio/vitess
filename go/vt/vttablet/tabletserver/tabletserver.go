@@ -1579,7 +1579,7 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 
 // registerThrottlerCheckHandlers registers throttler "check" requests
 func (tsv *TabletServer) registerThrottlerCheckHandlers() {
-	handle := func(path string, checkResultFunc func(ctx context.Context, appName string, remoteAddr string, flags *throttle.CheckFlags) *throttle.CheckResult) {
+	handle := func(path string, checkType throttle.ThrottleCheckType) {
 		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			ctx := tabletenv.LocalContext()
 			remoteAddr := r.Header.Get("X-Forwarded-For")
@@ -1594,7 +1594,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			flags := &throttle.CheckFlags{
 				LowPriority: (r.URL.Query().Get("p") == "low"),
 			}
-			checkResult := checkResultFunc(ctx, appName, remoteAddr, flags)
+			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
 			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
 				checkResult.StatusCode = http.StatusOK // 200
 			}
@@ -1608,8 +1608,8 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 		})
 	}
-	handle("/throttler/check", tsv.lagThrottler.Check)
-	handle("/throttler/check-self", tsv.lagThrottler.CheckSelf)
+	handle("/throttler/check", throttle.ThrottleCheckPrimaryWrite)
+	handle("/throttler/check-self", throttle.ThrottleCheckSelf)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request

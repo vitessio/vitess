@@ -36,15 +36,16 @@ import (
 )
 
 var (
-	vc               *VitessCluster
-	vtgate           *cluster.VtgateProcess
-	defaultCell      *Cell
-	vtgateConn       *mysql.Conn
-	defaultRdonly    int
-	defaultReplicas  int
-	allCellNames     string
-	httpClient       = throttlebase.SetupHTTPClient(time.Second)
-	throttlerAppName = "vstreamer"
+	vc                     *VitessCluster
+	vtgate                 *cluster.VtgateProcess
+	defaultCell            *Cell
+	vtgateConn             *mysql.Conn
+	defaultRdonly          int
+	defaultReplicas        int
+	allCellNames           string
+	httpClient             = throttlebase.SetupHTTPClient(time.Second)
+	sourceThrottlerAppName = "vstreamer"
+	targetThrottlerAppName = "vreplication"
 )
 
 func init() {
@@ -63,16 +64,16 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.
 	return resp, respBody, err
 }
 
-func throttleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerAppName))
+func throttleStreamer(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
 }
 
-func unthrottleStreamer(tablet *cluster.VttabletProcess) (*http.Response, string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerAppName))
+func unthrottleStreamer(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
 }
 
-func throttlerCheckSelf(tablet *cluster.VttabletProcess) (resp *http.Response, respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, throttlerAppName)
+func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http.Response, respBody string, err error) {
+	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, app)
 	resp, err = httpClient.Get(apiURL)
 	if err != nil {
 		return resp, respBody, err
@@ -107,6 +108,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	materializeRollup(t)
 
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
+
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
@@ -221,8 +223,13 @@ func insertMoreProducts(t *testing.T) {
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
-func insertMoreProductsForThrottler(t *testing.T) {
+func insertMoreProductsForSourceThrottler(t *testing.T) {
 	sql := "insert into product(pid, description) values(103, 'new-cpu'),(104, 'new-camera'),(105, 'new-mouse');"
+	execVtgateQuery(t, vtgateConn, "product", sql)
+}
+
+func insertMoreProductsForTargetThrottler(t *testing.T) {
+	sql := "insert into product(pid, description) values(203, 'new-cpu'),(204, 'new-camera'),(205, 'new-mouse');"
 	execVtgateQuery(t, vtgateConn, "product", sql)
 }
 
@@ -241,6 +248,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "80-"), 1); err != nil {
 			t.Fatal(err)
 		}
+
 		tables := "customer"
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
@@ -593,21 +601,28 @@ func materializeProduct(t *testing.T) {
 		}
 
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "master")
-		t.Run("throttle-app", func(t *testing.T) {
+		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
-				_, body, err := throttleStreamer(tab)
+				_, body, err := throttleStreamer(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
-				assert.Contains(t, body, throttlerAppName)
+				assert.Contains(t, body, sourceThrottlerAppName)
 			}
 			// Wait for throttling to take effect (caching will expire by this time):
 			time.Sleep(1 * time.Second)
 			for _, tab := range productTablets {
-				_, body, err := throttlerCheckSelf(tab)
-				assert.NoError(t, err)
-				assert.Contains(t, body, "417")
+				{
+					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
+					assert.NoError(t, err)
+					assert.Contains(t, body, "417")
+				}
+				{
+					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
+					assert.NoError(t, err)
+					assert.Contains(t, body, "200")
+				}
 			}
-			insertMoreProductsForThrottler(t)
+			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
 			time.Sleep(1 * time.Second)
 			// we expect the additional rows to **not appear** in the materialized view
@@ -615,17 +630,74 @@ func materializeProduct(t *testing.T) {
 				validateCountInTablet(t, tab, keyspace, workflow, 5)
 			}
 		})
-		t.Run("unthrottle-app", func(t *testing.T) {
+		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range productTablets {
-				_, body, err := unthrottleStreamer(tab)
+				_, body, err := unthrottleStreamer(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
-				assert.Contains(t, body, throttlerAppName)
+				assert.Contains(t, body, sourceThrottlerAppName)
+			}
+			// give time for unthrottling to take effect and for target to fetch data
+			time.Sleep(3 * time.Second)
+			for _, tab := range productTablets {
+				{
+					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
+					assert.NoError(t, err)
+					assert.Contains(t, body, "200")
+				}
+			}
+			for _, tab := range customerTablets {
+				validateCountInTablet(t, tab, keyspace, workflow, 8)
+			}
+		})
+
+		t.Run("throttle-app-customer", func(t *testing.T) {
+			// Now, throttle the streamer on source tablets, insert some rows
+			for _, tab := range customerTablets {
+				_, body, err := throttleStreamer(tab, targetThrottlerAppName)
+				assert.NoError(t, err)
+				assert.Contains(t, body, targetThrottlerAppName)
+			}
+			// Wait for throttling to take effect (caching will expire by this time):
+			time.Sleep(1 * time.Second)
+			for _, tab := range customerTablets {
+				{
+					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
+					assert.NoError(t, err)
+					assert.Contains(t, body, "417")
+				}
+				{
+					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
+					assert.NoError(t, err)
+					assert.Contains(t, body, "200")
+				}
+			}
+			insertMoreProductsForTargetThrottler(t)
+			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
+			time.Sleep(1 * time.Second)
+			// we expect the additional rows to **not appear** in the materialized view
+			for _, tab := range customerTablets {
+				validateCountInTablet(t, tab, keyspace, workflow, 8)
+			}
+		})
+		t.Run("unthrottle-app-customer", func(t *testing.T) {
+			// unthrottle on source tablets, and expect the rows to show up
+			for _, tab := range customerTablets {
+				_, body, err := unthrottleStreamer(tab, targetThrottlerAppName)
+				assert.NoError(t, err)
+				assert.Contains(t, body, targetThrottlerAppName)
 			}
 			// give time for unthrottling to take effect and for target to fetch data
 			time.Sleep(3 * time.Second)
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 8)
+				{
+					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
+					assert.NoError(t, err)
+					assert.Contains(t, body, "200")
+				}
+			}
+			for _, tab := range customerTablets {
+				validateCountInTablet(t, tab, keyspace, workflow, 11)
 			}
 		})
 	})
