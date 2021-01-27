@@ -248,7 +248,13 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 
 // DeleteShards is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
-	panic("unimplemented!")
+	for _, shard := range req.Shards {
+		if err := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing); err != nil {
+			return nil, err
+		}
+	}
+
+	return &vtctldatapb.DeleteShardsResponse{}, nil
 }
 
 // DeleteTablets is part of the vtctlservicepb.VtctldServer interface.

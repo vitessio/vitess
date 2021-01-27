@@ -99,6 +99,14 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 	}
 }
 
+// AddTablets adds a list of tablets to the topology. See AddTablet for more
+// details.
+func AddTablets(ctx context.Context, t *testing.T, ts *topo.Server, tablets ...*topodatapb.Tablet) {
+	for _, tablet := range tablets {
+		AddTablet(ctx, t, ts, tablet)
+	}
+}
+
 // AddShards adds a list of shards to the topology, failing a test if any of the
 // shard records could not be created. It also ensures that every shard's
 // keyspace exists, or creates an empty keyspace if that shard's keyspace does
@@ -126,5 +134,16 @@ func SetupReplicationGraphs(ctx context.Context, t *testing.T, ts *topo.Server, 
 			return nil
 		})
 		require.NoError(t, err, "could not save replication graph for %s/%s in cell %v", graph.Keyspace(), graph.Shard(), graph.Cell())
+	}
+}
+
+// UpdateSrvKeyspaces updates a set of SrvKeyspace records, grouped by cell and
+// then by keyspace. It fails the test if any records cannot be updated.
+func UpdateSrvKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, srvkeyspacesByCellByKeyspace map[string]map[string]*topodatapb.SrvKeyspace) {
+	for cell, srvKeyspacesByKeyspace := range srvkeyspacesByCellByKeyspace {
+		for keyspace, srvKeyspace := range srvKeyspacesByKeyspace {
+			err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
+			require.NoError(t, err, "UpdateSrvKeyspace(%v, %v, %v)", cell, keyspace, srvKeyspace)
+		}
 	}
 }

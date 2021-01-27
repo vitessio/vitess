@@ -789,7 +789,427 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestDeleteShards(t *testing.T) {
-	t.Skip("unimplemented")
+	t.Parallel()
+
+	tests := []struct {
+		name                    string
+		shards                  []*vtctldatapb.Shard
+		tablets                 []*topodatapb.Tablet
+		replicationGraphs       []*topo.ShardReplicationInfo
+		srvKeyspaces            map[string]map[string]*topodatapb.SrvKeyspace
+		topoErr                 error
+		req                     *vtctldatapb.DeleteShardsRequest
+		expected                *vtctldatapb.DeleteShardsResponse
+		expectedRemainingShards []*vtctldatapb.Shard
+		shouldErr               bool
+	}{
+		{
+			name: "success",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected:                &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{},
+			shouldErr:               false,
+		},
+		{
+			name:    "shard not found",
+			shards:  nil,
+			tablets: nil,
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "multiple shards",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+				{
+					Keyspace: "otherkeyspace",
+					Name:     "-80",
+				},
+				{
+					Keyspace: "otherkeyspace",
+					Name:     "80-",
+				},
+			},
+			tablets: nil,
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+					{
+						Keyspace: "otherkeyspace",
+						Name:     "-80",
+					},
+				},
+			},
+			expected: &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "otherkeyspace",
+					Name:     "80-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "topo is down",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			topoErr: assert.AnError,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected: nil,
+			expectedRemainingShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard is serving/EvenIfServing=false",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			srvKeyspaces: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"testkeyspace": &topodatapb.SrvKeyspace{
+						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+							{
+								ServedType: topodatapb.TabletType_MASTER,
+								ShardReferences: []*topodatapb.ShardReference{
+									{
+										Name:     "-",
+										KeyRange: &topodatapb.KeyRange{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected: nil,
+			expectedRemainingShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard is serving/EvenIfServing=true",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			srvKeyspaces: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"testkeyspace": &topodatapb.SrvKeyspace{
+						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+							{
+								ServedType: topodatapb.TabletType_MASTER,
+								ShardReferences: []*topodatapb.ShardReference{
+									{
+										Name:     "-",
+										KeyRange: &topodatapb.KeyRange{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+				EvenIfServing: true,
+			},
+			expected:                &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{},
+			shouldErr:               false,
+		},
+		{
+			name: "ShardReplication in topo",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			replicationGraphs: []*topo.ShardReplicationInfo{
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone1",
+								Uid:  100,
+							},
+						},
+					},
+				}, "zone1", "testkeyspace", "-"),
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone2",
+								Uid:  200,
+							},
+						},
+					},
+				}, "zone2", "testkeyspace", "-"),
+				topo.NewShardReplicationInfo(&topodatapb.ShardReplication{
+					Nodes: []*topodatapb.ShardReplication_Node{
+						{
+							TabletAlias: &topodatapb.TabletAlias{
+								Cell: "zone3",
+								Uid:  300,
+							},
+						},
+					},
+				}, "zone3", "testkeyspace", "-"),
+			},
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected:                &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{},
+			shouldErr:               false,
+		},
+		{
+			name: "shard has tablets/Recursive=false",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected: nil,
+			expectedRemainingShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard has tablets/Recursive=true",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+				Recursive: true,
+			},
+			expected:                &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{},
+			shouldErr:               false,
+		},
+		{
+			name: "tablets in topo belonging to other shard",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-80",
+				},
+				{
+					Keyspace: "testkeyspace",
+					Name:     "80-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "80-",
+				},
+			},
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-80",
+					},
+				},
+			},
+			expected: &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "80-",
+				},
+			},
+			shouldErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			cells := []string{"zone1", "zone2", "zone3"}
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory(cells...)
+			vtctld := NewVtctldServer(ts)
+
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			testutil.AddTablets(ctx, t, ts, tt.tablets...)
+			testutil.SetupReplicationGraphs(ctx, t, ts, tt.replicationGraphs...)
+			testutil.UpdateSrvKeyspaces(ctx, t, ts, tt.srvKeyspaces)
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			if tt.expectedRemainingShards != nil {
+				defer func() {
+					topofactory.SetError(nil)
+
+					actualShards := []*vtctldatapb.Shard{}
+
+					keyspaces, err := ts.GetKeyspaces(ctx)
+					require.NoError(t, err, "cannot get keyspace names to check remaining shards")
+
+					for _, ks := range keyspaces {
+						shards, err := ts.GetShardNames(ctx, ks)
+						require.NoError(t, err, "cannot get shard names for keyspace %s", ks)
+
+						for _, shard := range shards {
+							actualShards = append(actualShards, &vtctldatapb.Shard{
+								Keyspace: ks,
+								Name:     shard,
+							})
+						}
+					}
+
+					assert.ElementsMatch(t, tt.expectedRemainingShards, actualShards)
+				}()
+			}
+
+			resp, err := vtctld.DeleteShards(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
 }
 
 func TestDeleteTablets(t *testing.T) {
