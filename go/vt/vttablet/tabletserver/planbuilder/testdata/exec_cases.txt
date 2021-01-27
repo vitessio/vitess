@@ -942,5 +942,6 @@ options:PassthroughDMLs
 "call getAllTheThings()"
 {
   "PlanID": "CallProcedure",
-  "TableName": ""
+  "TableName": "",
+  "FullQuery": "call getAllTheThings()"
 }
