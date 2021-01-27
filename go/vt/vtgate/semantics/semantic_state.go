@@ -122,11 +122,13 @@ func (ts TableSet) NumberOfTables() int {
 // Constituents returns an slice with all the
 // individual tables in their own TableSet identifier
 func (ts TableSet) Constituents() (result []TableSet) {
-	for i := 0; i < 64; i++ {
-		i2 := TableSet(1 << i)
-		if ts&i2 == i2 {
-			result = append(result, i2)
-		}
+	mask := ts
+
+	for mask > 0 {
+		maskLeft := mask & (mask - 1)
+		constituent := mask ^ maskLeft
+		mask = maskLeft
+		result = append(result, constituent)
 	}
 	return
 }
