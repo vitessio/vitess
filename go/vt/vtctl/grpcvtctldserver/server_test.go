@@ -785,7 +785,205 @@ func TestCreateShard(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
-	t.Skip("unimplemented")
+	t.Parallel()
+
+	tests := []struct {
+		name                       string
+		keyspaces                  []*vtctldatapb.Keyspace
+		shards                     []*vtctldatapb.Shard
+		srvKeyspaces               map[string]map[string]*topodatapb.SrvKeyspace
+		topoErr                    error
+		req                        *vtctldatapb.DeleteKeyspaceRequest
+		expected                   *vtctldatapb.DeleteKeyspaceResponse
+		expectedRemainingKeyspaces []string
+		expectedRemainingShards    map[string][]string
+		shouldErr                  bool
+	}{
+		{
+			name: "success",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:       nil,
+			srvKeyspaces: nil,
+			topoErr:      nil,
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected:                   &vtctldatapb.DeleteKeyspaceResponse{},
+			expectedRemainingKeyspaces: []string{},
+			expectedRemainingShards:    map[string][]string{},
+			shouldErr:                  false,
+		},
+		{
+			name: "keyspace does not exist",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "otherkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:       nil,
+			srvKeyspaces: nil,
+			topoErr:      nil,
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected:                   nil,
+			expectedRemainingKeyspaces: []string{"otherkeyspace"},
+			expectedRemainingShards: map[string][]string{
+				"otherkeyspace": nil,
+			},
+			shouldErr: true,
+		},
+		{
+			name: "keyspace has shards/Recursive=false",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-80",
+				},
+				{
+					Keyspace: "testkeyspace",
+					Name:     "80-",
+				},
+			},
+			srvKeyspaces: nil,
+			topoErr:      nil,
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected:                   nil,
+			expectedRemainingKeyspaces: []string{"testkeyspace"},
+			expectedRemainingShards: map[string][]string{
+				"testkeyspace": {"-80", "80-"},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "keyspace has shards/Recursive=true",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-80",
+				},
+				{
+					Keyspace: "testkeyspace",
+					Name:     "80-",
+				},
+			},
+			srvKeyspaces: nil,
+			topoErr:      nil,
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace:  "testkeyspace",
+				Recursive: true,
+			},
+			expected:                   &vtctldatapb.DeleteKeyspaceResponse{},
+			expectedRemainingKeyspaces: []string{},
+			expectedRemainingShards:    map[string][]string{},
+			shouldErr:                  false,
+		},
+		// Not sure how to force this case because we always pass
+		// (Recursive=true, EvenIfServing=true) so anything short of "topo
+		// server is down" won't fail, and "topo server is down" will cause us
+		// to error before we even reach this point in the code, so, ¯\_(ツ)_/¯.
+		// {
+		// 	name: "recursive/cannot delete shard",
+		// },
+		{
+			name: "topo error",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "testkeyspace",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards:       nil,
+			srvKeyspaces: nil,
+			topoErr:      assert.AnError,
+			req: &vtctldatapb.DeleteKeyspaceRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected:                   nil,
+			expectedRemainingKeyspaces: []string{"testkeyspace"},
+			expectedRemainingShards: map[string][]string{
+				"testkeyspace": nil,
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			cells := []string{"zone1", "zone2", "zone3"}
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory(cells...)
+			vtctld := NewVtctldServer(ts)
+
+			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+			testutil.UpdateSrvKeyspaces(ctx, t, ts, tt.srvKeyspaces)
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			defer func() {
+				if tt.expectedRemainingKeyspaces == nil {
+					return
+				}
+
+				topofactory.SetError(nil)
+
+				keyspaces, err := ts.GetKeyspaces(ctx)
+				require.NoError(t, err, "cannot get keyspaces names after DeleteKeyspace call")
+				assert.ElementsMatch(t, tt.expectedRemainingKeyspaces, keyspaces)
+
+				if tt.expectedRemainingShards == nil {
+					return
+				}
+
+				remainingShards := make(map[string][]string, len(keyspaces))
+
+				for _, ks := range keyspaces {
+					shards, err := ts.GetShardNames(ctx, ks)
+					require.NoError(t, err, "cannot get shard names for keyspace %s", ks)
+
+					remainingShards[ks] = shards
+				}
+
+				assert.Equal(t, tt.expectedRemainingShards, remainingShards)
+			}()
+
+			resp, err := vtctld.DeleteKeyspace(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
 }
 
 func TestDeleteShards(t *testing.T) {

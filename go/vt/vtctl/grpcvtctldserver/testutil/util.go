@@ -69,6 +69,14 @@ func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctlda
 	require.NoError(t, err)
 }
 
+// AddKeyspaces adds a list of keyspaces to the topology, failing a test if any
+// of those keyspaces cannot be added. See AddKeyspace for details.
+func AddKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, keyspaces ...*vtctldatapb.Keyspace) {
+	for _, keyspace := range keyspaces {
+		AddKeyspace(ctx, t, ts, keyspace)
+	}
+}
+
 // AddTablet adds a tablet to the topology, failing a test if that tablet record
 // could not be created. It shallow copies to prevent XXX_ fields from changing,
 // including nested proto message fields.

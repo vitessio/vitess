@@ -243,7 +243,48 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 // DeleteKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
-	panic("unimplemented!")
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(shards) > 0 {
+		if !req.Recursive {
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "keyspace %v still has %d shards; use Recursive=true or remove them manually", req.Keyspace, len(shards))
+		}
+
+		log.Infof("Deleting all %d shards (and their tablets) in keyspace %v", len(shards), req.Keyspace)
+		recursive := true
+		evenIfServing := true
+
+		for _, shard := range shards {
+			log.Infof("Recursively deleting shard %v/%v", req.Keyspace, shard)
+			if err := deleteShard(ctx, s.ts, req.Keyspace, shard, recursive, evenIfServing); err != nil {
+				return nil, fmt.Errorf("cannot delete shard %v/%v: %w", req.Keyspace, shard, err)
+			}
+		}
+	}
+
+	cells, err := s.ts.GetKnownCells(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, cell := range cells {
+		if err := s.ts.DeleteKeyspaceReplication(ctx, cell, req.Keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
+			log.Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, req.Keyspace, err)
+		}
+
+		if err := s.ts.DeleteSrvKeyspace(ctx, cell, req.Keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
+			log.Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, req.Keyspace, err)
+		}
+	}
+
+	if err := s.ts.DeleteKeyspace(ctx, req.Keyspace); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DeleteKeyspaceResponse{}, nil
 }
 
 // DeleteShards is part of the vtctlservicepb.VtctldServer interface.
