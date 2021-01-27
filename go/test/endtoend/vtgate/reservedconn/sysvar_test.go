@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -366,18 +364,12 @@ func TestSystemVariableType(t *testing.T) {
 	checkedExec(t, conn, "insert into test (id, val1, val2, val3) values (1, null, 0, 0)")
 
 	// regardless of the "from", the select @@autocommit should return the same type
+	query1 := "select @@autocommit"
+	query2 := "select @@autocommit from test"
 
 	checkedExec(t, conn, "set autocommit = false")
-	qr1 := checkedExec(t, conn, "select @@autocommit")
-	got1 := fmt.Sprintf("%v", qr1.Rows)
-	qr2 := checkedExec(t, conn, "select @@autocommit from test")
-	got2 := fmt.Sprintf("%v", qr2.Rows)
-	assert.Equal(t, got1, got2)
+	assertResponseMatch(t, conn, query1, query2)
 
 	checkedExec(t, conn, "set autocommit = true")
-	qr1 = checkedExec(t, conn, "select @@autocommit")
-	got1 = fmt.Sprintf("%v", qr1.Rows)
-	qr2 = checkedExec(t, conn, "select @@autocommit from test")
-	got2 = fmt.Sprintf("%v", qr2.Rows)
-	assert.Equal(t, got1, got2)
+	assertResponseMatch(t, conn, query1, query2)
 }

@@ -334,10 +334,10 @@ func TestSelectSystemVariables(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@@autocommit", Type: sqltypes.Int32},
-			{Name: "@@client_found_rows", Type: sqltypes.Int32},
-			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int32},
-			{Name: "@@enable_system_settings", Type: sqltypes.Int32},
+			{Name: "@@autocommit", Type: sqltypes.Int64},
+			{Name: "@@client_found_rows", Type: sqltypes.Int64},
+			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64},
 			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
 			{Name: "@@workload", Type: sqltypes.VarBinary},
@@ -349,10 +349,10 @@ func TestSelectSystemVariables(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
-			sqltypes.NewInt32(0),
-			sqltypes.NewInt32(0),
-			sqltypes.NewInt32(0),
-			sqltypes.NewInt32(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
 			sqltypes.NewVarBinary("UNSPECIFIED"),
 			sqltypes.NewVarBinary(""),
@@ -386,13 +386,13 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 	result, err := executorExec(executor, sql, nil)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@@autocommit", Type: sqltypes.Int32},
-			{Name: "@@enable_system_settings", Type: sqltypes.Int32},
+			{Name: "@@autocommit", Type: sqltypes.Int64},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt32(1),
-			sqltypes.NewInt32(1),
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(1),
 		}},
 	}
 	require.NoError(t, err)
