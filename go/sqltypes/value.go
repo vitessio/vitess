@@ -280,7 +280,7 @@ func (v Value) EncodeSQL(b BinWriter) {
 		encodeBytesSQLBits(v.val, b)
 	default:
 		if v.typ == querypb.Type_INT32 {
-			b.Write([]byte(fmt.Sprintf("CAST(1 as INT) AS autocommit")))
+			b.Write([]byte("CAST(1 as INT) AS autocommit"))
 		} else {
 			b.Write(v.val)
 		}
