@@ -176,11 +176,12 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 }
 
 func TestQueryPlanCache(t *testing.T) {
+	const cachedPlanSize = 2275
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
 	time.Sleep(1 * time.Second)
 
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
-	framework.Server.SetQueryPlanCacheCap(1)
+	framework.Server.SetQueryPlanCacheCap(cachedPlanSize)
 
 	bindVars := map[string]*querypb.BindVariable{
 		"ival1": sqltypes.Int64BindVariable(1),
@@ -191,18 +192,18 @@ func TestQueryPlanCache(t *testing.T) {
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 1)
-	verifyIntValue(t, vend, "QueryCacheSize", 1)
-	verifyIntValue(t, vend, "QueryCacheCapacity", 1)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize)
+	verifyIntValue(t, vend, "QueryCacheCapacity", cachedPlanSize)
 
-	framework.Server.SetQueryPlanCacheCap(10)
+	framework.Server.SetQueryPlanCacheCap(64 * 1024)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 2)
-	verifyIntValue(t, vend, "QueryCacheSize", 2)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize*2)
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 3)
-	verifyIntValue(t, vend, "QueryCacheSize", 3)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize*2+2254)
 }
 
 func TestMaxResultSize(t *testing.T) {
