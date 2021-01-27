@@ -170,8 +170,12 @@ func TestStateNonServing(t *testing.T) {
 func TestStateChangeTabletType(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
+	statsTabletTypeCount.ResetAll()
 	tm := newTestTM(t, ts, 2, "ks", "0")
 	defer tm.Stop()
+
+	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell1",
@@ -185,6 +189,8 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	assert.NotNil(t, ti.MasterTermStartTime)
 	assert.Equal(t, "master", statsTabletType.Get())
+	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["master"])
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 	require.NoError(t, err)
@@ -193,6 +199,8 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.MasterTermStartTime)
 	assert.Equal(t, "replica", statsTabletType.Get())
+	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 }
 
 func TestPublishStateNew(t *testing.T) {
