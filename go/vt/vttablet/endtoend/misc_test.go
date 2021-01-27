@@ -783,7 +783,7 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 
 	for _, tc := range tcs {
 		qr, err := client.Execute(
-			fmt.Sprintf("select :%s", tc.Variable),
+			"select @@autocommit",
 			map[string]*querypb.BindVariable{tc.Variable: sqltypes.Int32BindVariable(int32(tc.Value))},
 		)
 		if err != nil {
