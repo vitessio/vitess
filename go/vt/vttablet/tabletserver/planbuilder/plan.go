@@ -217,7 +217,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 	case *sqlparser.Flush:
 		plan, err = &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}, nil
 	case *sqlparser.CallProc:
-		plan, err = &Plan{PlanID: PlanCallProc}, nil
+		plan, err = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}

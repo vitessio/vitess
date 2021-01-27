@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -130,6 +131,17 @@ BEGIN
     select * from allDefaults;
 	delete from allDefaults;
     set autocommit = 0;
+END;
+
+CREATE PROCEDURE in_parameter(IN val int)
+BEGIN
+	insert into allDefaults(id) values(val);
+END;
+
+CREATE PROCEDURE out_parameter(OUT val int)
+BEGIN
+	insert into allDefaults(id) values (128);
+	select 128 into val from dual;
 END;
 `
 )
@@ -272,6 +284,7 @@ func TestCallProcedure(t *testing.T) {
 		Flags:  mysql.CapabilityClientMultiResults,
 		DbName: "@master",
 	}
+	time.Sleep(5 * time.Second)
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -294,6 +307,19 @@ func TestCallProcedure(t *testing.T) {
 
 	qr = exec(t, conn, `CALL sp_variable()`)
 	require.EqualValues(t, 1, qr.RowsAffected)
+
+	qr = exec(t, conn, `CALL in_parameter(42)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	_ = exec(t, conn, `SET @foo = 123`)
+	qr = exec(t, conn, `CALL in_parameter(@foo)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+	qr = exec(t, conn, "select * from allDefaults where id = 123")
+	assert.NotEmpty(t, qr.Rows)
+
+	_, err = conn.ExecuteFetch(`CALL out_parameter(@foo)`, 100, true)
+	require.Error(t, err)
+	require.Contains(t, "OUT and INOUT parameters are not supported", err.Error())
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
