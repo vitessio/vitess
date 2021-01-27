@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -98,9 +98,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case planbuilder.PlanNextval:
+	case p.PlanNextval:
 		return qre.execNextval()
-	case planbuilder.PlanSelectImpossible:
+	case p.PlanSelectImpossible:
 		// If the fields did not get cached, we have send the query
 		// to mysql, which you can see below.
 		if qre.plan.Fields != nil {
@@ -121,7 +121,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShowTables:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShowTables:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -135,16 +135,18 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, err
 		}
 		return qr, nil
-	case planbuilder.PlanSelectLock:
+	case p.PlanSelectLock:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin, planbuilder.PlanFlush:
+	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execOther()
-	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
+	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execOther()
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL, planbuilder.PlanLoad:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
-	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
+	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
+	case p.PlanCallProc:
+		return qre.execCallProc()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -195,18 +197,18 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
 		return qre.txFetch(conn, true)
-	case planbuilder.PlanInsertMessage:
+	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
-	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
+	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
-	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin, planbuilder.PlanFlush:
+	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case planbuilder.PlanSavepoint, planbuilder.PlanRelease, planbuilder.PlanSRollback:
+	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case planbuilder.PlanSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible, planbuilder.PlanShowTables:
+	case p.PlanSelect, p.PlanSelectLock, p.PlanSelectImpossible, p.PlanShowTables:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -220,10 +222,12 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 			return nil, err
 		}
 		return qr, nil
-	case planbuilder.PlanDDL:
+	case p.PlanDDL:
 		return qre.execDDL(conn)
-	case planbuilder.PlanLoad:
+	case p.PlanLoad:
 		return qre.execLoad(conn)
+	case p.PlanCallProc:
+		return qre.execProc(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -507,7 +511,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 }
 
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
-// reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
+// reuses the result. If the plan is missing field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
 		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
@@ -609,7 +613,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	}
 	// Check tablet type.
 	if cm := qre.tsv.qe.consolidatorMode.Get(); cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
-		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
+		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
 		if original {
 			defer q.Broadcast()
 			conn, err := qre.getConn()
@@ -673,6 +677,83 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	buf.WriteString(qre.marginComments.Trailing)
 	fullSQL := buf.String()
 	return fullSQL, withoutComments, nil
+}
+
+func rewriteOUTParamError(err error) error {
+	sqlErr, ok := err.(*mysql.SQLError)
+	if !ok {
+		return err
+	}
+	if sqlErr.Num == mysql.ErSPNotVarArg {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OUT and INOUT parameters are not supported")
+	}
+	return err
+}
+
+func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
+	conn, err := qre.getConn()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := qre.execDBConn(conn, sql, true)
+	if err != nil {
+		return nil, rewriteOUTParamError(err)
+	}
+	if !qr.IsMoreResultsExists() {
+		if qr.IsInTransaction() {
+			conn.Close()
+			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
+		}
+		return qr, nil
+	}
+	err = qre.drainResultSetOnConn(conn)
+	if err != nil {
+		return nil, err
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
+	beforeInTx := conn.IsInTransaction()
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, rewriteOUTParamError(err)
+	}
+	if !qr.IsMoreResultsExists() {
+		afterInTx := qr.IsInTransaction()
+		if beforeInTx != afterInTx {
+			conn.Close()
+			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
+		}
+		return qr, nil
+	}
+	err = qre.drainResultSetOnConn(conn.UnderlyingDBConn())
+	if err != nil {
+		return nil, err
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
+	more := true
+	for more {
+		qr, err := conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
+		if err != nil {
+			return err
+		}
+		more = qr.IsMoreResultsExists()
+	}
+	return nil
 }
 
 func (qre *QueryExecutor) getSelectLimit() int64 {
@@ -739,7 +820,7 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	}
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
-	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, int64(duration))
+	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
 }
 
 // resolveNumber extracts a number from a bind variable or sql value.
