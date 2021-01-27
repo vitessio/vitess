@@ -379,6 +379,7 @@ const (
 	ERDuplicatedValueInType         = 1291
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
+	ErSPNotVarArg                   = 1414
 
 	// already exists
 	ERTableExists = 1050

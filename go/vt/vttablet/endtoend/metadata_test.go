@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"reflect"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -66,7 +65,7 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "eid",
@@ -98,13 +97,10 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 				sqltypes.NewInt32(-2147483648),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
-	if !reflect.DeepEqual(*streamQr, want) {
-		t.Errorf("StreamExecute: \n%#v, want \n%#v", prettyPrint(*streamQr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
+	mustMatch(t, want, streamQr)
 }
 
 // should return Name and Type, because we pass an empty ExecuteOptions and that is the default
@@ -121,7 +117,7 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "eid",
@@ -139,13 +135,10 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 				sqltypes.NewInt32(-2147483648),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
-	if !reflect.DeepEqual(*streamQr, want) {
-		t.Errorf("StreamExecute: \n%#v, want \n%#v", prettyPrint(*streamQr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
+	mustMatch(t, want, streamQr)
 }
 
 // should return Name and Type, because if nil ExecuteOptions are passed, we normalize to TYPE_AND_NAME
@@ -162,7 +155,7 @@ func TestMetadataNoExecOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "eid",
@@ -180,11 +173,8 @@ func TestMetadataNoExecOptions(t *testing.T) {
 				sqltypes.NewInt32(-2147483648),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
-	if !reflect.DeepEqual(*streamQr, want) {
-		t.Errorf("StreamExecute: \n%#v, want \n%#v", prettyPrint(*streamQr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
+	mustMatch(t, want, streamQr)
 }

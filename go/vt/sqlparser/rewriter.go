@@ -150,6 +150,14 @@ func replaceBinaryExprRight(newNode, parent SQLNode) {
 	parent.(*BinaryExpr).Right = newNode.(Expr)
 }
 
+func replaceCallProcName(newNode, parent SQLNode) {
+	parent.(*CallProc).Name = newNode.(TableName)
+}
+
+func replaceCallProcParams(newNode, parent SQLNode) {
+	parent.(*CallProc).Params = newNode.(Exprs)
+}
+
 func replaceCaseExprElse(newNode, parent SQLNode) {
 	parent.(*CaseExpr).Else = newNode.(Expr)
 }
@@ -1151,6 +1159,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Right, replaceBinaryExprRight)
 
 	case BoolVal:
+
+	case *CallProc:
+		a.apply(node, n.Name, replaceCallProcName)
+		a.apply(node, n.Params, replaceCallProcParams)
 
 	case *CaseExpr:
 		a.apply(node, n.Else, replaceCaseExprElse)
