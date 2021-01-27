@@ -1143,6 +1143,7 @@
 2021-01-27T07:54:44Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/514448032
 2021-01-27T07:54:44Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/514448011
 2021-01-27T07:54:44Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/514448037
+2021-01-27T07:54:44Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/514448006
 2021-01-27T07:54:44Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/514448034
 2021-01-27T07:54:44Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/514448027
 2021-01-27T07:54:44Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/514448019
@@ -1158,8 +1159,10 @@
 2021-01-27T07:54:44Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/514448016
 2021-01-27T07:54:44Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/514448035
 2021-01-27T07:54:44Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/514448022
+2021-01-27T07:54:44Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/514448010
 2021-01-27T07:54:44Z,endtoend,https://github.com/vitessio/vitess/actions/runs/514448015
 2021-01-27T07:54:44Z,local_example,https://github.com/vitessio/vitess/actions/runs/514448005
 2021-01-27T07:54:44Z,local_example,https://github.com/vitessio/vitess/actions/runs/514448021
 2021-01-27T07:54:44Z,region_example,https://github.com/vitessio/vitess/actions/runs/514448029
 2021-01-27T07:54:44Z,unit_race,https://github.com/vitessio/vitess/actions/runs/514448049
+2021-01-27T08:05:46Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/514468329
