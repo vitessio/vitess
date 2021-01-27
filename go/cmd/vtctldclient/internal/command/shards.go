@@ -34,6 +34,12 @@ var (
 		Args: cobra.ExactArgs(1),
 		RunE: commandCreateShard,
 	}
+	// DeleteShards makes a DeleteShards gRPC request to a vtctld.
+	DeleteShards = &cobra.Command{
+		Use:  "DeleteShards <keyspace/shard> [<keyspace/shard> ...]",
+		Args: cobra.MinimumNArgs(1),
+		RunE: commandDeleteShards,
+	}
 	// GetShard makes a GetShard gRPC request to a vtctld.
 	GetShard = &cobra.Command{
 		Use:  "GetShard <keyspace/shard>",
@@ -75,6 +81,32 @@ func commandCreateShard(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+var deleteShardsOptions = struct {
+	Recursive     bool
+	EvenIfServing bool
+}{}
+
+func commandDeleteShards(cmd *cobra.Command, args []string) error {
+	shards, err := cli.ParseKeyspaceShards(cmd.Flags().Args())
+	if err != nil {
+		return err
+	}
+
+	_, err = client.DeleteShards(commandCtx, &vtctldatapb.DeleteShardsRequest{
+		Shards:        shards,
+		EvenIfServing: deleteShardsOptions.EvenIfServing,
+		Recursive:     deleteShardsOptions.Recursive,
+	})
+
+	if err != nil {
+		return fmt.Errorf("%w: while deleting %d shards; please inspect the topo", err, len(shards))
+	}
+
+	fmt.Printf("Successfully deleted %d shards\n", len(shards))
 
 	return nil
 }
@@ -137,6 +169,10 @@ func init() {
 	CreateShard.Flags().BoolVarP(&createShardOptions.Force, "force", "f", false, "")
 	CreateShard.Flags().BoolVarP(&createShardOptions.IncludeParent, "include-parent", "p", false, "")
 	Root.AddCommand(CreateShard)
+
+	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.Recursive, "recursive", "r", false, "Also delete all tablets belonging to the shard. This is required to delete a non-empty shard.")
+	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.EvenIfServing, "even-if-serving", "f", false, "Remove the shard even if it is serving. Use with caution.")
+	Root.AddCommand(DeleteShards)
 
 	Root.AddCommand(GetShard)
 
