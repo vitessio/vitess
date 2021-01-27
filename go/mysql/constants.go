@@ -343,6 +343,7 @@ const (
 	ERNoSuchTable           = 1146
 	ERNonExistingTableGrant = 1147
 	ERKeyDoesNotExist       = 1176
+	ERDbDropExists          = 1008
 
 	// permissions
 	ERDBAccessDenied            = 1044
@@ -382,10 +383,11 @@ const (
 	ErSPNotVarArg                   = 1414
 
 	// already exists
-	ERTableExists = 1050
-	ERDupEntry    = 1062
-	ERFileExists  = 1086
-	ERUDFExists   = 1125
+	ERTableExists    = 1050
+	ERDupEntry       = 1062
+	ERFileExists     = 1086
+	ERUDFExists      = 1125
+	ERDbCreateExists = 1007
 
 	// aborted
 	ERGotSignal          = 1078
