@@ -58,9 +58,9 @@ var procSQL = []string{
 	BEGIN
 	    rollback;
 	END;`,
-	`create procedure in_parameter(IN name varchar(255))
+	`create procedure in_parameter(IN val int)
 	BEGIN
-	    select name as theName;
+		insert into vitess_test(intval) values(val);
 	END;`,
 	`create procedure out_parameter(OUT name varchar(255))
 	BEGIN
@@ -79,35 +79,6 @@ func TestCallProcedure(t *testing.T) {
 		wantErr: true,
 	}, {
 		query:   "call proc_select4()",
-		wantErr: true,
-	}, {
-		query: "call proc_dml()",
-	}}
-
-	for _, tc := range tcases {
-		t.Run(tc.query, func(t *testing.T) {
-			_, err := client.Execute(tc.query, nil)
-			if tc.wantErr {
-				require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
-				return
-			}
-			require.NoError(t, err)
-
-		})
-	}
-}
-
-func TestCallProcedureWithParams(t *testing.T) {
-	client := framework.NewClient()
-	type testcases struct {
-		query   string
-		wantErr bool
-	}
-	tcases := []testcases{{
-		query:   "call in_parameter('the name')",
-		wantErr: false,
-	}, {
-		query:   "call out_parameter('the name')",
 		wantErr: true,
 	}, {
 		query: "call proc_dml()",

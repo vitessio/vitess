@@ -679,15 +679,31 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	return fullSQL, withoutComments, nil
 }
 
+func rewriteOUTParamError(err error) error {
+	sqlErr, ok := err.(*mysql.SQLError)
+	if !ok {
+		return err
+	}
+	if sqlErr.Num == mysql.ErSPNotVarArg {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OUT and INOUT parameters are not supported")
+	}
+	return err
+}
+
 func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 	conn, err := qre.getConn()
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := qre.execDBConn(conn, qre.query, true)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err
+	}
+
+	qr, err := qre.execDBConn(conn, sql, true)
+	if err != nil {
+		return nil, rewriteOUTParamError(err)
 	}
 	if !qr.IsMoreResultsExists() {
 		if qr.IsInTransaction() {
@@ -705,9 +721,13 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
 	beforeInTx := conn.IsInTransaction()
-	qr, err := qre.execStatefulConn(conn, qre.query, true)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return nil, err
+	}
+	qr, err := qre.execStatefulConn(conn, sql, true)
+	if err != nil {
+		return nil, rewriteOUTParamError(err)
 	}
 	if !qr.IsMoreResultsExists() {
 		afterInTx := qr.IsInTransaction()
