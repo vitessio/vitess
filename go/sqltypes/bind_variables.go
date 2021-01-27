@@ -75,7 +75,7 @@ func Int32BindVariable(v int32) *querypb.BindVariable {
 	return ValueBindVariable(NewInt32(v))
 }
 
-// BoolBindVariable converts an bool to a int32 bind var.
+// BoolBindVariable converts an bool to a int64 bind var.
 func BoolBindVariable(v bool) *querypb.BindVariable {
 	if v {
 		return Int64BindVariable(1)
