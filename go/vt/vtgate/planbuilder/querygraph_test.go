@@ -123,7 +123,6 @@ func TestQueryGraph(t *testing.T) {
 			require.NoError(t, err)
 			qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
-			fmt.Println(qgraph.testString())
 			assert.Equal(t, tc.output, qgraph.testString())
 			utils.MustMatch(t, tc.output, qgraph.testString(), "incorrect query graph")
 		})

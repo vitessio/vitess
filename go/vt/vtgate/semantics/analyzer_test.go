@@ -40,7 +40,6 @@ func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
 }
 
 func TestScopeForSubqueries(t *testing.T) {
-	t.Skip("re-enable when gen4 supports subqueries")
 	query := `
 select t.col1, (
 	select t.col2 from z as t) 
