@@ -1299,3 +1299,315 @@ const (
 	// DoubleAt represnts @@
 	DoubleAt
 )
+
+func nilOrClone(in Expr) Expr {
+	if in == nil {
+		return nil
+	}
+	return in.Clone()
+}
+
+// Clone implements the Expr interface
+func (node *Subquery) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic("Subquery cloning not supported")
+}
+
+// Clone implements the Expr interface
+func (node *AndExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &AndExpr{
+		Left:  nilOrClone(node.Left),
+		Right: nilOrClone(node.Right),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *OrExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &OrExpr{
+		Left:  nilOrClone(node.Left),
+		Right: nilOrClone(node.Right),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *XorExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &XorExpr{
+		Left:  nilOrClone(node.Left),
+		Right: nilOrClone(node.Right),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *NotExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &NotExpr{
+		Expr: nilOrClone(node),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *ComparisonExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ComparisonExpr{
+		Operator: node.Operator,
+		Left:     nilOrClone(node.Left),
+		Right:    nilOrClone(node.Right),
+		Escape:   nilOrClone(node.Escape),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *RangeCond) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &RangeCond{
+		Operator: node.Operator,
+		Left:     nilOrClone(node.Left),
+		From:     nilOrClone(node.From),
+		To:       nilOrClone(node.To),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *IsExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &IsExpr{
+		Operator: node.Operator,
+		Expr:     nilOrClone(node.Expr),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *ExistsExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ExistsExpr{
+		Subquery: nilOrClone(node.Subquery).(*Subquery),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *Literal) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &Literal{}
+}
+
+// Clone implements the Expr interface
+func (node Argument) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	cpy := make(Argument, len(node))
+	copy(cpy, node)
+	return cpy
+}
+
+// Clone implements the Expr interface
+func (node *NullVal) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &NullVal{}
+}
+
+// Clone implements the Expr interface
+func (node BoolVal) Clone() Expr {
+	return node
+}
+
+// Clone implements the Expr interface
+func (node *ColName) Clone() Expr {
+	return node
+}
+
+// Clone implements the Expr interface
+func (node ValTuple) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	cpy := make(ValTuple, len(node))
+	copy(cpy, node)
+	return cpy
+}
+
+// Clone implements the Expr interface
+func (node ListArg) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	cpy := make(ListArg, len(node))
+	copy(cpy, node)
+	return cpy
+}
+
+// Clone implements the Expr interface
+func (node *BinaryExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &BinaryExpr{
+		Operator: node.Operator,
+		Left:     nilOrClone(node.Left),
+		Right:    nilOrClone(node.Right),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *UnaryExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &UnaryExpr{
+		Operator: node.Operator,
+		Expr:     nilOrClone(node.Expr),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *IntervalExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &IntervalExpr{
+		Expr: nilOrClone(node.Expr),
+		Unit: node.Unit,
+	}
+}
+
+// Clone implements the Expr interface
+func (node *CollateExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &CollateExpr{
+		Expr:    nilOrClone(node.Expr),
+		Charset: node.Charset,
+	}
+}
+
+// Clone implements the Expr interface
+func (node *FuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic("FuncExpr cloning not supported")
+}
+
+// Clone implements the Expr interface
+func (node *TimestampFuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &TimestampFuncExpr{
+		Name:  node.Name,
+		Expr1: nilOrClone(node.Expr1),
+		Expr2: nilOrClone(node.Expr2),
+		Unit:  node.Unit,
+	}
+}
+
+// Clone implements the Expr interface
+func (node *CurTimeFuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &CurTimeFuncExpr{
+		Name: node.Name,
+		Fsp:  nilOrClone(node.Fsp),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *CaseExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic("CaseExpr cloning not supported")
+}
+
+// Clone implements the Expr interface
+func (node *ValuesFuncExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ValuesFuncExpr{
+		Name: nilOrClone(node.Name).(*ColName),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *ConvertExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic("ConvertExpr cloning not supported")
+}
+
+// Clone implements the Expr interface
+func (node *SubstrExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &SubstrExpr{
+		Name:   node.Name,
+		StrVal: nilOrClone(node.StrVal).(*Literal),
+		From:   nilOrClone(node.From),
+		To:     nilOrClone(node.To),
+	}
+}
+
+// Clone implements the Expr interface
+func (node *ConvertUsingExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &ConvertUsingExpr{
+		Expr: nilOrClone(node.Expr),
+		Type: node.Type,
+	}
+}
+
+// Clone implements the Expr interface
+func (node *MatchExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic("MatchExpr cloning not supported")
+}
+
+// Clone implements the Expr interface
+func (node *GroupConcatExpr) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	panic("GroupConcatExpr cloning not supported")
+}
+
+// Clone implements the Expr interface
+func (node *Default) Clone() Expr {
+	if node == nil {
+		return nil
+	}
+	return &Default{ColName: node.ColName}
+}

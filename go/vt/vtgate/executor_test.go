@@ -2270,6 +2270,71 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
 }
 
+func TestExecutorCallProc(t *testing.T) {
+	executor, sbc1, sbc2, sbcUnsharded := createExecutorEnv()
+
+	type cnts struct {
+		Sbc1Cnt      int64
+		Sbc2Cnt      int64
+		SbcUnsharded int64
+	}
+
+	tcs := []struct {
+		name, targetStr string
+
+		hasNoKeyspaceErr bool
+		unshardedOnlyErr bool
+		wantCnts         cnts
+	}{{
+		name:             "simple call with no keyspace set",
+		targetStr:        "",
+		hasNoKeyspaceErr: true,
+	}, {
+		name:      "keyrange targeted keyspace",
+		targetStr: "TestExecutor[-]",
+		wantCnts: cnts{
+			Sbc1Cnt:      1,
+			Sbc2Cnt:      1,
+			SbcUnsharded: 0,
+		},
+	}, {
+		name:      "unsharded call proc",
+		targetStr: KsTestUnsharded,
+		wantCnts: cnts{
+			Sbc1Cnt:      0,
+			Sbc2Cnt:      0,
+			SbcUnsharded: 1,
+		},
+	}, {
+		name:             "should fail with sharded call proc",
+		targetStr:        "TestExecutor",
+		unshardedOnlyErr: true,
+	}}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			sbc1.ExecCount.Set(0)
+			sbc2.ExecCount.Set(0)
+			sbcUnsharded.ExecCount.Set(0)
+
+			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), "CALL proc()", nil)
+			if tc.hasNoKeyspaceErr {
+				assert.EqualError(t, err, "keyspace not specified")
+			} else if tc.unshardedOnlyErr {
+				require.EqualError(t, err, "CALL is only allowed for targeted queries or on unsharded keyspaces")
+			} else {
+				assert.NoError(t, err)
+			}
+
+			utils.MustMatch(t, tc.wantCnts, cnts{
+				Sbc1Cnt:      sbc1.ExecCount.Get(),
+				Sbc2Cnt:      sbc2.ExecCount.Get(),
+				SbcUnsharded: sbcUnsharded.ExecCount.Get(),
+			}, "count did not match")
+		})
+	}
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }

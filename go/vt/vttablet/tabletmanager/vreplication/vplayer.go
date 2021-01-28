@@ -188,6 +188,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}
 }
 
+// applyStmtEvent applies an actual DML statement received from the source, directly onto the backend database
 func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
 	sql := event.Statement
 	if sql == "" {
@@ -317,6 +318,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
 	var sbm int64 = -1
 	for {
+		// check throttler.
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			continue
+		}
+
 		items, err := relay.Fetch()
 		if err != nil {
 			return err

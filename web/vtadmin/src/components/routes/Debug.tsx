@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Theme, useTheme } from '../../hooks/useTheme';
 import { Button } from '../Button';
 import { Icon, Icons } from '../Icon';
+import { TextInput } from '../TextInput';
 import style from './Debug.module.scss';
 
 export const Debug = () => {
@@ -39,6 +40,38 @@ export const Debug = () => {
                 {Object.values(Icons).map((i) => (
                     <Icon className={style.icon} icon={i} key={i} />
                 ))}
+            </div>
+
+            <h3>Text Inputs</h3>
+            <div className={style.inputContainer}>
+                <TextInput autoFocus placeholder="Basic text input" />
+                <TextInput iconLeft={Icons.search} placeholder="With leftIcon" />
+                <TextInput iconRight={Icons.delete} placeholder="With rightIcon" />
+                <TextInput iconLeft={Icons.search} iconRight={Icons.delete} placeholder="With leftIcon and rightIcon" />
+                <TextInput disabled placeholder="Disabled" />
+                <TextInput
+                    disabled
+                    iconLeft={Icons.search}
+                    iconRight={Icons.delete}
+                    placeholder="Disabled with icons"
+                />
+                <div className={style.inputRow}>
+                    <TextInput
+                        iconLeft={Icons.search}
+                        iconRight={Icons.delete}
+                        size="large"
+                        placeholder="Button-adjacent"
+                    />
+                    <Button size="large">Primary</Button>
+                    <Button secondary size="large">
+                        Secondary
+                    </Button>
+                </div>
+                <div className={style.inputRow}>
+                    <TextInput iconLeft={Icons.search} iconRight={Icons.delete} placeholder="Button-adjacent" />
+                    <Button>Primary</Button>
+                    <Button secondary>Secondary</Button>
+                </div>
             </div>
 
             <h3>Buttons</h3>

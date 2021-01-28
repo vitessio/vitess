@@ -59,6 +59,7 @@ func TestSequence(t *testing.T) {
 			sqltypes.NewInt64(13),
 			sqltypes.NewInt64(3),
 		}},
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
 	assert.Equal(t, want, qr)
 
@@ -89,6 +90,7 @@ func TestSequence(t *testing.T) {
 			sqltypes.NewInt64(16),
 			sqltypes.NewInt64(3),
 		}},
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
 	assert.Equal(t, want, qr)
 
