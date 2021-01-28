@@ -331,9 +331,9 @@ func TestEnableSystemSettings(t *testing.T) {
 
 	// test set @@enable_system_settings to false and true
 	checkedExec(t, conn, "set enable_system_settings = false")
-	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT32(0)]]`)
+	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT64(0)]]`)
 	checkedExec(t, conn, "set enable_system_settings = true")
-	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT32(1)]]`)
+	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT64(1)]]`)
 
 	// prepare the @@sql_mode variable
 	checkedExec(t, conn, "set sql_mode = 'NO_ZERO_DATE'")
