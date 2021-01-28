@@ -17,12 +17,12 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"go/types"
-	"io"
+	"io/ioutil"
 	"log"
-	"os"
 	"path"
 	"sort"
 	"strings"
@@ -51,11 +51,6 @@ type sizegen struct {
 	sizes      types.Sizes
 	codegen    map[string]*codeFile
 	known      map[*types.Named]*typeState
-}
-
-type generatedCode struct {
-	mod   *packages.Module
-	files map[string]*codeFile
 }
 
 type codeFlag uint32
@@ -183,34 +178,28 @@ func (sizegen *sizegen) generateKnownInterface(pkg *types.Package, iff *types.In
 	})
 }
 
-func (sizegen *sizegen) finalize() {
-	code := sizegen.generateRemainingKnownTypes()
-	writeGeneratedCode(code, &realFS{})
-}
+func (sizegen *sizegen) finalize() map[string]*jen.File {
+	var complete bool
 
-type fileWriter interface {
-	forFile(fullpath string) (io.WriteCloser, error)
-}
-
-type realFS struct{}
-
-func (*realFS) forFile(fullpath string) (io.WriteCloser, error) {
-	file, err := os.Create(fullpath)
-	if err != nil {
-		return nil, err
+	for !complete {
+		complete = true
+		for tt, ts := range sizegen.known {
+			isComplex := !ts.pod
+			notYetGenerated := !ts.generated
+			if ts.local && isComplex && notYetGenerated {
+				sizegen.generateKnownType(tt)
+				complete = false
+			}
+		}
 	}
 
-	return file, nil
-}
+	outputFiles := make(map[string]*jen.File)
 
-var _ fileWriter = (*realFS)(nil)
-
-func writeGeneratedCode(code *generatedCode, wr fileWriter) error {
-	for pkg, file := range code.files {
+	for pkg, file := range sizegen.codegen {
 		if len(file.impls) == 0 {
 			continue
 		}
-		if !strings.HasPrefix(pkg, code.mod.Path) {
+		if !strings.HasPrefix(pkg, sizegen.mod.Path) {
 			log.Printf("failed to generate code for foreign package '%s'", pkg)
 			log.Printf("DEBUG:\n%#v", file)
 			continue
@@ -240,44 +229,11 @@ func writeGeneratedCode(code *generatedCode, wr fileWriter) error {
 			out.Add(impl.code)
 		}
 
-		fullPath := path.Join(code.mod.Dir, strings.TrimPrefix(pkg, code.mod.Path), "cached_size.go")
-		writer, err := wr.forFile(fullPath)
-		if err != nil {
-			return err
-		}
-
-		if err := out.Render(writer); err != nil {
-			writer.Close()
-			return fmt.Errorf("failed to save '%s': %v", fullPath, err)
-		}
-		if err = writer.Close(); err != nil {
-			return err
-		}
-
-		log.Printf("saved %s at '%s'", pkg, fullPath)
-	}
-	return nil
-}
-
-func (sizegen *sizegen) generateRemainingKnownTypes() *generatedCode {
-	var complete bool
-
-	for !complete {
-		complete = true
-		for tt, ts := range sizegen.known {
-			isComplex := !ts.pod
-			notYetGenerated := !ts.generated
-			if ts.local && isComplex && notYetGenerated {
-				sizegen.generateKnownType(tt)
-				complete = false
-			}
-		}
+		fullPath := path.Join(sizegen.mod.Dir, strings.TrimPrefix(pkg, sizegen.mod.Path), "cached_size.go")
+		outputFiles[fullPath] = out
 	}
 
-	return &generatedCode{
-		mod:   sizegen.mod,
-		files: sizegen.codegen,
-	}
+	return outputFiles
 }
 
 func (sizegen *sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct) (jen.Code, codeFlag) {
@@ -497,8 +453,11 @@ func (t *typePaths) Set(path string) error {
 func main() {
 	var patterns typePaths
 	var generate typePaths
+	var verify bool
+
 	flag.Var(&patterns, "in", "Go packages to load the generator")
 	flag.Var(&generate, "gen", "Typename of the Go struct to generate size info for")
+	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
 	flag.Parse()
 
 	loaded, err := packages.Load(&packages.Config{
@@ -515,7 +474,41 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sizegen.finalize()
+	result := sizegen.finalize()
+
+	if verify {
+		verifyFilesOnDisk(result)
+	} else {
+		saveFilesToDisk(result)
+	}
+}
+
+func saveFilesToDisk(result map[string]*jen.File) {
+	for fullPath, file := range result {
+		if err := file.Save(fullPath); err != nil {
+			log.Fatalf("filed to save file to '%s': %v", fullPath, err)
+		}
+		log.Printf("saved '%s'", fullPath)
+	}
+}
+
+func verifyFilesOnDisk(result map[string]*jen.File) {
+	for fullPath, file := range result {
+		existing, err := ioutil.ReadFile(fullPath)
+		if err != nil {
+			log.Fatalf("missing file on disk: %s (%v)", fullPath, err)
+		}
+
+		var buf bytes.Buffer
+		if err := file.Render(&buf); err != nil {
+			log.Fatalf("render error for '%s': %v", fullPath, err)
+		}
+
+		if !bytes.Equal(existing, buf.Bytes()) {
+			log.Fatalf("'%s' has changed!", fullPath)
+		}
+	}
+	log.Printf("%d files OK", len(result))
 }
 
 func generateCode(loaded []*packages.Package, generate typePaths) (*sizegen, error) {

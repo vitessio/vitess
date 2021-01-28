@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -10,14 +9,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
-
 	"golang.org/x/tools/go/packages"
 )
 
 func createFile(dir, fileName, code string) error {
-	s := path.Join(dir, "a.go")
+	s := path.Join(dir, fileName)
 	return ioutil.WriteFile(s, []byte(code), os.ModePerm)
 }
 
@@ -35,7 +32,15 @@ func TestName(t *testing.T) {
 package code
 
 type A struct {
+	str string
+	field uint64
 }
+
+type B struct {
+	field1 uint64
+	field2 *A
+}
+
 `
 
 	err = createFile(dir, "a.go", code)
@@ -54,8 +59,10 @@ type A struct {
 	require.Empty(t, pkg.Errors)
 	assert.NotNil(t, pkg.Module)
 
-	generator, err := generateCode(initial, []string{"example.com/m.A"})
+	generator, err := generateCode(initial, []string{"example.com/m.A", "example.com/m.B"})
 	require.NoError(t, err)
-	types := generator.generateRemainingKnownTypes()
-	fmt.Println(types)
+
+	for _, file := range generator.finalize() {
+		t.Logf("%#v", file)
+	}
 }
