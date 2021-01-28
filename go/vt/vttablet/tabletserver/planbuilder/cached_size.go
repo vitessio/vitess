@@ -17,10 +17,6 @@ limitations under the License.
 
 package planbuilder
 
-type cachedObject interface {
-	CachedSize(alloc bool) int64
-}
-
 func (cached *Permission) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -209,6 +209,8 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.Suffix))
 	return size
 }
+
+//go:nocheckptr
 func (cached *Join) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -662,6 +664,8 @@ func (cached *SysVarSetAware) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *Update) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -744,6 +748,8 @@ func (cached *VindexFunc) CachedSize(alloc bool) int64 {
 	size += cached.Value.CachedSize(false)
 	return size
 }
+
+//go:nocheckptr
 func (cached *VindexValues) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -769,6 +775,8 @@ func (cached *VindexValues) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
 func (cached *shardRoute) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -17,10 +17,6 @@ limitations under the License.
 
 package schema
 
-type cachedObject interface {
-	CachedSize(alloc bool) int64
-}
-
 func (cached *MessageInfo) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
