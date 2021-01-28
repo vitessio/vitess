@@ -20,10 +20,10 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/flagutil"
-
 	"vitess.io/vitess/go/vt/key"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // StringMapValue augements flagutil.StringMapValue so it can be used as a
