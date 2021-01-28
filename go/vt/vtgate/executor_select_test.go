@@ -313,7 +313,7 @@ func TestSelectLastInsertId(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectSystemVariables(t *testing.T) {
@@ -334,10 +334,10 @@ func TestSelectSystemVariables(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@@autocommit", Type: sqltypes.Int32},
-			{Name: "@@client_found_rows", Type: sqltypes.Int32},
-			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int32},
-			{Name: "@@enable_system_settings", Type: sqltypes.Int32},
+			{Name: "@@autocommit", Type: sqltypes.Int64},
+			{Name: "@@client_found_rows", Type: sqltypes.Int64},
+			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64},
 			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
 			{Name: "@@workload", Type: sqltypes.VarBinary},
@@ -349,10 +349,10 @@ func TestSelectSystemVariables(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
-			sqltypes.NULL,
-			sqltypes.NULL,
-			sqltypes.NULL,
-			sqltypes.NULL,
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
 			sqltypes.NewVarBinary("UNSPECIFIED"),
 			sqltypes.NewVarBinary(""),
@@ -364,7 +364,39 @@ func TestSelectSystemVariables(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
+}
+
+func TestSelectInitializedVitessAwareVariable(t *testing.T) {
+	executor, _, _, _ := createLegacyExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	masterSession.Autocommit = true
+	masterSession.EnableSystemSettings = true
+
+	defer func() {
+		masterSession.Autocommit = false
+		masterSession.EnableSystemSettings = false
+	}()
+
+	sql := "select @@autocommit, @@enable_system_settings"
+
+	result, err := executorExec(executor, sql, nil)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@@autocommit", Type: sqltypes.Int64},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(1),
+		}},
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectUserDefindVariable(t *testing.T) {
@@ -385,7 +417,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 			sqltypes.NULL,
 		}},
 	}
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 
 	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
 	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
@@ -399,7 +431,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 			sqltypes.NewVarBinary("bar"),
 		}},
 	}
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestFoundRows(t *testing.T) {
@@ -424,7 +456,7 @@ func TestFoundRows(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestRowCount(t *testing.T) {
@@ -454,7 +486,7 @@ func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
@@ -558,7 +590,7 @@ func TestSelectDatabase(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 
 }
 

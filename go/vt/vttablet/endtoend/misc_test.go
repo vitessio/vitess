@@ -760,3 +760,37 @@ func TestBeginExecuteWithFailingPreQueriesAndCheckConnectionState(t *testing.T) 
 	require.NoError(t, err)
 	require.Empty(t, qr.Rows)
 }
+
+func TestSelectBooleanSystemVariables(t *testing.T) {
+	client := framework.NewClient()
+
+	type testCase struct {
+		Variable string
+		Value    bool
+		Type     querypb.Type
+	}
+
+	newTestCase := func(varname string, vartype querypb.Type, value bool) testCase {
+		return testCase{Variable: varname, Value: value, Type: vartype}
+	}
+
+	tcs := []testCase{
+		newTestCase("autocommit", querypb.Type_INT64, true),
+		newTestCase("autocommit", querypb.Type_INT64, false),
+		newTestCase("enable_system_settings", querypb.Type_INT64, true),
+		newTestCase("enable_system_settings", querypb.Type_INT64, false),
+	}
+
+	for _, tc := range tcs {
+		qr, err := client.Execute(
+			fmt.Sprintf("select :%s", tc.Variable),
+			map[string]*querypb.BindVariable{tc.Variable: sqltypes.BoolBindVariable(tc.Value)},
+		)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		require.NotEmpty(t, qr.Fields, "fields should not be empty")
+		require.Equal(t, tc.Type, qr.Fields[0].Type, fmt.Sprintf("invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type))
+	}
+}
