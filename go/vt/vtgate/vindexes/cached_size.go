@@ -258,6 +258,8 @@ func (cached *Numeric) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.name))
 	return size
 }
+
+//go:nocheckptr
 func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -293,6 +295,8 @@ func (cached *RegionExperimental) CachedSize(alloc bool) int64 {
 	size += int64(len(cached.name))
 	return size
 }
+
+//go:nocheckptr
 func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

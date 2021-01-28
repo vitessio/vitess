@@ -17,10 +17,6 @@ limitations under the License.
 
 package query
 
-type cachedObject interface {
-	CachedSize(alloc bool) int64
-}
-
 func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

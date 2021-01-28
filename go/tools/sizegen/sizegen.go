@@ -20,7 +20,9 @@ import (
 	"flag"
 	"fmt"
 	"go/types"
+	"io"
 	"log"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -29,7 +31,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-const FileHeader = `Copyright 2021 The Vitess Authors.
+const licenseFileHeader = `Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -43,37 +45,50 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.`
 
-type Sizegen struct {
+type sizegen struct {
 	DebugTypes bool
 	mod        *packages.Module
 	sizes      types.Sizes
-	codegen    map[string]*File
-	known      map[*types.Named]*TypeState
+	codegen    map[string]*codeFile
+	known      map[*types.Named]*typeState
 }
 
-type Impl struct {
-	name string
-	code jen.Code
+type generatedCode struct {
+	mod   *packages.Module
+	files map[string]*codeFile
 }
 
-type File struct {
+type codeFlag uint32
+
+const (
+	codeWithInterface = 1 << 0
+	codeWithUnsafe    = 1 << 1
+)
+
+type codeImpl struct {
+	name  string
+	flags codeFlag
+	code  jen.Code
+}
+
+type codeFile struct {
 	pkg   string
-	impls []Impl
+	impls []codeImpl
 }
 
-type TypeState struct {
+type typeState struct {
 	generated bool
 	local     bool
-	pod       bool
+	pod       bool // struct with only primitives
 }
 
-func NewSizegen(mod *packages.Module, sizes types.Sizes) *Sizegen {
-	return &Sizegen{
+func newSizegen(mod *packages.Module, sizes types.Sizes) *sizegen {
+	return &sizegen{
 		DebugTypes: true,
 		mod:        mod,
 		sizes:      sizes,
-		known:      make(map[*types.Named]*TypeState),
-		codegen:    make(map[string]*File),
+		known:      make(map[*types.Named]*typeState),
+		codegen:    make(map[string]*codeFile),
 	}
 }
 
@@ -99,11 +114,11 @@ func isPod(tt types.Type) bool {
 	}
 }
 
-func (sizegen *Sizegen) getKnownType(named *types.Named) *TypeState {
+func (sizegen *sizegen) getKnownType(named *types.Named) *typeState {
 	ts := sizegen.known[named]
 	if ts == nil {
 		local := strings.HasPrefix(named.Obj().Pkg().Path(), sizegen.mod.Path)
-		ts = &TypeState{
+		ts = &typeState{
 			local: local,
 			pod:   isPod(named.Underlying()),
 		}
@@ -112,7 +127,7 @@ func (sizegen *Sizegen) getKnownType(named *types.Named) *TypeState {
 	return ts
 }
 
-func (sizegen *Sizegen) generateType(pkg *types.Package, file *File, named *types.Named) {
+func (sizegen *sizegen) generateType(pkg *types.Package, file *codeFile, named *types.Named) {
 	ts := sizegen.getKnownType(named)
 	if ts.generated {
 		return
@@ -121,10 +136,11 @@ func (sizegen *Sizegen) generateType(pkg *types.Package, file *File, named *type
 
 	switch tt := named.Underlying().(type) {
 	case *types.Struct:
-		if impl := sizegen.sizeImplForStruct(named.Obj(), tt); impl != nil {
-			file.impls = append(file.impls, Impl{
-				code: impl,
-				name: named.String(),
+		if impl, flag := sizegen.sizeImplForStruct(named.Obj(), tt); impl != nil {
+			file.impls = append(file.impls, codeImpl{
+				code:  impl,
+				name:  named.String(),
+				flags: flag,
 			})
 		}
 	case *types.Interface:
@@ -138,11 +154,11 @@ func (sizegen *Sizegen) generateType(pkg *types.Package, file *File, named *type
 	}
 }
 
-func (sizegen *Sizegen) GenerateKnownType(named *types.Named) {
+func (sizegen *sizegen) generateKnownType(named *types.Named) {
 	pkgInfo := named.Obj().Pkg()
 	file := sizegen.codegen[pkgInfo.Path()]
 	if file == nil {
-		file = &File{pkg: pkgInfo.Name()}
+		file = &codeFile{pkg: pkgInfo.Name()}
 		sizegen.codegen[pkgInfo.Path()] = file
 	}
 
@@ -159,77 +175,131 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 	}
 }
 
-func (sizegen *Sizegen) GenerateForInterface(pkg *types.Package, iff *types.Interface) {
+func (sizegen *sizegen) generateKnownInterface(pkg *types.Package, iff *types.Interface) {
 	findImplementations(pkg.Scope(), iff, func(tt types.Type) {
 		if named, ok := tt.(*types.Named); ok {
-			sizegen.GenerateKnownType(named)
+			sizegen.generateKnownType(named)
 		}
 	})
 }
 
-func (sizegen *Sizegen) Finalize() {
-	var complete bool
+func (sizegen *sizegen) finalize() {
+	code := sizegen.generateRemainingKnownTypes()
+	writeGeneratedCode(code, &realFS{})
+}
 
-	for !complete {
-		complete = true
-		for tt, ts := range sizegen.known {
-			if ts.local && !ts.pod && !ts.generated {
-				sizegen.GenerateKnownType(tt)
-				complete = false
-			}
-		}
+type fileWriter interface {
+	forFile(fullpath string) (io.WriteCloser, error)
+}
+
+type realFS struct{}
+
+func (*realFS) forFile(fullpath string) (io.WriteCloser, error) {
+	file, err := os.Create(fullpath)
+	if err != nil {
+		return nil, err
 	}
 
-	for pkg, file := range sizegen.codegen {
+	return file, nil
+}
+
+var _ fileWriter = (*realFS)(nil)
+
+func writeGeneratedCode(code *generatedCode, wr fileWriter) error {
+	for pkg, file := range code.files {
 		if len(file.impls) == 0 {
 			continue
 		}
-		if !strings.HasPrefix(pkg, sizegen.mod.Path) {
+		if !strings.HasPrefix(pkg, code.mod.Path) {
 			log.Printf("failed to generate code for foreign package '%s'", pkg)
 			log.Printf("DEBUG:\n%#v", file)
 			continue
 		}
 
-		out := jen.NewFile(file.pkg)
-		out.HeaderComment(FileHeader)
-		out.HeaderComment("Code generated by Sizegen. DO NOT EDIT.")
-		out.Add(jen.Type().Id("cachedObject").InterfaceFunc(func(i *jen.Group) {
-			i.Id("CachedSize").Params(jen.Id("alloc").Id("bool")).Int64()
-		}))
-
 		sort.Slice(file.impls, func(i, j int) bool {
 			return strings.Compare(file.impls[i].name, file.impls[j].name) < 0
 		})
 
+		out := jen.NewFile(file.pkg)
+		out.HeaderComment(licenseFileHeader)
+		out.HeaderComment("Code generated by Sizegen. DO NOT EDIT.")
+
 		for _, impl := range file.impls {
+			if impl.flags&codeWithInterface != 0 {
+				out.Add(jen.Type().Id("cachedObject").InterfaceFunc(func(i *jen.Group) {
+					i.Id("CachedSize").Params(jen.Id("alloc").Id("bool")).Int64()
+				}))
+				break
+			}
+		}
+
+		for _, impl := range file.impls {
+			if impl.flags&codeWithUnsafe != 0 {
+				out.Commentf("//go:nocheckptr")
+			}
 			out.Add(impl.code)
 		}
 
-		fullPath := path.Join(sizegen.mod.Dir, strings.TrimPrefix(pkg, sizegen.mod.Path), "cached_size.go")
-		if err := out.Save(fullPath); err != nil {
-			log.Printf("failed to save '%s': %v", fullPath, err)
-			continue
+		fullPath := path.Join(code.mod.Dir, strings.TrimPrefix(pkg, code.mod.Path), "cached_size.go")
+		writer, err := wr.forFile(fullPath)
+		if err != nil {
+			return err
 		}
+
+		if err := out.Render(writer); err != nil {
+			writer.Close()
+			return fmt.Errorf("failed to save '%s': %v", fullPath, err)
+		}
+		if err = writer.Close(); err != nil {
+			return err
+		}
+
 		log.Printf("saved %s at '%s'", pkg, fullPath)
+	}
+	return nil
+}
+
+func (sizegen *sizegen) generateRemainingKnownTypes() *generatedCode {
+	var complete bool
+
+	for !complete {
+		complete = true
+		for tt, ts := range sizegen.known {
+			isComplex := !ts.pod
+			notYetGenerated := !ts.generated
+			if ts.local && isComplex && notYetGenerated {
+				sizegen.generateKnownType(tt)
+				complete = false
+			}
+		}
+	}
+
+	return &generatedCode{
+		mod:   sizegen.mod,
+		files: sizegen.codegen,
 	}
 }
 
-func (sizegen *Sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct) jen.Code {
+func (sizegen *sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct) (jen.Code, codeFlag) {
 	if sizegen.sizes.Sizeof(st) == 0 {
-		return nil
+		return nil, 0
 	}
 
 	var stmt []jen.Code
+	var funcFlags codeFlag
 	for i := 0; i < st.NumFields(); i++ {
 		field := st.Field(i)
 		fieldType := field.Type()
 		fieldName := jen.Id("cached").Dot(field.Name())
-		if s := sizegen.sizeStmtForType(fieldName, fieldType, false); s != nil {
+
+		fieldStmt, flag := sizegen.sizeStmtForType(fieldName, fieldType, false)
+		if fieldStmt != nil {
 			if sizegen.DebugTypes {
 				stmt = append(stmt, jen.Commentf("%s", field.String()))
 			}
-			stmt = append(stmt, s)
+			stmt = append(stmt, fieldStmt)
 		}
+		funcFlags |= flag
 	}
 
 	f := jen.Func()
@@ -246,10 +316,10 @@ func (sizegen *Sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct
 		}
 		b.Add(jen.Return(jen.Id("size")))
 	})
-	return f
+	return f, funcFlags
 }
 
-func (sizegen *Sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) []jen.Code {
+func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) []jen.Code {
 	const bucketCnt = 8
 	const sizeofHmap = int64(6 * 8)
 
@@ -296,9 +366,9 @@ func (sizegen *Sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) [
 	}
 }
 
-func (sizegen *Sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Type, alloc bool) jen.Code {
+func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Type, alloc bool) (jen.Code, codeFlag) {
 	if sizegen.sizes.Sizeof(field) == 0 {
-		return nil
+		return nil, 0
 	}
 
 	switch node := field.(type) {
@@ -308,12 +378,13 @@ func (sizegen *Sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 
 		switch elemSize {
 		case 0:
-			return nil
+			return nil, 0
 
 		case 1:
-			return jen.Id("size").Op("+=").Int64().Call(jen.Cap(fieldName))
+			return jen.Id("size").Op("+=").Int64().Call(jen.Cap(fieldName)), 0
 
 		default:
+			stmt, flag := sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
 			return jen.BlockFunc(func(b *jen.Group) {
 				b.Add(
 					jen.Id("size").
@@ -322,22 +393,22 @@ func (sizegen *Sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 						Op("*").
 						Lit(sizegen.sizes.Sizeof(elemT)))
 
-				if stmt := sizegen.sizeStmtForType(jen.Id("elem"), elemT, false); stmt != nil {
-					b.Add(jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName))).Block(stmt)
+				if stmt != nil {
+					b.Add(jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(stmt))
 				}
-			})
+			}), flag
 		}
 
 	case *types.Map:
-		return jen.If(fieldName.Clone().Op("!=").Nil()).BlockFunc(func(b *jen.Group) {
+		keySize, keyFlag := sizegen.sizeStmtForType(jen.Id("k"), node.Key(), false)
+		valSize, valFlag := sizegen.sizeStmtForType(jen.Id("v"), node.Elem(), false)
+
+		return jen.If(fieldName.Clone().Op("!=").Nil()).BlockFunc(func(block *jen.Group) {
 			for _, stmt := range sizegen.sizeStmtForMap(fieldName, node) {
-				b.Add(stmt)
+				block.Add(stmt)
 			}
 
 			var forLoopVars []jen.Code
-			keySize := sizegen.sizeStmtForType(jen.Id("k"), node.Key(), false)
-			valSize := sizegen.sizeStmtForType(jen.Id("v"), node.Elem(), false)
-
 			switch {
 			case keySize != nil && valSize != nil:
 				forLoopVars = []jen.Code{jen.Id("k"), jen.Id("v")}
@@ -349,7 +420,7 @@ func (sizegen *Sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 				return
 			}
 
-			b.Add(jen.For(jen.List(forLoopVars...).Op(":=").Range().Add(fieldName))).BlockFunc(func(b *jen.Group) {
+			block.Add(jen.For(jen.List(forLoopVars...).Op(":=").Range().Add(fieldName))).BlockFunc(func(b *jen.Group) {
 				if keySize != nil {
 					b.Add(keySize)
 				}
@@ -357,7 +428,7 @@ func (sizegen *Sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 					b.Add(valSize)
 				}
 			})
-		})
+		}), codeWithUnsafe | keyFlag | valFlag
 
 	case *types.Pointer:
 		return sizegen.sizeStmtForType(fieldName, node.Elem(), true)
@@ -371,15 +442,15 @@ func (sizegen *Sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 				}
 				return jen.If(fieldName.Clone().Op("!=").Nil()).Block(
 					jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(node.Underlying())),
-				)
+				), 0
 			}
-			return nil
+			return nil, 0
 		}
 		return sizegen.sizeStmtForType(fieldName, node.Underlying(), alloc)
 
 	case *types.Interface:
 		if node.Empty() {
-			return nil
+			return nil, 0
 		}
 		return jen.If(
 			jen.List(
@@ -393,24 +464,23 @@ func (sizegen *Sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 				Id("cc").
 				Dot("CachedSize").
 				Call(jen.True()),
-		)
+		), codeWithInterface
 
 	case *types.Struct:
-		return jen.Id("size").Op("+=").Add(fieldName.Clone().Dot("CachedSize").Call(jen.Lit(alloc)))
+		return jen.Id("size").Op("+=").Add(fieldName.Clone().Dot("CachedSize").Call(jen.Lit(alloc))), 0
 
 	case *types.Basic:
 		if !alloc {
 			if node.Info()&types.IsString != 0 {
-				return jen.Id("size").Op("+=").Int64().Call(jen.Len(fieldName))
+				return jen.Id("size").Op("+=").Int64().Call(jen.Len(fieldName)), 0
 			}
-			return nil
+			return nil, 0
 		}
-		return jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(node))
+		return jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(node)), 0
 	default:
 		log.Printf("unhandled type: %T", node)
+		return nil, 0
 	}
-
-	return nil
 }
 
 type typePaths []string
@@ -440,7 +510,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sizegen := NewSizegen(loaded[0].Module, loaded[0].TypesSizes)
+	sizegen, err := generateCode(loaded, generate)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	sizegen.finalize()
+}
+
+func generateCode(loaded []*packages.Package, generate typePaths) (*sizegen, error) {
+	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes)
 
 	scopes := make(map[string]*types.Scope)
 	for _, pkg := range loaded {
@@ -450,7 +529,7 @@ func main() {
 	for _, gen := range generate {
 		pos := strings.LastIndexByte(gen, '.')
 		if pos < 0 {
-			log.Fatalf("unexpected input type: %s", gen)
+			return nil, fmt.Errorf("unexpected input type: %s", gen)
 		}
 
 		pkgname := gen[:pos]
@@ -458,16 +537,16 @@ func main() {
 
 		scope := scopes[pkgname]
 		if scope == nil {
-			log.Fatalf("no scope found for type '%s'", gen)
+			return nil, fmt.Errorf("no scope found for type '%s'", gen)
 		}
 
 		tt := scope.Lookup(typename)
 		if tt == nil {
-			log.Fatalf("no type called '%s' found in '%s'", typename, pkgname)
+			return nil, fmt.Errorf("no type called '%s' found in '%s'", typename, pkgname)
 		}
 
-		sizegen.GenerateKnownType(tt.Type().(*types.Named))
+		sizegen.generateKnownType(tt.Type().(*types.Named))
 	}
 
-	sizegen.Finalize()
+	return sizegen, nil
 }
