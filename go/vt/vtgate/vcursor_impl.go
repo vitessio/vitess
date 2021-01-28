@@ -358,12 +358,14 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 	switch strings.ToLower(*plannerVersion) {
 	case "v3":
 		return planbuilder.V3
-	case "v4":
-		return planbuilder.V4
-	case "v4greedy", "greedy":
-		return planbuilder.V4GreedyOnly
+	case "gen4":
+		return planbuilder.Gen4
+	case "gen4greedy", "greedy":
+		return planbuilder.Gen4GreedyOnly
 	case "left2right":
-		return planbuilder.V4Left2Right
+		return planbuilder.Gen4Left2Right
+	case "gen4fallback":
+		return planbuilder.Gen4WithFallback
 	}
 
 	log.Warn("unknown planner version configured. using the default")

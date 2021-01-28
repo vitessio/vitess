@@ -422,7 +422,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				empty = true
 			}
 
-			vschema.version = V4
+			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
 
 			// our expectation for the new planner on this query is one of three
@@ -610,10 +610,10 @@ func BenchmarkPlanner(b *testing.B) {
 			benchmarkPlanner(b, V3, testCases, vschema)
 		})
 		b.Run(filename+"-v4", func(b *testing.B) {
-			benchmarkPlanner(b, V4, testCases, vschema)
+			benchmarkPlanner(b, Gen4, testCases, vschema)
 		})
 		b.Run(filename+"-v4left2right", func(b *testing.B) {
-			benchmarkPlanner(b, V4Left2Right, testCases, vschema)
+			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}
 }
