@@ -319,7 +319,9 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 				}
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
-		case sysvars.VitessVersion.Name:
+		case sysvars.Version.Name:
+			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.MySQLVersion())
+		case sysvars.VersionComment.Name:
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		}
 	}

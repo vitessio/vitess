@@ -521,6 +521,7 @@ var SingleRowResult = &sqltypes.Result{
 		sqltypes.NewInt32(1),
 		sqltypes.NewVarChar("foo"),
 	}},
+	StatusFlags: sqltypes.ServerStatusAutocommit,
 }
 
 // StreamRowResult is SingleRowResult with RowsAffected set to 0.

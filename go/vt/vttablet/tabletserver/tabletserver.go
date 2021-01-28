@@ -157,13 +157,21 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
+	tabletTypeFunc := func() topodatapb.TabletType {
+		if tsv.sm == nil {
+			return topodatapb.TabletType_UNKNOWN
+		}
+		return tsv.sm.Target().TabletType
+	}
+
 	tsv.statelessql = NewQueryList("oltp-stateless")
 	tsv.statefulql = NewQueryList("oltp-stateful")
 	tsv.olapql = NewQueryList("olap")
+	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
 	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, alias.Cell)
+	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
@@ -171,14 +179,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
-	tabletTypeFunc := func() topodatapb.TabletType {
-		if tsv.sm == nil {
-			return topodatapb.TabletType_UNKNOWN
-		}
-		return tsv.sm.Target().TabletType
-	}
 	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tabletTypeFunc)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
@@ -1576,35 +1577,39 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 	})
 }
 
-// registerThrottlerCheckHandler registers a throttler "check" request
-func (tsv *TabletServer) registerThrottlerCheckHandler() {
-	tsv.exporter.HandleFunc("/throttler/check", func(w http.ResponseWriter, r *http.Request) {
-		ctx := tabletenv.LocalContext()
-		remoteAddr := r.Header.Get("X-Forwarded-For")
-		if remoteAddr == "" {
-			remoteAddr = r.RemoteAddr
-			remoteAddr = strings.Split(remoteAddr, ":")[0]
-		}
-		appName := r.URL.Query().Get("app")
-		if appName == "" {
-			appName = throttle.DefaultAppName
-		}
-		flags := &throttle.CheckFlags{
-			LowPriority: (r.URL.Query().Get("p") == "low"),
-		}
-		checkResult := tsv.lagThrottler.Check(ctx, appName, remoteAddr, flags)
-		if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
-			checkResult.StatusCode = http.StatusOK // 200
-		}
+// registerThrottlerCheckHandlers registers throttler "check" requests
+func (tsv *TabletServer) registerThrottlerCheckHandlers() {
+	handle := func(path string, checkType throttle.ThrottleCheckType) {
+		tsv.exporter.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			ctx := tabletenv.LocalContext()
+			remoteAddr := r.Header.Get("X-Forwarded-For")
+			if remoteAddr == "" {
+				remoteAddr = r.RemoteAddr
+				remoteAddr = strings.Split(remoteAddr, ":")[0]
+			}
+			appName := r.URL.Query().Get("app")
+			if appName == "" {
+				appName = throttle.DefaultAppName
+			}
+			flags := &throttle.CheckFlags{
+				LowPriority: (r.URL.Query().Get("p") == "low"),
+			}
+			checkResult := tsv.lagThrottler.CheckByType(ctx, appName, remoteAddr, flags, checkType)
+			if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
+				checkResult.StatusCode = http.StatusOK // 200
+			}
 
-		if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-		}
-		w.WriteHeader(checkResult.StatusCode)
-		if r.Method == http.MethodGet {
-			json.NewEncoder(w).Encode(checkResult)
-		}
-	})
+			if r.Method == http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+			}
+			w.WriteHeader(checkResult.StatusCode)
+			if r.Method == http.MethodGet {
+				json.NewEncoder(w).Encode(checkResult)
+			}
+		})
+	}
+	handle("/throttler/check", throttle.ThrottleCheckPrimaryWrite)
+	handle("/throttler/check-self", throttle.ThrottleCheckSelf)
 }
 
 // registerThrottlerStatusHandler registers a throttler "status" request
@@ -1617,10 +1622,34 @@ func (tsv *TabletServer) registerThrottlerStatusHandler() {
 	})
 }
 
+// registerThrottlerThrottleAppHandler registers a throttler "throttle-app" request
+func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
+	tsv.exporter.HandleFunc("/throttler/throttle-app", func(w http.ResponseWriter, r *http.Request) {
+		appName := r.URL.Query().Get("app")
+		d, err := time.ParseDuration(r.URL.Query().Get("duration"))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
+			return
+		}
+		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), 1)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(appThrottle)
+	})
+	tsv.exporter.HandleFunc("/throttler/unthrottle-app", func(w http.ResponseWriter, r *http.Request) {
+		appName := r.URL.Query().Get("app")
+		appThrottle := tsv.lagThrottler.UnthrottleApp(appName)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(appThrottle)
+	})
+}
+
 // registerThrottlerHandlers registers all throttler handlers
 func (tsv *TabletServer) registerThrottlerHandlers() {
-	tsv.registerThrottlerCheckHandler()
+	tsv.registerThrottlerCheckHandlers()
 	tsv.registerThrottlerStatusHandler()
+	tsv.registerThrottlerThrottleAppHandler()
 }
 
 func (tsv *TabletServer) registerDebugEnvHandler() {
@@ -1633,6 +1662,13 @@ func (tsv *TabletServer) registerDebugEnvHandler() {
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
 	tsv.rt.EnableHeartbeat(enabled)
+}
+
+// EnableThrottler forces throttler to be on or off.
+// When throttler is off, it responds to all check requests with HTTP 200 OK
+// Only to be used for testing.
+func (tsv *TabletServer) EnableThrottler(enabled bool) {
+	tsv.Config().EnableLagThrottler = enabled
 }
 
 // SetTracking forces tracking to be on or off.

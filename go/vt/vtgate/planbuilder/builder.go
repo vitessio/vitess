@@ -20,6 +20,8 @@ import (
 	"errors"
 	"sort"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -186,6 +188,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
 	case *sqlparser.Flush:
 		return buildFlushPlan(stmt, vschema)
+	case *sqlparser.CallProc:
+		return buildCallProcPlan(stmt, vschema)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
@@ -209,12 +213,12 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !ksExists {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot drop database '%s'; database does not exists", ksName)
+			return nil, mysql.NewSQLError(mysql.ERDbDropExists, mysql.SSUnknownSQLState, "Can't drop database '%s'; database doesn't exists", ksName)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot alter database '%s'; database does not exists", ksName)
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Can't alter database '%s'; database doesn't exists", ksName)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database not allowed")
 	case *sqlparser.CreateDatabase:
@@ -222,7 +226,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !dbDDL.IfNotExists && ksExists {
-			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "cannot create database '%s'; database exists", ksName)
+			return nil, mysql.NewSQLError(mysql.ERDbCreateExists, mysql.SSUnknownSQLState, "Can't create database '%s'; database exists", ksName)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
 	}

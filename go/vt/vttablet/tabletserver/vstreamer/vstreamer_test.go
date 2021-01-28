@@ -251,7 +251,7 @@ func TestVersion(t *testing.T) {
 	require.NoError(t, err)
 	defer env.SchemaEngine.EnableHistorian(false)
 
-	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, env.Cells[0])
+	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
 	engine.InitDBConfig(env.KeyspaceName)
 	engine.Open()
 	defer engine.Close()
@@ -1923,7 +1923,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
-	t.Helper()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	wg, ch := startStream(ctx, t, filter, position, tablePK)
@@ -1956,7 +1956,6 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 }
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
-	t.Helper()
 	timer := time.NewTimer(1 * time.Minute)
 	defer timer.Stop()
 	for _, wantset := range output {

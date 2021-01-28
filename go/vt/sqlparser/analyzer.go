@@ -60,6 +60,7 @@ const (
 	StmtLockTables
 	StmtUnlockTables
 	StmtFlush
+	StmtCallProc
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -103,6 +104,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUnlockTables
 	case *Flush:
 		return StmtFlush
+	case *CallProc:
+		return StmtCallProc
 	default:
 		return StmtUnknown
 	}
@@ -111,7 +114,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 //CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc: // TODO: we could merge this logic into ASTrewriter
 		return true
 	}
 	return false
@@ -262,6 +265,8 @@ func (s StatementType) String() string {
 		return "UNLOCK_TABLES"
 	case StmtFlush:
 		return "FLUSH"
+	case StmtCallProc:
+		return "CALL_PROC"
 	default:
 		return "UNKNOWN"
 	}

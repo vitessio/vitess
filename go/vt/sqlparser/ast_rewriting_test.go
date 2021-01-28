@@ -27,12 +27,12 @@ import (
 )
 
 type myTestCase struct {
-	in, expected                                                      string
-	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID bool
-	ddlStrategy, sessionUUID, sessionEnableSystemSettings             bool
-	udv                                                               int
-	autocommit, clientFoundRows, skipQueryPlanCache                   bool
-	sqlSelectLimit, transactionMode, workload, vitessVersion          bool
+	in, expected                                                       string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
+	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
+	udv                                                                int
+	autocommit, clientFoundRows, skipQueryPlanCache                    bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -41,9 +41,13 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT 42",
 		// no bindvar needs
 	}, {
-		in:            "SELECT @@vitess_version",
-		expected:      "SELECT :__vtvitess_version as `@@vitess_version`",
-		vitessVersion: true,
+		in:       "SELECT @@version",
+		expected: "SELECT :__vtversion as `@@version`",
+		version:  true,
+	}, {
+		in:             "SELECT @@version_comment",
+		expected:       "SELECT :__vtversion_comment as `@@version_comment`",
+		versionComment: true,
 	}, {
 		in:                          "SELECT @@enable_system_settings",
 		expected:                    "SELECT :__vtenable_system_settings as `@@enable_system_settings`",
@@ -173,6 +177,10 @@ func TestRewrites(in *testing.T) {
 		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
 		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
 		expected: "SELECT * FROM A JOIN B USING (id1,id2,id3)",
+	}, {
+		in:       "CALL proc(@foo)",
+		expected: "CALL proc(:__vtudvfoo)",
+		udv:      1,
 	}}
 
 	for _, tc := range tests {
@@ -207,7 +215,8 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
 			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
-			assert.Equal(tc.vitessVersion, result.NeedsSysVar(sysvars.VitessVersion.Name), "should need Vitess version")
+			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
+			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
 		})
 	}
 }

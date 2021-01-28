@@ -56,7 +56,6 @@ var (
 	mysqlTCPVersion               = flag.String("mysql_tcp_version", "tcp", "Select tcp, tcp4, or tcp6 to control the socket type.")
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use. Options: none, ldap, clientcert, static, vault.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
-	mysqlServerVersion            = flag.String("mysql_server_version", mysql.DefaultServerVersion, "MySQL server version to advertise.")
 	mysqlProxyProtocol            = flag.Bool("proxy_protocol", false, "Enable HAProxy PROXY protocol on MySQL listener socket")
 
 	mysqlServerRequireSecureTransport = flag.Bool("mysql_server_require_secure_transport", false, "Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided")
@@ -71,7 +70,7 @@ var (
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
-	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "UNSPECIFIED", "Default session workload (OLTP, OLAP, DBA)")
+	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "OLTP", "Default session workload (OLTP, OLAP, DBA)")
 	mysqlDefaultWorkload     int32
 
 	busyConnections int32
@@ -425,8 +424,8 @@ func initMySQLProtocol() {
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		if *mysqlServerVersion != "" {
-			mysqlListener.ServerVersion = *mysqlServerVersion
+		if *servenv.MySQLServerVersion != "" {
+			mysqlListener.ServerVersion = *servenv.MySQLServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlServerRequireSecureTransport)

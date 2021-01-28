@@ -127,6 +127,8 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 
 	assert.Equal(t, "replica", statsTabletType.Get())
+	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	_, err := ts.GetShard(ctx, "ks", "0")
 	require.NoError(t, err)

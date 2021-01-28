@@ -514,6 +514,12 @@ type (
 	// ExplainType is an enum for Explain.Type
 	ExplainType int8
 
+	// CallProc represents a CALL statement
+	CallProc struct {
+		Name   TableName
+		Params Exprs
+	}
+
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
@@ -585,6 +591,7 @@ func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
+func (*CallProc) iStatement()          {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -1474,6 +1481,7 @@ type (
 	Expr interface {
 		iExpr()
 		SQLNode
+		Clone() Expr
 	}
 
 	// AndExpr represents an AND expression.
@@ -2488,6 +2496,11 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
+}
+
+// Format formats the node.
+func (node *CallProc) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "call %v(%v)", node.Name, node.Params)
 }
 
 // Format formats the node.

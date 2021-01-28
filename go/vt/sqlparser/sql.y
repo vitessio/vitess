@@ -151,7 +151,7 @@ func skipToEnd(yylex interface{}) {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %token <bytes> DISTINCTROW PARSER
 %token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
@@ -278,7 +278,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolean> default_optional
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
-%type <statement> lock_statement unlock_statement
+%type <statement> lock_statement unlock_statement call_statement
 %type <bytes2> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
@@ -311,7 +311,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
 %type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> expression_list
+%type <exprs> expression_list expression_list_opt
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
@@ -446,6 +446,7 @@ command:
 | load_statement
 | lock_statement
 | unlock_statement
+| call_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -4621,6 +4622,21 @@ to_opt:
 | AS
   { $$ = struct{}{} }
 
+call_statement:
+  CALL table_name openb expression_list_opt closeb
+  {
+    $$ = &CallProc{Name: $2, Params: $4}
+  }
+
+expression_list_opt:  
+  {
+    $$ = nil
+  }
+| expression_list
+  {
+    $$ = $1
+  }
+
 using_opt:
   { $$ = nil }
 | using_index_type
@@ -4684,6 +4700,7 @@ reserved_keyword:
 | BINARY
 | BY
 | CASE
+| CALL
 | CHANGE
 | CHECK
 | COLLATE

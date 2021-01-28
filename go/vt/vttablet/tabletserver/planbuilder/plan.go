@@ -71,6 +71,7 @@ const (
 	PlanFlush
 	PlanLockTables
 	PlanUnlockTables
+	PlanCallProc
 	NumPlans
 )
 
@@ -100,6 +101,7 @@ var planName = []string{
 	"Flush",
 	"LockTables",
 	"UnlockTables",
+	"CallProcedure",
 }
 
 func (pt PlanType) String() string {
@@ -214,6 +216,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = &Plan{PlanID: PlanLoad}, nil
 	case *sqlparser.Flush:
 		plan, err = &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}, nil
+	case *sqlparser.CallProc:
+		plan, err = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
@@ -250,7 +254,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		plan.Table = lookupTable(stmt.From, tables)
-	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
+	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc:
 		// pass
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%v' not allowed for streaming", sqlparser.String(stmt))
