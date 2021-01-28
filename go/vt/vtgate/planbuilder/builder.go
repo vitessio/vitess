@@ -96,7 +96,8 @@ var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
-	instruction, err := createInstructionFor(query, stmt, vschema, getConfiguredPlanner(vschema))
+
+	instruction, err := createInstructionFor(query, stmt, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -109,25 +110,20 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema ContextVSchema) selectPlanner {
+func getConfiguredPlanner(vschema ContextVSchema) (selectPlanner, error) {
 	switch vschema.Planner() {
 	case V3:
-		return buildSelectPlan
+		return buildSelectPlan, nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
-		return gen4Planner
+		return gen4Planner, nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
-			primary:  buildSelectPlan,
-			fallback: gen4Planner,
+			primary:  gen4Planner,
+			fallback: buildSelectPlan,
 		}
-		return fp.plan
+		return fp.plan, nil
 	default:
-		// fail - unknown planner
-		return func(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
-			return func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown planner selected %d", vschema.Planner())
-			}
-		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown planner selected %d", vschema.Planner())
 	}
 }
 
@@ -140,10 +136,14 @@ func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(sta
 
 type selectPlanner func(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error)
 
-func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema, sel selectPlanner) (engine.Primitive, error) {
+func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		return buildRoutePlan(stmt, vschema, sel(query))
+		configuredPlanner, err := getConfiguredPlanner(vschema)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, vschema, configuredPlanner(query))
 	case *sqlparser.Insert:
 		return buildRoutePlan(stmt, vschema, buildInsertPlan)
 	case *sqlparser.Update:
@@ -160,7 +160,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildUsePlan(stmt, vschema)
 	case *sqlparser.Explain:
 		if stmt.Type == sqlparser.VitessType {
-			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema, sel)
+			innerInstruction, err := createInstructionFor(query, stmt.Statement, vschema)
 			if err != nil {
 				return nil, err
 			}
