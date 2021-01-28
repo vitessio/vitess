@@ -533,12 +533,18 @@ func generateCode(loaded []*packages.Package, generate typePaths) (*sizegen, err
 			return nil, fmt.Errorf("no scope found for type '%s'", gen)
 		}
 
-		tt := scope.Lookup(typename)
-		if tt == nil {
-			return nil, fmt.Errorf("no type called '%s' found in '%s'", typename, pkgname)
-		}
+		if typename == "*" {
+			for _, name := range scope.Names() {
+				sizegen.generateKnownType(scope.Lookup(name).Type().(*types.Named))
+			}
+		} else {
+			tt := scope.Lookup(typename)
+			if tt == nil {
+				return nil, fmt.Errorf("no type called '%s' found in '%s'", typename, pkgname)
+			}
 
-		sizegen.generateKnownType(tt.Type().(*types.Named))
+			sizegen.generateKnownType(tt.Type().(*types.Named))
+		}
 	}
 
 	return sizegen, nil
