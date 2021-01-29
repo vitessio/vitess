@@ -434,6 +434,7 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
+		Temp        bool
 		Table       TableName
 		IfNotExists bool
 		TableSpec   *TableSpec
@@ -3167,11 +3168,17 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	if node.IfNotExists {
-		buf.astPrintf(node, "create table if not exists %v", node.Table)
-	} else {
-		buf.astPrintf(node, "create table %v", node.Table)
+	buf.WriteString("create ")
+	if node.Temp {
+		buf.WriteString("temporary ")
 	}
+	buf.WriteString("table ")
+
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	buf.astPrintf(node, "%v", node.Table)
+
 	if node.OptLike != nil {
 		buf.astPrintf(node, " %v", node.OptLike)
 	}

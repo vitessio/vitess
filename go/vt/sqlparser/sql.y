@@ -201,7 +201,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
-%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
+%token <bytes> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -347,7 +347,7 @@ func skipToEnd(yylex interface{}) {
 %type <ignore> ignore_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt null_opt enforced_opt
+%type <boolean> exists_opt not_exists_opt null_opt enforced_opt temp_opt
 %type <empty> to_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -827,9 +827,9 @@ vindex_param:
   }
 
 create_table_prefix:
-  CREATE TABLE not_exists_opt table_name
+  CREATE temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Table: $4, IfNotExists: $3}
+    $$ = &CreateTable{Table: $5, IfNotExists: $4, Temp: $2}
     setDDL(yylex, $$)
   }
 
@@ -4600,6 +4600,11 @@ for_from:
   FOR
 | FROM
 
+temp_opt:
+  { $$ = false }
+| TEMPORARY
+  { $$ = true }
+
 exists_opt:
   { $$ = false }
 | IF EXISTS
@@ -5052,6 +5057,7 @@ non_reserved_keyword:
 | STORAGE
 | TABLES
 | TABLESPACE
+| TEMPORARY
 | TEMPTABLE
 | TERMINATED
 | TEXT
