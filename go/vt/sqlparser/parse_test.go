@@ -1254,6 +1254,8 @@ var (
 		input:  "drop table if exists a,b restrict",
 		output: "drop table if exists a, b",
 	}, {
+		input: "drop temporary table if exists a, b",
+	}, {
 		input:  "drop view if exists a cascade",
 		output: "drop view if exists a",
 	}, {
