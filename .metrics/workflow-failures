@@ -1288,3 +1288,5 @@
 2021-01-29T12:24:25Z,local_example,https://github.com/vitessio/vitess/actions/runs/520866724
 2021-01-29T12:27:58Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/520873944
 2021-01-29T12:27:58Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/520873975
+2021-01-29T16:32:34Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/521428734
+2021-01-29T17:06:45Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/521506365
