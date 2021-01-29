@@ -45,6 +45,9 @@ type Send struct {
 	// SingleShardOnly specifies that the query must be send to only single shard
 	SingleShardOnly bool
 
+	// ReservedConn specifies that the query to be executed in a reserved connection
+	ReservedConn bool
+
 	noInputs
 }
 
@@ -87,6 +90,10 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
 	}
 
+	if s.ReservedConn {
+		vcursor.Session().NeedsReservedConn()
+	}
+
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{
@@ -122,6 +129,10 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 
 	if s.SingleShardOnly && len(rss) != 1 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
+	}
+
+	if s.ReservedConn {
+		vcursor.Session().NeedsReservedConn()
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))

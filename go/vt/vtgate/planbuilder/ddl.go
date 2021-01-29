@@ -2,7 +2,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -26,6 +26,9 @@ const (
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	if ddlStatement.IsTemporary() {
+		return buildTempTablePlan(sql, ddlStatement, vschema)
+	}
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, vschema)
 	if err != nil {
 		return nil, err
@@ -37,6 +40,44 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschem
 		DDL:       ddlStatement,
 		NormalDDL: normalDDLPlan,
 		OnlineDDL: onlineDDLPlan,
+	}, nil
+}
+
+func buildTempTablePlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
+	var destination key.Destination
+	var keyspace *vindexes.Keyspace
+	var err error
+
+	switch stmt.(type) {
+	case *sqlparser.CreateTable:
+		destination, keyspace, _, err = vschema.TargetDestination(stmt.GetTable().Qualifier.String())
+		// Remove the keyspace name as the database name might be different.
+		stmt.SetTable("", stmt.GetTable().Name.String())
+		if err != nil {
+			return nil, err
+		}
+	case *sqlparser.DropTable:
+		destination, keyspace, err = buildDropViewOrTable(vschema, stmt)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: Temporary table not planned for %s", sql)
+	}
+	if keyspace.Sharded {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded keyspace: %s", keyspace.Name)
+	}
+	query := sql
+	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
+	if stmt.IsFullyParsed() {
+		query = sqlparser.String(stmt)
+	}
+
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: destination,
+		Query:             query,
+		ReservedConn:      true,
 	}, nil
 }
 
@@ -82,7 +123,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		}
 
 	default:
-		return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected statement type: %T", ddlStatement)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", ddlStatement)
 	}
 
 	if destination == nil {
@@ -148,13 +189,13 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	}
 	routePlan, isRoute := selectPlan.(*engine.Route)
 	if !isRoute {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
 	}
 	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
 	}
 	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
@@ -184,13 +225,13 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Des
 	}
 	routePlan, isRoute := selectPlan.(*engine.Route)
 	if !isRoute {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
 	}
 	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
-		return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
 	}
 	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
@@ -240,7 +281,7 @@ func buildDropViewOrTable(vschema ContextVSchema, ddlStatement sqlparser.DDLStat
 			keyspace = keyspaceTab
 		}
 		if destination != destinationTab || keyspace != keyspaceTab {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, DifferentDestinations)
+			return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil
@@ -296,7 +337,7 @@ func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable
 			keyspace = keyspaceFrom
 		}
 		if destination != destinationFrom || keyspace != keyspaceFrom {
-			return nil, nil, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, DifferentDestinations)
+			return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil
