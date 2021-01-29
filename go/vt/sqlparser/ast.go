@@ -421,6 +421,7 @@ type (
 
 	// DropTable represents a DROP TABLE statement.
 	DropTable struct {
+		Temp       bool
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
@@ -3243,11 +3244,15 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DropTable) Format(buf *TrackedBuffer) {
+	temp := ""
+	if node.Temp {
+		temp = " temporary"
+	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.astPrintf(node, "drop table%s %v", exists, node.FromTables)
+	buf.astPrintf(node, "drop%s table%s %v", temp, exists, node.FromTables)
 }
 
 // Format formats the node.
