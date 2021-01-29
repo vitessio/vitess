@@ -1119,6 +1119,8 @@ var (
 		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null, KEY b2_idx(b))",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null,\n\tKEY b2_idx (b)\n)",
 	}, {
+		input: "create temporary table a (\n\tid bigint\n)",
+	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
 		input: "alter vschema create vindex keyspace.hash_vdx using hash",
