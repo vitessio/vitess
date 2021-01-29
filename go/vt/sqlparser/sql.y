@@ -2289,9 +2289,9 @@ rename_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list restrict_or_cascade_opt
+  DROP temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $4, IfExists: $3}
+    $$ = &DropTable{FromTables: $5, IfExists: $4, Temp: $2}
   }
 | DROP INDEX id_or_var ON table_name algorithm_lock_opt
   {
