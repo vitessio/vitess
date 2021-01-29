@@ -460,58 +460,62 @@ func main() {
 	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
 	flag.Parse()
 
-	loaded, err := packages.Load(&packages.Config{
-		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
-		Logf: log.Printf,
-	}, patterns...)
-
+	result, err := GenerateSizeHelpers(patterns, generate)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	sizegen, err := generateCode(loaded, generate)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	result := sizegen.finalize()
 
 	if verify {
-		verifyFilesOnDisk(result)
-	} else {
-		saveFilesToDisk(result)
-	}
-}
-
-func saveFilesToDisk(result map[string]*jen.File) {
-	for fullPath, file := range result {
-		if err := file.Save(fullPath); err != nil {
-			log.Fatalf("filed to save file to '%s': %v", fullPath, err)
+		for _, err := range VerifyFilesOnDisk(result) {
+			log.Fatal(err)
 		}
-		log.Printf("saved '%s'", fullPath)
+		log.Printf("%d files OK", len(result))
+	} else {
+		for fullPath, file := range result {
+			if err := file.Save(fullPath); err != nil {
+				log.Fatalf("filed to save file to '%s': %v", fullPath, err)
+			}
+			log.Printf("saved '%s'", fullPath)
+		}
 	}
 }
 
-func verifyFilesOnDisk(result map[string]*jen.File) {
+// VerifyFilesOnDisk compares the generated results from the codegen against the files that
+// currently exist on disk and returns any mismatches
+func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	for fullPath, file := range result {
 		existing, err := ioutil.ReadFile(fullPath)
 		if err != nil {
-			log.Fatalf("missing file on disk: %s (%v)", fullPath, err)
+			errors = append(errors, fmt.Errorf("missing file on disk: %s (%w)", fullPath, err))
+			continue
 		}
 
 		var buf bytes.Buffer
 		if err := file.Render(&buf); err != nil {
-			log.Fatalf("render error for '%s': %v", fullPath, err)
+			errors = append(errors, fmt.Errorf("render error for '%s': %w", fullPath, err))
+			continue
 		}
 
 		if !bytes.Equal(existing, buf.Bytes()) {
-			log.Fatalf("'%s' has changed!", fullPath)
+			errors = append(errors, fmt.Errorf("'%s' has changed", fullPath))
+			continue
 		}
 	}
-	log.Printf("%d files OK", len(result))
+	return errors
 }
 
-func generateCode(loaded []*packages.Package, generate typePaths) (*sizegen, error) {
+// GenerateSizeHelpers generates the auxiliary code that implements CachedSize helper methods
+// for all the types listed in typePatterns
+func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[string]*jen.File, error) {
+	loaded, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
+		Logf: log.Printf,
+	}, packagePatterns...)
+
+	if err != nil {
+		return nil, err
+	}
+
 	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes)
 
 	scopes := make(map[string]*types.Scope)
@@ -519,7 +523,7 @@ func generateCode(loaded []*packages.Package, generate typePaths) (*sizegen, err
 		scopes[pkg.PkgPath] = pkg.Types.Scope()
 	}
 
-	for _, gen := range generate {
+	for _, gen := range typePatterns {
 		pos := strings.LastIndexByte(gen, '.')
 		if pos < 0 {
 			return nil, fmt.Errorf("unexpected input type: %s", gen)
@@ -547,5 +551,5 @@ func generateCode(loaded []*packages.Package, generate typePaths) (*sizegen, err
 		}
 	}
 
-	return sizegen, nil
+	return sizegen.finalize(), nil
 }
