@@ -58,6 +58,7 @@ type (
 	DDLStatement interface {
 		iDDLStatement()
 		IsFullyParsed() bool
+		IsTemporary() bool
 		GetTable() TableName
 		GetAction() DDLAction
 		GetOptLike() *OptLike
@@ -677,6 +678,46 @@ func (node *DropTable) IsFullyParsed() bool {
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*TruncateTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*RenameTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterView) IsTemporary() bool {
+	return false
 }
 
 // GetTable implements the DDLStatement interface
