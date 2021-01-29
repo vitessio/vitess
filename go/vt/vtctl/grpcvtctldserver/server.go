@@ -316,6 +316,11 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 	return &vtctldatapb.DeleteTabletsResponse{}, nil
 }
 
+// EmergencyReparentShard is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (*vtctldatapb.EmergencyReparentShardResponse, error) {
+	panic("unimplemented!")
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	result, err := s.ts.FindAllShardsInKeyspace(ctx, req.Keyspace)
@@ -864,6 +869,11 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
+// PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtctldatapb.PlannedReparentShardResponse, error) {
+	panic("unimplemented!")
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
@@ -895,6 +905,16 @@ func (s *VtctldServer) RemoveShardCell(ctx context.Context, req *vtctldatapb.Rem
 	}
 
 	return &vtctldatapb.RemoveShardCellResponse{}, nil
+}
+
+// ReparentTablet is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.ReparentTabletRequest) (*vtctldatapb.ReparentTabletResponse, error) {
+	panic("unimplemented!")
+}
+
+// TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtctldatapb.TabletExternallyReparentedRequest) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
+	panic("unimplemented!")
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
