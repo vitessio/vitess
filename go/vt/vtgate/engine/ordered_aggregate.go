@@ -206,7 +206,6 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	if current != nil {
 		out.Rows = append(out.Rows, current)
 	}
-	out.RowsAffected = uint64(len(out.Rows))
 	return out, nil
 }
 
@@ -324,6 +323,7 @@ func (oa *OrderedAggregate) Inputs() []Primitive {
 	return []Primitive{oa.Input}
 }
 
+// NeedsTransaction implements the Primitive interface
 func (oa *OrderedAggregate) NeedsTransaction() bool {
 	return oa.Input.NeedsTransaction()
 }

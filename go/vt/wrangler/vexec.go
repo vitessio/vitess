@@ -81,7 +81,6 @@ func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangle
 // QueryResultForRowsAffected aggregates results into row-type results (fields + values)
 func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
 	qr.Fields = []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,
@@ -102,7 +101,6 @@ func (wr *Wrangler) QueryResultForRowsAffected(results map[*topo.TabletInfo]*sql
 // QueryResultForTabletResults aggregates given results into a "rows-affected" type result (no row data)
 func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sqltypes.Result) *sqltypes.Result {
 	var qr = &sqltypes.Result{}
-	qr.RowsAffected = uint64(len(results))
 	defaultFields := []*querypb.Field{{
 		Name: "Tablet",
 		Type: sqltypes.VarBinary,

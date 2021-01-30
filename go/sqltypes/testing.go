@@ -73,7 +73,6 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 			result.Rows[i][j] = MakeTrusted(fields[j].Type, []byte(col))
 		}
 	}
-	result.RowsAffected = uint64(len(result.Rows))
 	return result
 }
 

@@ -65,7 +65,7 @@ var selectRowsResult = &sqltypes.Result{
 			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
 		},
 	},
-	RowsAffected: 2,
+	RowsAffected: 0,
 }
 
 type testHandler struct {

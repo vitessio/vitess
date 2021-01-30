@@ -112,8 +112,6 @@ func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		}
 	}
 
-	result.RowsAffected = uint64(len(result.Rows))
-
 	return result, err
 }
 
