@@ -24,10 +24,12 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // tabletManagerClient implements the tmclient.TabletManagerClient for
@@ -44,12 +46,8 @@ func (c *tabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb
 		return assert.AnError
 	}
 
-	in := *tablet
-	in.Type = newType
-	tmpAlias := *tablet.Alias
-	in.Alias = &tmpAlias
-
-	return c.Topo.UpdateTablet(ctx, &topo.TabletInfo{Tablet: &in})
+	_, err := topotools.ChangeType(ctx, c.Topo, tablet.Alias, newType, &vttime.Time{})
+	return err
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
