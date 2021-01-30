@@ -914,7 +914,62 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 
 // TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtctldatapb.TabletExternallyReparentedRequest) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
-	panic("unimplemented!")
+	if req.Tablet == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "TabletExternallyReparentedRequest.Tablet must not be nil")
+	}
+
+	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
+	if err != nil {
+		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", topoproto.TabletAliasString(req.Tablet), err)
+		return nil, err
+	}
+
+	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Warningf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
+		return nil, err
+	}
+
+	resp := &vtctldatapb.TabletExternallyReparentedResponse{
+		Keyspace:   shard.Keyspace(),
+		Shard:      shard.ShardName(),
+		NewPrimary: req.Tablet,
+		OldPrimary: shard.MasterAlias,
+	}
+
+	// If the externally reparented (new primary) tablet is already MASTER in
+	// the topo, this is a no-op.
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		return resp, nil
+	}
+
+	log.Infof("TabletExternallyReparented: executing tablet type change %v -> MASTER on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
+	ev := &events.Reparent{
+		ShardInfo: *shard,
+		NewMaster: *tablet.Tablet,
+		OldMaster: topodatapb.Tablet{
+			Alias: shard.MasterAlias,
+			Type:  topodatapb.TabletType_MASTER,
+		},
+	}
+
+	defer func() {
+		// Ensure we dispatch an update with any failure.
+		if err != nil {
+			event.DispatchUpdate(ev, "failed: "+err.Error())
+		}
+	}()
+
+	event.DispatchUpdate(ev, "starting external reparent")
+
+	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_MASTER); err != nil {
+		log.Warningf("ChangeType(%v, MASTER): %v", topoproto.TabletAliasString(req.Tablet), err)
+		return nil, err
+	}
+
+	event.DispatchUpdate(ev, "finished")
+
+	return resp, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
