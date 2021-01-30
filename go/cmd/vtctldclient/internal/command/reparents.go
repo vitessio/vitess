@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -35,6 +36,13 @@ var (
 		Use:  "InitShardPrimary",
 		Args: cobra.ExactArgs(2),
 		RunE: commandInitShardPrimary,
+	}
+	// TabletExternallyReparented makes a TabletExternallyReparented gRPC call
+	// to a vtctld.
+	TabletExternallyReparented = &cobra.Command{
+		Use:  "TabletExternallyReparented ALIAS",
+		Args: cobra.ExactArgs(1),
+		RunE: commandTabletExternallyReparented,
 	}
 )
 
@@ -71,8 +79,33 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+func commandTabletExternallyReparented(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.TabletExternallyReparented(commandCtx, &vtctldatapb.TabletExternallyReparentedRequest{
+		Tablet: alias,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func init() {
 	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
 	InitShardPrimary.Flags().BoolVar(&initShardPrimaryOptions.Force, "force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	Root.AddCommand(InitShardPrimary)
+
+	Root.AddCommand(TabletExternallyReparented)
 }
