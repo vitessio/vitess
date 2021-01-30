@@ -209,9 +209,7 @@ func TestChangeTabletType(t *testing.T) {
 			vtctld := NewVtctldServer(ts)
 			testutil.TabletManagerClient.Topo = ts
 
-			for _, tablet := range tt.tablets {
-				testutil.AddTablet(ctx, t, ts, tablet)
-			}
+			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			resp, err := vtctld.ChangeTabletType(ctx, tt.req)
 			if tt.shouldErr {
@@ -257,7 +255,7 @@ func TestChangeTabletType(t *testing.T) {
 				Uid:  100,
 			},
 			Type: topodatapb.TabletType_REPLICA,
-		})
+		}, nil)
 
 		_, err := vtctld.ChangeTabletType(ctx, &vtctldatapb.ChangeTabletTypeRequest{
 			TabletAlias: &topodatapb.TabletAlias{
@@ -1364,7 +1362,7 @@ func TestDeleteShards(t *testing.T) {
 			vtctld := NewVtctldServer(ts)
 
 			testutil.AddShards(ctx, t, ts, tt.shards...)
-			testutil.AddTablets(ctx, t, ts, tt.tablets...)
+			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 			testutil.SetupReplicationGraphs(ctx, t, ts, tt.replicationGraphs...)
 			testutil.UpdateSrvKeyspaces(ctx, t, ts, tt.srvKeyspaces)
 
@@ -1853,9 +1851,7 @@ func TestDeleteTablets(t *testing.T) {
 			vtctld := NewVtctldServer(ts)
 
 			// Setup tablets and shards
-			for _, tablet := range tt.tablets {
-				testutil.AddTablet(ctx, t, ts, tablet)
-			}
+			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			for key, updateFn := range tt.shardFieldUpdates {
 				ks, shard, err := topoproto.ParseKeyspaceShard(key)
@@ -2166,7 +2162,7 @@ func TestGetTablet(t *testing.T) {
 		Type:     topodatapb.TabletType_REPLICA,
 	}
 
-	testutil.AddTablet(ctx, t, ts, tablet)
+	testutil.AddTablet(ctx, t, ts, tablet, nil)
 
 	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
 		TabletAlias: &topodatapb.TabletAlias{
@@ -2198,14 +2194,14 @@ func TestGetSchema(t *testing.T) {
 	}
 	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 		Alias: validAlias,
-	})
+	}, nil)
 	otherAlias := &topodatapb.TabletAlias{
 		Cell: "zone1",
 		Uid:  101,
 	}
 	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 		Alias: otherAlias,
-	})
+	}, nil)
 
 	// we need to run this on each test case or they will pollute each other
 	setupSchema := func() {
@@ -2869,9 +2865,7 @@ func TestGetTablets(t *testing.T) {
 			ts := memorytopo.NewServer(tt.cells...)
 			vtctld := NewVtctldServer(ts)
 
-			for _, tablet := range tt.tablets {
-				testutil.AddTablet(ctx, t, ts, tablet)
-			}
+			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
 			resp, err := vtctld.GetTablets(ctx, tt.req)
 			if tt.shouldErr {

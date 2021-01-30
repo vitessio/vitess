@@ -727,7 +727,7 @@ func TestGetSchemas(t *testing.T) {
 
 					for _, tablet := range cts {
 						// AddTablet also adds the keyspace + shard for us.
-						testutil.AddTablet(context.Background(), t, toposerver, tablet.Tablet)
+						testutil.AddTablet(context.Background(), t, toposerver, tablet.Tablet, nil)
 
 						// Adds each SchemaDefinition to the fake TabletManagerClient, or nil
 						// if there are no schemas for that tablet. (All tablet aliases must
