@@ -515,8 +515,7 @@ var SingleRowResult = &sqltypes.Result{
 		{Name: "id", Type: sqltypes.Int32},
 		{Name: "value", Type: sqltypes.VarChar},
 	},
-	RowsAffected: 1,
-	InsertID:     0,
+	InsertID: 0,
 	Rows: [][]sqltypes.Value{{
 		sqltypes.NewInt32(1),
 		sqltypes.NewVarChar("foo"),

@@ -425,7 +425,6 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			if !wantfields {
 				result.Fields = nil
 			}
-			result.RowsAffected = uint64(len(result.Rows))
 
 			// The deprecated EOF packets change means that this is either an
 			// EOF packet or an OK packet with the EOF type code.

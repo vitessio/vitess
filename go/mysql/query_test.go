@@ -415,7 +415,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
-		RowsAffected: 2,
+		RowsAffected: 0,
 	})
 
 	// Typical Select with TYPE_AND_NAME.
@@ -518,7 +518,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
-		RowsAffected: 2,
+		RowsAffected: 0,
 	})
 
 	// Typical Select with TYPE_AND_NAME.
@@ -538,7 +538,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
-		RowsAffected: 2,
+		RowsAffected: 0,
 	})
 
 	// Typical Select with TYPE_ONLY.
@@ -556,7 +556,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("20")),
 			},
 		},
-		RowsAffected: 2,
+		RowsAffected: 0,
 	})
 
 	// Typical Select with ALL.
@@ -589,7 +589,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("30")),
 			},
 		},
-		RowsAffected: 3,
+		RowsAffected: 0,
 	})
 }
 
@@ -649,7 +649,6 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	go func() {
 		defer wg.Done()
 
-		// Test ExecuteFetch.
 		maxrows := 10000
 		if !allRows {
 			// Asking for just one row max. The results that have more will fail.
@@ -687,6 +686,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 
 		if gotWarnings != warningCount {
 			t.Errorf("ExecuteFetch(%v) expected %v warnings got %v", query, warningCount, gotWarnings)
+			return
 		}
 
 		// Test ExecuteStreamFetch, build a Result.
@@ -732,6 +732,10 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 					t.Logf("========== Got      row(%v) = %v", i, RowString(row))
 					t.Logf("========== Expected row(%v) = %v", i, RowString(expected.Rows[i]))
 				}
+			}
+			if expected.RowsAffected != got.RowsAffected {
+				t.Logf("========== Got      RowsAffected = %v", got.RowsAffected)
+				t.Logf("========== Expected RowsAffected = %v", expected.RowsAffected)
 			}
 			t.Errorf("\nExecuteStreamFetch(%v) returned:\n%+v\nBut was expecting:\n%+v\n", query, got, &expected)
 		}

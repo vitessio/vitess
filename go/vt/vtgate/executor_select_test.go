@@ -466,7 +466,6 @@ func TestRowCount(t *testing.T) {
 func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 	result, err := executorExec(executor, "select row_count()", map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "row_count()", Type: sqltypes.Int64},
 		},
@@ -1441,8 +1440,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32},
 			{Name: "sum(foo)", Type: sqltypes.Int32},
 		},
-		RowsAffected: 4,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
@@ -1559,8 +1557,7 @@ func TestSelectScatterLimit(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "col2", Type: sqltypes.Int32},
 		},
-		RowsAffected: 3,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	wantResult.Rows = append(wantResult.Rows,
 		[]sqltypes.Value{
@@ -1676,7 +1673,6 @@ func TestSimpleJoin(t *testing.T) {
 				sandboxconn.SingleRowResult.Rows[0][0],
 			},
 		},
-		RowsAffected: 1,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -1854,14 +1850,11 @@ func TestLeftJoin(t *testing.T) {
 				{},
 			},
 		},
-		RowsAffected: 1,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
-
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
-
 }
 
 func TestLeftJoinStream(t *testing.T) {
@@ -1871,8 +1864,7 @@ func TestLeftJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2098,7 +2090,6 @@ func TestCrossShardSubquery(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 		}},
@@ -2115,8 +2106,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),

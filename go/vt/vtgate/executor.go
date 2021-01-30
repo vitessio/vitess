@@ -586,9 +586,8 @@ func (e *Executor) handleShowVitessMetadata(ctx context.Context, opt *sqlparser.
 	}
 
 	return &sqltypes.Result{
-		Fields:       buildVarCharFields("Key", "Value"),
-		Rows:         rows,
-		RowsAffected: uint64(len(rows)),
+		Fields: buildVarCharFields("Key", "Value"),
+		Rows:   rows,
 	}, nil
 }
 
@@ -626,9 +625,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			"YES")
 		rows = append(rows, row)
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
-			Rows:         rows,
-			RowsAffected: 1,
+			Fields: buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
+			Rows:   rows,
 		}, nil
 	// for PLUGINS, return InnoDb + mysql_native_password
 	case sqlparser.KeywordString(sqlparser.PLUGINS):
@@ -641,9 +639,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			"GPL")
 		rows = append(rows, row)
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Name", "Status", "Type", "Library", "License"),
-			Rows:         rows,
-			RowsAffected: 1,
+			Fields: buildVarCharFields("Name", "Status", "Type", "Library", "License"),
+			Rows:   rows,
 		}, nil
 	case "create table":
 		if !show.Table.Qualifier.IsEmpty() {
@@ -769,9 +766,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Shards"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Shards"),
+			Rows:   rows,
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
 		return e.showTablets(show)
@@ -779,9 +775,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Target"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Target"),
+			Rows:   rows,
 		}, nil
 	case "vschema tables":
 		if destKeyspace == "" {
@@ -804,9 +799,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Tables"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Tables"),
+			Rows:   rows,
 		}, nil
 	case "vschema vindexes":
 		vschema := e.vm.GetCurrentSrvVschema()
@@ -856,9 +850,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 
 			return &sqltypes.Result{
-				Fields:       buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-				Rows:         rows,
-				RowsAffected: uint64(len(rows)),
+				Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+				Rows:   rows,
 			}, nil
 		}
 
@@ -889,9 +882,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 		}
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
+			Rows:   rows,
 		}, nil
 	case sqlparser.KeywordString(sqlparser.WARNINGS):
 		fields := []*querypb.Field{
@@ -1034,9 +1026,8 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		}
 	}
 	return &sqltypes.Result{
-		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
-		Rows:         rows,
-		RowsAffected: uint64(len(rows)),
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows:   rows,
 	}, nil
 }
 
