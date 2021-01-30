@@ -64,9 +64,15 @@ func buildTempTablePlan(sql string, stmt sqlparser.DDLStatement, vschema Context
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: Temporary table not planned for %s", sql)
 	}
+
 	if keyspace.Sharded {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded keyspace: %s", keyspace.Name)
 	}
+
+	if destination == nil {
+		destination = key.DestinationAllShards{}
+	}
+
 	query := sql
 	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
 	if stmt.IsFullyParsed() {
