@@ -2279,6 +2279,16 @@ func TestExecutorCallProc(t *testing.T) {
 	}
 }
 
+func TestExecutorTempTable(t *testing.T) {
+	executor, _, _, sbcUnsharded := createExecutorEnv()
+
+	createTempTable := "create temporary table temp_t(id bigint primary key)"
+	_, err := executor.Execute(context.Background(), "TestExecutorTempTable",
+		NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), createTempTable, nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, sbcUnsharded.ExecCount.Get())
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }
