@@ -322,6 +322,30 @@ func TestCallProcedure(t *testing.T) {
 	require.Contains(t, err.Error(), "OUT and INOUT parameters are not supported")
 }
 
+func TestTempTable(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn1, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	_ = exec(t, conn1, `create temporary table temp_t(id bigint primary key)`)
+	_ = exec(t, conn1, `insert into temp_t(id) values (1),(2),(3)`)
+	//	assertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+	assertMatches(t, conn1, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
+
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	assertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
+	execAssertError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
