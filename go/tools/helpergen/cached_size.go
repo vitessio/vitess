@@ -19,6 +19,8 @@ package main
 import (
 	"go/types"
 	"log"
+	"sort"
+	"strings"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -31,8 +33,14 @@ func (s *cachedSize) fileName() string {
 	return "cached_size.go"
 }
 
-func (s *cachedSize) finalizeFile(file []codeImpl, out *jen.File) {
-	for _, impl := range file {
+func (s *cachedSize) finalizeFile(file *codeFile, out *jen.File) {
+	impls := file.state.([]codeImpl)
+
+	sort.Slice(impls, func(i, j int) bool {
+		return strings.Compare(impls[i].name, impls[j].name) < 0
+	})
+
+	for _, impl := range impls {
 		if impl.flags&codeWithInterface != 0 {
 			out.Add(jen.Type().Id("cachedObject").InterfaceFunc(func(i *jen.Group) {
 				i.Id("CachedSize").Params(jen.Id("alloc").Id("bool")).Int64()
@@ -41,7 +49,7 @@ func (s *cachedSize) finalizeFile(file []codeImpl, out *jen.File) {
 		}
 	}
 
-	for _, impl := range file {
+	for _, impl := range impls {
 		if impl.flags&codeWithUnsafe != 0 {
 			out.Commentf("//go:nocheckptr")
 		}
@@ -213,7 +221,7 @@ func (s *cachedSize) stmtForType(fieldName *jen.Statement, field types.Type, all
 	}
 }
 
-func (s *cachedSize) implForStruct(name *types.TypeName, st *types.Struct, sizes types.Sizes, debugTypes bool) (jen.Code, codeFlag) {
+func (s *cachedSize) implForStruct(file *codeFile, name *types.TypeName, st *types.Struct, sizes types.Sizes, debugTypes bool) (jen.Code, codeFlag) {
 	if sizes.Sizeof(st) == 0 {
 		return nil, 0
 	}
@@ -249,7 +257,24 @@ func (s *cachedSize) implForStruct(name *types.TypeName, st *types.Struct, sizes
 		}
 		b.Add(jen.Return(jen.Id("size")))
 	})
+
+	var impls []codeImpl
+	if file.state != nil {
+		impls = file.state.([]codeImpl)
+	}
+
+	impls = append(impls, codeImpl{
+		code:  f,
+		name:  name.String(),
+		flags: funcFlags,
+	})
+	file.state = impls
+
 	return f, funcFlags
+}
+
+func (s *cachedSize) isEmpty(file *codeFile) bool {
+	return file.state == nil || len(file.state.([]codeImpl)) == 0
 }
 
 func newCachedSize(lookup typeLookup) output {
