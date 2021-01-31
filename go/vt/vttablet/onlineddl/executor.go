@@ -369,6 +369,16 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 	return (row != nil), nil
 }
 
+func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.OnlineDDL) string {
+	// Temporary hack (2020-08-11)
+	// Because sqlparser does not do full blown ALTER TABLE parsing,
+	// and because we don't want gh-ost to know about WITH_GHOST and WITH_PT syntax,
+	// we resort to regexp-based parsing of the query.
+	// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
+	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+	return alterOptions
+}
+
 // executeDirectly runs a DDL query directly on the backend MySQL server
 func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...int) error {
 	e.migrationMutex.Lock()
@@ -439,12 +449,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			return err
 		}
 	}
-	// Temporary hack (2020-08-11)
-	// Because sqlparser does not do full blown ALTER TABLE parsing,
-	// and because we don't want gh-ost to know about WITH_GHOST and WITH_PT syntax,
-	// we resort to regexp-based parsing of the query.
-	// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
-	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
 	{
 		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
 		// Apply ALTER TABLE to materialized table
@@ -593,12 +598,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	}
 
 	runGhost := func(execute bool) error {
-		// Temporary hack (2020-08-11)
-		// Because sqlparser does not do full blown ALTER TABLE parsing,
-		// and because we don't want gh-ost to know about WITH_GHOST and WITH_PT syntax,
-		// we resort to regexp-based parsing of the query.
-		// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
-		_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+		alterOptions := e.parseAlterOptions(ctx, onlineDDL)
 		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, ReadableTimestamp())
 
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID,
@@ -803,12 +803,7 @@ export MYSQL_PWD
 		return err
 	}
 
-	// Temporary hack (2020-08-11)
-	// Because sqlparser does not do full blown ALTER TABLE parsing,
-	// and because pt-online-schema-change requires only the table options part of the ALTER TABLE statement,
-	// we resort to regexp-based parsing of the query.
-	// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
-	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
 
 	// The following sleep() is temporary and artificial. Because we create a new user for this
 	// migration, and because we throttle by replicas, we need to wait for the replicas to be
