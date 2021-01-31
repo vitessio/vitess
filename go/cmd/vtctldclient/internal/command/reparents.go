@@ -37,6 +37,14 @@ var (
 		Args: cobra.ExactArgs(2),
 		RunE: commandInitShardPrimary,
 	}
+	// ReparentTablet makes a ReparentTablet gRPC call to a vtctld.
+	ReparentTablet = &cobra.Command{
+		Use: "ReparentTablet ALIAS",
+		Long: "Reparent a tablet to the current primary in the shard. This only works if the current replica position " +
+			"matches the last known reparent action.",
+		Args: cobra.ExactArgs(1),
+		RunE: commandReparentTablet,
+	}
 	// TabletExternallyReparented makes a TabletExternallyReparented gRPC call
 	// to a vtctld.
 	TabletExternallyReparented = &cobra.Command{
@@ -79,6 +87,29 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+func commandReparentTablet(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.ReparentTablet(commandCtx, &vtctldatapb.ReparentTabletRequest{
+		Tablet: alias,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
 func commandTabletExternallyReparented(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -107,5 +138,6 @@ func init() {
 	InitShardPrimary.Flags().BoolVar(&initShardPrimaryOptions.Force, "force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	Root.AddCommand(InitShardPrimary)
 
+	Root.AddCommand(ReparentTablet)
 	Root.AddCommand(TabletExternallyReparented)
 }
