@@ -25,35 +25,13 @@ func getBackend(t *testing.T) (StatsBackend, *net.UDPConn) {
 	sb.namespace = "foo"
 	sb.sampleRate = 1
 	sb.statsdClient = client
-	return sb, server
-}
-
-func TestStatsdString(t *testing.T) {
-	sb, server := getBackend(t)
-	defer server.Close()
-	name := "string_name"
-	stats.NewString(name).Set("foo")
-	found := false
-	expvar.Do(func(kv expvar.KeyValue) {
-		if kv.Key == name {
-			found = true
-			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
-			bytes := make([]byte, 4096)
-			n, err := server.Read(bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
-			result := string(bytes[:n])
-			expected := "test.string_name:foo|s"
-			assert.Equal(t, result, expected)
-		}
+	stats.RegisterTimerHook(func(name string, val int64, tags []string) {
+		client.TimeInMilliseconds(name, float64(val), tags, sb.sampleRate)
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	stats.RegisterHistogramHook(func(name string, val int64) {
+		client.Histogram(name, float64(val), []string{}, sb.sampleRate)
+	})
+	return sb, server
 }
 
 func TestStatsdCounter(t *testing.T) {
@@ -393,20 +371,8 @@ func TestStatsdMultiTimings(t *testing.T) {
 				t.Fatal(err)
 			}
 			result := string(bytes[:n])
-			expected := []string{
-				"test.multi_timings_name.500000:0.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.1000000:0.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.5000000:0.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.10000000:1.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.50000000:0.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.100000000:0.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.500000000:0.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.1000000000:0.000000|g|#label1:foo,label2:bar",
-				"test.multi_timings_name.5000000000:0.000000|g|#label1:foo,label2:bar",
-			}
-			for i, res := range strings.Split(result, "\n") {
-				assert.Equal(t, res, expected[i])
-			}
+			expected := "test.multi_timings_name:10.000000|ms|#label1:foo,label2:bar"
+			assert.Equal(t, result, expected)
 		}
 	})
 	if !found {
@@ -434,20 +400,8 @@ func TestStatsdTimings(t *testing.T) {
 				t.Fatal(err)
 			}
 			result := string(bytes[:n])
-			expected := []string{
-				"test.timings_name.500000:0.000000|g|#label1:foo",
-				"test.timings_name.1000000:0.000000|g|#label1:foo",
-				"test.timings_name.5000000:1.000000|g|#label1:foo",
-				"test.timings_name.10000000:0.000000|g|#label1:foo",
-				"test.timings_name.50000000:0.000000|g|#label1:foo",
-				"test.timings_name.100000000:0.000000|g|#label1:foo",
-				"test.timings_name.500000000:0.000000|g|#label1:foo",
-				"test.timings_name.1000000000:0.000000|g|#label1:foo",
-				"test.timings_name.5000000000:0.000000|g|#label1:foo",
-			}
-			for i, res := range strings.Split(result, "\n") {
-				assert.Equal(t, res, expected[i])
-			}
+			expected := "test.timings_name:2.000000|ms|#label1:foo"
+			assert.Equal(t, result, expected)
 		}
 	})
 	if !found {
@@ -478,12 +432,9 @@ func TestStatsdHistogram(t *testing.T) {
 			}
 			result := string(bytes[:n])
 			expected := []string{
-				"test.histogram_name.1:0.000000|g",
-				"test.histogram_name.5:2.000000|g",
-				"test.histogram_name.10:1.000000|g",
-				"test.histogram_name.inf:0.000000|g",
-				"test.histogram_name.Count:3.000000|g",
-				"test.histogram_name.Total:11.000000|g",
+				"test.histogram_name:2.000000|h",
+				"test.histogram_name:3.000000|h",
+				"test.histogram_name:6.000000|h",
 			}
 			for i, res := range strings.Split(result, "\n") {
 				assert.Equal(t, res, expected[i])
