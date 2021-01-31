@@ -451,9 +451,26 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			return err
 		}
 	}
-	v := NewVRepl(e.dbName, onlineDDL.Table, vreplTableName)
+	v := NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName)
 	if err := v.analyze(ctx, conn, alterOptions); err != nil {
 		return err
+	}
+	{
+		insert, err := v.generateInsert(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := e.execQuery(ctx, insert); err != nil {
+			return err
+		}
+		start, err := v.generateStartStatement(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := e.execQuery(ctx, start); err != nil {
+			return err
+		}
+		fmt.Printf("============== INSERT: %s\n", insert)
 	}
 	return nil
 }

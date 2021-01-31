@@ -31,13 +31,19 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
+	workflow    string
+	keyspace    string
+	shard       string
 	dbName      string
 	sourceTable string
 	targetTable string
@@ -54,8 +60,11 @@ type VRepl struct {
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(dbName, sourceTable, targetTable string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable string) *VRepl {
 	return &VRepl{
+		workflow:    workflow,
+		keyspace:    keyspace,
+		shard:       shard,
 		dbName:      dbName,
 		sourceTable: sourceTable,
 		targetTable: targetTable,
@@ -298,6 +307,34 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection, alte
 		return err
 	}
 	return nil
+}
+
+// generateInsert generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
+func (v *VRepl) generateInsert(ctx context.Context) (string, error) {
+	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace:      v.keyspace,
+		Shard:         v.shard,
+		Filter:        &binlogdatapb.Filter{},
+		StopAfterCopy: false,
+	}
+	rule := &binlogdatapb.Rule{
+		Match:  v.targetTable,
+		Filter: v.filterQuery,
+	}
+	bls.Filter.Rules = append(bls.Filter.Rules, rule)
+	ig.AddRow(v.workflow, bls, "", "", "MASTER")
+
+	return ig.String(), nil
+}
+
+// generateStartStatement Generates the statement to start VReplication running on the workflow
+func (v *VRepl) generateStartStatement(ctx context.Context) (string, error) {
+	return sqlparser.ParseAndBind(sqlStartVReplStream,
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(v.workflow),
+	)
 }
 
 // escapeName will escape a db/table/column/... name by wrapping with backticks.

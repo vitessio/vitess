@@ -221,6 +221,7 @@ const (
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
+	sqlStartVReplStream  = "update _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
 	// TODO(shlomi): consider removing:
 	// sqlGetUniqueKeys     = `
 	//   SELECT
