@@ -903,7 +903,7 @@ export MYSQL_PWD
 
 func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, err error) {
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectMigration, "_vt", ":migration_uuid")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectMigration, ":migration_uuid")
 	bindVars := map[string]*querypb.BindVariable{
 		"migration_uuid": sqltypes.StringBindVariable(uuid),
 	}
@@ -1030,8 +1030,7 @@ func (e *Executor) cancelMigrations(ctx context.Context, uuids []string) (err er
 // cancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
 func (e *Executor) cancelPendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
-	parsed := sqlparser.BuildParsedQuery(sqlSelectPendingMigrations, "_vt")
-	r, err := e.execQuery(ctx, parsed.Query)
+	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 	if err != nil {
 		return result, err
 	}
@@ -1065,8 +1064,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	}
 
 	{
-		parsed := sqlparser.BuildParsedQuery(sqlSelectCountReadyMigrations, "_vt")
-		r, err := e.execQuery(ctx, parsed.Query)
+		r, err := e.execQuery(ctx, sqlSelectCountReadyMigrations)
 		if err != nil {
 			return err
 		}
@@ -1083,8 +1081,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		}
 	} // Cool, seems like no migration is ready. Let's try and make a single 'queued' migration 'ready'
 
-	parsed := sqlparser.BuildParsedQuery(sqlScheduleSingleMigration, "_vt")
-	_, err := e.execQuery(ctx, parsed.Query)
+	_, err := e.execQuery(ctx, sqlScheduleSingleMigration)
 
 	return err
 }
@@ -1180,8 +1177,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectReadyMigration, "_vt")
-	r, err := e.execQuery(ctx, parsed.Query)
+	r, err := e.execQuery(ctx, sqlSelectReadyMigration)
 	if err != nil {
 		return err
 	}
@@ -1279,7 +1275,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, "_vt", ":strategy")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, ":strategy")
 	bindVars := map[string]*querypb.BindVariable{
 		"strategy": sqltypes.StringBindVariable(string(schema.DDLStrategyPTOSC)),
 	}
@@ -1317,7 +1313,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectStaleMigrations, "_vt", ":minutes")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectStaleMigrations, ":minutes")
 	bindVars := map[string]*querypb.BindVariable{
 		"minutes": sqltypes.Int64BindVariable(staleMigrationMinutes),
 	}
@@ -1392,8 +1388,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectUncollectedArtifacts, "_vt")
-	r, err := e.execQuery(ctx, parsed.Query)
+	r, err := e.execQuery(ctx, sqlSelectUncollectedArtifacts)
 	if err != nil {
 		return err
 	}
@@ -1468,7 +1463,7 @@ func (e *Executor) onMigrationCheckTick() {
 }
 
 func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid string) error {
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStartedTimestamp, "_vt",
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStartedTimestamp,
 		":migration_uuid",
 	)
 	bindVars := map[string]*querypb.BindVariable{
@@ -1483,7 +1478,7 @@ func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid str
 }
 
 func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn string, uuid string) error {
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationTimestamp, "_vt", timestampColumn,
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationTimestamp, timestampColumn,
 		":migration_uuid",
 	)
 	bindVars := map[string]*querypb.BindVariable{
@@ -1499,7 +1494,7 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 
 func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, path string) error {
 	logPath := fmt.Sprintf("%s:%s", hostname, path)
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationLogPath, "_vt",
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationLogPath,
 		":log_path",
 		":migration_uuid",
 	)
@@ -1517,7 +1512,7 @@ func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, host
 
 func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts ...string) error {
 	bindArtifacts := strings.Join(artifacts, ",")
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateArtifacts, "_vt",
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateArtifacts,
 		":artifacts",
 		":migration_uuid",
 	)
@@ -1535,7 +1530,7 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 
 // updateTabletFailure marks a given migration as "tablet_failed"
 func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateTabletFailure, "_vt",
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateTabletFailure,
 		":migration_uuid",
 	)
 	bindVars := map[string]*querypb.BindVariable{
@@ -1550,7 +1545,7 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 }
 
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStatus, "_vt",
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStatus,
 		":migration_status",
 		":migration_uuid",
 	)
@@ -1573,7 +1568,7 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 		// In both cases there's nothing to update
 		return nil
 	}
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationProgress, "_vt",
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationProgress,
 		":migration_progress",
 		":migration_uuid",
 	)
@@ -1592,7 +1587,7 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, "_vt", ":tablet", whereExpr)
+	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, ":tablet", whereExpr)
 	bindVars := map[string]*querypb.BindVariable{
 		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
 	}
