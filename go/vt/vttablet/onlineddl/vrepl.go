@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -46,6 +47,8 @@ type VRepl struct {
 	sourceSharedColumns *vrepl.ColumnList
 	targetSharedColumns *vrepl.ColumnList
 	sharedColumnsMap    map[string]string
+
+	filterQuery string
 
 	parser *vrepl.AlterTableParser
 }
@@ -155,7 +158,6 @@ func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList,
 			sharedColumnNames = append(sharedColumnNames, sourceColumn)
 		}
 	}
-	mappedSharedColumnNames := []string{}
 	sharedColumnsMap = map[string]string{}
 	for _, columnName := range sharedColumnNames {
 		if mapped, ok := columnRenameMap[columnName]; ok {
@@ -164,6 +166,7 @@ func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList,
 			sharedColumnsMap[columnName] = columnName
 		}
 	}
+	mappedSharedColumnNames := []string{}
 	for _, columnName := range sharedColumnNames {
 		mappedSharedColumnNames = append(mappedSharedColumnNames, sharedColumnsMap[columnName])
 	}
@@ -259,4 +262,50 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	// 	return fmt.Errorf("Found no shared unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	// }
 	return nil
+}
+func (v *VRepl) generateFilterQuery(ctx context.Context) error {
+	if v.sourceSharedColumns.Len() == 0 {
+		return fmt.Errorf("Empty column list")
+	}
+	var sb strings.Builder
+
+	sb.WriteString("select ")
+	for i, name := range v.sourceSharedColumns.Names() {
+		targetName := v.sharedColumnsMap[name]
+
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(escapeName(name))
+		sb.WriteString(" as ")
+		sb.WriteString(escapeName(targetName))
+	}
+	sb.WriteString(" from ")
+	sb.WriteString(v.sourceTable)
+
+	v.filterQuery = sb.String()
+	return nil
+}
+
+func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection, alterOptions string) error {
+	if err := v.analyzeAlter(ctx, alterOptions); err != nil {
+		return err
+	}
+	if err := v.analyzeTables(ctx, conn); err != nil {
+		return err
+	}
+	if err := v.generateFilterQuery(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// escapeName will escape a db/table/column/... name by wrapping with backticks.
+// It is not fool proof. I'm just trying to do the right thing here, not solving
+// SQL injection issues, which should be irrelevant for this tool.
+func escapeName(name string) string {
+	if unquoted, err := strconv.Unquote(name); err == nil {
+		name = unquoted
+	}
+	return fmt.Sprintf("`%s`", name)
 }
