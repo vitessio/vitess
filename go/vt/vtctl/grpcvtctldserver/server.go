@@ -909,7 +909,46 @@ func (s *VtctldServer) RemoveShardCell(ctx context.Context, req *vtctldatapb.Rem
 
 // ReparentTablet is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.ReparentTabletRequest) (*vtctldatapb.ReparentTabletResponse, error) {
-	panic("unimplemented!")
+	if req.Tablet == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet alias must not be nil")
+	}
+
+	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	if !shard.HasMaster() {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	shardPrimary, err := s.ts.GetTablet(ctx, shard.MasterAlias)
+	if err != nil {
+		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.MasterAlias), tablet.Keyspace, tablet.Shard, err)
+	}
+
+	if shardPrimary.Type != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard master %v", topoproto.TabletAliasString(shard.MasterAlias))
+	}
+
+	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.MasterAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
+	}
+
+	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.MasterAlias, 0, "", false); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ReparentTabletResponse{
+		Keyspace: tablet.Keyspace,
+		Shard:    tablet.Shard,
+		Primary:  shard.MasterAlias,
+	}, nil
 }
 
 // TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.

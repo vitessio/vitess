@@ -3439,6 +3439,534 @@ func TestRemoveShardCell(t *testing.T) {
 	}
 }
 
+func TestReparentTablet(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		tmc       tmclient.TabletManagerClient
+		tablets   []*topodatapb.Tablet
+		shards    []*vtctldatapb.Shard
+		topoErr   error
+		req       *vtctldatapb.ReparentTabletRequest
+		expected  *vtctldatapb.ReparentTabletResponse
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			tmc: &testutil.TabletManagerClient{
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected: &vtctldatapb.ReparentTabletResponse{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				Primary: &topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  200,
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "tablet is nil",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: nil,
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "tablet not in topo",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "shard not in topo",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: nil,
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "shard has no primary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsMasterServing: false,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "shard primary not in topo",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone3",
+							Uid:  300,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1010,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "shard primary is not type MASTER",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1010,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "shard primary is not actually in shard",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "otherkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1010,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "tmc.SetMaster failure",
+			tmc: &testutil.TabletManagerClient{
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "topo is down",
+			tmc: &testutil.TabletManagerClient{
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_MASTER,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 1000,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  200,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 1000,
+						},
+						IsMasterServing: true,
+					},
+				},
+			},
+			topoErr: assert.AnError,
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.req == nil {
+				t.Skip("focused on other test cases right now")
+			}
+
+			cells := []string{"zone1", "zone2", "zone3"}
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory(cells...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				SkipShardCreation: true,
+			}, tt.tablets...)
+			testutil.AddShards(ctx, t, ts, tt.shards...)
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			resp, err := vtctld.ReparentTablet(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestTabletExternallyReparented(t *testing.T) {
 	t.Parallel()
 
