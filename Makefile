@@ -106,7 +106,7 @@ visitor:
 	go generate go/vt/sqlparser/rewriter.go
 
 sizegen:
-	go run go/tools/sizegen/sizegen.go \
+	go run ./go/tools/helpergen/ \
 		-in ./go/vt/... \
 	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan
