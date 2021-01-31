@@ -50,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -456,21 +457,27 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		return err
 	}
 	{
-		insert, err := v.generateInsert(ctx)
+		// We need to talk to tabletmanager's VREngine. But we're on TabletServer. While we live in the same
+		// process as VREngine, it is actually simpler to get hold of it via gRPC, just like wrangler does.
+		tmClient := tmclient.NewTabletManagerClient()
+		tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
 		if err != nil {
 			return err
 		}
-		if _, err := e.execQuery(ctx, insert); err != nil {
-			return err
-		}
-		start, err := v.generateStartStatement(ctx)
+		insertVReplicationQuery, err := v.generateInsertStatement(ctx)
 		if err != nil {
 			return err
 		}
-		if _, err := e.execQuery(ctx, start); err != nil {
+		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, insertVReplicationQuery); err != nil {
 			return err
 		}
-		fmt.Printf("============== INSERT: %s\n", insert)
+		startVReplicationQuery, err := v.generateStartStatement(ctx)
+		if err != nil {
+			return err
+		}
+		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, startVReplicationQuery); err != nil {
+			return err
+		}
 	}
 	return nil
 }

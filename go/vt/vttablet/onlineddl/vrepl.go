@@ -309,8 +309,8 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection, alte
 	return nil
 }
 
-// generateInsert generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
-func (v *VRepl) generateInsert(ctx context.Context) (string, error) {
+// generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
+func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
 
 	bls := &binlogdatapb.BinlogSource{
