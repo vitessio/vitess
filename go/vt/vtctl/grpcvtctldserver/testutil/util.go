@@ -87,6 +87,9 @@ type AddTabletOptions struct {
 	// update the shard record to make that tablet the primary, and fail the
 	// test if the shard record has a serving primary already.
 	AlsoSetShardMaster bool
+	// SkipShardCreation, when set, makes AddTablet never attempt to create a
+	// shard record in the topo under any circumstances.
+	SkipShardCreation bool
 }
 
 // AddTablet adds a tablet to the topology, failing a test if that tablet record
@@ -113,6 +116,10 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 
 	err := ts.CreateTablet(ctx, &in)
 	require.NoError(t, err, "CreateTablet(%+v)", &in)
+
+	if opts.SkipShardCreation {
+		return
+	}
 
 	if tablet.Keyspace != "" {
 		if _, err := ts.GetKeyspace(ctx, tablet.Keyspace); err != nil {
@@ -167,6 +174,15 @@ func AddShards(ctx context.Context, t *testing.T, ts *topo.Server, shards ...*vt
 
 		err := ts.CreateShard(ctx, shard.Keyspace, shard.Name)
 		require.NoError(t, err, "CreateShard(%s/%s)", shard.Keyspace, shard.Name)
+
+		if shard.Shard != nil {
+			_, err := ts.UpdateShardFields(ctx, shard.Keyspace, shard.Name, func(si *topo.ShardInfo) error {
+				si.Shard = shard.Shard
+
+				return nil
+			})
+			require.NoError(t, err, "UpdateShardFields(%s/%s, %v)", shard.Keyspace, shard.Name, shard.Shard)
+		}
 	}
 }
 
