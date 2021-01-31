@@ -586,44 +586,6 @@ func (wr *Wrangler) findCurrentMaster(tabletMap map[string]*topo.TabletInfo) *to
 	return currentMaster
 }
 
-// maxReplPosSearch is a struct helping to search for a tablet with the largest replication
-// position querying status from all tablets in parallel.
-type maxReplPosSearch struct {
-	wrangler            *Wrangler
-	ctx                 context.Context
-	waitReplicasTimeout time.Duration
-	waitGroup           sync.WaitGroup
-	maxPosLock          sync.Mutex
-	maxPos              mysql.Position
-	maxPosTablet        *topodatapb.Tablet
-}
-
-func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
-	defer maxPosSearch.waitGroup.Done()
-	maxPosSearch.wrangler.logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
-
-	replicaStatusCtx, cancelReplicaStatus := context.WithTimeout(maxPosSearch.ctx, maxPosSearch.waitReplicasTimeout)
-	defer cancelReplicaStatus()
-
-	status, err := maxPosSearch.wrangler.tmc.ReplicationStatus(replicaStatusCtx, tablet)
-	if err != nil {
-		maxPosSearch.wrangler.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return
-	}
-	replPos, err := mysql.DecodePosition(status.Position)
-	if err != nil {
-		maxPosSearch.wrangler.logger.Warningf("cannot decode replica %v position %v: %v", topoproto.TabletAliasString(tablet.Alias), status.Position, err)
-		return
-	}
-
-	maxPosSearch.maxPosLock.Lock()
-	if maxPosSearch.maxPosTablet == nil || !maxPosSearch.maxPos.AtLeast(replPos) {
-		maxPosSearch.maxPos = replPos
-		maxPosSearch.maxPosTablet = tablet
-	}
-	maxPosSearch.maxPosLock.Unlock()
-}
-
 // chooseNewMaster finds a tablet that is going to become master after reparent. The criteria
 // for the new master-elect are (preferably) to be in the same cell as the current master, and
 // to be different from avoidMasterTabletAlias. The tablet with the largest replication
@@ -646,28 +608,31 @@ func (wr *Wrangler) chooseNewMaster(
 		masterCell = shardInfo.MasterAlias.Cell
 	}
 
-	maxPosSearch := maxReplPosSearch{
-		wrangler:            wr,
-		ctx:                 ctx,
-		waitReplicasTimeout: waitReplicasTimeout,
-		waitGroup:           sync.WaitGroup{},
-		maxPosLock:          sync.Mutex{},
-	}
+	var (
+		searcher = topotools.NewMaxReplicationPositionSearcher(wr.tmc, wr.logger, waitReplicasTimeout)
+		wg       sync.WaitGroup
+	)
+
 	for _, tabletInfo := range tabletMap {
 		if (masterCell != "" && tabletInfo.Alias.Cell != masterCell) ||
 			topoproto.TabletAliasEqual(tabletInfo.Alias, avoidMasterTabletAlias) ||
 			tabletInfo.Tablet.Type != topodatapb.TabletType_REPLICA {
 			continue
 		}
-		maxPosSearch.waitGroup.Add(1)
-		go maxPosSearch.processTablet(tabletInfo.Tablet)
+		wg.Add(1)
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+			searcher.ProcessTablet(ctx, tablet)
+		}(tabletInfo.Tablet)
 	}
-	maxPosSearch.waitGroup.Wait()
 
-	if maxPosSearch.maxPosTablet == nil {
-		return nil, nil
+	wg.Wait()
+
+	if maxPosTablet := searcher.MaxPositionTablet(); maxPosTablet != nil {
+		return maxPosTablet.Alias, nil
 	}
-	return maxPosSearch.maxPosTablet.Alias, nil
+
+	return nil, nil
 }
 
 // EmergencyReparentShard will make the provided tablet the master for
