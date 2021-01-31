@@ -402,6 +402,62 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	return nil
 }
 
+// ExecuteWithVReplication sets up the grounds for a vreplication schema migration
+func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+		return ErrExecutorMigrationAlreadyRunning
+	}
+
+	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
+		return ErrExecutorNotWritableTablet
+	}
+
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	atomic.StoreInt64(&e.migrationRunning, 1)
+	e.lastMigrationUUID = onlineDDL.UUID
+	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted); err != nil {
+		return err
+	}
+	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
+		return err
+	}
+
+	{
+		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return err
+		}
+	}
+	// Temporary hack (2020-08-11)
+	// Because sqlparser does not do full blown ALTER TABLE parsing,
+	// and because we don't want gh-ost to know about WITH_GHOST and WITH_PT syntax,
+	// we resort to regexp-based parsing of the query.
+	// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
+	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+	{
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
+		// Apply ALTER TABLE to materialized table
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return err
+		}
+	}
+	v := NewVRepl(e.dbName, onlineDDL.Table, vreplTableName)
+	if err := v.analyzeAlter(ctx, alterOptions); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ExecuteWithGhost validates and runs a gh-ost process.
 // Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
@@ -870,6 +926,11 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		}
 	}
 	switch onlineDDL.Strategy {
+	case schema.DDLStrategyOnline:
+		// TODO(shlomi): remove vreplication
+		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+		atomic.StoreInt64(&e.migrationRunning, 0)
+
 	case schema.DDLStrategyPTOSC:
 		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
 		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, onlineDDL.UUID); running {
@@ -1065,6 +1126,12 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		}()
 	case sqlparser.AlterDDLAction:
 		switch onlineDDL.Strategy {
+		case schema.DDLStrategyOnline:
+			go func() {
+				if err := e.ExecuteWithVReplication(ctx, onlineDDL); err != nil {
+					failMigration(err)
+				}
+			}()
 		case schema.DDLStrategyGhost:
 			go func() {
 				if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
