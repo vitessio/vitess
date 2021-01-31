@@ -216,8 +216,69 @@ const (
 			AND ACTION_TIMING='AFTER'
 			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
 		`
-	sqlDropTrigger    = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike = "SHOW TABLES LIKE '%a'"
+	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
+	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
+	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
+	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
+	// TODO(shlomi): consider removing:
+	// sqlGetUniqueKeys     = `
+	//   SELECT
+	//     COLUMNS.TABLE_SCHEMA,
+	//     COLUMNS.TABLE_NAME,
+	//     COLUMNS.COLUMN_NAME,
+	//     UNIQUES.INDEX_NAME,
+	//     UNIQUES.COLUMN_NAMES,
+	//     UNIQUES.COUNT_COLUMN_IN_INDEX,
+	//     COLUMNS.DATA_TYPE,
+	//     COLUMNS.CHARACTER_SET_NAME,
+	// 		LOCATE('auto_increment', EXTRA) > 0 as is_auto_increment,
+	//     has_nullable
+	//   FROM INFORMATION_SCHEMA.COLUMNS INNER JOIN (
+	//     SELECT
+	//       TABLE_SCHEMA,
+	//       TABLE_NAME,
+	//       INDEX_NAME,
+	//       COUNT(*) AS COUNT_COLUMN_IN_INDEX,
+	//       GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC) AS COLUMN_NAMES,
+	//       SUBSTRING_INDEX(GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX ASC), ',', 1) AS FIRST_COLUMN_NAME,
+	//       SUM(NULLABLE='YES') > 0 AS has_nullable
+	//     FROM INFORMATION_SCHEMA.STATISTICS
+	//     WHERE
+	// 			NON_UNIQUE=0
+	// 			AND TABLE_SCHEMA = %a
+	//     	AND TABLE_NAME = %a
+	//     GROUP BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME
+	//   ) AS UNIQUES
+	//   ON (
+	//     COLUMNS.COLUMN_NAME = UNIQUES.FIRST_COLUMN_NAME
+	//   )
+	//   WHERE
+	//     COLUMNS.TABLE_SCHEMA = %a
+	//     AND COLUMNS.TABLE_NAME = %a
+	//   ORDER BY
+	//     COLUMNS.TABLE_SCHEMA, COLUMNS.TABLE_NAME,
+	//     CASE UNIQUES.INDEX_NAME
+	//       WHEN 'PRIMARY' THEN 0
+	//       ELSE 1
+	//     END,
+	//     CASE has_nullable
+	//       WHEN 0 THEN 0
+	//       ELSE 1
+	//     END,
+	//     CASE IFNULL(CHARACTER_SET_NAME, '')
+	//         WHEN '' THEN 0
+	//         ELSE 1
+	//     END,
+	//     CASE DATA_TYPE
+	//       WHEN 'tinyint' THEN 0
+	//       WHEN 'smallint' THEN 1
+	//       WHEN 'int' THEN 2
+	//       WHEN 'bigint' THEN 3
+	//       ELSE 100
+	//     END,
+	//     COUNT_COLUMN_IN_INDEX
+	// `
 )
 
 const (

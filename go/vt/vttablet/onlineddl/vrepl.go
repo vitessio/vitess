@@ -1,0 +1,262 @@
+/*
+	Original copyright by GitHub as follows. Additions by the Vitess authors as follows.
+*/
+/*
+   Copyright 2016 GitHub Inc.
+	 See https://github.com/github/gh-ost/blob/master/LICENSE
+*/
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package onlineddl
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"strings"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
+)
+
+// VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
+type VRepl struct {
+	dbName      string
+	sourceTable string
+	targetTable string
+
+	sharedPKColumns *vrepl.ColumnList
+
+	sourceSharedColumns *vrepl.ColumnList
+	targetSharedColumns *vrepl.ColumnList
+	sharedColumnsMap    map[string]string
+
+	parser *vrepl.AlterTableParser
+}
+
+// NewVRepl creates a VReplication handler for Online DDL
+func NewVRepl(dbName, sourceTable, targetTable string) *VRepl {
+	return &VRepl{
+		dbName:      dbName,
+		sourceTable: sourceTable,
+		targetTable: targetTable,
+		parser:      vrepl.NewAlterTableParser(),
+	}
+}
+
+// getCandidateUniqueKeys investigates a table and returns the list of unique keys
+// candidate for chunking
+func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys [](*vrepl.UniqueKey), err error) {
+
+	query, err := sqlparser.ParseAndBind(sqlShowColumnsFrom,
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return uniqueKeys, err
+	}
+
+	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rs.Named().Rows {
+		uniqueKey := &vrepl.UniqueKey{
+			Name:            row.AsString("INDEX_NAME", ""),
+			Columns:         *vrepl.ParseColumnList(row.AsString("COLUMN_NAMES", "")),
+			HasNullable:     row.AsBool("has_nullable", false),
+			IsAutoIncrement: row.AsBool("is_auto_increment", false),
+		}
+		uniqueKeys = append(uniqueKeys, uniqueKey)
+	}
+	return uniqueKeys, nil
+}
+
+// readTableColumns reads column list from given table
+func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (columns *vrepl.ColumnList, virtualColumns *vrepl.ColumnList, pkColumns *vrepl.ColumnList, err error) {
+	parsed := sqlparser.BuildParsedQuery(sqlShowColumnsFrom, tableName)
+	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	columnNames := []string{}
+	virtualColumnNames := []string{}
+	pkColumnNames := []string{}
+	for _, row := range rs.Named().Rows {
+		columnName := row.AsString("Field", "")
+		columnNames = append(columnNames, columnName)
+
+		extra := row.AsString("Extra", "")
+		if strings.Contains(extra, " GENERATED") {
+			virtualColumnNames = append(virtualColumnNames, columnName)
+		}
+
+		key := row.AsString("Key", "")
+		if key == "PRI" {
+			pkColumnNames = append(pkColumnNames, columnName)
+		}
+	}
+	if len(columnNames) == 0 {
+		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", tableName)
+	}
+	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
+}
+
+// getSharedColumns returns the intersection of two lists of columns in same order as the first list
+func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList, sourceVirtualColumns, targetVirtualColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
+	sourceSharedColumns *vrepl.ColumnList, targetSharedColumns *vrepl.ColumnList, sharedColumnsMap map[string]string,
+) {
+	sharedColumnNames := []string{}
+	for _, sourceColumn := range sourceColumns.Names() {
+		isSharedColumn := false
+		for _, targetColumn := range targetColumns.Names() {
+			if strings.EqualFold(sourceColumn, targetColumn) {
+				// both tables have this column. Good start.
+				isSharedColumn = true
+				break
+			}
+			if strings.EqualFold(columnRenameMap[sourceColumn], targetColumn) {
+				// column in source is renamed in target
+				isSharedColumn = true
+				break
+			}
+		}
+		for _, virtualColumn := range sourceVirtualColumns.Names() {
+			// virtual/generated columns on source are silently skipped
+			if strings.EqualFold(sourceColumn, virtualColumn) {
+				isSharedColumn = false
+			}
+		}
+		for _, virtualColumn := range targetVirtualColumns.Names() {
+			// virtual/generated columns on target are silently skipped
+			if strings.EqualFold(sourceColumn, virtualColumn) {
+				isSharedColumn = false
+			}
+		}
+		if isSharedColumn {
+			sharedColumnNames = append(sharedColumnNames, sourceColumn)
+		}
+	}
+	mappedSharedColumnNames := []string{}
+	sharedColumnsMap = map[string]string{}
+	for _, columnName := range sharedColumnNames {
+		if mapped, ok := columnRenameMap[columnName]; ok {
+			sharedColumnsMap[columnName] = mapped
+		} else {
+			sharedColumnsMap[columnName] = columnName
+		}
+	}
+	for _, columnName := range sharedColumnNames {
+		mappedSharedColumnNames = append(mappedSharedColumnNames, sharedColumnsMap[columnName])
+	}
+	return vrepl.NewColumnList(sharedColumnNames), vrepl.NewColumnList(mappedSharedColumnNames), sharedColumnsMap
+}
+
+// getSharedPKColumns returns the intersection of PRIMARY KEY columns (taking renaming into consideration) etween source and target tables
+func (v *VRepl) getSharedPKColumns(sourcePKColumns, targetPKColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
+	sharedPKColumns *vrepl.ColumnList,
+) {
+	sharedColumnNames := []string{}
+	for _, sourceColumn := range sourcePKColumns.Names() {
+		isSharedColumn := false
+		for _, targetColumn := range targetPKColumns.Names() {
+			if strings.EqualFold(sourceColumn, targetColumn) {
+				// both tables have this column. Good start.
+				isSharedColumn = true
+				break
+			}
+			if strings.EqualFold(columnRenameMap[sourceColumn], targetColumn) {
+				// column in source is renamed in target
+				isSharedColumn = true
+				break
+			}
+		}
+		if isSharedColumn {
+			sharedColumnNames = append(sharedColumnNames, sourceColumn)
+		}
+	}
+	return vrepl.NewColumnList(sharedColumnNames)
+}
+
+// getSharedUniqueKeys returns the intersection of two given unique keys,
+// testing by list of columns
+func (v *VRepl) getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)) (uniqueKeys [](*vrepl.UniqueKey), err error) {
+	// We actually do NOT rely on key name, just on the set of columns. This is because maybe
+	// the ALTER is on the name itself...
+	for _, sourceUniqueKey := range sourceUniqueKeys {
+		for _, targetUniqueKey := range targetUniqueKeys {
+			if sourceUniqueKey.Columns.EqualsByNames(&targetUniqueKey.Columns) {
+				uniqueKeys = append(uniqueKeys, sourceUniqueKey)
+			}
+		}
+	}
+	return uniqueKeys, nil
+}
+
+func (v *VRepl) analyzeAlter(ctx context.Context, alterOptions string) error {
+	if err := v.parser.ParseAlterStatement(alterOptions); err != nil {
+		return err
+	}
+	if v.parser.IsRenameTable() {
+		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", alterOptions)
+	}
+	return nil
+}
+
+func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	// columns:
+	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := v.readTableColumns(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
+	}
+	targetColumns, targetVirtualColumns, targetPKColumns, err := v.readTableColumns(ctx, conn, v.targetTable)
+	if err != nil {
+		return err
+	}
+	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
+
+	v.sharedPKColumns = v.getSharedPKColumns(sourcePKColumns, targetPKColumns, v.parser.ColumnRenameMap())
+	if v.sharedPKColumns.Len() == 0 {
+		// TODO(shlomi): need to carefully examine what happens when we extend/reduce a PRIMARY KEY
+		// is a column subset OK?
+		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
+	}
+
+	// // unique keys:
+	// sourceUniqueKeys, err := v.getCandidateUniqueKeys(ctx, conn, v.sourceTable)
+	// if err != nil {
+	// 	return err
+	// }
+	// targetUniqueKeys, err := v.getCandidateUniqueKeys(ctx, conn, v.targetTable)
+	// if err != nil {
+	// 	return err
+	// }
+	// sharedUniqueKeys, err := v.getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys)
+	// if err != nil {
+	// 	return err
+	// }
+	// if len(sharedUniqueKeys) == 0 {
+	// 	// TODO(shlomi): need to carefully examine what happens when we extend/reduce a PRIMARY KEY
+	// 	// is a column subset OK?
+	// 	return fmt.Errorf("Found no shared unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
+	// }
+	return nil
+}
