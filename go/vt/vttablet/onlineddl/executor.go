@@ -452,7 +452,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		}
 	}
 	v := NewVRepl(e.dbName, onlineDDL.Table, vreplTableName)
-	if err := v.analyzeAlter(ctx, alterOptions); err != nil {
+	if err := v.analyze(ctx, conn, alterOptions); err != nil {
 		return err
 	}
 	return nil
