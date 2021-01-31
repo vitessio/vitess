@@ -59,7 +59,9 @@ const (
   vrepl_id int,
   table_name varbinary(128),
   lastpk varbinary(2000),
-  primary key (vrepl_id, table_name))`
+	primary key (vrepl_id, table_name))`
+
+	warmUpQuery = "select 1 from _vt.vreplication limit 1"
 )
 
 var withDDL *withddl.WithDDL
@@ -192,6 +194,9 @@ func (vre *Engine) Open(ctx context.Context) {
 		vre.cancelRetry = cancel
 		go vre.retry(ctx, err)
 	}
+
+	// Ensure the schema exists
+	go vre.Exec(warmUpQuery)
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
