@@ -77,6 +77,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 
 	httpAPI := vtadminhttp.NewAPI(api)
 
+	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
@@ -111,6 +112,25 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 // grpcserver.Options) until shutdown or irrecoverable error occurs.
 func (api *API) ListenAndServe() error {
 	return api.serv.ListenAndServe()
+}
+
+// GetClusters is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	span, _ := trace.NewSpan(ctx, "API.GetClusters")
+	defer span.Finish()
+
+	vcs := make([]*vtadminpb.Cluster, 0, len(api.clusters))
+
+	for _, c := range api.clusters {
+		vcs = append(vcs, &vtadminpb.Cluster{
+			Id:   c.ID,
+			Name: c.Name,
+		})
+	}
+
+	return &vtadminpb.GetClustersResponse{
+		Clusters: vcs,
+	}, nil
 }
 
 // GetGates is part of the vtadminpb.VTAdminServer interface.
