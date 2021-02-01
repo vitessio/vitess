@@ -133,14 +133,27 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			g, err := c.Discovery.DiscoverVTGates(ctx, []string{})
+			gs, err := c.Discovery.DiscoverVTGates(ctx, []string{})
 			if err != nil {
 				er.RecordError(err)
 				return
 			}
 
 			m.Lock()
-			gates = append(gates, g...)
+
+			for _, g := range gs {
+				gates = append(gates, &vtadminpb.VTGate{
+					Cell: g.Cell,
+					Cluster: &vtadminpb.Cluster{
+						Id:   c.ID,
+						Name: c.Name,
+					},
+					Hostname:  g.Hostname,
+					Keyspaces: g.Keyspaces,
+					Pool:      g.Pool,
+				})
+			}
+
 			m.Unlock()
 		}(c)
 	}
