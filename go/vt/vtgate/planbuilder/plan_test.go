@@ -623,7 +623,7 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	vschema := &vschemaWrapper{
 		v:             loadSchema(b, "schema_test.json"),
 		sysVarEnabled: true,
-		version:       V4,
+		version:       V3,
 	}
 
 	var dmlCases []testCase
@@ -650,11 +650,11 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	})
 
 	b.Run("DML (random sample, N=32)", func(b *testing.B) {
-		benchmarkPlanner(b, V4, dmlCases[:32], vschema)
+		benchmarkPlanner(b, V3, dmlCases[:32], vschema)
 	})
 
 	b.Run("Select (random sample, N=32)", func(b *testing.B) {
-		benchmarkPlanner(b, V4, selectCases[:32], vschema)
+		benchmarkPlanner(b, V3, selectCases[:32], vschema)
 	})
 }
 
