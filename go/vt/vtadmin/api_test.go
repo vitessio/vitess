@@ -51,6 +51,56 @@ func init() {
 	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
 }
 
+func TestGetClusters(t *testing.T) {
+	tests := []struct {
+		name     string
+		clusters []*cluster.Cluster
+		expected []*vtadminpb.Cluster
+	}{
+		{
+			name: "multiple clusters",
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		},
+		{
+			name:     "no clusters",
+			clusters: []*cluster.Cluster{},
+			expected: []*vtadminpb.Cluster{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api := NewAPI(tt.clusters, grpcserver.Options{}, http.Options{})
+			ctx := context.Background()
+
+			resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.expected, resp.Clusters)
+		})
+	}
+}
+
 func TestGetGates(t *testing.T) {
 	fakedisco1 := fakediscovery.New()
 	cluster1 := &cluster.Cluster{

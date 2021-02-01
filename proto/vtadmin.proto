@@ -29,6 +29,8 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // GetClusters returns all configured clusters.
+    rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
     // GetKeyspaces returns all keyspaces across the specified clusters.
@@ -93,6 +95,11 @@ message VTGate {
 }
 
 /* Request/Response types */
+message GetClustersRequest {}
+
+message GetClustersResponse {
+    repeated Cluster clusters = 1;
+}
 
 message GetGatesRequest {
     repeated string cluster_ids = 1;
