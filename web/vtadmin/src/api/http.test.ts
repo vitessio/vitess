@@ -39,21 +39,45 @@ import { HTTP_RESPONSE_NOT_OK_ERROR, MALFORMED_HTTP_RESPONSE_ERROR } from './htt
 // means our fake is more robust than it would be otherwise. Since we are using
 // the exact same protos in our fake as in our real vtadmin-api server, we're guaranteed
 // to have type parity.
-process.env.REACT_APP_VTADMIN_API_ADDRESS = '';
 const server = setupServer();
 
+// mockServerJson configures an HttpOkResponse containing the given `json`
+// for all requests made against the given `endpoint`.
 const mockServerJson = (endpoint: string, json: object) => {
     server.use(rest.get(endpoint, (req, res, ctx) => res(ctx.json(json))));
 };
 
-// Enable API mocking before tests.
-beforeAll(() => server.listen());
+// Since vtadmin uses process.env variables quite a bit, we need to
+// do a bit of a dance to clear them out between test runs.
+const ORIGINAL_PROCESS_ENV = process.env;
+const TEST_PROCESS_ENV = {
+    ...process.env,
+    REACT_APP_VTADMIN_API_ADDRESS: '',
+};
 
-// Reset any runtime request handlers we may add during the tests.
-afterEach(() => server.resetHandlers());
+beforeAll(() => {
+    process.env = { ...TEST_PROCESS_ENV };
 
-// Disable API mocking after the tests are done.
-afterAll(() => server.close());
+    // Enable API mocking before tests.
+    server.listen();
+});
+
+afterEach(() => {
+    // Reset the process.env to clear out any changes made in the tests.
+    process.env = { ...TEST_PROCESS_ENV };
+
+    jest.restoreAllMocks();
+
+    // Reset any runtime request handlers we may add during the tests.
+    server.resetHandlers();
+});
+
+afterAll(() => {
+    process.env = { ...ORIGINAL_PROCESS_ENV };
+
+    // Disable API mocking after the tests are done.
+    server.close();
+});
 
 describe('api/http', () => {
     describe('vtfetch', () => {
@@ -104,6 +128,61 @@ describe('api/http', () => {
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 /* eslint-enable jest/no-conditional-expect */
             }
+        });
+
+        describe('credentials', () => {
+            it('uses the REACT_APP_FETCH_CREDENTIALS env variable if specified', async () => {
+                process.env.REACT_APP_FETCH_CREDENTIALS = 'include';
+
+                jest.spyOn(global, 'fetch');
+
+                const endpoint = `/api/tablets`;
+                const response = { ok: true, result: null };
+                mockServerJson(endpoint, response);
+
+                await api.vtfetch(endpoint);
+                expect(global.fetch).toHaveBeenCalledTimes(1);
+                expect(global.fetch).toHaveBeenCalledWith(endpoint, { credentials: 'include' });
+
+                jest.restoreAllMocks();
+            });
+
+            it('uses the fetch default `credentials` property by default', async () => {
+                jest.spyOn(global, 'fetch');
+
+                const endpoint = `/api/tablets`;
+                const response = { ok: true, result: null };
+                mockServerJson(endpoint, response);
+
+                await api.vtfetch(endpoint);
+                expect(global.fetch).toHaveBeenCalledTimes(1);
+                expect(global.fetch).toHaveBeenCalledWith(endpoint, { credentials: undefined });
+
+                jest.restoreAllMocks();
+            });
+
+            it('throws an error if an invalid value used for `credentials`', async () => {
+                (process as any).env.REACT_APP_FETCH_CREDENTIALS = 'nope';
+
+                jest.spyOn(global, 'fetch');
+
+                const endpoint = `/api/tablets`;
+                const response = { ok: true, result: null };
+                mockServerJson(endpoint, response);
+
+                try {
+                    await api.vtfetch(endpoint);
+                } catch (e) {
+                    /* eslint-disable jest/no-conditional-expect */
+                    expect(e.message).toEqual(
+                        'Invalid fetch credentials property: nope. Must be undefined or one of omit, same-origin, include'
+                    );
+                    expect(global.fetch).toHaveBeenCalledTimes(0);
+                    /* eslint-enable jest/no-conditional-expect */
+                }
+
+                jest.restoreAllMocks();
+            });
         });
     });
 

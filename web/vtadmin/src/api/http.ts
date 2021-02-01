@@ -58,13 +58,27 @@ class HttpResponseNotOkError extends Error {
 // Note that this only validates the HttpResponse envelope; it does not
 // do any type checking or validation on the result.
 export const vtfetch = async (endpoint: string): Promise<HttpResponse> => {
-    const url = `${process.env.REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
-    const response = await fetch(url);
+    const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
+
+    const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+    const opts = vtfetchOpts();
+
+    const response = await global.fetch(url, opts);
 
     const json = await response.json();
     if (!('ok' in json)) throw new MalformedHttpResponseError('invalid http envelope', json);
 
     return json as HttpResponse;
+};
+
+export const vtfetchOpts = (): RequestInit => {
+    const credentials = process.env.REACT_APP_FETCH_CREDENTIALS;
+    if (credentials && credentials !== 'omit' && credentials !== 'same-origin' && credentials !== 'include') {
+        throw Error(
+            `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
+        );
+    }
+    return { credentials };
 };
 
 export const fetchTablets = async () => {
