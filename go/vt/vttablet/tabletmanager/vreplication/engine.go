@@ -151,6 +151,9 @@ func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
 	}
 	vre.dbName = dbcfgs.DBName
+
+	// Ensure the schema is created as early as possible
+	go vre.Exec(warmUpQuery)
 }
 
 // NewTestEngine creates a new Engine for testing.
@@ -194,9 +197,6 @@ func (vre *Engine) Open(ctx context.Context) {
 		vre.cancelRetry = cancel
 		go vre.retry(ctx, err)
 	}
-
-	// Ensure the schema exists
-	go vre.Exec(warmUpQuery)
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
