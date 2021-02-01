@@ -464,6 +464,7 @@ func TestRowCount(t *testing.T) {
 }
 
 func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
+	t.Helper()
 	result, err := executorExec(executor, "select row_count()", map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
