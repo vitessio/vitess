@@ -60,8 +60,6 @@ const (
   table_name varbinary(128),
   lastpk varbinary(2000),
 	primary key (vrepl_id, table_name))`
-
-	warmUpQuery = "select 1 from _vt.vreplication limit 1"
 )
 
 var withDDL *withddl.WithDDL
@@ -151,9 +149,6 @@ func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
 	}
 	vre.dbName = dbcfgs.DBName
-
-	// Ensure the schema is created as early as possible
-	go vre.Exec(warmUpQuery)
 }
 
 // NewTestEngine creates a new Engine for testing.
