@@ -101,6 +101,7 @@ type SandboxConn struct {
 	// reserve id generator
 	ReserveID sync2.AtomicInt64
 
+	mapMu     sync.Mutex //protects the map txIDToRID
 	txIDToRID map[int64]int64
 
 	sExecMu sync.Mutex
@@ -232,7 +233,7 @@ func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQu
 // Commit is part of the QueryService interface.
 func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.CommitCount.Add(1)
-	reservedID := sbc.txIDToRID[transactionID]
+	reservedID := sbc.getTxReservedID(transactionID)
 	if reservedID != 0 {
 		reservedID = sbc.ReserveID.Add(1)
 	}
@@ -242,7 +243,7 @@ func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, tran
 // Rollback is part of the QueryService interface.
 func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
 	sbc.RollbackCount.Add(1)
-	reservedID := sbc.txIDToRID[transactionID]
+	reservedID := sbc.getTxReservedID(transactionID)
 	if reservedID != 0 {
 		reservedID = sbc.ReserveID.Add(1)
 	}
@@ -340,7 +341,7 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	transactionID, alias, err := sbc.begin(ctx, target, preQueries, reservedID, options)
 	if transactionID != 0 {
-		sbc.txIDToRID[transactionID] = reservedID
+		sbc.setTxReservedID(transactionID, reservedID)
 	}
 	if err != nil {
 		return nil, 0, nil, err
@@ -443,7 +444,7 @@ func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
 	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, preQueries, sql, bindVariables, reservedID, options)
 	if transactionID != 0 {
-		sbc.txIDToRID[transactionID] = reservedID
+		sbc.setTxReservedID(transactionID, reservedID)
 	}
 	if err != nil {
 		return nil, transactionID, reservedID, alias, err
@@ -456,7 +457,7 @@ func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Targ
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	if transactionID != 0 {
-		sbc.txIDToRID[transactionID] = reservedID
+		sbc.setTxReservedID(transactionID, reservedID)
 	}
 	if err != nil {
 		return nil, 0, nil, err
@@ -498,6 +499,18 @@ func (sbc *SandboxConn) getNextResult() *sqltypes.Result {
 		return r
 	}
 	return SingleRowResult
+}
+
+func (sbc *SandboxConn) setTxReservedID(transactionID int64, reservedID int64) {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	sbc.txIDToRID[transactionID] = reservedID
+}
+
+func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {
+	sbc.mapMu.Lock()
+	defer sbc.mapMu.Unlock()
+	return sbc.txIDToRID[txID]
 }
 
 //StringQueries returns the queries executed as a slice of strings
