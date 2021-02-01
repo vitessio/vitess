@@ -153,11 +153,7 @@ func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	vre.dbName = dbcfgs.DBName
 
 	// Ensure the schema is created as early as possible
-	go func() {
-		vre.mu.Lock()
-		defer vre.mu.Unlock()
-		vre.Exec(warmUpQuery)
-	}()
+	go vre.Exec(warmUpQuery)
 }
 
 // NewTestEngine creates a new Engine for testing.
