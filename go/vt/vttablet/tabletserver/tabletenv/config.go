@@ -143,8 +143,8 @@ func init() {
 
 	flag.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
-	flag.BoolVar(&currentConfig.EnableLagThrottler, "enable-lag-throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
-	flag.BoolVar(&currentConfig.EnableLagThrottler, "enable_lag_throttler", currentConfig.EnableLagThrottler, "synonym to -enable-lag-throttler")
+	flag.BoolVar(&currentConfig.EnableLagThrottler, "enable_lag_throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
+	flag.BoolVar(&currentConfig.EnableLagThrottler, "enable-lag-throttler", currentConfig.EnableLagThrottler, "synonym to -enable_lag_throttler")
 
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&enableConsolidator, "enable-consolidator", true, "This option enables the query consolidator.")
