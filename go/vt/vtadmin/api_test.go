@@ -69,8 +69,31 @@ func TestGetGates(t *testing.T) {
 			Hostname: "cluster1-gate3",
 		},
 	}
-
 	fakedisco1.AddTaggedGates(nil, cluster1Gates...)
+
+	expectedCluster1Gates := []*vtadminpb.VTGate{
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-gate1",
+		},
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-gate2",
+		},
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-gate3",
+		},
+	}
 
 	fakedisco2 := fakediscovery.New()
 	cluster2 := &cluster.Cluster{
@@ -83,19 +106,28 @@ func TestGetGates(t *testing.T) {
 			Hostname: "cluster2-gate1",
 		},
 	}
-
 	fakedisco2.AddTaggedGates(nil, cluster2Gates...)
+
+	expectedCluster2Gates := []*vtadminpb.VTGate{
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster2.ID,
+				Name: cluster2.Name,
+			},
+			Hostname: "cluster2-gate1",
+		},
+	}
 
 	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, grpcserver.Options{}, http.Options{})
 	ctx := context.Background()
 
 	resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, append(cluster1Gates, cluster2Gates...), resp.Gates)
+	assert.ElementsMatch(t, append(expectedCluster1Gates, expectedCluster2Gates...), resp.Gates)
 
 	resp, err = api.GetGates(ctx, &vtadminpb.GetGatesRequest{ClusterIds: []string{cluster1.ID}})
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, cluster1Gates, resp.Gates)
+	assert.ElementsMatch(t, expectedCluster1Gates, resp.Gates)
 
 	fakedisco1.SetGatesError(true)
 
