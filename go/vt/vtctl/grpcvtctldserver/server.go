@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -365,15 +365,10 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "shard field is required")
 	}
 
-	var waitReplicasTimeout time.Duration
-	if req.WaitReplicasTimeout != nil {
-		wrt, err := ptypes.Duration(req.WaitReplicasTimeout)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot parse WaitReplicasTimeout; err = %v", err)
-		}
-
-		waitReplicasTimeout = wrt
-	} else {
+	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	} else if !ok {
 		waitReplicasTimeout = time.Second * 30
 	}
 

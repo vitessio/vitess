@@ -7,6 +7,7 @@
 /go/cmd/vtadmin @ajm188 @doeg
 /go/cmd/vtctldclient @ajm188 @doeg
 /go/mysql @harshit-gangal @systay
+/go/protoutil @ajm188
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/orchestrator @deepthi @shlomi-noach
 /go/test/endtoend/vtgate @harshit-gangal @systay
