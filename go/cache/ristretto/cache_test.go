@@ -764,7 +764,7 @@ func TestDropUpdates(t *testing.T) {
 			}
 		}
 		// Wait for all the items to be processed.
-		time.Sleep(time.Millisecond)
+		c.Wait()
 		// This will cause eviction from the cache.
 		require.True(t, c.Set("1", nil, 10))
 		c.Close()
