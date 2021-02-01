@@ -413,6 +413,40 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	return nil
 }
 
+// terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
+func (e *Executor) terminateVReplMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	tmClient := tmclient.NewTabletManagerClient()
+	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+	if err != nil {
+		return err
+	}
+	{
+		query, err := sqlparser.ParseAndBind(sqlStopVReplStream,
+			sqltypes.StringBindVariable(e.dbName),
+			sqltypes.StringBindVariable(onlineDDL.UUID),
+		)
+		if err != nil {
+			return err
+		}
+		// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
+		_, _ = tmClient.VReplicationExec(ctx, tablet.Tablet, query)
+	}
+	{
+		query, err := sqlparser.ParseAndBind(sqlDeleteVReplStream,
+			sqltypes.StringBindVariable(e.dbName),
+			sqltypes.StringBindVariable(onlineDDL.UUID),
+		)
+		if err != nil {
+			return err
+		}
+		// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
+		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ExecuteWithVReplication sets up the grounds for a vreplication schema migration
 func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	e.migrationMutex.Lock()
@@ -946,7 +980,9 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 	}
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline:
-		// TODO(shlomi): remove vreplication
+		if err := e.terminateVReplMigration(ctx, onlineDDL); err != nil {
+			return foundRunning, fmt.Errorf("Error cancelling migration, vreplication exec error: %+v", err)
+		}
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 		atomic.StoreInt64(&e.migrationRunning, 0)
 
@@ -1269,30 +1305,106 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 	return err
 }
 
+// isVReplMigrationReadyToCutOver sees if the vreplication migration has completed the row copy
+// and is up to date with the binlogs.
+func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, uuid string) (isRunning bool, err error) {
+	// fmt.Printf("============== isVReplMigrationRunning \n")
+	// query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
+	// 	sqltypes.StringBindVariable(uuid),
+	// )
+	// if err != nil {
+	// 	return false, err
+	// }
+	// fmt.Printf("============== isVReplMigrationRunning query=%v\n", query)
+	// r, err := e.execQuery(ctx, query)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// timeNow := time.Now()
+	// for _, row := range r.Named().Rows {
+	// 	timeUpdated := row.AsInt64("time_updated", 0)
+	// 	fmt.Printf("============== isVReplMigrationRunning timeUpdated=%v\n", timeUpdated)
+	// 	durationDiff := timeNow.Sub(time.Unix(timeUpdated, 0))
+	// 	if durationDiff < 0 {
+	// 		durationDiff = -durationDiff
+	// 	}
+	// 	fmt.Printf("============== isVReplMigrationRunning durationDiff=%v\n", durationDiff)
+	// 	if durationDiff < time.Minute {
+	// 		isRunning = true
+	// 	}
+	// }
+	// fmt.Printf("============== isVReplMigrationRunning isRunning=%v\n", isRunning)
+	return isRunning, nil
+}
+
+// isVReplMigrationRunning sees if there is a VReplication migration actively running
+func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (isRunning bool, err error) {
+	fmt.Printf("============== isVReplMigrationRunning \n")
+	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return false, err
+	}
+	fmt.Printf("============== isVReplMigrationRunning query=%v\n", query)
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return false, err
+	}
+	named := r.Named()
+	if len(named.Rows) == 0 {
+		// no vreplication entry
+		return false, nil
+	}
+	row := named.Row()
+	if row == nil {
+		// multiple workflows under same name:
+		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "multiple workflows found for UUID: %+v", uuid)
+	}
+	message := row.AsString("message", "")
+	if strings.Contains(strings.ToLower(message), "error") {
+		return false, nil
+	}
+	return true, nil
+}
+
 // reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
 // actually running).
 func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, runningNotByThisProcess []string, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	parsed := sqlparser.BuildParsedQuery(sqlSelectRunningMigrations, ":strategy")
-	bindVars := map[string]*querypb.BindVariable{
-		"strategy": sqltypes.StringBindVariable(string(schema.DDLStrategyPTOSC)),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return countRunnning, runningNotByThisProcess, err
-	}
-	r, err := e.execQuery(ctx, bound)
+	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, runningNotByThisProcess, err
 	}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
-		// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
-		// if the process is alive, we update the `liveness_timestamp` for this migration.
-		if running, _, _ := e.isPTOSCMigrationRunning(ctx, uuid); running {
-			_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+		strategy := schema.DDLStrategy(row["strategy"].ToString())
+		switch strategy {
+		case schema.DDLStrategyPTOSC:
+			{
+				// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
+				// if the process is alive, we update the `liveness_timestamp` for this migration.
+				running, _, err := e.isPTOSCMigrationRunning(ctx, uuid)
+				if err != nil {
+					return countRunnning, runningNotByThisProcess, err
+				}
+				if running {
+					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+				}
+			}
+		case schema.DDLStrategyOnline:
+			{
+				// We check the _vt.vreplication table
+				running, err := e.isVReplMigrationRunning(ctx, uuid)
+				if err != nil {
+					return countRunnning, runningNotByThisProcess, err
+				}
+				if running {
+					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+				}
+			}
 		}
 		countRunnning++
 

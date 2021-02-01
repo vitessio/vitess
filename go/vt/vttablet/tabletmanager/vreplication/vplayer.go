@@ -260,8 +260,6 @@ func (vp *vplayer) recordHeartbeat() (err error) {
 }
 
 // applyEvents is the main thread that applies the events. It has the following use
-
-// applyEvents is the main thread that applies the events. It has the following use
 // cases to take into account:
 // * Normal transaction that has row mutations. In this case, the transaction
 //   is committed along with an update of the position.

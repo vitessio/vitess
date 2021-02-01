@@ -122,11 +122,11 @@ const (
 		AND retries=0
 	`
 	sqlSelectRunningMigrations = `SELECT
-			migration_uuid
+			migration_uuid,
+			strategy
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='running'
-			AND strategy=%a
 	`
 	sqlSelectCountReadyMigrations = `SELECT
 			count(*) as count_ready
@@ -217,7 +217,21 @@ const (
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
-	sqlStartVReplStream  = "update _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStartVReplStream  = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
+	sqlStopVReplStream   = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
+	sqlDeleteVReplStream = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
+	sqlReadVReplStream   = `SELECT
+			workflow,
+			pos,
+			time_updated,
+			transaction_timestamp,
+			state,
+			message
+		FROM _vt.vreplication
+		WHERE
+			workflow=%a
+
+		`
 	// TODO(shlomi): consider removing:
 	// sqlGetUniqueKeys     = `
 	//   SELECT
