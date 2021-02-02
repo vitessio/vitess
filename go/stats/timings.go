@@ -19,7 +19,6 @@ package stats
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -91,15 +90,7 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 		t.mu.Unlock()
 	}
 	if defaultStatsdHook.timerHook != nil && t.name != "" {
-		labels := strings.Split(t.label, ".")
-		names := strings.Split(name, ".")
-		var tags []string
-		if len(labels) == len(names) {
-			for i, label := range labels {
-				tags = append(tags, fmt.Sprintf("%s:%s", label, names[i]))
-			}
-		}
-		defaultStatsdHook.timerHook(t.name, elapsed.Milliseconds(), tags)
+		defaultStatsdHook.timerHook(t.name, name, elapsed.Milliseconds(), t)
 	}
 
 	elapsedNs := int64(elapsed)
