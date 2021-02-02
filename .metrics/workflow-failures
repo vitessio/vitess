@@ -1616,3 +1616,5 @@
 2021-02-02T07:53:12Z,local_example,https://github.com/vitessio/vitess/actions/runs/530104649
 2021-02-02T07:53:12Z,region_example,https://github.com/vitessio/vitess/actions/runs/530104650
 2021-02-02T07:53:12Z,unit_race,https://github.com/vitessio/vitess/actions/runs/530104628
+2021-02-02T09:09:37Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/530267818
+2021-02-02T09:09:37Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/530267838
