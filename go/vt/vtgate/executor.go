@@ -171,7 +171,7 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 		return
 	}
 	if !safeSession.foundRowsHandled {
-		safeSession.FoundRows = result.RowsAffected
+		safeSession.FoundRows = uint64(len(result.Rows))
 	}
 	if result.InsertID > 0 {
 		safeSession.LastInsertId = result.InsertID
@@ -557,7 +557,7 @@ func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value stri
 		return nil, err
 	}
 
-	return &sqltypes.Result{RowsAffected: 1}, nil
+	return &sqltypes.Result{}, nil
 }
 
 func (e *Executor) handleShowVitessMetadata(ctx context.Context, opt *sqlparser.ShowTablesOpt) (*sqltypes.Result, error) {

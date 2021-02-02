@@ -293,7 +293,6 @@ func TestSelectLastInsertId(t *testing.T) {
 	sql := "select last_insert_id()"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "last_insert_id()", Type: sqltypes.Uint64},
 		},
@@ -335,7 +334,6 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
 			{Name: "@@ddl_strategy", Type: sqltypes.VarBinary},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
 			sqltypes.NewInt64(0),
@@ -378,7 +376,6 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 			{Name: "@@autocommit", Type: sqltypes.Int64},
 			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 			sqltypes.NewInt64(1),
@@ -398,7 +395,6 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.Null},
 		},
@@ -412,7 +408,6 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.VarBinary},
 		},
@@ -436,7 +431,6 @@ func TestFoundRows(t *testing.T) {
 	sql := "select found_rows()"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "found_rows()", Type: sqltypes.Uint64},
 		},
@@ -512,8 +506,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -541,7 +534,6 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	rs, err := executorExec(executor, "select (select last_insert_id()) as x", nil)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "x", Type: sqltypes.Uint64},
 		},
@@ -570,7 +562,6 @@ func TestSelectDatabase(t *testing.T) {
 		sql,
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "database()", Type: sqltypes.VarBinary},
 		},
@@ -1165,8 +1156,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				// i%4 ensures that there are duplicates across shards.
@@ -1196,8 +1186,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "col2", Type: sqltypes.Int32},
 		},
-		RowsAffected: 8,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		// There should be a duplicate for each row returned.
@@ -1231,8 +1220,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "textcol", Type: sqltypes.VarChar},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				// i%4 ensures that there are duplicates across shards.
@@ -1263,8 +1251,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
 		},
-		RowsAffected: 8,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		// There should be a duplicate for each row returned.
@@ -1297,8 +1284,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 				{Name: "id", Type: sqltypes.Int32},
 				{Name: "col", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
@@ -1354,8 +1340,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 				{Name: "id", Type: sqltypes.Int32},
 				{Name: "textcol", Type: sqltypes.VarChar},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
@@ -1413,8 +1398,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
@@ -1471,8 +1455,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
@@ -1530,8 +1513,7 @@ func TestSelectScatterLimit(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
@@ -1597,8 +1579,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
@@ -1752,8 +1733,7 @@ func TestVarJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1788,8 +1768,7 @@ func TestVarJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1823,8 +1802,7 @@ func TestLeftJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2065,8 +2043,7 @@ func TestCrossShardSubquery(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2282,7 +2259,6 @@ func TestSelectLock(t *testing.T) {
 			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 		LockSession: &vtgatepb.Session_ShardSession{
-
 			Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
 			TabletAlias: sbc1.Tablet().Alias,
 			ReservedId:  1,

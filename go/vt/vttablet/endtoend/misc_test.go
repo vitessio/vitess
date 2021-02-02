@@ -30,6 +30,7 @@ import (
 	"context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -88,16 +89,14 @@ func TestBinary(t *testing.T) {
 				Flags:        128,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarBinary(binaryData),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !qr.Equal(&want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, *qr)
 
 	// Test with bindvars.
 	_, err = client.Execute(
@@ -132,9 +131,7 @@ func TestNocacheListArgs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 2 {
-		t.Errorf("rows affected: %d, want 2", qr.RowsAffected)
-	}
+	assert.Equal(t, 2, len(qr.Rows))
 
 	qr, err = client.Execute(
 		query,
@@ -146,9 +143,7 @@ func TestNocacheListArgs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("rows affected: %d, want 1", qr.RowsAffected)
-	}
+	assert.Equal(t, 1, len(qr.Rows))
 
 	qr, err = client.Execute(
 		query,
@@ -160,9 +155,7 @@ func TestNocacheListArgs(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("rows affected: %d, want 1", qr.RowsAffected)
-	}
+	assert.Equal(t, 1, len(qr.Rows))
 
 	// Error case
 	_, err = client.Execute(
@@ -320,7 +313,6 @@ func TestBindInSelect(t *testing.T) {
 			Charset:      63,
 			Flags:        32897,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewInt64(1),
@@ -354,7 +346,6 @@ func TestBindInSelect(t *testing.T) {
 			Charset:      33,
 			Flags:        1,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarChar("abcd"),
@@ -384,7 +375,6 @@ func TestBindInSelect(t *testing.T) {
 			Charset:      33,
 			Flags:        1,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarChar("\x00\xff"),
@@ -480,7 +470,7 @@ func TestQueryStats(t *testing.T) {
 	}
 	vend := framework.DebugVars()
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.Select", vstart, 2)
-	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 2)
+	compareIntDiff(t, vend, "QueryRowCounts/vitess_a.Select", vstart, 0)
 	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Select", vstart, 1)
 
 	// Ensure BeginExecute also updates the stats and strips comments.
@@ -518,18 +508,14 @@ func TestDBAStatements(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 4 {
-		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 
 	qr, err = client.Execute("explain vitess_a", nil)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 4 {
-		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 }
 
 type testLogger struct {
@@ -645,9 +631,7 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 0 {
-		t.Errorf("Execute(rowsFound==false): %d, want 0", qr.RowsAffected)
-	}
+	assert.Equal(t, 0, len(qr.Rows))
 	if err := client.Rollback(); err != nil {
 		t.Error(err)
 	}
@@ -658,9 +642,7 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 1 {
-		t.Errorf("Execute(rowsFound==true): %d, want 1", qr.RowsAffected)
-	}
+	assert.EqualValues(t, 1, qr.RowsAffected)
 	if err := client.Rollback(); err != nil {
 		t.Error(err)
 	}
