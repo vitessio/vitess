@@ -68,20 +68,24 @@ func newPolicy(numCounters, maxCost int64) policy {
 
 type defaultPolicy struct {
 	sync.Mutex
-	admit    *tinyLFU
-	evict    *sampledLFU
-	itemsCh  chan []uint64
-	stop     chan struct{}
-	isClosed bool
-	metrics  *Metrics
+	admit       *tinyLFU
+	evict       *sampledLFU
+	itemsCh     chan []uint64
+	stop        chan struct{}
+	isClosed    bool
+	metrics     *Metrics
+	numCounters int64
+	maxCost     int64
 }
 
 func newDefaultPolicy(numCounters, maxCost int64) *defaultPolicy {
 	p := &defaultPolicy{
-		admit:   newTinyLFU(numCounters),
-		evict:   newSampledLFU(maxCost),
-		itemsCh: make(chan []uint64, 3),
-		stop:    make(chan struct{}),
+		admit:       newTinyLFU(numCounters),
+		evict:       newSampledLFU(maxCost),
+		itemsCh:     make(chan []uint64, 3),
+		stop:        make(chan struct{}),
+		numCounters: numCounters,
+		maxCost:     maxCost,
 	}
 	go p.processItems()
 	return p
@@ -246,8 +250,8 @@ func (p *defaultPolicy) Cost(key uint64) int64 {
 
 func (p *defaultPolicy) Clear() {
 	p.Lock()
-	p.admit.clear()
-	p.evict.clear()
+	p.admit = newTinyLFU(p.numCounters)
+	p.evict = newSampledLFU(p.maxCost)
 	p.Unlock()
 }
 
@@ -412,6 +416,6 @@ func (p *tinyLFU) reset() {
 
 func (p *tinyLFU) clear() {
 	p.incrs = 0
-	p.door.Clear()
 	p.freq.Clear()
+	p.door.Clear()
 }
