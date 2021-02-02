@@ -69,13 +69,17 @@ func TestSelectDBA(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	sbc1.Queries = nil
 
-	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'PERFORMANCE_SCHEMA' AND table_name = 'foo'"
+	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'"
 	_, err = executor.Execute(context.Background(), "TestSelectDBA",
 		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename", BindVariables: map[string]*querypb.BindVariable{}}}
+	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
+			"__vttablename":  sqltypes.StringBindVariable("foo"),
+		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 }
