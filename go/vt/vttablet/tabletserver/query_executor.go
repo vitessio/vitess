@@ -197,14 +197,14 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanSet:
 		return qre.txFetch(conn, true)
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
-	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
