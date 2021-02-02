@@ -200,11 +200,7 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 		logStats.Error = err
 		errCount = 1
 	} else {
-		if qr.RowsAffected > 0 {
-			logStats.RowsAffected = qr.RowsAffected
-		} else {
-			logStats.RowsAffected = uint64(len(qr.Rows))
-		}
+		logStats.RowsAffected = qr.RowsAffected
 	}
 	return errCount
 }
