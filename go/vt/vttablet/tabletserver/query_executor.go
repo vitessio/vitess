@@ -137,7 +137,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qr, nil
 	case p.PlanSelectLock:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execOther()
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execOther()
