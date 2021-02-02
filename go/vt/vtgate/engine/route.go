@@ -417,6 +417,18 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		Row:      []sqltypes.Value{},
 	}
 
+	var specifiedKS string
+	if route.SysTableTableSchema != nil {
+		result, err := route.SysTableTableSchema.Evaluate(env)
+		if err != nil {
+			return nil, err
+		}
+		specifiedKS = result.Value().ToString()
+		if sqlparser.SystemSchema(specifiedKS) {
+			return defaultRoute()
+		}
+	}
+
 	if route.SysTableTableName != nil {
 		// the use has specified a table_name - let's check if it's a routed table
 		rss, err := route.paramsRoutedTable(vcursor, env, bindVars)
@@ -433,11 +445,6 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	}
 
 	// we only have table_schema to work with
-	result, err := route.SysTableTableSchema.Evaluate(env)
-	if err != nil {
-		return nil, err
-	}
-	specifiedKS := result.Value().ToString()
 	destinations, _, err := vcursor.ResolveDestinations(specifiedKS, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		log.Errorf("failed to route information_schema query to keyspace [%s]", specifiedKS)
