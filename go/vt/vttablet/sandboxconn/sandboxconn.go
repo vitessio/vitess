@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -160,7 +162,9 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	return sbc.getNextResult(), nil
+
+	stmt, _ := sqlparser.Parse(query) // knowingly ignoring the error
+	return sbc.getNextResult(stmt), nil
 }
 
 // ExecuteBatch is part of the QueryService interface.
@@ -176,7 +180,7 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 	sbc.Options = append(sbc.Options, options)
 	result := make([]sqltypes.Result, 0, len(queries))
 	for range queries {
-		result = append(result, *(sbc.getNextResult()))
+		result = append(result, *(sbc.getNextResult(nil)))
 	}
 	return result, nil
 }
@@ -199,7 +203,8 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	nextRs := sbc.getNextResult()
+	parse, _ := sqlparser.Parse(query)
+	nextRs := sbc.getNextResult(parse)
 	sbc.sExecMu.Unlock()
 
 	return callback(nextRs)
@@ -365,7 +370,7 @@ func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Targe
 	if err := sbc.getError(); err != nil {
 		return err
 	}
-	r := sbc.getNextResult()
+	r := sbc.getNextResult(nil)
 	if r == nil {
 		return nil
 	}
@@ -492,13 +497,21 @@ func (sbc *SandboxConn) Tablet() *topodatapb.Tablet {
 	return sbc.tablet
 }
 
-func (sbc *SandboxConn) getNextResult() *sqltypes.Result {
+func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result {
 	if len(sbc.results) != 0 {
 		r := sbc.results[0]
 		sbc.results = sbc.results[1:]
 		return r
 	}
-	return SingleRowResult
+	if stmt == nil {
+		// if we didn't get a valid query, we'll assume we need a SELECT
+		return SingleRowResult
+	}
+	switch stmt.(type) {
+	case *sqlparser.Select, *sqlparser.Union:
+		return SingleRowResult
+	}
+	return &sqltypes.Result{RowsAffected: 1}
 }
 
 func (sbc *SandboxConn) setTxReservedID(transactionID int64, reservedID int64) {
@@ -542,8 +555,6 @@ var StreamRowResult = &sqltypes.Result{
 		{Name: "id", Type: sqltypes.Int32},
 		{Name: "value", Type: sqltypes.VarChar},
 	},
-	RowsAffected: 0,
-	InsertID:     0,
 	Rows: [][]sqltypes.Value{{
 		sqltypes.NewInt32(1),
 		sqltypes.NewVarChar("foo"),

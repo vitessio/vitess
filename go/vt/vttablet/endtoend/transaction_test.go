@@ -115,9 +115,7 @@ func TestRollback(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 3 {
-		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
-	}
+	assert.Equal(t, 3, len(qr.Rows))
 
 	expectedDiffs := []struct {
 		tag  string
@@ -156,18 +154,14 @@ func TestAutoCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 4 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 3 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 3, len(qr.Rows))
 
 	expectedDiffs := []struct {
 		tag  string
@@ -270,9 +264,7 @@ func TestPrepareRollback(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 3 {
-		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
-	}
+	assert.Equal(t, 3, len(qr.Rows))
 }
 
 func TestPrepareCommit(t *testing.T) {
@@ -294,9 +286,7 @@ func TestPrepareCommit(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 4 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 }
 
 func TestPrepareReparentCommit(t *testing.T) {
@@ -324,9 +314,7 @@ func TestPrepareReparentCommit(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 4 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 }
 
 func TestShutdownGracePeriod(t *testing.T) {
