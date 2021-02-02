@@ -221,6 +221,7 @@ const (
 	sqlStopVReplStream   = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
 	sqlDeleteVReplStream = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
 	sqlReadVReplStream   = `SELECT
+			id,
 			workflow,
 			pos,
 			time_updated,
@@ -231,6 +232,12 @@ const (
 		WHERE
 			workflow=%a
 
+		`
+	sqlReadCountCopyState = `SELECT
+			count(*) as cnt
+		FROM
+			_vt.copy_state
+		WHERE vrepl_id=%a
 		`
 	// TODO(shlomi): consider removing:
 	// sqlGetUniqueKeys     = `
