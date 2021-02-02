@@ -93,11 +93,18 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		return nil, err
 	}
 
-	changedTablet, _ := s.ts.GetTablet(ctx, req.TabletAlias)
+	var changedTablet *topodatapb.Tablet
+
+	changedTabletInfo, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		log.Warningf("error while reading the tablet we just changed back out of the topo: %v", err)
+	} else {
+		changedTablet = changedTabletInfo.Tablet
+	}
 
 	return &vtctldatapb.ChangeTabletTypeResponse{
 		BeforeTablet: tablet.Tablet,
-		AfterTablet:  changedTablet.Tablet,
+		AfterTablet:  changedTablet,
 		WasDryRun:    false,
 	}, nil
 }
