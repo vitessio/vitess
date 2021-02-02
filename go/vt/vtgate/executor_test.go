@@ -315,8 +315,8 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
-	if logStats.RowsAffected == 0 {
-		t.Errorf("logstats: expected non-zero RowsAffected")
+	if logStats.RowsReturned == 0 {
+		t.Errorf("logstats: expected non-zero RowsReturned")
 	}
 
 	// autocommit = 1
