@@ -96,7 +96,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 	switch topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType) {
 	case topodatapb.KeyspaceType_NORMAL, topodatapb.KeyspaceType_SNAPSHOT:
 	default:
-		return errors.New("invalid keyspace type passed to --type")
+		return fmt.Errorf("invalid keyspace type passed to --type: %v", createKeyspaceOptions.KeyspaceType)
 	}
 
 	var snapshotTime *vttime.Time
@@ -111,7 +111,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 
 		t, err := time.Parse(time.RFC3339, createKeyspaceOptions.SnapshotTimestamp)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot parse --snapshot-timestamp as RFC3339: %w", err)
 		}
 
 		if now := time.Now(); t.After(now) {
