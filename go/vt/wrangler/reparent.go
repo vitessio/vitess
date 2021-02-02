@@ -817,29 +817,13 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 // waitOnNMinusOneTablets will wait until N-1 tablets have responded via a supplied error channel. In that case that N-1 tablets have responded,
 // the supplied cancel function will be called, and we will wait until N tablets return their errors, and then return an AllErrorRecorder to the caller.
 func waitOnNMinusOneTablets(ctxCancel context.CancelFunc, tabletCount int, errorChannel chan error, acceptableErrCnt int) *concurrency.AllErrorRecorder {
-	errCounter := 0
-	successCounter := 0
-	responseCounter := 0
-	rec := &concurrency.AllErrorRecorder{}
-
-	for err := range errorChannel {
-		responseCounter++
-		if err != nil {
-			errCounter++
-			rec.RecordError(err)
-		} else {
-			successCounter++
-		}
-		if responseCounter == tabletCount {
-			// We must wait for any cancelled goroutines to return their error.
-			break
-		}
-		if errCounter > acceptableErrCnt || successCounter == tabletCount-1 {
-			ctxCancel()
-		}
+	errGroup := concurrency.ErrorGroup{
+		NumGoroutines:        tabletCount,
+		NumRequiredSuccesses: tabletCount - 1,
+		NumAllowedErrors:     acceptableErrCnt,
 	}
 
-	return rec
+	return errGroup.Wait(ctxCancel, errorChannel)
 }
 
 // findValidReparentCandidates will find valid candidates for emergency reparent, and if successful, returning them as a list of tablet aliases.
