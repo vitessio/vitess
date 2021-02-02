@@ -1614,7 +1614,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	}
 	logStats.RowsAffected = qr.RowsAffected
 
-	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
+	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, err
 }
