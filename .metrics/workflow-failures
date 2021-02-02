@@ -1619,3 +1619,4 @@
 2021-02-02T09:09:37Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/530267818
 2021-02-02T09:09:37Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/530267838
 2021-02-02T09:09:37Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/530267843
+2021-02-02T10:21:14Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/530436367
