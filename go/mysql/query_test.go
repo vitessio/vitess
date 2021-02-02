@@ -415,7 +415,6 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
-		RowsAffected: 0,
 	})
 
 	// Typical Select with TYPE_AND_NAME.
@@ -518,7 +517,6 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
-		RowsAffected: 0,
 	})
 
 	// Typical Select with TYPE_AND_NAME.
@@ -538,7 +536,6 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
-		RowsAffected: 0,
 	})
 
 	// Typical Select with TYPE_ONLY.
@@ -556,7 +553,6 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("20")),
 			},
 		},
-		RowsAffected: 0,
 	})
 
 	// Typical Select with ALL.
@@ -589,7 +585,6 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("30")),
 			},
 		},
-		RowsAffected: 0,
 	})
 }
 

@@ -508,9 +508,25 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		return SingleRowResult
 	}
 	switch stmt.(type) {
-	case *sqlparser.Select, *sqlparser.Union:
+	case *sqlparser.Select,
+		*sqlparser.Union,
+		*sqlparser.Show,
+		*sqlparser.Explain,
+		*sqlparser.OtherRead:
 		return SingleRowResult
+	case *sqlparser.Set,
+		sqlparser.DDLStatement,
+		*sqlparser.AlterVschema,
+		*sqlparser.Use,
+		*sqlparser.OtherAdmin,
+		*sqlparser.SetTransaction,
+		*sqlparser.Savepoint,
+		*sqlparser.SRollback,
+		*sqlparser.Release:
+		return &sqltypes.Result{}
 	}
+
+	// for everything else we fake a single row being affected
 	return &sqltypes.Result{RowsAffected: 1}
 }
 
