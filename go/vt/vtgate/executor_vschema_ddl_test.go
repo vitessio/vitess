@@ -58,14 +58,14 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 		t.Errorf("vschema was not updated as expected")
 	}
 
-	// Wait up to 10ms until the vindex manager gets notified of the update
+	// Wait up to 100ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
 		vschema := executor.vm.GetCurrentSrvVschema()
 		vindex, ok := vschema.Keyspaces[ks].Vindexes[name]
 		if ok {
 			return vschema, vindex
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	t.Fatalf("updated vschema did not contain %s", name)
@@ -75,7 +75,7 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Executor) *vschemapb.SrvVSchema {
 	t.Helper()
 
-	// Wait up to 10ms until the vindex manager gets notified of the update
+	// Wait up to 100ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
 		vschema := executor.vm.GetCurrentSrvVschema()
 		gotTables := []string{}
@@ -87,7 +87,7 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 		if reflect.DeepEqual(tables, gotTables) {
 			return vschema
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	t.Fatalf("updated vschema did not contain tables %v", tables)
