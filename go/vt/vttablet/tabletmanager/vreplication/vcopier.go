@@ -273,7 +273,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 			vc.vr.stats.QueryTimings.Record("copy", start)
 
-			vc.vr.stats.CopyRowCount.Add(int64(len(qr.Rows)))
+			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))
 			vc.vr.stats.QueryCount.Add("copy", 1)
 
 			return qr, err

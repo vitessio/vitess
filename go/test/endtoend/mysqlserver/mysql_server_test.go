@@ -152,7 +152,7 @@ func TestWarnings(t *testing.T) {
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
 	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
-	assert.Equal(t, uint64(1), len(qr.Rows), "number of rows")
+	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
 	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1054)", qr.Rows)
 	assert.Contains(t, qr.Rows[0][2].String(), "Unknown column", qr.Rows)
@@ -164,7 +164,7 @@ func TestWarnings(t *testing.T) {
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
 	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
-	assert.Equal(t, uint64(1), len(qr.Rows), "number of rows")
+	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
 	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1317)", qr.Rows)
 	assert.Contains(t, qr.Rows[0][2].String(), "context deadline exceeded", qr.Rows)

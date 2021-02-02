@@ -36,7 +36,6 @@ func TestSequence(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(0),
 		}},
@@ -54,7 +53,6 @@ func TestSequence(t *testing.T) {
 	qr.Fields = nil
 
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(13),
 			sqltypes.NewInt64(3),
@@ -72,7 +70,6 @@ func TestSequence(t *testing.T) {
 
 	// Next value generated should be based on the LastVal
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(13),
 		}},
@@ -85,7 +82,6 @@ func TestSequence(t *testing.T) {
 	qr.Fields = nil
 
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(16),
 			sqltypes.NewInt64(3),
@@ -103,7 +99,6 @@ func TestSequence(t *testing.T) {
 
 	// Next value should jump to the high value
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(100),
 		}},
@@ -118,7 +113,6 @@ func TestResetSequence(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
