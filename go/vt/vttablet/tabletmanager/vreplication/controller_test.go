@@ -36,9 +36,8 @@ import (
 
 var (
 	testSettingsResponse = &sqltypes.Result{
-		Fields:       nil,
-		RowsAffected: 1,
-		InsertID:     0,
+		Fields:   nil,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
@@ -299,9 +298,8 @@ func TestControllerStopPosition(t *testing.T) {
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	withStop := &sqltypes.Result{
-		Fields:       nil,
-		RowsAffected: 1,
-		InsertID:     0,
+		Fields:   nil,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarBinary("MariaDB/0-1-1083"),    // pos

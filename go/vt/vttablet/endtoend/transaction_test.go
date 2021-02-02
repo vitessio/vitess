@@ -57,7 +57,7 @@ func TestCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.Equal(t, uint64(4), qr.RowsAffected, "rows affected")
+	require.Equal(t, uint64(4), len(qr.Rows), "rows affected")
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
