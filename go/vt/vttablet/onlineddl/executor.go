@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -62,9 +63,9 @@ import (
 
 var (
 	// ErrExecutorNotWritableTablet  is generated when executor is asked to run gh-ost on a read-only server
-	ErrExecutorNotWritableTablet = errors.New("Cannot run gh-ost migration on non-writable tablet")
+	ErrExecutorNotWritableTablet = errors.New("Cannot run migration on non-writable tablet")
 	// ErrExecutorMigrationAlreadyRunning is generated when an attempt is made to run an operation that conflicts with a running migration
-	ErrExecutorMigrationAlreadyRunning = errors.New("Cannot run gh-ost migration since a migration is already running")
+	ErrExecutorMigrationAlreadyRunning = errors.New("Cannot run migration since a migration is already running")
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
 	ErrMigrationNotFound = errors.New("Migration not found")
 )
@@ -110,6 +111,7 @@ const (
 	progressPctFull       float64 = 100.0
 	gcHoldHours                   = 72
 	databasePoolSize              = 3
+	cutOverThreshold              = 3 * time.Second
 )
 
 var (
@@ -1305,53 +1307,100 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 	return err
 }
 
-// isVReplMigrationReadyToCutOver sees if the vreplication migration has completed the row copy
-// and is up to date with the binlogs.
-func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, uuid string) (isRunning bool, err error) {
-	// fmt.Printf("============== isVReplMigrationRunning \n")
-	// query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
-	// 	sqltypes.StringBindVariable(uuid),
-	// )
-	// if err != nil {
-	// 	return false, err
-	// }
-	// fmt.Printf("============== isVReplMigrationRunning query=%v\n", query)
-	// r, err := e.execQuery(ctx, query)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// timeNow := time.Now()
-	// for _, row := range r.Named().Rows {
-	// 	timeUpdated := row.AsInt64("time_updated", 0)
-	// 	fmt.Printf("============== isVReplMigrationRunning timeUpdated=%v\n", timeUpdated)
-	// 	durationDiff := timeNow.Sub(time.Unix(timeUpdated, 0))
-	// 	if durationDiff < 0 {
-	// 		durationDiff = -durationDiff
-	// 	}
-	// 	fmt.Printf("============== isVReplMigrationRunning durationDiff=%v\n", durationDiff)
-	// 	if durationDiff < time.Minute {
-	// 		isRunning = true
-	// 	}
-	// }
-	// fmt.Printf("============== isVReplMigrationRunning isRunning=%v\n", isRunning)
-	return isRunning, nil
-}
-
-// isVReplMigrationRunning sees if there is a VReplication migration actively running
-func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (isRunning bool, err error) {
-	fmt.Printf("============== isVReplMigrationRunning \n")
+// readVReplStream reads _vt.vreplication entries for given workflow
+func (e *Executor) readVReplStream(ctx context.Context, uuid string) (*sqltypes.NamedResult, error) {
 	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	fmt.Printf("============== isVReplMigrationRunning query=%v\n", query)
 	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return r.Named(), nil
+}
+
+// isVReplMigrationReadyToCutOver sees if the vreplication migration has completed the row copy
+// and is up to date with the binlogs.
+func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, uuid string) (isReady bool, err error) {
+	named, err := e.readVReplStream(ctx, uuid)
 	if err != nil {
 		return false, err
 	}
-	named := r.Named()
+	if len(named.Rows) == 0 {
+		// no vreplication entry
+		return false, nil
+	}
+	row := named.Row()
+	if row == nil {
+		// multiple workflows under same name:
+		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "multiple workflows found for UUID: %+v", uuid)
+	}
+
+	// Check all the cases where migration is still running:
+	{
+		// when ready to cut-over, pos must have some value
+		pos := row.AsString("pos", "")
+		if pos == "" {
+			return false, nil
+		}
+	}
+	{
+		// Both time_updated and transaction_timestamp must be in close priximity to each
+		// other and to the time now, otherwise that means we're lagging and it's not a good time
+		// to cut-over
+		durationDiff := func(t1, t2 time.Time) time.Duration {
+			diff := t1.Sub(t2)
+			if diff < 0 {
+				diff = -diff
+			}
+			return diff
+		}
+		timeUpdated := time.Unix(row.AsInt64("time_updated", 0), 0)
+		if durationDiff(time.Now(), timeUpdated) > cutOverThreshold {
+			return false, nil
+		}
+		transactionTimestamp := time.Unix(row.AsInt64("transaction_timestamp", 0), 0)
+		if durationDiff(transactionTimestamp, timeUpdated) > cutOverThreshold {
+			return false, nil
+		}
+	}
+	{
+		// copy_state must have no entries for this vreplication id: if entries are
+		// present that means copy is still in progress
+		id := row.AsInt64("id", 0)
+
+		query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
+			sqltypes.Int64BindVariable(id),
+		)
+		if err != nil {
+			return false, err
+		}
+		r, err := e.execQuery(ctx, query)
+		if err != nil {
+			return false, err
+		}
+		csRow := r.Named().Row()
+		if csRow == nil {
+			return false, nil
+		}
+		count := csRow.AsInt64("cnt", 0)
+		if count > 0 {
+			// Still copying
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// isVReplMigrationRunning sees if there is a VReplication migration actively running
+func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (isRunning bool, err error) {
+	named, err := e.readVReplStream(ctx, uuid)
+	if err != nil {
+		return false, err
+	}
 	if len(named.Rows) == 0 {
 		// no vreplication entry
 		return false, nil
@@ -1365,7 +1414,12 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 	if strings.Contains(strings.ToLower(message), "error") {
 		return false, nil
 	}
-	return true, nil
+	state := row.AsString("state", "")
+	switch state {
+	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+		return true, nil
+	}
+	return false, nil
 }
 
 // reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
@@ -1382,22 +1436,25 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
 		switch strategy {
-		case schema.DDLStrategyPTOSC:
+		case schema.DDLStrategyOnline:
 			{
-				// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
-				// if the process is alive, we update the `liveness_timestamp` for this migration.
-				running, _, err := e.isPTOSCMigrationRunning(ctx, uuid)
+				// We check the _vt.vreplication table
+				running, err := e.isVReplMigrationRunning(ctx, uuid)
 				if err != nil {
 					return countRunnning, runningNotByThisProcess, err
 				}
 				if running {
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 				}
+
+				isReady, err := e.isVReplMigrationReadyToCutOver(ctx, uuid)
+				fmt.Printf("========== isVReplMigrationReadyToCutOver: %v, %v, %v\n", uuid, isReady, err)
 			}
-		case schema.DDLStrategyOnline:
+		case schema.DDLStrategyPTOSC:
 			{
-				// We check the _vt.vreplication table
-				running, err := e.isVReplMigrationRunning(ctx, uuid)
+				// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
+				// if the process is alive, we update the `liveness_timestamp` for this migration.
+				running, _, err := e.isPTOSCMigrationRunning(ctx, uuid)
 				if err != nil {
 					return countRunnning, runningNotByThisProcess, err
 				}
