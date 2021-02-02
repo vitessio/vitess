@@ -1677,3 +1677,5 @@
 2021-02-02T18:20:00Z,unit_race,https://github.com/vitessio/vitess/actions/runs/531584946
 2021-02-02T18:20:01Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/531584971
 2021-02-02T22:47:48Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/532185082
+2021-02-02T23:24:14Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/532259854
+2021-02-02T23:24:14Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/532259884
