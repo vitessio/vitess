@@ -62,9 +62,19 @@ func Init(namespace string) {
 		sb.statsdClient = statsdC
 		sb.sampleRate = *statsdSampleRate
 		stats.RegisterPushBackend("statsd", sb)
-		stats.RegisterTimerHook(func(name string, val int64, tags []string) {
-			if err := statsdC.TimeInMilliseconds(name, float64(val), tags, sb.sampleRate); err != nil {
-				log.Errorf("Fail to TimeInMilliseconds %v: %v", name, err)
+		stats.RegisterTimerHook(func(statsName, name string, value int64, timings *stats.Timings) {
+			labels := strings.Split(timings.Label(), ".")
+			names := strings.Split(name, ".")
+			var tags []string
+			if len(labels) != len(names) {
+				log.Errorf("Mismatch labels and names for %s tag: %v, %v", statsName, labels, names)
+				return
+			}
+			for i, label := range labels {
+				tags = append(tags, makeLabel(label, names[i])[0])
+			}
+			if err := statsdC.TimeInMilliseconds(statsName, float64(value), tags, sb.sampleRate); err != nil {
+				log.Errorf("Fail to TimeInMilliseconds %v: %v", statsName, err)
 			}
 		})
 		stats.RegisterHistogramHook(func(name string, val int64) {

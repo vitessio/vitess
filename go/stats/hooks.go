@@ -17,14 +17,14 @@ limitations under the License.
 package stats
 
 type statsdHook struct {
-	timerHook     func(string, int64, []string)
+	timerHook     func(string, string, int64, *Timings)
 	histogramHook func(string, int64)
 }
 
 var defaultStatsdHook = statsdHook{}
 
 // RegisterTimerHook registers timer hook
-func RegisterTimerHook(hook func(string, int64, []string)) {
+func RegisterTimerHook(hook func(string, string, int64, *Timings)) {
 	defaultStatsdHook.timerHook = hook
 }
 
