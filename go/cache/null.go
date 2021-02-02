@@ -25,7 +25,7 @@ func (n *nullCache) Get(_ string) (interface{}, bool) {
 }
 
 // Set is a no-op in the nullCache
-func (n *nullCache) Set(_ string, _ interface{}, _ int64) bool {
+func (n *nullCache) Set(_ string, _ interface{}) bool {
 	return false
 }
 

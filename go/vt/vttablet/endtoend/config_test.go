@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -176,9 +177,18 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 }
 
 func TestQueryPlanCache(t *testing.T) {
-	const cacheItemSize = 40
-	const cachedPlanSize = 2275 + cacheItemSize
-	const cachePlanSize2 = 2254 + cacheItemSize
+	if cache.DefaultCacheSize.Bytes() != 0 {
+		const cacheItemSize = 40
+		const cachedPlanSize = 2275 + cacheItemSize
+		const cachePlanSize2 = 2254 + cacheItemSize
+		testQueryPlanCache(t, cachedPlanSize, cachePlanSize2)
+	} else {
+		testQueryPlanCache(t, 1, 1)
+	}
+}
+
+func testQueryPlanCache(t *testing.T, cachedPlanSize, cachePlanSize2 int) {
+	t.Helper()
 
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
 	time.Sleep(1 * time.Second)

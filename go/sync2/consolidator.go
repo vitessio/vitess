@@ -94,7 +94,9 @@ type ConsolidatorCache struct {
 
 // NewConsolidatorCache creates a new cache with the given capacity.
 func NewConsolidatorCache(capacity int64) *ConsolidatorCache {
-	return &ConsolidatorCache{cache.NewLRUCache(capacity)}
+	return &ConsolidatorCache{cache.NewLRUCache(capacity, func(_ interface{}) int64 {
+		return 1
+	})}
 }
 
 // Record increments the count for "query" by 1.
@@ -104,7 +106,7 @@ func (cc *ConsolidatorCache) Record(query string) {
 		v.(*ccount).add(1)
 	} else {
 		c := ccount(1)
-		cc.Set(query, &c, 1)
+		cc.Set(query, &c)
 	}
 }
 

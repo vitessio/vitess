@@ -41,6 +41,7 @@ type LRUCache struct {
 	// list & table contain *entry objects.
 	list  *list.List
 	table map[string]*list.Element
+	cost  func(interface{}) int64
 
 	size      int64
 	capacity  int64
@@ -61,11 +62,12 @@ type entry struct {
 }
 
 // NewLRUCache creates a new empty cache with the given capacity.
-func NewLRUCache(capacity int64) *LRUCache {
+func NewLRUCache(capacity int64, cost func(interface{}) int64) *LRUCache {
 	return &LRUCache{
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
 		capacity: capacity,
+		cost:     cost,
 	}
 }
 
@@ -84,14 +86,14 @@ func (lru *LRUCache) Get(key string) (v interface{}, ok bool) {
 }
 
 // Set sets a value in the cache.
-func (lru *LRUCache) Set(key string, value interface{}, valueSize int64) bool {
+func (lru *LRUCache) Set(key string, value interface{}) bool {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
 	if element := lru.table[key]; element != nil {
-		lru.updateInplace(element, value, valueSize)
+		lru.updateInplace(element, value)
 	} else {
-		lru.addNew(key, value, valueSize)
+		lru.addNew(key, value)
 	}
 	// the LRU cache cannot fail to insert items; it always returns true
 	return true
@@ -196,7 +198,8 @@ func (lru *LRUCache) Items() []Item {
 	return items
 }
 
-func (lru *LRUCache) updateInplace(element *list.Element, value interface{}, valueSize int64) {
+func (lru *LRUCache) updateInplace(element *list.Element, value interface{}) {
+	valueSize := lru.cost(value)
 	sizeDiff := valueSize - element.Value.(*entry).size
 	element.Value.(*entry).value = value
 	element.Value.(*entry).size = valueSize
@@ -210,8 +213,8 @@ func (lru *LRUCache) moveToFront(element *list.Element) {
 	element.Value.(*entry).timeAccessed = time.Now()
 }
 
-func (lru *LRUCache) addNew(key string, value interface{}, valueSize int64) {
-	newEntry := &entry{key, value, valueSize, time.Now()}
+func (lru *LRUCache) addNew(key string, value interface{}) {
+	newEntry := &entry{key, value, lru.cost(value), time.Now()}
 	element := lru.list.PushFront(newEntry)
 	lru.table[key] = element
 	lru.size += newEntry.size

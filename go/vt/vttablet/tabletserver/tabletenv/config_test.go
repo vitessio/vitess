@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/yaml2"
 )
@@ -118,6 +119,7 @@ hotRowProtection:
   maxGlobalQueueSize: 1000
   maxQueueSize: 20
   mode: disable
+lfuQueryCacheSizeBytes: 67108864
 messagePostponeParallelism: 4
 olapReadPool:
   idleTimeoutSeconds: 1800
@@ -130,7 +132,6 @@ oltpReadPool:
   idleTimeoutSeconds: 1800
   maxWaiters: 5000
   size: 16
-queryCacheSizeBytes: 67108864
 replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
@@ -190,7 +191,8 @@ func TestFlags(t *testing.T) {
 			MaxConcurrency:     5,
 		},
 		StreamBufferSize:            32768,
-		QueryCacheSizeBytes:         64 * 1024 * 1024,
+		QueryCacheSize:              int(cache.DefaultCacheSize.Entries()),
+		LFUQueryCacheSizeBytes:      cache.DefaultCacheSize.Bytes(),
 		SchemaReloadIntervalSeconds: 1800,
 		TrackSchemaVersions:         false,
 		MessagePostponeParallelism:  4,

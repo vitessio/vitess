@@ -30,6 +30,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
@@ -304,7 +305,6 @@ var unshardedVSchema = `
 
 const (
 	testBufferSize = 10
-	testCacheSize  = int64(64 * 1024 * 1024)
 )
 
 type DestinationAnyShardPickerFirstShard struct{}
@@ -398,7 +398,7 @@ func createLegacyExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandb
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultCacheSize)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
@@ -433,7 +433,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultCacheSize)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
@@ -453,7 +453,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultCacheSize)
 	return executor, sbc1, sbc2, sbclookup
 }
 
