@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -103,7 +104,7 @@ func init() {
 
 	flag.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
 	flag.IntVar(&currentConfig.QueryCacheSize, "queryserver-config-query-cache-size", defaultConfig.QueryCacheSize, "deprecated: query server query cache size, maximum number of queries to be cached. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	flag.IntVar(&currentConfig.QueryCacheSizeBytes, "queryserver-config-query-cache-size-bytes", defaultConfig.QueryCacheSizeBytes, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	flag.Int64Var(&currentConfig.LFUQueryCacheSizeBytes, "queryserver-config-query-cache-size-bytes", defaultConfig.LFUQueryCacheSizeBytes, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	SecondsVar(&currentConfig.SchemaReloadIntervalSeconds, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadIntervalSeconds, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance in seconds. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	SecondsVar(&currentConfig.Oltp.QueryTimeoutSeconds, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeoutSeconds, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	SecondsVar(&currentConfig.OltpReadPool.TimeoutSeconds, "queryserver-config-query-pool-timeout", defaultConfig.OltpReadPool.TimeoutSeconds, "query server query pool timeout (in seconds), it is how long vttablet waits for a connection from the query pool. If set to 0 (default) then the overall query timeout is used instead.")
@@ -244,7 +245,7 @@ type TabletConfig struct {
 	PassthroughDML              bool    `json:"passthroughDML,omitempty"`
 	StreamBufferSize            int     `json:"streamBufferSize,omitempty"`
 	QueryCacheSize              int     `json:"queryCacheSize,omitempty"`
-	QueryCacheSizeBytes         int     `json:"queryCacheSizeBytes,omitempty"`
+	LFUQueryCacheSizeBytes      int64   `json:"lfuQueryCacheSizeBytes,omitempty"`
 	SchemaReloadIntervalSeconds Seconds `json:"schemaReloadIntervalSeconds,omitempty"`
 	WatchReplication            bool    `json:"watchReplication,omitempty"`
 	TrackSchemaVersions         bool    `json:"trackSchemaVersions,omitempty"`
@@ -449,8 +450,8 @@ var defaultConfig = TabletConfig{
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
 	StreamBufferSize:            32 * 1024,
-	QueryCacheSize:              0,
-	QueryCacheSizeBytes:         64 * 1024 * 1024,
+	QueryCacheSize:              int(cache.DefaultCacheSize.Entries()),
+	LFUQueryCacheSizeBytes:      cache.DefaultCacheSize.Bytes(),
 	SchemaReloadIntervalSeconds: 30 * 60,
 	MessagePostponeParallelism:  4,
 	CacheResultFields:           true,

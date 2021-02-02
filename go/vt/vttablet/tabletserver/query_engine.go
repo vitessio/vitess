@@ -53,7 +53,7 @@ import (
 
 // AverageTabletPlanSize is the average size in bytes that a TabletPlan takes when
 // cached in memory
-const AverageTabletPlanSize = 256
+const AverageTabletPlanSize = 4000
 
 // TabletPlan wraps the planbuilder's exec plan to enforce additional rules
 // and track stats.
@@ -165,15 +165,17 @@ type QueryEngine struct {
 // You must call this only once.
 func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	config := env.Config()
-	if config.QueryCacheSize != 0 {
-		config.QueryCacheSizeBytes = config.QueryCacheSize * AverageTabletPlanSize
+
+	var cacheSize cache.Capacity = cache.SizeInEntries(config.QueryCacheSize)
+	if config.LFUQueryCacheSizeBytes != 0 {
+		cacheSize = cache.SizeInBytes(config.LFUQueryCacheSizeBytes)
 	}
 
 	qe := &QueryEngine{
 		env:              env,
 		se:               se,
 		tables:           make(map[string]*schema.Table),
-		plans:            cache.NewDefaultCacheImpl(int64(config.QueryCacheSizeBytes), AverageTabletPlanSize),
+		plans:            cache.NewDefaultCacheImpl(cacheSize, AverageTabletPlanSize),
 		queryRuleSources: rules.NewMap(),
 	}
 
@@ -332,7 +334,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		return plan, nil
 	}
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) {
-		qe.plans.Set(sql, plan, plan.CachedSize(true))
+		qe.plans.Set(sql, plan)
 	}
 	return plan, nil
 }

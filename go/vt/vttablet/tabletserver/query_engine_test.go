@@ -281,7 +281,6 @@ func TestStatsURL(t *testing.T) {
 func newTestQueryEngine(idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = dbcfgs
-	config.QueryCacheSizeBytes = 1 * 1024 * 1024
 	config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout)
 	config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout)
 	config.TxPool.IdleTimeoutSeconds.Set(idleTimeout)

@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -68,8 +69,7 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	vtgateSession.TargetString = opts.Target
 
 	streamSize := 10
-	queryPlanCacheSize := int64(64 * 1024 * 1024)
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, streamSize, queryPlanCacheSize)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, streamSize, cache.DefaultCacheSize)
 
 	return nil
 }

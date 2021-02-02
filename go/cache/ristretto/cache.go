@@ -249,8 +249,8 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 // To dynamically evaluate the items cost using the Config.Coster function, set
 // the cost parameter to 0 and Coster will be ran when needed in order to find
 // the items true cost.
-func (c *Cache) Set(key string, value interface{}, cost int64) bool {
-	return c.SetWithTTL(key, value, cost, 0*time.Second)
+func (c *Cache) Set(key string, value interface{}) bool {
+	return c.SetWithTTL(key, value, 0, 0*time.Second)
 }
 
 // SetWithTTL works like Set but adds a key-value pair to the cache that will expire

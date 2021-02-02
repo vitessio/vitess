@@ -47,7 +47,7 @@ const (
 	ListVarName = "__vals"
 	// AveragePlanSize is the average size in bytes that a cached plan takes
 	// when cached in memory
-	AveragePlanSize = 128
+	AveragePlanSize = 2500
 )
 
 type (

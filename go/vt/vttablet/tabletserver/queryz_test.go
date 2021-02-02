@@ -46,7 +46,7 @@ func TestQueryzHandler(t *testing.T) {
 		},
 	}
 	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)
-	qe.plans.Set(query1, plan1, plan1.CachedSize(true))
+	qe.plans.Set(query1, plan1)
 
 	const query2 = "insert into test_table values 1"
 	plan2 := &TabletPlan{
@@ -57,7 +57,7 @@ func TestQueryzHandler(t *testing.T) {
 		},
 	}
 	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
-	qe.plans.Set(query2, plan2, plan2.CachedSize(true))
+	qe.plans.Set(query2, plan2)
 
 	const query3 = "show tables"
 	plan3 := &TabletPlan{
@@ -68,8 +68,8 @@ func TestQueryzHandler(t *testing.T) {
 		},
 	}
 	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
-	qe.plans.Set(query3, plan3, plan3.CachedSize(true))
-	qe.plans.Set("", (*TabletPlan)(nil), 1)
+	qe.plans.Set(query3, plan3)
+	qe.plans.Set("", (*TabletPlan)(nil))
 
 	hugeInsert := "insert into test_table values 0"
 	for i := 1; i < 1000; i++ {
@@ -83,8 +83,8 @@ func TestQueryzHandler(t *testing.T) {
 		},
 	}
 	plan4.AddStats(1, 1*time.Millisecond, 1*time.Millisecond, 1, 0)
-	qe.plans.Set(hugeInsert, plan4, plan4.CachedSize(true))
-	qe.plans.Set("", (*TabletPlan)(nil), 1)
+	qe.plans.Set(hugeInsert, plan4)
+	qe.plans.Set("", (*TabletPlan)(nil))
 
 	// Wait for cache to settle
 	qe.plans.Wait()

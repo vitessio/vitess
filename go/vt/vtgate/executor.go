@@ -114,14 +114,14 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSizeBytes int64) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, cacheSize cache.Capacity) *Executor {
 	e := &Executor{
 		serv:        serv,
 		cell:        cell,
 		resolver:    resolver,
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewDefaultCacheImpl(queryPlanCacheSizeBytes, engine.AveragePlanSize),
+		plans:       cache.NewDefaultCacheImpl(cacheSize, engine.AveragePlanSize),
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}
@@ -1325,7 +1325,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
-		e.plans.Set(planKey, plan, plan.CachedSize(true))
+		e.plans.Set(planKey, plan)
 	}
 	return plan, nil
 }

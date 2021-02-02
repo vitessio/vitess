@@ -27,7 +27,7 @@ func TestCacheKeyToHash(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if c.Set("1", 1, 1) {
+	if c.SetWithTTL("1", 1, 1, 0) {
 		time.Sleep(wait)
 		val, ok := c.Get("1")
 		require.True(t, ok)
@@ -71,7 +71,7 @@ func TestCacheMaxCost(t *testing.T) {
 						} else {
 							val = strings.Repeat("a", 1000)
 						}
-						c.Set(key(), val, int64(2+len(val)))
+						c.SetWithTTL(key(), val, int64(2+len(val)), 0)
 					}
 				}
 			}
@@ -96,7 +96,7 @@ func TestUpdateMaxCost(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, int64(10), c.MaxCapacity())
-	require.True(t, c.Set("1", 1, 1))
+	require.True(t, c.SetWithTTL("1", 1, 1, 0))
 	time.Sleep(wait)
 	_, ok := c.Get("1")
 	// Set is rejected because the cost of the entry is too high
@@ -106,7 +106,7 @@ func TestUpdateMaxCost(t *testing.T) {
 	// Update the max cost of the cache and retry.
 	c.SetCapacity(1000)
 	require.Equal(t, int64(1000), c.MaxCapacity())
-	require.True(t, c.Set("1", 1, 1))
+	require.True(t, c.SetWithTTL("1", 1, 1, 0))
 	time.Sleep(wait)
 	val, ok := c.Get("1")
 	require.True(t, ok)
@@ -149,7 +149,7 @@ func TestNilCache(t *testing.T) {
 	require.False(t, ok)
 	require.Nil(t, val)
 
-	require.False(t, c.Set("1", 1, 1))
+	require.False(t, c.SetWithTTL("1", 1, 1, 0))
 	c.Delete("1")
 	c.Clear()
 	c.Close()
@@ -177,7 +177,7 @@ func TestSetAfterClose(t *testing.T) {
 	require.NotNil(t, c)
 
 	c.Close()
-	require.False(t, c.Set("1", 1, 1))
+	require.False(t, c.SetWithTTL("1", 1, 1, 0))
 }
 
 func TestClearAfterClose(t *testing.T) {
@@ -194,7 +194,7 @@ func TestGetAfterClose(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
-	require.True(t, c.Set("1", 1, 1))
+	require.True(t, c.SetWithTTL("1", 1, 1, 0))
 	c.Close()
 
 	_, ok := c.Get("2")
@@ -206,7 +206,7 @@ func TestDelAfterClose(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
-	require.True(t, c.Set("1", 1, 1))
+	require.True(t, c.SetWithTTL("1", 1, 1, 0))
 	c.Close()
 
 	c.Delete("1")
@@ -377,7 +377,7 @@ func TestCacheSet(t *testing.T) {
 
 	retrySet(t, c, "1", 1, 1, 0)
 
-	c.Set("1", 2, 2)
+	c.SetWithTTL("1", 2, 2, 0)
 	val, ok := c.store.Get(defaultStringHash("1"))
 	require.True(t, ok)
 	require.Equal(t, 2, val.(int))
@@ -393,13 +393,13 @@ func TestCacheSet(t *testing.T) {
 			Cost:     1,
 		}
 	}
-	require.False(t, c.Set("2", 2, 1))
+	require.False(t, c.SetWithTTL("2", 2, 1, 0))
 	require.Equal(t, uint64(1), c.Metrics.SetsDropped())
 	close(c.setBuf)
 	close(c.stop)
 
 	c = nil
-	require.False(t, c.Set("1", 1, 1))
+	require.False(t, c.SetWithTTL("1", 1, 1, 0))
 }
 
 func TestCacheInternalCost(t *testing.T) {
@@ -521,7 +521,7 @@ func TestCacheDel(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	c.Set("1", 1, 1)
+	c.SetWithTTL("1", 1, 1, 0)
 	c.Delete("1")
 	// The deletes and sets are pushed through the setbuf. It might be possible
 	// that the delete is not processed before the following get is called. So
@@ -567,7 +567,7 @@ func TestCacheClear(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		c.Set(strconv.Itoa(i), i, 1)
+		c.SetWithTTL(strconv.Itoa(i), i, 1, 0)
 	}
 	time.Sleep(wait)
 	require.Equal(t, uint64(10), c.Metrics.KeysAdded())
@@ -593,7 +593,7 @@ func TestCacheMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		c.Set(strconv.Itoa(i), i, 1)
+		c.SetWithTTL(strconv.Itoa(i), i, 1, 0)
 	}
 	time.Sleep(wait)
 	m := c.Metrics
@@ -690,7 +690,7 @@ func TestCacheMetricsClear(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	c.Set("1", 1, 1)
+	c.SetWithTTL("1", 1, 1, 0)
 	stop := make(chan struct{})
 	go func() {
 		for {
@@ -757,7 +757,7 @@ func TestDropUpdates(t *testing.T) {
 		for i := 0; i < 5*setBufSize; i++ {
 			v := fmt.Sprintf("%0100d", i)
 			// We're updating the same key.
-			if !c.Set("0", v, 1) {
+			if !c.SetWithTTL("0", v, 1, 0) {
 				// The race condition doesn't show up without this sleep.
 				time.Sleep(time.Microsecond)
 				droppedMap[i] = struct{}{}
@@ -766,7 +766,7 @@ func TestDropUpdates(t *testing.T) {
 		// Wait for all the items to be processed.
 		c.Wait()
 		// This will cause eviction from the cache.
-		require.True(t, c.Set("1", nil, 10))
+		require.True(t, c.SetWithTTL("1", nil, 10, 0))
 		c.Close()
 	}
 
