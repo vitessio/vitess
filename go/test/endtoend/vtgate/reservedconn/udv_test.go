@@ -49,11 +49,9 @@ func TestSetUDV(t *testing.T) {
 		query:        "select @foo",
 		expectedRows: "[[NULL]]", rowsAffected: 1,
 	}, {
-		query:        "set @foo = 'abc', @bar = 42, @baz = 30.5, @tablet = concat('foo','bar')",
-		expectedRows: "", rowsAffected: 0,
+		query: "set @foo = 'abc', @bar = 42, @baz = 30.5, @tablet = concat('foo','bar')",
 	}, {
-		query:        "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */",
-		expectedRows: "", rowsAffected: 0,
+		query: "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */",
 	}, { // This is handled at vtgate.
 		query:        "select @foo, @bar, @baz, @tablet",
 		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARBINARY("foobar")]]`, rowsAffected: 1,
@@ -83,7 +81,7 @@ func TestSetUDV(t *testing.T) {
 		expectedRows: ``, rowsAffected: 1,
 	}, {
 		query:        "select id, val2 from test where val2=@bar",
-		expectedRows: ``, rowsAffected: 0,
+		expectedRows: ``,
 	}, {
 		query:        "update test set val2 = @bar where val1 = @foo",
 		expectedRows: ``, rowsAffected: 1,
@@ -98,7 +96,7 @@ func TestSetUDV(t *testing.T) {
 		expectedRows: `[[INT64(42) VARCHAR("foobar")]]`, rowsAffected: 1,
 	}, {
 		query:        "set @foo = now(), @bar = now(), @dd = date('2020-10-20'), @tt = time('10:15')",
-		expectedRows: `[]`, rowsAffected: 0,
+		expectedRows: `[]`,
 	}, {
 		query:        "select @foo = @bar, @dd, @tt",
 		expectedRows: `[[INT64(1) VARCHAR("2020-10-20") VARCHAR("10:15:00")]]`, rowsAffected: 1,
@@ -121,6 +119,47 @@ func TestSetUDV(t *testing.T) {
 					t.Errorf("%s\nfor query: %s", diff, q.query)
 				}
 			}
+		})
+	}
+}
+
+func TestMysqlDumpInitialLog(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	queries := []string{
+		"/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;",
+		"/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;",
+		"/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;",
+		"/*!50503 SET NAMES utf8mb4 */;",
+		"/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;",
+		"/*!40103 SET TIME_ZONE='+00:00' */;",
+		"/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;",
+		"/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;",
+		"/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;",
+		"/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;",
+		"/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;",
+		"/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;",
+		"/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;",
+		"/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;",
+		"/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;",
+		"/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;",
+		"/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;",
+		"/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, more, err := conn.ExecuteFetchMulti(query, 1000, true)
+			require.NoError(t, err)
+			require.False(t, more)
 		})
 	}
 }
