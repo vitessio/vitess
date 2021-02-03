@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -166,7 +167,11 @@ func TestQueryPlanCache(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1024)
+	if cache.DefaultCacheSize.Bytes() != 0 {
+		qe.SetQueryPlanCacheCap(1024)
+	} else {
+		qe.SetQueryPlanCacheCap(1)
+	}
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false /* inReservedConn */)
 	if err != nil {
 		t.Fatal(err)

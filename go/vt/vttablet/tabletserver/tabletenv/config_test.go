@@ -119,7 +119,6 @@ hotRowProtection:
   maxGlobalQueueSize: 1000
   maxQueueSize: 20
   mode: disable
-lfuQueryCacheSizeBytes: 67108864
 messagePostponeParallelism: 4
 olapReadPool:
   idleTimeoutSeconds: 1800
@@ -132,6 +131,7 @@ oltpReadPool:
   idleTimeoutSeconds: 1800
   maxWaiters: 5000
   size: 16
+queryCacheSize: 5000
 replicationTracker:
   heartbeatIntervalSeconds: 0.25
   mode: disable
