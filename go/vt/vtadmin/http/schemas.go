@@ -22,7 +22,7 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-// GetSchemas implements the http wrapper for /schemas[?cluster=[&cluster=]&keyspace=[&keyspace=]].
+// GetSchemas implements the http wrapper for /schemas[?cluster=[&cluster=]
 func GetSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
 	schemas, err := api.server.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
 		ClusterIds: r.URL.Query()["cluster"],
