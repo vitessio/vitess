@@ -18,7 +18,6 @@ package onlineddl
 
 const (
 	// SchemaMigrationsTableName is used by VExec interceptor to call the correct handler
-	SchemaMigrationsTableName      = "schema_migrations"
 	sqlCreateSidecarDB             = "create database if not exists _vt"
 	sqlCreateSchemaMigrationsTable = `CREATE TABLE IF NOT EXISTS _vt.schema_migrations (
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -223,6 +222,7 @@ const (
 	sqlReadVReplStream   = `SELECT
 			id,
 			workflow,
+			source,
 			pos,
 			time_updated,
 			transaction_timestamp,
@@ -239,6 +239,7 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
+	sqlSwapTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
 	// TODO(shlomi): consider removing:
 	// sqlGetUniqueKeys     = `
 	//   SELECT
