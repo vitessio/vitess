@@ -83,11 +83,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 		if reply == nil {
 			qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, 0, 1)
-			qre.plan.AddStats(1, duration, mysqlTime, 0, 1)
+			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
 		qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
-		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), 0)
+		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))

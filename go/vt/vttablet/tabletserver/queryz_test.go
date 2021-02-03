@@ -43,7 +43,7 @@ func TestQueryzHandler(t *testing.T) {
 			PlanID: planbuilder.PlanSelect,
 		},
 	}
-	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)
+	plan1.AddStats(10, 2*time.Second, 1*time.Second, 0, 2, 0)
 	qe.plans.Set("select name from test_table", plan1)
 
 	plan2 := &TabletPlan{
@@ -52,7 +52,7 @@ func TestQueryzHandler(t *testing.T) {
 			PlanID: planbuilder.PlanDDL,
 		},
 	}
-	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
+	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0, 0)
 	qe.plans.Set("insert into test_table values 1", plan2)
 
 	plan3 := &TabletPlan{
@@ -61,7 +61,7 @@ func TestQueryzHandler(t *testing.T) {
 			PlanID: planbuilder.PlanOtherRead,
 		},
 	}
-	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
+	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 0, 1, 0)
 	qe.plans.Set("show tables", plan3)
 	qe.plans.Set("", (*TabletPlan)(nil))
 
@@ -71,7 +71,7 @@ func TestQueryzHandler(t *testing.T) {
 			PlanID: planbuilder.PlanOtherRead,
 		},
 	}
-	plan4.AddStats(1, 1*time.Millisecond, 1*time.Millisecond, 1, 0)
+	plan4.AddStats(1, 1*time.Millisecond, 1*time.Millisecond, 1, 0, 0)
 	hugeInsert := "insert into test_table values 0"
 	for i := 1; i < 1000; i++ {
 		hugeInsert = hugeInsert + fmt.Sprintf(", %d", i)
@@ -89,10 +89,12 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>10</td>`,
 		`<td>2.000000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0</td>`,
 		`<td>2</td>`,
 		`<td>0</td>`,
 		`<td>0.200000</td>`,
 		`<td>0.100000</td>`,
+		`<td>0.000000</td>`,
 		`<td>0.200000</td>`,
 		`<td>0.000000</td>`,
 	}
@@ -107,9 +109,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>0.001000</td>`,
 		`<td>1</td>`,
 		`<td>0</td>`,
+		`<td>0</td>`,
 		`<td>0.002000</td>`,
 		`<td>0.001000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>0.000000</td>`,
 	}
 	checkQueryzHasPlan(t, planPattern2, plan2, body)
@@ -121,10 +125,12 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>1</td>`,
 		`<td>0.075000</td>`,
 		`<td>0.050000</td>`,
+		`<td>0</td>`,
 		`<td>1</td>`,
 		`<td>0</td>`,
 		`<td>0.075000</td>`,
 		`<td>0.050000</td>`,
+		`<td>0.000000</td>`,
 		`<td>1.000000</td>`,
 		`<td>0.000000</td>`,
 	}
@@ -139,9 +145,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>0.001000</td>`,
 		`<td>1</td>`,
 		`<td>0</td>`,
+		`<td>0</td>`,
 		`<td>0.001000</td>`,
 		`<td>0.001000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>0.000000</td>`,
 	}
 	checkQueryzHasPlan(t, planPattern4, plan4, body)
