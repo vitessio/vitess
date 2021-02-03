@@ -265,24 +265,6 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
 
-	// // unique keys:
-	// sourceUniqueKeys, err := v.getCandidateUniqueKeys(ctx, conn, v.sourceTable)
-	// if err != nil {
-	// 	return err
-	// }
-	// targetUniqueKeys, err := v.getCandidateUniqueKeys(ctx, conn, v.targetTable)
-	// if err != nil {
-	// 	return err
-	// }
-	// sharedUniqueKeys, err := v.getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys)
-	// if err != nil {
-	// 	return err
-	// }
-	// if len(sharedUniqueKeys) == 0 {
-	// 	// TODO(shlomi): need to carefully examine what happens when we extend/reduce a PRIMARY KEY
-	// 	// is a column subset OK?
-	// 	return fmt.Errorf("Found no shared unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
-	// }
 	return nil
 }
 func (v *VRepl) generateFilterQuery(ctx context.Context) error {
