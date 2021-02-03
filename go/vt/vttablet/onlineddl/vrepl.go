@@ -39,6 +39,19 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
+// VReplStream represents a row in _vt.vreplication table
+type VReplStream struct {
+	id                   int64
+	workflow             string
+	source               string
+	pos                  string
+	timeUpdated          int64
+	transactionTimestamp int64
+	state                string
+	message              string
+	bls                  *binlogdatapb.BinlogSource
+}
+
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
 	workflow    string
