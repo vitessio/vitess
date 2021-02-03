@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -440,16 +442,16 @@ func TestQueryStats(t *testing.T) {
 	stat.Time = 0
 	stat.MysqlTime = 0
 	want := framework.QueryStat{
-		Query:      query,
-		Table:      "vitess_a",
-		Plan:       "Select",
-		QueryCount: 1,
-		RowCount:   2,
-		ErrorCount: 0,
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "Select",
+		QueryCount:   1,
+		RowsAffected: 0,
+		RowsReturned: 2,
+		ErrorCount:   0,
 	}
-	if stat != want {
-		t.Errorf("stat: %+v, want %+v", stat, want)
-	}
+
+	utils.MustMatch(t, want, stat)
 
 	// Query cache should be updated for errors that happen at MySQL level also.
 	query = "select /* query_stats */ eid from vitess_a where dontexist(eid) = :eid"
@@ -458,12 +460,13 @@ func TestQueryStats(t *testing.T) {
 	stat.Time = 0
 	stat.MysqlTime = 0
 	want = framework.QueryStat{
-		Query:      query,
-		Table:      "vitess_a",
-		Plan:       "Select",
-		QueryCount: 1,
-		RowCount:   0,
-		ErrorCount: 1,
+		Query:        query,
+		Table:        "vitess_a",
+		Plan:         "Select",
+		QueryCount:   1,
+		RowsAffected: 0,
+		RowsReturned: 0,
+		ErrorCount:   1,
 	}
 	if stat != want {
 		t.Errorf("stat: %+v, want %+v", stat, want)
