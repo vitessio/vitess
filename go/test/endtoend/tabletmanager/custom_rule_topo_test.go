@@ -83,9 +83,8 @@ func TestTopoCustomRule(t *testing.T) {
 	err = json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)
 
-	rowsAffected := resultMap["rows_affected"]
-	want := float64(2)
-	assert.Equal(t, want, rowsAffected)
+	rowsAffected := resultMap["rows"].([]interface{})
+	assert.EqualValues(t, 2, len(rowsAffected))
 
 	// Now update the topocustomrule file.
 	data = []byte(`[{

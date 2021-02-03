@@ -517,7 +517,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(1),
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 1,
 	})
 	updateQuery := "update seq set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -538,7 +537,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
 	}
 	assert.Equal(t, want, got)
 
@@ -558,7 +556,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(2),
 		}},
-		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -575,7 +572,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(4),
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 1,
 	})
 	updateQuery = "update seq set next_id = 7 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -592,7 +588,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -626,7 +621,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(5),
 		}},
-		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -1202,7 +1196,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1427325875)},
 			},
-			RowsAffected: 1,
 		},
 		"select @@global.sql_mode": {
 			Fields: []*querypb.Field{{
@@ -1211,7 +1204,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
-			RowsAffected: 1,
 		},
 		"select @@autocommit": {
 			Fields: []*querypb.Field{{
@@ -1220,7 +1212,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("1")},
 			},
-			RowsAffected: 1,
 		},
 		"select @@sql_auto_is_null": {
 			Fields: []*querypb.Field{{
@@ -1229,7 +1220,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
 			},
-			RowsAffected: 1,
 		},
 		"select @@version_comment from dual where 1 != 1": {
 			Fields: []*querypb.Field{{
@@ -1243,7 +1233,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("fakedb server")},
 			},
-			RowsAffected: 1,
 		},
 		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1)": {
 			Fields: []*querypb.Field{{

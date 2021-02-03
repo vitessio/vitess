@@ -242,11 +242,6 @@ func expectNoError(t *testing.T, err error) {
 	}
 }
 
-//func expectRows(t *testing.T, msg string, result *sqltypes.Result, want int) {
-//	t.Helper()
-//	assert.EqualValuesf(t, want, len(result.Rows), msg+": %v", result.Rows)
-//}
-
 func expectFlag(t *testing.T, msg string, flag, want bool) {
 	t.Helper()
 	if flag != want {
