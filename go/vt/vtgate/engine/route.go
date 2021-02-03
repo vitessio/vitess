@@ -417,53 +417,59 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		Row:      []sqltypes.Value{},
 	}
 
+	var specifiedKS string
+	if route.SysTableTableSchema != nil {
+		result, err := route.SysTableTableSchema.Evaluate(env)
+		if err != nil {
+			return nil, err
+		}
+		specifiedKS = result.Value().ToString()
+		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
+	}
+
+	var tableName string
 	if route.SysTableTableName != nil {
-		// the use has specified a table_name - let's check if it's a routed table
-		rss, err := route.paramsRoutedTable(vcursor, env, bindVars)
+		val, err := route.SysTableTableName.Evaluate(env)
+		if err != nil {
+			return nil, err
+		}
+		tableName = val.Value().ToString()
+		bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
+	}
+
+	// if the table_schema is system system, route to default keyspace.
+	if sqlparser.SystemSchema(specifiedKS) {
+		return defaultRoute()
+	}
+
+	// the use has specified a table_name - let's check if it's a routed table
+	if tableName != "" {
+		rss, err := route.paramsRoutedTable(vcursor, bindVars, specifiedKS, tableName)
 		if err != nil {
 			return nil, err
 		}
 		if rss != nil {
 			return rss, nil
 		}
-		// it was not a routed table, and we dont have a schema name to look up. give up
-		if route.SysTableTableSchema == nil {
-			return defaultRoute()
-		}
+	}
+
+	// it was not a routed table, and we dont have a schema name to look up. give up
+	if specifiedKS == "" {
+		return defaultRoute()
 	}
 
 	// we only have table_schema to work with
-	result, err := route.SysTableTableSchema.Evaluate(env)
-	if err != nil {
-		return nil, err
-	}
-	specifiedKS := result.Value().ToString()
 	destinations, _, err := vcursor.ResolveDestinations(specifiedKS, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		log.Errorf("failed to route information_schema query to keyspace [%s]", specifiedKS)
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 		return defaultRoute()
 	}
-	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+	setReplaceSchemaName(bindVars)
 	return destinations, nil
 }
 
-func (route *Route) paramsRoutedTable(vcursor VCursor, env evalengine.ExpressionEnv, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
-	val, err := route.SysTableTableName.Evaluate(env)
-	if err != nil {
-		return nil, err
-	}
-	tableName := val.Value().ToString()
-
-	var tableSchema string
-	if route.SysTableTableSchema != nil {
-		val, err := route.SysTableTableSchema.Evaluate(env)
-		if err != nil {
-			return nil, err
-		}
-		tableSchema = val.Value().ToString()
-	}
-
+func (route *Route) paramsRoutedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableName string) ([]*srvtopo.ResolvedShard, error) {
 	tbl := sqlparser.TableName{
 		Name:      sqlparser.NewTableIdent(tableName),
 		Qualifier: sqlparser.NewTableIdent(tableSchema),
@@ -478,7 +484,7 @@ func (route *Route) paramsRoutedTable(vcursor VCursor, env evalengine.Expression
 		shards, _, err := vcursor.ResolveDestinations(destination.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 		bindVars[BvTableName] = sqltypes.StringBindVariable(destination.Name.String())
 		if tableSchema != "" {
-			bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
+			setReplaceSchemaName(bindVars)
 		}
 		return shards, err
 	}
@@ -486,6 +492,11 @@ func (route *Route) paramsRoutedTable(vcursor VCursor, env evalengine.Expression
 	// no routed table info found. we'll return nil and check on the outside if we can find the table_schema
 	bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
 	return nil, nil
+}
+
+func setReplaceSchemaName(bindVars map[string]*querypb.BindVariable) {
+	delete(bindVars, sqltypes.BvSchemaName)
+	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
 }
 
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
