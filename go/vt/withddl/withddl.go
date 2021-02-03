@@ -38,7 +38,7 @@ import (
 type WithDDL struct {
 	ddls []string
 
-	initApply sync.Once
+	applyOnce sync.Once
 }
 
 // New creates a new WithDDL.
@@ -81,7 +81,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 
 	// On the first time this ever gets called, just go ahead and brute force the schema.
 	// this ensures even "soft" changes, like adding an index, are applied.
-	wd.initApply.Do(func() {
+	wd.applyOnce.Do(func() {
 		wd.applyDDLs(ctx, exec)
 	})
 
