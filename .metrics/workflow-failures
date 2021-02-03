@@ -1730,3 +1730,11 @@
 2021-02-03T07:22:42Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/533155205
 2021-02-03T07:22:42Z,endtoend,https://github.com/vitessio/vitess/actions/runs/533155208
 2021-02-03T07:22:42Z,unit_race,https://github.com/vitessio/vitess/actions/runs/533155200
+2021-02-03T07:50:29Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/533215266
+2021-02-03T07:50:29Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/533215237
+2021-02-03T07:50:29Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/533215239
+2021-02-03T07:50:29Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/533215246
+2021-02-03T07:50:29Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/533215275
+2021-02-03T07:50:29Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/533215241
+2021-02-03T07:50:29Z,endtoend,https://github.com/vitessio/vitess/actions/runs/533215232
+2021-02-03T07:50:29Z,unit_race,https://github.com/vitessio/vitess/actions/runs/533215273
