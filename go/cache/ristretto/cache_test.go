@@ -1,3 +1,20 @@
+/*
+ * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package ristretto
 
 import (
@@ -27,7 +44,7 @@ func TestCacheKeyToHash(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	if c.SetWithTTL("1", 1, 1, 0) {
+	if c.SetWithCost("1", 1, 1) {
 		time.Sleep(wait)
 		val, ok := c.Get("1")
 		require.True(t, ok)
@@ -71,7 +88,7 @@ func TestCacheMaxCost(t *testing.T) {
 						} else {
 							val = strings.Repeat("a", 1000)
 						}
-						c.SetWithTTL(key(), val, int64(2+len(val)), 0)
+						c.SetWithCost(key(), val, int64(2+len(val)))
 					}
 				}
 			}
@@ -96,7 +113,7 @@ func TestUpdateMaxCost(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, int64(10), c.MaxCapacity())
-	require.True(t, c.SetWithTTL("1", 1, 1, 0))
+	require.True(t, c.SetWithCost("1", 1, 1))
 	time.Sleep(wait)
 	_, ok := c.Get("1")
 	// Set is rejected because the cost of the entry is too high
@@ -106,7 +123,7 @@ func TestUpdateMaxCost(t *testing.T) {
 	// Update the max cost of the cache and retry.
 	c.SetCapacity(1000)
 	require.Equal(t, int64(1000), c.MaxCapacity())
-	require.True(t, c.SetWithTTL("1", 1, 1, 0))
+	require.True(t, c.SetWithCost("1", 1, 1))
 	time.Sleep(wait)
 	val, ok := c.Get("1")
 	require.True(t, ok)
@@ -149,7 +166,7 @@ func TestNilCache(t *testing.T) {
 	require.False(t, ok)
 	require.Nil(t, val)
 
-	require.False(t, c.SetWithTTL("1", 1, 1, 0))
+	require.False(t, c.SetWithCost("1", 1, 1))
 	c.Delete("1")
 	c.Clear()
 	c.Close()
@@ -177,7 +194,7 @@ func TestSetAfterClose(t *testing.T) {
 	require.NotNil(t, c)
 
 	c.Close()
-	require.False(t, c.SetWithTTL("1", 1, 1, 0))
+	require.False(t, c.SetWithCost("1", 1, 1))
 }
 
 func TestClearAfterClose(t *testing.T) {
@@ -194,7 +211,7 @@ func TestGetAfterClose(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
-	require.True(t, c.SetWithTTL("1", 1, 1, 0))
+	require.True(t, c.SetWithCost("1", 1, 1))
 	c.Close()
 
 	_, ok := c.Get("2")
@@ -206,7 +223,7 @@ func TestDelAfterClose(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, c)
 
-	require.True(t, c.SetWithTTL("1", 1, 1, 0))
+	require.True(t, c.SetWithCost("1", 1, 1))
 	c.Close()
 
 	c.Delete("1")
@@ -348,10 +365,10 @@ func TestCacheGet(t *testing.T) {
 	require.Nil(t, val)
 }
 
-// retrySet calls SetWithTTL until the item is accepted by the cache.
-func retrySet(t *testing.T, c *Cache, key string, value int, cost int64, ttl time.Duration) {
+// retrySet calls SetWithCost until the item is accepted by the cache.
+func retrySet(t *testing.T, c *Cache, key string, value int, cost int64) {
 	for {
-		if set := c.SetWithTTL(key, value, cost, ttl); !set {
+		if set := c.SetWithCost(key, value, cost); !set {
 			time.Sleep(wait)
 			continue
 		}
@@ -375,9 +392,9 @@ func TestCacheSet(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	retrySet(t, c, "1", 1, 1, 0)
+	retrySet(t, c, "1", 1, 1)
 
-	c.SetWithTTL("1", 2, 2, 0)
+	c.SetWithCost("1", 2, 2)
 	val, ok := c.store.Get(defaultStringHash("1"))
 	require.True(t, ok)
 	require.Equal(t, 2, val.(int))
@@ -393,13 +410,13 @@ func TestCacheSet(t *testing.T) {
 			Cost:     1,
 		}
 	}
-	require.False(t, c.SetWithTTL("2", 2, 1, 0))
+	require.False(t, c.SetWithCost("2", 2, 1))
 	require.Equal(t, uint64(1), c.Metrics.SetsDropped())
 	close(c.setBuf)
 	close(c.stop)
 
 	c = nil
-	require.False(t, c.SetWithTTL("1", 1, 1, 0))
+	require.False(t, c.SetWithCost("1", 1, 1))
 }
 
 func TestCacheInternalCost(t *testing.T) {
@@ -413,104 +430,10 @@ func TestCacheInternalCost(t *testing.T) {
 
 	// Get should return false because the cache's cost is too small to store the item
 	// when accounting for the internal cost.
-	c.SetWithTTL("1", 1, 1, 0)
+	c.SetWithCost("1", 1, 1)
 	time.Sleep(wait)
 	_, ok := c.Get("1")
 	require.False(t, ok)
-}
-
-func TestRecacheWithTTL(t *testing.T) {
-	c, err := NewCache(&Config{
-		NumCounters:        100,
-		MaxCost:            10,
-		IgnoreInternalCost: true,
-		BufferItems:        64,
-		Metrics:            true,
-	})
-
-	require.NoError(t, err)
-
-	// Set initial value for key = 1
-	insert := c.SetWithTTL("1", 1, 1, 5*time.Second)
-	require.True(t, insert)
-	time.Sleep(2 * time.Second)
-
-	// Get value from cache for key = 1
-	val, ok := c.Get("1")
-	require.True(t, ok)
-	require.NotNil(t, val)
-	require.Equal(t, 1, val)
-
-	// Wait for expiration
-	time.Sleep(5 * time.Second)
-
-	// The cached value for key = 1 should be gone
-	val, ok = c.Get("1")
-	require.False(t, ok)
-	require.Nil(t, val)
-
-	// Set new value for key = 1
-	insert = c.SetWithTTL("1", 2, 1, 5*time.Second)
-	require.True(t, insert)
-	time.Sleep(2 * time.Second)
-
-	// Get value from cache for key = 1
-	val, ok = c.Get("1")
-	require.True(t, ok)
-	require.NotNil(t, val)
-	require.Equal(t, 2, val)
-}
-
-func TestCacheSetWithTTL(t *testing.T) {
-	m := &sync.Mutex{}
-	evicted := make(map[uint64]struct{})
-	c, err := NewCache(&Config{
-		NumCounters:        100,
-		MaxCost:            10,
-		IgnoreInternalCost: true,
-		BufferItems:        64,
-		Metrics:            true,
-		OnEvict: func(item *Item) {
-			m.Lock()
-			defer m.Unlock()
-			evicted[item.Key] = struct{}{}
-		},
-	})
-	require.NoError(t, err)
-
-	retrySet(t, c, "1", 1, 1, time.Second)
-
-	// Sleep to make sure the item has expired after execution resumes.
-	time.Sleep(2 * time.Second)
-	val, ok := c.Get("1")
-	require.False(t, ok)
-	require.Nil(t, val)
-
-	// Sleep to ensure that the bucket where the item was stored has been cleared
-	// from the expiraton map.
-	time.Sleep(5 * time.Second)
-	m.Lock()
-	require.Equal(t, 1, len(evicted))
-	evk, _ := defaultStringHash("1")
-	_, ok = evicted[evk]
-	require.True(t, ok)
-	m.Unlock()
-
-	// Verify that expiration times are overwritten.
-	retrySet(t, c, "2", 1, 1, time.Second)
-	retrySet(t, c, "2", 2, 1, 100*time.Second)
-	time.Sleep(3 * time.Second)
-	val, ok = c.Get("2")
-	require.True(t, ok)
-	require.Equal(t, 2, val.(int))
-
-	// Verify that entries with no expiration are overwritten.
-	retrySet(t, c, "3", 1, 1, 0)
-	retrySet(t, c, "3", 2, 1, time.Second)
-	time.Sleep(3 * time.Second)
-	val, ok = c.Get("3")
-	require.False(t, ok)
-	require.Nil(t, val)
 }
 
 func TestCacheDel(t *testing.T) {
@@ -521,7 +444,7 @@ func TestCacheDel(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	c.SetWithTTL("1", 1, 1, 0)
+	c.SetWithCost("1", 1, 1)
 	c.Delete("1")
 	// The deletes and sets are pushed through the setbuf. It might be possible
 	// that the delete is not processed before the following get is called. So
@@ -538,24 +461,6 @@ func TestCacheDel(t *testing.T) {
 	c.Delete("1")
 }
 
-func TestCacheDelWithTTL(t *testing.T) {
-	c, err := NewCache(&Config{
-		NumCounters:        100,
-		MaxCost:            10,
-		IgnoreInternalCost: true,
-		BufferItems:        64,
-	})
-	require.NoError(t, err)
-	retrySet(t, c, "3", 1, 1, 10*time.Second)
-	time.Sleep(1 * time.Second)
-	// Delete the item
-	c.Delete("3")
-	// Ensure the key is deleted.
-	val, ok := c.Get("3")
-	require.False(t, ok)
-	require.Nil(t, val)
-}
-
 func TestCacheClear(t *testing.T) {
 	c, err := NewCache(&Config{
 		NumCounters:        100,
@@ -567,7 +472,7 @@ func TestCacheClear(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		c.SetWithTTL(strconv.Itoa(i), i, 1, 0)
+		c.SetWithCost(strconv.Itoa(i), i, 1)
 	}
 	time.Sleep(wait)
 	require.Equal(t, uint64(10), c.Metrics.KeysAdded())
@@ -593,7 +498,7 @@ func TestCacheMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
-		c.SetWithTTL(strconv.Itoa(i), i, 1, 0)
+		c.SetWithCost(strconv.Itoa(i), i, 1)
 	}
 	time.Sleep(wait)
 	m := c.Metrics
@@ -690,7 +595,7 @@ func TestCacheMetricsClear(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	c.SetWithTTL("1", 1, 1, 0)
+	c.SetWithCost("1", 1, 1)
 	stop := make(chan struct{})
 	go func() {
 		for {
@@ -707,11 +612,6 @@ func TestCacheMetricsClear(t *testing.T) {
 	stop <- struct{}{}
 	c.Metrics = nil
 	c.Metrics.Clear()
-}
-
-func init() {
-	// Set bucketSizeSecs to 1 to avoid waiting too much during the tests.
-	bucketDurationSecs = 1
 }
 
 // Regression test for bug https://github.com/dgraph-io/ristretto/issues/167
@@ -759,7 +659,7 @@ func TestDropUpdates(t *testing.T) {
 		for i := 0; i < 5*setBufSize; i++ {
 			v := fmt.Sprintf("%0100d", i)
 			// We're updating the same key.
-			if !c.SetWithTTL("0", v, 1, 0) {
+			if !c.SetWithCost("0", v, 1) {
 				// The race condition doesn't show up without this sleep.
 				time.Sleep(time.Microsecond)
 				droppedMap[i] = struct{}{}
@@ -768,7 +668,7 @@ func TestDropUpdates(t *testing.T) {
 		// Wait for all the items to be processed.
 		c.Wait()
 		// This will cause eviction from the cache.
-		require.True(t, c.SetWithTTL("1", nil, 10, 0))
+		require.True(t, c.SetWithCost("1", nil, 10))
 		c.Close()
 	}
 

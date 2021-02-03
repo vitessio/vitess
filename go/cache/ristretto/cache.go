@@ -1,5 +1,6 @@
 /*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2021 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +66,7 @@ type Cache struct {
 	// onReject is called when an item is rejected via admission policy.
 	onReject itemCallback
 	// onExit is called whenever a value goes out of scope from the cache.
-	onExit (func(interface{}))
+	onExit func(interface{})
 	// KeyToHash function is used to customize the key hashing algorithm.
 	// Each key will be hashed using the provided function. If keyToHash value
 	// is not set, the default keyToHash function is used.
@@ -79,8 +80,6 @@ type Cache struct {
 	// ignoreInternalCost dictates whether to ignore the cost of internally storing
 	// the item in the cost calculation.
 	ignoreInternalCost bool
-	// cleanupTicker is used to periodically check for entries whose TTL has passed.
-	cleanupTicker *time.Ticker
 	// Metrics contains a running log of important statistics like hits, misses,
 	// and dropped items.
 	Metrics *Metrics
@@ -150,13 +149,12 @@ const (
 
 // Item is passed to setBuf so items can eventually be added to the cache.
 type Item struct {
-	flag       itemFlag
-	Key        uint64
-	Conflict   uint64
-	Value      interface{}
-	Cost       int64
-	Expiration int64
-	wg         *sync.WaitGroup
+	flag     itemFlag
+	Key      uint64
+	Conflict uint64
+	Value    interface{}
+	Cost     int64
+	wg       *sync.WaitGroup
 }
 
 // NewCache returns a new Cache instance and any configuration errors, if any.
@@ -179,7 +177,6 @@ func NewCache(config *Config) (*Cache, error) {
 		stop:               make(chan struct{}),
 		cost:               config.Cost,
 		ignoreInternalCost: config.IgnoreInternalCost,
-		cleanupTicker:      time.NewTicker(time.Duration(bucketDurationSecs) * time.Second / 2),
 	}
 	cache.onExit = func(val interface{}) {
 		if config.OnExit != nil && val != nil {
@@ -246,42 +243,26 @@ func (c *Cache) Get(key string) (interface{}, bool) {
 // its determined that the key-value item isn't worth keeping, but otherwise the
 // item will be added and other items will be evicted in order to make room.
 //
-// To dynamically evaluate the items cost using the Config.Coster function, set
-// the cost parameter to 0 and Coster will be ran when needed in order to find
-// the items true cost.
+// The cost of the entry will be evaluated lazily by the cache's Cost function.
 func (c *Cache) Set(key string, value interface{}) bool {
-	return c.SetWithTTL(key, value, 0, 0*time.Second)
+	return c.SetWithCost(key, value, 0)
 }
 
-// SetWithTTL works like Set but adds a key-value pair to the cache that will expire
-// after the specified TTL (time to live) has passed. A zero value means the value never
-// expires, which is identical to calling Set. A negative value is a no-op and the value
-// is discarded.
-func (c *Cache) SetWithTTL(key string, value interface{}, cost int64, ttl time.Duration) bool {
+// SetWithCost works like Set but adds a key-value pair to the cache with a specific
+// cost. The built-in Cost function will not be called to evaluate the object's cost
+// and instead the given value will be used.
+func (c *Cache) SetWithCost(key string, value interface{}, cost int64) bool {
 	if c == nil || c.isClosed {
 		return false
 	}
 
-	var expiration int64
-	switch {
-	case ttl == 0:
-		// No expiration.
-		break
-	case ttl < 0:
-		// Treat this a a no-op.
-		return false
-	default:
-		expiration = time.Now().Add(ttl).Unix()
-	}
-
 	keyHash, conflictHash := c.keyToHash(key)
 	i := &Item{
-		flag:       itemNew,
-		Key:        keyHash,
-		Conflict:   conflictHash,
-		Value:      value,
-		Cost:       cost,
-		Expiration: expiration,
+		flag:     itemNew,
+		Key:      keyHash,
+		Conflict: conflictHash,
+		Value:    value,
+		Cost:     cost,
 	}
 	// cost is eventually updated. The expiration must also be immediately updated
 	// to prevent items from being prematurely removed from the map.
@@ -411,7 +392,10 @@ func (c *Cache) SetCapacity(maxCost int64) {
 // Evictions returns the number of evictions
 func (c *Cache) Evictions() int64 {
 	// TODO
-	return 0
+	if c == nil || c.Metrics == nil {
+		return 0
+	}
+	return int64(c.Metrics.KeysEvicted())
 }
 
 // ForEach yields all the values currently stored in the cache to the given callback.
@@ -488,8 +472,6 @@ func (c *Cache) processItems() {
 				_, val := c.store.Del(i.Key, i.Conflict)
 				c.onExit(val)
 			}
-		case <-c.cleanupTicker.C:
-			c.store.Cleanup(c.policy, onEvict)
 		case <-c.stop:
 			return
 		}
