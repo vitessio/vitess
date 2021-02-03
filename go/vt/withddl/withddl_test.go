@@ -144,7 +144,7 @@ func TestExec(t *testing.T) {
 			"invalid sql",
 		},
 		query: "insert into a values(1)",
-		err:   "doesn't exist",
+		err:   "error in your SQL syntax",
 	}}
 
 	withdb := connParams
