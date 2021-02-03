@@ -97,7 +97,7 @@ func FindValidEmergencyReparentCandidates(
 		// in the earlier loop, but let's be doubly sure.
 		relayLogGTIDSet, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "we got a filled-in relay log position, but it's not of type Mysql56GTIDSet, even thought we've determined we need to use GTID based assesment")
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "we got a filled-in relay log position, but it's not of type Mysql56GTIDSet, even though we've determined we need to use GTID based assesment")
 		}
 
 		// We need to remove this alias's status from the list, otherwise the
