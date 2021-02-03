@@ -749,7 +749,9 @@ func TestDropUpdates(t *testing.T) {
 			BufferItems: 64,
 			Metrics:     true,
 			OnEvict: func(item *Item) {
-				handler(nil, item.Value)
+				if item.Value != nil {
+					handler(nil, item.Value)
+				}
 			},
 		})
 		require.NoError(t, err)
