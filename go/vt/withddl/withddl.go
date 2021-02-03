@@ -48,6 +48,11 @@ func New(ddls []string) *WithDDL {
 	}
 }
 
+// DDLs returns the ddl statements used by this WithDDL
+func (wd *WithDDL) DDLs() []string {
+	return wd.ddls
+}
+
 // applyDDLs applies DDLs and ignores any schema error
 func (wd *WithDDL) applyDDLs(ctx context.Context, exec func(query string) (*sqltypes.Result, error)) error {
 	log.Infof("Updating schema")
