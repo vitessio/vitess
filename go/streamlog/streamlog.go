@@ -29,8 +29,9 @@ import (
 	"sync"
 	"syscall"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -131,7 +132,7 @@ func (logger *StreamLogger) Name() string {
 // ServeLogs registers the URL on which messages will be broadcast.
 // It is safe to register multiple URLs for the same StreamLogger.
 func (logger *StreamLogger) ServeLogs(url string, logf LogFormatter) {
-	mx := httputil2.GetMux()
+	mx := servenv.GetMux()
 	mx.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/proc"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -45,7 +44,7 @@ func Run(port int) {
 	if err != nil {
 		log.Exit(err)
 	}
-	go http.Serve(l, httputil2.GetMux())
+	go http.Serve(l, GetMux())
 
 	proc.Wait()
 	l.Close()

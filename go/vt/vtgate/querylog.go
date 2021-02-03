@@ -20,7 +20,8 @@ import (
 	"flag"
 	"net/http"
 
-	"vitess.io/vitess/go/httputil2"
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/streamlog"
 )
 
@@ -44,13 +45,14 @@ var (
 func initQueryLogger(vtg *VTGate) error {
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 
-	httputil2.GetMux().HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
+	mx := servenv.GetMux()
+	mx.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
 		ch := QueryLogger.Subscribe("querylogz")
 		defer QueryLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)
 	})
 
-	httputil2.GetMux().HandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
+	mx.HandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {
 		queryzHandler(vtg.executor, w, r)
 	})
 

@@ -20,9 +20,10 @@ import (
 	"expvar"
 	"strings"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -38,8 +39,7 @@ var (
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
-	mx := httputil2.GetMux()
-	mx.Handle("/metrics", promhttp.Handler())
+	servenv.GetMux().Handle("/metrics", promhttp.Handler())
 	be.namespace = namespace
 	stats.Register(be.publishPrometheusMetric)
 }

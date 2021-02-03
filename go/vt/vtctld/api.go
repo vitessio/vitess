@@ -29,12 +29,12 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -134,7 +134,7 @@ func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...i
 }
 
 func handleAPI(apiPath string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
-	httputil2.GetMux().HandleFunc(apiPrefix+apiPath, func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc(apiPrefix+apiPath, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
 				httpErrorf(w, r, "uncaught panic: %v", x)

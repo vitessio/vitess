@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -140,12 +139,12 @@ func newStatusPage(name string) *statusPage {
 	}
 	sp.tmpl = template.Must(sp.reparse(nil))
 	if name == "" {
-		httputil2.GetMux().HandleFunc(StatusURLPath(), sp.statusHandler)
+		GetMux().HandleFunc(StatusURLPath(), sp.statusHandler)
 		// Debug profiles are only supported for the top level status page.
 		registerDebugBlockProfileRate()
 		registerDebugMutexProfileFraction()
 	} else {
-		httputil2.GetMux().HandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
+		GetMux().HandleFunc("/"+name+StatusURLPath(), sp.statusHandler)
 	}
 	return sp
 }
@@ -250,7 +249,7 @@ func (sp *statusPage) reparse(sections []section) (*template.Template, error) {
 
 // Toggle the block profile rate to/from 100%, unless specific rate is passed in
 func registerDebugBlockProfileRate() {
-	mx := httputil2.GetMux()
+	mx := GetMux()
 	mx.HandleFunc("/debug/blockprofilerate", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
@@ -281,7 +280,7 @@ func registerDebugBlockProfileRate() {
 
 // Toggle the mutex profiling fraction to/from 100%, unless specific fraction is passed in
 func registerDebugMutexProfileFraction() {
-	httputil2.GetMux().HandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
+	GetMux().HandleFunc("/debug/mutexprofilefraction", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
 			return

@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -75,7 +74,7 @@ const workerStatusHTML = `
 func (wi *Instance) InitStatusHandling() {
 	// code to serve /status
 	workerTemplate := mustParseTemplate("worker", workerStatusHTML)
-	httputil2.GetMux().HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 			acl.SendError(w, err)
 			return
@@ -115,7 +114,7 @@ func (wi *Instance) InitStatusHandling() {
 	})
 
 	// reset handler
-	httputil2.GetMux().HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 			acl.SendError(w, err)
 			return
@@ -130,7 +129,7 @@ func (wi *Instance) InitStatusHandling() {
 	})
 
 	// cancel handler
-	httputil2.GetMux().HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 			acl.SendError(w, err)
 			return

@@ -28,7 +28,6 @@ import (
 	"time"
 	"unicode"
 
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -101,7 +100,7 @@ func Init(prefix string) {
 
 		stats.RegisterPushBackend("opentsdb", backend)
 
-		mx := httputil2.GetMux()
+		mx := servenv.GetMux()
 		mx.HandleFunc("/debug/opentsdb", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			dataPoints := (*backend).getDataPoints()

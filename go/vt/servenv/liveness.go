@@ -18,8 +18,6 @@ package servenv
 
 import (
 	"net/http"
-
-	"vitess.io/vitess/go/httputil2"
 )
 
 // This file registers a handler that immediately responds with HTTP 200 OK.
@@ -31,7 +29,7 @@ import (
 // further behind on its backlog.
 
 func init() {
-	mx := httputil2.GetMux()
+	mx := GetMux()
 	mx.HandleFunc("/debug/liveness", func(rw http.ResponseWriter, r *http.Request) {
 		// Do nothing. Return success immediately.
 	})

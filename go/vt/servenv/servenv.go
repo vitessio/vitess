@@ -94,7 +94,7 @@ func Init() {
 
 	// Register pprof handlers if pprof is enabled
 	if *enablePprof {
-		httputil2.RegisterPprof(httputil2.GetMux())
+		httputil2.RegisterPprof(GetMux())
 	}
 
 	// Add version tag to every info log

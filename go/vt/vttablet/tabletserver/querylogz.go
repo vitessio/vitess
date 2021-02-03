@@ -25,8 +25,9 @@ import (
 	"text/template"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -89,7 +90,7 @@ var (
 )
 
 func init() {
-	httputil2.GetMux().HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
 		ch := tabletenv.StatsLogger.Subscribe("querylogz")
 		defer tabletenv.StatsLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)

@@ -26,7 +26,8 @@ import (
 	"text/template"
 	"time"
 
-	"vitess.io/vitess/go/httputil2"
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -64,7 +65,7 @@ func (stats *VrLogStats) Send(detail string) {
 }
 
 func init() {
-	httputil2.GetMux().HandleFunc("/debug/vrlog", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/debug/vrlog", func(w http.ResponseWriter, r *http.Request) {
 		ch := vrLogStatsLogger.Subscribe("vrlogstats")
 		defer vrLogStatsLogger.Unsubscribe(ch)
 		vrlogStatsHandler(ch, w, r)

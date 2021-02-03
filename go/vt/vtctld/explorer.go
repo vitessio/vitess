@@ -26,7 +26,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/httputil2"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
@@ -174,7 +174,7 @@ func initExplorer(ts *topo.Server) {
 	})
 
 	// Redirects for explorers.
-	httputil2.GetMux().HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpErrorf(w, r, "cannot parse form: %s", err)
 			return

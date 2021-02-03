@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -73,7 +73,7 @@ var (
 )
 
 func init() {
-	httputil2.GetMux().HandleFunc("/txlogz", txlogzHandler)
+	servenv.GetMux().HandleFunc("/txlogz", txlogzHandler)
 }
 
 // txlogzHandler serves a human readable snapshot of the

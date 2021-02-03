@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/httputil2"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sysvars"
 
 	"golang.org/x/net/context"
@@ -137,9 +137,9 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", e.plans.Oldest())
 		}))
-		httputil2.GetMux().Handle(pathQueryPlans, e)
-		httputil2.GetMux().Handle(pathScatterStats, e)
-		httputil2.GetMux().Handle(pathVSchema, e)
+		servenv.GetMux().Handle(pathQueryPlans, e)
+		servenv.GetMux().Handle(pathScatterStats, e)
+		servenv.GetMux().Handle(pathVSchema, e)
 	})
 	return e
 }

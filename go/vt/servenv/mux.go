@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,21 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package servenv
 
 import (
 	"net/http"
-
-	"vitess.io/vitess/go/vt/servenv"
+	"sync"
 )
 
-// This is a separate file so it can be selectively included/excluded from
-// builds to opt in/out of the redirect.
+var (
+	muxOnce   sync.Once
+	serverMux *http.ServeMux
+)
 
-func init() {
-	// Anything unrecognized gets redirected to the status page.
-	mx := servenv.GetMux()
-	mx.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/debug/status", http.StatusFound)
+func GetMux() *http.ServeMux {
+	muxOnce.Do(func() {
+		serverMux = &http.ServeMux{}
 	})
+
+	return serverMux
 }

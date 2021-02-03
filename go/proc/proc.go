@@ -30,7 +30,8 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/httputil2"
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -57,8 +58,7 @@ func Wait() os.Signal {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGINT)
 
-	mx := httputil2.GetMux()
-	mx.HandleFunc(pidURL, func(r http.ResponseWriter, req *http.Request) {
+	servenv.GetMux().HandleFunc(pidURL, func(r http.ResponseWriter, req *http.Request) {
 		r.Write(strconv.AppendInt(nil, int64(os.Getpid()), 10))
 	})
 

@@ -19,7 +19,6 @@ import (
 	"go.uber.org/ratelimit"
 	"gopkg.in/yaml.v2"
 	"vitess.io/vitess/examples/are-you-alive/pkg/client"
-	"vitess.io/vitess/go/httputil2"
 )
 
 /*
@@ -210,7 +209,7 @@ func waitForCtrlC() {
 }
 
 func runPrometheus() {
-	httputil2.GetMux().Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", promhttp.Handler())
 	logrus.Fatal(http.ListenAndServe(*prometheusMetricsAddress, nil))
 }
 

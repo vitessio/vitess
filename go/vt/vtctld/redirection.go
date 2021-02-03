@@ -24,7 +24,8 @@ import (
 	"net/http/httputil"
 	"strings"
 
-	"vitess.io/vitess/go/httputil2"
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -32,7 +33,7 @@ import (
 )
 
 func initVTTabletRedirection(ts *topo.Server) {
-	httputil2.GetMux().HandleFunc("/vttablet/", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/vttablet/", func(w http.ResponseWriter, r *http.Request) {
 		splits := strings.SplitN(r.URL.Path, "/", 4)
 		if len(splits) < 4 {
 			log.Errorf("Invalid URL: %v", r.URL)

@@ -18,21 +18,7 @@ package httputil2
 import (
 	"net/http"
 	"net/http/pprof"
-	"sync"
 )
-
-var (
-	muxOnce   sync.Once
-	serverMux *http.ServeMux
-)
-
-func GetMux() *http.ServeMux {
-	muxOnce.Do(func() {
-		serverMux = &http.ServeMux{}
-	})
-
-	return serverMux
-}
 
 func RegisterPprof(mux *http.ServeMux) {
 	mux.HandleFunc("/debug/pprof", pprof.Index)

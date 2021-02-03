@@ -21,16 +21,17 @@ package vtctld
 import (
 	"net/http"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 // RegisterDebugHealthHandler register a debug health http endpoint for a vtcld server
 func RegisterDebugHealthHandler(ts *topo.Server) {
-	httputil2.GetMux().HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return

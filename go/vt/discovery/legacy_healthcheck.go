@@ -50,7 +50,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -392,7 +391,7 @@ func NewLegacyHealthCheck(retryDelay, healthCheckTimeout time.Duration) LegacyHe
 	}
 
 	healthcheckOnce.Do(func() {
-		mx := httputil2.GetMux()
+		mx := servenv.GetMux()
 		mx.Handle("/debug/gateway", hc)
 	})
 

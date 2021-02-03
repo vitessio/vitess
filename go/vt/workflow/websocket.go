@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"net/http"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/httputil2"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -34,7 +35,7 @@ var upgrader = websocket.Upgrader{} // use default options
 // HandleHTTPWebSocket registers the WebSocket handler.
 func (m *Manager) HandleHTTPWebSocket(pattern string) {
 	log.Infof("workflow Manager listening to websocket traffic at %v", pattern)
-	httputil2.GetMux().HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+	servenv.GetMux().HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
 				errMsg := fmt.Sprintf("uncaught panic: %v", x)
