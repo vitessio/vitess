@@ -40,9 +40,8 @@ import (
 )
 
 const (
-	vexecTableQualifier       = "_vt"
-	vreplicationTableName     = "vreplication"
-	schemaMigrationsTableName = "schema_migrations"
+	vexecTableQualifier   = "_vt"
+	vreplicationTableName = "vreplication"
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing

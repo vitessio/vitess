@@ -36,6 +36,10 @@ var (
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
 )
 
+const (
+	SchemaMigrationsTableName = "schema_migrations"
+)
+
 // MigrationBasePath is the root for all schema migration entries
 func MigrationBasePath() string {
 	return migrationBasePath
