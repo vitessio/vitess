@@ -49,22 +49,17 @@ func New(ddls []string) *WithDDL {
 }
 
 // applyDDLs applies DDLs and ignores any schema error
-func (wd *WithDDL) applyDDLs(ctx context.Context, f interface{}) error {
-	exec, err := wd.unify(ctx, f)
-	if err != nil {
-		return err
-	}
-
+func (wd *WithDDL) applyDDLs(ctx context.Context, exec func(query string) (*sqltypes.Result, error)) error {
 	log.Infof("Updating schema")
 	for _, applyQuery := range wd.ddls {
-		_, merr := exec(applyQuery)
-		if merr == nil {
+		_, err := exec(applyQuery)
+		if err == nil {
 			continue
 		}
-		if mysql.IsSchemaApplyError(merr) {
+		if mysql.IsSchemaApplyError(err) {
 			continue
 		}
-		log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
+		log.Warningf("DDL apply %v failed: %v", applyQuery, err)
 		// Return the original error.
 		return err
 	}
@@ -87,7 +82,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 	// On the first time this ever gets called, just go ahead and brute force the schema.
 	// this ensures even "soft" changes, like adding an index, are applied.
 	wd.initApply.Do(func() {
-		wd.applyDDLs(ctx, f)
+		wd.applyDDLs(ctx, exec)
 	})
 
 	// Attempt to run queries:
@@ -101,7 +96,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 
 	// Got here? Means we hit a schema error
 	log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
-	if err := wd.applyDDLs(ctx, f); err != nil {
+	if err := wd.applyDDLs(ctx, exec); err != nil {
 		return nil, err
 	}
 	// Try the query again
