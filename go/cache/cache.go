@@ -27,9 +27,9 @@ package cache
 // Regardless of the default value used here, the user can always override Vitess' configuration to
 // force a specific cache type (e.g. when passing a value in ENTRIES to vtgate, the service will use
 // a LRU cache).
-const DefaultCacheSize = SizeInBytes(64 * 1024 * 1024)
+const DefaultCacheSize = SizeInEntries(5000)
 
-// const DefaultCacheSize = SizeInEntries(10000)
+// const DefaultCacheSize = SizeInBytes(64 * 1024 * 1024)
 
 // Cache is a generic interface type for a data structure that keeps recently used
 // objects in memory and evicts them when it becomes full.
