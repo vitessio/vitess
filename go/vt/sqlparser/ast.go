@@ -86,6 +86,12 @@ type (
 		SQLNode
 	}
 
+	// Explain is an interface that represents the Explain statements
+	Explain interface {
+		iExplain()
+		Statement
+	}
+
 	// AddConstraintDefinition represents a ADD CONSTRAINT alter option
 	AddConstraintDefinition struct {
 		ConstraintDefinition *ConstraintDefinition
@@ -505,31 +511,11 @@ type (
 		Name ColIdent
 	}
 
-	// Explain represents an EXPLAIN statement
-	Explain struct {
-		Type      ExplainType
-		Statement Statement
-	}
-
-	// ExplainType is an enum for Explain.Type
-	ExplainType int8
-
 	// CallProc represents a CALL statement
 	CallProc struct {
 		Name   TableName
 		Params Exprs
 	}
-
-	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherRead struct{}
-
-	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
-	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherAdmin struct{}
 
 	// LockType is an enum for Lock Types
 	LockType int8
@@ -550,6 +536,32 @@ type (
 
 	// UnlockTables represents the unlock statement
 	UnlockTables struct{}
+
+	// ExplainType is an enum for Explain.Type
+	ExplainType int8
+
+	// Explain represents an EXPLAIN statement
+	ExplainStmt struct {
+		Type      ExplainType
+		Statement Statement
+	}
+
+	// ExplainTab represents the explain table statement
+	ExplainTab struct {
+		Table TableName
+		Wild  string
+	}
+
+	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherRead struct{}
+
+	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
+	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherAdmin struct{}
 )
 
 func (*Union) iStatement()             {}
@@ -592,6 +604,7 @@ func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
+func (*Desc) iStatement()              {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -2496,6 +2509,14 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
+}
+
+// Format formats the node.
+func (node *Desc) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "explain %v", node.Table)
+	if node.Wild != "" {
+		buf.astPrintf(node, " %s", node.Wild)
+	}
 }
 
 // Format formats the node.
