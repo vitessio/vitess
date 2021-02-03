@@ -595,38 +595,6 @@ options:PassthroughDMLs
   "FullQuery": "delete from a limit 10"
 }
 
-# int
-"set  a=1"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 1"
-}
-
-# float
-"set  a=1.2"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 1.2"
-}
-
-# string
-"set a='b'"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 'b'"
-}
-
-# multi
-"set a=1, b=2"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 1, b = 2"
-}
-
 # create
 "create table a(a int, b varchar(8))"
 {

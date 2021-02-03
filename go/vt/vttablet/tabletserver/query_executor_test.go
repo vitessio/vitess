@@ -113,15 +113,6 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// not get re-executed.
 		inTxWant: "select * from t limit 1",
 	}, {
-		input: "set a=1",
-		dbResponses: []dbResponse{{
-			query:  "set a=1",
-			result: dmlResult,
-		}},
-		resultWant: dmlResult,
-		planWant:   "Set",
-		logWant:    "set a=1",
-	}, {
 		input: "show engines",
 		dbResponses: []dbResponse{{
 			query:  "show engines",
@@ -262,7 +253,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 		inTxWant:   "RELEASE savepoint a",
 	}}
 	for _, tcase := range testcases {
-		func() {
+		t.Run(tcase.input, func(t *testing.T) {
 			db := setUpQueryExecutorTest(t)
 			defer db.Close()
 			for _, dbr := range tcase.dbResponses {
@@ -300,7 +291,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 				want = tcase.inTxWant
 			}
 			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
-		}()
+		})
 	}
 }
 
