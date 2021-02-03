@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -58,6 +59,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/shlex"
 )
 
@@ -449,6 +451,110 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, onlineDDL *schem
 	return nil
 }
 
+// cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
+func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
+	// sanity checks:
+	if s == nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplicatoin stream migration %s", s.workflow)
+	}
+	if s.bls.Filter == nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No binlog source filter for migration %s", s.workflow)
+	}
+	if len(s.bls.Filter.Rules) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot detect filter rules for migration/vreplication %+v", s.workflow)
+	}
+	vreplTable := s.bls.Filter.Rules[0].Match
+
+	// get topology client & entities:
+	tmClient := tmclient.NewTabletManagerClient()
+	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
+	if err != nil {
+		return err
+	}
+	shardInfo, err := e.ts.GetShard(ctx, e.keyspace, e.shard)
+	if err != nil {
+		return err
+	}
+
+	// information about source tablet
+	onlineDDL, err := e.readMigration(ctx, s.workflow)
+	if err != nil {
+		return err
+	}
+	// come up with temporary name for swap table
+	swapTable, err := schema.CreateUUID()
+	if err != nil {
+		return err
+	}
+	swapTable = strings.Replace(swapTable, "-", "", -1)
+	swapTable = fmt.Sprintf("_swap_%s", swapTable)
+
+	// Preparation is complete. We proceed to cut-over.
+
+	// lock keyspace:
+	{
+		lctx, unlockKeyspace, err := e.ts.LockKeyspace(ctx, e.keyspace, "OnlineDDLCutOver")
+		if err != nil {
+			return err
+		}
+		// lctx has the lock info, needed for UpdateShardFields
+		ctx = lctx
+		defer unlockKeyspace(&err)
+	}
+	toggleWrites := func(allowWrites bool) error {
+		if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
+			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, allowWrites, []string{onlineDDL.Table})
+			return err
+		}); err != nil {
+			return err
+		}
+		if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
+			return err
+		}
+		return nil
+	}
+	// stop writes on source:
+	if err := toggleWrites(false); err != nil {
+		return err
+	}
+	defer toggleWrites(true)
+
+	// Writes are now disabled on table. Read up-to-date vreplication info, specifically to get latest (and fixed) pos:
+	s, err = e.readVReplStream(ctx, s.workflow, false)
+	if err != nil {
+		return err
+	}
+
+	// Wait for target to reach the up-to-date pos
+	if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), s.pos); err != nil {
+		return err
+	}
+	// Target is now in sync with source!
+
+	// Stop vreplication
+	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
+		return err
+	}
+
+	// rename tables atomically (remember, writes on source tables are stopped)
+	{
+		parsed := sqlparser.BuildParsedQuery(sqlSwapTables,
+			onlineDDL.Table, swapTable,
+			vreplTable, onlineDDL.Table,
+			swapTable, vreplTable,
+		)
+		if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			return err
+		}
+	}
+
+	// Tables are now swapped! Migration is successful
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
+	atomic.StoreInt64(&e.migrationRunning, 0)
+
+	return nil
+}
+
 // ExecuteWithVReplication sets up the grounds for a vreplication schema migration
 func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	e.migrationMutex.Lock()
@@ -505,6 +611,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
+		// create vreplication entry
 		insertVReplicationQuery, err := v.generateInsertStatement(ctx)
 		if err != nil {
 			return err
@@ -512,6 +619,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, insertVReplicationQuery); err != nil {
 			return err
 		}
+		// start stream!
 		startVReplicationQuery, err := v.generateStartStatement(ctx)
 		if err != nil {
 			return err
@@ -1308,7 +1416,7 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 }
 
 // readVReplStream reads _vt.vreplication entries for given workflow
-func (e *Executor) readVReplStream(ctx context.Context, uuid string) (*sqltypes.NamedResult, error) {
+func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing bool) (*VReplStream, error) {
 	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -1319,32 +1427,38 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string) (*sqltypes.
 	if err != nil {
 		return nil, err
 	}
-	return r.Named(), nil
+	if len(r.Rows) == 0 && okIfMissing {
+		return nil, nil
+	}
+	row := r.Named().Row()
+	if row == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot find unique workflow for UUID: %+v", uuid)
+	}
+	s := &VReplStream{
+		id:                   row.AsInt64("id", 0),
+		workflow:             row.AsString("workflow", ""),
+		source:               row.AsString("source", ""),
+		pos:                  row.AsString("pos", ""),
+		timeUpdated:          row.AsInt64("time_updated", 0),
+		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
+		state:                row.AsString("state", ""),
+		message:              row.AsString("message", ""),
+		bls:                  &binlogdatapb.BinlogSource{},
+	}
+	if err := proto.UnmarshalText(s.source, s.bls); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // isVReplMigrationReadyToCutOver sees if the vreplication migration has completed the row copy
 // and is up to date with the binlogs.
-func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, uuid string) (isReady bool, err error) {
-	named, err := e.readVReplStream(ctx, uuid)
-	if err != nil {
-		return false, err
-	}
-	if len(named.Rows) == 0 {
-		// no vreplication entry
-		return false, nil
-	}
-	row := named.Row()
-	if row == nil {
-		// multiple workflows under same name:
-		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "multiple workflows found for UUID: %+v", uuid)
-	}
-
+func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplStream) (isReady bool, err error) {
 	// Check all the cases where migration is still running:
 	{
 		// when ready to cut-over, pos must have some value
-		pos := row.AsString("pos", "")
-		if pos == "" {
-			return false, nil
+		if s.pos == "" {
+			return false, err
 		}
 	}
 	{
@@ -1358,22 +1472,20 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, uuid stri
 			}
 			return diff
 		}
-		timeUpdated := time.Unix(row.AsInt64("time_updated", 0), 0)
+		timeUpdated := time.Unix(s.timeUpdated, 0)
 		if durationDiff(time.Now(), timeUpdated) > cutOverThreshold {
-			return false, nil
+			return false, err
 		}
-		transactionTimestamp := time.Unix(row.AsInt64("transaction_timestamp", 0), 0)
+		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
 		if durationDiff(transactionTimestamp, timeUpdated) > cutOverThreshold {
-			return false, nil
+			return false, err
 		}
 	}
 	{
 		// copy_state must have no entries for this vreplication id: if entries are
 		// present that means copy is still in progress
-		id := row.AsInt64("id", 0)
-
 		query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
-			sqltypes.Int64BindVariable(id),
+			sqltypes.Int64BindVariable(s.id),
 		)
 		if err != nil {
 			return false, err
@@ -1384,42 +1496,34 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, uuid stri
 		}
 		csRow := r.Named().Row()
 		if csRow == nil {
-			return false, nil
+			return false, err
 		}
 		count := csRow.AsInt64("cnt", 0)
 		if count > 0 {
 			// Still copying
-			return false, nil
+			return false, err
 		}
 	}
 	return true, nil
 }
 
 // isVReplMigrationRunning sees if there is a VReplication migration actively running
-func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (isRunning bool, err error) {
-	named, err := e.readVReplStream(ctx, uuid)
+func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (isRunning bool, s *VReplStream, err error) {
+	s, err = e.readVReplStream(ctx, uuid, true)
 	if err != nil {
-		return false, err
+		return false, s, err
 	}
-	if len(named.Rows) == 0 {
-		// no vreplication entry
-		return false, nil
+	if s == nil {
+		return false, s, nil
 	}
-	row := named.Row()
-	if row == nil {
-		// multiple workflows under same name:
-		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "multiple workflows found for UUID: %+v", uuid)
+	if strings.Contains(strings.ToLower(s.message), "error") {
+		return false, s, nil
 	}
-	message := row.AsString("message", "")
-	if strings.Contains(strings.ToLower(message), "error") {
-		return false, nil
-	}
-	state := row.AsString("state", "")
-	switch state {
+	switch s.state {
 	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
-		return true, nil
+		return true, s, nil
 	}
-	return false, nil
+	return false, s, nil
 }
 
 // reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
@@ -1439,16 +1543,22 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		case schema.DDLStrategyOnline:
 			{
 				// We check the _vt.vreplication table
-				running, err := e.isVReplMigrationRunning(ctx, uuid)
+				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
 				if err != nil {
 					return countRunnning, runningNotByThisProcess, err
 				}
 				if running {
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
+					if err != nil {
+						return countRunnning, runningNotByThisProcess, err
+					}
+					if isReady {
+						if err := e.cutOverVReplMigration(ctx, s); err != nil {
+							return countRunnning, runningNotByThisProcess, err
+						}
+					}
 				}
-
-				isReady, err := e.isVReplMigrationReadyToCutOver(ctx, uuid)
-				fmt.Printf("========== isVReplMigrationReadyToCutOver: %v, %v, %v\n", uuid, isReady, err)
 			}
 		case schema.DDLStrategyPTOSC:
 			{
@@ -1826,6 +1936,7 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context, uuidParam, statu
 }
 
 // VExec is called by a VExec invocation
+// Implements vitess.io/vitess/go/vt/vttablet/vexec.Executor interface
 func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *querypb.QueryResult, err error) {
 	response := func(result *sqltypes.Result, err error) (*querypb.QueryResult, error) {
 		if err != nil {
