@@ -76,6 +76,8 @@ func TestInformationSchemaQuery(t *testing.T) {
 	assertResultIsEmpty(t, conn, "table_schema = 'NONE'")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema'", "performance_schema")
 	assertResultIsEmpty(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
+	assertResultIsEmpty(t, conn, "table_schema = 'performance_schema' and table_name = 'foo'")
 }
 
 func assertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
