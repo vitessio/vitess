@@ -1823,5 +1823,7 @@
 2021-02-03T18:02:08Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/534706383
 2021-02-03T18:02:08Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/534706346
 2021-02-03T18:18:09Z,endtoend,https://github.com/vitessio/vitess/actions/runs/534743091
+2021-02-03T22:03:49Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/535260038
+2021-02-03T22:03:49Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/535260046
 2021-02-03T22:03:49Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/535260033
 2021-02-03T22:03:49Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/535260067
