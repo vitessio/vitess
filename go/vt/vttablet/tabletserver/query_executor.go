@@ -506,7 +506,6 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(ret),
 		}},
-		RowsAffected: 1,
 	}, nil
 }
 
