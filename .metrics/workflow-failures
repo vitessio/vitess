@@ -1827,4 +1827,8 @@
 2021-02-03T22:03:49Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/535260046
 2021-02-03T22:03:49Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/535260033
 2021-02-03T22:03:49Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/535260067
+2021-02-03T22:59:59Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/535384338
+2021-02-03T22:59:59Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/535384347
+2021-02-03T22:59:59Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/535384340
+2021-02-03T22:59:59Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/535384365
 2021-02-03T22:59:59Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/535384348
