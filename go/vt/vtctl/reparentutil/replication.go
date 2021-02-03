@@ -43,13 +43,8 @@ func FindValidEmergencyReparentCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	primaryStatusMap map[string]*replicationdatapb.MasterStatus,
 ) (map[string]mysql.Position, error) {
-	var (
-		replicationStatusMap         = make(map[string]*mysql.ReplicationStatus, len(statusMap))
-		positionMap                  = make(map[string]mysql.Position)
-		seenGTIDBasedPosition        bool
-		seenNonGTIDBasedPosition     bool
-		firstZeroPositionTabletAlias string
-	)
+	replicationStatusMap := make(map[string]*mysql.ReplicationStatus, len(statusMap))
+	positionMap := make(map[string]mysql.Position)
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
@@ -59,22 +54,32 @@ func FindValidEmergencyReparentCandidates(
 
 	// Determine if we're GTID-based. If we are, we'll need to look for errant
 	// GTIDs below.
+	var (
+		isGTIDBased                bool
+		isNonGTIDBased             bool
+		emptyRelayPosErrorRecorder concurrency.FirstErrorRecorder
+	)
+
 	for alias, status := range replicationStatusMap {
 		if _, ok := status.RelayLogPosition.GTIDSet.(mysql.Mysql56GTIDSet); ok {
-			seenGTIDBasedPosition = true
-		} else if status.RelayLogPosition.IsZero() {
-			firstZeroPositionTabletAlias = alias
+			isGTIDBased = true
 		} else {
-			seenNonGTIDBasedPosition = true
+			isNonGTIDBased = true
+		}
+
+		if status.RelayLogPosition.IsZero() {
+			// Potentially bail. If any other tablet hits the non-default
+			// case, that means we have a mixed bunch.
+			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
 		}
 	}
 
-	if seenGTIDBasedPosition && seenNonGTIDBasedPosition {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "encountered tablets running GTID and non-GTID based relay log positions")
+	if isGTIDBased && emptyRelayPosErrorRecorder.HasErrors() {
+		return nil, emptyRelayPosErrorRecorder.Error()
 	}
 
-	if firstZeroPositionTabletAlias != "" && seenGTIDBasedPosition {
-		return nil, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID-based relay log positions", firstZeroPositionTabletAlias)
+	if isGTIDBased && isNonGTIDBased {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "encountered mix of GTID-based and non GTID-based relay logs")
 	}
 
 	// Create relevant position list of errant GTID-based positions for later
@@ -82,7 +87,7 @@ func FindValidEmergencyReparentCandidates(
 	for alias, status := range replicationStatusMap {
 		// If we're not GTID-based, no need to search for errant GTIDs, so just
 		// add the position to the map and continue.
-		if seenNonGTIDBasedPosition {
+		if !isGTIDBased {
 			positionMap[alias] = status.Position
 
 			continue
