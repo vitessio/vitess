@@ -1534,13 +1534,13 @@ var (
 		output: "explain select * from t",
 	}, {
 		input:  "desc foobar",
-		output: "otherread",
+		output: "explain foobar",
 	}, {
-		input:  "explain t1",
-		output: "otherread",
+		input: "explain t1",
 	}, {
-		input:  "explain t1 col",
-		output: "otherread",
+		input: "explain t1 col",
+	}, {
+		input: "explain t1 '%col%'",
 	}, {
 		input: "explain select * from t",
 	}, {
