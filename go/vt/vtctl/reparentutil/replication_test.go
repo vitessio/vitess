@@ -175,7 +175,7 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 					Position: "InvalidFlavor/1234",
 				},
 			},
-			// expected:  []string{"r1", "p1"},
+			expected:  nil,
 			shouldErr: true,
 		},
 	}
@@ -185,10 +185,6 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			if !tt.shouldErr && tt.expected == nil {
-				t.Skip("still implementing other test cases")
-			}
 
 			actual, err := FindValidEmergencyReparentCandidates(tt.statusMap, tt.primaryStatusMap)
 			if tt.shouldErr {
