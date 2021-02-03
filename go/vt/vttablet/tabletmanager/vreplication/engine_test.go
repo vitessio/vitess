@@ -154,6 +154,9 @@ func TestEngineExec(t *testing.T) {
 	vre.Open(context.Background())
 	defer vre.Close()
 
+	for _, ddl := range withDDL.DDLs() {
+		dbClient.ExpectRequest(ddl, &sqltypes.Result{}, nil)
+	}
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
