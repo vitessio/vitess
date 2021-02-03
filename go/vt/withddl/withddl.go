@@ -22,6 +22,7 @@ package withddl
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -36,6 +37,8 @@ import (
 // to the desired state and retry.
 type WithDDL struct {
 	ddls []string
+
+	initApply sync.Once
 }
 
 // New creates a new WithDDL.
@@ -43,6 +46,29 @@ func New(ddls []string) *WithDDL {
 	return &WithDDL{
 		ddls: ddls,
 	}
+}
+
+// applyDDLs applies DDLs and ignores any schema error
+func (wd *WithDDL) applyDDLs(ctx context.Context, f interface{}) error {
+	exec, err := wd.unify(ctx, f)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Updating schema")
+	for _, applyQuery := range wd.ddls {
+		_, merr := exec(applyQuery)
+		if merr == nil {
+			continue
+		}
+		if mysql.IsSchemaApplyError(merr) {
+			continue
+		}
+		log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
+		// Return the original error.
+		return err
+	}
+	return nil
 }
 
 // Exec executes the query using the supplied function.
@@ -57,6 +83,14 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 	if err != nil {
 		return nil, err
 	}
+
+	// On the first time this ever gets called, just go ahead and brute force the schema.
+	// this ensures even "soft" changes, like adding an index, are applied.
+	wd.initApply.Do(func() {
+		wd.applyDDLs(ctx, f)
+	})
+
+	// Attempt to run queries:
 	qr, err := exec(query)
 	if err == nil {
 		return qr, nil
@@ -65,19 +99,12 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 		return nil, err
 	}
 
+	// Got here? Means we hit a schema error
 	log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
-	for _, applyQuery := range wd.ddls {
-		_, merr := exec(applyQuery)
-		if merr == nil {
-			continue
-		}
-		if mysql.IsSchemaApplyError(merr) {
-			continue
-		}
-		log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
-		// Return the original error.
+	if err := wd.applyDDLs(ctx, f); err != nil {
 		return nil, err
 	}
+	// Try the query again
 	return exec(query)
 }
 
