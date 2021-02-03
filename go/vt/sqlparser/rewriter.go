@@ -342,6 +342,10 @@ func replaceDerivedTableSelect(newNode, parent SQLNode) {
 	parent.(*DerivedTable).Select = newNode.(SelectStatement)
 }
 
+func replaceDescTable(newNode, parent SQLNode) {
+	parent.(*Desc).Table = newNode.(TableName)
+}
+
 func replaceDropColumnName(newNode, parent SQLNode) {
 	parent.(*DropColumn).Name = newNode.(*ColName)
 }
@@ -1262,6 +1266,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *DerivedTable:
 		a.apply(node, n.Select, replaceDerivedTableSelect)
+
+	case *Desc:
+		a.apply(node, n.Table, replaceDescTable)
 
 	case *DropColumn:
 		a.apply(node, n.Name, replaceDropColumnName)

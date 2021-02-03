@@ -8291,19 +8291,19 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2730
 		{
-			yyVAL.str = ""
+			yyVAL.str = yyDollar[1].colIdent.val
 		}
 	case 513:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2734
 		{
-			yyVAL.str = ""
+			yyVAL.str = "'" + string(yyDollar[1].bytes) + "'"
 		}
 	case 514:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2740
 		{
-			yyVAL.statement = &OtherRead{}
+			yyVAL.statement = &Desc{Table: yyDollar[2].tableName, Wild: yyDollar[3].str}
 		}
 	case 515:
 		yyDollar = yyS[yypt-3 : yypt+1]

@@ -2728,17 +2728,17 @@ wild_opt:
   }
 | sql_id
   {
-    $$ = "" 
+    $$ = $1.val
   }
 | STRING
   {
-    $$ = "" 
+    $$ = "'" + string($1) + "'"
   }
-  
+
 explain_statement:
   explain_synonyms table_name wild_opt
   {
-    $$ = &OtherRead{}
+    $$ = &Desc{Table: $2, Wild: $3}
   }
 | explain_synonyms explain_format_opt explainable_statement
   {
