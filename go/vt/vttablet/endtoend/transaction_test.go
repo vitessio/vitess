@@ -64,7 +64,7 @@ func TestCommit(t *testing.T) {
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.EqualValues(t, 3, qr.RowsAffected, "rows affected")
+	require.Equal(t, 3, len(qr.Rows), "rows affected")
 
 	expectedDiffs := []struct {
 		tag  string
