@@ -1912,6 +1912,7 @@
 2021-02-04T02:24:45Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/535809110
 2021-02-04T02:24:45Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/535809118
 2021-02-04T02:24:45Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/535809098
+2021-02-04T06:24:53Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/536256194
 2021-02-04T06:24:53Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/536256213
 2021-02-04T06:24:53Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/536256204
 2021-02-04T06:24:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/536256224
