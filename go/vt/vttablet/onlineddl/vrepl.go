@@ -68,6 +68,7 @@ type VRepl struct {
 	sharedColumnsMap    map[string]string
 
 	filterQuery string
+	bls         *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
 }
@@ -267,12 +268,14 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 
 	return nil
 }
+
+// generateFilterQuery creates a SELECT query used by vreplication as a filter. It SELECTs all
+// non-generated columns between source & target tables, and takes care of column renames.
 func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	if v.sourceSharedColumns.Len() == 0 {
 		return fmt.Errorf("Empty column list")
 	}
 	var sb strings.Builder
-
 	sb.WriteString("select ")
 	for i, name := range v.sourceSharedColumns.Names() {
 		targetName := v.sharedColumnsMap[name]
@@ -285,10 +288,25 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		sb.WriteString(escapeName(targetName))
 	}
 	sb.WriteString(" from ")
-	sb.WriteString(v.sourceTable)
+	sb.WriteString(escapeName(v.sourceTable))
 
 	v.filterQuery = sb.String()
 	return nil
+}
+
+func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace:      v.keyspace,
+		Shard:         v.shard,
+		Filter:        &binlogdatapb.Filter{},
+		StopAfterCopy: false,
+	}
+	rule := &binlogdatapb.Rule{
+		Match:  v.targetTable,
+		Filter: v.filterQuery,
+	}
+	bls.Filter.Rules = append(bls.Filter.Rules, rule)
+	v.bls = bls
 }
 
 func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection, alterOptions string) error {
@@ -301,25 +319,14 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection, alte
 	if err := v.generateFilterQuery(ctx); err != nil {
 		return err
 	}
+	v.analyzeBinlogSource(ctx)
 	return nil
 }
 
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
-
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace:      v.keyspace,
-		Shard:         v.shard,
-		Filter:        &binlogdatapb.Filter{},
-		StopAfterCopy: false,
-	}
-	rule := &binlogdatapb.Rule{
-		Match:  v.targetTable,
-		Filter: v.filterQuery,
-	}
-	bls.Filter.Rules = append(bls.Filter.Rules, rule)
-	ig.AddRow(v.workflow, bls, "", "", "MASTER")
+	ig.AddRow(v.workflow, v.bls, "", "", "MASTER")
 
 	return ig.String(), nil
 }
