@@ -20,18 +20,34 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // tabletManagerClient implements the tmclient.TabletManagerClient for
 // testing. It allows users to mock various tmclient methods.
 type tabletManagerClient struct {
 	tmclient.TabletManagerClient
+	Topo    *topo.Server
 	Schemas map[string]*tabletmanagerdatapb.SchemaDefinition
+}
+
+// ChangeType is part of the tmclient.TabletManagerClient interface.
+func (c *tabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType) error {
+	if c.Topo == nil {
+		return assert.AnError
+	}
+
+	_, err := topotools.ChangeType(ctx, c.Topo, tablet.Alias, newType, &vttime.Time{})
+	return err
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.

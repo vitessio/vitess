@@ -69,6 +69,14 @@ func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctlda
 	require.NoError(t, err)
 }
 
+// AddKeyspaces adds a list of keyspaces to the topology, failing a test if any
+// of those keyspaces cannot be added. See AddKeyspace for details.
+func AddKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, keyspaces ...*vtctldatapb.Keyspace) {
+	for _, keyspace := range keyspaces {
+		AddKeyspace(ctx, t, ts, keyspace)
+	}
+}
+
 // AddTablet adds a tablet to the topology, failing a test if that tablet record
 // could not be created. It shallow copies to prevent XXX_ fields from changing,
 // including nested proto message fields.
@@ -95,6 +103,55 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 				err := ts.CreateShard(ctx, tablet.Keyspace, tablet.Shard)
 				require.NoError(t, err, "CreateShard(%s, %s)", tablet.Keyspace, tablet.Shard)
 			}
+		}
+	}
+}
+
+// AddTablets adds a list of tablets to the topology. See AddTablet for more
+// details.
+func AddTablets(ctx context.Context, t *testing.T, ts *topo.Server, tablets ...*topodatapb.Tablet) {
+	for _, tablet := range tablets {
+		AddTablet(ctx, t, ts, tablet)
+	}
+}
+
+// AddShards adds a list of shards to the topology, failing a test if any of the
+// shard records could not be created. It also ensures that every shard's
+// keyspace exists, or creates an empty keyspace if that shard's keyspace does
+// not exist.
+func AddShards(ctx context.Context, t *testing.T, ts *topo.Server, shards ...*vtctldatapb.Shard) {
+	for _, shard := range shards {
+		if shard.Keyspace != "" {
+			if _, err := ts.GetKeyspace(ctx, shard.Keyspace); err != nil {
+				err := ts.CreateKeyspace(ctx, shard.Keyspace, &topodatapb.Keyspace{})
+				require.NoError(t, err, "CreateKeyspace(%s)", shard.Keyspace)
+			}
+		}
+
+		err := ts.CreateShard(ctx, shard.Keyspace, shard.Name)
+		require.NoError(t, err, "CreateShard(%s/%s)", shard.Keyspace, shard.Name)
+	}
+}
+
+// SetupReplicationGraphs creates a set of ShardReplication objects in the topo,
+// failing the test if any of the records could not be created.
+func SetupReplicationGraphs(ctx context.Context, t *testing.T, ts *topo.Server, replicationGraphs ...*topo.ShardReplicationInfo) {
+	for _, graph := range replicationGraphs {
+		err := ts.UpdateShardReplicationFields(ctx, graph.Cell(), graph.Keyspace(), graph.Shard(), func(sr *topodatapb.ShardReplication) error {
+			sr.Nodes = graph.Nodes
+			return nil
+		})
+		require.NoError(t, err, "could not save replication graph for %s/%s in cell %v", graph.Keyspace(), graph.Shard(), graph.Cell())
+	}
+}
+
+// UpdateSrvKeyspaces updates a set of SrvKeyspace records, grouped by cell and
+// then by keyspace. It fails the test if any records cannot be updated.
+func UpdateSrvKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, srvkeyspacesByCellByKeyspace map[string]map[string]*topodatapb.SrvKeyspace) {
+	for cell, srvKeyspacesByKeyspace := range srvkeyspacesByCellByKeyspace {
+		for keyspace, srvKeyspace := range srvKeyspacesByKeyspace {
+			err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
+			require.NoError(t, err, "UpdateSrvKeyspace(%v, %v, %v)", cell, keyspace, srvKeyspace)
 		}
 	}
 }
