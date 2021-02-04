@@ -57,7 +57,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		}
 	case *sqlparser.OtherAdmin, *sqlparser.CallProc, *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
 		*sqlparser.Load, *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show,
-		*sqlparser.OtherRead, *sqlparser.Explain:
+		*sqlparser.OtherRead, sqlparser.Explain:
 		// no op
 	default:
 		panic(fmt.Errorf("BUG: unexpected statement type: %T", node))
