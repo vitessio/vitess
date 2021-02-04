@@ -68,8 +68,9 @@ func FindValidEmergencyReparentCandidates(
 		}
 
 		if status.RelayLogPosition.IsZero() {
-			// Potentially bail. If any other tablet hits the non-default
-			// case, that means we have a mixed bunch.
+			// Potentially bail. If any other tablet is detected to have
+			// GTID-based relay log positions, we will return the error recorded
+			// here.
 			emptyRelayPosErrorRecorder.RecordError(vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "encountered tablet %v with no relay log position, when at least one other tablet in the status map has GTID based relay log positions", alias))
 		}
 	}
@@ -181,7 +182,7 @@ func StopReplicationAndBuildStatusMaps(
 
 			masterStatus, err = tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
 			if err != nil {
-				msg := "replica %v think it's master but we failed to demote it"
+				msg := "replica %v thinks it's master but we failed to demote it"
 				err = vterrors.Wrapf(err, msg+": %v", alias, err)
 
 				logger.Warningf(msg, alias)
